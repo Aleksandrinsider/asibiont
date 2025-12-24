@@ -21,19 +21,23 @@ async def start_handler(message: Message):
 @router.message()
 async def chat_handler(message: Message):
     print(f"Received message from {message.from_user.id}: {message.text}")
-    # Все сообщения обрабатываются через ИИ
-    user_id = message.from_user.id
-    if os.getenv("LOCAL") == "1":
-        context = context_store.get(f"context:{user_id}")
-    else:
-        context = r.get(f"context:{user_id}")
-        if context:
-            context = context.decode('utf-8')
-    response = chat_with_ai(message.text, context, user_id)
-    print(f"Response: {response}")
-    # Сохранить контекст для продолжения
-    if os.getenv("LOCAL") == "1":
-        context_store[f"context:{user_id}"] = response
-    else:
-        r.set(f"context:{user_id}", response)
-    await message.reply(response)
+    try:
+        # Все сообщения обрабатываются через ИИ
+        user_id = message.from_user.id
+        if os.getenv("LOCAL") == "1":
+            context = context_store.get(f"context:{user_id}")
+        else:
+            context = r.get(f"context:{user_id}")
+            if context:
+                context = context.decode('utf-8')
+        response = chat_with_ai(message.text, context, user_id)
+        print(f"Response: {response}")
+        # Сохранить контекст для продолжения
+        if os.getenv("LOCAL") == "1":
+            context_store[f"context:{user_id}"] = response
+        else:
+            r.set(f"context:{user_id}", response)
+        await message.reply(response)
+    except Exception as e:
+        print(f"Error in chat_handler: {e}")
+        await message.reply("Извините, произошла ошибка. Попробуйте позже.")

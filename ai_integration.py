@@ -129,6 +129,7 @@ TOOLS = [
 ]
 
 def chat_with_ai(message, context=None, user_id=None):
+    try:
     url = "https://api.deepseek.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -190,3 +191,6 @@ def chat_with_ai(message, context=None, user_id=None):
             return message["content"]
     else:
         return "Извините, не могу ответить сейчас."
+    except Exception as e:
+        print(f"Error in chat_with_ai: {e}")
+        return "Извините, произошла ошибка."
