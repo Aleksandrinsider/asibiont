@@ -1,4 +1,5 @@
 import json
+from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from ai_integration import chat_with_ai
