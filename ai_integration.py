@@ -1,7 +1,20 @@
 import requests
-from config import DEEPSEEK_API_KEY
+from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
 import json
 from datetime import datetime, timezone
+from cryptography.fernet import Fernet
+
+cipher = Fernet(ENCRYPTION_KEY.encode())
+
+def encrypt_data(data):
+    if data:
+        return cipher.encrypt(data.encode()).decode()
+    return data
+
+def decrypt_data(data):
+    if data:
+        return cipher.decrypt(data.encode()).decode()
+    return data
 
 SYSTEM_PROMPT = """Вы - продвинутый ИИ-ассистент для управления задачами в Telegram. Вы умны, полезны, можете рассуждать, давать советы и использовать долговременную память для персонализации.
 
@@ -89,10 +102,11 @@ def update_user_memory(info, user_id=None):
     session = Session()
     user = session.query(User).filter_by(id=user_id).first()
     if user:
+        encrypted_info = encrypt_data(info)
         if user.memory:
-            user.memory += "\n" + info
+            user.memory += "\n" + encrypted_info
         else:
-            user.memory = info
+            user.memory = encrypted_info
         session.commit()
         result = "Информация сохранена в память."
     else:
@@ -178,7 +192,11 @@ def chat_with_ai(message, context=None, user_id=None):
             session = Session()
             user = session.query(User).filter_by(id=user_id).first()
             if user and user.memory:
-                user_memory = f"\nИнформация о пользователе: {user.memory}"
+                try:
+                    decrypted = decrypt_data(user.memory)
+                    user_memory = f"\nИнформация о пользователе: {decrypted}"
+                except:
+                    user_memory = ""  # If decryption fails, skip
             session.close()
         
         url = "https://api.deepseek.com/v1/chat/completions"
