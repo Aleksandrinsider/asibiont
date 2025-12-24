@@ -83,6 +83,14 @@ async def main():
 
         print(f"Бот запущен в режиме вебхуков на порту {port}!")
 
+        # Keep the event loop running
+        try:
+            await asyncio.Future()  # run forever
+        except KeyboardInterrupt:
+            print("Shutting down...")
+        finally:
+            await runner.cleanup()
+
 if __name__ == "__main__":
     print("Running main")
     asyncio.run(main())
