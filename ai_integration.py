@@ -3,14 +3,16 @@ from config import DEEPSEEK_API_KEY
 import json
 from datetime import datetime, timezone
 
-SYSTEM_PROMPT = """Вы - ИИ-ассистент для управления задачами в Telegram. Следуйте этим правилам строго:
+SYSTEM_PROMPT = """Вы - продвинутый ИИ-ассистент для управления задачами в Telegram. Вы умны, полезны, можете рассуждать, давать советы и использовать долговременную память для персонализации.
 
-Используйте инструменты для всех действий с задачами: add_task для добавления, list_tasks для перечисления, complete_task для завершения, set_reminder для напоминаний.
+Используйте инструменты для всех действий с задачами: add_task для добавления, list_tasks для перечисления, complete_task для завершения, set_reminder для напоминаний, update_user_memory для сохранения информации о пользователе.
 Отвечайте только через инструменты, если запрос касается задач. Для других запросов отвечайте текстом.
 Текущая дата: 2025-12-25. Интерпретируйте относительные даты: 'завтра' = 2025-12-26, 'послезавтра' = 2025-12-27.
 Для напоминаний требуйте точное время в формате YYYY-MM-DD HH:MM, если не указано.
 Автоматически добавляйте задачи из неявных запросов, таких как "Мне нужно сделать X".
 Для напоминаний относительно дедлайнов сначала получите дедлайн через list_tasks, затем установите напоминание.
+Используйте update_user_memory для хранения предпочтений, привычек, целей пользователя для персонализации советов.
+Давайте полезные советы, мотивируйте, предлагайте улучшения в управлении временем и задачами.
 Отвечайте естественно, как человек, без списков, маркеров, тире или форматирования.
 Будьте вежливы, разговорны и дружелюбны."""
 
@@ -82,6 +84,22 @@ def set_reminder(task_id, reminder_time, user_id=None):
     session.close()
     return result
 
+def update_user_memory(info, user_id=None):
+    from models import Session, User
+    session = Session()
+    user = session.query(User).filter_by(id=user_id).first()
+    if user:
+        if user.memory:
+            user.memory += "\n" + info
+        else:
+            user.memory = info
+        session.commit()
+        result = "Информация сохранена в память."
+    else:
+        result = "Пользователь не найден."
+    session.close()
+    return result
+
 TOOLS = [
     {
         "type": "function",
@@ -134,17 +152,41 @@ TOOLS = [
                 "required": ["task_id", "reminder_time"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_user_memory",
+            "description": "Сохранить информацию о пользователе в долговременную память для персонализации",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "info": {"type": "string", "description": "Информация для сохранения, например предпочтения, привычки, цели"}
+                },
+                "required": ["info"]
+            }
+        }
     }
 ]
 
 def chat_with_ai(message, context=None, user_id=None):
     try:
+        # Get user memory
+        user_memory = ""
+        if user_id:
+            from models import Session, User
+            session = Session()
+            user = session.query(User).filter_by(id=user_id).first()
+            if user and user.memory:
+                user_memory = f"\nИнформация о пользователе: {user.memory}"
+            session.close()
+        
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": SYSTEM_PROMPT + user_memory}]
         if context:
             for item in context:
                 if "user" in item:
@@ -179,6 +221,8 @@ def chat_with_ai(message, context=None, user_id=None):
                         result_text = complete_task(**args, user_id=user_id)
                     elif func_name == "set_reminder":
                         result_text = set_reminder(**args, user_id=user_id)
+                    elif func_name == "update_user_memory":
+                        result_text = update_user_memory(**args, user_id=user_id)
                     tool_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],

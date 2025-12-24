@@ -12,6 +12,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True, nullable=False)
     username = Column(String(255))
+    memory = Column(Text)  # Long-term memory for user info
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
 class Task(Base):
