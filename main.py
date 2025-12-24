@@ -77,10 +77,11 @@ async def main():
 
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', 8080)
+        port = int(os.getenv("PORT", 8080))
+        site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
 
-        print("Бот запущен в режиме вебхуков!")
+        print(f"Бот запущен в режиме вебхуков на порту {port}!")
 
 if __name__ == "__main__":
     print("Running main")
