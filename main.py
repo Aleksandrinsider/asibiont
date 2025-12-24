@@ -7,6 +7,7 @@ from handlers import router
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timezone
 import os
+from models import Session, Task
 
 bot = Bot(token=TELEGRAM_TOKEN)
 

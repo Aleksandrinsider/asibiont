@@ -2,12 +2,29 @@ import requests
 from config import DEEPSEEK_API_KEY
 import json
 
-SYSTEM_PROMPT = "Вы - полезный ИИ-ассистент для управления задачами в Telegram. Вы можете добавлять, перечислять, завершать задачи, устанавливать напоминания и общаться с пользователями. Помните контекст, будьте вежливы и помогайте с запросами, связанными с задачами. Используйте инструменты для выполнения действий."
+SYSTEM_PROMPT = "Вы - полезный ИИ-ассистент для управления задачами в Telegram. Вы можете добавлять, перечислять, завершать задачи, устанавливать напоминания и общаться с пользователями. Помните контекст, будьте вежливы и помогайте с запросами, связанными с задачами. Всегда используйте предоставленные инструменты для выполнения действий с задачами, таких как добавление, перечисление или завершение. Не отвечайте текстом, если можно использовать инструмент. Текущая дата: 2025-12-25. Определяй даты и времена относительно текущей даты: 'завтра' значит 2025-12-26, 'послезавтра' 2025-12-27. Если пользователь не указал время напоминания, уточни у него время, прежде чем добавлять задачу. Для напоминаний используй формат YYYY-MM-DD HH:MM. Если пользователь говорит о задаче неявно, например 'Мне нужно подготовить отчет завтра', используй add_task. Для 'напомни за час до дедлайна', сначала list_tasks для получения due_date, затем set_reminder на час раньше."
 
-def add_task(title, description="", user_id=None):
-    from models import Session, Task
+def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
+    from models import Session, Task, User
+    from datetime import datetime
     session = Session()
+    # Проверить, существует ли пользователь
+    user = session.query(User).filter_by(id=user_id).first()
+    if not user:
+        user = User(id=user_id, telegram_id=user_id)  # Предполагаем, что user_id = telegram_id
+        session.add(user)
+        session.commit()
     task = Task(user_id=user_id, title=title, description=description)
+    if reminder_time:
+        try:
+            task.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+        except ValueError:
+            pass  # Игнорировать неверный формат
+    if due_date:
+        try:
+            task.due_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
+        except ValueError:
+            pass
     session.add(task)
     session.commit()
     task_id = task.id
@@ -20,7 +37,7 @@ def list_tasks(user_id=None):
     tasks = session.query(Task).filter_by(user_id=user_id).all()
     session.close()
     if tasks:
-        task_list = "\n".join([f"{t.id}: {t.title} - {t.status}" for t in tasks])
+        task_list = "\n".join([f"{t.id}: {t.title} - {t.status} - Дедлайн: {t.due_date} - Напоминание: {t.reminder_time}" for t in tasks])
         return f"Ваши задачи:\n{task_list}"
     return "У вас нет задач."
 
@@ -37,17 +54,17 @@ def complete_task(task_id, user_id=None):
     session.close()
     return result
 
-def set_reminder(task_id, time_str, user_id=None):
+def set_reminder(task_id, reminder_time, user_id=None):
     from models import Session, Task
     from datetime import datetime
     session = Session()
     task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
     if task:
         try:
-            reminder_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-            task.reminder_time = reminder_time
+            reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+            task.reminder_time = reminder_time_parsed
             session.commit()
-            result = f"Напоминание установлено для {task.title} на {reminder_time}."
+            result = f"Напоминание установлено для {task.title} на {reminder_time_parsed}."
         except ValueError:
             result = "Неверный формат времени."
     else:
@@ -60,14 +77,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "add_task",
-            "description": "Добавить новую задачу",
+            "description": "Добавить новую задачу с обязательным временем напоминания и опциональным дедлайном",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Название задачи"},
-                    "description": {"type": "string", "description": "Описание задачи"}
+                    "description": {"type": "string", "description": "Описание задачи"},
+                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"},
+                    "due_date": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM, опционально"}
                 },
-                "required": ["title"]
+                "required": ["title", "reminder_time"]
             }
         }
     },
@@ -100,9 +119,9 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи"},
-                    "time_str": {"type": "string", "description": "Время в формате YYYY-MM-DD HH:MM"}
+                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"}
                 },
-                "required": ["task_id", "time_str"]
+                "required": ["task_id", "reminder_time"]
             }
         }
     }
@@ -116,13 +135,18 @@ def chat_with_ai(message, context=None, user_id=None):
     }
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     if context:
-        messages.append({"role": "assistant", "content": context})
+        for item in context:
+            if "user" in item:
+                messages.append({"role": "user", "content": item["user"]})
+            if "agent" in item:
+                messages.append({"role": "assistant", "content": item["agent"]})
     messages.append({"role": "user", "content": message})
     
     data = {
         "model": "deepseek-chat",
         "messages": messages,
-        "tools": TOOLS
+        "tools": TOOLS,
+        "tool_choice": "auto"
     }
     response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:
@@ -131,6 +155,8 @@ def chat_with_ai(message, context=None, user_id=None):
         if "tool_calls" in message:
             # Выполнить tool calls
             tool_messages = []
+            # Добавить assistant message с tool_calls
+            messages.append(message)
             for tool_call in message["tool_calls"]:
                 func_name = tool_call["function"]["name"]
                 args = json.loads(tool_call["function"]["arguments"])
