@@ -130,67 +130,67 @@ TOOLS = [
 
 def chat_with_ai(message, context=None, user_id=None):
     try:
-    url = "https://api.deepseek.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    if context:
-        for item in context:
-            if "user" in item:
-                messages.append({"role": "user", "content": item["user"]})
-            if "agent" in item:
-                messages.append({"role": "assistant", "content": item["agent"]})
-    messages.append({"role": "user", "content": message})
-    
-    data = {
-        "model": "deepseek-chat",
-        "messages": messages,
-        "tools": TOOLS,
-        "tool_choice": "auto"
-    }
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        result = response.json()
-        message = result["choices"][0]["message"]
-        if "tool_calls" in message:
-            # Выполнить tool calls
-            tool_messages = []
-            # Добавить assistant message с tool_calls
-            messages.append(message)
-            for tool_call in message["tool_calls"]:
-                func_name = tool_call["function"]["name"]
-                args = json.loads(tool_call["function"]["arguments"])
-                if func_name == "add_task":
-                    result = add_task(**args, user_id=user_id)
-                elif func_name == "list_tasks":
-                    result = list_tasks(user_id=user_id)
-                elif func_name == "complete_task":
-                    result = complete_task(**args, user_id=user_id)
-                elif func_name == "set_reminder":
-                    result = set_reminder(**args, user_id=user_id)
-                tool_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call["id"],
-                    "content": result
-                })
-            # Отправить результат tools обратно ИИ для финального ответа
-            messages.extend(tool_messages)
-            data = {
-                "model": "deepseek-chat",
-                "messages": messages
-            }
-            response = requests.post(url, headers=headers, json=data)
-            if response.status_code == 200:
-                final_message = response.json()["choices"][0]["message"]
-                return final_message["content"]
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        if context:
+            for item in context:
+                if "user" in item:
+                    messages.append({"role": "user", "content": item["user"]})
+                if "agent" in item:
+                    messages.append({"role": "assistant", "content": item["agent"]})
+        messages.append({"role": "user", "content": message})
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": messages,
+            "tools": TOOLS,
+            "tool_choice": "auto"
+        }
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            result = response.json()
+            message_response = result["choices"][0]["message"]
+            if "tool_calls" in message_response:
+                # Выполнить tool calls
+                tool_messages = []
+                # Добавить assistant message с tool_calls
+                messages.append(message_response)
+                for tool_call in message_response["tool_calls"]:
+                    func_name = tool_call["function"]["name"]
+                    args = json.loads(tool_call["function"]["arguments"])
+                    if func_name == "add_task":
+                        result_text = add_task(**args, user_id=user_id)
+                    elif func_name == "list_tasks":
+                        result_text = list_tasks(user_id=user_id)
+                    elif func_name == "complete_task":
+                        result_text = complete_task(**args, user_id=user_id)
+                    elif func_name == "set_reminder":
+                        result_text = set_reminder(**args, user_id=user_id)
+                    tool_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": result_text
+                    })
+                # Отправить результат tools обратно ИИ для финального ответа
+                messages.extend(tool_messages)
+                data = {
+                    "model": "deepseek-chat",
+                    "messages": messages
+                }
+                response = requests.post(url, headers=headers, json=data)
+                if response.status_code == 200:
+                    final_message = response.json()["choices"][0]["message"]
+                    return final_message["content"]
+                else:
+                    return "Извините, не могу ответить сейчас."
             else:
-                return "Извините, не могу ответить сейчас."
+                return message_response["content"]
         else:
-            return message["content"]
-    else:
-        return "Извините, не могу ответить сейчас."
+            return "Извините, не могу ответить сейчас."
     except Exception as e:
         print(f"Error in chat_with_ai: {e}")
         return "Извините, произошла ошибка."
