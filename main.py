@@ -31,8 +31,13 @@ async def schedule_reminders(scheduler):
 async def on_startup(bot: Bot):
     if os.getenv("LOCAL") == "1":
         await bot.delete_webhook()
+        print("Webhook deleted for local mode")
     else:
-        await bot.set_webhook(WEBHOOK_URL)
+        try:
+            await bot.set_webhook(WEBHOOK_URL)
+            print(f"Webhook set to: {WEBHOOK_URL}")
+        except Exception as e:
+            print(f"Error setting webhook: {e}")
     # Запустить scheduler
     scheduler = AsyncIOScheduler()
     await schedule_reminders(scheduler)

@@ -20,6 +20,7 @@ async def start_handler(message: Message):
 
 @router.message()
 async def chat_handler(message: Message):
+    print(f"Received message from {message.from_user.id}: {message.text}")
     # Все сообщения обрабатываются через ИИ
     user_id = message.from_user.id
     if os.getenv("LOCAL") == "1":
@@ -29,6 +30,7 @@ async def chat_handler(message: Message):
         if context:
             context = context.decode('utf-8')
     response = chat_with_ai(message.text, context, user_id)
+    print(f"Response: {response}")
     # Сохранить контекст для продолжения
     if os.getenv("LOCAL") == "1":
         context_store[f"context:{user_id}"] = response
