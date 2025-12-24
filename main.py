@@ -29,6 +29,7 @@ async def schedule_reminders(scheduler):
             scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
 
 async def on_startup(bot: Bot):
+    print("Starting on_startup")
     if os.getenv("LOCAL") == "1":
         await bot.delete_webhook()
         print("Webhook deleted for local mode")
@@ -39,13 +40,17 @@ async def on_startup(bot: Bot):
         except Exception as e:
             print(f"Error setting webhook: {e}")
     # Запустить scheduler
+    print("Starting scheduler")
     scheduler = AsyncIOScheduler()
     await schedule_reminders(scheduler)
     scheduler.start()
+    print("Scheduler started")
 
 async def main():
+    print("Starting main function")
     dp = Dispatcher()
     dp.include_router(router)
+    print("Dispatcher created and router included")
 
     # Проверка на локальный запуск
     if os.getenv("LOCAL") == "1":
@@ -54,6 +59,7 @@ async def main():
         await dp.start_polling(bot)
     else:
         # Вебхук для Railway
+        print("Setting up webhook for Railway")
         app = web.Application()
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
@@ -63,6 +69,7 @@ async def main():
 
         setup_application(app, dp, bot=bot)
 
+        print("Calling on_startup")
         await on_startup(bot)
 
         runner = web.AppRunner(app)
@@ -73,4 +80,5 @@ async def main():
         print("Бот запущен в режиме вебхуков!")
 
 if __name__ == "__main__":
+    print("Running main")
     asyncio.run(main())
