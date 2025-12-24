@@ -1,4 +1,4 @@
-from aiogram import Router
+import json
 from aiogram.filters import Command
 from aiogram.types import Message
 from ai_integration import chat_with_ai
@@ -25,18 +25,21 @@ async def chat_handler(message: Message):
         # Все сообщения обрабатываются через ИИ
         user_id = message.from_user.id
         if os.getenv("LOCAL") == "1":
-            context = context_store.get(f"context:{user_id}")
+            context = context_store.get(f"context:{user_id}", [])
         else:
-            context = r.get(f"context:{user_id}")
-            if context:
-                context = context.decode('utf-8')
+            context_data = r.get(f"context:{user_id}")
+            if context_data:
+                context = json.loads(context_data.decode('utf-8'))
+            else:
+                context = []
         response = chat_with_ai(message.text, context, user_id)
         print(f"Response: {response}")
         # Сохранить контекст для продолжения
+        context.append({"user": message.text, "agent": response})
         if os.getenv("LOCAL") == "1":
-            context_store[f"context:{user_id}"] = response
+            context_store[f"context:{user_id}"] = context
         else:
-            r.set(f"context:{user_id}", response)
+            r.set(f"context:{user_id}", json.dumps(context))
         await message.reply(response)
     except Exception as e:
         print(f"Error in chat_handler: {e}")
