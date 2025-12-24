@@ -1,6 +1,7 @@
 import requests
 from config import DEEPSEEK_API_KEY
 import json
+from datetime import datetime, timezone
 
 SYSTEM_PROMPT = "Вы - полезный ИИ-ассистент для управления задачами в Telegram. Вы можете добавлять, перечислять, завершать задачи, устанавливать напоминания и общаться с пользователями. Помните контекст, будьте вежливы и помогайте с запросами, связанными с задачами. Всегда используйте предоставленные инструменты для выполнения действий с задачами, таких как добавление, перечисление или завершение. Не отвечайте текстом, если можно использовать инструмент. Текущая дата: 2025-12-25. Определяй даты и времена относительно текущей даты: 'завтра' значит 2025-12-26, 'послезавтра' 2025-12-27. Если пользователь не указал время напоминания, уточни у него время, прежде чем добавлять задачу. Для напоминаний используй формат YYYY-MM-DD HH:MM. Если пользователь говорит о задаче неявно, например 'Мне нужно подготовить отчет завтра', используй add_task. Для 'напомни за час до дедлайна', сначала list_tasks для получения due_date, затем set_reminder на час раньше."
 
@@ -17,12 +18,12 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     task = Task(user_id=user_id, title=title, description=description)
     if reminder_time:
         try:
-            task.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+            task.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
         except ValueError:
             pass  # Игнорировать неверный формат
     if due_date:
         try:
-            task.due_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
+            task.due_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
         except ValueError:
             pass
     session.add(task)
@@ -61,7 +62,7 @@ def set_reminder(task_id, reminder_time, user_id=None):
     task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
     if task:
         try:
-            reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+            reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
             task.reminder_time = reminder_time_parsed
             session.commit()
             result = f"Напоминание установлено для {task.title} на {reminder_time_parsed}."
