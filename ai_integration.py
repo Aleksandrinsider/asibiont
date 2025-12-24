@@ -221,7 +221,7 @@ def chat_with_ai(message, context=None, user_id=None):
             "tools": TOOLS,
             "tool_choice": "auto"
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             result = response.json()
             message_response = result["choices"][0]["message"]
@@ -254,7 +254,7 @@ def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                response = requests.post(url, headers=headers, json=data, timeout=30)
+                response = requests.post(url, headers=headers, json=data)
                 if response.status_code == 200:
                     final_message = response.json()["choices"][0]["message"]
                     return final_message["content"]

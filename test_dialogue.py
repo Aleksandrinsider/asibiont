@@ -24,7 +24,7 @@ def generate_user_message(context):
         "messages": messages,
         "max_tokens": 50
     }
-    response = requests.post(url, headers=headers, json=data, timeout=30)
+    response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:
         generated = response.json()["choices"][0]["message"]["content"].strip()
         # Убрать кавычки если есть
