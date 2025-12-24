@@ -19,14 +19,17 @@ async def send_reminder(task_id, user_id):
         await bot.send_message(user_id, f"Напоминание: {task.title}")
 
 async def schedule_reminders(scheduler):
-    session = Session()
-    tasks = session.query(Task).filter(Task.reminder_time.isnot(None), Task.status == 'pending').all()
-    session.close()
-    for task in tasks:
-        if task.reminder_time.tzinfo is None:
-            task.reminder_time = task.reminder_time.replace(tzinfo=timezone.utc)
-        if task.reminder_time > datetime.now(timezone.utc):
-            scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
+    try:
+        session = Session()
+        tasks = session.query(Task).filter(Task.reminder_time.isnot(None), Task.status == 'pending').all()
+        session.close()
+        for task in tasks:
+            if task.reminder_time.tzinfo is None:
+                task.reminder_time = task.reminder_time.replace(tzinfo=timezone.utc)
+            if task.reminder_time > datetime.now(timezone.utc):
+                scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
+    except Exception as e:
+        print(f"Error in schedule_reminders: {e}")
 
 async def on_startup(bot: Bot):
     print("Starting on_startup")

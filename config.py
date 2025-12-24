@@ -7,6 +7,8 @@ if os.getenv("LOCAL") == "1":
     DATABASE_URL = "sqlite:///local.db"
 else:
     DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL is not set")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 REDIS_URL = os.getenv("REDIS_URL")
