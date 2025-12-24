@@ -3,7 +3,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+if os.getenv("LOCAL") == "1":
+    DATABASE_URL = "sqlite:///local.db"
+else:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 REDIS_URL = os.getenv("REDIS_URL")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")

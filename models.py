@@ -1,8 +1,8 @@
+import datetime
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import DATABASE_URL
-import datetime
 
 Base = declarative_base()
 
@@ -16,7 +16,7 @@ class Task(Base):
     due_date = Column(DateTime)
     status = Column(String(50), default='pending')  # pending, completed, etc.
     reminder_time = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
 engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
