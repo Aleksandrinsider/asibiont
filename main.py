@@ -77,7 +77,10 @@ async def main():
 
         runner = web.AppRunner(app)
         await runner.setup()
-        port = int(os.getenv("PORT", 8000))
+        port_env = os.getenv("PORT")
+        print(f"PORT env var: {port_env}")
+        port = int(port_env) if port_env else 8000
+        print(f"Using port: {port}")
         print(f"Starting server on port {port}")
         site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
@@ -87,7 +90,7 @@ async def main():
 
         # Keep the event loop running
         try:
-            await asyncio.Future()  # run forever
+            await asyncio.sleep(float('inf'))
         except KeyboardInterrupt:
             print("Shutting down...")
         finally:
