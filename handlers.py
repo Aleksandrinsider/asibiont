@@ -41,7 +41,7 @@ async def chat_handler(message: Message):
             context_store[f"context:{user_id}"] = context
         else:
             r.set(f"context:{user_id}", json.dumps(context))
-        await message.reply(response)
+        await message.bot.send_message(message.chat.id, response)
     except Exception as e:
         print(f"Error in chat_handler: {e}")
         await message.reply("Извините, произошла ошибка. Попробуйте позже.")
