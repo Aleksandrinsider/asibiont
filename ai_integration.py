@@ -12,7 +12,7 @@ def add_task(title, description="", user_id=None):
     session.commit()
     task_id = task.id
     session.close()
-    return f"Задача '{title}' добавлена с ID {task_id}."
+    return f"Задача добавлена: {title} (ID: {task_id})"
 
 def list_tasks(user_id=None):
     from models import Session, Task
@@ -20,8 +20,9 @@ def list_tasks(user_id=None):
     tasks = session.query(Task).filter_by(user_id=user_id).all()
     session.close()
     if tasks:
-        return "\n".join([f"{t.id}: {t.title} - {t.status}" for t in tasks])
-    return "Нет задач."
+        task_list = "\n".join([f"{t.id}: {t.title} - {t.status}" for t in tasks])
+        return f"Ваши задачи:\n{task_list}"
+    return "У вас нет задач."
 
 def complete_task(task_id, user_id=None):
     from models import Session, Task
@@ -30,7 +31,7 @@ def complete_task(task_id, user_id=None):
     if task:
         task.status = "completed"
         session.commit()
-        result = f"Задача '{task.title}' выполнена."
+        result = f"Задача выполнена: {task.title}"
     else:
         result = "Задача не найдена."
     session.close()
@@ -46,9 +47,9 @@ def set_reminder(task_id, time_str, user_id=None):
             reminder_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
             task.reminder_time = reminder_time
             session.commit()
-            result = f"Напоминание установлено на {reminder_time}."
+            result = f"Напоминание установлено для {task.title} на {reminder_time}."
         except ValueError:
-            result = "Неверный формат времени. Используйте YYYY-MM-DD HH:MM."
+            result = "Неверный формат времени."
     else:
         result = "Задача не найдена."
     session.close()
@@ -129,7 +130,7 @@ def chat_with_ai(message, context=None, user_id=None):
         message = result["choices"][0]["message"]
         if "tool_calls" in message:
             # Выполнить tool calls
-            tool_responses = []
+            tool_messages = []
             for tool_call in message["tool_calls"]:
                 func_name = tool_call["function"]["name"]
                 args = json.loads(tool_call["function"]["arguments"])
@@ -141,8 +142,23 @@ def chat_with_ai(message, context=None, user_id=None):
                     result = complete_task(**args, user_id=user_id)
                 elif func_name == "set_reminder":
                     result = set_reminder(**args, user_id=user_id)
-                tool_responses.append(result)
-            return " ".join(tool_responses)
+                tool_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call["id"],
+                    "content": result
+                })
+            # Отправить результат tools обратно ИИ для финального ответа
+            messages.extend(tool_messages)
+            data = {
+                "model": "deepseek-chat",
+                "messages": messages
+            }
+            response = requests.post(url, headers=headers, json=data)
+            if response.status_code == 200:
+                final_message = response.json()["choices"][0]["message"]
+                return final_message["content"]
+            else:
+                return "Извините, не могу ответить сейчас."
         else:
             return message["content"]
     else:

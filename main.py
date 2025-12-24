@@ -6,6 +6,7 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL
 from handlers import router
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timezone
+import os
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
@@ -25,7 +26,10 @@ async def schedule_reminders(scheduler):
             scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
 
 async def on_startup(bot: Bot):
-    await bot.set_webhook(WEBHOOK_URL)
+    if os.getenv("LOCAL") == "1":
+        await bot.delete_webhook()
+    else:
+        await bot.set_webhook(WEBHOOK_URL)
     # Запустить scheduler
     scheduler = AsyncIOScheduler()
     await schedule_reminders(scheduler)
