@@ -23,6 +23,8 @@ async def schedule_reminders(scheduler):
     tasks = session.query(Task).filter(Task.reminder_time.isnot(None), Task.status == 'pending').all()
     session.close()
     for task in tasks:
+        if task.reminder_time.tzinfo is None:
+            task.reminder_time = task.reminder_time.replace(tzinfo=timezone.utc)
         if task.reminder_time > datetime.now(timezone.utc):
             scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
 
