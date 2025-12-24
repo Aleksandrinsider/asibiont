@@ -1,7 +1,7 @@
 import requests
 from config import DEEPSEEK_API_KEY
 
-SYSTEM_PROMPT = "You are a helpful AI assistant for task management in Telegram. You can add, list, complete tasks, set reminders, and chat with users. Remember context, be polite, and assist with task-related queries."
+SYSTEM_PROMPT = "Вы - полезный ИИ-ассистент для управления задачами в Telegram. Вы можете добавлять, перечислять, завершать задачи, устанавливать напоминания и общаться с пользователями. Помните контекст, будьте вежливы и помогайте с запросами, связанными с задачами."
 
 def chat_with_ai(message, context=None):
     url = "https://api.deepseek.com/v1/chat/completions"  # Предполагаемый URL, нужно проверить
