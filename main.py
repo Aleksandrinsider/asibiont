@@ -78,8 +78,10 @@ async def main():
         runner = web.AppRunner(app)
         await runner.setup()
         port = int(os.getenv("PORT", 8000))
+        print(f"Starting server on port {port}")
         site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
+        print(f"Server started on port {port}")
 
         print(f"Бот запущен в режиме вебхуков на порту {port}!")
 
