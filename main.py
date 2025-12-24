@@ -6,6 +6,7 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL
 from handlers import router
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timezone
+import pytz
 import os
 from models import Session, Task
 
@@ -25,8 +26,8 @@ async def schedule_reminders(scheduler):
         session.close()
         for task in tasks:
             if task.reminder_time.tzinfo is None:
-                task.reminder_time = task.reminder_time.replace(tzinfo=timezone.utc)
-            if task.reminder_time > datetime.now(timezone.utc):
+                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+            if task.reminder_time > datetime.now(pytz.UTC):
                 scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
     except Exception as e:
         print(f"Error in schedule_reminders: {e}")
