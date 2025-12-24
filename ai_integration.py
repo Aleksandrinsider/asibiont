@@ -1,7 +1,7 @@
 import requests
 from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from cryptography.fernet import Fernet
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
@@ -16,11 +16,15 @@ def decrypt_data(data):
         return cipher.decrypt(data.encode()).decode()
     return data
 
-SYSTEM_PROMPT = """Вы - продвинутый ИИ-ассистент для управления задачами в Telegram. Вы умны, полезны, можете рассуждать, давать советы и использовать долговременную память для персонализации.
+def get_system_prompt():
+    current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+    day_after = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
+    return f"""Вы - продвинутый ИИ-ассистент для управления задачами в Telegram. Вы умны, полезны, можете рассуждать, давать советы и использовать долговременную память для персонализации.
 
 Используйте инструменты для всех действий с задачами: add_task для добавления, list_tasks для перечисления, complete_task для завершения, set_reminder для напоминаний, update_user_memory для сохранения информации о пользователе.
 Отвечайте только через инструменты, если запрос касается задач. Для других запросов отвечайте текстом.
-Текущая дата: 2025-12-25. Интерпретируйте относительные даты: 'завтра' = 2025-12-26, 'послезавтра' = 2025-12-27.
+Текущая дата: {current_date}. Интерпретируйте относительные даты: 'завтра' = {tomorrow}, 'послезавтра' = {day_after}.
 Если пользователь не указал время напоминания, уточните у него время, задавая наводящие вопросы.
 Автоматически добавляйте задачи из неявных запросов, таких как "Мне нужно сделать X".
 Для напоминаний относительно дедлайнов сначала получите дедлайн через list_tasks, затем установите напоминание.
@@ -228,7 +232,7 @@ def chat_with_ai(message, context=None, user_id=None):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        messages = [{"role": "system", "content": SYSTEM_PROMPT + user_memory}]
+        messages = [{"role": "system", "content": get_system_prompt() + user_memory}]
         if context:
             for item in context:
                 if "user" in item:
