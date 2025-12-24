@@ -24,7 +24,7 @@ def generate_user_message(context):
         "messages": messages,
         "max_tokens": 50
     }
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data, timeout=30)
     if response.status_code == 200:
         generated = response.json()["choices"][0]["message"]["content"].strip()
         # Убрать кавычки если есть
@@ -40,17 +40,21 @@ def test_dialogue():
     print("Тестирование диалога в продакшен режиме: Агент отвечает на ИИ-генерированные запросы пользователя.")
 
     for i in range(10):  # 10 итераций для полного теста
-        user_input = generate_user_message(context)
-        print(f"Пользователь: {user_input}")
+        try:
+            user_input = generate_user_message(context)
+            print(f"Пользователь: {user_input}")
 
-        response = chat_with_ai(user_input, context, user_id)
-        print(f"Агент: {response}")
-        print("---")
+            response = chat_with_ai(user_input, context, user_id)
+            print(f"Агент: {response}")
+            print("---")
 
-        # Сохранить контекст
-        context.append({"user": user_input, "agent": response})
-        if len(context) > 10:  # Ограничить контекст
-            context = context[-10:]
+            # Сохранить контекст
+            context.append({"user": user_input, "agent": response})
+            if len(context) > 10:  # Ограничить контекст
+                context = context[-10:]
+        except Exception as e:
+            print(f"Ошибка на шаге {i+1}: {e}")
+            break
 
 if __name__ == "__main__":
     test_dialogue()
