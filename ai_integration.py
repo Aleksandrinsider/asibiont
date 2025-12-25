@@ -2,6 +2,7 @@ import requests
 from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
 import json
 from datetime import datetime, timezone, timedelta
+import re
 from cryptography.fernet import Fernet
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
@@ -15,6 +16,27 @@ def decrypt_data(data):
     if data:
         return cipher.decrypt(data.encode()).decode()
     return data
+
+def parse_relative_time(message):
+    now = datetime.now(timezone.utc)
+    # Паттерны для русского языка
+    patterns = [
+        (r'через (\d+) минут', lambda m: now + timedelta(minutes=int(m.group(1)))),
+        (r'через (\d+) час', lambda m: now + timedelta(hours=int(m.group(1)))),
+        (r'через (\d+) часа', lambda m: now + timedelta(hours=int(m.group(1)))),
+        (r'через (\d+) часов', lambda m: now + timedelta(hours=int(m.group(1)))),
+        (r'завтра в (\d{1,2}):(\d{2})', lambda m: (now + timedelta(days=1)).replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)),
+        (r'послезавтра в (\d{1,2}):(\d{2})', lambda m: (now + timedelta(days=2)).replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)),
+    ]
+    for pattern, func in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            absolute_time = func(match)
+            time_str = absolute_time.strftime("%Y-%m-%d %H:%M")
+            # Заменить относительное на абсолютное в сообщении
+            message = re.sub(pattern, f'в {time_str}', message, flags=re.IGNORECASE)
+            break
+    return message
 
 def get_system_prompt():
     current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -242,6 +264,7 @@ def chat_with_ai(message, context=None, user_id=None):
                     messages.append({"role": "user", "content": item["user"]})
                 if "agent" in item:
                     messages.append({"role": "assistant", "content": item["agent"]})
+        message = parse_relative_time(message)
         messages.append({"role": "user", "content": message})
         
         data = {
