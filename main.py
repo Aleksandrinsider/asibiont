@@ -4,11 +4,9 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 from config import TELEGRAM_TOKEN, WEBHOOK_URL
 from handlers import router
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from datetime import datetime, timezone
-import pytz
+from reminder_service import ReminderService
+from ai_integration import AIIntegration
 import os
-from models import Session, Task
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
@@ -43,12 +41,11 @@ async def on_startup(bot: Bot):
             print(f"Webhook set to: {WEBHOOK_URL}")
         except Exception as e:
             print(f"Error setting webhook: {e}")
-    # Запустить scheduler
-    print("Starting scheduler")
-    scheduler = AsyncIOScheduler()
-    await schedule_reminders(scheduler)
-    scheduler.start()
-    print("Scheduler started")
+    # Инициализировать AI и ReminderService
+    ai_service = AIIntegration()
+    reminder_service = ReminderService(bot, ai_service)
+    reminder_service.start()
+    print("ReminderService started")
 
 async def main():
     print("Starting main function")

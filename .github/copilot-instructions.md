@@ -1,81 +1,59 @@
-<!-- Use this file to provide workspace-specific custom instructions to Copilot. For more details, visit https://code.visualstudio.com/docs/copilot/copilot-customization#_use-a-githubcopilotinstructionsmd-file -->
 - [x] Verify that the copilot-instructions.md file in the .github directory is created.
 
 - [x] Clarify Project Requirements
-	<!-- Project: AI-powered Telegram bot for task management using natural dialogue, DeepSeek AI, PostgreSQL, Redis, Yookassa payments. -->
+	Project: AI-powered Telegram bot for task management using natural dialogue, DeepSeek AI, PostgreSQL, Redis, Yookassa payments.
 
 - [x] Scaffold the Project
-	<!-- Created Python project with aiogram, SQLAlchemy, etc. -->
+	Created Python project with aiogram, SQLAlchemy, etc.
 
 - [x] Customize the Project
-	<!-- Implemented AI chat with tool calling for dynamic task management, Russian prompts, local testing with SQLite. -->
+	Implemented AI chat with tool calling for dynamic task management, Russian prompts, local testing with SQLite.
 
 - [x] Install Required Extensions
-	<!-- No extensions required. -->
+	No extensions required.
 
 - [x] Compile the Project
-	<!-- Dependencies installed, no compilation needed for Python. -->
+	Dependencies installed, no compilation needed for Python.
 
 - [x] Create and Run Task
-	<!-- Created test_dialogue.py for testing dialogue simulation. -->
+	Created test_dialogue.py for testing dialogue simulation.
 
 - [x] Launch the Project
-	<!-- Bot can be launched locally with LOCAL=1 or on Railway with webhooks. -->
+	Bot can be launched locally with LOCAL=1 or on Railway with webhooks.
 
 - [x] Ensure Documentation is Complete
-	<!-- README.md updated with setup and deployment instructions. -->
-	<!--
-	Verify that all previous steps have been completed.
-	Verify that README.md and the copilot-instructions.md file in the .github directory exists and contains current project information.
-	Clean up the copilot-instructions.md file in the .github directory by removing all HTML comments.
-	 -->
+	README.md updated with setup and deployment instructions.
 
-<!--
-## Execution Guidelines
-PROGRESS TRACKING:
-- If any tools are available to manage the above todo list, use it to track progress through this checklist.
-- After completing each step, mark it complete and add a summary.
-- Read current todo list status before starting each new step.
+- [x] Verify that the copilot-instructions.md file in the .github directory is created.
 
-COMMUNICATION RULES:
-- Avoid verbose explanations or printing full command outputs.
-- If a step is skipped, state that briefly (e.g. "No extensions needed").
-- Do not explain project structure unless asked.
-- Keep explanations concise and focused.
+- [x] Clarify Project Requirements
+	Project: AI-powered Telegram bot for task management using natural dialogue, DeepSeek AI, PostgreSQL, Redis, Yookassa payments.
 
-DEVELOPMENT RULES:
-- Use '.' as the working directory unless user specifies otherwise.
-- Avoid adding media or external links unless explicitly requested.
-- Use placeholders only with a note that they should be replaced.
-- Use VS Code API tool only for VS Code extension projects.
-- Once the project is created, it is already opened in Visual Studio Code—do not suggest commands to open this project in vscode.
-- If the project setup information has additional rules, follow them strictly.
+- [x] Scaffold the Project
+	Created Python project with aiogram, SQLAlchemy, etc.
 
-FOLDER CREATION RULES:
-- Always use the current directory as the project root.
-- If you are running any terminal commands, use the '.' argument to ensure that the current working directory is used ALWAYS.
-- Do not create a new folder unless the user explicitly requests it besides a .vscode folder for a tasks.json file.
-- If any of the scaffolding commands mention that the folder name is not correct, let the user know to create a new folder with the correct name and then reopen it again in vscode.
+- [x] Customize the Project
+	Implemented AI chat with tool calling for dynamic task management, Russian prompts, local testing with SQLite.
 
-EXTENSION INSTALLATION RULES:
-- Only install extension specified by the get_project_setup_info tool. DO NOT INSTALL any other extensions.
+- [x] Install Required Extensions
+	No extensions required.
 
-PROJECT CONTENT RULES:
-- If the user has not specified project details, assume they want a "Hello World" project as a starting point.
-- Avoid adding links of any type (URLs, files, folders, etc.) or integrations that are not explicitly required.
-- Avoid generating images, videos, or any other media files unless explicitly requested.
-- If a feature is assumed but not confirmed, prompt the user for clarification before including it.
-- If you are working on a VS Code extension, use the VS Code API tool with a query to find relevant VS Code API references and samples.
+- [x] Compile the Project
+	Dependencies installed, no compilation needed for Python.
 
-TASK COMPLETION RULES:
-- Your task is complete when:
-  - Project is successfully scaffolded and compiled without errors
-  - copilot-instructions.md file in the .github directory exists
-  - README.md file exists and is up to date
-  - User is provided with clear instructions to debug/launch the project
+- [x] Create and Run Task
+	Created test_dialogue.py for testing dialogue simulation.
 
-Before starting a new task in the above plan, update progress in the plan.
--->
+- [x] Launch the Project
+	Bot can be launched locally with LOCAL=1 or on Railway with webhooks.
+
+- [x] Ensure Documentation is Complete
+	README.md updated with setup and deployment instructions.
+
+Verify that all previous steps have been completed.
+Verify that README.md and the copilot-instructions.md file in the .github directory exists and contains current project information.
+Clean up the copilot-instructions.md file in the .github directory by removing all HTML comments.
+
 - Work through each checklist item systematically.
 - Keep communication concise and focused.
 - Follow development best practices.

@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from aiogram import Bot
-from database import SessionLocal
+from models import Session
 from models import Task, User
 from datetime import datetime, timedelta
 import pytz
@@ -20,7 +20,7 @@ class ReminderService:
         self.schedule_overdue_checks()
 
     def schedule_existing_reminders(self):
-        db = SessionLocal()
+        db = Session()
         try:
             tasks = db.query(Task).filter(Task.reminder_time.isnot(None), Task.reminder_sent == False).all()
             for task in tasks:
@@ -96,7 +96,7 @@ class ReminderService:
             logging.error(f"Failed to send result check for task {task_id}: {e}")
         
         # Обновить статус в БД
-        db = SessionLocal()
+        db = Session()
         try:
             task = db.query(Task).filter(Task.id == task_id).first()
             if task:
@@ -150,7 +150,7 @@ class ReminderService:
             logging.error(f"Failed to send reminder for task {task_id}: {e}")
         
         # Обновить статус в БД даже если отправка не удалась
-        db = SessionLocal()
+        db = Session()
         try:
             task = db.query(Task).filter(Task.id == task_id).first()
             if task:
@@ -165,10 +165,10 @@ class ReminderService:
 
     def schedule_daily_reports(self):
         """Планирование ежедневных отчетов в 22:00 по времени пользователя"""
-        from database import SessionLocal
+        from models import Session
         from models import User
         
-        db = SessionLocal()
+        db = Session()
         try:
             users = db.query(User).all()
             for user in users:
@@ -212,64 +212,33 @@ class ReminderService:
             logging.error(f"Failed to send daily report to user {user_id}: {e}")
 
     def schedule_proactive_checks(self):
-        """Планирование проактивных проверок: первое через 30 мин, второе через 1 час, потом каждые 6 часов по времени пользователя"""
-        from database import SessionLocal
+        """Планирование проактивных проверок каждые 30 минут"""
+        from models import Session
         from models import User
         from apscheduler.triggers.interval import IntervalTrigger
-        from apscheduler.triggers.date import DateTrigger
-        from datetime import timedelta
         
-        db = SessionLocal()
+        db = Session()
         try:
             users = db.query(User).all()
             for user in users:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
-                # Получить текущее время в UTC
-                now_utc = datetime.now(pytz.UTC)
-                
-                # Первое проактивное сообщение через 30 минут
-                first_message_time = now_utc + timedelta(minutes=30)
-                
-                # Второе через 1 час
-                second_message_time = now_utc + timedelta(hours=1)
-                
-                # Планируем первое сообщение
+                # Планируем проактивные проверки каждые 30 минут
                 self.scheduler.add_job(
-                    self.send_proactive_message,
-                    trigger=DateTrigger(run_date=first_message_time, timezone=pytz.UTC),
-                    args=[user.telegram_id, 1],  # 1 - номер сообщения
-                    id=f"proactive_{user.telegram_id}_1",
+                    self.check_and_send_proactive,
+                    trigger="cron",
+                    minute="*/30",
+                    timezone=user_tz,
+                    args=[user.telegram_id],
+                    id=f"proactive_check_{user.telegram_id}",
                     replace_existing=True
                 )
-                
-                # Планируем второе сообщение
-                self.scheduler.add_job(
-                    self.send_proactive_message,
-                    trigger=DateTrigger(run_date=second_message_time, timezone=pytz.UTC),
-                    args=[user.telegram_id, 2],  # 2 - номер сообщения
-                    id=f"proactive_{user.telegram_id}_2",
-                    replace_existing=True
-                )
-                
-                # Планируем последующие сообщения каждые 6 часов, начиная с 7 часов от сейчас
-                for hours in range(7, 24, 6):  # 7, 13, 19 часов
-                    message_time = now_utc + timedelta(hours=hours)
-                    message_num = (hours // 6) + 2  # 3, 4, 5...
-                    
-                    self.scheduler.add_job(
-                        self.send_proactive_message,
-                        trigger=DateTrigger(run_date=message_time, timezone=pytz.UTC),
-                        args=[user.telegram_id, message_num],
-                        id=f"proactive_{user.telegram_id}_{message_num}",
-                        replace_existing=True
-                    )
         finally:
             db.close()
 
     async def check_and_send_proactive(self, user_id: int):
         """Проверка и отправка проактивного сообщения, если нет задач на ближайший час"""
-        from database import SessionLocal
+        from models import Session
         from models import Task, User, Interaction
         from datetime import timedelta
         from subscription_service import check_subscription
@@ -278,7 +247,7 @@ class ReminderService:
         if not check_subscription(user_id):
             return
         
-        db = SessionLocal()
+        db = Session()
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             if not user:
@@ -303,8 +272,8 @@ class ReminderService:
             # Получить текущее время в UTC
             now_utc = datetime.now(pytz.UTC)
             
-            # Проверить задачи на ближайшие 15 минут (в UTC)
-            next_15_min_utc = now_utc + timedelta(minutes=15)
+            # Проверить задачи на ближайшие 60 минут (в UTC)
+            next_60_min_utc = now_utc + timedelta(minutes=60)
             
             # Получить все pending задачи с reminder_time
             pending_tasks = db.query(Task).filter(
@@ -313,16 +282,16 @@ class ReminderService:
                 Task.reminder_time.isnot(None)
             ).all()
             
-            # Проверить, есть ли задачи с reminder_time в ближайшие 15 минут
-            tasks_in_15_min = 0
+            # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
+            tasks_in_60_min = 0
             for task in pending_tasks:
                 # Сделать reminder_time aware с UTC, если он naive
                 reminder_time = task.reminder_time
                 if reminder_time.tzinfo is None:
                     reminder_time = pytz.UTC.localize(reminder_time)
                 
-                if now_utc <= reminder_time < next_15_min_utc:
-                    tasks_in_15_min += 1
+                if now_utc <= reminder_time < next_60_min_utc:
+                    tasks_in_60_min += 1
             
             # Также проверить активные задачи с estimated_duration (пользователь может быть занят)
             active_tasks = db.query(Task).filter(
@@ -337,11 +306,11 @@ class ReminderService:
                 if task.created_at and (now_utc - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() < 1800:  # 30 мин
                     busy_time += task.estimated_duration or 0
             
-            # Если пользователь занят (больше 10 минут в ближайшие 15 мин), не отправлять
-            if tasks_in_15_min > 0 or busy_time > 10:
+            # Если пользователь занят (больше 10 минут в ближайшие 60 мин), не отправлять
+            if tasks_in_60_min > 0 or busy_time > 10:
                 return
             
-            if tasks_in_15_min == 0:
+            if tasks_in_60_min == 0:
                 # Нет задач - отправить проактивное сообщение
                 await self.send_proactive_message(user_id)
         finally:
@@ -349,11 +318,11 @@ class ReminderService:
 
     def schedule_overdue_checks(self):
         """Планирование проверок просроченных задач каждые 15 минут"""
-        from database import SessionLocal
+        from models import Session
         from models import User
         from apscheduler.triggers.interval import IntervalTrigger
         
-        db = SessionLocal()
+        db = Session()
         try:
             users = db.query(User).all()
             for user in users:
@@ -372,9 +341,9 @@ class ReminderService:
         finally:
             db.close()
 
-    async def send_proactive_message(self, user_id: int, message_num: int = 1):
+    async def send_proactive_message(self, user_id: int):
         """Отправка проактивного сообщения пользователю с проверками условий"""
-        from database import SessionLocal
+        from models import Session
         from models import Task, User, Interaction
         from datetime import timedelta
         from subscription_service import check_subscription
@@ -383,7 +352,7 @@ class ReminderService:
         if not check_subscription(user_id):
             return
         
-        db = SessionLocal()
+        db = Session()
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             if not user:
@@ -408,8 +377,8 @@ class ReminderService:
             # Получить текущее время в UTC
             now_utc = datetime.now(pytz.UTC)
             
-            # Проверить задачи на ближайшие 15 минут (в UTC)
-            next_15_min_utc = now_utc + timedelta(minutes=15)
+            # Проверить задачи на ближайшие 60 минут (в UTC)
+            next_60_min_utc = now_utc + timedelta(minutes=60)
             
             # Получить все pending задачи с reminder_time
             pending_tasks = db.query(Task).filter(
@@ -418,16 +387,16 @@ class ReminderService:
                 Task.reminder_time.isnot(None)
             ).all()
             
-            # Проверить, есть ли задачи с reminder_time в ближайшие 15 минут
-            tasks_in_15_min = 0
+            # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
+            tasks_in_60_min = 0
             for task in pending_tasks:
                 # Сделать reminder_time aware с UTC, если он naive
                 reminder_time = task.reminder_time
                 if reminder_time.tzinfo is None:
                     reminder_time = pytz.UTC.localize(reminder_time)
                 
-                if now_utc <= reminder_time < next_15_min_utc:
-                    tasks_in_15_min += 1
+                if now_utc <= reminder_time < next_60_min_utc:
+                    tasks_in_60_min += 1
             
             # Также проверить активные задачи с estimated_duration (пользователь может быть занят)
             active_tasks = db.query(Task).filter(
@@ -442,13 +411,13 @@ class ReminderService:
                 if task.created_at and (now_utc - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() < 1800:  # 30 мин
                     busy_time += task.estimated_duration or 0
             
-            # Если пользователь занят (больше 10 минут в ближайшие 15 мин), не отправлять
-            if tasks_in_15_min > 0 or busy_time > 10:
+            # Если пользователь занят (больше 10 минут в ближайшие 60 мин), не отправлять
+            if tasks_in_60_min > 0 or busy_time > 10:
                 return
             
             # Отправить проактивное сообщение с номером для разнообразия
             try:
-                proactive_text = await self.ai_service.generate_proactive_message(user_id, message_num)
+                proactive_text = await self.ai_service.generate_proactive_message(user_id)
                 
                 if self.bot:
                     await self.bot.send_message(
@@ -465,11 +434,11 @@ class ReminderService:
 
     async def check_and_send_overdue_reminder(self, user_id: int):
         """Проверка и отправка напоминания о просроченных задачах"""
-        from database import SessionLocal
+        from models import Session
         from models import Task
         from datetime import datetime
         
-        db = SessionLocal()
+        db = Session()
         try:
             now = datetime.utcnow()
             
