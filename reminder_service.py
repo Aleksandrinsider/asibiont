@@ -241,10 +241,10 @@ class ReminderService:
         from models import Session
         from models import Task, User, Interaction
         from datetime import timedelta
-        from subscription_service import check_subscription
+        from config import FREE_ACCESS_MODE
         
         # Проверить подписку - если нет доступа, не отправлять проактивное сообщение
-        if not check_subscription(user_id):
+        if not FREE_ACCESS_MODE:
             return
         
         db = Session()
