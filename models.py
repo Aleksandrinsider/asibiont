@@ -47,6 +47,20 @@ class Interaction(Base):
 
     user = relationship("User", backref="interactions")
 
+class UserProfile(Base):
+    __tablename__ = 'user_profiles'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    skills = Column(Text)  # JSON or comma-separated skills
+    interests = Column(Text)  # JSON or comma-separated interests
+    goals = Column(Text)  # User's goals
+    contact_info = Column(String(255))  # Telegram username or other contact
+    city = Column(String(100))  # City for location-based matching
+    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="profile")
+
 engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
 

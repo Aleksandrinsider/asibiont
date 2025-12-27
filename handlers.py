@@ -3,6 +3,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from ai_integration import chat_with_ai
+from models import Session, User, UserProfile
 import os
 
 router = Router()
@@ -18,6 +19,68 @@ else:
 @router.message(Command("start"))
 async def start_handler(message: Message):
     await message.reply("Привет! Я ИИ-бот для управления задачами. Просто общайтесь со мной на естественном языке!")
+
+@router.message(Command("update_profile"))
+async def update_profile_handler(message: Message):
+    user_id = message.from_user.id
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        user = User(telegram_id=user_id, username=message.from_user.username)
+        session.add(user)
+        session.commit()
+    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=user.id)
+        session.add(profile)
+    # Предполагаем, что сообщение содержит данные в формате: навыки: ..., интересы: ..., цели: ...
+    text = message.text.replace("/update_profile", "").strip()
+    if text:
+        parts = text.split(",")
+        if len(parts) >= 3:
+            profile.skills = parts[0].strip()
+            profile.interests = parts[1].strip()
+            profile.goals = parts[2].strip()
+            profile.contact_info = message.from_user.username or str(user_id)
+            session.commit()
+            await message.reply("Профиль обновлён!")
+        else:
+            await message.reply("Формат: /update_profile навыки, интересы, цели")
+    else:
+        await message.reply("Введите данные: /update_profile навыки, интересы, цели")
+    session.close()
+
+@router.message(Command("find_partners"))
+async def find_partners_handler(message: Message):
+    user_id = message.from_user.id
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        await message.reply("Сначала обновите профиль с /update_profile")
+        session.close()
+        return
+    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    if not profile:
+        await message.reply("Сначала обновите профиль с /update_profile")
+        session.close()
+        return
+    # Получить все профили кроме своего
+    profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+    partners = []
+    for p in profiles:
+        # Простая логика: если навыки или интересы совпадают
+        if profile.skills and p.skills and any(skill in p.skills for skill in profile.skills.split(",")):
+            partners.append(p)
+        elif profile.interests and p.interests and any(interest in p.interests for interest in profile.interests.split(",")):
+            partners.append(p)
+    if partners:
+        response = "Возможные партнёры:\n"
+        for p in partners[:5]:  # Ограничить 5
+            response += f"- @{p.contact_info} (навыки: {p.skills})\n"
+        await message.reply(response)
+    else:
+        await message.reply("Партнёры не найдены. Попробуйте обновить профиль.")
+    session.close()
 
 @router.message()
 async def chat_handler(message: Message):

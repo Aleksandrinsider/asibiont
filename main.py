@@ -6,6 +6,7 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL
 from handlers import router
 from reminder_service import ReminderService
 from ai_integration import AIIntegration
+from models import Base, engine
 import os
 
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -49,6 +50,10 @@ async def on_startup(bot: Bot):
 
 async def main():
     print("Starting main function")
+    # Создание таблиц
+    Base.metadata.create_all(engine)
+    print("Database tables created")
+
     dp = Dispatcher()
     dp.include_router(router)
     print("Dispatcher created and router included")

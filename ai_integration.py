@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone, timedelta
 import re
 from cryptography.fernet import Fernet
+from models import User
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
 
@@ -59,29 +60,27 @@ def get_system_prompt():
     current_time = datetime.now(timezone.utc).strftime("%H:%M")
     tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
     day_after = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
-    return f"""Вы - ИИ-ассистент для управления задачами в Telegram. Следуйте этим правилам строго:
+    return f"""Ты дружелюбный ИИ-помощник для управления задачами в Telegram. Твоя основная роль — помогать с организацией дел: добавлять задачи, просматривать список, завершать их, устанавливать напоминания. Используй инструменты: add_task(title, description='', reminder_time=None, due_date=None) для добавления задачи, list_tasks() для просмотра списка, complete_task(task_id) для завершения по ID, set_reminder(task_id, reminder_time) для напоминаний. Также доступны социальные функции: find_partners() для поиска партнеров, update_profile(skills, interests, goals) для обновления профиля, update_user_memory(info) для сохранения информации о пользователе.
 
-1. Используйте инструменты для всех действий с задачами: add_task для добавления, list_tasks для перечисления, complete_task для завершения, set_reminder для напоминаний.
-2. Отвечайте только через инструменты, если запрос касается задач. Для других запросов отвечайте текстом.
-3. Текущая дата и время: {current_date} {current_time}. Интерпретируйте относительные даты: 'завтра' = {tomorrow}, 'послезавтра' = {day_after}.
-4. Для напоминаний требуйте точное время в формате YYYY-MM-DD HH:MM, если не указано.
-5. Автоматически добавляйте задачи из неявных запросов, таких как "Мне нужно сделать X".
-6. Для напоминаний относительно дедлайнов сначала получите дедлайн через list_tasks, затем установите напоминание.
-7. Отвечайте естественно, как человек, без списков, маркеров, тире или форматирования.
-8. Будьте вежливы, разговорны и дружелюбны.
-9. Не ссылайтесь на предыдущие сообщения или повторения. Отвечайте только на текущий запрос."""
+Отвечай естественно, как в живом разговоре. СТРОГО ЗАПРЕЩЕНО использовать любые списки (нумерованные или маркированные), жирный шрифт, курсив, заголовки или любое Markdown-форматирование. Никогда не используй списки, даже если кажется удобным — всегда перечисляй повествовательно, например 'у вас задачи A, B и C'. Будь вежливым, позитивным, используй эмодзи 😊. Мотивируй на продуктивность, но не навязчиво. Будь честным: если пользователь пропускает задачи или не следует плану, мягко укажи на это, чтобы помочь улучшить привычки, но не будь грубым. Не повторяйся: избегай повторения одних и тех же фраз, тем или предложений в диалоге. Фокусируйся на текущем запросе пользователя и новых аспектах.
+
+Текущая дата: {current_date}, время: {current_time}. 'Завтра' — {tomorrow}, 'послезавтра' — {day_after}. Автоматически добавляй задачи из фраз вроде 'Мне нужно X'. Для дедлайнов сначала проверь через list_tasks, затем установи напоминание.
+
+Будь proactive: если пользователь говорит о планах или целях, предложи добавить задачу. Для социальных функций: интегрируй естественно в разговор. Ключевые слова для поиска партнеров: бег, бегать, спорт, хобби, партнер, единомышленник, дизайн, программирование и т.д. Если сообщение содержит такие слова, немедленно вызови find_partners и включи 1-2 найденных пользователей с контактами в первый абзац ответа. Всегда используй результаты инструментов в ответе — например, если find_partners нашел партнеров, упомяни их в разговоре. Если данных недостаточно для точных рекомендаций (например, город, время, уровень), уточни у пользователя, чтобы советы были релевантными.
+
+Используй информацию о пользователе из памяти для персонализированных советов и предложений. Если пользователь делится предпочтениями или важной информацией, сохраняй её через update_user_memory для будущих взаимодействий. После завершения задачи уточни результат: спроси, что было сделано, как прошло, чтобы учесть в будущем планировании и мотивации."""
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
     from models import Session, Task, User
     from datetime import datetime
     session = Session()
     # Проверить, существует ли пользователь
-    user = session.query(User).filter_by(id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        user = User(id=user_id, telegram_id=user_id)  # Предполагаем, что user_id = telegram_id
+        user = User(telegram_id=user_id)
         session.add(user)
         session.commit()
-    task = Task(user_id=user_id, title=title, description=description)
+    task = Task(user_id=user.id, title=title, description=description)
     if reminder_time:
         try:
             task.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
@@ -101,17 +100,32 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
 def list_tasks(user_id=None):
     from models import Session, Task
     session = Session()
-    tasks = session.query(Task).filter_by(user_id=user_id).all()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    tasks = session.query(Task).filter_by(user_id=user.id).all()
     session.close()
     if tasks:
-        task_list = "\n".join([f"{t.id}: {t.title} - {t.status} - Дедлайн: {t.due_date} - Напоминание: {t.reminder_time}" for t in tasks])
-        return f"Ваши задачи:\n{task_list}"
+        task_descriptions = []
+        for t in tasks:
+            desc = f"Задача '{t.title}' со статусом {t.status}"
+            if t.due_date:
+                desc += f", дедлайн {t.due_date.strftime('%Y-%m-%d %H:%M')}"
+            if t.reminder_time:
+                desc += f", напоминание {t.reminder_time.strftime('%Y-%m-%d %H:%M')}"
+            task_descriptions.append(desc)
+        return f"У вас {len(tasks)} задач: " + "; ".join(task_descriptions) + "."
     return "У вас нет задач."
 
 def complete_task(task_id, user_id=None):
     from models import Session, Task
     session = Session()
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     if task:
         task.status = "completed"
         session.commit()
@@ -125,7 +139,11 @@ def set_reminder(task_id, reminder_time, user_id=None):
     from models import Session, Task
     from datetime import datetime
     session = Session()
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     if task:
         try:
             reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
@@ -142,7 +160,7 @@ def set_reminder(task_id, reminder_time, user_id=None):
 def update_user_memory(info, user_id=None):
     from models import Session, User
     session = Session()
-    user = session.query(User).filter_by(id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
     if user:
         encrypted_info = encrypt_data(info)
         if user.memory:
@@ -159,7 +177,11 @@ def update_user_memory(info, user_id=None):
 def edit_task(task_id, title=None, description=None, user_id=None):
     from models import Session, Task
     session = Session()
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     if task:
         if title:
             task.title = title
@@ -175,7 +197,11 @@ def edit_task(task_id, title=None, description=None, user_id=None):
 def delete_task(task_id, user_id=None):
     from models import Session, Task
     session = Session()
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     if task:
         session.delete(task)
         session.commit()
@@ -188,7 +214,11 @@ def delete_task(task_id, user_id=None):
 def set_priority(task_id, priority, user_id=None):
     from models import Session, Task
     session = Session()
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     if task:
         if priority in ['high', 'medium', 'low']:
             task.priority = priority
@@ -204,12 +234,67 @@ def set_priority(task_id, priority, user_id=None):
 def get_task_details(task_id, user_id=None):
     from models import Session, Task
     session = Session()
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user_id).first()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     session.close()
     if task:
         details = f"ID: {task.id}\nНазвание: {task.title}\nОписание: {task.description or 'Нет'}\nСтатус: {task.status}\nПриоритет: {task.priority}\nДедлайн: {task.due_date}\nНапоминание: {task.reminder_time}\nСоздано: {task.created_at}"
         return details
     return "Задача не найдена."
+
+def find_partners(user_id=None):
+    from models import Session, UserProfile
+    session = Session()
+    user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+    profiles = session.query(UserProfile).filter(UserProfile.user_id != user_id).all()
+    partners = []
+    if user_profile:
+        # Сначала фильтруем по городу, если указан
+        if user_profile.city:
+            city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
+            if city_profiles:
+                profiles = city_profiles  # Используем только профили из того же города
+        for p in profiles:
+            if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
+                partners.append(p)
+            elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
+                partners.append(p)
+    else:
+        # Если профиля нет, вернуть тестовых партнеров для демонстрации
+        partners = profiles[:2] if profiles else []
+    session.close()
+    if partners:
+        response = "Есть пользователи с похожими интересами: "
+        for p in partners[:2]:
+            response += f"@{p.contact_info} (интересуется {p.interests}), "
+        response = response.rstrip(", ") + "."
+        return response
+    return "Партнёры не найдены. Попробуйте обновить профиль."
+
+def update_profile(skills, interests, goals, city=None, user_id=None):
+    from models import Session, User, UserProfile
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        user = User(telegram_id=user_id)
+        session.add(user)
+        session.commit()
+    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    if not profile:
+        profile = UserProfile(user_id=user.id)
+        session.add(profile)
+    profile.skills = skills
+    profile.interests = interests
+    profile.goals = goals
+    profile.city = city
+    profile.contact_info = f"user{user_id}"  # Простой username
+    profile.updated_at = datetime.now(timezone.utc)
+    session.commit()
+    session.close()
+    return "Профиль обновлён!"
 
 TOOLS = [
     {
@@ -332,6 +417,31 @@ TOOLS = [
                 "required": ["task_id"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_partners",
+            "description": "Найти потенциальных партнеров на основе профиля пользователя",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_profile",
+            "description": "Обновить профиль пользователя с навыками, интересами, целями и городом",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skills": {"type": "string", "description": "Навыки пользователя, разделенные запятыми"},
+                    "interests": {"type": "string", "description": "Интересы пользователя, разделенные запятыми"},
+                    "goals": {"type": "string", "description": "Цели пользователя"},
+                    "city": {"type": "string", "description": "Город пользователя, опционально"}
+                },
+                "required": ["skills", "interests", "goals"]
+            }
+        }
     }
 ]
 
@@ -342,7 +452,7 @@ def chat_with_ai(message, context=None, user_id=None):
         if user_id:
             from models import Session, User
             session = Session()
-            user = session.query(User).filter_by(id=user_id).first()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
@@ -405,6 +515,10 @@ def chat_with_ai(message, context=None, user_id=None):
                         result_text = set_priority(**args, user_id=user_id)
                     elif func_name == "get_task_details":
                         result_text = get_task_details(**args, user_id=user_id)
+                    elif func_name == "find_partners":
+                        result_text = find_partners(user_id=user_id)
+                    elif func_name == "update_profile":
+                        result_text = update_profile(**args, user_id=user_id)
                     tool_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],

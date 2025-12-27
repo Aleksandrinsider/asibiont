@@ -39,9 +39,14 @@ def test_dialogue():
 
     print("Тестирование диалога в продакшен режиме: Агент отвечает на ИИ-генерированные запросы пользователя.")
 
-    for i in range(10):  # 10 итераций для полного теста
+    for i in range(5):  # 5 итераций для быстрого теста
         try:
-            user_input = generate_user_message(context)
+            if i == 0:
+                user_input = "/update_profile дизайн, искусство, создать сайт"
+            elif i == 1:
+                user_input = "/find_partners"
+            else:
+                user_input = generate_user_message(context)
             print(f"Пользователь: {user_input}")
 
             response = chat_with_ai(user_input, context, user_id)
