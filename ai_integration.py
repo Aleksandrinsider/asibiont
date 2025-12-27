@@ -329,7 +329,7 @@ def find_partners(user_id=None):
     if tips:
         response += " ".join(tips[:2])
     if not response:
-        response = "Единомышленники не найдены. Попробуйте обновить профиль."
+        response = "Единомышленники не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу EREBUS AI — так у вас появится больше возможностей для общения и совместных проектов! 😊"
     return response
 
 def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, user_id=None):
@@ -604,7 +604,6 @@ def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                response = requests.post(url, headers=headers, json=data)
                 if response.status_code == 200:
                     final_message = response.json()["choices"][0]["message"]
                     content = final_message.get("content", "")
