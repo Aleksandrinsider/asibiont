@@ -13,7 +13,7 @@ class ReminderService:
         self.scheduler = AsyncIOScheduler(timezone=pytz.UTC)
 
     async def start(self):
-        await self.scheduler.start()
+        self.scheduler.start()
         self.schedule_existing_reminders()
         self.schedule_daily_reports()
         self.schedule_proactive_checks()
