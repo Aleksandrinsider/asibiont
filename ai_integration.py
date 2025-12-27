@@ -66,7 +66,7 @@ def get_system_prompt():
 
 Текущая дата: {current_date}, время: {current_time}. 'Завтра' — {tomorrow}, 'послезавтра' — {day_after}. Автоматически добавляй задачи из фраз вроде 'Мне нужно X'. Для дедлайнов сначала проверь через list_tasks, затем установи напоминание.
 
-Будь proactive: если пользователь говорит о планах или целях, предложи добавить задачу. Для социальных функций: интегрируй естественно в разговор. Ключевые слова для поиска партнеров: бег, бегать, спорт, хобби, партнер, единомышленник, дизайн, программирование и т.д. Если сообщение содержит такие слова, немедленно вызови find_partners и включи 1-2 найденных пользователей с контактами в первый абзац ответа. Всегда используй результаты инструментов в ответе — например, если find_partners нашел партнеров, упомяни их в разговоре. Если данных недостаточно для точных рекомендаций (например, город, время, уровень), уточни у пользователя, чтобы советы были релевантными.
+Будь proactive: если пользователь говорит о планах или целях, предложи добавить задачу. Для социальных функций: интегрируй естественно в разговор. Ключевые слова для поиска партнеров: бег, бегать, спорт, хобби, партнер, единомышленник, дизайн, программирование и т.д. Если сообщение содержит такие слова, немедленно вызови find_partners и включи 1-2 найденных пользователей с контактами в первый абзац ответа. Всегда используй результаты инструментов в ответе — например, если find_partners нашел партнеров, упомяни их в разговоре. Если данных недостаточно для точных рекомендаций (например, город, время, уровень), уточни у пользователя, чтобы советы были релевантными. Также предлагай советы о релевантных событиях или планах других пользователей в том же городе, основываясь на их профилях.
 
 Используй информацию о пользователе из памяти для персонализированных советов и предложений. Если пользователь делится предпочтениями или важной информацией, сохраняй её через update_user_memory для будущих взаимодействий. После завершения задачи уточни результат: спроси, что было сделано, как прошло, чтобы учесть в будущем планировании и мотивации.
 
@@ -248,11 +248,16 @@ def get_task_details(task_id, user_id=None):
     return "Задача не найдена."
 
 def find_partners(user_id=None):
-    from models import Session, UserProfile
+    from models import Session, UserProfile, User
     session = Session()
-    user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-    profiles = session.query(UserProfile).filter(UserProfile.user_id != user_id).all()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
     partners = []
+    tips = []
     if user_profile:
         # Сначала фильтруем по городу, если указан
         if user_profile.city:
@@ -264,19 +269,30 @@ def find_partners(user_id=None):
                 partners.append(p)
             elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
                 partners.append(p)
+            # Проверяем планы на релевантность
+            if p.current_plans and user_profile.interests:
+                for interest in user_profile.interests.split(","):
+                    interest_words = interest.strip().lower().split()
+                    if any(word in p.current_plans.lower() for word in interest_words):
+                        tips.append(f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — это может быть интересно для тебя с твоими интересами в {interest.strip()}.")
+                        break
     else:
         # Если профиля нет, вернуть тестовых партнеров для демонстрации
         partners = profiles[:2] if profiles else []
     session.close()
+    response = ""
     if partners:
-        response = "Есть пользователи с похожими интересами: "
+        response += "Есть пользователи с похожими интересами: "
         for p in partners[:2]:
             response += f"@{p.contact_info} (интересуется {p.interests}), "
-        response = response.rstrip(", ") + "."
-        return response
-    return "Партнёры не найдены. Попробуйте обновить профиль."
+        response = response.rstrip(", ") + ". "
+    if tips:
+        response += " ".join(tips[:2])
+    if not response:
+        response = "Партнёры не найдены. Попробуйте обновить профиль."
+    return response
 
-def update_profile(skills, interests, goals, city=None, user_id=None):
+def update_profile(skills, interests, goals, city=None, current_plans=None, user_id=None):
     from models import Session, User, UserProfile
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -292,6 +308,7 @@ def update_profile(skills, interests, goals, city=None, user_id=None):
     profile.interests = interests
     profile.goals = goals
     profile.city = city
+    profile.current_plans = current_plans
     profile.contact_info = f"user{user_id}"  # Простой username
     profile.updated_at = datetime.now(timezone.utc)
     session.commit()
@@ -432,14 +449,15 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль пользователя с навыками, интересами, целями и городом",
+            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом и текущими планами",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "skills": {"type": "string", "description": "Навыки пользователя, разделенные запятыми"},
                     "interests": {"type": "string", "description": "Интересы пользователя, разделенные запятыми"},
                     "goals": {"type": "string", "description": "Цели пользователя"},
-                    "city": {"type": "string", "description": "Город пользователя, опционально"}
+                    "city": {"type": "string", "description": "Город пользователя, опционально"},
+                    "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"}
                 },
                 "required": ["skills", "interests", "goals"]
             }

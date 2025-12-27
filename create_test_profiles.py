@@ -12,9 +12,9 @@ session.add(user3)
 session.commit()
 
 # Профили
-profile1 = UserProfile(user_id=user1.id, skills="дизайн, искусство", interests="креативность, технологии", goals="создать сайт", contact_info="@testuser1", city="Москва")
-profile2 = UserProfile(user_id=user2.id, skills="программирование, маркетинг", interests="бизнес, стартапы", goals="найти партнеров", contact_info="@testuser2", city="Санкт-Петербург")
-profile3 = UserProfile(user_id=user3.id, skills="дизайн, UI/UX", interests="веб-дизайн, мобильные приложения", goals="сотрудничество в проектах", contact_info="@designer_alex", city="Москва")
+profile1 = UserProfile(user_id=user1.id, skills="дизайн, искусство", interests="креативность, технологии", goals="создать сайт", contact_info="@testuser1", city="Москва", current_plans="Сегодня иду на выставку современного искусства в центре, завтра планирую посетить мастер-класс по веб-дизайну")
+profile2 = UserProfile(user_id=user2.id, skills="программирование, маркетинг", interests="бизнес, стартапы", goals="найти партнеров", contact_info="@testuser2", city="Санкт-Петербург", current_plans="Сегодня встречаюсь с инвесторами в кафе на Невском, завтра иду на конференцию по стартапам")
+profile3 = UserProfile(user_id=user3.id, skills="дизайн, UI/UX", interests="веб-дизайн, мобильные приложения", goals="сотрудничество в проектах", contact_info="@designer_alex", city="Москва", current_plans="Сегодня работаю над проектом в коворкинге, завтра планирую сходить в кино на новый фильм о дизайне")
 session.add(profile1)
 session.add(profile2)
 session.add(profile3)
