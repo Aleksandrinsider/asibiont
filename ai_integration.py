@@ -72,7 +72,7 @@ def get_system_prompt():
 
 Вовлекай пользователя в диалог: задавай открытые вопросы, чтобы продолжить разговор, не предлагай готовые примеры в виде списков или перечислений. Вместо 'Хотите добавить задачу A, B или C?' скажи 'Расскажите, что у вас на уме сегодня? Может, что-то нужно сделать?' или 'Что планируете на ближайшее время?'. Никогда не предлагай варианты в форме 'A или B или C' — всегда задавай вопросы. Делай ответы короткими, но вовлекающими, чтобы пользователь чувствовал себя в разговоре, а не получал инструкции. Если пользователь просто приветствует, ответь тепло и спроси о планах, без списков или примеров.
 
-Будь социально ориентированным: если в памяти есть информация о предыдущих контактах или взаимодействиях с другими пользователями, предлагай продолжить общение или присоединиться к их проектам. Например, 'Вы недавно связывались с @user по дизайну, он сегодня работает над проектом — не хотите присоединиться?' или 'Помните, вы обсуждали сайт с @partner, может, стоит написать ему?'."""
+Будь социально ориентированным: если в памяти есть информация о предыдущих контактах или взаимодействиях с другими пользователями, предлагай продолжить общение или присоединиться к их проектам. Например, 'Вы недавно связывались с @user по дизайну, он сегодня работает над проектом — не хотите присоединиться?' или 'Помните, вы обсуждали сайт с @partner, может, стоит написать ему?'. Если пользователь просит не показывать кого-то (например, 'не показывать @user'), сохрани это в памяти через update_user_memory, чтобы в будущем не предлагать этого пользователя."""
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
     from models import Session, Task, User
@@ -166,11 +166,21 @@ def update_user_memory(info, user_id=None):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if user:
-        encrypted_info = encrypt_data(info)
+        # Дешифруем существующую память
+        existing_decrypted = ""
         if user.memory:
-            user.memory += "\n" + encrypted_info
+            try:
+                existing_decrypted = decrypt_data(user.memory)
+            except:
+                existing_decrypted = ""
+        # Добавляем новую информацию
+        if existing_decrypted:
+            existing_decrypted += "\n" + info
         else:
-            user.memory = encrypted_info
+            existing_decrypted = info
+        # Шифруем обратно
+        encrypted = encrypt_data(existing_decrypted)
+        user.memory = encrypted
         session.commit()
         result = "Информация сохранена в память."
     else:
@@ -258,6 +268,18 @@ def find_partners(user_id=None):
         return "Пользователь не найден."
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+    # Получить память для исключения заблокированных
+    blocked = []
+    if user.memory:
+        try:
+            decrypted = decrypt_data(user.memory)
+            # Ищем паттерны вроде "не показывать @user" или "заблокировать @user"
+            import re
+            matches = re.findall(r'не показывать @(\w+)|заблокировать @(\w+)', decrypted, re.IGNORECASE)
+            for match in matches:
+                blocked.extend([m for m in match if m])
+        except:
+            pass
     partners = []
     tips = []
     if user_profile:
@@ -267,6 +289,9 @@ def find_partners(user_id=None):
             if city_profiles:
                 profiles = city_profiles  # Используем только профили из того же города
         for p in profiles:
+            # Исключаем заблокированных
+            if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked):
+                continue
             if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
                 partners.append(p)
             elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
