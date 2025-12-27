@@ -74,9 +74,11 @@ def get_system_prompt():
 
 Будь социально ориентированным: если в памяти есть информация о предыдущих контактах или взаимодействиях с другими пользователями, предлагай продолжить общение или присоединиться к их проектам. Например, 'Вы недавно связывались с @user по дизайну, он сегодня работает над проектом — не хотите присоединиться?' или 'Помните, вы обсуждали сайт с @partner, может, стоит написать ему?'. Если пользователь просит не показывать кого-то (например, 'не показывать @user'), сохрани это в памяти через update_user_memory, чтобы в будущем не предлагать этого пользователя.
 
-ВАЖНО: Всегда вызывай соответствующий инструмент для выполнения действий, не симулируй ответы текстом. Если пользователь просит добавить задачу, завершить, обновить профиль, найти партнеров, сохранить в память и т.д., ОБЯЗАТЕЛЬНО вызови инструмент (add_task, complete_task, update_profile и т.д.) и используй его результат в ответе. Не говори 'я добавил', если не вызвал инструмент — сначала вызови, затем ответь на основе результата. Для редактирования задач используй edit_task, для удаления — delete_task, для приоритетов — set_priority, для деталей — get_task_details, для напоминаний — set_reminder. Если запрос подразумевает обновление планов в профиле, вызови update_profile с current_plans.
+ВАЖНО: Всегда вызывай соответствующий инструмент для выполнения действий, не симулируй ответы текстом. Если пользователь просит добавить задачу, завершить, обновить профиль, найти партнеров, сохранить в память и т.д., ОБЯЗАТЕЛЬНО сначала вызови инструмент (add_task, complete_task, update_profile и т.д.), затем используй его результат в ответе. Не говори 'я добавил' или 'я обновил', если не вызвал инструмент — сначала инструмент, потом ответ на основе результата. Для редактирования задач используй edit_task, для удаления — delete_task, для приоритетов — set_priority, для деталей — get_task_details, для напоминаний — set_reminder. Если запрос подразумевает обновление планов в профиле, вызови update_profile с current_plans.
 
-Дополнительные запросы: Если пользователь хочет изменить задачу ('измени задачу X на Y'), вызови edit_task. Для удаления ('удали задачу X') — delete_task. Для приоритета ('сделай задачу высокой') — set_priority. Для деталей ('покажи задачу X') — get_task_details. Для новых напоминаний — set_reminder. Если делится планами ('сегодня планирую Z'), сохрани через update_profile(current_plans=Z). Для мотивации: если много невыполненных задач, мягко предложи завершить. Для справки: расскажи о функциях без списков."""
+Строго запрещено использовать нумерованные или маркированные списки (1., 2., -, •). Вместо этого перечисляй повествовательно: 'Во-первых, расскажите о городе. Во-вторых, поделитесь планами. В-третьих, уточните навыки.' Всегда следуй этому, даже если кажется удобным.
+
+Дополнительные запросы: Если пользователь хочет изменить задачу ('измени задачу X на Y'), вызови edit_task. Для удаления ('удали задачу X') — delete_task. Для приоритета ('сделай задачу высокой') — set_priority. Для деталей ('покажи задачу X') — get_task_details. Для новых напоминаний — set_reminder. Если делится планами ('сегодня планирую Z'), сохрани через update_profile(current_plans=Z). Для мотивации: если много невыполненных задач, мягко предложи завершить. Для справки: расскажи о функциях повествовательно, без списков."""
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
     from models import Session, Task, User
@@ -293,8 +295,8 @@ def find_partners(user_id=None):
             if city_profiles:
                 profiles = city_profiles  # Используем только профили из того же города
         for p in profiles:
-            # Исключаем заблокированных
-            if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked):
+            # Исключаем заблокированных и себя
+            if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
                 continue
             if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
                 partners.append(p)
@@ -323,7 +325,7 @@ def find_partners(user_id=None):
         response = "Партнёры не найдены. Попробуйте обновить профиль."
     return response
 
-def update_profile(skills, interests, goals, city=None, current_plans=None, user_id=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, user_id=None):
     from models import Session, User, UserProfile
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -335,11 +337,11 @@ def update_profile(skills, interests, goals, city=None, current_plans=None, user
     if not profile:
         profile = UserProfile(user_id=user.id)
         session.add(profile)
-    profile.skills = skills
-    profile.interests = interests
-    profile.goals = goals
-    profile.city = city
-    profile.current_plans = current_plans
+    profile.skills = skills if skills else profile.skills
+    profile.interests = interests if interests else profile.interests
+    profile.goals = goals if goals else profile.goals
+    profile.city = city if city else profile.city
+    profile.current_plans = current_plans if current_plans else profile.current_plans
     profile.contact_info = f"user{user_id}"  # Простой username
     profile.updated_at = datetime.now(timezone.utc)
     session.commit()
@@ -489,8 +491,7 @@ TOOLS = [
                     "goals": {"type": "string", "description": "Цели пользователя"},
                     "city": {"type": "string", "description": "Город пользователя, опционально"},
                     "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"}
-                },
-                "required": ["skills", "interests", "goals"]
+                }
             }
         }
     }
