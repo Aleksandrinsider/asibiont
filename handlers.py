@@ -3,7 +3,7 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from ai_integration import chat_with_ai
-from models import Session, User, UserProfile
+from models import Session, User, UserProfile, Subscription
 import os
 
 router = Router()
