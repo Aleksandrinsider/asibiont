@@ -62,6 +62,19 @@ class UserProfile(Base):
 
     user = relationship("User", backref="profile")
 
+class Subscription(Base):
+    __tablename__ = 'subscriptions'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    status = Column(String(50), default='inactive')  # active, inactive, expired
+    plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
+    start_date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    end_date = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="subscription")
+
 engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
 

@@ -6,7 +6,7 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL
 from handlers import router
 from reminder_service import ReminderService
 from ai_integration import AIIntegration
-from models import Base, engine
+from models import Base, engine, Session, Subscription
 import os
 
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -75,6 +75,8 @@ async def main():
 
         setup_application(app, dp, bot=bot)
 
+        app.router.add_post('/yookassa-webhook', yookassa_webhook)
+
         print("Calling on_startup")
         await on_startup(bot)
 
@@ -98,6 +100,26 @@ async def main():
             print("Shutting down...")
         finally:
             await runner.cleanup()
+
+async def yookassa_webhook(request):
+    data = await request.json()
+    if data.get('event') == 'payment.succeeded':
+        payment = data['object']
+        user_id = payment['metadata']['user_id']
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=int(user_id)).first()
+        if user:
+            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+            if not subscription:
+                subscription = Subscription(user_id=user.id)
+                session.add(subscription)
+            subscription.status = 'active'
+            subscription.start_date = datetime.now(pytz.UTC)
+            subscription.end_date = datetime.now(pytz.UTC) + timedelta(days=30)  # Месяц
+            session.commit()
+            await bot.send_message(int(user_id), "Подписка активирована! Теперь у вас доступ ко всем премиум-функциям.")
+        session.close()
+    return web.Response(text="OK")
 
 if __name__ == "__main__":
     print("Running main")

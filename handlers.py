@@ -82,6 +82,26 @@ async def find_partners_handler(message: Message):
         await message.reply("Партнёры не найдены. Попробуйте обновить профиль.")
     session.close()
 
+@router.message(Command("subscribe"))
+async def subscribe_handler(message: Message):
+    user_id = message.from_user.id
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        user = User(telegram_id=user_id)
+        session.add(user)
+        session.commit()
+    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+    if subscription and subscription.status == 'active':
+        await message.reply("У вас уже активная подписка!")
+        session.close()
+        return
+    # Создать платеж на 3000 RUB
+    from payments import create_payment
+    payment_url = create_payment(3000, "Подписка на премиум-функции бота (месяц)", user_id)
+    await message.reply(f"Для оформления подписки оплатите 3000 рублей по ссылке: {payment_url}\nПосле оплаты подписка активируется автоматически.")
+    session.close()
+
 @router.message()
 async def chat_handler(message: Message):
     print(f"Received message from {message.from_user.id}: {message.text}")
