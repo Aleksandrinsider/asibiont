@@ -607,11 +607,17 @@ def chat_with_ai(message, context=None, user_id=None):
                 response = requests.post(url, headers=headers, json=data)
                 if response.status_code == 200:
                     final_message = response.json()["choices"][0]["message"]
-                    return final_message["content"]
+                    content = final_message.get("content", "")
+                    if "<|DSML|" in content:
+                        return "Извините, произошла ошибка в обработке ответа."
+                    return content
                 else:
                     return "Извините, не могу ответить сейчас."
             else:
-                return message_response["content"]
+                content = message_response.get("content", "")
+                if "<|DSML|" in content:
+                    return "Извините, произошла ошибка в обработке ответа."
+                return content
         else:
             return "Извините, не могу ответить сейчас."
     except Exception as e:
