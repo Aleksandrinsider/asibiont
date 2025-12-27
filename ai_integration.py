@@ -35,10 +35,9 @@ class AIIntegration:
         return await generate_overdue_reminder(user_id, overdue_tasks)
 
 def parse_relative_time(message, user_now=None):
-    if user_now:
-        now = user_now
-    else:
-        now = datetime.now(timezone.utc)
+    if not user_now:
+        return message  # Don't parse if no user time
+    now = user_now
     # Паттерны для русского языка
     patterns = [
         (r'через (\d+) минут', lambda m: now + timedelta(minutes=int(m.group(1)))),
