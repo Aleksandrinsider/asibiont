@@ -56,12 +56,12 @@ async def find_partners_handler(message: Message):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        await message.reply("Сначала обновите профиль с /update_profile")
+        await message.bot.send_message(message.chat.id, "Сначала обновите профиль с /update_profile")
         session.close()
         return
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if not profile:
-        await message.reply("Сначала обновите профиль с /update_profile")
+        await message.bot.send_message(message.chat.id, "Сначала обновите профиль с /update_profile")
         session.close()
         return
     # Получить все профили кроме своего
@@ -77,9 +77,9 @@ async def find_partners_handler(message: Message):
         response = "Возможные партнёры:\n"
         for p in partners[:5]:  # Ограничить 5
             response += f"- @{p.contact_info} (навыки: {p.skills})\n"
-        await message.reply(response)
+        await message.bot.send_message(message.chat.id, response)
     else:
-        await message.reply("Партнёры не найдены. Попробуйте обновить профиль.")
+        await message.bot.send_message(message.chat.id, "Партнёры не найдены. Попробуйте обновить профиль.")
     session.close()
 
 @router.message(Command("subscribe"))
