@@ -29,6 +29,11 @@ async def update_profile_handler(message: Message):
         user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
         session.add(user)
         session.commit()
+    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+    if not subscription or subscription.status != 'active':
+        await message.bot.send_message(message.chat.id, "🌟 Интеллектуальная платформа, разработанная лабораторией ИИ EREBUS AI, для эффективного управления задачами и построения мощного сообщества единомышленников.\n\nС премиум-подпиской за 3000 рублей в месяц вы получаете эксклюзивный доступ к:\n\n🔹 Интеллектуальной ИИ-системе: Автоматизированное планирование задач, умные напоминания и персональная мотивация для достижения целей.\n🔹 Сообществу лидеров: Поиск и подключение к единомышленникам по интересам, целям и проектам — от дизайна и программирования до спорта и бизнеса.\n🔹 Совместным возможностям: Рекомендации по событиям, коллаборациям и проектам, которые меняют жизнь.\n🔹 Персонализированным инструментам: Управление задачами с приоритетами, дедлайнами и аналитикой прогресса.\n\nПрисоединяйтесь к сообществу амбициозных профессионалов, где каждый шаг ведет к успеху. Оформите подписку /subscribe и начните трансформировать свою продуктивность! 🚀")
+        session.close()
+        return
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if not profile:
         profile = UserProfile(user_id=user.id)
@@ -56,7 +61,12 @@ async def find_partners_handler(message: Message):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        await message.bot.send_message(message.chat.id, "Сначала обновите профиль с /update_profile")
+        user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
+        session.add(user)
+        session.commit()
+    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+    if not subscription or subscription.status != 'active':
+        await message.bot.send_message(message.chat.id, "🌟 Интеллектуальная платформа, разработанная лабораторией ИИ EREBUS AI, для эффективного управления задачами и построения мощного сообщества единомышленников.\n\nС премиум-подпиской за 3000 рублей в месяц вы получаете эксклюзивный доступ к:\n\n🔹 Интеллектуальной ИИ-системе: Автоматизированное планирование задач, умные напоминания и персональная мотивация для достижения целей.\n🔹 Сообществу лидеров: Поиск и подключение к единомышленникам по интересам, целям и проектам — от дизайна и программирования до спорта и бизнеса.\n🔹 Совместным возможностям: Рекомендации по событиям, коллаборациям и проектам, которые меняют жизнь.\n🔹 Персонализированным инструментам: Управление задачами с приоритетами, дедлайнами и аналитикой прогресса.\n\nПрисоединяйтесь к сообществу амбициозных профессионалов, где каждый шаг ведет к успеху. Оформите подписку /subscribe и начните трансформировать свою продуктивность! 🚀")
         session.close()
         return
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
