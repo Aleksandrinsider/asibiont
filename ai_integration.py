@@ -51,9 +51,16 @@ def parse_relative_time(message, user_now=None):
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             absolute_time = func(match)
-            time_str = absolute_time.strftime("%Y-%m-%d %H:%M")
+            if absolute_time.date() == now.date():
+                time_str = absolute_time.strftime("сегодня в %H:%M")
+            elif absolute_time.date() == (now + timedelta(days=1)).date():
+                time_str = absolute_time.strftime("завтра в %H:%M")
+            elif absolute_time.date() == (now + timedelta(days=2)).date():
+                time_str = absolute_time.strftime("послезавтра в %H:%M")
+            else:
+                time_str = absolute_time.strftime("%Y-%m-%d %H:%M")
             # Заменить относительное на абсолютное в сообщении
-            message = re.sub(pattern, f'в {time_str}', message, flags=re.IGNORECASE)
+            message = re.sub(pattern, time_str, message, flags=re.IGNORECASE)
             break
     return message
 
