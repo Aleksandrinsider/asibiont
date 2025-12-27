@@ -26,7 +26,7 @@ async def update_profile_handler(message: Message):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
+        user = User(telegram_id=user_id, username=message.from_user.username)
         session.add(user)
         session.commit()
     subscription = session.query(Subscription).filter_by(user_id=user.id).first()
@@ -61,7 +61,7 @@ async def find_partners_handler(message: Message):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
+        user = User(telegram_id=user_id, username=message.from_user.username)
         session.add(user)
         session.commit()
     subscription = session.query(Subscription).filter_by(user_id=user.id).first()
@@ -98,7 +98,7 @@ async def subscribe_handler(message: Message):
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
+        user = User(telegram_id=user_id, username=message.from_user.username)
         session.add(user)
         session.commit()
     subscription = session.query(Subscription).filter_by(user_id=user.id).first()
@@ -120,7 +120,7 @@ async def chat_handler(message: Message):
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
+            user = User(telegram_id=user_id, username=message.from_user.username)
             session.add(user)
             session.commit()
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
