@@ -106,8 +106,19 @@ async def subscribe_handler(message: Message):
 async def chat_handler(message: Message):
     print(f"Received message from {message.from_user.id}: {message.text}")
     try:
-        # Все сообщения обрабатываются через ИИ
         user_id = message.from_user.id
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(telegram_id=user_id)
+            session.add(user)
+            session.commit()
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        session.close()
+        if not subscription or subscription.status != 'active':
+            await message.reply("Для общения с ИИ оформите подписку за 3000 рублей в месяц с /subscribe.")
+            return
+        # Все сообщения обрабатываются через ИИ
         if os.getenv("LOCAL") == "1":
             context = context_store.get(f"context:{user_id}", [])
         else:

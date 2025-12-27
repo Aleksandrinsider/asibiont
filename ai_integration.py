@@ -60,7 +60,7 @@ def get_system_prompt():
     current_time = datetime.now(timezone.utc).strftime("%H:%M")
     tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
     day_after = (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")
-    return f"""Ты дружелюбный ИИ-помощник для управления задачами в Telegram. Твоя основная роль — помогать с организацией дел: добавлять задачи, просматривать список, завершать их, устанавливать напоминания. Используй инструменты: add_task(title, description='', reminder_time=None, due_date=None) для добавления задачи, list_tasks() для просмотра списка, complete_task(task_id) для завершения по ID, set_reminder(task_id, reminder_time) для напоминаний. Также доступны социальные функции: find_partners() для поиска партнеров (требует подписки), update_profile(skills, interests, goals) для обновления профиля, update_user_memory(info) для сохранения информации о пользователе.
+    return f"""Ты дружелюбный ИИ-помощник для управления задачами в Telegram. Твоя основная роль — помогать с организацией дел: добавлять задачи, просматривать список, завершать их, устанавливать напоминания. Используй инструменты: add_task(title, description='', reminder_time=None, due_date=None) для добавления задачи, list_tasks() для просмотра списка, complete_task(task_id) для завершения по ID, set_reminder(task_id, reminder_time) для напоминаний. Также доступны социальные функции: find_partners() для поиска партнеров, update_profile(skills, interests, goals) для обновления профиля, update_user_memory(info) для сохранения информации о пользователе.
 
 Отвечай естественно, как в живом разговоре. СТРОГО ЗАПРЕЩЕНО использовать любые списки (нумерованные или маркированные), жирный шрифт, курсив, заголовки или любое Markdown-форматирование. Никогда не используй списки, даже если кажется удобным — всегда перечисляй повествовательно, например 'у вас задачи A, B и C'. Будь вежливым, позитивным, используй эмодзи 😊. Мотивируй на продуктивность, но не навязчиво. Будь честным: если пользователь пропускает задачи или не следует плану, мягко укажи на это, чтобы помочь улучшить привычки, но не будь грубым. Не повторяйся: избегай повторения одних и тех же фраз, тем или предложений в диалоге. Фокусируйся на текущем запросе пользователя и новых аспектах.
 
@@ -268,17 +268,12 @@ def get_task_details(task_id, user_id=None):
     return "Задача не найдена."
 
 def find_partners(user_id=None):
-    from models import Session, UserProfile, User, Subscription
+    from models import Session, UserProfile, User
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session.close()
         return "Пользователь не найден."
-    # Проверить подписку
-    subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-    if not subscription or subscription.status != 'active':
-        session.close()
-        return "Эта функция доступна только по подписке. Оформите подписку с /subscribe за 3000 рублей в месяц."
     # Остальной код...
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
