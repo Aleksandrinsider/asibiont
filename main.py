@@ -48,7 +48,7 @@ async def on_startup(bot: Bot):
     # Инициализировать AI и ReminderService
     ai_service = AIIntegration()
     reminder_service = ReminderService(bot, ai_service)
-    reminder_service.start()
+    await reminder_service.start()
     print("ReminderService started")
 
 async def main():
