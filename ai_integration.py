@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone, timedelta
 import re
 from cryptography.fernet import Fernet
-from models import User
+from models import User, UserProfile
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
 
@@ -34,8 +34,11 @@ class AIIntegration:
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
         return await generate_overdue_reminder(user_id, overdue_tasks)
 
-def parse_relative_time(message):
-    now = datetime.now(timezone.utc)
+def parse_relative_time(message, user_now=None):
+    if user_now:
+        now = user_now
+    else:
+        now = datetime.now(timezone.utc)
     # Паттерны для русского языка
     patterns = [
         (r'через (\d+) минут', lambda m: now + timedelta(minutes=int(m.group(1)))),
@@ -80,7 +83,7 @@ def get_system_prompt():
 
 Строго запрещено использовать нумерованные или маркированные списки (1., 2., -, •). Вместо этого перечисляй повествовательно: 'Во-первых, расскажите о городе. Во-вторых, поделитесь планами. В-третьих, уточните навыки.' Всегда следуй этому, даже если кажется удобным. НИКОГДА не предлагай примеры в виде списков или перечислений — всегда задавай открытые вопросы. Не говори 'Можете сделать A, B или C' — вместо этого спроси 'Что у вас на уме?' или 'Расскажите о своих планах?'. Избегай слова 'партнер' — используй 'единомышленник', 'коллега' или 'соратник' вместо этого.
 
-Дополнительные запросы: Если пользователь хочет изменить задачу ('измени задачу X на Y'), вызови edit_task. Для удаления ('удали задачу X') — delete_task. Для приоритета ('сделай задачу высокой') — set_priority. Для деталей ('покажи задачу X') — get_task_details. Для новых напоминаний — set_reminder. Если делится планами ('сегодня планирую Z'), сохрани через update_profile(current_plans=Z). Для мотивации: если много невыполненных задач, мягко предложи завершить. Для справки: расскажи о функциях повествовательно, без списков. Иногда, когда это уместно (например, если пользователь кажется новым, задает общие вопросы или не использует все возможности), кратко упомяни о своих возможностях, чтобы помочь ему узнать, что ты можешь делать — например, 'Кстати, я могу помогать с задачами, напоминать о них, искать партнеров и обновлять профиль', но не навязчиво и только если это естественно в разговоре. Не предлагай добавлять тестовые, демонстрационные или примерные задачи. Не используй списки для примеров — всегда задавай открытые вопросы. Не предлагай добавлять задачи самостоятельно — жди, пока пользователь сам попросит. Не предлагай пользователю добавлять задачи. Не используй примеры задач в списках. Не используй списки вообще — всегда пиши повествовательно. Не давай советы в списках."""
+Дополнительные запросы: Если пользователь хочет изменить задачу ('измени задачу X на Y'), вызови edit_task. Для удаления ('удали задачу X') — delete_task. Для приоритета ('сделай задачу высокой') — set_priority. Для деталей ('покажи задачу X') — get_task_details. Для новых напоминаний — set_reminder. Если делится планами ('сегодня планирую Z'), сохрани через update_profile(current_plans=Z). Для мотивации: если много невыполненных задач, мягко предложи завершить. Для справки: расскажи о функциях повествовательно, без списков. Иногда, когда это уместно (например, если пользователь кажется новым, задает общие вопросы или не использует все возможности), кратко упомяни о своих возможностях, чтобы помочь ему узнать, что ты можешь делать — например, 'Кстати, я могу помогать с задачами, напоминать о них, искать партнеров и обновлять профиль', но не навязчиво и только если это естественно в разговоре. Не предлагай добавлять тестовые, демонстрационные или примерные задачи. Не используй списки для примеров — всегда задавай открытые вопросы. Не предлагай добавлять задачи самостоятельно — жди, пока пользователь сам попросит. Не предлагай пользователю добавлять задачи. Не используй примеры задач в списках. Не используй списки вообще — всегда пиши повествовательно. Не давай советы в списках. Для времени: Поддерживай разные форматы постановки времени: 'через 1 час', 'завтра в 10:00', 'сегодня в 15:00', 'послезавтра в 14:30', 'через 30 минут'. Если пользователь говорит о относительном времени (например, 'через час'), уточни его текущее время, если оно не сохранено в профиле (current_time). Спроси 'Какое у вас сейчас время?' и сохрани через update_profile(current_time='HH:MM'). Если пользователь сообщает свое текущее время, сохрани его через update_profile(current_time='HH:MM'). Если пользователь просит изменить время, обнови профиль. Используй сохраненное current_time для расчетов напоминаний. Если город известен, можешь предположить timezone, но лучше уточнить время напрямую."""
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
     from models import Session, Task, User
@@ -328,7 +331,7 @@ def find_partners(user_id=None):
         response = "Единомышленники не найдены. Попробуйте обновить профиль."
     return response
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, user_id=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, user_id=None):
     from models import Session, User, UserProfile
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -345,6 +348,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.goals = goals if goals else profile.goals
     profile.city = city if city else profile.city
     profile.current_plans = current_plans if current_plans else profile.current_plans
+    profile.current_time = current_time if current_time else profile.current_time
     profile.contact_info = f"user{user_id}"  # Простой username
     profile.updated_at = datetime.now(timezone.utc)
     session.commit()
@@ -485,7 +489,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом и текущими планами",
+            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом, текущими планами и текущим временем",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -493,7 +497,8 @@ TOOLS = [
                     "interests": {"type": "string", "description": "Интересы пользователя, разделенные запятыми"},
                     "goals": {"type": "string", "description": "Цели пользователя"},
                     "city": {"type": "string", "description": "Город пользователя, опционально"},
-                    "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"}
+                    "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"},
+                    "current_time": {"type": "string", "description": "Текущее время пользователя в формате HH:MM, опционально"}
                 }
             }
         }
@@ -517,6 +522,16 @@ def chat_with_ai(message, context=None, user_id=None):
             # Get all tasks for extended memory
             all_tasks = list_tasks(user_id=user_id)
             user_memory += f"\nВсе задачи пользователя: {all_tasks}"
+            # Get user current time for relative time parsing
+            user_now = None
+            if user:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile and profile.current_time:
+                    try:
+                        current_date = datetime.now(timezone.utc).date()
+                        user_now = datetime.combine(current_date, datetime.strptime(profile.current_time, "%H:%M").time(), tzinfo=timezone.utc)
+                    except:
+                        user_now = None
             session.close()
         
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -531,7 +546,7 @@ def chat_with_ai(message, context=None, user_id=None):
                     messages.append({"role": "user", "content": item["user"]})
                 if "agent" in item:
                     messages.append({"role": "assistant", "content": item["agent"]})
-        message = parse_relative_time(message)
+        message = parse_relative_time(message, user_now)
         messages.append({"role": "user", "content": message})
         
         data = {

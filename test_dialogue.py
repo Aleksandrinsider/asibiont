@@ -42,7 +42,7 @@ def test_dialogue():
     for i in range(5):  # 5 итераций для быстрого теста
         try:
             if i == 0:
-                user_input = "/update_profile дизайн, искусство, создать сайт"
+                user_input = "Напомни через час заняться уборкой в квартире"
             elif i == 1:
                 user_input = "/find_partners"
             else:
