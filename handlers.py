@@ -99,7 +99,7 @@ async def subscribe_handler(message: Message):
     # Создать платеж на 3000 RUB
     from payments import create_payment
     payment_url = create_payment(3000, "Подписка на премиум-функции бота (месяц)", user_id)
-    await message.bot.send_message(message.chat.id, f"Оплатите по защищенной ссылке: {payment_url}\nПосле оплаты вы мгновенно присоединитесь к сообществу, где успех — это норма. Добро пожаловать в EREBUS AI! 🚀")
+    await message.bot.send_message(message.chat.id, f"Оплатить с помощью ЮКАССА, СБЕР или БАНКОВСКОЙ КАРТЫ: {payment_url}\nПосле оплаты вы мгновенно присоединитесь к сообществу, где успех — это норма. Добро пожаловать в EREBUS AI! 🚀")
     session.close()
 
 @router.message()
