@@ -110,7 +110,7 @@ async def chat_handler(message: Message):
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            user = User(telegram_id=user_id)
+            user = User(telegram_id=user_id, username=message.from_user.username, first_name=message.from_user.first_name)
             session.add(user)
             session.commit()
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
