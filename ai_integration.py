@@ -309,6 +309,8 @@ def find_partners(user_id=None):
                 partners.append(p)
             elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
                 partners.append(p)
+            elif user_profile.goals and p.goals and any(goal.strip().lower() in p.goals.lower() for goal in user_profile.goals.split(",")):
+                partners.append(p)
             # Проверяем планы на релевантность
             if p.current_plans and user_profile.interests:
                 for interest in user_profile.interests.split(","):
