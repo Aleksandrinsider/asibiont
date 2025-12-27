@@ -73,6 +73,8 @@ def get_system_prompt():
 
 Твоя основная роль — помогать с организацией дел: добавлять задачи, просматривать список, завершать их, устанавливать напоминания. Используй инструменты: add_task(title, description='', reminder_time=None, due_date=None) для добавления задачи, list_tasks() для просмотра списка, complete_task(task_id) для завершения по ID, set_reminder(task_id, reminder_time) для напоминаний. Также доступны социальные функции: find_partners() для поиска единомышленников, update_profile(skills, interests, goals) для обновления профиля, update_user_memory(info) для сохранения информации о пользователе.
 
+Основная цель — вести пользователя по задачам: мотивировать на продуктивность, давать советы по планированию и выполнению, предлагать завершить невыполненные задачи, планировать следующий шаг на основе интересов. Если пользователь имеет невыполненные задачи, мягко напомни и предложи завершить одну. Всегда предлагай 1-2 конкретные задачи на основе интересов, например, 'Может, поработать над проектом по программированию?' для программистов. Давай советы по продуктивности, такие как 'Разбейте большую задачу на маленькие шаги' или 'Установите напоминание, чтобы не забыть'.
+
 Отвечай естественно, как в живом разговоре. СТРОГО ЗАПРЕЩЕНО использовать любые списки (нумерованные или маркированные), жирный шрифт, курсив, заголовки или любое Markdown-форматирование. Никогда не используй списки, даже если кажется удобным — всегда перечисляй повествовательно, например 'у вас задачи A, B и C'. НИКОГДА не используй тире или маркеры для перечислений. Будь вежливым, позитивным, используй эмодзи 😊. Мотивируй на продуктивность, но не навязчиво. Будь честным: если пользователь пропускает задачи или не следует плану, мягко укажи на это, чтобы помочь улучшить привычки, но не будь грубым. Не повторяйся: избегай повторения одних и тех же фраз, тем или предложений в диалоге. Фокусируйся на текущем запросе пользователя и новых аспектах.
 
 Текущая дата: {current_date}, время: {current_time}. 'Завтра' — {tomorrow}, 'послезавтра' — {day_after}. Автоматически добавляй задачи из фраз вроде 'Мне нужно X'. Для дедлайнов сначала проверь через list_tasks, затем установи напоминание.
@@ -91,7 +93,7 @@ def get_system_prompt():
 
 Строго запрещено использовать нумерованные или маркированные списки (1., 2., -, •). Вместо этого перечисляй повествовательно: 'Во-первых, расскажите о городе. Во-вторых, поделитесь планами. В-третьих, уточните навыки.' Всегда следуй этому, даже если кажется удобным. НИКОГДА не предлагай примеры в виде списков или перечислений — всегда задавай открытые вопросы. Не говори 'Можете сделать A, B или C' — вместо этого спроси 'Что у вас на уме?' или 'Расскажите о своих планах?'. Избегай слова 'партнер' — используй 'единомышленник', 'коллега' или 'соратник' вместо этого.
 
-Дополнительные запросы: Если пользователь хочет изменить задачу ('измени задачу X на Y'), вызови edit_task. Для удаления ('удали задачу X') — delete_task. Для приоритета ('сделай задачу высокой') — set_priority. Для деталей ('покажи задачу X') — get_task_details. Для новых напоминаний — set_reminder. Если делится планами ('сегодня планирую Z'), сохрани через update_profile(current_plans=Z). Для мотивации: если много невыполненных задач, мягко предложи завершить. Для справки: расскажи о функциях повествовательно, без списков. Иногда, когда это уместно (например, если пользователь кажется новым, задает общие вопросы или не использует все возможности), кратко упомяни о своих возможностях, чтобы помочь ему узнать, что ты можешь делать — например, 'Кстати, я могу помогать с задачами, напоминать о них, искать партнеров и обновлять профиль', но не навязчиво и только если это естественно в разговоре. Не предлагай добавлять тестовые, демонстрационные или примерные задачи. Не используй списки для примеров — всегда задавай открытые вопросы. Не предлагай добавлять задачи самостоятельно — жди, пока пользователь сам попросит. Не предлагай пользователю добавлять задачи. Не используй примеры задач в списках. Не используй списки вообще — всегда пиши повествовательно. Не давай советы в списках. Для времени: Поддерживай разные форматы постановки времени: 'через 1 час', 'завтра в 10:00', 'сегодня в 15:00', 'послезавтра в 14:30', 'через 30 минут'. Если пользователь говорит 'напомни сегодня в HH:MM X', вызови add_task(title='X', reminder_time='сегодня HH:MM'). Если пользователь сообщает свое текущее время, сохрани его через update_profile(current_time='HH:MM'). Если пользователь просит изменить время, обнови профиль. Используй сохраненное current_time для расчетов напоминаний. Если город известен, можешь предположить timezone, но лучше уточнить время напрямую."""
+Дополнительные запросы: Если пользователь хочет изменить задачу ('измени задачу X на Y'), вызови edit_task. Для удаления ('удали задачу X') — delete_task. Для приоритета ('сделай задачу высокой') — set_priority. Для деталей ('покажи задачу X') — get_task_details. Для новых напоминаний — set_reminder. Если делится планами ('сегодня планирую Z'), сохрани через update_profile(current_plans=Z). Для мотивации: если много невыполненных задач, мягко предложи завершить. Для справки: расскажи о функциях повествовательно, без списков. Иногда, когда это уместно (например, если пользователь кажется новым, задает общие вопросы или не использует все возможности), кратко упомяни о своих возможностях, чтобы помочь ему узнать, что ты можешь делать — например, 'Кстати, я могу помогать с задачами, напоминать о них, искать единомышленников и обновлять профиль', но не навязчиво и только если это естественно в разговоре. Не предлагай добавлять тестовые, демонстрационные или примерные задачи. Не используй списки для примеров — всегда задавай открытые вопросы. Не предлагай добавлять задачи самостоятельно — жди, пока пользователь сам попросит. Не предлагай пользователю добавлять задачи. Не используй примеры задач в списках. Не используй списки вообще — всегда пиши повествовательно. Не давай советы в списках. Для времени: Поддерживай разные форматы постановки времени: 'через 1 час', 'завтра в 10:00', 'сегодня в 15:00', 'послезавтра в 14:30', 'через 30 минут'. Если пользователь говорит 'напомни сегодня в HH:MM X', вызови add_task(title='X', reminder_time='сегодня HH:MM'). Если пользователь сообщает свое текущее время, сохрани его через update_profile(current_time='HH:MM'). Если пользователь просит изменить время, обнови профиль. Используй сохраненное current_time для расчетов напоминаний. Если город известен, можешь предположить timezone, но лучше уточнить время напрямую."""
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
     from models import Session, Task, User
@@ -118,7 +120,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     session.commit()
     task_id = task.id
     session.close()
-    return f"Задача добавлена: {title} (ID: {task_id})"
+    return f"Добавлена задача '{title}' с ID {task_id}."
 
 def list_tasks(user_id=None):
     from models import Session, Task
@@ -130,16 +132,9 @@ def list_tasks(user_id=None):
     tasks = session.query(Task).filter_by(user_id=user.id).all()
     session.close()
     if tasks:
-        task_descriptions = []
-        for t in tasks:
-            desc = f"Задача '{t.title}' со статусом {t.status}"
-            if t.due_date:
-                desc += f", дедлайн {t.due_date.strftime('%Y-%m-%d %H:%M')}"
-            if t.reminder_time:
-                desc += f", напоминание {t.reminder_time.strftime('%Y-%m-%d %H:%M')}"
-            task_descriptions.append(desc)
-        return f"У вас {len(tasks)} задач: " + "; ".join(task_descriptions) + "."
-    return "У вас нет задач."
+        task_list = [f"{t.title} ({t.status})" for t in tasks]
+        return f"Задачи: {', '.join(task_list)}."
+    return "Нет задач."
 
 def complete_task(task_id, user_id=None):
     from models import Session, Task
@@ -152,7 +147,7 @@ def complete_task(task_id, user_id=None):
     if task:
         task.status = "completed"
         session.commit()
-        result = f"Задача выполнена: {task.title}"
+        result = f"Завершена задача '{task.title}'."
     else:
         result = "Задача не найдена."
     session.close()
@@ -172,7 +167,7 @@ def set_reminder(task_id, reminder_time, user_id=None):
             reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
             task.reminder_time = reminder_time_parsed
             session.commit()
-            result = f"Напоминание установлено для {task.title} на {reminder_time_parsed}."
+            result = f"Установлено напоминание для '{task.title}' на {reminder_time_parsed}."
         except ValueError:
             result = "Неверный формат времени."
     else:
@@ -201,7 +196,7 @@ def update_user_memory(info, user_id=None):
         encrypted = encrypt_data(existing_decrypted)
         user.memory = encrypted
         session.commit()
-        result = "Информация сохранена в память."
+        result = "Сохранена информация."
     else:
         result = "Пользователь не найден."
     session.close()
@@ -221,7 +216,7 @@ def edit_task(task_id, title=None, description=None, user_id=None):
         if description:
             task.description = description
         session.commit()
-        result = f"Задача обновлена: {task.title}"
+        result = f"Обновлена задача '{task.title}'."
     else:
         result = "Задача не найдена."
     session.close()
@@ -238,7 +233,7 @@ def delete_task(task_id, user_id=None):
     if task:
         session.delete(task)
         session.commit()
-        result = f"Задача удалена: {task.title}"
+        result = f"Удалена задача '{task.title}'."
     else:
         result = "Задача не найдена."
     session.close()
@@ -256,7 +251,7 @@ def set_priority(task_id, priority, user_id=None):
         if priority in ['high', 'medium', 'low']:
             task.priority = priority
             session.commit()
-            result = f"Приоритет задачи '{task.title}' установлен на {priority}."
+            result = f"Установлен приоритет '{priority}' для '{task.title}'."
         else:
             result = "Неверный приоритет. Используйте high, medium или low."
     else:
@@ -274,8 +269,7 @@ def get_task_details(task_id, user_id=None):
     task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     session.close()
     if task:
-        details = f"ID: {task.id}\nНазвание: {task.title}\nОписание: {task.description or 'Нет'}\nСтатус: {task.status}\nПриоритет: {task.priority}\nДедлайн: {task.due_date}\nНапоминание: {task.reminder_time}\nСоздано: {task.created_at}"
-        return details
+        return f"Задача: {task.title}, статус {task.status}, приоритет {task.priority}."
     return "Задача не найдена."
 
 def find_partners(user_id=None):
@@ -363,7 +357,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.updated_at = datetime.now(timezone.utc)
     session.commit()
     session.close()
-    return "Профиль обновлён!"
+    return "Профиль обновлен."
 
 TOOLS = [
     {
@@ -618,23 +612,28 @@ def chat_with_ai(message, context=None, user_id=None):
                     content = final_message.get("content", "")
                     if "<|DSML|" in content:
                         content = content.split("<|DSML|")[0].strip()
-                        if not content:
-                            content = "Извините, произошла ошибка в обработке ответа."
+                    if not content:
+                        content = "Ошибка обработки."
+                    if not content:
+                        # Fallback: дать общий совет
+                        content = "Я обработал запрос. Что дальше?"
                     return content
                 else:
-                    return "Извините, не могу ответить сейчас."
+                    return "Ошибка ответа."
             else:
                 content = message_response.get("content", "")
                 if "<|DSML|" in content:
                     content = content.split("<|DSML|")[0].strip()
                     if not content:
-                        content = "Извините, произошла ошибка в обработке ответа."
+                        content = "Ошибка."
+                if not content:
+                    content = "Расскажите подробнее."
                 return content
         else:
-            return "Извините, не могу ответить сейчас."
+            return "Ошибка."
     except Exception as e:
         print(f"Error in chat_with_ai: {e}")
-        return "Извините, произошла ошибка."
+        return "Ошибка."
 
 async def generate_reminder(user_id, task_title):
     """Генерирует текст напоминания о задаче"""
@@ -676,10 +675,10 @@ async def generate_reminder(user_id, task_title):
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            return "Не удалось сгенерировать напоминание. Попробуйте позже."
+            return "Ошибка генерации напоминания."
     except Exception as e:
         print(f"Error in generate_reminder: {e}")
-        return f"Напоминание: {task_title}. Выполните задачу вовремя!"
+        return f"Напоминание о '{task_title}'."
 
 async def generate_result_check(user_id, task_title):
     """Генерирует вопрос о результате выполнения задачи"""
@@ -721,18 +720,19 @@ async def generate_result_check(user_id, task_title):
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            return "Не удалось сгенерировать вопрос о результате. Попробуйте позже."
+            return "Ошибка генерации вопроса."
     except Exception as e:
         print(f"Error in generate_result_check: {e}")
-        return f"Задача '{task_title}' выполнена? Сколько времени заняло? Были сложности?"
+        return f"Результат задачи '{task_title}'?"
 
 async def generate_proactive_message(user_id):
     """Генерирует проактивное сообщение, если нет задач на ближайший час"""
     try:
-        # Получить память пользователя
+        # Получить память пользователя и планы других
         user_memory = ""
+        plans_info = ""
         if user_id:
-            from models import Session, User
+            from models import Session, User, UserProfile
             session = Session()
             user = session.query(User).filter_by(id=user_id).first()
             if user and user.memory:
@@ -741,6 +741,21 @@ async def generate_proactive_message(user_id):
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except:
                     user_memory = ""
+            # Получить профиль пользователя
+            user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if user_profile and user_profile.interests:
+                # Найти планы других пользователей, совпадающие с интересами
+                profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+                tips = []
+                for p in profiles:
+                    if p.current_plans and p.contact_info != f"user{user_id}":
+                        for interest in user_profile.interests.split(","):
+                            interest_words = interest.strip().lower().split()
+                            if any(word in p.current_plans.lower() for word in interest_words):
+                                tips.append(f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — может быть интересно с твоими интересами в {interest.strip()}.")
+                                break
+                if tips:
+                    plans_info = "\nПланы единомышленников: " + " ".join(tips[:2])
             session.close()
         
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -750,7 +765,8 @@ async def generate_proactive_message(user_id):
         }
         system_prompt = f"""Ты — строгий ассистент по управлению задачами. Создай проактивное сообщение для пользователя, у которого нет задач на ближайший час.
 Предложи добавить новую задачу или проанализировать текущие. Будь мотивирующим и строгим, напомни о важности продуктивности.
-Не используй форматирование, будь краток (1-2 предложения).{user_memory}"""
+Если есть информация о планах единомышленников, включи 1-2 предложения с предложением связаться с ними.
+Не используй форматирование, будь краток (1-2 предложения).{user_memory}{plans_info}"""
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -766,10 +782,10 @@ async def generate_proactive_message(user_id):
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            return "Не удалось сгенерировать проактивное сообщение. Попробуйте позже."
+            return "Ошибка генерации сообщения."
     except Exception as e:
         print(f"Error in generate_proactive_message: {e}")
-        return "У вас нет задач на ближайший час. Хотите добавить новую задачу для поддержания продуктивности?"
+        return "Добавьте задачу."
 
 async def generate_daily_report(user_id):
     """Генерирует ежедневный отчет о задачах"""
@@ -821,10 +837,10 @@ async def generate_daily_report(user_id):
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            return "Не удалось сгенерировать ежедневный отчет. Попробуйте позже."
+            return "Ошибка генерации отчета."
     except Exception as e:
         print(f"Error in generate_daily_report: {e}")
-        return "Не удалось сгенерировать отчет."
+        return "Отчет о задачах."
 
 async def generate_overdue_reminder(user_id, overdue_tasks):
     """Генерирует напоминание о просроченных задачах"""
@@ -866,7 +882,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            return "Не удалось сгенерировать напоминание о просроченных задачах. Попробуйте позже."
+            return "Ошибка генерации напоминания."
     except Exception as e:
         print(f"Error in generate_overdue_reminder: {e}")
-        return "У вас есть просроченные задачи. Выполните их!"
+        return "Просроченные задачи."
