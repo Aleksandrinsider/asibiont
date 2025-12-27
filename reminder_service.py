@@ -244,7 +244,8 @@ class ReminderService:
         from config import FREE_ACCESS_MODE
         
         # Проверить подписку - если нет доступа, не отправлять проактивное сообщение
-        if not FREE_ACCESS_MODE:
+        from subscription_service import check_subscription
+        if not check_subscription(user_id):
             return
         
         db = Session()
@@ -349,7 +350,8 @@ class ReminderService:
         from config import FREE_ACCESS_MODE
         
         # Проверить подписку - если нет доступа, не отправлять проактивное сообщение
-        if not FREE_ACCESS_MODE:
+        from subscription_service import check_subscription
+        if not check_subscription(user_id):
             return
         
         db = Session()
