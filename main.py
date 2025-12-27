@@ -6,8 +6,11 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL
 from handlers import router
 from reminder_service import ReminderService
 from ai_integration import AIIntegration
-from models import Base, engine, Session, Subscription
+from models import Base, engine, Session, Subscription, User
 import os
+import datetime
+import pytz
+from datetime import timedelta
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
