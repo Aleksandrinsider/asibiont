@@ -546,6 +546,9 @@ def chat_with_ai(message, context=None, user_id=None):
                 if "agent" in item:
                     messages.append({"role": "assistant", "content": item["agent"]})
         message = parse_relative_time(message, user_now)
+        # If message has relative time and no user_now, force AI to ask for current time
+        if re.search(r'через \d+ (минут|час|часа|часов)', message) and user_now is None:
+            messages[0]["content"] += "\nВАЖНО: Пользователь упомянул относительное время 'через X', но current_time не установлено в профиле. ОБЯЗАТЕЛЬНО спроси у пользователя его текущее время в формате 'сейчас HH:MM' и сохрани через update_profile(current_time='HH:MM'). Не добавляй задачу, пока не узнаешь точное время."
         messages.append({"role": "user", "content": message})
         
         data = {
