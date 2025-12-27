@@ -18,7 +18,7 @@ else:
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
-    await message.reply("Привет! Я ИИ-бот для управления задачами. Просто общайтесь со мной на естественном языке!")
+    await message.bot.send_message(message.chat.id, "Привет! Я ИИ-бот для управления задачами. Просто общайтесь со мной на естественном языке!")
 
 @router.message(Command("update_profile"))
 async def update_profile_handler(message: Message):
@@ -43,11 +43,11 @@ async def update_profile_handler(message: Message):
             profile.goals = parts[2].strip()
             profile.contact_info = message.from_user.username or str(user_id)
             session.commit()
-            await message.reply("Профиль обновлён!")
+            await message.bot.send_message(message.chat.id, "Профиль обновлён!")
         else:
-            await message.reply("Формат: /update_profile навыки, интересы, цели")
+            await message.bot.send_message(message.chat.id, "Формат: /update_profile навыки, интересы, цели")
     else:
-        await message.reply("Введите данные: /update_profile навыки, интересы, цели")
+        await message.bot.send_message(message.chat.id, "Введите данные: /update_profile навыки, интересы, цели")
     session.close()
 
 @router.message(Command("find_partners"))
@@ -138,4 +138,4 @@ async def chat_handler(message: Message):
         await message.bot.send_message(message.chat.id, response)
     except Exception as e:
         print(f"Error in chat_handler: {e}")
-        await message.reply("Извините, произошла ошибка. Попробуйте позже.")
+        await message.bot.send_message(message.chat.id, "Извините, произошла ошибка. Попробуйте позже.")
