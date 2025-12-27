@@ -132,10 +132,14 @@ async def chat_handler(message: Message):
         if os.getenv("LOCAL") == "1":
             context = context_store.get(f"context:{user_id}", [])
         else:
-            context_data = r.get(f"context:{user_id}")
-            if context_data:
-                context = json.loads(context_data.decode('utf-8'))
-            else:
+            try:
+                context_data = r.get(f"context:{user_id}")
+                if context_data:
+                    context = json.loads(context_data.decode('utf-8'))
+                else:
+                    context = []
+            except Exception as e:
+                print(f"Error loading context from Redis: {e}")
                 context = []
         response = chat_with_ai(message.text, context, user_id)
         print(f"Response: {response}")
@@ -144,7 +148,10 @@ async def chat_handler(message: Message):
         if os.getenv("LOCAL") == "1":
             context_store[f"context:{user_id}"] = context
         else:
-            r.set(f"context:{user_id}", json.dumps(context))
+            try:
+                r.set(f"context:{user_id}", json.dumps(context))
+            except Exception as e:
+                print(f"Error saving context to Redis: {e}")
         await message.bot.send_message(message.chat.id, response)
     except Exception as e:
         print(f"Error in chat_handler: {e}")
