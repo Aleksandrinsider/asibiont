@@ -60,6 +60,11 @@ class UserProfile(Base):
     city = Column(String(100))  # City for location-based matching
     current_plans = Column(Text)  # Current plans or events, e.g., "Сегодня иду в кино, завтра на выставку"
     current_time = Column(String(10))  # User's current time in HH:MM format, for relative time calculations
+    total_tasks_created = Column(Integer, default=0)  # Total tasks created
+    completed_tasks = Column(Integer, default=0)  # Total completed tasks
+    skipped_tasks = Column(Integer, default=0)  # Tasks marked as skipped or overdue
+    average_completion_time = Column(Integer, default=0)  # Average time to complete tasks in minutes
+    last_activity = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))  # Last interaction time
     updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="profile")

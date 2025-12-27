@@ -39,12 +39,20 @@ def test_dialogue():
 
     print("Тестирование диалога в продакшен режиме: Агент отвечает на ИИ-генерированные запросы пользователя.")
 
+    # Добавить несколько задач для теста низкого прогресса
+    from ai_integration import add_task
+    add_task("Купить продукты", user_id=user_id)
+    add_task("Позвонить другу", user_id=user_id)
+    add_task("Почитать книгу", user_id=user_id)
+
     for i in range(5):  # 5 итераций для быстрого теста
         try:
             if i == 0:
                 user_input = "Напомни через час заняться уборкой в квартире"
             elif i == 1:
                 user_input = "/find_partners"
+            elif i == 3:
+                user_input = "заверши задачу уборка"
             else:
                 user_input = generate_user_message(context)
             print(f"Пользователь: {user_input}")
