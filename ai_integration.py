@@ -34,13 +34,13 @@ class AIIntegration:
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
         return generate_overdue_reminder(user_id, overdue_tasks)
 
-def parse_tool_arguments(arguments_str):
-    params = {}
-    # Парсим <name>key</name> <string>value</string> или другие типы
-    matches = re.findall(r'<name>([^<]+)</name>\s*<([^>]+)>([^<]+)</\2>', arguments_str)
-    for key, tag, value in matches:
-        params[key] = value.strip()
-    return params
+def clean_content(content):
+    content = re.sub(r'<.*?>', '', content).strip()
+    content = re.sub(r'<\|.*?\|>', '', content).strip()
+    content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
+    content = re.sub(r'\{[^}]*\}', '', content).strip()
+    content = re.sub(r'\w+\s*\{[^}]*\}', '', content).strip()
+    return content
 
 def parse_relative_time(message, user_now=None):
     if not user_now:
@@ -195,7 +195,9 @@ def get_system_prompt():
 - Не предлагай тестовые задачи
 - Для времени: поддерживай форматы, сохраняй current_time
 
-Будь полезным, естественным и направленным на результат. Помогай не просто планировать, а действительно делать дела, предлагая конкретные шаги и поддержку в нужный момент. Вовлекай в диалог: задавай открытые вопросы. Делай ответы подробными, полезными, но не длинными. Фокусируйся на продуктивности: предлагай действия на основе времени и задач."""
+Будь полезным, естественным и направленным на результат. Помогай не просто планировать, а действительно делать дела, предлагая конкретные шаги и поддержку в нужный момент. Вовлекай в диалог: задавай открытые вопросы. Делай ответы подробными, полезными, но не длинными. Фокусируйся на продуктивности: предлагай действия на основе времени и задач.
+
+ВАЖНО: Отвечай только естественным текстом на русском языке. Не включай tool calls, JSON, код или технические детали в ответ. Используй инструменты только через внутренние tool calls, но никогда не показывай их в тексте ответа пользователю."""
 
 def get_progress_analytics(user_id):
     from models import Session, UserProfile
@@ -741,7 +743,7 @@ async def chat_with_ai(message, context=None, user_id=None):
             message_response = result["choices"][0]["message"]
             content = message_response.get("content", "")
             # Фильтровать сырые tool calls
-            content = re.sub(r'<.*?>', '', content).strip()
+            content = clean_content(content)
             content = re.sub(r'<\|.*?\|>', '', content).strip()
             content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
             tool_calls_in_content = False
@@ -831,7 +833,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                                 content = "Запрос обработан."
                         else:
                             content = "Запрос обработан."
-                    content = re.sub(r'<.*?>', '', content).strip()
+                    content = clean_content(content)
                     return content
                 else:
                     return "Ошибка ответа."
@@ -899,7 +901,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                             content = re.sub(r'<\|.*?\|>', '', content).strip()
                         else:
                             content = "Расскажите подробнее."
-                    content = re.sub(r'<.*?>', '', content).strip()
+                    content = clean_content(content)
                     return content
                 else:
                     return "Ошибка ответа."
@@ -920,7 +922,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                         content = re.sub(r'<\|.*?\|>', '', content).strip()
                     else:
                         content = "Расскажите подробнее."
-                content = re.sub(r'<.*?>', '', content).strip()
+                content = clean_content(content)
                 return content
         else:
             return "Ошибка."
