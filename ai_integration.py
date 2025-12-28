@@ -742,6 +742,8 @@ async def chat_with_ai(message, context=None, user_id=None):
             content = message_response.get("content", "")
             # Фильтровать сырые tool calls
             content = re.sub(r'<.*?>', '', content).strip()
+            content = re.sub(r'<\|.*?\|>', '', content).strip()
+            content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
             tool_calls_in_content = False
             if "<｜DSML｜function_calls>" in content:
                 tool_calls_in_content = True
@@ -829,6 +831,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                                 content = "Запрос обработан."
                         else:
                             content = "Запрос обработан."
+                    content = re.sub(r'<.*?>', '', content).strip()
                     return content
                 else:
                     return "Ошибка ответа."
@@ -896,6 +899,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                             content = re.sub(r'<\|.*?\|>', '', content).strip()
                         else:
                             content = "Расскажите подробнее."
+                    content = re.sub(r'<.*?>', '', content).strip()
                     return content
                 else:
                     return "Ошибка ответа."
@@ -916,6 +920,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                         content = re.sub(r'<\|.*?\|>', '', content).strip()
                     else:
                         content = "Расскажите подробнее."
+                content = re.sub(r'<.*?>', '', content).strip()
                 return content
         else:
             return "Ошибка."
