@@ -244,3 +244,118 @@ Added job "ReminderService.check_and_send_overdue_reminder" to job store "defaul
 Пользователь: Покажи задачи с высоким приоритетом.
 Агент: Ошибка.
 Scheduler has been shut down
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+Агент: Привет! Рад тебя видеть. Я помогу тебе с задачами, планами и всем, что нужно для продуктивности. 
+
+Сейчас у тебя нет активных задач, так что мы можем начать с чистого листа. Расскажи, какие у тебя планы на ближайшее время? Может быть, есть что-то, что нужно сделать сегодня или на этой неделе? 
+
+Или, если хочешь, я могу помочь тебе с чем-то конкретным — добавлением задач, планированием времени, поиском людей для совместных проектов. Что тебя интересует?
+Пользователь: Добавь задачу "подготовить презентацию к четвергу".
+Агент: Отлично, добавлю задачу по подготовке презентации. Для правильного планирования мне нужно знать, когда тебе удобно начать работу над ней? 
+
+Например, сегодня вечером, завтра утром или в другой день? И есть ли у тебя конкретное время, когда ты обычно работаешь над такими задачами? Это поможет установить оптимальное напоминание, чтобы презентация была готова к четвергу.
+Пользователь: Хорошо, давай начнём завтра утром в 10:00.
+Агент: Отлично, задача "подготовить презентацию к четвергу" добавлена. Я установил напоминание на завтра, 15 января, в 10:00 утра. 
+
+Кстати, чтобы презентация получилась качественной, можно подумать о структуре, визуальном оформлении или даже найти примеры для вдохновения. Если хочешь, я могу помочь с поиском людей, которые разбираются в презентациях, или предложить ресурсы по дизайну. 
+
+А пока у тебя есть другие планы на завтра после 10:00? Может, добавим ещё что-то, чтобы день был продуктивным?
+Пользователь: Хорошо, спасибо. Пока других задач нет, но я вернусь, если что-то понадобится.
+Агент: Отлично! Буду ждать твоего возвращения. Если понадобится помощь с презентацией или добавлением новых задач — обращайся. Удачи с подготовкой завтра!
+Пользователь: Хорошо, я вернулся. Можешь добавить ещё одну задачу — "купить подарок на день рождения" на субботу?
+Агент: Конечно, добавлю задачу по покупке подарка на день рождения. Чтобы установить оптимальное напоминание, скажи, когда тебе удобно заняться покупками? 
+
+Например, в субботу утром, днём или вечером? Или, может быть, ты предпочитаешь сделать это заранее — в пятницу? Это поможет не забыть о подарке и выбрать подходящее время.
+Пользователь: завершил задачу 'Подготовить отчет по проекту X'
+Агент: Сейчас у тебя есть только одна активная задача — "подготовить презентацию к четвергу". Задачи "Подготовить отчет по проекту X" в списке нет, возможно, она уже завершена или была удалена ранее. 
+
+Хочешь проверить другие задачи или, может быть, добавить что-то новое? Например, если отчет по проекту X всё ещё актуален, я могу помочь с его планированием или разбить на шаги.
+Пользователь: Хорошо, тогда добавь задачу "завершить чтение книги" на эту неделю.
+Агент: Отлично, добавлю задачу по чтению книги. Чтобы установить напоминание, скажи, когда тебе удобно заняться чтением на этой неделе? 
+
+Например, сегодня вечером, завтра после работы или в другой день? И есть ли у тебя предпочтения по времени — утро, день или вечер? Это поможет настроить оптимальное напоминание, чтобы книга была прочитана до конца недели.
+Пользователь: Хорошо, поставь напоминание на завтра в 20:00.
+Агент: Отлично, задача "завершить чтение книги" добавлена с напоминанием на завтра, 16 января, в 20:00. 
+
+Теперь у тебя две активные задачи: подготовка презентации к четвергу и чтение книги. Если хочешь, я могу помочь с планированием времени, чтобы всё успеть, или предложить идеи для подарка на день рождения в субботу. 
+
+Кстати, какую книгу ты читаешь? Может, есть вопросы по содержанию или хочешь обсудить её с кем-то?
+Пользователь: Хорошо, спасибо за напоминание. Книга — "Атомные привычки", пока всё понятно, но если возникнут вопросы, спрошу. А насчёт подарка — можешь предложить несколько идей для коллеги?
+Агент: Отличный выбор книги! "Атомные привычки" — очень полезная для продуктивности. Если появятся вопросы или захочешь обсудить какие-то идеи из неё, обращайся.
+
+Насчёт подарка для коллеги — вот несколько идей, которые можно рассмотреть:
+
+Можно подарить стильный ежедневник или блокнот для планирования, особенно если коллега ценит организованность. Также подойдёт качественная ручка или набор канцелярии. 
+
+Если знаешь увлечения коллеги, можно выбрать что-то связанное с хобби — например, книгу по интересующей теме, набор для творчества или аксессуар для спорта. 
+
+Ещё вариант — подарочная карта в книжный магазин, кофейню или на сервис онлайн-курсов. Это даст возможность выбрать то, что действительно нужно. 
+
+Или классический вариант — коробка хорошего чая/кофе с печеньем. 
+
+Какой бюджет ты рассматриваешь и что знаешь об интересах коллеги? Это поможет сузить варианты.
+Пользователь: Бюджет около 2000 рублей, коллега увлекается йогой и любит читать. Что посоветуешь?
+Агент: Отличные интересы! С бюджетом 2000 рублей можно выбрать что-то действительно стоящее. 
+
+Для увлечения йогой можно рассмотреть качественный коврик для йоги из натуральных материалов — это практичный и полезный подарок. Или набор блоков и ремешков для йоги, которые помогают в практике. 
+
+Для любителя чтения подойдёт подарочное издание книги по йоге, медитации или саморазвитию — например, что-то вроде "Йога-сутры" или книги известного мастера. 
+
+Можно совместить оба интереса: книга по йоге плюс сертификат на онлайн-курс по медитации. Или стильная термокружка для чая, чтобы пить во время чтения. 
+
+Ещё вариант — абонемент на несколько занятий в студию йоги, если знаешь, куда коллега ходит. 
+
+Какой из вариантов кажется тебе наиболее подходящим?
+Scheduler has been shut down
+Error running job overdue_123456789
+Traceback (most recent call last):
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 38, in callback
+    events = f.result()
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\base_py3.py", line 13, in run_coroutine_job
+    async def run_coroutine_job(job, jobstore_alias, run_times, logger_name):
+asyncio.exceptions.CancelledError
+Error running job overdue_12346
+Traceback (most recent call last):
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 38, in callback
+    events = f.result()
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\base_py3.py", line 13, in run_coroutine_job
+    async def run_coroutine_job(job, jobstore_alias, run_times, logger_name):
+asyncio.exceptions.CancelledError
+Error running job overdue_146333757
+Traceback (most recent call last):
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 38, in callback
+    events = f.result()
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\base_py3.py", line 13, in run_coroutine_job
+    async def run_coroutine_job(job, jobstore_alias, run_times, logger_name):
+asyncio.exceptions.CancelledError
+Error running job proactive_check_123456789
+Traceback (most recent call last):
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 38, in callback
+    events = f.result()
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\base_py3.py", line 13, in run_coroutine_job
+    async def run_coroutine_job(job, jobstore_alias, run_times, logger_name):
+asyncio.exceptions.CancelledError
+Error running job proactive_check_12346
+Traceback (most recent call last):
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 38, in callback
+    events = f.result()
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\base_py3.py", line 13, in run_coroutine_job
+    async def run_coroutine_job(job, jobstore_alias, run_times, logger_name):
+asyncio.exceptions.CancelledError
+Error running job proactive_check_146333757
+Traceback (most recent call last):
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\asyncio.py", line 38, in callback
+    events = f.result()
+  File "C:\Users\Insider\Desktop\Task\.venv\Lib\site-packages\apscheduler\executors\base_py3.py", line 13, in run_coroutine_job
+    async def run_coroutine_job(job, jobstore_alias, run_times, logger_name):
+asyncio.exceptions.CancelledError
