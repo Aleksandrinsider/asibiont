@@ -12,7 +12,9 @@ import datetime
 import pytz
 from datetime import timedelta
 
+
 bot = Bot(token=TELEGRAM_TOKEN)
+
 
 async def send_reminder(task_id, user_id):
     session = Session()
@@ -20,6 +22,7 @@ async def send_reminder(task_id, user_id):
     session.close()
     if task and task.status == 'pending':
         await bot.send_message(user_id, f"Напоминание: {task.title}")
+
 
 async def schedule_reminders(scheduler):
     try:
@@ -33,6 +36,7 @@ async def schedule_reminders(scheduler):
                 scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
     except Exception as e:
         print(f"Error in schedule_reminders: {e}")
+
 
 async def on_startup(bot: Bot):
     print("Starting on_startup")
@@ -50,6 +54,7 @@ async def on_startup(bot: Bot):
     reminder_service = ReminderService(bot, ai_service)
     await reminder_service.start()
     print("ReminderService started")
+
 
 async def main():
     print("Starting main function")
@@ -107,36 +112,37 @@ async def main():
         finally:
             await runner.cleanup()
 
+
 async def dashboard_handler(request):
     telegram_id = request.query.get('telegram_id')
     if not telegram_id:
         return web.Response(text="Telegram ID required", status=400)
-    
+
     session = Session()
     user = session.query(User).filter_by(telegram_id=int(telegram_id)).first()
     if not user:
         session.close()
         return web.Response(text="User not found", status=404)
-    
+
     # Get user metrics
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     tasks = session.query(Task).filter_by(user_id=user.id).all()
     interactions = session.query(Interaction).filter_by(user_id=user.id).all()
     subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-    
+
     total_tasks = len(tasks)
     completed_tasks = len([t for t in tasks if t.status == 'completed'])
     pending_tasks = len([t for t in tasks if t.status == 'pending'])
     skipped_tasks = len([t for t in tasks if t.status == 'skipped'])
-    
+
     # Calculate average completion time if available
     avg_completion_time = profile.average_completion_time if profile else 0
-    
+
     # Recent interactions
     recent_interactions = sorted(interactions, key=lambda x: x.created_at, reverse=True)[:10]
-    
+
     session.close()
-    
+
     # Generate HTML
     html = f"""
     <!DOCTYPE html>
@@ -166,7 +172,7 @@ async def dashboard_handler(request):
                 <p>Пользователь: {user.first_name or user.username}</p>
                 <p>Статус подписки: {subscription.status if subscription else 'Нет'}</p>
             </div>
-            
+
             <div class="metrics">
                 <div class="metric">
                     <h3>Всего задач</h3>
@@ -189,17 +195,19 @@ async def dashboard_handler(request):
                     <p>{avg_completion_time} мин</p>
                 </div>
             </div>
-            
+
             <div class="interactions">
                 <h2>Последние взаимодействия</h2>
-                {"".join([f'<div class="interaction"><div class="type">{i.message_type}</div><div class="content">{i.content[:100]}...</div></div>' for i in recent_interactions])}
+                {"".join([f'<div class="interaction"><div class="type">{i.message_type}</div>'
+                         f'<div class="content">{i.content[:100]}...</div></div>' for i in recent_interactions])}
             </div>
         </div>
     </body>
     </html>
     """
-    
+
     return web.Response(text=html, content_type='text/html')
+
 
 async def yookassa_webhook(request):
     data = await request.json()
