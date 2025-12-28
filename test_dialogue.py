@@ -6,6 +6,14 @@ import asyncio
 from models import Session, Task, User, Interaction, UserProfile
 from reminder_service import ReminderService
 import json
+import sys
+
+# Настройка кодировки для корректного вывода Unicode в Windows
+sys.stdout.reconfigure(encoding='utf-8')
+
+# Логирование в файл для чтения полного текста
+import logging
+logging.basicConfig(filename='test_dialogue.log', level=logging.INFO, encoding='utf-8', format='%(message)s')
 
 # Боевые настройки: без LOCAL=1, используем реальные Redis и БД
 import os
@@ -29,6 +37,8 @@ def print_user_tasks(user_id):
                 print(f"  - {task.title}: {task.status}, reminder: {task.reminder_time}, sent: {task.reminder_sent}")
         else:
             print(f"Пользователь {user_id} не найден в БД")
+    except Exception as e:
+        print(f"Ошибка при выводе задач: {e}")
     finally:
         db.close()
 
@@ -104,16 +114,20 @@ async def test_dialogue():
 
     # Новый пользователь - без предустановленных задач
 
-    for i in range(5):  # 5 итераций для тестирования
+    for i in range(10):  # 10 итераций для тестирования
         try:
             if i == 0:
                 user_input = "привет"
+            elif i == 5 and any("завершил" not in msg["agent"] for msg in context[-3:]):  # После добавления задач
+                user_input = "завершил задачу 'Подготовить отчет по проекту X'"
             else:
                 user_input = generate_user_message(context)
             print(f"Пользователь: {user_input}")
+            logging.info(f"Пользователь: {user_input}")
 
-            response = chat_with_ai(user_input, context, user_id)
+            response = await chat_with_ai(user_input, context, user_id)
             print(f"Агент: {response}")
+            logging.info(f"Агент: {response}")
             print("---")
 
             # Сохранить контекст
@@ -128,6 +142,17 @@ async def test_dialogue():
                 except Exception as e:
                     print(f"Error saving context: {e}")
 
+            # Записать взаимодействие для проактивных проверок
+            db = Session()
+            user = db.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                interaction = Interaction(user_id=user.id, message_type='user', content=user_input)
+                db.add(interaction)
+                interaction = Interaction(user_id=user.id, message_type='agent', content=response)
+                db.add(interaction)
+                db.commit()
+            db.close()
+
             # Проверка работы с БД: вывести текущие задачи
             print_user_tasks(user_id)
 
@@ -138,14 +163,12 @@ async def test_dialogue():
             print("Проверка proactive...")
             await reminder_service.check_and_send_proactive(user_id)
             print("Proactive проверен.")
-            
-            # Также протестируем generate_proactive_message напрямую
-            from ai_integration import generate_proactive_message
-            proactive_msg = await generate_proactive_message(user_id)
-            print(f"Сгенерированное proactive сообщение: {proactive_msg}")
         except Exception as e:
             print(f"Ошибка на шаге {i+1}: {e}")
             break
+
+    # Остановить scheduler после теста
+    reminder_service.scheduler.shutdown(wait=True)
 
 if __name__ == "__main__":
     asyncio.run(test_dialogue())

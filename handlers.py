@@ -64,7 +64,7 @@ async def update_profile_handler(message: Message):
                 context = json.loads(context_data)
         except Exception as e:
             context = []
-    response = chat_with_ai(prompt, context, user_id)
+    response = await chat_with_ai(prompt, context, user_id)
     await message.bot.send_message(message.chat.id, response)
     # Сохранить контекст
     context.append({"user": prompt, "agent": response})
@@ -104,7 +104,7 @@ async def find_partners_handler(message: Message):
                 context = json.loads(context_data)
         except Exception as e:
             context = []
-    response = chat_with_ai("Найди партнеров", context, user_id)
+    response = await chat_with_ai("Найди партнеров", context, user_id)
     await message.bot.send_message(message.chat.id, response)
     # Сохранить контекст
     context.append({"user": "Найди партнеров", "agent": response})
@@ -178,7 +178,7 @@ async def chat_handler(message: Message):
             except Exception as e:
                 print(f"Error loading context from Redis: {e}")
                 context = []
-        response = chat_with_ai(message.text, context, user_id)
+        response = await chat_with_ai(message.text, context, user_id)
         print(f"Response: {response}")
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
@@ -190,6 +190,17 @@ async def chat_handler(message: Message):
             except Exception as e:
                 print(f"Error saving context to Redis: {e}")
         await message.bot.send_message(message.chat.id, response)
+        # Записать взаимодействие для проактивных проверок
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            from models import Interaction
+            interaction = Interaction(user_id=user.id, message_type='user', content=message.text)
+            session.add(interaction)
+            interaction = Interaction(user_id=user.id, message_type='agent', content=response)
+            session.add(interaction)
+            session.commit()
+        session.close()
     except Exception as e:
         print(f"Error in chat_handler: {e}")
         await message.bot.send_message(message.chat.id, "Извините, произошла ошибка. Попробуйте позже.")

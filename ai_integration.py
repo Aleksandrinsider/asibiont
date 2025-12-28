@@ -20,19 +20,19 @@ def decrypt_data(data):
 
 class AIIntegration:
     async def generate_reminder(self, user_id, task_title):
-        return await generate_reminder(user_id, task_title)
+        return generate_reminder(user_id, task_title)
     
     async def generate_result_check(self, user_id, task_title):
-        return await generate_result_check(user_id, task_title)
+        return generate_result_check(user_id, task_title)
     
     async def generate_proactive_message(self, user_id):
-        return await generate_proactive_message(user_id)
+        return generate_proactive_message(user_id)
     
     async def generate_daily_report(self, user_id):
-        return await generate_daily_report(user_id)
+        return generate_daily_report(user_id)
     
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
-        return await generate_overdue_reminder(user_id, overdue_tasks)
+        return generate_overdue_reminder(user_id, overdue_tasks)
 
 def parse_tool_arguments(arguments_str):
     params = {}
@@ -79,6 +79,7 @@ def get_system_prompt():
 
 КЛЮЧЕВЫЕ ПРАВИЛА ФОРМАТИРОВАНИЯ:
 - Говори только сплошным текстом, без списков и пунктов.
+- Строго избегай любых списков, нумерации, пунктов, маркеров — говори только повествовательным текстом, перечисляя варианты в предложениях.
 - Используй обычные предложения, даже когда перечисляешь варианты: "можно попробовать это или то, также подойдет другой вариант".
 - Избегай структурирующих слов типа "во-первых", "затем", "следующий шаг".
 
@@ -92,19 +93,20 @@ def get_system_prompt():
 - update_user_memory(user_id=число, memory="важная информация о пользователе") — для сохранения памяти
 
 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
-- Если пользователь говорит "добавь задачу X", немедленно вызови add_task(title="X").
-- Если пользователь спрашивает о задачах, вызови list_tasks() и включи результат в ответ.
-- Если пользователь хочет завершить задачу, сначала вызови list_tasks(), затем complete_task() с ID.
-- Всегда предпочитай действие через инструмент, а не текстовое описание.
+- Если пользователь говорит "добавь задачу X", немедленно вызови add_task(title="X", reminder_time="ближайшее время").
+- Всегда передавай все обязательные параметры в tool calls, особенно title и reminder_time для add_task.
+- Если пользователь не указал время, используй ближайшее свободное, но всегда передавай reminder_time.
 
 ОСНОВНОЙ ПОДХОД:
 
 АКТИВНОЕ УПРАВЛЕНИЕ ЗАДАЧАМИ:
 - Когда слышишь о планах ("нужно сходить", "хочу сделать"), сразу предлагай добавить задачу.
 - Автоматически добавляй задачи из фраз вроде 'Мне нужно X' — НЕ ОТВЕЧАЙ ТЕКСТОМ, А НЕМЕДЛЕННО ВЫЗЫВАЙ add_task().
+- Всегда уточняй точное время напоминания перед добавлением задачи, чтобы избежать конфликтов и правильно спланировать день.
 - Если данных достаточно для действия (например, title и время), НЕМЕДЛЕННО вызывай инструмент. Не спрашивай подтверждения, если не нужно уточнений.
 - Всегда проверяй текущие задачи через list_tasks() перед предложением новых.
 - Если видишь невыполненные задачи — мягко напомни и предложи завершить через complete_task().
+- Для завершения задач всегда сначала проверяй list_tasks(), чтобы получить актуальный task_id, затем вызывай complete_task(task_id, user_id).
 - Вместо совета "разбей на части" предлагай конкретные способы решения.
 - Избегай шаблонных методик — ищи индивидуальный подход для каждого пользователя.
 - Будь proactive: если пользователь говорит о планах или целях, предложи добавить задачу через add_task().
@@ -123,15 +125,11 @@ def get_system_prompt():
 - Будь proactive: если пользователь указал свободное время, немедленно предложи 1-2 задачи на это время.
 
 ПОИСК КОНТАКТОВ:
-- Как только в разговоре возникают темы хобби, проектов, интересов — сразу ищи людей через find_partners().
-- При упоминании хобби, интересов, навыков, бизнеса, знакомств или подобными темами (например, спорт, хобби, дизайн, бизнес, знакомства, программирование), немедленно вызови find_partners и включи 1-2 найденных пользователей с контактами в первый абзац ответа.
-- Всегда используй результаты инструментов в ответе — например, если find_partners нашел людей, упомяни их в разговоре.
-- Если данных недостаточно для точных рекомендаций (например, город, время, уровень), уточни у пользователя, чтобы советы были релевантными.
-- Также предлагай советы о релевантных событиях или планах других пользователей в том же городе, основываясь на их профилях.
-- Упоминай в ответе подходящих людей: "Кстати, я нашел Алексея, который тоже занимается дизайном..."
-- Делись информацией о событиях или активностях в городе пользователя.
-- Предлагай поиск людей для совместной работы.
-- Будь социально: предлагай продолжить общение с предыдущими контактами. Часто предлагай найти людей для проектов.
+- Предлагай поиск людей только если пользователь явно выразил интерес к социальным взаимодействиям, или если текущая ситуация предполагает сотрудничество (например, сложная задача, где нужна помощь, или пользователь упомянул интересы/проекты).
+- Не предлагай поиск людей в каждом сообщении — делай это уместно и естественно, только когда это добавляет ценность диалогу.
+- Если пользователь упомянул хобби, интересы, навыки или проекты, тогда вызови find_partners() и упомяни найденных людей в ответе, чтобы помочь с сотрудничеством.
+- Используй результаты инструментов только когда они релевантны — например, если find_partners нашел подходящих людей, кратко упомяни их: "Кстати, я нашел Алексея, который тоже занимается дизайном..."
+- Будь социально, но не навязчиво: предлагай продолжить общение с предыдущими контактами только если пользователь проявляет интерес.
 
 ВЫЯВЛЕНИЕ ПОТРЕБНОСТЕЙ И ПЕРСОНАЛИЗАЦИЯ РЕШЕНИЙ:
 - Анализируй истинные потребности пользователя на основе контекста: задач, интересов, планов, прогресса и предыдущих взаимодействий.
@@ -152,6 +150,7 @@ def get_system_prompt():
   * <50% — мотивируй улучшить продуктивность
   * <20% — предложи пересмотреть подход
 - Адаптируйся к прогрессу.
+- Делай диалог уникальным и уместным: анализируй текущую ситуацию (задачи, время, предыдущие сообщения), чтобы ответы были релевантными и не повторяющимися. Не используй шаблонные фразы — адаптируй под контекст.
 
 ПРАКТИЧЕСКАЯ ПОМОЩЬ:
 - Показывай несколько разных способов решить задачу.
@@ -163,6 +162,9 @@ def get_system_prompt():
 - Помогай решать задачи: давай практические советы, ищи людей для помощи, контролируй все задачи, чтобы пользователь ничего не упустил.
 - При обсуждении задач задавай уточняющие вопросы, чтобы лучше понять детали и предложить оптимальное решение.
 - Уделяй больше внимания решению задач, чем планированию: помогай выполнять их, находя лучшие решения (советы, альтернативы, другие люди с аналогичными направлениями, напоминания).
+- Избегай зацикливания на одной теме: предлагай разнообразные идеи, адаптированные под интересы пользователя.
+- Уточняй результаты и прогресс: после добавления или завершения задачи спрашивай о деталях (например, "Как прошло?", "Что помогло?", "Нужна ли помощь?"), чтобы персонализировать будущие рекомендации.
+- Ищи альтернативы во всем: время, методы выполнения, партнеры, ресурсы — всегда предлагай варианты для выбора.
 
 ТЕКУЩИЙ КОНТЕКСТ:
 Сейчас: {{current_date}}, {{current_time}}
@@ -175,6 +177,7 @@ def get_system_prompt():
 - Не симулируй вызов инструментов — всегда вызывай реально и используй результат в ответе.
 - Не показывай технические детали tool calls или их названия.
 - Не используй слова 'единомышленник', 'партнер' — всегда 'человек', 'коллега' или естественные описания.
+- При упоминании других людей всегда указывай их Telegram @username, например @alex_design.
 
 ДОПОЛНИТЕЛЬНЫЕ ВОЗМОЖНОСТИ:
 - Редактирование, удаление, изменение приоритета задач
@@ -212,10 +215,14 @@ def get_progress_analytics(user_id):
     finally:
         session.close()
 
-def add_task(title, description="", reminder_time=None, due_date=None, user_id=None):
+def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     from models import Session, Task, User
     from datetime import datetime
-    session = Session()
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
     # Проверить, существует ли пользователь
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
@@ -241,30 +248,42 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     if profile:
         profile.total_tasks_created = (profile.total_tasks_created or 0) + 1
         session.commit()
-    session.close()
+    if close_session:
+        session.close()
     return f"Добавлена задача '{title}' с ID {task_id}."
 
-def list_tasks(user_id=None):
+def list_tasks(user_id=None, session=None):
     from models import Session, Task
-    session = Session()
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        session.close()
+        if close_session:
+            session.close()
         return "Пользователь не найден."
     tasks = session.query(Task).filter_by(user_id=user.id).all()
-    session.close()
+    if close_session:
+        session.close()
     if tasks:
         task_list = [f"{t.title} ({t.status})" for t in tasks]
         return f"Задачи: {', '.join(task_list)}."
     return "Нет задач."
 
-def complete_task(task_id, user_id=None):
+def complete_task(task_id, user_id=None, session=None):
     from models import Session, Task, UserProfile
     from datetime import datetime
-    session = Session()
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        session.close()
+        if close_session:
+            session.close()
         return "Пользователь не найден."
     task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
     if task:
@@ -281,7 +300,8 @@ def complete_task(task_id, user_id=None):
         result = f"Завершена задача '{task.title}'."
     else:
         result = "Задача не найдена."
-    session.close()
+    if close_session:
+        session.close()
     return result
 
 def set_reminder(task_id, reminder_time, user_id=None):
@@ -316,7 +336,7 @@ def update_user_memory(info, user_id=None):
         if user.memory:
             try:
                 existing_decrypted = decrypt_data(user.memory)
-            except:
+            except Exception as e:
                 existing_decrypted = ""
         # Добавляем новую информацию
         if existing_decrypted:
@@ -403,12 +423,17 @@ def get_task_details(task_id, user_id=None):
         return f"Задача: {task.title}, статус {task.status}, приоритет {task.priority}."
     return "Задача не найдена."
 
-def find_partners(user_id=None):
+def find_partners(user_id=None, session=None):
     from models import Session, UserProfile, User
-    session = Session()
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        session.close()
+        if close_session:
+            session.close()
         return "Пользователь не найден."
     # Остальной код...
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -423,7 +448,7 @@ def find_partners(user_id=None):
             matches = re.findall(r'не показывать @(\w+)|заблокировать @(\w+)', decrypted, re.IGNORECASE)
             for match in matches:
                 blocked.extend([m for m in match if m])
-        except:
+        except Exception as e:
             pass
     partners = []
     tips = []
@@ -453,7 +478,8 @@ def find_partners(user_id=None):
     else:
         # Если профиля нет, вернуть тестовых партнеров для демонстрации
         partners = profiles[:2] if profiles else []
-    session.close()
+    if close_session:
+        session.close()
     response = ""
     if partners:
         response += "Есть люди с похожими интересами: "
@@ -466,9 +492,13 @@ def find_partners(user_id=None):
         response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу EREBUS AI — так у вас появится больше возможностей для общения и совместных проектов! 😊"
     return response
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, user_id=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, user_id=None, session=None):
     from models import Session, User, UserProfile
-    session = Session()
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         user = User(telegram_id=user_id)
@@ -487,7 +517,8 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.contact_info = f"user{user_id}"  # Простой username
     profile.updated_at = datetime.now(timezone.utc)
     session.commit()
-    session.close()
+    if close_session:
+        session.close()
     return "Профиль обновлен."
 
 TOOLS = [
@@ -640,12 +671,12 @@ TOOLS = [
     }
 ]
 
-def chat_with_ai(message, context=None, user_id=None):
+async def chat_with_ai(message, context=None, user_id=None):
     try:
         # Get user memory and all tasks for extended context
         user_memory = ""
         if user_id:
-            from models import Session, User
+            from models import Session, User, Task
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -709,13 +740,17 @@ def chat_with_ai(message, context=None, user_id=None):
             result = response.json()
             message_response = result["choices"][0]["message"]
             content = message_response.get("content", "")
+            # Фильтровать сырые tool calls
+            content = re.sub(r'<.*?>', '', content).strip()
             tool_calls_in_content = False
             if "<｜DSML｜function_calls>" in content:
                 tool_calls_in_content = True
                 # Парсить tool calls из content
                 tool_call_blocks = re.findall(r'<｜DSML｜invoke name="([^"]+)">(.*?)</｜DSML｜invoke>', content, re.DOTALL)
                 tool_messages = []
-                messages.append({"role": "assistant", "content": content})  # Добавить с tool calls
+                # Очистить content от tool calls перед добавлением в messages
+                clean_content = re.sub(r'<.*?>', '', content).strip()
+                messages.append({"role": "assistant", "content": clean_content})  # Добавить очищенный content
                 for func_name, block in tool_call_blocks:
                     # Try JSON first
                     arguments_match = re.search(r'<｜DSML｜function_input>(.*?)</｜DSML｜function_input>', block, re.DOTALL)
@@ -726,12 +761,21 @@ def chat_with_ai(message, context=None, user_id=None):
                         except:
                             args = parse_tool_arguments(arguments_str)
                     else:
-                        # Fallback to arg format
-                        args = {}
-                        arg_matches = re.findall(r'<｜DSML｜arg name="([^"]+)">(.*?)</｜DSML｜arg>', block, re.DOTALL)
-                        for key, value in arg_matches:
-                            args[key] = value.strip()
+                        # Try JSON in tool_call
+                        json_match = re.search(r'<｜DSML｜tool_call>(.*?)</｜DSML｜tool_call>', block, re.DOTALL)
+                        if json_match:
+                            try:
+                                args = json.loads(json_match.group(1))
+                            except:
+                                args = {}
+                        else:
+                            # Fallback to arg format
+                            args = {}
+                            arg_matches = re.findall(r'<｜DSML｜(?:arg|parameter) name="([^"]+)">(.*?)</｜DSML｜(?:arg|parameter)>', block, re.DOTALL)
+                            for key, value in arg_matches:
+                                args[key] = value.strip()
                     if func_name == "add_task":
+                        print(f"Args for add_task (content): {args}")
                         result_text = add_task(**args, user_id=user_id)
                     elif func_name == "list_tasks":
                         result_text = list_tasks(user_id=user_id)
@@ -795,8 +839,12 @@ def chat_with_ai(message, context=None, user_id=None):
                 messages.append(message_response)
                 for tool_call in message_response["tool_calls"]:
                     func_name = tool_call["function"]["name"]
-                    args = parse_tool_arguments(tool_call["function"]["arguments"])
+                    try:
+                        args = json.loads(tool_call["function"]["arguments"])
+                    except:
+                        args = parse_tool_arguments(tool_call["function"]["arguments"])
                     if func_name == "add_task":
+                        print(f"Args for add_task (tool_calls): {args}")
                         result_text = add_task(**args, user_id=user_id)
                     elif func_name == "list_tasks":
                         result_text = list_tasks(user_id=user_id)
@@ -897,9 +945,8 @@ async def generate_reminder(user_id, task_title):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        system_prompt = f"""Ты — строгий ассистент по управлению задачами. Создай краткое напоминание о задаче '{task_title}' в естественном диалоге.
-Будь мотивирующим, но строгим. Напомни о важности выполнения задачи вовремя. Если пользователь часто откладывает, укажи на это мягко.
-Говори повествовательно, без списков или форматирования, будь краток (1-2 предложения).{user_memory}"""
+        base_prompt = get_system_prompt()
+        system_prompt = f"{base_prompt}\nТы генерируешь краткое напоминание о задаче '{task_title}'. Будь мотивирующим, строгим, краток (1-2 предложения).{user_memory}"
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -942,9 +989,8 @@ async def generate_result_check(user_id, task_title):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        system_prompt = f"""Ты — строгий ассистент по управлению задачами. Задай вопрос о результате выполнения задачи '{task_title}' в естественном диалоге.
-Спроси: сколько времени заняло, были ли сложности, что можно улучшить. Будь строгим, если задача была просрочена.
-Говори повествовательно, без списков или форматирования, будь краток.{user_memory}"""
+        base_prompt = get_system_prompt()
+        system_prompt = f"{base_prompt}\nТы задаешь вопрос о результате выполнения задачи '{task_title}'. Спроси о времени, сложностях, улучшениях. Будь строгим при просрочке, краток.{user_memory}"
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -965,7 +1011,7 @@ async def generate_result_check(user_id, task_title):
         print(f"Error in generate_result_check: {e}")
         return f"Результат задачи '{task_title}'?"
 
-async def generate_proactive_message(user_id):
+def generate_proactive_message(user_id):
     """Генерирует проактивное сообщение, если нет задач на ближайший час"""
     try:
         # Получить память пользователя, планы других и текущие задачи
@@ -1009,15 +1055,8 @@ async def generate_proactive_message(user_id):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        system_prompt = f"""Ты — мотивирующий ассистент по управлению задачами. Создай разнообразное проактивное сообщение для пользователя, у которого нет задач на ближайший час.
-Варианты сообщений:
-- Напомни о текущих невыполненных задачах и предложи завершить одну.
-- Спроси о новых задачах, которые пользователь хочет добавить.
-- Расскажи о том, что делают другие люди в городе с похожими интересами, и предложи связаться с ними.
-- Предложи добавить задачу на основе интересов пользователя (например, если интересуется программированием, предложи поработать над проектом).
-- Мотивируй на продуктивность, напомни о важности планирования.
-Проанализируй текущую ситуацию пользователя на основе предоставленной информации (задачи, память, планы других) и включи свои наблюдения в сообщение, чтобы сделать его более персонализированным.
-Будь позитивным, вовлекающим, говори повествовательно, без списков или форматирования, будь краток (1-2 предложения). Если есть информация о планах людей, включи предложение связаться.{user_memory}{plans_info}{tasks_info}"""
+        base_prompt = get_system_prompt()
+        system_prompt = f"{base_prompt}\nТы генерируешь разнообразное проактивное сообщение для пользователя без задач на ближайший час. Будь позитивным, вовлекающим, краток (1-2 предложения). Включи персонализацию на основе задач, памяти, планов людей.{user_memory}{plans_info}{tasks_info}"
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -1069,10 +1108,8 @@ async def generate_daily_report(user_id):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        system_prompt = f"""Ты — ассистент по управлению задачами. Создай краткий ежедневный отчет на основе задач пользователя.
-Выполнено задач: {len(completed)}
-Ожидающих задач: {len(pending)}
-Будь позитивным, мотивирующим, говори повествовательно, без списков или форматирования, будь краток.{user_memory}"""
+        base_prompt = get_system_prompt()
+        system_prompt = f"{base_prompt}\nТы генерируешь краткий ежедневный отчет: выполнено {len(completed)} задач, ожидают {len(pending)}. Будь позитивным, мотивирующим.{user_memory}"
         
         messages = [
             {"role": "system", "content": system_prompt},
@@ -1116,8 +1153,8 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        system_prompt = f"""Ты — строгий ассистент по управлению задачами. Создай напоминание о просроченных задачах: {', '.join(task_titles)}.
-Будь строгим, мотивирующим, напомни о последствиях. Говори повествовательно, без списков или форматирования, будь краток.{user_memory}"""
+        base_prompt = get_system_prompt()
+        system_prompt = f"{base_prompt}\nТы генерируешь строгое, мотивирующее напоминание о просроченных задачах: {', '.join(task_titles)}. Будь краток, напомни о последствиях.{user_memory}"
         
         messages = [
             {"role": "system", "content": system_prompt},
