@@ -213,3 +213,34 @@ Added job "ReminderService.check_and_send_overdue_reminder" to job store "defaul
 Пользователь: Ошибка.
 Агент: Ошибка.
 Scheduler has been shut down
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+Агент: Ошибка.
+Пользователь: Добавь задачу "купить молоко".
+Агент: Ошибка.
+Пользователь: Покажи мои задачи.
+Агент: Ошибка.
+Пользователь: Удали задачу "купить молоко".
+Агент: Ошибка.
+Пользователь: Покажи список моих задач.
+Агент: Ошибка.
+Пользователь: завершил задачу 'Подготовить отчет по проекту X'
+Агент: Ошибка.
+Пользователь: Покажи все завершенные задачи.
+Агент: Ошибка.
+Пользователь: Покажи мои активные задачи.
+Агент: Ошибка.
+Пользователь: Покажи задачи, которые я создал за последнюю неделю.
+Агент: Ошибка.
+Пользователь: Покажи задачи с высоким приоритетом.
+Агент: Ошибка.
+Scheduler has been shut down

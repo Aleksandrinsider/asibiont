@@ -753,8 +753,8 @@ async def chat_with_ai(message, context=None, user_id=None):
                 tool_call_blocks = re.findall(r'<｜DSML｜invoke name="([^"]+)">(.*?)</｜DSML｜invoke>', content, re.DOTALL)
                 tool_messages = []
                 # Очистить content от tool calls перед добавлением в messages
-                clean_content = re.sub(r'<.*?>', '', content).strip()
-                messages.append({"role": "assistant", "content": clean_content})  # Добавить очищенный content
+                cleaned_content = re.sub(r'<.*?>', '', content).strip()
+                messages.append({"role": "assistant", "content": cleaned_content})  # Добавить очищенный content
                 for func_name, block in tool_call_blocks:
                     # Try JSON first
                     arguments_match = re.search(r'<｜DSML｜function_input>(.*?)</｜DSML｜function_input>', block, re.DOTALL)
