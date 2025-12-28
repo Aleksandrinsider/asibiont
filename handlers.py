@@ -189,7 +189,9 @@ async def chat_handler(message: Message):
                 r.set(f"context:{user_id}", json.dumps(context))
             except Exception as e:
                 print(f"Error saving context to Redis: {e}")
+        print(f"Sending response to {message.chat.id}")
         await message.bot.send_message(message.chat.id, response)
+        print("Response sent successfully")
         # Записать взаимодействие для проактивных проверок
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
