@@ -57,7 +57,7 @@ def generate_user_message(context):
     data = {
         "model": "deepseek-chat",
         "messages": messages,
-        "max_tokens": 50
+        "max_tokens": 200
     }
     response = requests.post(url, headers=headers, json=data)
     if response.status_code == 200:

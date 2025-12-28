@@ -175,3 +175,10 @@ Added job "ReminderService.check_and_send_overdue_reminder" to job store "defaul
 Пользователь: Отлично, добавил описание. Напомни мне за час до совещания, пожалуйста.
 Агент: Конечно! Чтобы установить напоминание за час до совещания, мне нужно знать точное время самого совещания. Во сколько планируется встреча?
 Scheduler has been shut down
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
