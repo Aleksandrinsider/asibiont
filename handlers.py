@@ -135,7 +135,7 @@ async def subscribe_handler(message: Message):
     # Создать платеж на 3000 RUB
     from payments import create_payment
     payment_url = create_payment(3000, "Подписка на премиум-функции бота (месяц)", user_id)
-    await message.bot.send_message(message.chat.id, f"💳 Оплатите подписку удобным способом:\n\n🔗 Ссылка на оплату (ЮКАССА, СБЕР или банковская карта): {payment_url}\n\n✅ После оплаты подписка активируется мгновенно — никаких задержек!\n\n🚀 Добро пожаловать в команду лидеров! Теперь ваш ИИ-ассистент поможет достигать целей быстрее. Начните с команды /start и добавьте первую задачу! 💪✨")
+    await message.bot.send_message(message.chat.id, f"Оплатите подписку удобным способом:\n\nСсылка на оплату (ЮКАССА, СБЕР или банковская карта): {payment_url}\n\nПосле оплаты подписка активируется мгновенно — никаких задержек!")
     session.close()
 
 @router.message()
