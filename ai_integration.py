@@ -18,6 +18,14 @@ def decrypt_data(data):
         return cipher.decrypt(data.encode()).decode()
     return data
 
+def clean_content(content):
+    content = re.sub(r'<.*?>', '', content).strip()
+    content = re.sub(r'<\|.*?\|>', '', content).strip()
+    content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
+    content = re.sub(r'\{[^}]*\}', '', content).strip()
+    content = re.sub(r'\w+\s*\{[^}]*\}', '', content).strip()
+    return content
+
 class AIIntegration:
     async def generate_reminder(self, user_id, task_title):
         return generate_reminder(user_id, task_title)
@@ -33,14 +41,6 @@ class AIIntegration:
     
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
         return generate_overdue_reminder(user_id, overdue_tasks)
-
-def clean_content(content):
-    content = re.sub(r'<.*?>', '', content).strip()
-    content = re.sub(r'<\|.*?\|>', '', content).strip()
-    content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
-    content = re.sub(r'\{[^}]*\}', '', content).strip()
-    content = re.sub(r'\w+\s*\{[^}]*\}', '', content).strip()
-    return content
 
 def parse_relative_time(message, user_now=None):
     if not user_now:

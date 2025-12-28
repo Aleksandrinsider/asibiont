@@ -182,3 +182,34 @@ Added job "ReminderService.send_daily_report" to job store "default"
 Added job "ReminderService.check_and_send_proactive" to job store "default"
 Added job "ReminderService.check_and_send_proactive" to job store "default"
 Added job "ReminderService.check_and_send_proactive" to job store "default"
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+Агент: Ошибка.
+Пользователь: Добавь задачу "подготовить отчет".
+Агент: Ошибка.
+Пользователь: Покажи все мои задачи.
+Агент: Ошибка.
+Пользователь: Ошибка.
+Агент: Ошибка.
+Пользователь: Ошибка.
+Агент: Ошибка.
+Пользователь: завершил задачу 'Подготовить отчет по проекту X'
+Агент: Ошибка.
+Пользователь: Покажи, какие задачи остались невыполненными.
+Агент: Ошибка.
+Пользователь: Ошибка.
+Агент: Ошибка.
+Пользователь: Покажи список всех задач.
+Агент: Ошибка.
+Пользователь: Ошибка.
+Агент: Ошибка.
+Scheduler has been shut down
