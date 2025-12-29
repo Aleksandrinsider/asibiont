@@ -192,6 +192,18 @@ app.router.add_post('/yookassa-webhook', yookassa_webhook)
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
+# Setup for production
+dp = Dispatcher()
+dp.include_router(router)
+
+webhook_requests_handler = SimpleRequestHandler(
+    dispatcher=dp,
+    bot=bot,
+)
+webhook_requests_handler.register(app, path="/webhook")
+
+setup_application(app, dp, bot=bot)
+
 # Add startup handler
 app.on_startup.append(on_startup)
 
@@ -246,27 +258,6 @@ async def main():
         except KeyboardInterrupt:
             print("Stopping server...")
             await runner.cleanup()
-    else:
-        # Вебхук для Railway
-        logger.info("Setting up webhook for Railway")
-        
-        dp = Dispatcher()
-        dp.include_router(router)
-        logger.info("Dispatcher created and router included")
-        
-        webhook_requests_handler = SimpleRequestHandler(
-            dispatcher=dp,
-            bot=bot,
-        )
-        webhook_requests_handler.register(app, path="/webhook")
-
-        setup_application(app, dp, bot=bot)
-
-        logger.info("App configured for Railway")
-        
-        port = int(os.getenv("PORT"))
-        logger.info(f"Running app on port {port}")
-        web.run_app(app, port=port, host='0.0.0.0')
 
 
 async def yookassa_webhook(request):
@@ -290,10 +281,16 @@ async def yookassa_webhook(request):
     return web.Response(text="OK")
 
 if __name__ == "__main__":
-    logger.info("Running main")
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        logger.error(f"Error in main: {e}")
-        import traceback
-        traceback.print_exc()
+    if os.getenv("LOCAL") == "1":
+        logger.info("Running main in local mode")
+        try:
+            asyncio.run(main())
+        except Exception as e:
+            logger.error(f"Error in main: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        logger.info("Running app in production mode")
+        port = int(os.getenv("PORT"))
+        logger.info(f"Starting web app on port {port}")
+        web.run_app(app, port=port, host='0.0.0.0')
