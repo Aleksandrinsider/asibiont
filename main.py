@@ -180,7 +180,7 @@ aiohttp_session.setup(app, SimpleCookieStorage())
 
 # Routes
 app.router.add_get('/', login_handler)
-app.router.add_get('/tg_auth', auth_handler)
+app.router.add_get('/telegram_auth', auth_handler)
 app.router.add_get('/test_login', test_login_handler)
 app.router.add_get('/logout', logout_handler)
 app.router.add_get('/dashboard', dashboard_handler)
