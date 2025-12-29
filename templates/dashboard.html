@@ -3,41 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task Manager Dashboard</title>
+    <title>Task Manager - Диалог с агентом</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .chat-container {
+            max-width: 800px;
+            margin: 0 auto;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .message {
+            margin-bottom: 10px;
+        }
+        .message.user {
+            text-align: right;
+        }
+        .message.agent {
+            text-align: left;
+        }
+        .chat-input {
+            display: flex;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+        }
+        .chat-input button {
+            padding: 10px;
+        }
+    </style>
 </head>
 <body>
-    <header class="header">
-        <div class="header-content">
-            <h1>Task Manager</h1>
-            <nav>
-                <a href="/dashboard">Dashboard</a>
-                <a href="/tasks">Tasks</a>
-                <a href="/logout">Logout</a>
-            </nav>
-        </div>
-    </header>
-    <div class="main-content">
-        <aside class="sidebar">
-            <h2>Меню</h2>
-            <ul>
-                <li><a href="/dashboard">Обзор</a></li>
-                <li><a href="/tasks">Задачи</a></li>
-                <li><a href="/profile">Профиль</a></li>
-            </ul>
-        </aside>
-        <main class="content">
-            <h2>Ваши задачи</h2>
-            <div class="issues-list">
-                {% for task in tasks %}
-                <div class="issue-item">
-                    <h3>{{ task.title }}</h3>
-                    <p>{{ task.description }}</p>
-                    <span class="status {{ task.status }}">{{ task.status }}</span>
-                </div>
-                {% endfor %}
+    <div class="container">
+        <h1>Диалог с агентом по управлению задачами</h1>
+        <a href="/logout" class="logout-btn">Выйти</a>
+        <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message agent">Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>
             </div>
-        </main>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Введите сообщение...">
+                <button onclick="sendMessage()">Отправить</button>
+            </div>
+        </div>
     </div>
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, 'user');
+            input.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message }),
+                });
+                const data = await response.json();
+                addMessage(data.response, 'agent');
+            } catch (error) {
+                addMessage('Ошибка: ' + error.message, 'agent');
+            }
+        }
+
+        function addMessage(text, sender) {
+            const messages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = text;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
 </body>
 </html>

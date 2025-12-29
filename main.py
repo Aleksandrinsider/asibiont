@@ -10,7 +10,7 @@ from aiohttp_session import get_session, SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from handlers import router
 from reminder_service import ReminderService
-from ai_integration import AIIntegration
+from ai_integration import chat_with_ai
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
 import os
 import datetime
@@ -77,6 +77,29 @@ async def dashboard_handler(request):
     tasks = session_db.query(Task).filter_by(user_id=user_id).all()
     session_db.close()
     return {'tasks': tasks}
+
+
+async def tasks_handler(request):
+    return web.HTTPFound('/dashboard')
+
+
+async def profile_handler(request):
+    return web.HTTPFound('/dashboard')
+
+
+async def chat_handler(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+
+    data = await request.json()
+    message = data.get('message', '')
+
+    # Get AI response
+    response = await chat_with_ai(message, user_id=user_id)
+
+    return web.json_response({'response': response})
 
 
 async def yookassa_webhook(request):
@@ -156,6 +179,9 @@ async def main():
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/logout', logout_handler)
         app.router.add_get('/dashboard', dashboard_handler)
+        app.router.add_get('/tasks', tasks_handler)
+        app.router.add_get('/profile', profile_handler)
+        app.router.add_post('/chat', chat_handler)
         app.router.add_static('/static', 'static')
         
         runner = web.AppRunner(app)
@@ -204,6 +230,9 @@ async def main():
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/logout', logout_handler)
         app.router.add_get('/dashboard', dashboard_handler)
+        app.router.add_get('/tasks', tasks_handler)
+        app.router.add_get('/profile', profile_handler)
+        app.router.add_post('/chat', chat_handler)
         app.router.add_static('/static', 'static')
 
         app.router.add_post('/yookassa-webhook', yookassa_webhook)
