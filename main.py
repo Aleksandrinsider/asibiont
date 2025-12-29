@@ -78,7 +78,22 @@ async def dashboard_handler(request):
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
     session_db.close()
-    return {'tasks': tasks, 'user': user, 'profile': profile}
+    
+    # Calculate metrics
+    total_tasks = len(tasks)
+    completed_tasks = len([t for t in tasks if t.status == 'completed'])
+    pending_tasks = len([t for t in tasks if t.status == 'pending'])
+    skipped_tasks = len([t for t in tasks if t.status == 'skipped'])
+    
+    return {
+        'tasks': tasks, 
+        'user': user, 
+        'profile': profile,
+        'total_tasks': total_tasks,
+        'completed_tasks': completed_tasks,
+        'pending_tasks': pending_tasks,
+        'skipped_tasks': skipped_tasks
+    }
 
 
 async def tasks_handler(request):

@@ -6,11 +6,29 @@
     <title>Task Manager - Дашборд</title>
     <link rel="stylesheet" href="/static/style.css">
     <style>
-        .dashboard-grid {
+        .metrics {
             display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 20px;
-            margin-top: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .metric {
+            background: #f6f8fa;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+        }
+        .metric h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #586069;
+        }
+        .metric p {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+            color: #24292f;
         }
         .main-section {
             background: white;
@@ -127,6 +145,24 @@
         </div>
         <div class="dashboard-grid">
             <div class="main-section">
+                <div class="metrics">
+                    <div class="metric">
+                        <h3>Всего задач</h3>
+                        <p>{{ total_tasks }}</p>
+                    </div>
+                    <div class="metric">
+                        <h3>Завершено</h3>
+                        <p>{{ completed_tasks }}</p>
+                    </div>
+                    <div class="metric">
+                        <h3>В ожидании</h3>
+                        <p>{{ pending_tasks }}</p>
+                    </div>
+                    <div class="metric">
+                        <h3>Пропущено</h3>
+                        <p>{{ skipped_tasks }}</p>
+                    </div>
+                </div>
                 <div class="tasks-section">
                     <h2>Ваши задачи</h2>
                     <div class="issues-list">
