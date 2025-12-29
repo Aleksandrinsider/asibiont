@@ -42,9 +42,9 @@ async def auth_handler(request):
     data = request.query
     if check_telegram_authentication(data):
         user_id = int(data['id'])
-        # session = await get_session(request)
-        # session['user_id'] = user_id
-        return web.Response(text=f'Authenticated as {user_id}')
+        session = await get_session(request)
+        session['user_id'] = user_id
+        return web.HTTPFound('/dashboard')
     else:
         return web.Response(text='Authentication failed', status=401)
 
@@ -141,7 +141,7 @@ async def main():
         aiohttp_session.setup(app, storage)
         
         # Web app routes
-        app.router.add_get('/', simple_login_handler)
+        app.router.add_get('/', login_handler)
         app.router.add_get('/tg_auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/dashboard', dashboard_handler)
