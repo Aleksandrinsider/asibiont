@@ -23,10 +23,10 @@ import urllib.parse
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
     token = TELEGRAM_TOKEN
-    if not token.startswith('bot'):
-        token = 'bot' + token
-    secret_key = token.encode()
-    data_check_string = '\n'.join(sorted([f'{k}={urllib.parse.quote(str(v))}' for k, v in data.items() if k != 'hash']))
+    if token.startswith('bot'):
+        token = token[3:]  # Remove 'bot' prefix
+    secret_key = hashlib.sha256(token.encode()).digest()
+    data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     return hash_computed == data.get('hash')
 
