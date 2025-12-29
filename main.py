@@ -10,7 +10,7 @@ from aiohttp_session import get_session, SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from handlers import router
 from reminder_service import ReminderService
-from ai_integration import chat_with_ai
+from ai_integration import AIIntegration, chat_with_ai
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
 import os
 import datetime
