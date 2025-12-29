@@ -24,6 +24,9 @@ def check_telegram_authentication(data):
     secret_key = TELEGRAM_TOKEN.encode()
     data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    print(f"Data string: {data_check_string}")
+    print(f"Computed hash: {hash_computed}")
+    print(f"Received hash: {data.get('hash')}")
     return hash_computed == data.get('hash')
 
 
@@ -155,7 +158,16 @@ async def main():
         
         await on_startup(bot)
         
-        await dp.start_polling(bot)
+        # Для локального тестирования веб, polling отключен
+        # await dp.start_polling(bot)
+        print("Polling disabled for local web testing. Press Ctrl+C to stop.")
+        # Бесконечный цикл для поддержания сервера
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("Stopping server...")
+            await runner.cleanup()
     else:
         # Вебхук для Railway
         print("Setting up webhook for Railway")
