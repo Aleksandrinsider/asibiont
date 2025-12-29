@@ -41,18 +41,7 @@ async def simple_login_handler(request):
 
 async def auth_handler(request):
     data = request.query
-    if check_telegram_authentication(data):
-        user_id = int(data['id'])
-        session = await get_session(request)
-        session['user_id'] = user_id
-        return web.HTTPFound('/dashboard')
-    else:
-        # Debug: return hashes
-        secret_key = TELEGRAM_TOKEN.encode()
-        data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
-        hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        received_hash = data.get('hash')
-        return web.Response(text=f'Authentication failed\nData string: {data_check_string}\nComputed hash: {hash_computed}\nReceived hash: {received_hash}', status=401)
+    return web.Response(text=f'Data: {dict(data)}')
 
 
 async def test_login_handler(request):
