@@ -40,13 +40,14 @@ async def simple_login_handler(request):
 
 async def auth_handler(request):
     data = request.query
+    # return web.Response(text=str(data))
     if check_telegram_authentication(data):
         user_id = int(data['id'])
         # session = await get_session(request)
         # session['user_id'] = user_id
         return web.Response(text=f'Authenticated as {user_id} - redirect to /dashboard')
     else:
-        return web.Response(text='Authentication failed', status=401)
+        return web.Response(text=f'Authentication failed: {str(data)}', status=401)
 
 
 async def test_login_handler(request):
