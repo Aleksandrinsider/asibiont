@@ -180,10 +180,6 @@ async def main():
     Base.metadata.create_all(engine)
     logger.info("Database tables created")
 
-    dp = Dispatcher()
-    dp.include_router(router)
-    print("Dispatcher created and router included")
-
     # Проверка на локальный запуск
     if os.getenv("LOCAL") == "1":
         # Локальный запуск с polling и веб-сервером
