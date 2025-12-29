@@ -35,7 +35,7 @@ async def login_handler(request):
 
 # Temporary simple handler
 async def simple_login_handler(request):
-    return web.Response(text="Login page - Telegram auth available")
+    return web.Response(text="Login page - Telegram auth available at /tg_auth")
 
 
 async def auth_handler(request):
@@ -142,7 +142,7 @@ async def main():
         
         # Web app routes
         app.router.add_get('/', simple_login_handler)
-        app.router.add_get('/auth', auth_handler)
+        app.router.add_get('/tg_auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/dashboard', dashboard_handler)
         app.router.add_static('/static', 'static')
