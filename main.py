@@ -154,7 +154,7 @@ async def schedule_reminders(scheduler):
         print(f"Error in schedule_reminders: {e}")
 
 
-async def on_startup(bot: Bot):
+async def on_startup(app):
     logger.info("Starting on_startup")
     if os.getenv("LOCAL") == "1":
         await bot.delete_webhook()
@@ -197,6 +197,8 @@ async def main():
         storage = SimpleCookieStorage()
         aiohttp_session.setup(app, storage)
         
+        app.on_startup.append(on_startup)
+        
         # Web app routes
         app.router.add_get('/', login_handler)
         app.router.add_get('/telegram_auth', auth_handler)
@@ -214,8 +216,6 @@ async def main():
         await site.start()
         print("Web server started on http://localhost:8080")
         
-        await on_startup(bot)
-        
         # Для локального тестирования веб, polling отключен
         # await dp.start_polling(bot)
         print("Polling disabled for local web testing. Press Ctrl+C to stop.")
@@ -228,15 +228,11 @@ async def main():
             await runner.cleanup()
     else:
         # Вебхук для Railway
-        print("Setting up webhook for Railway")
-        app = web.Application()
+        logger.info("Setting up webhook for Railway")
         
-        # Setup Jinja2
-        aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-        
-        # Setup sessions
-        storage = SimpleCookieStorage()
-        aiohttp_session.setup(app, storage)
+        dp = Dispatcher()
+        dp.include_router(router)
+        logger.info("Dispatcher created and router included")
         
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
@@ -246,50 +242,11 @@ async def main():
 
         setup_application(app, dp, bot=bot)
 
-        app.router.add_post('/yookassa-webhook', yookassa_webhook)
-
-        # Web app routes
-        app.router.add_get('/', login_handler)
-        app.router.add_get('/telegram_auth', auth_handler)
-        app.router.add_get('/test_login', test_login_handler)
-        app.router.add_get('/logout', logout_handler)
-        app.router.add_get('/dashboard', dashboard_handler)
-        app.router.add_get('/tasks', tasks_handler)
-        app.router.add_get('/profile', profile_handler)
-        app.router.add_post('/chat', chat_handler)
-        app.router.add_static('/static', 'static')
-
-        app.router.add_post('/yookassa-webhook', yookassa_webhook)
-
-        logger.info("Calling on_startup")
-        await on_startup(bot)
-
-        runner = web.AppRunner(app)
-        await runner.setup()
-        port_env = os.getenv("PORT")
-        logger.info(f"PORT env var: {port_env}")
-        if not port_env:
-            raise ValueError("PORT is not set")
-        port = int(port_env)
-        logger.info(f"Using port: {port}")
-        logger.info(f"Starting server on port {port}")
-        try:
-            site = web.TCPSite(runner, '0.0.0.0', port)
-            await site.start()
-            logger.info(f"Server started on port {port}")
-        except Exception as e:
-            logger.error(f"Error starting server: {e}")
-            raise
-
-        logger.info(f"Бот запущен в режиме вебхуков на порту {port}!")
-
-        # Keep the event loop running
-        try:
-            await asyncio.sleep(float('inf'))
-        except KeyboardInterrupt:
-            print("Shutting down...")
-        finally:
-            await runner.cleanup()
+        logger.info("App configured for Railway")
+        
+        port = int(os.getenv("PORT"))
+        logger.info(f"Running app on port {port}")
+        web.run_app(app, port=port, host='0.0.0.0')
 
 
 async def yookassa_webhook(request):
@@ -320,3 +277,26 @@ if __name__ == "__main__":
         logger.error(f"Error in main: {e}")
         import traceback
         traceback.print_exc()
+
+
+# Global app for Railway
+app = web.Application()
+aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+aiohttp_session.setup(app, SimpleCookieStorage())
+
+# Routes
+app.router.add_get('/', login_handler)
+app.router.add_get('/tg_auth', auth_handler)
+app.router.add_get('/test_login', test_login_handler)
+app.router.add_get('/logout', logout_handler)
+app.router.add_get('/dashboard', dashboard_handler)
+app.router.add_get('/tasks', tasks_handler)
+app.router.add_get('/profile', profile_handler)
+app.router.add_post('/chat', chat_handler)
+app.router.add_static('/static', 'static')
+app.router.add_post('/yookassa-webhook', yookassa_webhook)
+
+bot = Bot(token=TELEGRAM_TOKEN)
+
+# Add startup handler
+app.on_startup.append(on_startup)
