@@ -7,108 +7,13 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<body>
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>Home</h1>
-            <p class="subtitle">Ask anything<br>Add repositories, files, and spaces</p>
-            <div class="button-row">
-                <a href="/tasks" class="btn btn-primary">Create issue</a>
-                <a href="/chat" class="btn">Spark</a>
-                <a href="/profile" class="btn">Git</a>
-                <a href="/logout" class="btn">Pull requests</a>
+        <div class="chat-section">
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Введите сообщение для AI...">
+                <button onclick="sendMessage()">Отправить</button>
             </div>
-        </div>
-
-        <!-- Feed Section -->
-        <div class="feed-section">
-            <h2 class="section-title">
-                Feed
-                <a href="/tasks" class="see-more">See more</a>
-            </h2>
-
-            {% for task in tasks[:3] %}
-            <div class="feed-item">
-                <div class="repo-header">
-                    <div class="repo-name">{{ task.title }}</div>
-                    <button class="star-btn">⭐ Star</button>
-                </div>
-                <p class="repo-desc">{{ task.description }}</p>
-                <div class="repo-stats">
-                    <span>{{ task.status }}</span>
-                    <span>{{ task.created_at.strftime('%d.%m.%Y') }}</span>
-                </div>
-            </div>
-            {% endfor %}
-
-            {% if not tasks %}
-            <div class="feed-item">
-                <div class="repo-header">
-                    <div class="repo-name">Welcome to Task Manager</div>
-                    <button class="star-btn">⭐ Star</button>
-                </div>
-                <p class="repo-desc">Create your first task to get started with AI-powered task management.</p>
-                <div class="repo-stats">
-                    <span>Getting started</span>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- Changelog Section -->
-        <div class="changelog-section">
-            <h2 class="section-title">Listed from our changelog</h2>
-
-            {% for interaction in interactions[:4] %}
-            <div class="changelog-item">
-                <div class="date">{{ interaction.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
-                <div class="changelog-title">{{ interaction.content[:100] }}{% if interaction.content|length > 100 %}...{% endif %}</div>
-            </div>
-            {% endfor %}
-
-            {% if not interactions %}
-            <div class="changelog-item">
-                <div class="date">Recent</div>
-                <div class="changelog-title">Welcome to your AI assistant! Start a conversation to see activity here.</div>
-            </div>
-            {% endif %}
-
-            <a href="/chat" class="view-changelog">View changelog →</a>
-        </div>
-
-        <!-- Tomorrow Section -->
-        <div class="tomorrow-section">
-            <div class="tomorrow-label">Tomorrow</div>
-
-            {% for task in tasks if task.status == 'pending' %}
-            <div class="feed-item">
-                <div class="repo-header">
-                    <div class="repo-name">{{ task.title }}</div>
-                    <button class="star-btn">⭐ Star</button>
-                </div>
-                <p class="repo-desc">{{ task.description }}</p>
-                <div class="repo-stats">
-                    <span>{{ task.status }}</span>
-                    {% if task.due_date %}
-                    <span>Due: {{ task.due_date.strftime('%d.%m.%Y') }}</span>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-
-            {% if not tasks or not [t for t in tasks if t.status == 'pending'] %}
-            <div class="feed-item">
-                <div class="repo-header">
-                    <div class="repo-name">No upcoming tasks</div>
-                    <button class="star-btn">⭐ Star</button>
-                </div>
-                <p class="repo-desc">All caught up! Create a new task to see it here tomorrow.</p>
-                <div class="repo-stats">
-                    <span>Tomorrow</span>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
     <script>
@@ -143,21 +48,6 @@
             messageDiv.textContent = text;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
-        }
-
-        function filterTasks(status) {
-            const items = document.querySelectorAll('.issue-item');
-            const links = document.querySelectorAll('.filter-link');
-            links.forEach(link => link.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            items.forEach(item => {
-                if (status === 'all' || item.dataset.status === status) {
-                    item.style.display = 'flex';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
         }
 
         document.getElementById('message-input').addEventListener('keypress', function(e) {

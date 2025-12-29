@@ -2,22 +2,30 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 body {
-    background-color: #0d1117;
-    color: #c9d1d9;
-    line-height: 1.5;
-    padding: 20px;
-    max-width: 1280px;
+    background-color: #FFFFFF;
+    color: #1F2328;
+    line-height: 21px;
+    font-size: 14px;
+    font-weight: 400;
+    letter-spacing: normal;
+    padding: 40px;
+    width: 1184.8px;
+    height: 736.4px;
     margin: 0 auto;
+    border-radius: 0px;
 }
 
 .container {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 20px;
+    padding: 40px;
+    background-color: #FFFFFF;
+    border-radius: 0px;
 }
 
 /* Header Section */
@@ -240,4 +248,78 @@ hr {
     .container {
         grid-template-columns: 1fr;
     }
+}
+
+/* Chat Section */
+.chat-section {
+    grid-column: 1 / -1;
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 80vh;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #F6F8FA;
+    border-radius: 6px;
+    border: 1px solid #D1D9E0;
+}
+
+.message {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 6px;
+    max-width: 80%;
+}
+
+.message.user {
+    background-color: #0969DA;
+    color: #FFFFFF;
+    align-self: flex-end;
+    margin-left: auto;
+}
+
+.message.agent {
+    background-color: #F6F8FA;
+    color: #1F2328;
+    border: 1px solid #D1D9E0;
+}
+
+.chat-input {
+    display: flex;
+    gap: 10px;
+}
+
+.chat-input input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    background-color: #FFFFFF;
+    color: #1F2328;
+}
+
+.chat-input input:focus {
+    outline: none;
+    border-color: #0969DA;
+}
+
+.chat-input button {
+    padding: 10px 20px;
+    background-color: #0969DA;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.chat-input button:hover {
+    background-color: #218BFF;
 }
