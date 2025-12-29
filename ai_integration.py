@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 import re
 from cryptography.fernet import Fernet
 from models import User, UserProfile
+import pytz
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
 
@@ -89,7 +90,7 @@ def get_system_prompt():
 - complete_task(task_id=число, user_id=число) — для завершения задачи
 - set_reminder(task_id=число, reminder_time="время в формате YYYY-MM-DD HH:MM", user_id=число) — для установки напоминания
 - find_partners(user_id=число, interests="интересы через запятую") — для поиска людей
-- update_profile(user_id=число, current_plans="текущие планы", interests="интересы через запятую", city="город") — для обновления профиля
+- update_profile(user_id=число, current_plans="текущие планы", interests="интересы через запятую", city="город", timezone="Europe/Moscow") — для обновления профиля
 - update_user_memory(user_id=число, memory="важная информация о пользователе") — для сохранения памяти
 
 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
@@ -189,11 +190,11 @@ def get_system_prompt():
 - set_priority() — установка приоритета
 - get_task_details() — детали задачи
 - set_reminder() — напоминания
-- Для планов — update_profile(current_plans=Z)
+- Для планов — update_profile(current_plans=Z, timezone="Europe/Moscow")
 - Для мотивации: мягко предложи завершить
 - Для справки: расскажи повествовательно
 - Не предлагай тестовые задачи
-- Для времени: поддерживай форматы, сохраняй current_time
+- Для времени: поддерживай форматы, сохраняй timezone
 
 Будь полезным, естественным и направленным на результат. Помогай не просто планировать, а действительно делать дела, предлагая конкретные шаги и поддержку в нужный момент. Вовлекай в диалог: задавай открытые вопросы. Делай ответы подробными, полезными, но не длинными. Фокусируйся на продуктивности: предлагай действия на основе времени и задач.
 
@@ -494,7 +495,7 @@ def find_partners(user_id=None, session=None):
         response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу EREBUS AI — так у вас появится больше возможностей для общения и совместных проектов! 😊"
     return response
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, user_id=None, session=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, user_id=None, session=None):
     from models import Session, User, UserProfile
     if session is None:
         session = Session()
@@ -516,6 +517,8 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.city = city if city else profile.city
     profile.current_plans = current_plans if current_plans else profile.current_plans
     profile.current_time = current_time if current_time else profile.current_time
+    if timezone:
+        user.timezone = timezone
     profile.contact_info = f"user{user_id}"  # Простой username
     profile.updated_at = datetime.now(timezone.utc)
     session.commit()
@@ -657,7 +660,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом, текущими планами и текущим временем",
+            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом, текущими планами, текущим временем и часовым поясом",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -666,7 +669,8 @@ TOOLS = [
                     "goals": {"type": "string", "description": "Цели пользователя"},
                     "city": {"type": "string", "description": "Город пользователя, опционально"},
                     "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"},
-                    "current_time": {"type": "string", "description": "Текущее время пользователя в формате HH:MM, опционально"}
+                    "current_time": {"type": "string", "description": "Текущее время пользователя в формате HH:MM, опционально"},
+                    "timezone": {"type": "string", "description": "Часовой пояс пользователя, например 'Europe/Moscow', опционально"}
                 }
             }
         }
@@ -694,23 +698,27 @@ async def chat_with_ai(message, context=None, user_id=None):
             user_now = None
             current_time_str = datetime.now(timezone.utc).strftime("%H:%M")
             if user:
-                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-                if profile and profile.current_time:
-                    try:
-                        current_date = datetime.now(timezone.utc).date()
-                        user_now = datetime.combine(current_date, datetime.strptime(profile.current_time, "%H:%M").time(), tzinfo=timezone.utc)
-                        current_time_str = profile.current_time  # Use user's local time
-                        # Get upcoming reminders
-                        upcoming_reminders = []
-                        tasks = session.query(Task).filter_by(user_id=user.id).filter(Task.reminder_time.isnot(None)).all()
-                        for task in tasks:
-                            if task.reminder_time and task.reminder_time > user_now and task.status == 'pending':
-                                reminder_time_local = task.reminder_time.astimezone(timezone.utc).strftime("%H:%M")
+                tz_str = user.timezone if user.timezone else 'UTC'
+                try:
+                    user_tz = pytz.timezone(tz_str)
+                    user_now = datetime.now(user_tz)
+                    current_time_str = user_now.strftime("%H:%M")
+                    # Get upcoming reminders
+                    upcoming_reminders = []
+                    tasks = session.query(Task).filter_by(user_id=user.id).filter(Task.reminder_time.isnot(None)).all()
+                    for task in tasks:
+                        if task.reminder_time:
+                            if task.reminder_time.tzinfo is None:
+                                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+                            if task.reminder_time.astimezone(user_tz) > user_now and task.status == 'pending':
+                                reminder_time_local = task.reminder_time.astimezone(user_tz).strftime("%H:%M")
                                 upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
-                        if upcoming_reminders:
-                            user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:3])}"
-                    except:
-                        user_now = None
+                    if upcoming_reminders:
+                        user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:3])}"
+                except pytz.exceptions.UnknownTimeZoneError:
+                    # Fallback to UTC if invalid timezone
+                    user_now = datetime.now(timezone.utc)
+                    current_time_str = user_now.strftime("%H:%M")
             session.close()
         
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -728,7 +736,7 @@ async def chat_with_ai(message, context=None, user_id=None):
         message = parse_relative_time(message, user_now)
         # If message has relative time and no user_now, force AI to ask for current time
         if re.search(r'через \d+ (минут|час|часа|часов)', message) and user_now is None:
-            messages[0]["content"] += "\nВАЖНО: Пользователь упомянул относительное время 'через X', но current_time не установлено в профиле. ОБЯЗАТЕЛЬНО спроси у пользователя его текущее время в формате 'сейчас HH:MM' и сохрани через update_profile(current_time='HH:MM'). Не добавляй задачу, пока не узнаешь точное время."
+            messages[0]["content"] += "\nВАЖНО: Пользователь упомянул относительное время 'через X', но timezone не установлен. ОБЯЗАТЕЛЬНО спроси у пользователя его часовой пояс (например, 'Europe/Moscow' или 'Asia/Yekaterinburg') и сохрани через update_profile(timezone='Europe/Moscow'). Не добавляй задачу, пока не узнаешь часовой пояс."
         messages.append({"role": "user", "content": message})
         
         data = {
