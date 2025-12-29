@@ -75,8 +75,10 @@ async def dashboard_handler(request):
     # Получить задачи пользователя
     session_db = Session()
     tasks = session_db.query(Task).filter_by(user_id=user_id).all()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
     session_db.close()
-    return {'tasks': tasks}
+    return {'tasks': tasks, 'user': user, 'profile': profile}
 
 
 async def tasks_handler(request):
