@@ -22,7 +22,7 @@ import urllib.parse
 
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
-    secret_key = TELEGRAM_TOKEN.encode()
+    secret_key = hmac.new(b'WebAppData', TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
     data_check_string = '\n'.join(sorted([f'{k}={urllib.parse.quote(str(v))}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     return hash_computed == data.get('hash')
@@ -48,7 +48,7 @@ async def auth_handler(request):
         return web.HTTPFound('/dashboard')
     else:
         # Debug: return hashes
-        secret_key = TELEGRAM_TOKEN.encode()
+        secret_key = hmac.new(b'WebAppData', TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
         data_check_string = '\n'.join(sorted([f'{k}={urllib.parse.quote(str(v))}' for k, v in data.items() if k != 'hash']))
         hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         received_hash = data.get('hash')
