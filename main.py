@@ -42,9 +42,9 @@ async def auth_handler(request):
     data = request.query
     if check_telegram_authentication(data):
         user_id = int(data['id'])
-        session = await get_session(request)
-        session['user_id'] = user_id
-        return web.HTTPFound('/dashboard')
+        # session = await get_session(request)
+        # session['user_id'] = user_id
+        return web.Response(text=f'Authenticated as {user_id} - redirect to /dashboard')
     else:
         return web.Response(text='Authentication failed', status=401)
 
@@ -165,8 +165,8 @@ async def main():
         aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
         
         # Setup sessions
-        storage = SimpleCookieStorage()
-        aiohttp_session.setup(app, storage)
+        # storage = SimpleCookieStorage()
+        # aiohttp_session.setup(app, storage)
         
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
