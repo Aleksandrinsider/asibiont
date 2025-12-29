@@ -1,5 +1,5 @@
 import requests
-from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
+from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE
 import json
 from datetime import datetime, timezone, timedelta
 import re
@@ -170,6 +170,8 @@ def get_system_prompt():
 ТЕКУЩИЙ КОНТЕКСТ:
 Сейчас: {{current_date}}, {{current_time}}
 Ближайшие дни: завтра {{tomorrow}}, послезавтра {{day_after}}
+
+ВАЖНО: Ты знаешь текущую дату и время. Используй эту информацию как БАЗУ для всех расчетов времени. Если пользователь говорит "через 5 минут", рассчитай абсолютное время, добавив 5 минут к ТЕКУЩЕМУ времени на ТЕКУЩЕЙ дате. Не спрашивай о времени или дате — всегда рассчитывай самостоятельно.
 
 ЧЕГО НЕ ДЕЛАТЬ:
 - Не предлагай разбивать задачи на мелкие части или этапы.
@@ -695,13 +697,19 @@ async def chat_with_ai(message, context=None, user_id=None):
             all_tasks = list_tasks(user_id=user_id)
             user_memory += f"\nВсе задачи пользователя: {all_tasks}"
             # Get user current time for relative time parsing and prompt
-            user_now = None
-            current_time_str = datetime.now(timezone.utc).strftime("%H:%M")
+            # Use CURRENT_DATE if set (for testing), otherwise real time
+            if CURRENT_DATE:
+                current_datetime_str = CURRENT_DATE + " " + datetime.now(timezone.utc).strftime("%H:%M:%S")
+                base_now = datetime.strptime(current_datetime_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            else:
+                base_now = datetime.now(timezone.utc)
+            user_now = base_now  # Default to base_now
+            current_time_str = user_now.strftime("%H:%M")
             if user:
                 tz_str = user.timezone if user.timezone else 'UTC'
                 try:
                     user_tz = pytz.timezone(tz_str)
-                    user_now = datetime.now(user_tz)
+                    user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
                     # Get upcoming reminders
                     upcoming_reminders = []
@@ -717,7 +725,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                         user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:3])}"
                 except pytz.exceptions.UnknownTimeZoneError:
                     # Fallback to UTC if invalid timezone
-                    user_now = datetime.now(timezone.utc)
+                    user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
             session.close()
         
@@ -726,7 +734,7 @@ async def chat_with_ai(message, context=None, user_id=None):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        messages = [{"role": "system", "content": get_system_prompt().replace("{{current_date}}", datetime.now(timezone.utc).strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (datetime.now(timezone.utc) + timedelta(days=2)).strftime("%Y-%m-%d")) + user_memory}]
+        messages = [{"role": "system", "content": get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")) + user_memory}]
         if context:
             for item in context:
                 if "user" in item:
@@ -735,8 +743,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                     messages.append({"role": "assistant", "content": item["agent"]})
         message = parse_relative_time(message, user_now)
         # If message has relative time and no user_now, force AI to ask for current time
-        if re.search(r'через \d+ (минут|час|часа|часов)', message) and user_now is None:
-            messages[0]["content"] += "\nВАЖНО: Пользователь упомянул относительное время 'через X', но timezone не установлен. ОБЯЗАТЕЛЬНО спроси у пользователя его часовой пояс (например, 'Europe/Moscow' или 'Asia/Yekaterinburg') и сохрани через update_profile(timezone='Europe/Moscow'). Не добавляй задачу, пока не узнаешь часовой пояс."
+        # Removed: since user_now is always set
         messages.append({"role": "user", "content": message})
         
         data = {

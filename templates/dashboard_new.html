@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager - Дашборд</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1>Task Manager</h1>
+                <nav>
+                    <a href="/dashboard">Dashboard</a>
+                    <a href="/logout">Logout</a>
+                </nav>
+            </div>
+        </header>
+        <div class="main-content">
+            <aside class="sidebar">
+                <h2>Меню</h2>
+                <ul>
+                    <li><a href="/dashboard">Обзор</a></li>
+                    <li><a href="/tasks">Задачи</a></li>
+                    <li><a href="/profile">Профиль</a></li>
+                </ul>
+            </aside>
+            <main class="content">
+                <div class="metrics">
+                    <div class="metric">
+                        <h3>Всего задач</h3>
+                        <p>{{ total_tasks }}</p>
+                    </div>
+                    <div class="metric">
+                        <h3>Завершено</h3>
+                        <p>{{ completed_tasks }}</p>
+                    </div>
+                    <div class="metric">
+                        <h3>В ожидании</h3>
+                        <p>{{ pending_tasks }}</p>
+                    </div>
+                    <div class="metric">
+                        <h3>Пропущено</h3>
+                        <p>{{ skipped_tasks }}</p>
+                    </div>
+                </div>
+                <div class="tasks-section">
+                    <h2>Задачи</h2>
+                    <div class="filters">
+                        <a href="#" class="filter-link active" onclick="filterTasks('all')">Все</a>
+                        <a href="#" class="filter-link" onclick="filterTasks('pending')">Открытые</a>
+                        <a href="#" class="filter-link" onclick="filterTasks('completed')">Закрытые</a>
+                    </div>
+                    <div class="issues-list" id="issues-list">
+                        {% for task in tasks %}
+                        <div class="issue-item" data-status="{{ task.status }}">
+                            <div class="issue-info">
+                                <h4><span class="status-icon {{ task.status }}"></span>{{ task.title }}</h4>
+                                <p>{{ task.description }}</p>
+                                <div class="issue-meta">
+                                    <span class="label {{ task.status }}">{{ task.status }}</span>
+                                    {% if task.deadline %}
+                                    <span class="due-date">Дедлайн: {{ task.deadline.strftime('%Y-%m-%d') }}</span>
+                                    {% endif %}
+                                    <span class="created-at">Создано: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    {% if task.updated_at %}
+                                    <span class="updated-at">Обновлено: {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if not tasks %}
+                    <p>У вас нет задач.</p>
+                    {% endif %}
+                </div>
+                <div class="chat-container">
+                    <h3>Диалог с агентом</h3>
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="message agent">Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>
+                    </div>
+                    <div class="chat-input">
+                        <input type="text" id="message-input" placeholder="Введите сообщение...">
+                        <button onclick="sendMessage()">Отправить</button>
+                    </div>
+                </div>
+                <div class="activity-section">
+                    <h3>Недавняя активность</h3>
+                    <ul class="activity-list">
+                        {% for interaction in interactions %}
+                        <li class="activity-item">
+                            <span class="activity-type">{{ interaction.message_type }}</span>
+                            <span class="activity-content">{{ interaction.content[:100] }}...</span>
+                            <span class="activity-time">{{ interaction.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% if not interactions %}
+                    <p>Нет недавней активности.</p>
+                    {% endif %}
+                </div>
+            </main>
+        </div>
+    </div>
+    <script>
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, 'user');
+            input.value = '';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message }),
+                });
+                const data = await response.json();
+                addMessage(data.response, 'agent');
+            } catch (error) {
+                addMessage('Ошибка: ' + error.message, 'agent');
+            }
+        }
+
+        function addMessage(text, sender) {
+            const messages = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.textContent = text;
+            messages.appendChild(messageDiv);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function filterTasks(status) {
+            const items = document.querySelectorAll('.issue-item');
+            const links = document.querySelectorAll('.filter-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            items.forEach(item => {
+                if (status === 'all' || item.dataset.status === status) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

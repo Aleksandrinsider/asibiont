@@ -34,3 +34,4 @@ if not ENCRYPTION_KEY:
     raise ValueError("ENCRYPTION_KEY is not set")
 PORT = int(os.getenv("PORT", 8000))
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
+CURRENT_DATE = os.getenv("CURRENT_DATE")  # Optional for testing, leave unset for real time

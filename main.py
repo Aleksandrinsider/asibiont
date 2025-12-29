@@ -18,7 +18,6 @@ import pytz
 from datetime import timedelta
 import hashlib
 import hmac
-import urllib.parse
 
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
@@ -66,7 +65,7 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
-@aiohttp_jinja2.template('dashboard.html')
+@aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
