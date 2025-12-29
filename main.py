@@ -33,6 +33,11 @@ async def login_handler(request):
     return {'bot_username': TELEGRAM_BOT_USERNAME, 'auth_url': '/auth', 'local': local}
 
 
+# Temporary simple handler
+async def simple_login_handler(request):
+    return web.Response(text="Login page - Telegram auth available")
+
+
 async def auth_handler(request):
     data = await request.post()
     if check_telegram_authentication(data):
@@ -136,7 +141,7 @@ async def main():
         aiohttp_session.setup(app, storage)
         
         # Web app routes
-        app.router.add_get('/', login_handler)
+        app.router.add_get('/', simple_login_handler)
         app.router.add_post('/auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/dashboard', dashboard_handler)
