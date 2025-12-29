@@ -174,6 +174,7 @@ async def on_startup(app):
 
 
 async def main():
+    global app
     logger.info("Starting main function")
     logger.info(f"LOCAL env: {repr(os.getenv('LOCAL'))}")
     # Создание таблиц
