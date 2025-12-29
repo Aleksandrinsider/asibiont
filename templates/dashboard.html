@@ -45,37 +45,79 @@
         .tasks-section {
             margin-bottom: 30px;
         }
-        .task-item {
-            padding: 12px;
+        .filters {
+            margin-bottom: 15px;
+        }
+        .filter-link {
+            margin-right: 15px;
+            text-decoration: none;
+            color: #586069;
+            padding: 5px 10px;
+            border-radius: 6px;
+        }
+        .filter-link.active {
+            background: #0366d6;
+            color: white;
+        }
+        .issue-item {
+            padding: 16px;
             border-bottom: 1px solid #d1d9e0;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
         }
-        .task-item:last-child {
+        .issue-item:last-child {
             border-bottom: none;
         }
-        .task-info h4 {
+        .issue-info h4 {
             margin: 0 0 5px 0;
+            display: flex;
+            align-items: center;
         }
-        .task-info p {
-            margin: 0;
+        .status-icon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-icon.pending {
+            background: #28a745;
+        }
+        .status-icon.completed {
+            background: #6c757d;
+        }
+        .status-icon.skipped {
+            background: #dc3545;
+        }
+        .issue-info p {
+            margin: 5px 0;
             color: #586069;
-            font-size: 14px;
         }
-        .status {
-            padding: 4px 8px;
+        .issue-meta {
+            margin-top: 10px;
+        }
+        .label {
+            display: inline-block;
+            padding: 2px 8px;
             border-radius: 12px;
             font-size: 12px;
             font-weight: bold;
+            margin-right: 10px;
         }
-        .status.pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        .status.completed {
-            background-color: #d4edda;
+        .label.pending {
+            background: #d4edda;
             color: #155724;
+        }
+        .label.completed {
+            background: #f8f9fa;
+            color: #6c757d;
+        }
+        .label.skipped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .due-date {
+            color: #586069;
+            font-size: 12px;
         }
         .chat-container {
             margin-top: 20px;
@@ -164,16 +206,25 @@
                     </div>
                 </div>
                 <div class="tasks-section">
-                    <h2>Ваши задачи</h2>
-                    <div class="issues-list">
+                    <h2>Задачи</h2>
+                    <div class="filters">
+                        <a href="#" class="filter-link active" onclick="filterTasks('all')">Все</a>
+                        <a href="#" class="filter-link" onclick="filterTasks('pending')">Открытые</a>
+                        <a href="#" class="filter-link" onclick="filterTasks('completed')">Закрытые</a>
+                    </div>
+                    <div class="issues-list" id="issues-list">
                         {% for task in tasks %}
-                        <div class="task-item">
-                            <div class="task-info">
-                                <h4>{{ task.title }}</h4>
+                        <div class="issue-item" data-status="{{ task.status }}">
+                            <div class="issue-info">
+                                <h4><span class="status-icon {{ task.status }}"></span>{{ task.title }}</h4>
                                 <p>{{ task.description }}</p>
-                                <p>Дедлайн: {{ task.deadline or 'Не указан' }}</p>
+                                <div class="issue-meta">
+                                    <span class="label {{ task.status }}">{{ task.status }}</span>
+                                    {% if task.deadline %}
+                                    <span class="due-date">Дедлайн: {{ task.deadline.strftime('%Y-%m-%d') }}</span>
+                                    {% endif %}
+                                </div>
                             </div>
-                            <span class="status {{ task.status }}">{{ task.status }}</span>
                         </div>
                         {% endfor %}
                     </div>
@@ -248,6 +299,21 @@
                 sendMessage();
             }
         });
+
+        function filterTasks(status) {
+            const items = document.querySelectorAll('.issue-item');
+            const links = document.querySelectorAll('.filter-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            items.forEach(item => {
+                if (status === 'all' || item.dataset.status === status) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
     </script>
 </body>
 </html>
