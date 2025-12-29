@@ -39,7 +39,7 @@ async def simple_login_handler(request):
 
 
 async def auth_handler(request):
-    data = await request.post()
+    data = request.query
     if check_telegram_authentication(data):
         user_id = int(data['id'])
         session = await get_session(request)
@@ -142,7 +142,7 @@ async def main():
         
         # Web app routes
         app.router.add_get('/', simple_login_handler)
-        app.router.add_post('/auth', auth_handler)
+        app.router.add_get('/auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/dashboard', dashboard_handler)
         app.router.add_static('/static', 'static')
