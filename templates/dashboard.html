@@ -115,7 +115,35 @@
             background: #f8d7da;
             color: #721c24;
         }
-        .due-date {
+        .activity-section {
+            margin-top: 30px;
+            border-top: 1px solid #d1d9e0;
+            padding-top: 20px;
+        }
+        .activity-list {
+            list-style: none;
+            padding: 0;
+        }
+        .activity-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #f6f8fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        .activity-type {
+            font-weight: bold;
+            color: #0366d6;
+        }
+        .activity-content {
+            flex: 1;
+            margin-left: 10px;
+            color: #586069;
+        }
+        .activity-time {
             color: #586069;
             font-size: 12px;
         }
@@ -223,6 +251,10 @@
                                     {% if task.deadline %}
                                     <span class="due-date">Дедлайн: {{ task.deadline.strftime('%Y-%m-%d') }}</span>
                                     {% endif %}
+                                    <span class="created-at">Создано: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    {% if task.updated_at %}
+                                    <span class="updated-at">Обновлено: {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -241,6 +273,21 @@
                         <input type="text" id="message-input" placeholder="Введите сообщение...">
                         <button onclick="sendMessage()">Отправить</button>
                     </div>
+                </div>
+                <div class="activity-section">
+                    <h3>Недавняя активность</h3>
+                    <ul class="activity-list">
+                        {% for interaction in interactions %}
+                        <li class="activity-item">
+                            <span class="activity-type">{{ interaction.message_type }}</span>
+                            <span class="activity-content">{{ interaction.content[:100] }}...</span>
+                            <span class="activity-time">{{ interaction.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% if not interactions %}
+                    <p>Нет недавней активности.</p>
+                    {% endif %}
                 </div>
             </div>
             <div class="sidebar-section">
