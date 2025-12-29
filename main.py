@@ -18,6 +18,10 @@ import pytz
 from datetime import timedelta
 import hashlib
 import hmac
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
@@ -151,28 +155,30 @@ async def schedule_reminders(scheduler):
 
 
 async def on_startup(bot: Bot):
-    print("Starting on_startup")
+    logger.info("Starting on_startup")
     if os.getenv("LOCAL") == "1":
         await bot.delete_webhook()
-        print("Webhook deleted for local mode")
+        logger.info("Webhook deleted for local mode")
     else:
         try:
             await bot.set_webhook(WEBHOOK_URL)
-            print(f"Webhook set to: {WEBHOOK_URL}")
+            logger.info(f"Webhook set to: {WEBHOOK_URL}")
         except Exception as e:
-            print(f"Error setting webhook: {e}")
+            logger.error(f"Error setting webhook: {e}")
     # Инициализировать AI и ReminderService
+    logger.info("Initializing AI and ReminderService")
     ai_service = AIIntegration()
     reminder_service = ReminderService(bot, ai_service)
     await reminder_service.start()
-    print("ReminderService started")
+    logger.info("ReminderService started")
 
 
 async def main():
-    print("Starting main function")
+    logger.info("Starting main function")
+    logger.info(f"LOCAL env: {repr(os.getenv('LOCAL'))}")
     # Создание таблиц
     Base.metadata.create_all(engine)
-    print("Database tables created")
+    logger.info("Database tables created")
 
     dp = Dispatcher()
     dp.include_router(router)
@@ -255,23 +261,21 @@ async def main():
 
         app.router.add_post('/yookassa-webhook', yookassa_webhook)
 
-        print("Calling on_startup")
-
-        print("Calling on_startup")
+        logger.info("Calling on_startup")
         await on_startup(bot)
 
         runner = web.AppRunner(app)
         await runner.setup()
         port_env = os.getenv("PORT")
-        print(f"PORT env var: {port_env}")
+        logger.info(f"PORT env var: {port_env}")
         port = int(port_env) if port_env else 8000
-        print(f"Using port: {port}")
-        print(f"Starting server on port {port}")
+        logger.info(f"Using port: {port}")
+        logger.info(f"Starting server on port {port}")
         site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
-        print(f"Server started on port {port}")
+        logger.info(f"Server started on port {port}")
 
-        print(f"Бот запущен в режиме вебхуков на порту {port}!")
+        logger.info(f"Бот запущен в режиме вебхуков на порту {port}!")
 
         # Keep the event loop running
         try:
@@ -303,5 +307,10 @@ async def yookassa_webhook(request):
     return web.Response(text="OK")
 
 if __name__ == "__main__":
-    print("Running main")
-    asyncio.run(main())
+    logger.info("Running main")
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logger.error(f"Error in main: {e}")
+        import traceback
+        traceback.print_exc()
