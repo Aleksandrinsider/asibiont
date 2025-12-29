@@ -13,14 +13,15 @@ body {
     font-weight: 400;
     letter-spacing: normal;
     padding: 20px;
-    width: 1184.8px;
-    height: 736.4px;
+    max-width: 1200px;
+    height: auto;
+    min-height: 100vh;
     margin: 0 auto;
     border-radius: 0px;
 }
 
 .app-header {
-    width: 1520.8px;
+    width: 100%;
     height: 64px;
     background-color: #FFFFFF;
     color: #1F2328;
@@ -47,6 +48,36 @@ body {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
+}
+
+.tabs {
+    display: flex;
+    margin-top: 80px;
+    border-bottom: 1px solid #D1D9E0;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #656D76;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button.active {
+    color: #1F2328;
+    border-bottom: 2px solid #0969DA;
+}
+
+.tab-content {
+    display: none;
+    padding: 20px 0;
+}
+
+.tab-content.active {
+    display: block;
 }
 
 .header-info {
@@ -400,4 +431,88 @@ hr {
 .advice-item small {
     color: #656D76;
     font-size: 12px;
+}
+
+/* Tasks Section */
+.tasks-section {
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 20px;
+}
+
+.tasks-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1F2328;
+}
+
+.task-item {
+    background-color: #F6F8FA;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.task-item p {
+    margin: 0 0 5px 0;
+    color: #1F2328;
+    line-height: 1.4;
+}
+
+.task-item small {
+    color: #656D76;
+    font-size: 12px;
+}
+
+/* People Section */
+.people-section {
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 20px;
+}
+
+.people-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1F2328;
+}
+
+.partner-item {
+    background-color: #F6F8FA;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.partner-item p {
+    margin: 0 0 5px 0;
+    color: #1F2328;
+    line-height: 1.4;
+}
+
+/* Profile Section */
+.profile-section {
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 20px;
+}
+
+.profile-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1F2328;
+}
+
+.profile-section p {
+    margin: 0 0 10px 0;
+    color: #1F2328;
+    line-height: 1.4;
 }

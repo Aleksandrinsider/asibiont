@@ -427,6 +427,52 @@ def get_task_details(task_id, user_id=None):
         return f"Задача: {task.title}, статус {task.status}, приоритет {task.priority}."
     return "Задача не найдена."
 
+def get_partners_list(user_id=None, session=None):
+    from models import Session, UserProfile, User
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return []
+    user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+    # Получить память для исключения заблокированных
+    blocked = []
+    if user.memory:
+        try:
+            decrypted = decrypt_data(user.memory)
+            import re
+            matches = re.findall(r'не показывать @(\w+)|заблокировать @(\w+)', decrypted, re.IGNORECASE)
+            for match in matches:
+                blocked.extend([m for m in match if m])
+        except Exception as e:
+            pass
+    partners = []
+    if user_profile:
+        if user_profile.city:
+            city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
+            if city_profiles:
+                profiles = city_profiles
+        for p in profiles:
+            if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
+                continue
+            if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
+                partners.append(p)
+            elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
+                partners.append(p)
+            elif user_profile.goals and p.goals and any(goal.strip().lower() in p.goals.lower() for goal in user_profile.goals.split(",")):
+                partners.append(p)
+    else:
+        partners = profiles[:2] if profiles else []
+    if close_session:
+        session.close()
+    return partners[:5]  # Ограничим до 5 для отображения
+
 def find_partners(user_id=None, session=None):
     from models import Session, UserProfile, User
     if session is None:

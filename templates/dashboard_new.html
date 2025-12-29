@@ -16,25 +16,77 @@
             </div>
         </div>
     </div>
+    <div class="tabs">
+        <button class="tab-button active" onclick="showTab('chat')">Чат</button>
+        <button class="tab-button" onclick="showTab('tasks')">Задачи</button>
+        <button class="tab-button" onclick="showTab('people')">Люди</button>
+        <button class="tab-button" onclick="showTab('profile')">Профиль</button>
+    </div>
     <div class="container">
-        <div class="chat-section">
-            <div id="chat-messages" class="chat-messages"></div>
-            <div class="chat-input">
-                <input type="text" id="message-input" placeholder="Введите сообщение для AI...">
-                <button onclick="sendMessage()">Отправить</button>
+        <div id="chat-tab" class="tab-content active">
+            <div class="chat-section">
+                <div id="chat-messages" class="chat-messages"></div>
+                <div class="chat-input">
+                    <input type="text" id="message-input" placeholder="Введите сообщение для AI...">
+                    <button onclick="sendMessage()">Отправить</button>
+                </div>
             </div>
         </div>
-        <div class="advice-section">
-            <h3>Советы от AI</h3>
-            {% for interaction in interactions[:3] %}
-            <div class="advice-item">
-                <p>{{ interaction.content[:200] }}{% if interaction.content|length > 200 %}...{% endif %}</p>
-                <small>{{ interaction.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+        <div id="tasks-tab" class="tab-content">
+            <div class="tasks-section">
+                <h3>Ваши задачи</h3>
+                {% for task in tasks %}
+                <div class="task-item">
+                    <p><strong>{{ task.title }}</strong> - {{ task.status }}</p>
+                    {% if task.description %}<p>{{ task.description }}</p>{% endif %}
+                    {% if task.reminder_time %}<small>Напоминание: {{ task.reminder_time.strftime('%d.%m.%Y %H:%M') }}</small>{% endif %}
+                </div>
+                {% endfor %}
+                {% if not tasks %}<p>Нет задач.</p>{% endif %}
             </div>
-            {% endfor %}
+        </div>
+        <div id="people-tab" class="tab-content">
+            <div class="people-section">
+                <h3>Люди для общения</h3>
+                {% if partners %}
+                {% for partner in partners %}
+                <div class="partner-item">
+                    <p><strong>@{{ partner.contact_info }}</strong></p>
+                    {% if partner.interests %}<p>Интересы: {{ partner.interests }}</p>{% endif %}
+                    {% if partner.skills %}<p>Навыки: {{ partner.skills }}</p>{% endif %}
+                    {% if partner.city %}<p>Город: {{ partner.city }}</p>{% endif %}
+                </div>
+                {% endfor %}
+                {% else %}
+                <p>Нет найденных партнеров. Обновите профиль для поиска.</p>
+                {% endif %}
+            </div>
+        </div>
+        <div id="profile-tab" class="tab-content">
+            <div class="profile-section">
+                <h3>Ваш профиль</h3>
+                {% if profile %}
+                <p><strong>Навыки:</strong> {{ profile.skills or 'Не указаны' }}</p>
+                <p><strong>Интересы:</strong> {{ profile.interests or 'Не указаны' }}</p>
+                <p><strong>Цели:</strong> {{ profile.goals or 'Не указаны' }}</p>
+                <p><strong>Город:</strong> {{ profile.city or 'Не указан' }}</p>
+                <p><strong>Текущие планы:</strong> {{ profile.current_plans or 'Не указаны' }}</p>
+                {% else %}
+                <p>Профиль не заполнен.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
     <script>
+        function showTab(tabName) {
+            const tabs = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            const buttons = document.querySelectorAll('.tab-button');
+            buttons.forEach(button => button.classList.remove('active'));
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
         async function sendMessage() {
             const input = document.getElementById('message-input');
             const message = input.value.trim();

@@ -11,7 +11,7 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from datetime import datetime
 from handlers import router
 from reminder_service import ReminderService
-from ai_integration import AIIntegration, chat_with_ai
+from ai_integration import AIIntegration, chat_with_ai, get_partners_list
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
 import os
 import pytz
@@ -94,6 +94,7 @@ async def dashboard_handler(request):
     tasks = session_db.query(Task).filter_by(user_id=user.id).all()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
     interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(10).all() if user else []
+    partners = get_partners_list(user_id=user_id)
     session_db.close()
     
     # Calculate metrics
@@ -113,6 +114,7 @@ async def dashboard_handler(request):
         'user': user, 
         'profile': profile,
         'interactions': interactions,
+        'partners': partners,
         'total_tasks': total_tasks,
         'completed_tasks': completed_tasks,
         'pending_tasks': pending_tasks,
