@@ -7,6 +7,15 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <div class="app-header">
+        <div class="header-content">
+            <h1>Task Manager</h1>
+            <div class="header-info">
+                <span>{{ current_date }}</span>
+                <span>{{ current_time }}</span>
+            </div>
+        </div>
+    </div>
     <div class="container">
         <div class="chat-section">
             <div id="chat-messages" class="chat-messages"></div>
@@ -14,6 +23,15 @@
                 <input type="text" id="message-input" placeholder="Введите сообщение для AI...">
                 <button onclick="sendMessage()">Отправить</button>
             </div>
+        </div>
+        <div class="advice-section">
+            <h3>Советы от AI</h3>
+            {% for interaction in interactions[:3] %}
+            <div class="advice-item">
+                <p>{{ interaction.content[:200] }}{% if interaction.content|length > 200 %}...{% endif %}</p>
+                <small>{{ interaction.created_at.strftime('%d.%m.%Y %H:%M') }}</small>
+            </div>
+            {% endfor %}
         </div>
     </div>
     <script>
@@ -27,13 +45,17 @@
             input.value = '';
 
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 сек timeout
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ message: message }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 const data = await response.json();
                 addMessage(data.response, 'agent');
             } catch (error) {

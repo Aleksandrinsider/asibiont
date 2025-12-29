@@ -74,24 +74,23 @@ def parse_relative_time(message, user_now=None):
     return message
 
 def get_system_prompt():
-    return f"""Ты — ИИ-помощник для управления задачами в Telegram. Твой стиль общения — естественный диалог, как с дружелюбным и полезным собеседником.
+    return f"""Ты — дружелюбный ИИ-помощник для управления задачами. Твой стиль общения — естественный, как с хорошим другом. Всегда будь позитивным, полезным и вовлечённым в разговор.
 
-ВАЖНО: Всегда предпочитай вызывать инструменты для выполнения действий, а не описывать их текстом. Если пользователь просит добавить задачу, немедленно вызови add_task(). Не отвечай словами "я добавлю", а сразу действуй через инструмент.
+ОСНОВНЫЕ ПРАВИЛА:
+- Отвечай естественно, без списков, пунктов или форматирования.
+- Используй tool calls для действий, но не упоминай их в ответе.
+- Для приветствия: "Привет! Рад тебя видеть. Я помогу тебе управлять задачами, планировать время и находить интересных людей для общения или сотрудничества. Расскажи, чем ты сейчас занимаешься? Какие у тебя планы на сегодня или ближайшее время? Может быть, есть задачи, которые нужно добавить в список, или интересы, которые ты хотел бы развивать? Также интересно узнать, в каком городе ты находишься и какие у тебя основные увлечения — это поможет мне лучше подбирать для тебя подходящие активности и контакты."
+- Для добавления задач: "Отлично, сейчас добавлю задачу с напоминанием." затем tool call.
+- Всегда уточняй детали, если нужно, но действуй сразу, если информации достаточно.
 
-КЛЮЧЕВЫЕ ПРАВИЛА ФОРМАТИРОВАНИЯ:
-- Говори только сплошным текстом, без списков и пунктов.
-- Строго избегай любых списков, нумерации, пунктов, маркеров — говори только повествовательным текстом, перечисляя варианты в предложениях.
-- Используй обычные предложения, даже когда перечисляешь варианты: "можно попробовать это или то, также подойдет другой вариант".
-- Избегай структурирующих слов типа "во-первых", "затем", "следующий шаг".
-
-ТВОИ ИНСТРУМЕНТЫ (используй их по необходимости, не упоминая названия):
-- add_task(title="название задачи", description="описание", reminder_time="время в формате YYYY-MM-DD HH:MM", due_date="дедлайн в формате YYYY-MM-DD HH:MM", user_id=число) — для добавления задачи
-- list_tasks(user_id=число) — для просмотра всех задач пользователя
-- complete_task(task_id=число, user_id=число) — для завершения задачи
-- set_reminder(task_id=число, reminder_time="время в формате YYYY-MM-DD HH:MM", user_id=число) — для установки напоминания
-- find_partners(user_id=число, interests="интересы через запятую") — для поиска людей
-- update_profile(user_id=число, current_plans="текущие планы", interests="интересы через запятую", city="город", timezone="Europe/Moscow") — для обновления профиля
-- update_user_memory(user_id=число, memory="важная информация о пользователе") — для сохранения памяти
+ИНСТРУМЕНТЫ:
+- add_task(title="название", description="", reminder_time="YYYY-MM-DD HH:MM", due_date="", user_id=число)
+- list_tasks(user_id=число)
+- complete_task(task_id=число, user_id=число)
+- set_reminder(task_id=число, reminder_time="YYYY-MM-DD HH:MM", user_id=число)
+- find_partners(user_id=число, interests="")
+- update_profile(user_id=число, current_plans="", interests="", city="", timezone="")
+- update_user_memory(user_id=число, memory="")
 
 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
 - Если пользователь говорит "добавь задачу X", немедленно вызови add_task(title="X", reminder_time="ближайшее время").
@@ -752,7 +751,7 @@ async def chat_with_ai(message, context=None, user_id=None):
             "tools": TOOLS,
             "tool_choice": "auto"
         }
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         if response.status_code == 200:
             result = response.json()
             message_response = result["choices"][0]["message"]
@@ -827,7 +826,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=30)
                 if response.status_code == 200:
                     final_message = response.json()["choices"][0]["message"]
                     content = final_message.get("content", "")
@@ -839,7 +838,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                             "model": "deepseek-chat",
                             "messages": messages
                         }
-                        response = requests.post(url, headers=headers, json=data)
+                        response = requests.post(url, headers=headers, json=data, timeout=30)
                         if response.status_code == 200:
                             final_message = response.json()["choices"][0]["message"]
                             content = final_message.get("content", "Запрос обработан.")
@@ -897,7 +896,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                response = requests.post(url, headers=headers, json=data)
+                response = requests.post(url, headers=headers, json=data, timeout=30)
                 if response.status_code == 200:
                     final_message = response.json()["choices"][0]["message"]
                     content = final_message.get("content", "")
@@ -909,7 +908,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                             "model": "deepseek-chat",
                             "messages": messages
                         }
-                        response = requests.post(url, headers=headers, json=data)
+                        response = requests.post(url, headers=headers, json=data, timeout=30)
                         if response.status_code == 200:
                             final_message = response.json()["choices"][0]["message"]
                             content = final_message.get("content", "Расскажите подробнее.")
@@ -930,7 +929,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                         "model": "deepseek-chat",
                         "messages": messages
                     }
-                    response = requests.post(url, headers=headers, json=data)
+                    response = requests.post(url, headers=headers, json=data, timeout=30)
                     if response.status_code == 200:
                         final_message = response.json()["choices"][0]["message"]
                         content = final_message.get("content", "Расскажите подробнее.")
@@ -979,7 +978,7 @@ async def generate_reminder(user_id, task_title):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         if response.status_code == 200:
             result = response.json()
             return result["choices"][0]["message"]["content"]
@@ -1023,7 +1022,7 @@ async def generate_result_check(user_id, task_title):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         if response.status_code == 200:
             result = response.json()
             return result["choices"][0]["message"]["content"]
@@ -1089,7 +1088,7 @@ def generate_proactive_message(user_id):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         if response.status_code == 200:
             result = response.json()
             return result["choices"][0]["message"]["content"]
@@ -1142,7 +1141,7 @@ async def generate_daily_report(user_id):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         if response.status_code == 200:
             result = response.json()
             return result["choices"][0]["message"]["content"]
@@ -1187,7 +1186,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         if response.status_code == 200:
             result = response.json()
             return result["choices"][0]["message"]["content"]

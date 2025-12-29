@@ -8,12 +8,12 @@ import aioredis
 import aiohttp_session
 from aiohttp_session import get_session, SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
+from datetime import datetime
 from handlers import router
 from reminder_service import ReminderService
 from ai_integration import AIIntegration, chat_with_ai
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
 import os
-import datetime
 import pytz
 from datetime import timedelta
 import hashlib
@@ -102,6 +102,12 @@ async def dashboard_handler(request):
     pending_tasks = len([t for t in tasks if t.status == 'pending'])
     skipped_tasks = len([t for t in tasks if t.status == 'skipped'])
     
+    # Format date in Russian
+    now = datetime.now()
+    months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+    current_date = f"{now.day} {months[now.month - 1]} {now.year}"
+    current_time = now.strftime('%H:%M')
+    
     return {
         'tasks': tasks, 
         'user': user, 
@@ -110,7 +116,9 @@ async def dashboard_handler(request):
         'total_tasks': total_tasks,
         'completed_tasks': completed_tasks,
         'pending_tasks': pending_tasks,
-        'skipped_tasks': skipped_tasks
+        'skipped_tasks': skipped_tasks,
+        'current_date': current_date,
+        'current_time': current_time
     }
 
 

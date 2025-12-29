@@ -12,20 +12,58 @@ body {
     font-size: 14px;
     font-weight: 400;
     letter-spacing: normal;
-    padding: 40px;
+    padding: 20px;
     width: 1184.8px;
     height: 736.4px;
     margin: 0 auto;
     border-radius: 0px;
 }
 
+.app-header {
+    width: 1520.8px;
+    height: 64px;
+    background-color: #FFFFFF;
+    color: #1F2328;
+    padding: 16px;
+    border-radius: 0px;
+    margin: 0;
+    border-bottom: 1px solid #D1D9E0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1184.8px;
+    margin: 0 auto;
+}
+
+.header-content h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.header-info {
+    display: flex;
+    gap: 10px;
+    font-size: 14px;
+    color: #1F2328;
+}
+
 .container {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 40px;
+    gap: 15px;
+    padding: 20px;
     background-color: #FFFFFF;
     border-radius: 0px;
+    margin-top: 80px; /* to account for fixed header */
 }
 
 /* Header Section */
@@ -259,37 +297,42 @@ hr {
     padding: 20px;
     display: flex;
     flex-direction: column;
-    height: 80vh;
+    height: 40vh;
 }
 
 .chat-messages {
     flex: 1;
     overflow-y: auto;
     margin-bottom: 20px;
-    padding: 10px;
-    background-color: #F6F8FA;
-    border-radius: 6px;
-    border: 1px solid #D1D9E0;
+    padding: 20px;
+    background-color: #FFFFFF;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .message {
-    margin-bottom: 10px;
-    padding: 10px;
-    border-radius: 6px;
-    max-width: 80%;
+    padding: 0;
+    border-radius: 0;
+    max-width: none;
+    margin: 0;
+    border: none;
+    background: transparent;
 }
 
 .message.user {
-    background-color: #0969DA;
-    color: #FFFFFF;
-    align-self: flex-end;
-    margin-left: auto;
+    background-color: transparent;
+    color: #1F2328;
+    align-self: flex-start;
+    text-align: left;
+    font-weight: 500;
 }
 
 .message.agent {
-    background-color: #F6F8FA;
+    background-color: transparent;
     color: #1F2328;
-    border: 1px solid #D1D9E0;
+    text-align: left;
 }
 
 .chat-input {
@@ -322,4 +365,39 @@ hr {
 
 .chat-input button:hover {
     background-color: #218BFF;
+}
+
+/* Advice Section */
+.advice-section {
+    margin-top: 20px;
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 20px;
+}
+
+.advice-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1F2328;
+}
+
+.advice-item {
+    background-color: #F6F8FA;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.advice-item p {
+    margin: 0 0 10px 0;
+    color: #1F2328;
+    line-height: 1.4;
+}
+
+.advice-item small {
+    color: #656D76;
+    font-size: 12px;
 }
