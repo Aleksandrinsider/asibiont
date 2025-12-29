@@ -7,101 +7,101 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<body>
     <div class="container">
-        <header class="header">
-            <div class="header-content">
-                <h1>Task Manager</h1>
-                <nav>
-                    <a href="/dashboard">Dashboard</a>
-                    <a href="/logout">Logout</a>
-                </nav>
+        <!-- Header -->
+        <div class="header">
+            <h1>Dashboard</h1>
+            <p class="subtitle">Управляйте задачами с помощью AI<br>Создавайте задачи, общайтесь с ассистентом</p>
+            <div class="button-row">
+                <a href="/tasks" class="btn btn-primary">Создать задачу</a>
+                <a href="/chat" class="btn">Чат с AI</a>
+                <a href="/profile" class="btn">Профиль</a>
+                <a href="/logout" class="btn">Выход</a>
             </div>
-        </header>
-        <div class="main-content">
-            <aside class="sidebar">
-                <h2>Меню</h2>
-                <ul>
-                    <li><a href="/dashboard">Обзор</a></li>
-                    <li><a href="/tasks">Задачи</a></li>
-                    <li><a href="/profile">Профиль</a></li>
-                </ul>
-            </aside>
-            <main class="content">
-                <div class="metrics">
-                    <div class="metric">
-                        <h3>Всего задач</h3>
-                        <p>{{ total_tasks }}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Завершено</h3>
-                        <p>{{ completed_tasks }}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>В ожидании</h3>
-                        <p>{{ pending_tasks }}</p>
-                    </div>
-                    <div class="metric">
-                        <h3>Пропущено</h3>
-                        <p>{{ skipped_tasks }}</p>
+        </div>
+
+        <!-- Tasks Feed Section -->
+        <div class="feed-section">
+            <h2 class="section-title">
+                Недавние задачи
+                <a href="/tasks" class="see-more">Показать все</a>
+            </h2>
+            
+            {% for task in tasks[:3] %}
+            <div class="feed-item">
+                <div class="repo-header">
+                    <div class="task-title">{{ task.title }}</div>
+                    <div class="task-status status-{{ task.status }}">
+                        {% if task.status == 'completed' %}✅ Завершена
+                        {% elif task.status == 'pending' %}⏳ Ожидает
+                        {% else %}❌ Пропущена
+                        {% endif %}
                     </div>
                 </div>
-                <div class="tasks-section">
-                    <h2>Задачи</h2>
-                    <div class="filters">
-                        <a href="#" class="filter-link active" onclick="filterTasks('all')">Все</a>
-                        <a href="#" class="filter-link" onclick="filterTasks('pending')">Открытые</a>
-                        <a href="#" class="filter-link" onclick="filterTasks('completed')">Закрытые</a>
-                    </div>
-                    <div class="issues-list" id="issues-list">
-                        {% for task in tasks %}
-                        <div class="issue-item" data-status="{{ task.status }}">
-                            <div class="issue-info">
-                                <h4><span class="status-icon {{ task.status }}"></span>{{ task.title }}</h4>
-                                <p>{{ task.description }}</p>
-                                <div class="issue-meta">
-                                    <span class="label {{ task.status }}">{{ task.status }}</span>
-                                    {% if task.deadline %}
-                                    <span class="due-date">Дедлайн: {{ task.deadline.strftime('%Y-%m-%d') }}</span>
-                                    {% endif %}
-                                    <span class="created-at">Создано: {{ task.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-                                    {% if task.updated_at %}
-                                    <span class="updated-at">Обновлено: {{ task.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% if not tasks %}
-                    <p>У вас нет задач.</p>
+                <p class="repo-desc">{{ task.description }}</p>
+                <div class="repo-stats">
+                    <span>Создана: {{ task.created_at.strftime('%d.%m.%Y') }}</span>
+                    {% if task.due_date %}
+                    <span>Срок: {{ task.due_date.strftime('%d.%m.%Y') }}</span>
                     {% endif %}
                 </div>
-                <div class="chat-container">
-                    <h3>Диалог с агентом</h3>
-                    <div class="chat-messages" id="chat-messages">
-                        <div class="message agent">Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>
-                    </div>
-                    <div class="chat-input">
-                        <input type="text" id="message-input" placeholder="Введите сообщение...">
-                        <button onclick="sendMessage()">Отправить</button>
-                    </div>
+            </div>
+            {% endfor %}
+            
+            {% if not tasks %}
+            <div class="feed-item">
+                <p class="repo-desc">У вас пока нет задач. Создайте первую задачу!</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats-section">
+            <h2 class="section-title">Статистика</h2>
+            
+            <div class="stat-item">
+                <div class="stat-number">{{ total_tasks }}</div>
+                <div class="stat-label">Всего задач</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-number">{{ completed_tasks }}</div>
+                <div class="stat-label">Завершено</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-number">{{ pending_tasks }}</div>
+                <div class="stat-label">В ожидании</div>
+            </div>
+            
+            <div class="stat-item">
+                <div class="stat-number">{{ skipped_tasks }}</div>
+                <div class="stat-label">Пропущено</div>
+            </div>
+        </div>
+
+        <!-- AI Interactions Section -->
+        <div class="interactions-section">
+            <h2 class="section-title">
+                Недавние взаимодействия с AI
+                <a href="/chat" class="see-more">Показать все</a>
+            </h2>
+            
+            {% for interaction in interactions[:3] %}
+            <div class="interaction-item">
+                <div class="date">{{ interaction.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+                <div class="interaction-content">
+                    <strong>Вы:</strong> {{ interaction.content[:100] }}{% if interaction.content|length > 100 %}...{% endif %}
                 </div>
-                <div class="activity-section">
-                    <h3>Недавняя активность</h3>
-                    <ul class="activity-list">
-                        {% for interaction in interactions %}
-                        <li class="activity-item">
-                            <span class="activity-type">{{ interaction.message_type }}</span>
-                            <span class="activity-content">{{ interaction.content[:100] }}...</span>
-                            <span class="activity-time">{{ interaction.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% if not interactions %}
-                    <p>Нет недавней активности.</p>
-                    {% endif %}
-                </div>
-            </main>
+            </div>
+            {% endfor %}
+            
+            {% if not interactions %}
+            <div class="interaction-item">
+                <div class="interaction-content">Пока нет взаимодействий с AI</div>
+            </div>
+            {% endif %}
         </div>
     </div>
     <script>

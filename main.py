@@ -60,6 +60,16 @@ async def test_login_handler(request):
     # Тестовый вход для локального режима
     session = await get_session(request)
     session['user_id'] = 123456789  # Тестовый user_id
+    
+    # Создать тестового пользователя, если не существует
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=123456789).first()
+    if not user:
+        user = User(telegram_id=123456789, username='test_user')
+        session_db.add(user)
+        session_db.commit()
+    session_db.close()
+    
     return web.HTTPFound('/dashboard')
 
 
@@ -77,8 +87,11 @@ async def dashboard_handler(request):
         return web.HTTPFound('/')
     # Получить задачи пользователя
     session_db = Session()
-    tasks = session_db.query(Task).filter_by(user_id=user_id).all()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session_db.close()
+        return web.HTTPFound('/')
+    tasks = session_db.query(Task).filter_by(user_id=user.id).all()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
     interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(10).all() if user else []
     session_db.close()
