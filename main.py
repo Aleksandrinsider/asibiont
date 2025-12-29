@@ -24,9 +24,6 @@ def check_telegram_authentication(data):
     secret_key = TELEGRAM_TOKEN.encode()
     data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    print(f"Data string: {data_check_string}")
-    print(f"Computed hash: {hash_computed}")
-    print(f"Received hash: {data.get('hash')}")
     return hash_computed == data.get('hash')
 
 
@@ -49,7 +46,12 @@ async def auth_handler(request):
         session['user_id'] = user_id
         return web.HTTPFound('/dashboard')
     else:
-        return web.Response(text=f'Authentication failed: {str(data)}', status=401)
+        # Debug: return hashes
+        secret_key = TELEGRAM_TOKEN.encode()
+        data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
+        hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        received_hash = data.get('hash')
+        return web.Response(text=f'Authentication failed\nData string: {data_check_string}\nComputed hash: {hash_computed}\nReceived hash: {received_hash}', status=401)
 
 
 async def test_login_handler(request):
