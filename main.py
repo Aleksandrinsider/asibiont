@@ -103,11 +103,18 @@ async def dashboard_handler(request):
     pending_tasks = len([t for t in tasks if t.status == 'pending'])
     skipped_tasks = len([t for t in tasks if t.status == 'skipped'])
     
-    # Format date in Russian
-    now = datetime.now()
+    # Format date and time in user's timezone
+    base_now = datetime.now(pytz.UTC)
+    user_now = base_now
+    if user and user.timezone:
+        try:
+            user_tz = pytz.timezone(user.timezone)
+            user_now = base_now.astimezone(user_tz)
+        except pytz.exceptions.UnknownTimeZoneError:
+            user_now = base_now
     months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
-    current_date = f"{now.day} {months[now.month - 1]} {now.year}"
-    current_time = now.strftime('%H:%M')
+    current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+    current_time = user_now.strftime('%H:%M')
     
     return {
         'tasks': tasks, 

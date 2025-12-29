@@ -16,25 +16,18 @@
             </div>
         </div>
     </div>
-    <div class="tabs">
-        <button class="tab-button active" onclick="showTab('chat')">Чат</button>
-        <button class="tab-button" onclick="showTab('tasks')">Задачи</button>
-        <button class="tab-button" onclick="showTab('people')">Люди</button>
-        <button class="tab-button" onclick="showTab('profile')">Профиль</button>
-    </div>
     <div class="container">
-        <div id="chat-tab" class="tab-content active">
-            <div class="chat-section">
-                <div id="chat-messages" class="chat-messages"></div>
-                <div class="chat-input">
-                    <input type="text" id="message-input" placeholder="Введите сообщение для AI...">
-                    <button onclick="sendMessage()">Отправить</button>
-                </div>
+        <div class="chat-section">
+            <h3>Чат с AI</h3>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Введите сообщение для AI...">
+                <button onclick="sendMessage()">Отправить</button>
             </div>
         </div>
-        <div id="tasks-tab" class="tab-content">
+        <div class="sidebar">
             <div class="tasks-section">
-                <h3>Ваши задачи</h3>
+                <h3>Задачи</h3>
                 {% for task in tasks %}
                 <div class="task-item">
                     <p><strong>{{ task.title }}</strong> - {{ task.status }}</p>
@@ -44,10 +37,8 @@
                 {% endfor %}
                 {% if not tasks %}<p>Нет задач.</p>{% endif %}
             </div>
-        </div>
-        <div id="people-tab" class="tab-content">
             <div class="people-section">
-                <h3>Люди для общения</h3>
+                <h3>Люди</h3>
                 {% if partners %}
                 {% for partner in partners %}
                 <div class="partner-item">
@@ -58,19 +49,17 @@
                 </div>
                 {% endfor %}
                 {% else %}
-                <p>Нет найденных партнеров. Обновите профиль для поиска.</p>
+                <p>Нет партнеров.</p>
                 {% endif %}
             </div>
-        </div>
-        <div id="profile-tab" class="tab-content">
             <div class="profile-section">
-                <h3>Ваш профиль</h3>
+                <h3>Профиль</h3>
                 {% if profile %}
                 <p><strong>Навыки:</strong> {{ profile.skills or 'Не указаны' }}</p>
                 <p><strong>Интересы:</strong> {{ profile.interests or 'Не указаны' }}</p>
                 <p><strong>Цели:</strong> {{ profile.goals or 'Не указаны' }}</p>
                 <p><strong>Город:</strong> {{ profile.city or 'Не указан' }}</p>
-                <p><strong>Текущие планы:</strong> {{ profile.current_plans or 'Не указаны' }}</p>
+                <p><strong>Планы:</strong> {{ profile.current_plans or 'Не указаны' }}</p>
                 {% else %}
                 <p>Профиль не заполнен.</p>
                 {% endif %}
@@ -78,15 +67,6 @@
         </div>
     </div>
     <script>
-        function showTab(tabName) {
-            const tabs = document.querySelectorAll('.tab-content');
-            tabs.forEach(tab => tab.classList.remove('active'));
-            const buttons = document.querySelectorAll('.tab-button');
-            buttons.forEach(button => button.classList.remove('active'));
-            document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
-        }
-
         async function sendMessage() {
             const input = document.getElementById('message-input');
             const message = input.value.trim();
