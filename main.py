@@ -23,28 +23,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global app for Railway
-app = web.Application()
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-aiohttp_session.setup(app, SimpleCookieStorage())
-
-# Routes
-app.router.add_get('/', login_handler)
-app.router.add_get('/tg_auth', auth_handler)
-app.router.add_get('/test_login', test_login_handler)
-app.router.add_get('/logout', logout_handler)
-app.router.add_get('/dashboard', dashboard_handler)
-app.router.add_get('/tasks', tasks_handler)
-app.router.add_get('/profile', profile_handler)
-app.router.add_post('/chat', chat_handler)
-app.router.add_static('/static', 'static')
-app.router.add_post('/yookassa-webhook', yookassa_webhook)
-
-bot = Bot(token=TELEGRAM_TOKEN)
-
-# Add startup handler
-app.on_startup.append(on_startup)
-
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
     token = TELEGRAM_TOKEN
@@ -193,6 +171,29 @@ async def on_startup(app):
     reminder_service = ReminderService(bot, ai_service)
     await reminder_service.start()
     logger.info("ReminderService started")
+
+
+# Global app for Railway
+app = web.Application()
+aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+aiohttp_session.setup(app, SimpleCookieStorage())
+
+# Routes
+app.router.add_get('/', login_handler)
+app.router.add_get('/tg_auth', auth_handler)
+app.router.add_get('/test_login', test_login_handler)
+app.router.add_get('/logout', logout_handler)
+app.router.add_get('/dashboard', dashboard_handler)
+app.router.add_get('/tasks', tasks_handler)
+app.router.add_get('/profile', profile_handler)
+app.router.add_post('/chat', chat_handler)
+app.router.add_static('/static', 'static')
+app.router.add_post('/yookassa-webhook', yookassa_webhook)
+
+bot = Bot(token=TELEGRAM_TOKEN)
+
+# Add startup handler
+app.on_startup.append(on_startup)
 
 
 async def main():
