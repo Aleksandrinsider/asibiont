@@ -57,6 +57,12 @@ async def test_login_handler(request):
     return web.HTTPFound('/dashboard')
 
 
+async def logout_handler(request):
+    session = await get_session(request)
+    session.clear()
+    return web.HTTPFound('/')
+
+
 @aiohttp_jinja2.template('dashboard.html')
 async def dashboard_handler(request):
     session = await get_session(request)
@@ -145,6 +151,7 @@ async def main():
         app.router.add_get('/', login_handler)
         app.router.add_get('/telegram_auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
+        app.router.add_get('/logout', logout_handler)
         app.router.add_get('/dashboard', dashboard_handler)
         app.router.add_static('/static', 'static')
         
@@ -192,6 +199,7 @@ async def main():
         app.router.add_get('/', login_handler)
         app.router.add_get('/telegram_auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
+        app.router.add_get('/logout', logout_handler)
         app.router.add_get('/dashboard', dashboard_handler)
         app.router.add_static('/static', 'static')
 
