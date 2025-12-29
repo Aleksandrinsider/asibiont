@@ -174,14 +174,16 @@ async def main():
         )
         webhook_requests_handler.register(app, path="/webhook")
 
+        setup_application(app, dp, bot=bot)
+
+        app.router.add_post('/yookassa-webhook', yookassa_webhook)
+
         # Web app routes
         app.router.add_get('/', login_handler)
-        app.router.add_post('/auth', auth_handler)
+        app.router.add_get('/telegram_auth', auth_handler)
         app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/dashboard', dashboard_handler)
         app.router.add_static('/static', 'static')
-
-        setup_application(app, dp, bot=bot)
 
         app.router.add_post('/yookassa-webhook', yookassa_webhook)
 
