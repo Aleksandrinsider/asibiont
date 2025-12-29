@@ -22,6 +22,7 @@ if not TELEGRAM_TOKEN:
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL is not set")
+WEB_APP_URL = os.getenv("WEB_APP_URL") or ("http://localhost:8000" if os.getenv("LOCAL") == "1" else "https://yourapp.railway.app")
 YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
