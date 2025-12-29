@@ -59,6 +59,7 @@ body {
 
 .container {
     display: flex;
+    flex-direction: column;
     gap: 20px;
     padding: 20px;
     background-color: #FFFFFF;
@@ -70,14 +71,14 @@ body {
 }
 
 .chat-section {
-    flex: 2;
+    width: 100%;
     background-color: #FFFFFF;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     padding: 20px;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 120px);
+    height: 400px; /* fixed height for chat */
 }
 
 .chat-section h3 {
@@ -98,12 +99,11 @@ body {
 }
 
 .sidebar {
-    flex: 1;
+    width: 100%;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 20px;
-    height: calc(100vh - 120px);
-    overflow-y: auto;
+    justify-content: space-between;
 }
 
 /* Header Section */
@@ -442,15 +442,20 @@ hr {
     font-size: 12px;
 }
 
-/* Tasks Section */
-.tasks-section {
+.tasks-section,
+.people-section,
+.profile-section {
     background-color: #FFFFFF;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     padding: 20px;
+    flex: 1;
+    min-width: 300px;
 }
 
-.tasks-section h3 {
+.tasks-section h3,
+.people-section h3,
+.profile-section h3 {
     margin: 0 0 15px 0;
     font-size: 16px;
     font-weight: 600;
@@ -476,21 +481,6 @@ hr {
     font-size: 12px;
 }
 
-/* People Section */
-.people-section {
-    background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    padding: 20px;
-}
-
-.people-section h3 {
-    margin: 0 0 15px 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #1F2328;
-}
-
 .partner-item {
     background-color: #F6F8FA;
     border: 1px solid #D1D9E0;
@@ -503,21 +493,6 @@ hr {
     margin: 0 0 5px 0;
     color: #1F2328;
     line-height: 1.4;
-}
-
-/* Profile Section */
-.profile-section {
-    background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    padding: 20px;
-}
-
-.profile-section h3 {
-    margin: 0 0 15px 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #1F2328;
 }
 
 .profile-section p {
