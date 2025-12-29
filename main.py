@@ -23,7 +23,7 @@ import urllib.parse
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
     secret_key = TELEGRAM_TOKEN.encode()
-    data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
+    data_check_string = '\n'.join(sorted([f'{k}={urllib.parse.quote(str(v))}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     return hash_computed == data.get('hash')
 
@@ -41,7 +41,13 @@ async def simple_login_handler(request):
 
 async def auth_handler(request):
     data = request.query
-    return web.Response(text=f'Data: {dict(data)}')
+    if check_telegram_authentication(data):
+        user_id = int(data['id'])
+        session = await get_session(request)
+        session['user_id'] = user_id
+        return web.HTTPFound('/dashboard')
+    else:
+        return web.Response(text='Authentication failed', status=401)
 
 
 async def test_login_handler(request):
