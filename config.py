@@ -19,6 +19,9 @@ if not REDIS_URL:
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_TOKEN is not set")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME")
+if not TELEGRAM_BOT_USERNAME:
+    raise ValueError("TELEGRAM_BOT_USERNAME is not set")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL is not set")

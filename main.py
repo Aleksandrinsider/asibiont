@@ -2,7 +2,12 @@ import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
-from config import TELEGRAM_TOKEN, WEBHOOK_URL
+import aiohttp_jinja2
+import jinja2
+import aioredis
+import aiohttp_session
+from aiohttp_session import get_session, SimpleCookieStorage
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from handlers import router
 from reminder_service import ReminderService
 from ai_integration import AIIntegration
@@ -11,6 +16,57 @@ import os
 import datetime
 import pytz
 from datetime import timedelta
+import hashlib
+import hmac
+
+def check_telegram_authentication(data):
+    # Проверка авторизации от Telegram
+    secret_key = hmac.new(b'WebAppData', TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
+    data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
+    hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    return hash_computed == data.get('hash')
+
+
+@aiohttp_jinja2.template('login.html')
+async def login_handler(request):
+    local = os.getenv("LOCAL") == "1"
+    return {'bot_username': TELEGRAM_BOT_USERNAME, 'auth_url': '/auth', 'local': local}
+
+
+async def auth_handler(request):
+    data = await request.post()
+    if check_telegram_authentication(data):
+        user_id = int(data['id'])
+        session = await get_session(request)
+        session['user_id'] = user_id
+        return web.HTTPFound('/dashboard')
+    else:
+        return web.Response(text='Authentication failed', status=401)
+
+
+async def test_login_handler(request):
+    # Тестовый вход для локального режима
+    session = await get_session(request)
+    session['user_id'] = 123456789  # Тестовый user_id
+    return web.HTTPFound('/dashboard')
+
+
+@aiohttp_jinja2.template('dashboard.html')
+async def dashboard_handler(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.HTTPFound('/')
+    # Получить задачи пользователя
+    session_db = Session()
+    tasks = session_db.query(Task).filter_by(user_id=user_id).all()
+    session_db.close()
+    return {'tasks': tasks}
+
+
+async def yookassa_webhook(request):
+    # Заглушка для webhook Yookassa
+    return web.Response(text='OK')
 
 
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -68,25 +124,63 @@ async def main():
 
     # Проверка на локальный запуск
     if os.getenv("LOCAL") == "1":
-        # Локальный запуск с polling
-        print("Запуск в локальном режиме (polling)...")
+        # Локальный запуск с polling и веб-сервером
+        print("Запуск в локальном режиме (polling + web)...")
+        app = web.Application()
+        
+        # Setup Jinja2
+        aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+        
+        # Setup sessions
+        storage = SimpleCookieStorage()
+        aiohttp_session.setup(app, storage)
+        
+        # Web app routes
+        app.router.add_get('/', login_handler)
+        app.router.add_post('/auth', auth_handler)
+        app.router.add_get('/test_login', test_login_handler)
+        app.router.add_get('/dashboard', dashboard_handler)
+        app.router.add_static('/static', 'static')
+        
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, 'localhost', 8080)
+        await site.start()
+        print("Web server started on http://localhost:8080")
+        
+        await on_startup(bot)
+        
         await dp.start_polling(bot)
     else:
         # Вебхук для Railway
         print("Setting up webhook for Railway")
         app = web.Application()
+        
+        # Setup Jinja2
+        aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+        
+        # Setup sessions
+        storage = SimpleCookieStorage()
+        aiohttp_session.setup(app, storage)
+        
         webhook_requests_handler = SimpleRequestHandler(
             dispatcher=dp,
             bot=bot,
         )
         webhook_requests_handler.register(app, path="/webhook")
 
+        # Web app routes
+        app.router.add_get('/', login_handler)
+        app.router.add_post('/auth', auth_handler)
+        app.router.add_get('/test_login', test_login_handler)
+        app.router.add_get('/dashboard', dashboard_handler)
+        app.router.add_static('/static', 'static')
+
         setup_application(app, dp, bot=bot)
 
         app.router.add_post('/yookassa-webhook', yookassa_webhook)
 
-        # Add dashboard route
-        app.router.add_get('/dashboard', dashboard_handler)
+        print("Calling on_startup")
 
         print("Calling on_startup")
         await on_startup(bot)

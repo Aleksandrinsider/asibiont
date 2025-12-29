@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>Task Manager</h1>
+            <nav>
+                <a href="/dashboard">Dashboard</a>
+                <a href="/tasks">Tasks</a>
+                <a href="/logout">Logout</a>
+            </nav>
+        </div>
+    </header>
+    <div class="main-content">
+        <aside class="sidebar">
+            <h2>Меню</h2>
+            <ul>
+                <li><a href="/dashboard">Обзор</a></li>
+                <li><a href="/tasks">Задачи</a></li>
+                <li><a href="/profile">Профиль</a></li>
+            </ul>
+        </aside>
+        <main class="content">
+            <h2>Ваши задачи</h2>
+            <div class="issues-list">
+                {% for task in tasks %}
+                <div class="issue-item">
+                    <h3>{{ task.title }}</h3>
+                    <p>{{ task.description }}</p>
+                    <span class="status {{ task.status }}">{{ task.status }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>
