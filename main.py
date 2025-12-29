@@ -21,7 +21,7 @@ import hmac
 
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
-    secret_key = hmac.new(b'WebAppData', TELEGRAM_TOKEN.encode(), hashlib.sha256).digest()
+    secret_key = TELEGRAM_TOKEN.encode()
     data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
     return hash_computed == data.get('hash')
@@ -40,12 +40,11 @@ async def simple_login_handler(request):
 
 async def auth_handler(request):
     data = request.query
-    # return web.Response(text=str(data))
     if check_telegram_authentication(data):
         user_id = int(data['id'])
-        # session = await get_session(request)
-        # session['user_id'] = user_id
-        return web.Response(text=f'Authenticated as {user_id} - redirect to /dashboard')
+        session = await get_session(request)
+        session['user_id'] = user_id
+        return web.HTTPFound('/dashboard')
     else:
         return web.Response(text=f'Authentication failed: {str(data)}', status=401)
 
