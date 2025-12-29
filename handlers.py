@@ -1,11 +1,11 @@
 import json
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from ai_integration import chat_with_ai
 from models import Session, User, UserProfile, Subscription
 import os
-from timezonefinder import TimezoneFinder
+from config import WEB_APP_URL
 
 PREMIUM_DESCRIPTION = "🚀 Лаборатория искусственного интеллекта EREBUS AI — ваш путь к успеху через умное управление задачами и мощное сообщество единомышленников!\n\nНаходите нужных вам людей в считанные минуты или просто наслаждайтесь общением с теми, у кого такие же интересы как и у вас!\n\nПредставьте: вы не просто планируете дела, а достигаете целей быстрее, чем когда-либо! С премиум-подпиской всего за 3000 рублей в месяц откройте доступ к эксклюзивным возможностям:\n\n🔹 Интеллектуальный ИИ-ассистент: Автоматическое планирование задач, умные напоминания и персональная мотивация — чтобы каждый день был продуктивным!\n🔹 Проактивные советы: Агент анализирует вашу ситуацию, делится инсайтами и предлагает шаги на основе ваших задач и интересов. Забудьте о хаосе — вперед к результатам!\n🔹 Сообщество лидеров: Найдите единомышленников по интересам — от программирования и дизайна до спорта и бизнеса. Общайтесь, коллаборируйте и меняйте жизнь вместе!\n🔹 Совместные возможности: Рекомендации по событиям, проектам и коллаборациям, которые откроют новые горизонты.\n🔹 Персонализированные инструменты: Управляйте задачами с приоритетами, дедлайнами и аналитикой прогресса — все в одном месте.\n🔹 Безопасность на первом месте: 🔒 Ваши данные шифруются, и даже мы не имеем к ним доступа. Полная конфиденциальность!\n\nНе ждите — присоединяйтесь к сообществу амбициозных профессионалов, где успех — это норма! Оформите премиум-подписку командой /subscribe и начните трансформировать жизнь уже сегодня! 💪✨\n\nПо вопросам поддержки обращайтесь: @aleksandrinsider"
 
@@ -32,7 +32,10 @@ else:
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
-    await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/issues?telegram_id={message.from_user.id}"))]
+    ])
+    await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
 
 @router.message(Command("update_profile"))
 async def update_profile_handler(message: Message):
