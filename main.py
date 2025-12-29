@@ -268,12 +268,18 @@ async def main():
         await runner.setup()
         port_env = os.getenv("PORT")
         logger.info(f"PORT env var: {port_env}")
-        port = int(port_env) if port_env else 8000
+        if not port_env:
+            raise ValueError("PORT is not set")
+        port = int(port_env)
         logger.info(f"Using port: {port}")
         logger.info(f"Starting server on port {port}")
-        site = web.TCPSite(runner, '0.0.0.0', port)
-        await site.start()
-        logger.info(f"Server started on port {port}")
+        try:
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            await site.start()
+            logger.info(f"Server started on port {port}")
+        except Exception as e:
+            logger.error(f"Error starting server: {e}")
+            raise
 
         logger.info(f"Бот запущен в режиме вебхуков на порту {port}!")
 
