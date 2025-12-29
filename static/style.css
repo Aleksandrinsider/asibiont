@@ -117,33 +117,33 @@ body {
     margin-bottom: 12px;
 }
 
-.task-title {
+.repo-name {
     color: #58a6ff;
     font-weight: 600;
     font-size: 14px;
+    text-decoration: none;
 }
 
-.task-status {
-    font-size: 12px;
-    padding: 2px 8px;
-    border-radius: 12px;
+.repo-name:hover {
+    text-decoration: underline;
+}
+
+.star-btn {
     background-color: #21262d;
     color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
-.status-completed {
-    background-color: #238636;
-    color: #ffffff;
-}
-
-.status-pending {
-    background-color: #d29922;
-    color: #ffffff;
-}
-
-.status-skipped {
-    background-color: #da3633;
-    color: #ffffff;
+.star-btn:hover {
+    background-color: #30363d;
+    border-color: #8b949e;
 }
 
 .repo-desc {
@@ -160,55 +160,21 @@ body {
     font-size: 12px;
 }
 
-/* Stats Section */
-.stats-section {
+/* Changelog Section */
+.changelog-section {
     background-color: #161b22;
     border: 1px solid #30363d;
     border-radius: 6px;
     padding: 20px;
 }
 
-.stat-item {
+.changelog-item {
     margin-bottom: 16px;
     padding-bottom: 16px;
     border-bottom: 1px solid #30363d;
 }
 
-.stat-item:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
-}
-
-.stat-number {
-    color: #ffffff;
-    font-size: 24px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.stat-label {
-    color: #8b949e;
-    font-size: 14px;
-}
-
-/* Interactions Section */
-.interactions-section {
-    grid-column: 1 / -1;
-    background-color: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    padding: 20px;
-    margin-top: 10px;
-}
-
-.interaction-item {
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #30363d;
-}
-
-.interaction-item:last-child {
+.changelog-item:last-child {
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0;
@@ -220,10 +186,48 @@ body {
     margin-bottom: 4px;
 }
 
-.interaction-content {
+.changelog-title {
     color: #c9d1d9;
     font-size: 14px;
     line-height: 1.4;
+}
+
+.view-changelog {
+    color: #58a6ff;
+    font-size: 14px;
+    text-decoration: none;
+    display: inline-block;
+    margin-top: 12px;
+}
+
+.view-changelog:hover {
+    text-decoration: underline;
+}
+
+/* Tomorrow Section */
+.tomorrow-section {
+    grid-column: 1 / -1;
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 20px;
+    margin-top: 10px;
+}
+
+.tomorrow-label {
+    color: #8b949e;
+    font-size: 12px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+}
+
+.highlight {
+    background-color: #1e60d5;
+    color: #ffffff;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-left: 8px;
 }
 
 hr {

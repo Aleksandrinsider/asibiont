@@ -11,95 +11,102 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>Dashboard</h1>
-            <p class="subtitle">Управляйте задачами с помощью AI<br>Создавайте задачи, общайтесь с ассистентом</p>
+            <h1>Home</h1>
+            <p class="subtitle">Ask anything<br>Add repositories, files, and spaces</p>
             <div class="button-row">
-                <a href="/tasks" class="btn btn-primary">Создать задачу</a>
-                <a href="/chat" class="btn">Чат с AI</a>
-                <a href="/profile" class="btn">Профиль</a>
-                <a href="/logout" class="btn">Выход</a>
+                <a href="/tasks" class="btn btn-primary">Create issue</a>
+                <a href="/chat" class="btn">Spark</a>
+                <a href="/profile" class="btn">Git</a>
+                <a href="/logout" class="btn">Pull requests</a>
             </div>
         </div>
 
-        <!-- Tasks Feed Section -->
+        <!-- Feed Section -->
         <div class="feed-section">
             <h2 class="section-title">
-                Недавние задачи
-                <a href="/tasks" class="see-more">Показать все</a>
+                Feed
+                <a href="/tasks" class="see-more">See more</a>
             </h2>
-            
+
             {% for task in tasks[:3] %}
             <div class="feed-item">
                 <div class="repo-header">
-                    <div class="task-title">{{ task.title }}</div>
-                    <div class="task-status status-{{ task.status }}">
-                        {% if task.status == 'completed' %}✅ Завершена
-                        {% elif task.status == 'pending' %}⏳ Ожидает
-                        {% else %}❌ Пропущена
-                        {% endif %}
-                    </div>
+                    <div class="repo-name">{{ task.title }}</div>
+                    <button class="star-btn">⭐ Star</button>
                 </div>
                 <p class="repo-desc">{{ task.description }}</p>
                 <div class="repo-stats">
-                    <span>Создана: {{ task.created_at.strftime('%d.%m.%Y') }}</span>
-                    {% if task.due_date %}
-                    <span>Срок: {{ task.due_date.strftime('%d.%m.%Y') }}</span>
-                    {% endif %}
+                    <span>{{ task.status }}</span>
+                    <span>{{ task.created_at.strftime('%d.%m.%Y') }}</span>
                 </div>
             </div>
             {% endfor %}
-            
+
             {% if not tasks %}
             <div class="feed-item">
-                <p class="repo-desc">У вас пока нет задач. Создайте первую задачу!</p>
+                <div class="repo-header">
+                    <div class="repo-name">Welcome to Task Manager</div>
+                    <button class="star-btn">⭐ Star</button>
+                </div>
+                <p class="repo-desc">Create your first task to get started with AI-powered task management.</p>
+                <div class="repo-stats">
+                    <span>Getting started</span>
+                </div>
             </div>
             {% endif %}
         </div>
 
-        <!-- Stats Section -->
-        <div class="stats-section">
-            <h2 class="section-title">Статистика</h2>
-            
-            <div class="stat-item">
-                <div class="stat-number">{{ total_tasks }}</div>
-                <div class="stat-label">Всего задач</div>
+        <!-- Changelog Section -->
+        <div class="changelog-section">
+            <h2 class="section-title">Listed from our changelog</h2>
+
+            {% for interaction in interactions[:4] %}
+            <div class="changelog-item">
+                <div class="date">{{ interaction.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
+                <div class="changelog-title">{{ interaction.content[:100] }}{% if interaction.content|length > 100 %}...{% endif %}</div>
             </div>
-            
-            <div class="stat-item">
-                <div class="stat-number">{{ completed_tasks }}</div>
-                <div class="stat-label">Завершено</div>
+            {% endfor %}
+
+            {% if not interactions %}
+            <div class="changelog-item">
+                <div class="date">Recent</div>
+                <div class="changelog-title">Welcome to your AI assistant! Start a conversation to see activity here.</div>
             </div>
-            
-            <div class="stat-item">
-                <div class="stat-number">{{ pending_tasks }}</div>
-                <div class="stat-label">В ожидании</div>
-            </div>
-            
-            <div class="stat-item">
-                <div class="stat-number">{{ skipped_tasks }}</div>
-                <div class="stat-label">Пропущено</div>
-            </div>
+            {% endif %}
+
+            <a href="/chat" class="view-changelog">View changelog →</a>
         </div>
 
-        <!-- AI Interactions Section -->
-        <div class="interactions-section">
-            <h2 class="section-title">
-                Недавние взаимодействия с AI
-                <a href="/chat" class="see-more">Показать все</a>
-            </h2>
-            
-            {% for interaction in interactions[:3] %}
-            <div class="interaction-item">
-                <div class="date">{{ interaction.created_at.strftime('%d.%m.%Y %H:%M') }}</div>
-                <div class="interaction-content">
-                    <strong>Вы:</strong> {{ interaction.content[:100] }}{% if interaction.content|length > 100 %}...{% endif %}
+        <!-- Tomorrow Section -->
+        <div class="tomorrow-section">
+            <div class="tomorrow-label">Tomorrow</div>
+
+            {% for task in tasks if task.status == 'pending' %}
+            <div class="feed-item">
+                <div class="repo-header">
+                    <div class="repo-name">{{ task.title }}</div>
+                    <button class="star-btn">⭐ Star</button>
+                </div>
+                <p class="repo-desc">{{ task.description }}</p>
+                <div class="repo-stats">
+                    <span>{{ task.status }}</span>
+                    {% if task.due_date %}
+                    <span>Due: {{ task.due_date.strftime('%d.%m.%Y') }}</span>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
-            
-            {% if not interactions %}
-            <div class="interaction-item">
-                <div class="interaction-content">Пока нет взаимодействий с AI</div>
+
+            {% if not tasks or not [t for t in tasks if t.status == 'pending'] %}
+            <div class="feed-item">
+                <div class="repo-header">
+                    <div class="repo-name">No upcoming tasks</div>
+                    <button class="star-btn">⭐ Star</button>
+                </div>
+                <p class="repo-desc">All caught up! Create a new task to see it here tomorrow.</p>
+                <div class="repo-stats">
+                    <span>Tomorrow</span>
+                </div>
             </div>
             {% endif %}
         </div>
