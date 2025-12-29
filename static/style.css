@@ -442,11 +442,27 @@ hr {
     font-size: 12px;
 }
 
-.tasks-section,
-.people-section,
+.tasks-section {
+    background-color: #FFFFFF;
+    border: 1px solid #0969DA;
+    border-radius: 6px;
+    padding: 20px;
+    flex: 1;
+    min-width: 300px;
+}
+
+.people-section {
+    background-color: #FFFFFF;
+    border: 1px solid #238636;
+    border-radius: 6px;
+    padding: 20px;
+    flex: 1;
+    min-width: 300px;
+}
+
 .profile-section {
     background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
+    border: 1px solid #D29922;
     border-radius: 6px;
     padding: 20px;
     flex: 1;
