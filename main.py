@@ -114,7 +114,8 @@ async def dashboard_handler(request):
             'logged_in': False,
             'current_date': '',
             'current_time': '',
-            'formatted_end_date': None
+            'formatted_end_date': None,
+            'is_local': os.getenv('LOCAL') == '1'
         }
     
     # Получить задачи пользователя

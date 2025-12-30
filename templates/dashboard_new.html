@@ -11,11 +11,7 @@
         <div class="header-content">
             <a href="https://t.me/Erebus_ai_bot" target="_blank" class="logo">EREBUS AI</a>
             <div class="header-info">
-                <span>{{ current_date }}</span>
-                <span>{{ current_time }}</span>
-                {% if formatted_end_date %}
-                <span>Подписка активна до {{ formatted_end_date }}</span>
-                {% endif %}
+                <span>{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>
             </div>
         </div>
     </div>
