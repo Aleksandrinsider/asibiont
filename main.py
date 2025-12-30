@@ -125,8 +125,12 @@ async def dashboard_handler(request):
             'formatted_end_date': None
         }
     
+    logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
+    
     # Проверить подписку
     subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+    logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
+    
     if os.getenv('LOCAL') == '1' and not subscription:
         # Создать демо-подписку для локального тестирования
         from datetime import datetime, timedelta
@@ -134,6 +138,7 @@ async def dashboard_handler(request):
         session_db.add(subscription)
         session_db.commit()
     if not subscription or subscription.status != 'active':
+        logger.info("No active subscription, rendering no_subscription")
         session_db.close()
         return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
     
