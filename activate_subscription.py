@@ -10,6 +10,8 @@ os.environ['LOCAL'] = '0'  # Production mode
 # Import config after setting LOCAL
 from config import DATABASE_URL
 
+print(f"DATABASE_URL: {DATABASE_URL}")
+
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
