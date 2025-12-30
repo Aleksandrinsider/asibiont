@@ -429,7 +429,7 @@ body {
     display: inline-block;
     padding: 10px 20px;
     background-color: #068487;
-    color: #FFFFFF;
+    color: #FFFFFF !important;
     border: none;
     border-radius: 6px;
     cursor: pointer;
