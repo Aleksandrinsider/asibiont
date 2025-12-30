@@ -127,6 +127,12 @@ async def dashboard_handler(request):
     
     # Проверить подписку
     subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+    if os.getenv('LOCAL') == '1' and not subscription:
+        # Создать демо-подписку для локального тестирования
+        from datetime import datetime, timedelta
+        subscription = Subscription(user_id=user.id, status='active', start_date=datetime.now(), end_date=datetime.now() + timedelta(days=30))
+        session_db.add(subscription)
+        session_db.commit()
     if not subscription or subscription.status != 'active':
         session_db.close()
         return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
