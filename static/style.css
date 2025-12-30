@@ -406,7 +406,7 @@ body {
 
 .back-link:hover {
     color: #1F2328;
-    text-decoration: none;
+    text-decoration: none !important;
 }
 
 .button-group {
