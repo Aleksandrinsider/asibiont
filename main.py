@@ -102,11 +102,6 @@ async def dashboard_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
     
-    # For local demo, auto-login
-    if os.getenv("LOCAL") == "1" and not user_id:
-        user_id = 123456789
-        session['user_id'] = user_id
-    
     logged_in = bool(user_id)
     
     if not logged_in:
