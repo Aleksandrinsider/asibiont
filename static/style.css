@@ -110,9 +110,9 @@ body {
 }
 
 .welcome-logo {
-    width: 100px;
-    height: 100px;
+    font-size: 48px;
     margin-bottom: 20px;
+    color: #1F2328;
 }
 
 .welcome-content h1 {
