@@ -725,6 +725,9 @@ TOOLS = [
 ]
 
 async def chat_with_ai(message, context=None, user_id=None):
+    if not DEEPSEEK_API_KEY:
+        return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
+    
     try:
         # Get user memory and all tasks for extended context
         user_memory = ""

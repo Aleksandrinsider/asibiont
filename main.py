@@ -36,8 +36,7 @@ def check_telegram_authentication(data):
 
 @aiohttp_jinja2.template('login.html')
 async def login_handler(request):
-    local = os.getenv("LOCAL") == "1"
-    return {'bot_username': TELEGRAM_BOT_USERNAME, 'auth_url': '/auth', 'local': local}
+    return web.HTTPFound('/dashboard')
 
 
 # Temporary simple handler
@@ -49,6 +48,15 @@ async def auth_handler(request):
     data = request.query
     if check_telegram_authentication(data):
         user_id = int(data['id'])
+        session_db = Session()
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'))
+            session_db.add(user)
+            session_db.commit()
+        
+        session_db.close()
+        
         session = await get_session(request)
         session['user_id'] = user_id
         return web.HTTPFound('/dashboard')
@@ -68,6 +76,16 @@ async def test_login_handler(request):
         user = User(telegram_id=123456789, username='test_user')
         session_db.add(user)
         session_db.commit()
+    
+    # Создать тестовую подписку для локального тестирования
+    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+    if not subscription:
+        from datetime import datetime, timedelta
+        end_date = datetime.now() + timedelta(days=30)  # Подписка на 30 дней
+        subscription = Subscription(user_id=user.id, status='active', plan='monthly', end_date=end_date)
+        session_db.add(subscription)
+        session_db.commit()
+    
     session_db.close()
     
     return web.HTTPFound('/dashboard')
@@ -83,18 +101,55 @@ async def logout_handler(request):
 async def dashboard_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
-    if not user_id:
-        return web.HTTPFound('/')
+    
+    # For local demo, auto-login
+    if os.getenv("LOCAL") == "1" and not user_id:
+        user_id = 123456789
+        session['user_id'] = user_id
+    
+    logged_in = bool(user_id)
+    
+    if not logged_in:
+        return {
+            'logged_in': False,
+            'current_date': '',
+            'current_time': '',
+            'formatted_end_date': None
+        }
+    
     # Получить задачи пользователя
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session_db.close()
-        return web.HTTPFound('/')
+        return {
+            'logged_in': False,
+            'current_date': '',
+            'current_time': '',
+            'formatted_end_date': None
+        }
+    
+    # Проверить подписку
+    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+    if not subscription or subscription.status != 'active':
+        session_db.close()
+        return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
+    
     tasks = session_db.query(Task).filter_by(user_id=user.id).all()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
     interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(10).all() if user else []
+    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
     partners = get_partners_list(user_id=user_id)
+    # Add common interests
+    if profile and profile.interests:
+        user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+        for p in partners:
+            if hasattr(p, 'interests') and p.interests:
+                partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                common = user_interests & partner_interests
+                p.common_interests = ', '.join(common) if common else 'Нет общих интересов'
+            else:
+                p.common_interests = 'Интересы не указаны'
     session_db.close()
     
     # Calculate metrics
@@ -116,18 +171,43 @@ async def dashboard_handler(request):
     current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
     current_time = user_now.strftime('%H:%M')
     
+    # Format subscription end date
+    formatted_end_date = None
+    if subscription and subscription.end_date:
+        end_dt = subscription.end_date
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=pytz.UTC)
+        end_local = end_dt.astimezone(user_tz if user.timezone else pytz.UTC)
+        formatted_end_date = f"{end_local.day} {months[end_local.month - 1]} {end_local.year}"
+    
+    # Calculate upcoming reminders
+    upcoming_reminders = []
+    if user:
+        for task in tasks:
+            if task.reminder_time:
+                if task.reminder_time.tzinfo is None:
+                    task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+                if task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC) > user_now and task.status == 'pending':
+                    reminder_time_local = task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
+                    upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
+    
     return {
+        'logged_in': True,
         'tasks': tasks, 
         'user': user, 
         'profile': profile,
         'interactions': interactions,
         'partners': partners,
+        'subscription': subscription,
         'total_tasks': total_tasks,
         'completed_tasks': completed_tasks,
         'pending_tasks': pending_tasks,
         'skipped_tasks': skipped_tasks,
         'current_date': current_date,
-        'current_time': current_time
+        'current_time': current_time,
+        'formatted_end_date': formatted_end_date,
+        'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
+        'is_local': os.getenv('LOCAL') == '1'
     }
 
 
@@ -142,21 +222,42 @@ async def profile_handler(request):
 async def chat_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
-    if not user_id:
+    print("Chat handler called, session user_id:", user_id)
+    
+    # For local demo, auto-login
+    if os.getenv("LOCAL") == "1" and not user_id:
+        user_id = 123456789
+        print("Set user_id to demo:", user_id)
+    
+    if os.getenv("LOCAL") != "1" and not user_id:
+        print("No user_id, returning 401")
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     data = await request.json()
     message = data.get('message', '')
+    print("Message received:", message)
+
+    # Save user message
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    print("User found:", user is not None)
+    if user:
+        interaction_user = Interaction(user_id=user.id, message_type='user', content=message)
+        session_db.add(interaction_user)
+        session_db.commit()
 
     # Get AI response
     response = await chat_with_ai(message, user_id=user_id)
 
+    # Save agent response
+    if user:
+        interaction_agent = Interaction(user_id=user.id, message_type='agent', content=response)
+        session_db.add(interaction_agent)
+        session_db.commit()
+
+    session_db.close()
+
     return web.json_response({'response': response})
-
-
-async def yookassa_webhook(request):
-    # Заглушка для webhook Yookassa
-    return web.Response(text='OK')
 
 
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -201,12 +302,178 @@ async def on_startup(app):
     reminder_service = ReminderService(bot, ai_service)
     await reminder_service.start()
     logger.info("ReminderService started")
+    
+    # Create demo data for local mode
+    if os.getenv("LOCAL") == "1":
+        logger.info("Creating demo data")
+        create_demo_data()
+        logger.info("Demo data created")
+
+
+def create_demo_data():
+    session = Session()
+    try:
+        # Check if demo user exists
+        demo_user = session.query(User).filter_by(telegram_id=123456789).first()
+        if not demo_user:
+            demo_user = User(telegram_id=123456789, username='demo_user')
+            session.add(demo_user)
+            session.commit()
+        
+        # Create subscription
+        subscription = session.query(Subscription).filter_by(user_id=demo_user.id).first()
+        if not subscription:
+            subscription = Subscription(
+                user_id=demo_user.id, 
+                status='active', 
+                plan='monthly', 
+                start_date=datetime.now(pytz.UTC),
+                end_date=datetime.now(pytz.UTC) + timedelta(days=30)
+            )
+            session.add(subscription)
+            session.commit()
+        
+        # Create profile
+        profile = session.query(UserProfile).filter_by(user_id=demo_user.id).first()
+        if profile:
+            session.delete(profile)
+            session.commit()
+        profile = UserProfile(
+            user_id=demo_user.id,
+            skills='Python, ИИ, Веб-разработка',
+            interests='Машинное обучение, Открытый исходный код, Технологические стартапы',
+            goals='Создать успешный AI-продукт, найти партнеров для коллаборации',
+            city='Москва',
+            current_plans='Разработка TaskChat, изучение новых фреймворков',
+            total_tasks_created=15,
+            completed_tasks=12,
+            skipped_tasks=1,
+            average_completion_time=45
+        )
+        session.add(profile)
+        session.commit()
+        
+        # Create tasks
+        if not session.query(Task).filter_by(user_id=demo_user.id).first():
+            tasks_data = [
+                {
+                    'title': 'Разработать AI-ассистента для задач',
+                    'description': 'Создать чат-бот с функциями управления задачами и поиска партнеров',
+                    'status': 'completed',
+                    'reminder_time': datetime.now(pytz.UTC) + timedelta(hours=2)
+                },
+                {
+                    'title': 'Добавить систему напоминаний',
+                    'description': 'Интегрировать напоминания с Telegram ботом',
+                    'status': 'completed',
+                    'reminder_time': None
+                },
+                {
+                    'title': 'Создать демо-данные',
+                    'description': 'Заполнить базу тестовыми данными для демонстрации',
+                    'status': 'in_progress',
+                    'reminder_time': datetime.now(pytz.UTC) + timedelta(days=1)
+                },
+                {
+                    'title': 'Оптимизировать UI для мобильных',
+                    'description': 'Сделать интерфейс адаптивным для всех устройств',
+                    'status': 'pending',
+                    'reminder_time': datetime.now(pytz.UTC) + timedelta(days=2)
+                }
+            ]
+            for task_data in tasks_data:
+                task = Task(user_id=demo_user.id, **task_data)
+                session.add(task)
+            session.commit()
+        
+        # Create partners
+        if not session.query(UserProfile).filter(UserProfile.user_id != demo_user.id).first():
+            partners_data = [
+                {
+                    'contact_info': 'partner1',
+                    'skills': 'React, Node.js, UI/UX',
+                    'interests': 'Веб-разработка, Дизайн, Стартапы',
+                    'goals': 'Создать крутой веб-приложение',
+                    'city': 'Москва',
+                    'current_plans': 'Ищу команду для проекта'
+                },
+                {
+                    'contact_info': 'partner2', 
+                    'skills': 'Data Science, Python, ML',
+                    'interests': 'ИИ, Большие данные, Исследования',
+                    'goals': 'Применить ML в реальных проектах',
+                    'city': 'Санкт-Петербург',
+                    'current_plans': 'Работаю над исследовательским проектом'
+                },
+                {
+                    'contact_info': 'partner3',
+                    'skills': 'DevOps, Cloud, Kubernetes',
+                    'interests': 'Инфраструктура, Автоматизация, Открытый исходный код',
+                    'goals': 'Строить надежные системы',
+                    'city': 'Екатеринбург',
+                    'current_plans': 'Миграция в облако'
+                }
+            ]
+            for partner_data in partners_data:
+                partner_user = User(telegram_id=100000000 + len(partners_data), username=partner_data['contact_info'])
+                session.add(partner_user)
+                session.commit()
+                partner_profile = UserProfile(user_id=partner_user.id, **partner_data)
+                session.add(partner_profile)
+            session.commit()
+        
+        # Create interactions
+        if not session.query(Interaction).filter_by(user_id=demo_user.id).first():
+            interactions_data = [
+                ('user', 'Привет! Расскажи о себе'),
+                ('agent', 'Привет! Я AI-ассистент TaskChat. Помогаю управлять задачами и находить партнеров для проектов. Что вас интересует?'),
+                ('user', 'Какие у меня задачи?'),
+                ('agent', 'У вас 4 задачи: 2 выполнены, 1 в работе, 1 ожидает. Хотите подробности по какой-то?'),
+                ('user', 'Покажи партнеров'),
+                ('agent', 'Нашел 3 потенциальных партнера в вашем городе с похожими интересами. Проверьте раздел "Партнеры"!')
+            ]
+            for msg_type, content in interactions_data:
+                interaction = Interaction(
+                    user_id=demo_user.id,
+                    message_type=msg_type,
+                    content=content,
+                    created_at=datetime.now(pytz.UTC) - timedelta(minutes=len(interactions_data) - interactions_data.index((msg_type, content)))
+                )
+                session.add(interaction)
+            session.commit()
+            
+    except Exception as e:
+        logger.error(f"Error creating demo data: {e}")
+    finally:
+        session.close()
 
 
 # Global app for Railway
 app = web.Application()
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 aiohttp_session.setup(app, SimpleCookieStorage())
+
+async def yookassa_webhook(request):
+    data = await request.json()
+    if data.get('event') == 'payment.succeeded':
+        payment = data['object']
+        user_id = payment['metadata']['user_id']
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=int(user_id)).first()
+        if user:
+            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+            if not subscription:
+                subscription = Subscription(user_id=user.id)
+                session.add(subscription)
+            subscription.status = 'active'
+            subscription.start_date = datetime.now(pytz.UTC)
+            subscription.end_date = datetime.now(pytz.UTC) + timedelta(days=30)  # Месяц
+            session.commit()
+            await bot.send_message(int(user_id), "Подписка активирована! Теперь у вас доступ ко всем премиум-функциям.")
+        session.close()
+    return web.Response(text="OK")
+
+bot = Bot(token=TELEGRAM_TOKEN)
 
 # Routes
 app.router.add_get('/', login_handler)
@@ -219,8 +486,6 @@ app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
-
-bot = Bot(token=TELEGRAM_TOKEN)
 
 # Setup for production
 dp = Dispatcher()
