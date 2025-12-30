@@ -404,3 +404,10 @@ body {
 .no-subscription-content a:hover {
     background-color: #056B6E;
 }
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 20px;
+}
