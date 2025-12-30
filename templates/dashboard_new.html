@@ -11,14 +11,26 @@
         <div class="header-content">
             <a href="https://t.me/Erebus_ai_bot" target="_blank" class="logo">EREBUS AI</a>
             <div class="header-info">
+                {% if logged_in %}
+                <span>{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>
                 <a href="/logout" class="logout-btn"><strong>Выход</strong></a>
+                {% endif %}
             </div>
         </div>
     </div>
     <div class="container">
+        {% if not logged_in %}
+        <div class="welcome-section">
+            <div class="welcome-content">
+                <img src="/static/logo.png" alt="EREBUS AI Logo" class="welcome-logo">
+                <h1>Добро пожаловать в EREBUS AI</h1>
+                <p>Управляйте задачами с помощью ИИ. Авторизуйтесь через Telegram для начала.</p>
+                <a href="/tg_auth" class="auth-btn">Авторизоваться</a>
+            </div>
+        </div>
+        {% else %}
         <div class="main-layout">
             <!-- Левая колонка - Люди -->
-            {% if logged_in %}
             <div class="left-column">
                 {% if user %}
                 <div class="user-info">{{ user.username }}</div>
@@ -109,6 +121,7 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}
     <script>
         const isLocal = {{ is_local|tojson }};
         async function sendMessage() {
