@@ -399,6 +399,15 @@ body {
     text-decoration: underline;
 }
 
+.back-link {
+    color: #068487;
+    text-decoration: none;
+}
+
+.back-link:hover {
+    color: #1F2328;
+}
+
 .button-group {
     display: flex;
     gap: 10px;
