@@ -328,11 +328,17 @@ async def on_startup(app):
         logger.error(f"Error setting webhook: {e}")
     # Initialize Redis
     from config import REDIS_URL
-    redis_client = Redis.from_url(REDIS_URL)
-    logger.info("Redis client initialized")
-    # Setup session storage
-    aiohttp_session.setup(app, RedisStorage(redis_client))
-    logger.info("Session storage initialized")
+    try:
+        redis_client = Redis.from_url(REDIS_URL)
+        logger.info("Redis client initialized")
+        # Setup session storage
+        aiohttp_session.setup(app, RedisStorage(redis_client))
+        logger.info("Session storage initialized with Redis")
+    except Exception as e:
+        logger.error(f"Failed to initialize Redis: {e}")
+        # Fallback to simple storage
+        aiohttp_session.setup(app, aiohttp_session.SimpleCookieStorage())
+        logger.info("Session storage initialized with SimpleCookieStorage")
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis()
