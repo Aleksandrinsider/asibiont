@@ -152,7 +152,7 @@ async def dashboard_handler(request):
                 task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
             local_reminder = task.reminder_time.astimezone(user_tz)
             task.overdue = local_reminder < user_now and task.status == 'pending'
-            task.reminder_time_local = local_reminder.strftime('%d.%m %H:%M')
+            task.reminder_time_local = local_reminder.strftime('%d.%m.%Y %H:%M')
         else:
             task.overdue = False
             task.reminder_time_local = None
@@ -423,7 +423,7 @@ async def api_tasks_handler(request):
                 task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
             local_reminder = task.reminder_time.astimezone(user_tz)
             task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
-            task_data['reminder_time_local'] = local_reminder.strftime('%d.%m %H:%M')
+            task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
         tasks_data.append(task_data)
     
     return web.json_response({'tasks': tasks_data})
