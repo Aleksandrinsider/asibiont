@@ -34,10 +34,10 @@
                     {% if profile %}
                     <div class="context-item">
                         <p>@{{ user.username or 'unknown' }} · {{ user.first_name or 'Пользователь' }}</p>
+                        <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
-                        <p>Город: {{ profile.city or 'Не указан' }}</p>
                     </div>
                     {% else %}
                     <p>Здесь появится информация о вашем профиле</p>
@@ -282,10 +282,10 @@
                     if (Object.keys(data.profile).length > 0) {
                         let html = '<div class="context-item">';
                         html += `<p>@${data.profile.username || 'unknown'} · ${data.profile.first_name || 'Пользователь'}</p>`;
+                        html += `<p>Город: ${data.profile.city}</p>`;
                         html += `<p>Навыки: ${data.profile.skills}</p>`;
                         html += `<p>Интересы: ${data.profile.interests}</p>`;
                         html += `<p>Цели: ${data.profile.goals}</p>`;
-                        html += `<p>Город: ${data.profile.city}</p>`;
                         html += '</div>';
                         contextSection.innerHTML = html;
                     } else {
