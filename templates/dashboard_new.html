@@ -9,10 +9,11 @@
 <body>
     <div class="app-header">
         <div class="header-content">
-            <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont{% if logged_in and user %} - {{ user.username }}{% endif %}</a>
+            <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont</a>
             <div class="header-info">
                 {% if logged_in %}
                 <span style="white-space: nowrap;">{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>
+                {% if user %}<span class="user-name">{{ user.username }}</span>{% endif %}
                 <a href="/logout" class="logout-btn">Выход</a>
                 {% endif %}
             </div>
@@ -30,10 +31,6 @@
         <div class="main-layout">
             <!-- Левая колонка - Люди -->
             <div class="left-column">
-                {% if user %}
-                <div class="user-info">{{ user.username }}</div>
-                {% endif %}
-
                 {% if profile %}
                 <div class="context-section">
                     <div class="context-item">
