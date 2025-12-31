@@ -7,7 +7,7 @@ import aiohttp_cors
 import jinja2
 from redis.asyncio import Redis
 import aiohttp_session
-from aiohttp_session import get_session, MemoryStorage
+from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from datetime import datetime
@@ -330,10 +330,10 @@ async def on_startup(app):
         logger.info("Session storage initialized with Redis")
     else:
         redis_client = None
-        logger.info("Redis not configured, using in-memory sessions")
-        # Setup in-memory session storage
-        aiohttp_session.setup(app, MemoryStorage())
-        logger.info("Session storage initialized with MemoryStorage")
+        logger.info("Redis not configured, using cookie-based sessions")
+        # Setup cookie-based session storage
+        aiohttp_session.setup(app, aiohttp_session.SimpleCookieStorage())
+        logger.info("Session storage initialized with SimpleCookieStorage")
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis()
