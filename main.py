@@ -97,9 +97,9 @@ async def dashboard_handler(request):
             'timestamp': int(datetime.now().timestamp())
         })
         response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+        
+        
+        
         return response
     
     # Получить задачи пользователя
@@ -115,9 +115,9 @@ async def dashboard_handler(request):
             'timestamp': int(datetime.now().timestamp())
         })
         response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+        
+        
+        
         return response
     
     logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
@@ -131,9 +131,9 @@ async def dashboard_handler(request):
         session_db.close()
         response = aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
         response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+        
+        
+        
         return response
     
     tasks = session_db.query(Task).filter_by(user_id=user.id).all()
@@ -248,9 +248,9 @@ async def dashboard_handler(request):
         'timestamp': int(datetime.now().timestamp())
     })
     response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
+    
+    
+    
     return response
 
 
