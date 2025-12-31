@@ -293,6 +293,22 @@ async def chat_handler(request):
     return web.json_response({'response': response})
 
 
+async def clear_history_handler(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    logger.info(f"Clear history for user_id: {user_id}")
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+
+    try:
+        await redis_client.set(f"context:{user_id}", json.dumps([]))
+        logger.info("Context cleared")
+    except Exception as e:
+        logger.error(f"Error clearing context: {e}")
+
+    return web.json_response({'message': 'History cleared'})
+
+
 bot = Bot(token=TELEGRAM_TOKEN)
 
 
@@ -554,6 +570,7 @@ app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
+app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=32">
+    <link rel="stylesheet" href="/static/style.css?v=33">
 </head>
 <body>
     <div class="app-header">
@@ -84,6 +84,7 @@
                     <div class="chat-input">
                         <input type="text" id="message-input" placeholder="Напишите сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
                         <button onclick="sendMessage()">Отправить</button>
+                        <button onclick="clearHistory()">Очистить историю</button>
                     </div>
                     {% endif %}
                 </div>
@@ -191,6 +192,29 @@
         function sendQuickMessage(message) {
             document.getElementById('message-input').value = message;
             sendMessage();
+        }
+
+        async function clearHistory() {
+            try {
+                const response = await fetch('/clear_history', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({}),
+                    credentials: isLocal ? undefined : 'include'
+                });
+                if (response.ok) {
+                    const messages = document.getElementById('chat-messages');
+                    messages.innerHTML = '';
+                    addMessage('История очищена.', 'agent');
+                } else {
+                    addMessage('Ошибка при очистке истории.', 'agent');
+                }
+            } catch (error) {
+                console.error('Error clearing history:', error);
+                addMessage('Ошибка: ' + error.message, 'agent');
+            }
         }
 
         async function login() {
