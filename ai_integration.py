@@ -539,7 +539,7 @@ def find_partners(user_id=None, session=None):
     if tips:
         response += " ".join(tips[:2])
     if not response:
-        response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу EREBUS AI — так у вас появится больше возможностей для общения и совместных проектов! 😊"
+        response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу ASI Biont — так у вас появится больше возможностей для общения и совместных проектов! 😊"
     return response
 
 def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, user_id=None, session=None):

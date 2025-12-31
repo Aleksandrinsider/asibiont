@@ -16,7 +16,7 @@
 1. Установите зависимости: `pip install -r requirements.txt`
 2. Настройте переменные окружения в .env:
    - TELEGRAM_TOKEN: Токен бота от BotFather
-   - TELEGRAM_BOT_USERNAME: Username бота (например, @Erebus_ai_bot)
+   - TELEGRAM_BOT_USERNAME: Username бота (например, @asibiont_bot)
    - DEEPSEEK_API_KEY: API ключ от DeepSeek
    - REDIS_URL: URL Redis базы
    - DATABASE_URL: URL PostgreSQL базы
