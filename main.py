@@ -151,9 +151,22 @@ async def dashboard_handler(request):
             local_reminder = task.reminder_time.astimezone(user_tz)
             task.overdue = local_reminder < user_now and task.status == 'pending'
             task.reminder_time_local = local_reminder.strftime('%d.%m.%Y %H:%M')
+            if task.overdue:
+                delta = user_now - local_reminder
+                days = delta.days
+                hours = delta.seconds // 3600
+                if days > 0:
+                    task.overdue_text = f"просрочено на {days} дн."
+                elif hours > 0:
+                    task.overdue_text = f"просрочено на {hours} ч."
+                else:
+                    task.overdue_text = "просрочено"
+            else:
+                task.overdue_text = None
         else:
             task.overdue = False
             task.reminder_time_local = None
+            task.overdue_text = None
     
     session_db.close()
     
