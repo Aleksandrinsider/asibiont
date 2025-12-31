@@ -973,11 +973,9 @@ async def chat_with_ai(message, context=None, user_id=None):
                                     content = final_message.get("content", "Расскажите подробнее.")
                                     content = re.sub(r'<\|.*?\|>', '', content).strip()
                                 else:
-                            content = "Расскажите подробнее."
+                                    content = "Расскажите подробнее."
                     content = clean_content(content)
                     return content
-                else:
-                    return "Ошибка ответа."
             else:
                 content = message_response.get("content", "")
                 content = re.sub(r'<\|.*?\|>', '', content).strip()
@@ -997,8 +995,6 @@ async def chat_with_ai(message, context=None, user_id=None):
                             content = "Расскажите подробнее."
                 content = clean_content(content)
                 return content
-        else:
-            return "Ошибка."
     except Exception as e:
         logger.error(f"Error in chat_with_ai: {e}")
         return "Ошибка."
@@ -1093,7 +1089,7 @@ async def generate_result_check(user_id, task_title):
         print(f"Error in generate_result_check: {e}")
         return f"Результат задачи '{task_title}'?"
 
-def generate_proactive_message(user_id):
+async def generate_proactive_message(user_id):
     """Генерирует проактивное сообщение, если нет задач на ближайший час"""
     try:
         # Получить память пользователя, планы других и текущие задачи
