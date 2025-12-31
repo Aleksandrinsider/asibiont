@@ -22,7 +22,7 @@ import hmac
 import json
 import logging
 
-# Trigger rebuild on Railway - update 3
+# Trigger rebuild on Railway - update 4
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -738,7 +738,7 @@ setup_application(app, dp, bot=bot)
 app.on_startup.append(on_startup)
 
 
-print("Starting main")
+print("Starting main - version 4")
 
 
 if __name__ == "__main__":
