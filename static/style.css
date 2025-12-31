@@ -173,7 +173,7 @@ body {
     gap: 20px;
     overflow-y: auto;
     height: 100%;
-    padding-top: 70px;
+    padding-top: 80px;
 }
 
 .center-column {
@@ -181,11 +181,11 @@ body {
     flex-direction: column;
     gap: 20px;
     height: 100%;
-    padding-top: 70px;
+    padding-top: 80px;
 }
 
 .right-column {
-    padding-top: 60px;
+    padding-top: 70px;
 }
 
 .chat-section {
@@ -317,7 +317,7 @@ body {
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     background-color: #FFFFFF;
-    margin-bottom: 20px;
+    margin-bottom: 0;
 }
 
 .people-section h3,
