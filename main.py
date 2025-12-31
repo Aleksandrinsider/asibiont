@@ -96,6 +96,9 @@ async def dashboard_handler(request):
             'formatted_end_date': None
         })
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
         return response
     
     # Получить задачи пользователя
@@ -110,6 +113,9 @@ async def dashboard_handler(request):
             'formatted_end_date': None
         })
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
         return response
     
     logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
@@ -123,6 +129,9 @@ async def dashboard_handler(request):
         session_db.close()
         response = aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
         return response
     
     tasks = session_db.query(Task).filter_by(user_id=user.id).all()
@@ -236,6 +245,9 @@ async def dashboard_handler(request):
         'upcoming_reminders': upcoming_reminders[:5]  # Limit to 5
     })
     response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
     return response
 
 
@@ -420,6 +432,19 @@ bot = Bot(token=TELEGRAM_TOKEN)
 
 # Global app for Railway
 app = web.Application()
+
+# Middleware to add cache control headers
+@web.middleware
+async def cache_control_middleware(request, handler):
+    response = await handler(request)
+    if request.path.startswith('/static'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
+app.middlewares.append(cache_control_middleware)
+
 cors = aiohttp_cors.setup(app, defaults={
     "*": aiohttp_cors.ResourceOptions(
         allow_credentials=True,
