@@ -127,7 +127,11 @@ async def dashboard_handler(request):
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
     interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(50).all() if user else []
     subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
-    partners = get_partners_list(user_id=user_id)
+    try:
+        partners = get_partners_list(user_id=user_id)
+    except Exception as e:
+        logger.error(f"Error getting partners: {e}")
+        partners = []
     # Add common interests
     if profile and profile.interests:
         user_interests = set(i.strip().lower() for i in profile.interests.split(','))
