@@ -32,6 +32,7 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
+    border-bottom: 1px solid #D1D9E0;
 }
 
 .header-content {
@@ -341,12 +342,46 @@ body {
     line-height: 1.4;
 }
 
-.task-item {
-    padding: 15px;
-    margin-bottom: 10px;
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #D1D9E0;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -22px;
+    top: 10px;
+    width: 12px;
+    height: 12px;
+    background-color: #068487;
+    border-radius: 50%;
+    border: 2px solid #FFFFFF;
+    z-index: 1;
+}
+
+.timeline-content {
     background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
+    padding: 10px;
+}
+
+.task-item {
+    padding: 0;
+    margin-bottom: 0;
 }
 
 .task-item p {
