@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=23">
+    <link rel="stylesheet" href="/static/style.css?v=24">
 </head>
 <body>
     <div class="app-header">
@@ -94,22 +94,17 @@
             <div class="right-column">
                 <div class="tasks-section">
                     {% if tasks %}
-                    <div class="timeline">
+                    <ul>
                         {% for task in tasks %}
-                        <div class="timeline-item">
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-content">
-                                <div class="task-item">
-                                    <p>{{ task.title }}</p>
-                                    <p>Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}</p>
-                                    {% if task.reminder_time %}
-                                    <small {% if task.overdue %}style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
+                        <li>
+                            <strong>{{ task.title }}</strong><br>
+                            Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
+                            {% if task.reminder_time %}
+                            <br><small {% if task.overdue %}style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>
+                            {% endif %}
+                        </li>
                         {% endfor %}
-                    </div>
+                    </ul>
                     {% else %}
                     <p>Здесь появятся ваши задачи</p>
                     {% endif %}
