@@ -320,7 +320,7 @@
                     const contextSection = document.querySelector('.context-section');
                     if (Object.keys(data.profile).length > 0) {
                         let html = '<div class="context-item">';
-                        html += `<p>@${data.profile.username || 'unknown'} · ${data.profile.first_name || 'Пользователь'}</p>`;
+                        html += `<p>${data.profile.first_name || data.profile.username || 'Пользователь'}</p>`;
                         html += `<p>Город: ${data.profile.city}</p>`;
                         html += `<p>Навыки: ${data.profile.skills}</p>`;
                         html += `<p>Интересы: ${data.profile.interests}</p>`;

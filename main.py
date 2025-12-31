@@ -82,6 +82,12 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
+async def test_login_handler(request):
+    session = await get_session(request)
+    session['user_id'] = 123456  # Test user ID
+    return web.HTTPFound('/dashboard')
+
+
 @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     session = await get_session(request)
@@ -566,6 +572,7 @@ bot = Bot(token=TELEGRAM_TOKEN)
 app.router.add_get('/', login_handler)
 app.router.add_get('/telegram_auth', auth_handler)
 app.router.add_get('/logout', logout_handler)
+app.router.add_get('/test_login', test_login_handler)
 app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)
