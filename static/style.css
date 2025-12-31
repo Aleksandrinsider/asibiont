@@ -174,7 +174,7 @@ body {
     gap: 20px;
     overflow-y: auto;
     height: 100%;
-    padding-top: 30px;
+    padding-top: 10px;
 }
 
 .center-column {
@@ -182,11 +182,7 @@ body {
     flex-direction: column;
     gap: 20px;
     height: 100%;
-    padding-top: 30px;
-}
-
-.right-column {
-    padding-top: 30px;
+    padding-top: 10px;
 }
 
 .chat-section {
