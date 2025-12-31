@@ -1,4 +1,4 @@
-import requests
+import aiohttp
 from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE
 import json
 from datetime import datetime, timezone, timedelta
@@ -808,16 +808,17 @@ async def chat_with_ai(message, context=None, user_id=None):
             "tool_choice": "auto"
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        logger.info(f"DeepSeek API response status: {response.status_code}")
-        if response.status_code == 200:
-            result = response.json()
-            message_response = result["choices"][0]["message"]
-            content = message_response.get("content", "")
-            # Фильтровать сырые tool calls
-            content = clean_content(content)
-            content = re.sub(r'<\|.*?\|>', '', content).strip()
-            content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                logger.info(f"DeepSeek API response status: {response.status}")
+                if response.status == 200:
+                    result = await response.json()
+                    message_response = result["choices"][0]["message"]
+                    content = message_response.get("content", "")
+                    # Фильтровать сырые tool calls
+                    content = clean_content(content)
+                    content = re.sub(r'<\|.*?\|>', '', content).strip()
+                    content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
             tool_calls_in_content = False
             if "<｜DSML｜function_calls>" in content:
                 tool_calls_in_content = True
@@ -884,31 +885,31 @@ async def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                response = requests.post(url, headers=headers, json=data, timeout=30)
-                if response.status_code == 200:
-                    final_message = response.json()["choices"][0]["message"]
-                    content = final_message.get("content", "")
-                    content = re.sub(r'<\|.*?\|>', '', content).strip()
-                    if not content or '<|' in content:
-                        # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
-                        messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
-                        data = {
-                            "model": "deepseek-chat",
-                            "messages": messages
-                        }
-                        response = requests.post(url, headers=headers, json=data, timeout=30)
-                        if response.status_code == 200:
-                            final_message = response.json()["choices"][0]["message"]
-                            content = final_message.get("content", "Запрос обработан.")
-                            content = re.sub(r'<\|.*?\|>', '', content).strip()
-                            if '<|' in content:
-                                content = "Запрос обработан."
-                        else:
-                            content = "Запрос обработан."
-                    content = clean_content(content)
-                    return content
-                else:
-                    return "Ошибка ответа."
+                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status == 200:
+                        final_message = (await response.json())["choices"][0]["message"]
+                        content = final_message.get("content", "")
+                        content = re.sub(r'<\|.*?\|>', '', content).strip()
+                        if not content or '<|' in content:
+                            # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
+                            messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
+                            data = {
+                                "model": "deepseek-chat",
+                                "messages": messages
+                            }
+                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                                if response.status == 200:
+                                    final_message = (await response.json())["choices"][0]["message"]
+                                    content = final_message.get("content", "Запрос обработан.")
+                                    content = re.sub(r'<\|.*?\|>', '', content).strip()
+                                    if '<|' in content:
+                                        content = "Запрос обработан."
+                                else:
+                                    content = "Запрос обработан."
+                        content = clean_content(content)
+                        return content
+                    else:
+                        return "Ошибка ответа."
             elif "tool_calls" in message_response:
                 # Выполнить tool calls
                 tool_messages = []
@@ -954,24 +955,24 @@ async def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                response = requests.post(url, headers=headers, json=data, timeout=30)
-                if response.status_code == 200:
-                    final_message = response.json()["choices"][0]["message"]
-                    content = final_message.get("content", "")
-                    content = re.sub(r'<\|.*?\|>', '', content).strip()
-                    if not content or '<|' in content:
-                        # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
-                        messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
-                        data = {
-                            "model": "deepseek-chat",
-                            "messages": messages
-                        }
-                        response = requests.post(url, headers=headers, json=data, timeout=30)
-                        if response.status_code == 200:
-                            final_message = response.json()["choices"][0]["message"]
-                            content = final_message.get("content", "Расскажите подробнее.")
-                            content = re.sub(r'<\|.*?\|>', '', content).strip()
-                        else:
+                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status == 200:
+                        final_message = (await response.json())["choices"][0]["message"]
+                        content = final_message.get("content", "")
+                        content = re.sub(r'<\|.*?\|>', '', content).strip()
+                        if not content or '<|' in content:
+                            # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
+                            messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
+                            data = {
+                                "model": "deepseek-chat",
+                                "messages": messages
+                            }
+                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                                if response.status == 200:
+                                    final_message = (await response.json())["choices"][0]["message"]
+                                    content = final_message.get("content", "Расскажите подробнее.")
+                                    content = re.sub(r'<\|.*?\|>', '', content).strip()
+                                else:
                             content = "Расскажите подробнее."
                     content = clean_content(content)
                     return content
@@ -987,13 +988,13 @@ async def chat_with_ai(message, context=None, user_id=None):
                         "model": "deepseek-chat",
                         "messages": messages
                     }
-                    response = requests.post(url, headers=headers, json=data, timeout=30)
-                    if response.status_code == 200:
-                        final_message = response.json()["choices"][0]["message"]
-                        content = final_message.get("content", "Расскажите подробнее.")
-                        content = re.sub(r'<\|.*?\|>', '', content).strip()
-                    else:
-                        content = "Расскажите подробнее."
+                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                        if response.status == 200:
+                            final_message = (await response.json())["choices"][0]["message"]
+                            content = final_message.get("content", "Расскажите подробнее.")
+                            content = re.sub(r'<\|.*?\|>', '', content).strip()
+                        else:
+                            content = "Расскажите подробнее."
                 content = clean_content(content)
                 return content
         else:
@@ -1036,12 +1037,13 @@ async def generate_reminder(user_id, task_title):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return "Ошибка генерации напоминания."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+                else:
+                    return "Ошибка генерации напоминания."
     except Exception as e:
         print(f"Error in generate_reminder: {e}")
         return f"Напоминание о '{task_title}'."
@@ -1080,12 +1082,13 @@ async def generate_result_check(user_id, task_title):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return "Ошибка генерации вопроса."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+                else:
+                    return "Ошибка генерации вопроса."
     except Exception as e:
         print(f"Error in generate_result_check: {e}")
         return f"Результат задачи '{task_title}'?"
@@ -1146,12 +1149,13 @@ def generate_proactive_message(user_id):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return "Ошибка генерации сообщения."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+                else:
+                    return "Ошибка генерации сообщения."
     except Exception as e:
         print(f"Error in generate_proactive_message: {e}")
         return "Добавьте задачу."
@@ -1199,12 +1203,13 @@ async def generate_daily_report(user_id):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return "Ошибка генерации отчета."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+                else:
+                    return "Ошибка генерации отчета."
     except Exception as e:
         print(f"Error in generate_daily_report: {e}")
         return "Отчет о задачах."
@@ -1244,12 +1249,13 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             "model": "deepseek-chat",
             "messages": messages
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
-            result = response.json()
-            return result["choices"][0]["message"]["content"]
-        else:
-            return "Ошибка генерации напоминания."
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return result["choices"][0]["message"]["content"]
+                else:
+                    return "Ошибка генерации напоминания."
     except Exception as e:
         print(f"Error in generate_overdue_reminder: {e}")
         return "Просроченные задачи."

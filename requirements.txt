@@ -3,6 +3,7 @@ sqlalchemy==2.0.44
 psycopg2-binary==2.9.10
 redis==5.0.1
 requests==2.32.3
+aiohttp==3.10.10
 python-dotenv==1.0.1
 yookassa==3.0.0
 apscheduler==3.10.4
