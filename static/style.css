@@ -174,7 +174,7 @@ body {
     gap: 20px;
     overflow-y: auto;
     height: 100%;
-    padding-top: 10px;
+    padding-top: 20px;
 }
 
 .center-column {
@@ -182,6 +182,10 @@ body {
     flex-direction: column;
     gap: 20px;
     height: 100%;
+    padding-top: 20px;
+}
+
+.right-column {
     padding-top: 10px;
 }
 
