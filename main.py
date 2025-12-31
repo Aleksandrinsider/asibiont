@@ -124,8 +124,15 @@ async def dashboard_handler(request):
             logged_in = True
         
         if not logged_in:
-            # Redirect to login page
-            return web.HTTPFound('/')
+            # Show login page in dashboard
+            return {
+                'logged_in': False,
+                'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
+                'current_date': '',
+                'current_time': '',
+                'formatted_end_date': None,
+                'timestamp': int(datetime.now().timestamp())
+            }
         
         # Получить задачи пользователя
         session_db = Session()
