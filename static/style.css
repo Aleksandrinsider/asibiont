@@ -155,9 +155,9 @@ body {
 }
 
 .container {
-    margin-top: 10px;
+    margin-top: 0px;
     width: 100%;
-    height: calc(100vh - 10px);
+    height: calc(100vh - 0px);
 }
 
 .main-layout {
