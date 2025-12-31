@@ -337,9 +337,10 @@ body {
 }
 
 .person-card p {
-    margin: 0 0 5px 0;
-    color: #1F2328;
+    margin: 0 0 20px 0;
+    color: #656D76;
     line-height: 1.4;
+    font-size: 16px;
 }
 
 .timeline {
@@ -353,8 +354,8 @@ body {
     left: 15px;
     top: 10px;
     bottom: 0;
-    width: 1px;
-    background-color: #D1D9E0;
+    width: 0;
+    border-left: 1px dashed #D1D9E0;
 }
 
 .timeline-item {
@@ -364,10 +365,10 @@ body {
 
 .timeline-marker {
     position: absolute;
-    left: -20px;
+    left: 9px;
     top: 10px;
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     background-color: #068487;
     border-radius: 50%;
     border: 2px solid #FFFFFF;
@@ -385,9 +386,10 @@ body {
 }
 
 .task-item p {
-    margin: 0 0 2px 0;
-    color: #1F2328;
+    margin: 0 0 20px 0;
+    color: #656D76;
     line-height: 1.4;
+    font-size: 16px;
 }
 
 .task-item small {
