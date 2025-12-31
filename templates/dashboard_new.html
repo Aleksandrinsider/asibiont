@@ -118,6 +118,7 @@
     <script>
         const isLocal = {{ is_local|tojson }};
         async function sendMessage() {
+            alert('Sending message');
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             console.log('Sending message:', message);
