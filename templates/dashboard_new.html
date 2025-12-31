@@ -121,7 +121,10 @@
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             console.log('Sending message:', message);
-            if (!message) return;
+            if (!message) {
+                console.log('Message is empty, sending test');
+                message = 'test';
+            }
 
             // Add user message
             addMessage(message, 'user');
