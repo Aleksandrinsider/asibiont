@@ -22,12 +22,8 @@ def check_subscription(user_id):
 
 router = Router()
 
-if os.getenv("LOCAL") == "1":
-    # Для локального тестирования использовать dict вместо Redis
-    context_store = {}
-else:
-    import redis
-    from config import REDIS_URL
+import redis
+from config import REDIS_URL
     r = redis.from_url(REDIS_URL)
 
 @router.message(Command("start"))
@@ -58,15 +54,11 @@ async def update_profile_handler(message: Message):
         prompt = f"Обнови мой профиль: {text}"
     else:
         prompt = "Помоги обновить профиль"
-    context = []
-    if os.getenv("LOCAL") == "1":
-        context = context_store.get(f"context:{user_id}", [])
-    else:
-        try:
-            context_data = r.get(f"context:{user_id}")
-            if context_data:
-                context = json.loads(context_data)
-        except Exception as e:
+    try:
+        context_data = r.get(f"context:{user_id}")
+        if context_data:
+            context = json.loads(context_data)
+    except Exception as e:
             context = []
     response = await chat_with_ai(prompt, context, user_id)
     await message.bot.send_message(message.chat.id, response)
@@ -74,13 +66,10 @@ async def update_profile_handler(message: Message):
     context.append({"user": prompt, "agent": response})
     if len(context) > 10:
         context = context[-10:]
-    if os.getenv("LOCAL") == "1":
-        context_store[f"context:{user_id}"] = context
-    else:
-        try:
-            r.set(f"context:{user_id}", json.dumps(context))
-        except Exception as e:
-            pass
+    try:
+        r.set(f"context:{user_id}", json.dumps(context))
+    except Exception as e:
+        pass
 
 @router.message(Command("find_partners"))
 async def find_partners_handler(message: Message):
@@ -98,29 +87,24 @@ async def find_partners_handler(message: Message):
         return
     session.close()
     # Отправить запрос в ИИ
-    context = []
-    if os.getenv("LOCAL") == "1":
-        context = context_store.get(f"context:{user_id}", [])
-    else:
-        try:
-            context_data = r.get(f"context:{user_id}")
-            if context_data:
-                context = json.loads(context_data)
-        except Exception as e:
+    try:
+        context_data = r.get(f"context:{user_id}")
+        if context_data:
+            context = json.loads(context_data)
+        else:
             context = []
+    except Exception as e:
+        context = []
     response = await chat_with_ai("Найди партнеров", context, user_id)
     await message.bot.send_message(message.chat.id, response)
     # Сохранить контекст
     context.append({"user": "Найди партнеров", "agent": response})
     if len(context) > 10:
         context = context[-10:]
-    if os.getenv("LOCAL") == "1":
-        context_store[f"context:{user_id}"] = context
-    else:
-        try:
-            r.set(f"context:{user_id}", json.dumps(context))
-        except Exception as e:
-            pass
+    try:
+        r.set(f"context:{user_id}", json.dumps(context))
+    except Exception as e:
+        pass
 
 @router.message(Command("subscribe"))
 async def subscribe_handler(message: Message):
@@ -180,38 +164,29 @@ async def chat_handler(message: Message):
         # Все сообщения обрабатываются через ИИ
         if message.text.lower() == "очистить историю":
             context = []
-            if os.getenv("LOCAL") == "1":
-                context_store[f"context:{user_id}"] = context
-            else:
-                try:
-                    r.set(f"context:{user_id}", json.dumps(context))
-                except Exception as e:
-                    print(f"Error saving context to Redis: {e}")
+            try:
+                r.set(f"context:{user_id}", json.dumps(context))
+            except Exception as e:
+                print(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
-        if os.getenv("LOCAL") == "1":
-            context = context_store.get(f"context:{user_id}", [])
-        else:
-            try:
-                context_data = r.get(f"context:{user_id}")
-                if context_data:
-                    context = json.loads(context_data.decode('utf-8'))
-                else:
-                    context = []
-            except Exception as e:
+        try:
+            context_data = r.get(f"context:{user_id}")
+            if context_data:
+                context = json.loads(context_data.decode('utf-8'))
+            else:
+                context = []
+        except Exception as e:
                 print(f"Error loading context from Redis: {e}")
                 context = []
         response = await chat_with_ai(message.text, context, user_id)
         print(f"Response: {response}")
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
-        if os.getenv("LOCAL") == "1":
-            context_store[f"context:{user_id}"] = context
-        else:
-            try:
-                r.set(f"context:{user_id}", json.dumps(context))
-            except Exception as e:
-                print(f"Error saving context to Redis: {e}")
+        try:
+            r.set(f"context:{user_id}", json.dumps(context))
+        except Exception as e:
+            print(f"Error saving context to Redis: {e}")
         print(f"Sending response to {message.chat.id}")
         await message.bot.send_message(message.chat.id, response)
         print("Response sent successfully")

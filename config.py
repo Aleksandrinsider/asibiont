@@ -3,12 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-if os.getenv("LOCAL") == "1":
-    DATABASE_URL = "sqlite:///local.db"
-else:
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    if not DATABASE_URL:
-        raise ValueError("DATABASE_URL is not set")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 if not DEEPSEEK_API_KEY:
@@ -25,7 +22,7 @@ if not TELEGRAM_BOT_USERNAME:
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL is not set")
-WEB_APP_URL = os.getenv("WEB_APP_URL") or ("http://localhost:8000" if os.getenv("LOCAL") == "1" else "https://yourapp.railway.app")
+WEB_APP_URL = os.getenv("WEB_APP_URL") or "https://yourapp.railway.app"
 YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
