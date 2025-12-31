@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=35">
+    <link rel="stylesheet" href="/static/style.css?v=36">
 </head>
 <body>
     <div class="app-header">
@@ -68,27 +68,19 @@
                 <div class="chat-section">
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
-                        <!-- Login prompt -->
                         <div class="message ai">
-                            <div class="message-content">
-                                <p>👋 Добро пожаловать в TaskChat!</p>
-                                <p>AI-ассистент для управления задачами и поиска партнеров.</p>
-                                <div class="quick-actions">
-                                    <button onclick="login()">🔐 Войти в систему</button>
-                                </div>
-                            </div>
+                            <p>👋 Добро пожаловать! Войдите для общения с AI.</p>
+                            <button onclick="login()">Войти</button>
                         </div>
                         {% endif %}
                     </div>
                     {% if logged_in %}
                     <div class="chat-input">
-                        <input type="text" id="message-input" placeholder="Напишите сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
-                        <button onclick="sendMessage()">Отправить</button>
-                        <button onclick="clearHistory()">Очистить историю</button>
+                        <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
+                        <button onclick="sendChatMessage()">Отправить</button>
                     </div>
                     {% endif %}
                 </div>
-
             </div>
 
             <!-- Правая колонка - Задачи и напоминания -->
@@ -171,46 +163,50 @@
             }
         }
 
-        function addMessage(text, sender) {
+        function addChatMessage(text, sender) {
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            messageDiv.innerHTML = `
-                <div class="message-text">${text}</div>
-                <div class="message-time">${timeString}</div>
-            `;
+            messageDiv.textContent = text;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
         }
 
-        function sendQuickMessage(message) {
-            document.getElementById('message-input').value = message;
-            sendMessage();
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendChatMessage();
+            }
         }
 
-        async function clearHistory() {
+        async function sendChatMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addChatMessage(message, 'user');
+            input.value = '';
+
             try {
-                const response = await fetch('/clear_history', {
+                const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({}),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message }),
                     credentials: isLocal ? undefined : 'include'
                 });
                 if (response.ok) {
-                    const messages = document.getElementById('chat-messages');
-                    messages.innerHTML = '';
-                    addMessage('История очищена.', 'agent');
+                    const data = await response.json();
+                    addChatMessage(data.response, 'ai');
                 } else {
-                    addMessage('Ошибка при очистке истории.', 'agent');
+                    addChatMessage('Ошибка: ' + response.status, 'ai');
                 }
             } catch (error) {
-                console.error('Error clearing history:', error);
-                addMessage('Ошибка: ' + error.message, 'agent');
+                addChatMessage('Ошибка: ' + error.message, 'ai');
             }
+        }
+
+        function sendQuickMessage(message) {
+            document.getElementById('message-input').value = message;
+            sendChatMessage();
         }
 
         async function login() {
@@ -222,22 +218,9 @@
             }
         }
 
-        // Add Enter key listener
-        document.addEventListener('DOMContentLoaded', function() {
-            const input = document.getElementById('message-input');
-            if (input) {
-                input.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        sendMessage();
-                    }
-                });
-            }
-        });
-
         // Load previous interactions
         {% for interaction in interactions|reverse %}
-        addMessage('{{ interaction.content }}', '{{ interaction.message_type }}');
+        addChatMessage('{{ interaction.content }}', '{{ interaction.message_type }}');
         {% endfor %}
 
         // Dynamic data updates
