@@ -15,6 +15,14 @@ from datetime import datetime
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
+
+# Create tables if not exist
+try:
+    Base.metadata.create_all(engine)
+    logger.info("Database tables created or already exist")
+except Exception as e:
+    logger.error(f"Failed to create database tables: {e}")
+
 import os
 import pytz
 from datetime import timedelta

@@ -85,7 +85,12 @@ class Subscription(Base):
     user = relationship("User", backref="subscription")
 
 engine = create_engine(DATABASE_URL)
-Base.metadata.create_all(engine)
+try:
+    Base.metadata.create_all(engine)
+    print("Database tables created successfully")
+except Exception as e:
+    print(f"Failed to create database tables: {e}")
+    raise
 
 Session = sessionmaker(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
