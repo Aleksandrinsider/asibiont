@@ -70,33 +70,6 @@ async def auth_handler(request):
         return web.Response(text='Authentication failed', status=401)
 
 
-async def test_login_handler(request):
-    # Тестовый вход для локального режима
-    session = await get_session(request)
-    session['user_id'] = 123456789  # Тестовый user_id
-    
-    # Создать тестового пользователя, если не существует
-    session_db = Session()
-    user = session_db.query(User).filter_by(telegram_id=123456789).first()
-    if not user:
-        user = User(telegram_id=123456789, username='test_user')
-        session_db.add(user)
-        session_db.commit()
-    
-    # Создать тестовую подписку для локального тестирования
-    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-    if not subscription:
-        from datetime import datetime, timedelta
-        end_date = datetime.now() + timedelta(days=30)  # Подписка на 30 дней
-        subscription = Subscription(user_id=user.id, status='active', plan='monthly', end_date=end_date)
-        session_db.add(subscription)
-        session_db.commit()
-    
-    session_db.close()
-    
-    return web.HTTPFound('/dashboard')
-
-
 async def logout_handler(request):
     session = await get_session(request)
     session.clear()
@@ -137,19 +110,7 @@ async def dashboard_handler(request):
     subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
     logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
     
-    # Temporary: create subscription for testing user
-    if user.telegram_id == 146333757 and not subscription:
-        subscription = Subscription(user_id=user.id, status='active', start_date=datetime.now(pytz.UTC), end_date=datetime.now(pytz.UTC) + timedelta(days=30), subscriber_number=1, login_count=0)
-        session_db.add(subscription)
-        session_db.commit()
-        logger.info("Created test subscription for user")
-    
-    if os.getenv('LOCAL') == '1' and not subscription:
-        # Создать демо-подписку для локального тестирования
-        from datetime import datetime, timedelta
-        subscription = Subscription(user_id=user.id, status='active', start_date=datetime.now(), end_date=datetime.now() + timedelta(days=30))
-        session_db.add(subscription)
-        session_db.commit()
+    if not subscription or subscription.status != 'active':
     if not subscription or subscription.status != 'active':
         logger.info("No active subscription, rendering no_subscription")
         session_db.close()
@@ -498,7 +459,6 @@ bot = Bot(token=TELEGRAM_TOKEN)
 # Routes
 app.router.add_get('/', login_handler)
 app.router.add_get('/telegram_auth', auth_handler)
-app.router.add_get('/test_login', test_login_handler)
 app.router.add_get('/logout', logout_handler)
 app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
@@ -549,7 +509,6 @@ async def main():
         # Web app routes
         app.router.add_get('/', login_handler)
         app.router.add_get('/telegram_auth', auth_handler)
-        app.router.add_get('/test_login', test_login_handler)
         app.router.add_get('/logout', logout_handler)
         app.router.add_get('/dashboard', dashboard_handler)
         app.router.add_get('/tasks', tasks_handler)
