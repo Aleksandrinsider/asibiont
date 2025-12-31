@@ -267,165 +267,18 @@ async def schedule_reminders(scheduler):
 
 async def on_startup(app):
     logger.info("Starting on_startup")
-    if os.getenv("LOCAL") == "1":
-        await bot.delete_webhook()
-        logger.info("Webhook deleted for local mode")
-    else:
-        try:
-            await bot.set_webhook(WEBHOOK_URL)
-            logger.info(f"Webhook set to: {WEBHOOK_URL}")
-        except Exception as e:
-            logger.error(f"Error setting webhook: {e}")
+    try:
+        await bot.set_webhook(WEBHOOK_URL)
+        logger.info(f"Webhook set to: {WEBHOOK_URL}")
+    except Exception as e:
+        logger.error(f"Error setting webhook: {e}")
     # Инициализировать AI и ReminderService
     logger.info("Initializing AI and ReminderService")
     ai_service = AIIntegration()
     reminder_service = ReminderService(bot, ai_service)
     await reminder_service.start()
     logger.info("ReminderService started")
-    
-    # Create demo data for local mode
-    if os.getenv("LOCAL") == "1":
-        logger.info("Creating demo data")
-        create_demo_data()
-        logger.info("Demo data created")
 
-
-def create_demo_data():
-    session = Session()
-    try:
-        # Check if demo user exists
-        demo_user = session.query(User).filter_by(telegram_id=123456789).first()
-        if not demo_user:
-            demo_user = User(telegram_id=123456789, username='demo_user')
-            session.add(demo_user)
-            session.commit()
-        
-        # Create subscription
-        subscription = session.query(Subscription).filter_by(user_id=demo_user.id).first()
-        if not subscription:
-            subscription = Subscription(
-                user_id=demo_user.id, 
-                status='active', 
-                plan='monthly', 
-                start_date=datetime.now(pytz.UTC),
-                end_date=datetime.now(pytz.UTC) + timedelta(days=30)
-            )
-            session.add(subscription)
-            session.commit()
-        
-        # Create profile
-        profile = session.query(UserProfile).filter_by(user_id=demo_user.id).first()
-        if profile:
-            session.delete(profile)
-            session.commit()
-        profile = UserProfile(
-            user_id=demo_user.id,
-            skills='Python, ИИ, Веб-разработка',
-            interests='Машинное обучение, Открытый исходный код, Технологические стартапы',
-            goals='Создать успешный AI-продукт, найти партнеров для коллаборации',
-            city='Москва',
-            current_plans='Разработка TaskChat, изучение новых фреймворков',
-            total_tasks_created=15,
-            completed_tasks=12,
-            skipped_tasks=1,
-            average_completion_time=45
-        )
-        session.add(profile)
-        session.commit()
-        
-        # Create tasks
-        if not session.query(Task).filter_by(user_id=demo_user.id).first():
-            tasks_data = [
-                {
-                    'title': 'Разработать AI-ассистента для задач',
-                    'description': 'Создать чат-бот с функциями управления задачами и поиска партнеров',
-                    'status': 'completed',
-                    'reminder_time': datetime.now(pytz.UTC) + timedelta(hours=2)
-                },
-                {
-                    'title': 'Добавить систему напоминаний',
-                    'description': 'Интегрировать напоминания с Telegram ботом',
-                    'status': 'completed',
-                    'reminder_time': None
-                },
-                {
-                    'title': 'Создать демо-данные',
-                    'description': 'Заполнить базу тестовыми данными для демонстрации',
-                    'status': 'in_progress',
-                    'reminder_time': datetime.now(pytz.UTC) + timedelta(days=1)
-                },
-                {
-                    'title': 'Оптимизировать UI для мобильных',
-                    'description': 'Сделать интерфейс адаптивным для всех устройств',
-                    'status': 'pending',
-                    'reminder_time': datetime.now(pytz.UTC) + timedelta(days=2)
-                }
-            ]
-            for task_data in tasks_data:
-                task = Task(user_id=demo_user.id, **task_data)
-                session.add(task)
-            session.commit()
-        
-        # Create partners
-        if not session.query(UserProfile).filter(UserProfile.user_id != demo_user.id).first():
-            partners_data = [
-                {
-                    'contact_info': 'partner1',
-                    'skills': 'React, Node.js, UI/UX',
-                    'interests': 'Веб-разработка, Дизайн, Стартапы',
-                    'goals': 'Создать крутой веб-приложение',
-                    'city': 'Москва',
-                    'current_plans': 'Ищу команду для проекта'
-                },
-                {
-                    'contact_info': 'partner2', 
-                    'skills': 'Data Science, Python, ML',
-                    'interests': 'ИИ, Большие данные, Исследования',
-                    'goals': 'Применить ML в реальных проектах',
-                    'city': 'Санкт-Петербург',
-                    'current_plans': 'Работаю над исследовательским проектом'
-                },
-                {
-                    'contact_info': 'partner3',
-                    'skills': 'DevOps, Cloud, Kubernetes',
-                    'interests': 'Инфраструктура, Автоматизация, Открытый исходный код',
-                    'goals': 'Строить надежные системы',
-                    'city': 'Екатеринбург',
-                    'current_plans': 'Миграция в облако'
-                }
-            ]
-            for partner_data in partners_data:
-                partner_user = User(telegram_id=100000000 + len(partners_data), username=partner_data['contact_info'])
-                session.add(partner_user)
-                session.commit()
-                partner_profile = UserProfile(user_id=partner_user.id, **partner_data)
-                session.add(partner_profile)
-            session.commit()
-        
-        # Create interactions
-        if not session.query(Interaction).filter_by(user_id=demo_user.id).first():
-            interactions_data = [
-                ('user', 'Привет! Расскажи о себе'),
-                ('agent', 'Привет! Я AI-ассистент TaskChat. Помогаю управлять задачами и находить партнеров для проектов. Что вас интересует?'),
-                ('user', 'Какие у меня задачи?'),
-                ('agent', 'У вас 4 задачи: 2 выполнены, 1 в работе, 1 ожидает. Хотите подробности по какой-то?'),
-                ('user', 'Покажи партнеров'),
-                ('agent', 'Нашел 3 потенциальных партнера в вашем городе с похожими интересами. Проверьте раздел "Партнеры"!')
-            ]
-            for msg_type, content in interactions_data:
-                interaction = Interaction(
-                    user_id=demo_user.id,
-                    message_type=msg_type,
-                    content=content,
-                    created_at=datetime.now(pytz.UTC) - timedelta(minutes=len(interactions_data) - interactions_data.index((msg_type, content)))
-                )
-                session.add(interaction)
-            session.commit()
-            
-    except Exception as e:
-        logger.error(f"Error creating demo data: {e}")
-    finally:
-        session.close()
 
 
 # Global app for Railway
@@ -482,91 +335,7 @@ setup_application(app, dp, bot=bot)
 app.on_startup.append(on_startup)
 
 
-async def main():
-    global app
-    logger.info("Starting main function")
-    logger.info(f"LOCAL env: {repr(os.getenv('LOCAL'))}")
-    # Создание таблиц
-    Base.metadata.create_all(engine)
-    logger.info("Database tables created")
-
-    # Проверка на локальный запуск
-    if os.getenv("LOCAL") == "1":
-        # Локальный запуск с polling и веб-сервером
-        print("Запуск в локальном режиме (polling + web)...")
-        app = web.Application()
-        
-        # Setup Jinja2
-        aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-        
-        # Setup sessions
-        storage = SimpleCookieStorage()
-        aiohttp_session.setup(app, storage)
-        
-        app.on_startup.append(on_startup)
-        
-        # Web app routes
-        app.router.add_get('/', login_handler)
-        app.router.add_get('/telegram_auth', auth_handler)
-        app.router.add_get('/logout', logout_handler)
-        app.router.add_get('/dashboard', dashboard_handler)
-        app.router.add_get('/tasks', tasks_handler)
-        app.router.add_get('/profile', profile_handler)
-        app.router.add_post('/chat', chat_handler)
-        app.router.add_static('/static', 'static')
-        
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, 'localhost', 8080)
-        await site.start()
-        print("Web server started on http://localhost:8080")
-        
-        # Для локального тестирования веб, polling отключен
-        # await dp.start_polling(bot)
-        print("Polling disabled for local web testing. Press Ctrl+C to stop.")
-        # Бесконечный цикл для поддержания сервера
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            print("Stopping server...")
-            await runner.cleanup()
-
-
-async def yookassa_webhook(request):
-    data = await request.json()
-    if data.get('event') == 'payment.succeeded':
-        payment = data['object']
-        user_id = payment['metadata']['user_id']
-        session = Session()
-        user = session.query(User).filter_by(telegram_id=int(user_id)).first()
-        if user:
-            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-            if not subscription:
-                # Get next subscriber number
-                max_subscriber = session.query(Subscription.subscriber_number).order_by(Subscription.subscriber_number.desc()).first()
-                next_subscriber_number = (max_subscriber[0] + 1) if max_subscriber and max_subscriber[0] else 1
-                subscription = Subscription(user_id=user.id, subscriber_number=next_subscriber_number, login_count=0)
-                session.add(subscription)
-            subscription.status = 'active'
-            subscription.start_date = datetime.now(pytz.UTC)
-            subscription.end_date = datetime.now(pytz.UTC) + timedelta(days=30)  # Месяц
-            session.commit()
-            await bot.send_message(int(user_id), "Подписка активирована! Теперь у вас доступ ко всем премиум-функциям.")
-        session.close()
-    return web.Response(text="OK")
-
 if __name__ == "__main__":
-    if os.getenv("LOCAL") == "1":
-        logger.info("Running main in local mode")
-        try:
-            asyncio.run(main())
-        except Exception as e:
-            logger.error(f"Error in main: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        logger.info("Running app in production mode")
-        port = int(os.getenv("PORT"))
-        logger.info(f"Starting web app on port {port}")
-        web.run_app(app, port=port, host='0.0.0.0')
+    port = int(os.getenv("PORT"))
+    logger.info(f"Starting web app on port {port}")
+    web.run_app(app, port=port, host='0.0.0.0')

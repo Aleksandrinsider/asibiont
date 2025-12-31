@@ -1024,3 +1024,91 @@ Added job "ReminderService.check_and_send_overdue_reminder" to job store "defaul
 
 А по поводу подарка — есть идеи, что хочешь подарить? Может, помочь найти варианты или напомнить ближе к дате?
 Пользователь: Хорошо, а можешь поставить напоминание о презентации на завтра в 14:00, чтобы успеть проверить всё перед встречей? И по подарку — пока не решил, но коллега увлекается фотографией.
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+Агент: Привет! Рад тебя видеть. Я помогу тебе управлять задачами, планировать время и находить интересных людей для общения или сотрудничества. 
+
+Расскажи, чем ты сейчас занимаешься? Какие у тебя планы на сегодня или ближайшее время? Может быть, есть задачи, которые нужно добавить в список, или интересы, которые ты хотел бы развивать? 
+
+Также интересно узнать, в каком городе ты находишься и какие у тебя основные увлечения — это поможет мне лучше подбирать для тебя подходящие активности и контакты.
+Пользователь: Хорошо, добавь задачу "подготовить презентацию к завтрашней встрече" на 15:00 сегодня.
+Агент: Отлично, сегодня в 15:00 свободно. Добавляю задачу "подготовить презентацию к завтрашней встрече" с напоминанием на 15:00.
+Пользователь: Хорошо, а можешь еще добавить задачу "купить продукты" на 18:00?
+Агент: Отлично, сегодня в 18:00 свободно. Добавляю задачу "купить продукты" с напоминанием на 18:00.
+Пользователь: Хорошо, а можешь напомнить мне о задачах на сегодня?
+Агент: Сейчас у тебя нет активных задач. Хочешь добавить что-то ещё на сегодня? Может быть, есть планы на вечер или что-то, что нужно сделать завтра?
+Пользователь: А что у меня запланировано на завтра?
+Агент: На завтра у тебя пока нет запланированных задач. Хочешь добавить что-то на завтра? Например, встречу, звонок или что-то по дому?
+Пользователь: завершил задачу 'Подготовить отчет по проекту X'
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+Агент: Привет! Рад тебя видеть. Я помогу тебе управлять задачами, планировать время и находить интересных людей для общения или сотрудничества. 
+
+Расскажи, чем ты сейчас занимаешься? Какие у тебя планы на сегодня или ближайшее время? Может быть, есть задачи, которые нужно добавить в список, или интересы, которые ты хотел бы развивать? 
+
+Также интересно узнать, в каком городе ты находишься и какие у тебя основные увлечения — это поможет мне лучше подбирать для тебя подходящие активности и контакты.
+Пользователь: Хорошо, добавь задачу "подготовить отчет по проекту" на завтра, 15:00.
+Агент: Отлично, задача "подготовить отчет по проекту" добавлена на завтра в 15:00. Я поставлю напоминание, чтобы ты не забыл. 
+
+Расскажи, что именно нужно включить в отчет? Может быть, есть какие-то детали или сложные моменты, где нужна помощь? Или, может, ты планируешь работать над этим один или с кем-то?
+Пользователь: Хорошо, а можешь также напомнить мне об этом за час до дедлайна?
+Агент: 1
+2025-01-27 14:00
+1
+Пользователь: Конечно, напомню за час до дедлайна — в 14:00. Добавить ещё задачи или уточнить что-то по этой?
+Агент: Да, добавлю напоминание за час до дедлайна — в 14:00. 
+
+Кстати, у тебя уже есть задача "подготовить отчет по проекту" с напоминанием на 15:00. Хочешь добавить ещё задачи на сегодня или завтра? Может быть, что-то связанное с этим отчетом или другие планы?
+Пользователь: Хорошо, спасибо! А можешь ещё добавить задачу "отправить отчет руководителю" на завтра в 17:00?
+Агент: Отлично, сейчас добавлю задачу "отправить отчет руководителю" с напоминанием на завтра в 17:00. 
+
+Интересно, а как ты обычно отправляешь отчеты — по почте, через мессенджер или в какой-то системе? И нужно ли будет что-то дополнительно приложить к отчету?
+Пользователь: завершил задачу 'Подготовить отчет по проекту X'
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+Агент: Привет! Рад тебя видеть. Я помогу тебе управлять задачами, планировать время и находить интересных людей для общения или сотрудничества. 
+
+Расскажи, чем ты сейчас занимаешься? Какие у тебя планы на сегодня или ближайшее время? Может быть, есть задачи, которые нужно добавить в список, или интересы, которые ты хотел бы развивать? 
+
+Также интересно узнать, в каком городе ты находишься и какие у тебя основные увлечения — это поможет мне лучше подбирать для тебя подходящие активности и контакты.
+Пользователь: Добавь задачу "подготовить отчет к завтрашнему совещанию" в мой список дел.
+Агент: Отлично, сейчас добавлю задачу с напоминанием. К какому времени завтра тебе нужно подготовить отчет? Хочешь, чтобы я напомнил утром или есть конкретное время, когда ты планируешь этим заняться?
+Пользователь: Хорошо, добавь напоминание на 10 утра, чтобы я точно не забыл.
+Агент: Отлично, задача добавлена! Я поставлю напоминание на завтра в 10:00, чтобы ты точно не забыл подготовить отчет к совещанию. 
+
+Кстати, расскажи, а что это за отчет? Может, нужна помощь с какими-то данными или оформлением? Или, может, есть кто-то из коллег, с кем можно скооперироваться, чтобы сделать всё быстрее?
+Пользователь: Хорошо, а можешь еще добавить задачу "позвонить клиенту Иванову" на сегодня?
+Агент: 
+Run time of job "ReminderService.check_and_send_overdue_reminder (trigger: cron[minute='*/15'], next run at: 2025-12-31 01:15:00 UTC)" was missed by 0:00:20.642321
+Run time of job "ReminderService.check_and_send_overdue_reminder (trigger: cron[minute='*/15'], next run at: 2025-12-31 01:15:00 UTC)" was missed by 0:00:20.642562
+Run time of job "ReminderService.check_and_send_overdue_reminder (trigger: cron[minute='*/15'], next run at: 2025-12-31 01:15:00 UTC)" was missed by 0:00:20.642644
+Run time of job "ReminderService.check_and_send_proactive (trigger: cron[minute='*/30'], next run at: 2025-12-31 01:30:00 UTC)" was missed by 0:00:20.642711
+Run time of job "ReminderService.check_and_send_proactive (trigger: cron[minute='*/30'], next run at: 2025-12-31 01:30:00 UTC)" was missed by 0:00:20.642775
+Run time of job "ReminderService.check_and_send_proactive (trigger: cron[minute='*/30'], next run at: 2025-12-31 01:30:00 UTC)" was missed by 0:00:20.642836

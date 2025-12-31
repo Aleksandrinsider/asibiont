@@ -82,6 +82,8 @@ body {
     gap: 10px;
     font-size: 14px;
     color: #1F2328;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .logout-btn {

@@ -12,7 +12,7 @@
             <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont</a>
             <div class="header-info">
                 {% if logged_in %}
-                <span>{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>
+                <span style="white-space: nowrap;">{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>
                 <a href="/logout" class="logout-btn">Выход</a>
                 {% endif %}
             </div>
