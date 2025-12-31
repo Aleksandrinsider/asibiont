@@ -186,6 +186,7 @@
         }
 
         async function sendChatMessage() {
+            console.log('sendChatMessage called');
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             if (!message) return;
@@ -243,10 +244,14 @@
 
         // Dynamic data updates
         async function updateTasks() {
+            console.log('updateTasks called');
             try {
+                console.log('Fetching /api/tasks');
                 const response = await fetch('/api/tasks');
+                console.log('updateTasks response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('updateTasks data:', data);
                     const tasksSection = document.querySelector('.tasks-section');
                     if (data.tasks.length > 0) {
                         let html = '';
@@ -282,8 +287,10 @@
         }
 
         async function deleteTask(taskId) {
+            console.log('deleteTask called with', taskId);
             if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
             try {
+                console.log('Fetching /clear_single_task');
                 const response = await fetch('/clear_single_task', {
                     method: 'POST',
                     headers: {
@@ -292,6 +299,7 @@
                     body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
+                console.log('Delete response status:', response.status);
                 if (response.ok) {
                     updateTasks();
                 } else {
