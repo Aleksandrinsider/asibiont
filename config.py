@@ -1,45 +1,38 @@
-import os
-from dotenv import load_dotenv
+from environs import Env
 
-load_dotenv()
+env = Env()
+env.read_env()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    if LOCAL:
-        DATABASE_URL = "sqlite:///local.db"
-    else:
-        raise ValueError("DATABASE_URL is not set")
+# Database
+DATABASE_URL = env.str("DATABASE_URL")
 
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-# if not DEEPSEEK_API_KEY:
-#     raise ValueError("DEEPSEEK_API_KEY is not set")
+# AI
+DEEPSEEK_API_KEY = env.str("DEEPSEEK_API_KEY")
 
-REDIS_URL = os.getenv("REDIS_URL")
-# if not REDIS_URL:
-#     raise ValueError("REDIS_URL is not set")
+# Redis
+REDIS_URL = env.str("REDIS_URL")
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN is not set")
+# Telegram
+TELEGRAM_TOKEN = env.str("TELEGRAM_TOKEN")
+TELEGRAM_BOT_USERNAME = env.str("TELEGRAM_BOT_USERNAME")
+WEBHOOK_URL = env.str("WEBHOOK_URL")
+WEB_APP_URL = env.str("WEB_APP_URL", default="https://yourapp.railway.app")
 
-TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME")
-if not TELEGRAM_BOT_USERNAME:
-    raise ValueError("TELEGRAM_BOT_USERNAME is not set")
+# Payments
+YOOKASSA_WEBHOOK_URL = env.str("YOOKASSA_WEBHOOK_URL", default=None)
+YOOKASSA_SHOP_ID = env.str("YOOKASSA_SHOP_ID", default=None)
+YOOKASSA_SECRET_KEY = env.str("YOOKASSA_SECRET_KEY", default=None)
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-if not WEBHOOK_URL:
-    raise ValueError("WEBHOOK_URL is not set")
+# Security
+ENCRYPTION_KEY = env.str("ENCRYPTION_KEY")
+SESSION_SECRET = env.str("SESSION_SECRET", default="default_secret_change_in_prod")
 
-WEB_APP_URL = os.getenv("WEB_APP_URL") or "https://yourapp.railway.app"
-YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")
-YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
-YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
-if not ENCRYPTION_KEY:
-    raise ValueError("ENCRYPTION_KEY is not set")
+# App settings
+PORT = env.int("PORT", default=8000)
+FREE_ACCESS_MODE = env.bool("FREE_ACCESS_MODE", default=False)
+CURRENT_DATE = env.str("CURRENT_DATE", default=None)
+LOCAL = env.bool("LOCAL", default=False)
 
-SESSION_SECRET = os.getenv("SESSION_SECRET", "default_secret_change_in_prod")
-PORT = int(os.getenv("PORT", 8000))
-FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
-CURRENT_DATE = os.getenv("CURRENT_DATE")  # Optional for testing, leave unset for real time
-LOCAL = os.getenv("LOCAL", "0") == "1"
+# Handle LOCAL database
+if LOCAL and not DATABASE_URL:
+    DATABASE_URL = "sqlite:///local.db"
