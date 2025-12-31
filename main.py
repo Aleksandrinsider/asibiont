@@ -411,17 +411,31 @@ bot = Bot(token=TELEGRAM_TOKEN)
 
 
 async def on_startup(app):
+    from config import REDIS_URL, LOCAL
     global redis_client
-    logger.info("Starting on_startup")
-    try:
-        await bot.set_webhook(WEBHOOK_URL)
-        logger.info(f"Webhook set to: {WEBHOOK_URL}")
-    except Exception as e:
-        logger.error(f"Error setting webhook: {e}")
-    # Setup session storage with memory
-    from aiohttp_session.memory_storage import MemoryStorage
-    aiohttp_session.setup(app, MemoryStorage())
-    logger.info("Session storage initialized with memory")
+    if LOCAL:
+        # In local mode, use dict for Redis
+        redis_client = None
+        logger.info("Using local mode without Redis")
+    else:
+        try:
+            from redis.asyncio import Redis
+            redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
+            logger.info("Redis client initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis: {e}")
+            redis_client = None
+    
+    # Setup session storage with Redis if available, else memory
+    if redis_client:
+        from aiohttp_session.redis_storage import RedisStorage
+        aiohttp_session.setup(app, RedisStorage(redis_client))
+        logger.info("Session storage initialized with Redis")
+    else:
+        from aiohttp_session.memory_storage import MemoryStorage
+        aiohttp_session.setup(app, MemoryStorage())
+        logger.info("Session storage initialized with memory")
+    
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis(redis_client)

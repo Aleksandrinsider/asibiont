@@ -170,7 +170,7 @@ async def chat_handler(message: Message):
             context = []
             if redis_client:
                 try:
-                    await redis_client.set(f"context:{user_id}", json.dumps(context))
+                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
                 except Exception as e:
                     print(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
@@ -192,7 +192,7 @@ async def chat_handler(message: Message):
         context.append({"user": message.text, "agent": response})
         if redis_client:
             try:
-                await redis_client.set(f"context:{user_id}", json.dumps(context))
+                await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
             except Exception as e:
                 print(f"Error saving context to Redis: {e}")
         print(f"Sending response to {message.chat.id}")
