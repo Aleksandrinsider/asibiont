@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=38">
+    <link rel="stylesheet" href="/static/style.css?v=39">
 </head>
 <body>
     <div class="app-header">
@@ -100,6 +100,7 @@
                         </li>
                         {% endfor %}
                     </ul>
+                    <button onclick="clearUserTasks()" style="margin-top: 10px; background-color: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer;">Очистить все задачи</button>
                     {% else %}
                     <p>Здесь появятся информация о ваших задачах</p>
                     {% endif %}
@@ -356,6 +357,29 @@
             updateProfile();
             updateReminders();
         }, 30000);
+
+        async function clearUserTasks() {
+            if (confirm('Вы уверены, что хотите удалить все задачи? Это действие нельзя отменить.')) {
+                try {
+                    const response = await fetch('/clear_user_tasks', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    if (response.ok) {
+                        alert('Задачи очищены');
+                        updateTasks(); // Refresh tasks
+                    } else {
+                        const error = await response.json();
+                        alert('Ошибка: ' + error.error);
+                    }
+                } catch (error) {
+                    console.error('Error clearing tasks:', error);
+                    alert('Ошибка при очистке задач');
+                }
+            }
+        }
     </script>
 </body>
 </html>

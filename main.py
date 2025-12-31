@@ -349,6 +349,31 @@ async def clear_db_handler(request):
         session_db.close()
 
 
+async def clear_user_tasks_handler(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        
+        # Clear user's tasks
+        session_db.query(Task).filter_by(user_id=user.id).delete()
+        session_db.commit()
+        logger.info(f"User {user_id} tasks cleared")
+        return web.json_response({'message': 'Tasks cleared'})
+    except Exception as e:
+        session_db.rollback()
+        logger.error(f"Error clearing user tasks: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+
 bot = Bot(token=TELEGRAM_TOKEN)
 
 
@@ -583,6 +608,7 @@ app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
 app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_get('/clear_db', clear_db_handler)
+app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates

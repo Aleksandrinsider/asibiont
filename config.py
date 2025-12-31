@@ -5,7 +5,10 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set")
+    if LOCAL:
+        DATABASE_URL = "sqlite:///local.db"
+    else:
+        raise ValueError("DATABASE_URL is not set")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 # if not DEEPSEEK_API_KEY:
