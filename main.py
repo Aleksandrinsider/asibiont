@@ -124,13 +124,8 @@ async def dashboard_handler(request):
             logged_in = True
         
         if not logged_in:
-            return {
-                'logged_in': False,
-                'current_date': '',
-                'current_time': '',
-                'formatted_end_date': None,
-                'timestamp': int(datetime.now().timestamp())
-            }
+            # Redirect to login page
+            return web.HTTPFound('/')
         
         # Получить задачи пользователя
         session_db = Session()
@@ -269,7 +264,8 @@ async def dashboard_handler(request):
             'current_time': current_time,
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': int(datetime.now().timestamp())
+            'timestamp': int(datetime.now().timestamp()),
+            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', '')
         }
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
