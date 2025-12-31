@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=41">
+    <link rel="stylesheet" href="/static/style.css?v=42">
 </head>
 <body>
     <div class="app-header">
@@ -99,11 +99,11 @@
                                 {% endif %}
                                 Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
                             </div>
-                            <button onclick="clearSingleTask({{ task.id }})" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer; margin-left: 10px;">Удалить</button>
+                            <button onclick="clearSingleTask({{ task.id }})" class="delete-btn">Удалить</button>
                         </li>
                         {% endfor %}
                     </ul>
-                    <button onclick="clearUserTasks()" style="margin-top: 10px; background-color: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer;">Очистить все задачи</button>
+                    <button onclick="clearUserTasks()" class="delete-btn" style="margin-top: 10px;">Очистить все задачи</button>
                     {% else %}
                     <p>Здесь появятся информация о ваших задачах</p>
                     {% endif %}
