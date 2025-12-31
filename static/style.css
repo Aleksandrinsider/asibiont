@@ -184,7 +184,7 @@ body {
 }
 
 .right-column {
-    padding-top: 80px;
+    align-self: start;
 }
 
 .chat-section {
