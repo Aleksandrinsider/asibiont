@@ -47,12 +47,15 @@ async def update_profile_handler(message: Message):
     else:
         prompt = "Помоги обновить профиль"
     try:
-        context_data = r.get(f"context:{user_id}")
-        if context_data:
-            if isinstance(context_data, bytes):
-                context = json.loads(context_data.decode('utf-8'))
-            else:
-                context = json.loads(context_data)
+        if redis_client:
+            context_data = redis_client.get(f"context:{user_id}")
+            if context_data:
+                if isinstance(context_data, bytes):
+                    context = json.loads(context_data.decode('utf-8'))
+                else:
+                    context = json.loads(context_data)
+        else:
+            context = []
     except Exception as e:
             context = []
     response = await chat_with_ai(prompt, context, user_id)
@@ -62,7 +65,8 @@ async def update_profile_handler(message: Message):
     if len(context) > 10:
         context = context[-10:]
     try:
-        r.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+        if redis_client:
+            redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
     except Exception as e:
         pass
 
@@ -83,12 +87,13 @@ async def find_partners_handler(message: Message):
     session.close()
     # Отправить запрос в ИИ
     try:
-        context_data = r.get(f"context:{user_id}")
-        if context_data:
-            if isinstance(context_data, bytes):
-                context = json.loads(context_data.decode('utf-8'))
-            else:
-                context = json.loads(context_data)
+        if redis_client:
+            context_data = redis_client.get(f"context:{user_id}")
+            if context_data:
+                if isinstance(context_data, bytes):
+                    context = json.loads(context_data.decode('utf-8'))
+                else:
+                    context = json.loads(context_data)
         else:
             context = []
     except Exception as e:
@@ -100,7 +105,8 @@ async def find_partners_handler(message: Message):
     if len(context) > 10:
         context = context[-10:]
     try:
-        r.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+        if redis_client:
+            redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
     except Exception as e:
         pass
 

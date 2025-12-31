@@ -418,28 +418,10 @@ async def on_startup(app):
         logger.info(f"Webhook set to: {WEBHOOK_URL}")
     except Exception as e:
         logger.error(f"Error setting webhook: {e}")
-    # Initialize Redis
-    from config import REDIS_URL
-    if REDIS_URL:
-        try:
-            redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
-            logger.info("Redis client initialized")
-            # Setup session storage
-            aiohttp_session.setup(app, RedisStorage(redis_client))
-            logger.info("Session storage initialized with Redis")
-        except Exception as e:
-            logger.error(f"Redis connection failed: {e}")
-            redis_client = None
-            # Fallback to memory storage
-            from aiohttp_session.memory_storage import MemoryStorage
-            aiohttp_session.setup(app, MemoryStorage())
-            logger.info("Session storage initialized with memory")
-    else:
-        redis_client = None
-        # Use memory storage
-        from aiohttp_session.memory_storage import MemoryStorage
-        aiohttp_session.setup(app, MemoryStorage())
-        logger.info("Session storage initialized with memory")
+    # Setup session storage with memory
+    from aiohttp_session.memory_storage import MemoryStorage
+    aiohttp_session.setup(app, MemoryStorage())
+    logger.info("Session storage initialized with memory")
         logger.info("Redis not configured, using encrypted cookie-based sessions")
         from config import SESSION_SECRET
         # Setup encrypted cookie-based session storage
