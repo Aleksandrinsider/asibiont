@@ -6,7 +6,7 @@ import aiohttp_jinja2
 import aiohttp_cors
 import jinja2
 from redis.asyncio import Redis
-from aiohttp_session.redis_storage import RedisStorage
+import aiohttp_session
 from aiohttp_session import get_session
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from datetime import datetime
