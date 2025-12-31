@@ -753,23 +753,9 @@ dp = Dispatcher()
 dp.include_router(router)
 
 # Setup session middleware
-if LOCAL:
-    from aiohttp_session import SimpleCookieStorage
-    aiohttp_session.setup(app, SimpleCookieStorage())
-else:
-    # For production, use Redis if available
-    if REDIS_URL:
-        try:
-            redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
-            storage = RedisStorage(redis_client)
-            aiohttp_session.setup(app, storage)
-        except Exception as e:
-            logger.warning(f"Failed to setup Redis session storage: {e}")
-            from aiohttp_session import SimpleCookieStorage
-            aiohttp_session.setup(app, SimpleCookieStorage())
-    else:
-        from aiohttp_session import SimpleCookieStorage
-        aiohttp_session.setup(app, SimpleCookieStorage())
+# Always use memory storage for simplicity
+from aiohttp_session import SimpleCookieStorage
+aiohttp_session.setup(app, SimpleCookieStorage())
 
 if bot:
     webhook_requests_handler = SimpleRequestHandler(
