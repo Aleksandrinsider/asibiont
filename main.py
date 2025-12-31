@@ -791,7 +791,7 @@ if __name__ == "__main__":
     print("Starting main - version 4")
 
     try:
-        port = 8000 if LOCAL else int(os.getenv("PORT", 8000))
+        port = int(os.getenv("PORT", 8000))
         print(f"Starting web app on port {port}")
         print("Before run_app")
         web.run_app(app, port=port, host='0.0.0.0')
