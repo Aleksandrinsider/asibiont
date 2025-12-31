@@ -10,11 +10,14 @@ import aiohttp_session
 from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL
-from datetime import datetime
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL, PORT
+from datetime import datetime, timedelta
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create tables if not exist
 try:
@@ -100,6 +103,11 @@ async def dashboard_handler(request):
         logger.info(f"User ID from session: {user_id}")
         
         logged_in = bool(user_id)
+        
+        # For local testing, auto-login with test user
+        if not logged_in and LOCAL:
+            user_id = 146333757
+            logged_in = True
         
         if not logged_in:
             return {
@@ -795,13 +803,13 @@ class SafeSimpleCookieStorage(SimpleCookieStorage):
     async def load_session(self, request):
         cookie = self.load_cookie(request)
         if cookie is None:
-            return self.new_session()
+            return await self.new_session()
         try:
             data = self._decoder(cookie)
-            return self.new_session(data)
+            return await self.new_session(data)
         except json.JSONDecodeError:
             # Invalid cookie, create new session
-            return self.new_session()
+            return await self.new_session()
 
 aiohttp_session.setup(app, SafeSimpleCookieStorage())
 
