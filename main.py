@@ -137,6 +137,15 @@ async def dashboard_handler(request):
     subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
     logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
     
+    # Temporary: create subscription for testing user
+    if user.telegram_id == 146333757 and not subscription:
+        from datetime import datetime, timedelta
+        import pytz
+        subscription = Subscription(user_id=user.id, status='active', start_date=datetime.now(pytz.UTC), end_date=datetime.now(pytz.UTC) + timedelta(days=30), subscriber_number=1, login_count=0)
+        session_db.add(subscription)
+        session_db.commit()
+        logger.info("Created test subscription for user")
+    
     if os.getenv('LOCAL') == '1' and not subscription:
         # Создать демо-подписку для локального тестирования
         from datetime import datetime, timedelta
