@@ -317,7 +317,7 @@ body {
 .tasks-section h3,
 .reminders-section h3 {
     margin: 0 0 15px 0;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: #1F2328;
 }
@@ -352,7 +352,7 @@ body {
 
 .task-item small {
     color: #656D76;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 @media (max-width: 768px) {
