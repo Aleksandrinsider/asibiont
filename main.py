@@ -261,8 +261,7 @@ async def chat_handler(request):
 
     # Get AI response
     try:
-        # response = await chat_with_ai(message, context, user_id)
-        response = "Тестовый ответ от ИИ. Чат работает!"
+        response = await chat_with_ai(message, context, user_id)
         logger.info(f"AI response: {response[:100]}...")
     except Exception as e:
         logger.error(f"Error getting AI response: {e}")
