@@ -8,8 +8,8 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-if not DEEPSEEK_API_KEY:
-    raise ValueError("DEEPSEEK_API_KEY is not set")
+# if not DEEPSEEK_API_KEY:
+#     raise ValueError("DEEPSEEK_API_KEY is not set")
 
 REDIS_URL = os.getenv("REDIS_URL")
 if not REDIS_URL:
