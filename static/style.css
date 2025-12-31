@@ -164,7 +164,7 @@ body {
     grid-template-columns: 1fr 2fr 1fr;
     height: 100%;
     column-gap: 20px;
-    padding: 0 20px;
+    padding: 80px 20px 0 20px;
     align-items: start;
 }
 
@@ -175,7 +175,6 @@ body {
     gap: 20px;
     overflow-y: auto;
     height: 100%;
-    padding-top: 80px;
 }
 
 .center-column {
@@ -183,7 +182,6 @@ body {
     flex-direction: column;
     gap: 20px;
     height: 100%;
-    padding-top: 80px;
 }
 
 .right-column {
