@@ -155,10 +155,13 @@ async def dashboard_handler(request):
                 delta = user_now - local_reminder
                 days = delta.days
                 hours = delta.seconds // 3600
+                minutes = (delta.seconds % 3600) // 60
                 if days > 0:
                     task.overdue_text = f"просрочено на {days} дн."
                 elif hours > 0:
                     task.overdue_text = f"просрочено на {hours} ч."
+                elif minutes > 0:
+                    task.overdue_text = f"просрочено на {minutes} мин."
                 else:
                     task.overdue_text = "просрочено"
             else:
