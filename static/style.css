@@ -314,6 +314,10 @@ body {
     padding: 20px;
     flex: 1;
     overflow-y: auto;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    background-color: #FFFFFF;
+    margin-bottom: 20px;
 }
 
 .people-section h3,

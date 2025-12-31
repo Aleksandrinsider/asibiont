@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=14">
+    <link rel="stylesheet" href="/static/style.css?v=15">
 </head>
 <body>
     <div class="app-header">
@@ -30,19 +30,21 @@
         <div class="main-layout">
             <!-- Левая колонка - Люди -->
             <div class="left-column">
-                {% if profile %}
                 <div class="context-section">
+                    {% if profile %}
                     <div class="context-item">
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                     </div>
+                    {% else %}
+                    <p>Здесь появится информация о вашем профиле</p>
+                    {% endif %}
                 </div>
-                {% endif %}
 
-                {% if partners %}
                 <div class="people-section">
+                    {% if partners %}
                     <div class="people-list">
                         {% for partner in partners %}
                         {% if partner.contact_info %}
@@ -53,8 +55,10 @@
                         {% endif %}
                         {% endfor %}
                     </div>
+                    {% else %}
+                    <p>Здесь появятся ваши партнеры</p>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
             {% endif %}
 
@@ -86,10 +90,10 @@
             </div>
 
             <!-- Правая колонка - Задачи и напоминания -->
-            {% if logged_in and (tasks or upcoming_reminders) %}
+            {% if logged_in %}
             <div class="right-column">
-                {% if tasks %}
                 <div class="tasks-section">
+                    {% if tasks %}
                     <div class="timeline">
                         {% for task in tasks %}
                         <div class="timeline-item">
@@ -106,18 +110,22 @@
                         </div>
                         {% endfor %}
                     </div>
+                    {% else %}
+                    <p>Здесь появятся ваши задачи</p>
+                    {% endif %}
                 </div>
-                {% endif %}
 
-                {% if upcoming_reminders %}
                 <div class="reminders-section">
+                    {% if upcoming_reminders %}
                     <ul>
                     {% for reminder in upcoming_reminders %}
                         <li>{{ reminder }}</li>
                     {% endfor %}
                     </ul>
+                    {% else %}
+                    <p>Здесь появятся ваши напоминания</p>
+                    {% endif %}
                 </div>
-                {% endif %}
             </div>
             {% endif %}
         </div>
