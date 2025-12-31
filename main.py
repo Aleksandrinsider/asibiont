@@ -753,9 +753,20 @@ dp = Dispatcher()
 dp.include_router(router)
 
 # Setup session middleware
-# Always use memory storage for simplicity
-from aiohttp_session import SimpleCookieStorage
-aiohttp_session.setup(app, SimpleCookieStorage())
+# Custom storage to handle invalid JSON cookies
+class SafeSimpleCookieStorage(SimpleCookieStorage):
+    async def load_session(self, request):
+        cookie = self.load_cookie(request)
+        if cookie is None:
+            return self.new_session()
+        try:
+            data = self._decoder(cookie)
+            return self.new_session(data)
+        except json.JSONDecodeError:
+            # Invalid cookie, create new session
+            return self.new_session()
+
+aiohttp_session.setup(app, SafeSimpleCookieStorage())
 
 if bot:
     webhook_requests_handler = SimpleRequestHandler(
