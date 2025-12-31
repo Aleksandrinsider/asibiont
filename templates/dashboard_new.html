@@ -286,6 +286,10 @@
             }
         }
 
+        async function clearSingleTask(taskId) {
+            await deleteTask(taskId);
+        }
+
         async function deleteTask(taskId) {
             console.log('deleteTask called with', taskId);
             if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
