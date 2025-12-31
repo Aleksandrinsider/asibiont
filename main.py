@@ -470,7 +470,30 @@ async def api_profile_handler(request):
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
     session_db.close()
+    
+    # Calculate current time and date
+    base_now = datetime.now(pytz.UTC)
+    user_now = base_now
+    if user and user.timezone:
+        try:
+            user_tz = pytz.timezone(user.timezone)
+            user_now = base_now.astimezone(user_tz)
+        except pytz.exceptions.UnknownTimeZoneError:
+            user_now = base_now
+    months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+    current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+    current_time = user_now.strftime('%H:%M')
+    
+    # Format subscription end date
+    formatted_end_date = None
+    if subscription and subscription.end_date:
+        end_dt = subscription.end_date
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=pytz.UTC)
+        end_local = end_dt.astimezone(user_tz if user and user.timezone else pytz.UTC)
+        formatted_end_date = f"{end_local.day} {months[end_local.month - 1]} {end_local.year}"
     
     profile_data = {}
     if profile:
@@ -483,7 +506,12 @@ async def api_profile_handler(request):
             'city': profile.city or 'Не указан'
         }
     
-    return web.json_response({'profile': profile_data})
+    return web.json_response({
+        'profile': profile_data,
+        'current_time': current_time,
+        'current_date': current_date,
+        'formatted_end_date': formatted_end_date
+    })
 
 async def api_reminders_handler(request):
     session_req = await get_session(request)

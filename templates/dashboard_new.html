@@ -12,7 +12,7 @@
             <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont</a>
             <div class="header-info">
                 {% if logged_in %}
-                <span style="white-space: nowrap;">{{ current_time }} · {{ current_date }} · Подписка активна до {{ formatted_end_date }}</span>
+                <span id="header-info" style="white-space: nowrap;">{{ current_time }} · {{ current_date }} · Подписка активна до {{ formatted_end_date }}</span>
                 <a href="/logout" class="logout-btn">Выход ({{ user.first_name or user.username or 'Пользователь' }})</a>
                 {% endif %}
             </div>
@@ -278,6 +278,12 @@
                 const response = await fetch('/api/profile');
                 if (response.ok) {
                     const data = await response.json();
+                    // Update header info
+                    const headerInfo = document.getElementById('header-info');
+                    if (headerInfo && data.current_time && data.current_date && data.formatted_end_date) {
+                        headerInfo.textContent = `${data.current_time} · ${data.current_date} · Подписка активна до ${data.formatted_end_date}`;
+                    }
+                    // Update profile section
                     const contextSection = document.querySelector('.context-section');
                     if (Object.keys(data.profile).length > 0) {
                         let html = '<div class="context-item">';
