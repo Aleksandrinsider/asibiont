@@ -91,12 +91,15 @@
                     {% if tasks %}
                     <ul>
                         {% for task in tasks %}
-                        <li>
-                            {{ task.title }}<br>
-                            {% if task.reminder_time %}
-                            Напоминание: {{ task.reminder_time_local }}{% if task.overdue %} <span style="color: red;">({{ task.overdue_text }})</span>{% endif %}<br>
-                            {% endif %}
-                            Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
+                        <li style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                {{ task.title }}<br>
+                                {% if task.reminder_time %}
+                                Напоминание: {{ task.reminder_time_local }}{% if task.overdue %} <span style="color: red;">({{ task.overdue_text }})</span>{% endif %}<br>
+                                {% endif %}
+                                Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
+                            </div>
+                            <button onclick="clearSingleTask({{ task.id }})" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer; margin-left: 10px;">Удалить</button>
                         </li>
                         {% endfor %}
                     </ul>
@@ -377,6 +380,29 @@
                 } catch (error) {
                     console.error('Error clearing tasks:', error);
                     alert('Ошибка при очистке задач');
+                }
+            }
+        }
+
+        async function clearSingleTask(taskId) {
+            if (confirm('Вы уверены, что хотите удалить эту задачу?')) {
+                try {
+                    const response = await fetch('/clear_single_task', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ task_id: taskId })
+                    });
+                    if (response.ok) {
+                        updateTasks(); // Refresh tasks
+                    } else {
+                        const error = await response.json();
+                        alert('Ошибка: ' + error.error);
+                    }
+                } catch (error) {
+                    console.error('Error deleting task:', error);
+                    alert('Ошибка при удалении задачи');
                 }
             }
         }
