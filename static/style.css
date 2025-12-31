@@ -215,21 +215,47 @@ body {
     font-size: 14px;
     line-height: 1.4;
     word-wrap: break-word;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
 }
 
 .message.user {
-    font-weight: bold;
-    color: #1F2328;
+    justify-content: flex-end;
+    background-color: #0D7DFD;
+    color: #FFFFFF;
 }
 
 .message.ai {
+    justify-content: flex-start;
+    background-color: #F6F8FA;
     color: #1F2328;
+}
+
+.message-avatar {
+    font-size: 20px;
+    flex-shrink: 0;
 }
 
 .message-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 4px;
+    flex: 1;
+}
+
+.message-text {
+    word-wrap: break-word;
+}
+
+.message-time {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    align-self: flex-end;
+}
+
+.message.ai .message-time {
+    color: #656D76;
 }
 
 .quick-actions {
