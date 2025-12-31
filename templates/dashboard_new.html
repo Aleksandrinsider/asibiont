@@ -182,6 +182,7 @@
         }
 
         async function sendChatMessage() {
+            alert('Sending message');
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             if (!message) return;
