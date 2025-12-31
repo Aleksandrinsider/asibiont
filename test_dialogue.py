@@ -1,6 +1,6 @@
 from ai_integration import chat_with_ai
 import requests
-from config import DEEPSEEK_API_KEY, REDIS_URL
+from config import DEEPSEEK_API_KEY, REDIS_URL, LOCAL
 import os
 import asyncio
 from models import Session, Task, User, Interaction, UserProfile
@@ -19,7 +19,7 @@ logging.basicConfig(filename='test_dialogue.log', level=logging.INFO, encoding='
 import os
 os.environ["FREE_ACCESS_MODE"] = "True"  # Для теста
 
-if os.getenv("LOCAL") == "1":
+if LOCAL:
     # Для локального тестирования использовать dict вместо Redis
     context_store = {}
 else:
@@ -72,7 +72,7 @@ async def test_dialogue():
     user_id = 12346  # Новый тестовый user_id для симуляции нового пользователя
 
     # Очистить контекст
-    if os.getenv("LOCAL") == "1":
+    if LOCAL:
         context_store[f"context:{user_id}"] = []
     else:
         try:
@@ -134,7 +134,7 @@ async def test_dialogue():
             context.append({"user": user_input, "agent": response})
             if len(context) > 10:
                 context = context[-10:]
-            if os.getenv("LOCAL") == "1":
+            if LOCAL:
                 context_store[f"context:{user_id}"] = context
             else:
                 try:

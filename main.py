@@ -359,7 +359,7 @@ async def clear_history_handler(request):
 
 
 async def clear_db_handler(request):
-    from config import LOCAL
+    from config import PORT
     if not LOCAL:
         return web.json_response({'error': 'Not allowed in production'}, status=403)
     
@@ -825,7 +825,7 @@ if __name__ == "__main__":
     print("Starting main - version 4")
 
     try:
-        port = int(os.getenv("PORT", 8000))
+        port = PORT
         host = '127.0.0.1' if LOCAL else '0.0.0.0'
         print(f"Starting web app on port {port}, host {host}")
         print("Before run_app")

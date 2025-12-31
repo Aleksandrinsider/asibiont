@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from ai_integration import chat_with_ai
 from models import Session, User, UserProfile, Subscription
-import os
+from config import WEBHOOK_URL
 from config import WEB_APP_URL
 from redis.asyncio import Redis
 from config import REDIS_URL
@@ -229,6 +229,6 @@ async def dashboard_handler(message: Message):
     session.close()
     
     # Generate dashboard URL
-    base_url = os.getenv("WEBHOOK_URL", "http://localhost:8000").replace("/webhook", "")
+    base_url = WEBHOOK_URL.replace("/webhook", "")
     dashboard_url = f"{base_url}/dashboard?telegram_id={user_id}"
     await message.bot.send_message(message.chat.id, f"Ваш личный дашборд: {dashboard_url}")
