@@ -134,6 +134,27 @@ async def dashboard_handler(request):
                 p.common_interests = ', '.join(common) if common else 'Нет общих интересов'
             else:
                 p.common_interests = 'Интересы не указаны'
+    
+    # Set overdue flag and local time for tasks
+    user_tz = pytz.UTC
+    if user and user.timezone:
+        try:
+            user_tz = pytz.timezone(user.timezone)
+        except pytz.exceptions.UnknownTimeZoneError:
+            user_tz = pytz.UTC
+    base_now = datetime.now(pytz.UTC)
+    user_now = base_now.astimezone(user_tz)
+    for task in tasks:
+        if task.reminder_time:
+            if task.reminder_time.tzinfo is None:
+                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+            local_reminder = task.reminder_time.astimezone(user_tz)
+            task.overdue = local_reminder < user_now and task.status == 'pending'
+            task.reminder_time_local = local_reminder.strftime('%d.%m %H:%M')
+        else:
+            task.overdue = False
+            task.reminder_time_local = None
+    
     session_db.close()
     
     # Calculate metrics

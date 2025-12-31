@@ -95,7 +95,7 @@
                         <p><strong>{{ task.title }}</strong></p>
                         <p>Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}</p>
                         {% if task.reminder_time %}
-                        <small>Напоминание: {{ task.reminder_time.strftime('%d.%m %H:%M') }}</small>
+                        <small {% if task.overdue %}style="color: orange;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>
                         {% endif %}
                     </div>
                     {% endfor %}
