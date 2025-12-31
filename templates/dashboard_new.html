@@ -103,7 +103,6 @@
                         </li>
                         {% endfor %}
                     </ul>
-                    <button onclick="clearUserTasks()" class="delete-btn" style="margin-top: 10px;">Очистить все задачи</button>
                     {% else %}
                     <p>Здесь появятся информация о ваших задачах</p>
                     {% endif %}
@@ -350,6 +349,45 @@
                 }
             } catch (error) {
                 console.error('Error updating reminders:', error);
+            }
+        }
+
+        async function updateTasks() {
+            try {
+                const response = await fetch('/api/tasks');
+                if (response.ok) {
+                    const data = await response.json();
+                    const tasksSection = document.querySelector('.tasks-section');
+                    if (data.tasks.length > 0) {
+                        let html = '<ul>';
+                        data.tasks.forEach(task => {
+                            html += '<li style="display: flex; justify-content: space-between; align-items: center;">';
+                            html += '<div>';
+                            html += `${task.title}<br>`;
+                            if (task.reminder_time_local) {
+                                html += `Напоминание: ${task.reminder_time_local}`;
+                                if (task.overdue) {
+                                    html += ` <span style="color: red;">(${task.overdue_text})</span>`;
+                                }
+                                html += '<br>';
+                            }
+                            let statusText = 'В ожидании';
+                            if (task.status === 'completed') statusText = 'Завершено';
+                            else if (task.status === 'in_progress') statusText = 'В работе';
+                            else if (task.status === 'skipped') statusText = 'Пропущено';
+                            html += `Статус: ${statusText}`;
+                            html += '</div>';
+                            html += `<button onclick="clearSingleTask(${task.id})" class="delete-btn">Удалить</button>`;
+                            html += '</li>';
+                        });
+                        html += '</ul>';
+                        tasksSection.innerHTML = html;
+                    } else {
+                        tasksSection.innerHTML = '<p>Здесь появятся информация о ваших задачах</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating tasks:', error);
             }
         }
 

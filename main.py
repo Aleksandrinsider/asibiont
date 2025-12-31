@@ -631,6 +631,65 @@ async def api_reminders_handler(request):
     
     return web.json_response({'reminders': upcoming_reminders[:5]})
 
+
+async def api_tasks_handler(request):
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        
+        tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+        
+        # Set overdue flag and local time for tasks
+        user_tz = pytz.UTC
+        if user and user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+            except pytz.exceptions.UnknownTimeZoneError:
+                user_tz = pytz.UTC
+        base_now = datetime.now(pytz.UTC)
+        user_now = base_now.astimezone(user_tz)
+        
+        tasks_data = []
+        for task in tasks:
+            task_data = {
+                'id': task.id,
+                'title': task.title,
+                'status': task.status,
+                'reminder_time_local': None,
+                'overdue': False,
+                'overdue_text': None
+            }
+            if task.reminder_time:
+                if task.reminder_time.tzinfo is None:
+                    task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+                local_reminder = task.reminder_time.astimezone(user_tz)
+                task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
+                task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
+                if task_data['overdue']:
+                    delta = user_now - local_reminder
+                    if delta.days > 0:
+                        task_data['overdue_text'] = f'просрочено на {delta.days} дн.'
+                    elif delta.seconds // 3600 > 0:
+                        task_data['overdue_text'] = f'просрочено на {delta.seconds // 3600} ч.'
+                    else:
+                        task_data['overdue_text'] = f'просрочено на {delta.seconds // 60} мин.'
+            tasks_data.append(task_data)
+        
+        return web.json_response({'tasks': tasks_data})
+    except Exception as e:
+        logger.error(f"Error fetching tasks: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+
 # Routes
 app.router.add_get('/', login_handler)
 app.router.add_get('/telegram_auth', auth_handler)
