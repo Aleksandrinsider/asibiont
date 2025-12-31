@@ -39,8 +39,6 @@ body {
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    max-width: 400px;
-    margin: 0 auto;
 }
 
 .header-content h1 {
