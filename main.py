@@ -330,6 +330,9 @@ async def on_startup(app):
     from config import REDIS_URL
     redis_client = Redis.from_url(REDIS_URL)
     logger.info("Redis client initialized")
+    # Setup session storage
+    aiohttp_session.setup(app, RedisStorage(redis_client))
+    logger.info("Session storage initialized")
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis()
@@ -353,7 +356,6 @@ cors = aiohttp_cors.setup(app, defaults={
     )
 })
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-aiohttp_session.setup(app, RedisStorage(redis_client))
 
 async def yookassa_webhook(request):
     data = await request.json()
