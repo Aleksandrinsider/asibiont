@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=25">
+    <link rel="stylesheet" href="/static/style.css?v=26">
 </head>
 <body>
     <div class="app-header">
@@ -97,7 +97,7 @@
                     <ul>
                         {% for task in tasks %}
                         <li>
-                            <strong>{{ task.title }}</strong><br>
+                            {{ task.title }}<br>
                             Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
                             {% if task.reminder_time %}
                             <br><small {% if task.overdue %}style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>

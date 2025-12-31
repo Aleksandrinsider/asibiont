@@ -173,7 +173,6 @@ body {
 .right-column {
     display: flex;
     flex-direction: column;
-    gap: 20px;
     overflow-y: auto;
     height: 100%;
 }
@@ -181,7 +180,6 @@ body {
 .center-column {
     display: flex;
     flex-direction: column;
-    gap: 20px;
     height: 100%;
 }
 
@@ -318,7 +316,7 @@ body {
     border-radius: 6px;
     background-color: #FFFFFF;
     flex: 1;
-    margin-bottom: 0;
+    margin-bottom: 20px;
 }
 
 .people-section h3,
@@ -338,11 +336,6 @@ body {
 
 .tasks-section li {
     padding: 10px 0;
-    border-bottom: 1px solid #D1D9E0;
-}
-
-.tasks-section li:last-child {
-    border-bottom: none;
 }
 
 .people-list {
