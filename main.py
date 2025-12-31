@@ -82,7 +82,6 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
-@aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
@@ -90,24 +89,28 @@ async def dashboard_handler(request):
     logged_in = bool(user_id)
     
     if not logged_in:
-        return {
+        response = aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None
-        }
+        })
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        return response
     
     # Получить задачи пользователя
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session_db.close()
-        return {
+        response = aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None
-        }
+        })
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        return response
     
     logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
     
@@ -118,7 +121,9 @@ async def dashboard_handler(request):
     if not subscription or subscription.status != 'active':
         logger.info("No active subscription, rendering no_subscription")
         session_db.close()
-        return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
+        response = aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+        return response
     
     tasks = session_db.query(Task).filter_by(user_id=user.id).all()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
@@ -213,7 +218,7 @@ async def dashboard_handler(request):
                     reminder_time_local = task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
                     upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
     
-    return {
+    response = aiohttp_jinja2.render_template('dashboard_new.html', request, {
         'logged_in': True,
         'tasks': tasks, 
         'user': user, 
@@ -229,7 +234,9 @@ async def dashboard_handler(request):
         'current_time': current_time,
         'formatted_end_date': formatted_end_date,
         'upcoming_reminders': upcoming_reminders[:5]  # Limit to 5
-    }
+    })
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+    return response
 
 
 async def tasks_handler(request):
