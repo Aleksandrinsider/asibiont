@@ -1112,3 +1112,86 @@ Run time of job "ReminderService.check_and_send_overdue_reminder (trigger: cron[
 Run time of job "ReminderService.check_and_send_proactive (trigger: cron[minute='*/30'], next run at: 2025-12-31 01:30:00 UTC)" was missed by 0:00:20.642711
 Run time of job "ReminderService.check_and_send_proactive (trigger: cron[minute='*/30'], next run at: 2025-12-31 01:30:00 UTC)" was missed by 0:00:20.642775
 Run time of job "ReminderService.check_and_send_proactive (trigger: cron[minute='*/30'], next run at: 2025-12-31 01:30:00 UTC)" was missed by 0:00:20.642836
+Scheduler started
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.send_daily_report" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_proactive" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Added job "ReminderService.check_and_send_overdue_reminder" to job store "default"
+Пользователь: привет
+chat_with_ai called with message: привет..., context len: 0, user_id: 12346
+Sending request to DeepSeek API with 2 messages
+DeepSeek API response status: 200
+Агент: Привет! Рад тебя видеть. Я помогу тебе управлять задачами, планировать время и находить интересных людей для общения или сотрудничества. 
+
+Расскажи, чем ты сейчас занимаешься? Какие у тебя планы на сегодня или ближайшее время? Может быть, есть задачи, которые нужно добавить в список, или интересы, которые ты хотел бы развивать? 
+
+Также интересно узнать, в каком городе ты находишься и какие у тебя основные увлечения — это поможет мне лучше подбирать для тебя подходящие активности и контакты.
+Пользователь: Добавь задачу "подготовить отчет по проекту" на завтра.
+chat_with_ai called with message: Добавь задачу "подготовить отчет по проекту" на за..., context len: 1, user_id: 12346
+Sending request to DeepSeek API with 4 messages
+DeepSeek API response status: 200
+Агент: Отлично, сейчас добавлю задачу с напоминанием. 
+
+На какое время завтра тебе поставить напоминание о подготовке отчета? Утром, днем или вечером?
+Пользователь: Поставь на 10 утра, пожалуйста.
+chat_with_ai called with message: Поставь на 10 утра, пожалуйста...., context len: 2, user_id: 12346
+Sending request to DeepSeek API with 6 messages
+DeepSeek API response status: 200
+Агент: Отлично! Задача "подготовить отчет по проекту" добавлена на завтра в 10:00. Я напомню тебе утром. 
+
+Расскажи, что входит в этот отчет? Может быть, нужно собрать данные, оформить графики или согласовать с коллегами? Если нужно, можем добавить дополнительные шаги или найти кого-то для помощи.
+Пользователь: Хорошо, спасибо! Добавь, пожалуйста, еще подзадачу "собрать данные за последний месяц" к этому отчету.
+chat_with_ai called with message: Хорошо, спасибо! Добавь, пожалуйста, еще подзадачу..., context len: 3, user_id: 12346
+Sending request to DeepSeek API with 8 messages
+DeepSeek API response status: 200
+Error in chat_with_ai: 
+Агент: Ошибка.
+Пользователь: Хорошо, добавил подзадачу. А еще что-то нужно для отчета?
+chat_with_ai called with message: Хорошо, добавил подзадачу. А еще что-то нужно для ..., context len: 4, user_id: 12346
+Sending request to DeepSeek API with 10 messages
+DeepSeek API response status: 200
+Агент: Вижу, что у тебя есть задача "подготовить отчет по проекту". Чтобы добавить "собрать данные за последний месяц" как отдельный шаг, лучше создать новую задачу с напоминанием. 
+
+На какое время поставить напоминание для сбора данных? Может, сегодня вечером или завтра утром до 10:00?
+Пользователь: завершил задачу 'Подготовить отчет по проекту X'
+chat_with_ai called with message: завершил задачу 'Подготовить отчет по проекту X'..., context len: 5, user_id: 12346
+Sending request to DeepSeek API with 12 messages
+DeepSeek API response status: 200
+Агент: 1
+1
+Пользователь: Отлично, задача "Подготовить отчет по проекту X" отмечена как выполненная. Удали ее из списка активных задач.
+chat_with_ai called with message: Отлично, задача "Подготовить отчет по проекту X" о..., context len: 6, user_id: 12346
+Sending request to DeepSeek API with 14 messages
+DeepSeek API response status: 200
+Агент: 
+Пользователь: Готово, задача удалена. Что дальше планируем?
+chat_with_ai called with message: Готово, задача удалена. Что дальше планируем?..., context len: 7, user_id: 12346
+Sending request to DeepSeek API with 16 messages
+DeepSeek API response status: 200
+Агент: Отлично, что отчет готов! Это важный шаг. 
+
+Теперь расскажи, что у тебя на повестке дня? Может быть, есть другие задачи, которые нужно выполнить, или новые планы? 
+
+Кстати, чтобы я мог лучше тебе помогать, расскажи немного о себе — какие у тебя интересы, в каком городе находишься, чем обычно занимаешься? Это поможет мне предлагать более подходящие активности и контакты.
+Пользователь: Давай создадим новую задачу "Проверить аналитику за последний квартал" и поставим напоминание на завтра к 14:00.
+chat_with_ai called with message: Давай создадим новую задачу "Проверить аналитику з..., context len: 8, user_id: 12346
+Sending request to DeepSeek API with 18 messages
+DeepSeek API response status: 200
+Агент: Готово! Задача "Проверить аналитику за последний квартал" добавлена на завтра в 14:00. Я напомню тебе вовремя.
+
+Расскажи, что именно нужно проверить в аналитике? Может быть, ключевые метрики, тренды или сравнение с предыдущими периодами? Если нужно, можем разбить на более конкретные шаги или найти коллегу, который разбирается в данных.
+Пользователь: Отлично, спасибо за напоминание! Давай добавим подзадачу "Сравнить показатели с аналогичным периодом прошлого года" и поставим на неё отдельное напоминание на завтра к 15:00.
+chat_with_ai called with message: Отлично, спасибо за напоминание! Давай добавим под..., context len: 9, user_id: 12346
+Sending request to DeepSeek API with 20 messages
+DeepSeek API response status: 200
+Агент: Отлично! Задача "Сравнить показатели с аналогичным периодом прошлого года" добавлена на завтра в 15:00. Я напомню тебе после основной проверки аналитики.
+
+Теперь у тебя две связанные задачи на завтра: сначала проверить аналитику в 14:00, затем сравнить показатели в 15:00. Это хороший план!
+
+Может быть, нужно еще что-то добавить к аналитике? Например, подготовить выводы или обсудить результаты с командой?
+Scheduler has been shut down
