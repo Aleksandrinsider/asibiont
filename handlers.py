@@ -24,7 +24,7 @@ router = Router()
 
 import redis
 from config import REDIS_URL
-    r = redis.from_url(REDIS_URL)
+r = redis.from_url(REDIS_URL)
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
