@@ -375,6 +375,137 @@ async def yookassa_webhook(request):
         session.close()
     return web.Response(text="OK")
 
+# API handlers for dynamic updates
+async def api_tasks_handler(request):
+    session_req = await get_session(request)
+    user_id = session_req.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not logged in'}, status=401)
+    
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session_db.close()
+        return web.json_response({'error': 'User not found'}, status=404)
+    
+    tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+    session_db.close()
+    
+    # Format tasks
+    user_tz = pytz.UTC
+    if user.timezone:
+        try:
+            user_tz = pytz.timezone(user.timezone)
+        except:
+            user_tz = pytz.UTC
+    base_now = datetime.now(pytz.UTC)
+    user_now = base_now.astimezone(user_tz)
+    
+    tasks_data = []
+    for task in tasks:
+        task_data = {
+            'id': task.id,
+            'title': task.title,
+            'status': task.status,
+            'reminder_time_local': None,
+            'overdue': False
+        }
+        if task.reminder_time:
+            if task.reminder_time.tzinfo is None:
+                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+            local_reminder = task.reminder_time.astimezone(user_tz)
+            task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
+            task_data['reminder_time_local'] = local_reminder.strftime('%d.%m %H:%M')
+        tasks_data.append(task_data)
+    
+    return web.json_response({'tasks': tasks_data})
+
+async def api_partners_handler(request):
+    session_req = await get_session(request)
+    user_id = session_req.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not logged in'}, status=401)
+    
+    partners = get_partners_list(user_id=user_id)
+    
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+    session_db.close()
+    
+    # Add common interests
+    if profile and profile.interests:
+        user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+        for p in partners:
+            if hasattr(p, 'interests') and p.interests:
+                partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                common = user_interests & partner_interests
+                p.common_interests = ', '.join(common) if common else 'Нет общих интересов'
+            else:
+                p.common_interests = 'Интересы не указаны'
+    
+    partners_data = []
+    for p in partners:
+        partners_data.append({
+            'contact_info': getattr(p, 'contact_info', ''),
+            'common_interests': getattr(p, 'common_interests', 'Нет общих интересов')
+        })
+    
+    return web.json_response({'partners': partners_data})
+
+async def api_profile_handler(request):
+    session_req = await get_session(request)
+    user_id = session_req.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not logged in'}, status=401)
+    
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+    session_db.close()
+    
+    profile_data = {}
+    if profile:
+        profile_data = {
+            'skills': profile.skills or 'Не указаны',
+            'interests': profile.interests or 'Не указаны',
+            'goals': profile.goals or 'Не указаны',
+            'city': profile.city or 'Не указан'
+        }
+    
+    return web.json_response({'profile': profile_data})
+
+async def api_reminders_handler(request):
+    session_req = await get_session(request)
+    user_id = session_req.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not logged in'}, status=401)
+    
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+    session_db.close()
+    
+    user_tz = pytz.UTC
+    if user and user.timezone:
+        try:
+            user_tz = pytz.timezone(user.timezone)
+        except:
+            user_tz = pytz.UTC
+    base_now = datetime.now(pytz.UTC)
+    user_now = base_now.astimezone(user_tz)
+    
+    upcoming_reminders = []
+    for task in tasks:
+        if task.reminder_time:
+            if task.reminder_time.tzinfo is None:
+                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+            if task.reminder_time.astimezone(user_tz) > user_now and task.status == 'pending':
+                reminder_time_local = task.reminder_time.astimezone(user_tz).strftime("%H:%M")
+                upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
+    
+    return web.json_response({'reminders': upcoming_reminders[:5]})
+
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # Routes
@@ -387,6 +518,11 @@ app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
+# API routes for dynamic updates
+app.router.add_get('/api/tasks', api_tasks_handler)
+app.router.add_get('/api/partners', api_partners_handler)
+app.router.add_get('/api/profile', api_profile_handler)
+app.router.add_get('/api/reminders', api_reminders_handler)
 
 # Setup for production
 dp = Dispatcher()

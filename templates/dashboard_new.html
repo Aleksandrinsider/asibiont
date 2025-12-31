@@ -205,6 +205,116 @@
         {% for interaction in interactions|reverse %}
         addMessage('{{ interaction.content }}', '{{ interaction.message_type }}');
         {% endfor %}
+
+        // Dynamic data updates
+        async function updateTasks() {
+            try {
+                const response = await fetch('/api/tasks');
+                if (response.ok) {
+                    const data = await response.json();
+                    const tasksSection = document.querySelector('.tasks-section');
+                    if (data.tasks.length > 0) {
+                        let html = '<ul>';
+                        data.tasks.forEach(task => {
+                            html += `<li>${task.title}<br>Статус: `;
+                            if (task.status === 'completed') html += 'Завершено';
+                            else if (task.status === 'pending') html += 'В ожидании';
+                            else if (task.status === 'in_progress') html += 'В работе';
+                            else if (task.status === 'skipped') html += 'Пропущено';
+                            else html += task.status;
+                            if (task.reminder_time_local) {
+                                html += `<br><small${task.overdue ? ' style="color: red;"' : ''}>Напоминание: ${task.reminder_time_local}</small>`;
+                            }
+                            html += '</li>';
+                        });
+                        html += '</ul>';
+                        tasksSection.innerHTML = html;
+                    } else {
+                        tasksSection.innerHTML = '<p>Здесь появятся ваши задачи</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating tasks:', error);
+            }
+        }
+
+        async function updatePartners() {
+            try {
+                const response = await fetch('/api/partners');
+                if (response.ok) {
+                    const data = await response.json();
+                    const peopleSection = document.querySelector('.people-section');
+                    if (data.partners.length > 0) {
+                        let html = '<div class="people-list">';
+                        data.partners.forEach(partner => {
+                            html += `<div class="person-card">
+                                <p><strong>@${partner.contact_info}</strong></p>
+                                <p>Общие интересы: ${partner.common_interests}</p>
+                            </div>`;
+                        });
+                        html += '</div>';
+                        peopleSection.innerHTML = html;
+                    } else {
+                        peopleSection.innerHTML = '<p>Здесь появятся ваши единомышленники</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating partners:', error);
+            }
+        }
+
+        async function updateProfile() {
+            try {
+                const response = await fetch('/api/profile');
+                if (response.ok) {
+                    const data = await response.json();
+                    const contextSection = document.querySelector('.context-section');
+                    if (Object.keys(data.profile).length > 0) {
+                        let html = '<div class="context-item">';
+                        html += `<p>Навыки: ${data.profile.skills}</p>`;
+                        html += `<p>Интересы: ${data.profile.interests}</p>`;
+                        html += `<p>Цели: ${data.profile.goals}</p>`;
+                        html += `<p>Город: ${data.profile.city}</p>`;
+                        html += '</div>';
+                        contextSection.innerHTML = html;
+                    } else {
+                        contextSection.innerHTML = '<p>Здесь появится информация о вашем профиле</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating profile:', error);
+            }
+        }
+
+        async function updateReminders() {
+            try {
+                const response = await fetch('/api/reminders');
+                if (response.ok) {
+                    const data = await response.json();
+                    const remindersSection = document.querySelector('.reminders-section');
+                    if (data.reminders.length > 0) {
+                        let html = '<ul>';
+                        data.reminders.forEach(reminder => {
+                            html += `<li>${reminder}</li>`;
+                        });
+                        html += '</ul>';
+                        remindersSection.innerHTML = html;
+                    } else {
+                        remindersSection.innerHTML = '<p>Здесь появятся ваши напоминания</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating reminders:', error);
+            }
+        }
+
+        // Update data every 30 seconds
+        setInterval(() => {
+            updateTasks();
+            updatePartners();
+            updateProfile();
+            updateReminders();
+        }, 30000);
     </script>
 </body>
 </html>
