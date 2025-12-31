@@ -6,7 +6,7 @@ import aiohttp_jinja2
 import aiohttp_cors
 import jinja2
 from redis.asyncio import Redis
-import aiohttp_session.redis
+from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import get_session
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from datetime import datetime
@@ -352,7 +352,7 @@ cors = aiohttp_cors.setup(app, defaults={
     )
 })
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
-aiohttp_session.setup(app, aiohttp_session.redis.RedisStorage(redis_client))
+aiohttp_session.setup(app, RedisStorage(redis_client))
 
 async def yookassa_webhook(request):
     data = await request.json()
