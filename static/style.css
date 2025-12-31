@@ -194,7 +194,7 @@ body {
 }
 
 .message {
-    max-width: 70%;
+    width: 100%;
     padding: 12px 16px;
     border-radius: 18px;
     font-size: 14px;
@@ -203,18 +203,12 @@ body {
 }
 
 .message.user {
-    align-self: flex-end;
-    background-color: #068487;
-    color: #FFFFFF;
-    border-bottom-right-radius: 4px;
+    font-weight: bold;
+    color: #1F2328;
 }
 
 .message.ai {
-    align-self: flex-start;
-    background-color: #F6F8FA;
     color: #1F2328;
-    border: 1px solid #D1D9E0;
-    border-bottom-left-radius: 4px;
 }
 
 .message-content {
