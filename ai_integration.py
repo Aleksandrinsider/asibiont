@@ -730,6 +730,8 @@ TOOLS = [
 async def chat_with_ai(message, context=None, user_id=None):
     import logging
     logger = logging.getLogger(__name__)
+    # Clean message from mentions
+    message = re.sub(r'@[\w]+', '', message).strip()
     logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}")
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
