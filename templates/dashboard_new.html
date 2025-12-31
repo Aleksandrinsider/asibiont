@@ -9,7 +9,7 @@
 <body>
     <div class="app-header">
         <div class="header-content">
-            <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont</a>
+            <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont{% if logged_in and user %} - {{ user.username }}{% endif %}</a>
             <div class="header-info">
                 {% if logged_in %}
                 <span style="white-space: nowrap;">{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>

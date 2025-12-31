@@ -18,6 +18,7 @@ import pytz
 from datetime import timedelta
 import hashlib
 import hmac
+import json
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -217,6 +218,19 @@ async def chat_handler(request):
     message = data.get('message', '')
     print("Message received:", message)
 
+    # Load context from Redis
+    context = []
+    try:
+        import redis
+        from config import REDIS_URL
+        r = redis.from_url(REDIS_URL)
+        context_data = r.get(f"context:{user_id}")
+        if context_data:
+            context = json.loads(context_data.decode('utf-8'))
+    except Exception as e:
+        print(f"Error loading context: {e}")
+        context = []
+
     # Save user message
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -227,7 +241,16 @@ async def chat_handler(request):
         session_db.commit()
 
     # Get AI response
-    response = await chat_with_ai(message, user_id=user_id)
+    response = await chat_with_ai(message, context, user_id)
+
+    # Save context back to Redis
+    context.append({"user": message, "agent": response})
+    if len(context) > 10:
+        context = context[-10:]
+    try:
+        r.set(f"context:{user_id}", json.dumps(context))
+    except Exception as e:
+        print(f"Error saving context: {e}")
 
     # Save agent response
     if user:
