@@ -98,10 +98,10 @@
                         {% for task in tasks %}
                         <li>
                             {{ task.title }}<br>
-                            Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
                             {% if task.reminder_time %}
-                            <br><small {% if task.overdue %}style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>
+                            <small{% if task.overdue %} style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small><br>
                             {% endif %}
+                            Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
                         </li>
                         {% endfor %}
                     </ul>
@@ -216,15 +216,16 @@
                     if (data.tasks.length > 0) {
                         let html = '<ul>';
                         data.tasks.forEach(task => {
-                            html += `<li>${task.title}<br>Статус: `;
+                            html += `<li>${task.title}<br>`;
+                            if (task.reminder_time_local) {
+                                html += `<small${task.overdue ? ' style="color: red;"' : ''}>Напоминание: ${task.reminder_time_local}</small><br>`;
+                            }
+                            html += 'Статус: ';
                             if (task.status === 'completed') html += 'Завершено';
                             else if (task.status === 'pending') html += 'В ожидании';
                             else if (task.status === 'in_progress') html += 'В работе';
                             else if (task.status === 'skipped') html += 'Пропущено';
                             else html += task.status;
-                            if (task.reminder_time_local) {
-                                html += `<br><small${task.overdue ? ' style="color: red;"' : ''}>Напоминание: ${task.reminder_time_local}</small>`;
-                            }
                             html += '</li>';
                         });
                         html += '</ul>';
