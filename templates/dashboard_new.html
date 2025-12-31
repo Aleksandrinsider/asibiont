@@ -165,7 +165,7 @@
             }
         }
 
-        function addChatMessage(text, sender) {
+        function addMessage(text, sender) {
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
@@ -192,7 +192,7 @@
             if (!message) return;
 
             console.log('Sending message:', message);
-            addChatMessage(message, 'user');
+            addMessage(message, 'user');
             input.value = '';
 
             try {
@@ -213,13 +213,13 @@
                 const data = await response.json();
                 console.log('Response data:', data);
                 if (response.ok) {
-                    addChatMessage(data.response, 'ai');
+                    addMessage(data.response, 'ai');
                 } else {
-                    addChatMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
             } catch (error) {
                 console.error('Error:', error);
-                addChatMessage('Ошибка: ' + error.message, 'ai');
+                addMessage('Ошибка: ' + error.message, 'ai');
             }
         }
 
@@ -239,7 +239,7 @@
 
         // Load previous interactions
         {% for interaction in interactions|reverse %}
-        addChatMessage('{{ interaction.content }}', '{{ interaction.message_type }}');
+        addMessage('{{ interaction.content }}', '{{ interaction.message_type }}');
         {% endfor %}
 
         // Dynamic data updates
