@@ -78,6 +78,8 @@ class Subscription(Base):
     plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
     start_date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     end_date = Column(DateTime)
+    login_count = Column(Integer, default=0)  # Number of logins
+    subscriber_number = Column(Integer, unique=True)  # Subscriber number
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="subscription")

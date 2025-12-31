@@ -59,6 +59,12 @@ async def auth_handler(request):
             session_db.add(user)
             session_db.commit()
         
+        # Increment login count if subscription exists
+        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+        if subscription:
+            subscription.login_count += 1
+            session_db.commit()
+        
         session_db.close()
         
         session = await get_session(request)
@@ -576,7 +582,10 @@ async def yookassa_webhook(request):
         if user:
             subscription = session.query(Subscription).filter_by(user_id=user.id).first()
             if not subscription:
-                subscription = Subscription(user_id=user.id)
+                # Get next subscriber number
+                max_subscriber = session.query(Subscription.subscriber_number).order_by(Subscription.subscriber_number.desc()).first()
+                next_subscriber_number = (max_subscriber[0] + 1) if max_subscriber and max_subscriber[0] else 1
+                subscription = Subscription(user_id=user.id, subscriber_number=next_subscriber_number, login_count=0)
                 session.add(subscription)
             subscription.status = 'active'
             subscription.start_date = datetime.now(pytz.UTC)
