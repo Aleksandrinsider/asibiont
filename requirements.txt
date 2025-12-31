@@ -11,5 +11,4 @@ timezonefinder==6.5.7
 jinja2==3.1.4
 aiohttp-jinja2==1.6
 aiohttp-session==2.12.0
-aioredis==1.3.1
 pytz==2025.2

@@ -4,7 +4,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 import aiohttp_jinja2
 import jinja2
-import aioredis
+from redis.asyncio import Redis
 import aiohttp_session
 from aiohttp_session import get_session, SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
@@ -302,7 +302,7 @@ async def on_startup(app):
         logger.error(f"Error setting webhook: {e}")
     # Initialize Redis
     from config import REDIS_URL
-    redis_client = aioredis.from_url(REDIS_URL)
+    redis_client = Redis.from_url(REDIS_URL)
     logger.info("Redis client initialized")
     # Initialize handlers Redis
     from handlers import init_redis

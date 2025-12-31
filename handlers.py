@@ -6,7 +6,7 @@ from ai_integration import chat_with_ai
 from models import Session, User, UserProfile, Subscription
 import os
 from config import WEB_APP_URL
-import aioredis
+from redis.asyncio import Redis
 from config import REDIS_URL
 
 # Global Redis client
@@ -14,7 +14,7 @@ redis_client = None
 
 async def init_redis():
     global redis_client
-    redis_client = aioredis.from_url(REDIS_URL)
+    redis_client = Redis.from_url(REDIS_URL)
 
 router = Router()
 
