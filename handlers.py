@@ -12,12 +12,9 @@ from config import REDIS_URL
 # Global Redis client
 redis_client = None
 
-async def init_redis():
+async def init_redis(client):
     global redis_client
-    if REDIS_URL:
-        redis_client = Redis.from_url(REDIS_URL)
-    else:
-        redis_client = None
+    redis_client = client
 
 router = Router()
 

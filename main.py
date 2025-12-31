@@ -421,13 +421,25 @@ async def on_startup(app):
     # Initialize Redis
     from config import REDIS_URL
     if REDIS_URL:
-        redis_client = Redis.from_url(REDIS_URL)
-        logger.info("Redis client initialized")
-        # Setup session storage
-        aiohttp_session.setup(app, RedisStorage(redis_client))
-        logger.info("Session storage initialized with Redis")
+        try:
+            redis_client = Redis.from_url(REDIS_URL)
+            logger.info("Redis client initialized")
+            # Setup session storage
+            aiohttp_session.setup(app, RedisStorage(redis_client))
+            logger.info("Session storage initialized with Redis")
+        except Exception as e:
+            logger.error(f"Redis connection failed: {e}")
+            redis_client = None
+            # Fallback to memory storage
+            from aiohttp_session.memory_storage import MemoryStorage
+            aiohttp_session.setup(app, MemoryStorage())
+            logger.info("Session storage initialized with memory")
     else:
         redis_client = None
+        # Use memory storage
+        from aiohttp_session.memory_storage import MemoryStorage
+        aiohttp_session.setup(app, MemoryStorage())
+        logger.info("Session storage initialized with memory")
         logger.info("Redis not configured, using encrypted cookie-based sessions")
         from config import SESSION_SECRET
         # Setup encrypted cookie-based session storage
@@ -435,7 +447,7 @@ async def on_startup(app):
         logger.info("Session storage initialized with EncryptedCookieStorage")
     # Initialize handlers Redis
     from handlers import init_redis
-    await init_redis()
+    await init_redis(redis_client)
     logger.info("Handlers Redis initialized")
     ai_service = AIIntegration()
 
@@ -632,6 +644,48 @@ async def api_reminders_handler(request):
     return web.json_response({'reminders': upcoming_reminders[:5]})
 
 
+async def on_startup(app):
+    from config import REDIS_URL, LOCAL
+    global redis_client
+    if LOCAL:
+        # In local mode, use dict for Redis
+        redis_client = None
+        logger.info("Using local mode without Redis")
+    else:
+        try:
+            from redis.asyncio import Redis
+            redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
+            logger.info("Redis client initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis: {e}")
+            redis_client = None
+    
+    # Initialize session storage
+    if redis_client:
+        from aiohttp_session.redis_storage import RedisStorage
+        storage = RedisStorage(redis_client)
+        logger.info("Session storage initialized with Redis")
+    else:
+        from aiohttp_session import SimpleCookieStorage
+        storage = SimpleCookieStorage()
+        logger.info("Session storage initialized with SimpleCookieStorage")
+    
+    aiohttp_session.setup(app, storage)
+    
+    # Set webhook
+    if not LOCAL:
+        webhook_url = f"{WEBHOOK_URL}/webhook"
+        await bot.set_webhook(webhook_url)
+        logger.info(f"Webhook set to: {webhook_url}")
+    else:
+        logger.info("Local mode: skipping webhook setup")
+    
+    # Initialize handlers Redis
+    from handlers import init_redis
+    await init_redis(redis_client)
+    logger.info("Handlers Redis initialized")
+
+
 async def api_tasks_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
@@ -726,7 +780,10 @@ setup_application(app, dp, bot=bot)
 app.on_startup.append(on_startup)
 
 
+print("Starting main")
+
+
 if __name__ == "__main__":
-    port = int(os.getenv("PORT"))
+    port = int(os.getenv("PORT", 8000))
     logger.info(f"Starting web app on port {port}")
     web.run_app(app, port=port, host='0.0.0.0')
