@@ -312,7 +312,6 @@ body {
 .reminders-section,
 .context-section {
     padding: 20px;
-    flex: 1;
     overflow-y: auto;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
