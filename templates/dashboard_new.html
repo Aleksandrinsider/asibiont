@@ -158,7 +158,11 @@
                 clearTimeout(timeoutId);
                 const data = await response.json();
                 console.log('Response data:', data);
-                addMessage(data.response, 'agent');
+                if (response.ok) {
+                    addMessage(data.response, 'agent');
+                } else {
+                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'agent');
+                }
             } catch (error) {
                 console.error('Error:', error);
                 addMessage('Ошибка: ' + error.message, 'agent');
