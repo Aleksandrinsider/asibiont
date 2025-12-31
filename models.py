@@ -84,7 +84,12 @@ class Subscription(Base):
 
     user = relationship("User", backref="subscription")
 
-engine = create_engine(DATABASE_URL)
+# Fix DATABASE_URL for psycopg3 compatibility
+db_url = DATABASE_URL
+if db_url and db_url.startswith('postgresql://'):
+    db_url = db_url.replace('postgresql://', 'postgresql+psycopg://', 1)
+
+engine = create_engine(db_url)
 try:
     Base.metadata.create_all(engine)
     print("Database tables created successfully")
