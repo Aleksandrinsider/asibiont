@@ -422,7 +422,7 @@ async def on_startup(app):
     from config import REDIS_URL
     if REDIS_URL:
         try:
-            redis_client = Redis.from_url(REDIS_URL)
+            redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
             logger.info("Redis client initialized")
             # Setup session storage
             aiohttp_session.setup(app, RedisStorage(redis_client))

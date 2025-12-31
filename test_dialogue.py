@@ -138,7 +138,7 @@ async def test_dialogue():
                 context_store[f"context:{user_id}"] = context
             else:
                 try:
-                    r.set(f"context:{user_id}", json.dumps(context))
+                    r.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
                 except Exception as e:
                     print(f"Error saving context: {e}")
 

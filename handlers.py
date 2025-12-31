@@ -49,7 +49,10 @@ async def update_profile_handler(message: Message):
     try:
         context_data = r.get(f"context:{user_id}")
         if context_data:
-            context = json.loads(context_data)
+            if isinstance(context_data, bytes):
+                context = json.loads(context_data.decode('utf-8'))
+            else:
+                context = json.loads(context_data)
     except Exception as e:
             context = []
     response = await chat_with_ai(prompt, context, user_id)
@@ -59,7 +62,7 @@ async def update_profile_handler(message: Message):
     if len(context) > 10:
         context = context[-10:]
     try:
-        r.set(f"context:{user_id}", json.dumps(context))
+        r.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
     except Exception as e:
         pass
 
@@ -82,7 +85,10 @@ async def find_partners_handler(message: Message):
     try:
         context_data = r.get(f"context:{user_id}")
         if context_data:
-            context = json.loads(context_data)
+            if isinstance(context_data, bytes):
+                context = json.loads(context_data.decode('utf-8'))
+            else:
+                context = json.loads(context_data)
         else:
             context = []
     except Exception as e:
@@ -94,7 +100,7 @@ async def find_partners_handler(message: Message):
     if len(context) > 10:
         context = context[-10:]
     try:
-        r.set(f"context:{user_id}", json.dumps(context))
+        r.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
     except Exception as e:
         pass
 
