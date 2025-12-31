@@ -418,6 +418,7 @@ cors = aiohttp_cors.setup(app, defaults={
         allow_credentials=True,
         expose_headers="*",
         allow_headers="*",
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
 })
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
