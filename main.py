@@ -228,6 +228,8 @@ async def chat_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
     logger.info(f"Chat handler called, session user_id: {user_id}")
+    logger.info(f"Session keys: {list(session.keys())}")
+    logger.info(f"Session data: {dict(session)}")
     
     if not user_id:
         logger.warning("No user_id, returning 401")
