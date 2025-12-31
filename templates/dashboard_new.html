@@ -90,22 +90,15 @@
             <div class="right-column">
                 {% if tasks %}
                 <div class="tasks-section">
-                    <div class="timeline">
-                        {% for task in tasks %}
-                        <div class="timeline-item">
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-content">
-                                <div class="task-item">
-                                    <p>{{ task.title }}</p>
-                                    <p>Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}</p>
-                                    {% if task.reminder_time %}
-                                    <small {% if task.overdue %}style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
+                    {% for task in tasks %}
+                    <div class="task-item">
+                        <p>{{ task.title }}</p>
+                        <p>Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}</p>
+                        {% if task.reminder_time %}
+                        <small {% if task.overdue %}style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small>
+                        {% endif %}
                     </div>
+                    {% endfor %}
                 </div>
                 {% endif %}
 
