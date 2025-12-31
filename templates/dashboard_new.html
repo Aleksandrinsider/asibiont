@@ -183,23 +183,30 @@
             const message = input.value.trim();
             if (!message) return;
 
+            console.log('Sending message:', message);
             addChatMessage(message, 'user');
             input.value = '';
 
             try {
+                console.log('Fetching /chat');
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message }),
                     credentials: isLocal ? undefined : 'include'
                 });
+                console.log('Response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Response data:', data);
                     addChatMessage(data.response, 'ai');
                 } else {
-                    addChatMessage('Ошибка: ' + response.status, 'ai');
+                    const errorText = await response.text();
+                    console.log('Error response:', errorText);
+                    addChatMessage('Ошибка: ' + response.status + ' ' + errorText, 'ai');
                 }
             } catch (error) {
+                console.error('Fetch error:', error);
                 addChatMessage('Ошибка: ' + error.message, 'ai');
             }
         }
