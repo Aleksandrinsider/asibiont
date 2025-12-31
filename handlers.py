@@ -193,7 +193,7 @@ async def chat_handler(message: Message):
             from models import Interaction
             interaction = Interaction(user_id=user.id, message_type='user', content=message.text)
             session.add(interaction)
-            interaction = Interaction(user_id=user.id, message_type='agent', content=response)
+            interaction = Interaction(user_id=user.id, message_type='ai', content=response)
             session.add(interaction)
             session.commit()
         session.close()

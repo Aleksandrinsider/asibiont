@@ -216,6 +216,9 @@ body {
     border-radius: 10px;
     max-width: 80%;
     word-wrap: break-word;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
 .message.user {
@@ -223,12 +226,23 @@ body {
     color: white;
     align-self: flex-end;
     margin-left: auto;
+    align-items: flex-end;
 }
 
 .message.ai {
     background-color: #f1f1f1;
     color: black;
     align-self: flex-start;
+}
+
+.message-text {
+    word-wrap: break-word;
+}
+
+.message-time {
+    font-size: 12px;
+    margin-top: 4px;
+    opacity: 0.7;
 }
 
 .quick-actions {

@@ -12,7 +12,6 @@ from aiohttp_session.redis_storage import RedisStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
 from datetime import datetime
 from handlers import router
-from reminder_service import ReminderService
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
 import os
@@ -82,12 +81,6 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
-async def test_login_handler(request):
-    session = await get_session(request)
-    session['user_id'] = 123456  # Test user ID
-    return web.HTTPFound('/dashboard')
-
-
 @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     session = await get_session(request)
@@ -100,8 +93,7 @@ async def dashboard_handler(request):
             'logged_in': False,
             'current_date': '',
             'current_time': '',
-            'formatted_end_date': None,
-            'is_local': os.getenv('LOCAL') == '1'
+            'formatted_end_date': None
         }
     
     # Получить задачи пользователя
@@ -219,8 +211,7 @@ async def dashboard_handler(request):
         'current_date': current_date,
         'current_time': current_time,
         'formatted_end_date': formatted_end_date,
-        'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-        'is_local': os.getenv('LOCAL') == '1'
+        'upcoming_reminders': upcoming_reminders[:5]  # Limit to 5
     }
 
 
@@ -290,7 +281,7 @@ async def chat_handler(request):
 
     # Save agent response
     if user:
-        interaction_agent = Interaction(user_id=user.id, message_type='agent', content=response)
+        interaction_agent = Interaction(user_id=user.id, message_type='ai', content=response)
         session_db.add(interaction_agent)
         session_db.commit()
 
@@ -318,28 +309,6 @@ async def clear_history_handler(request):
 bot = Bot(token=TELEGRAM_TOKEN)
 
 
-async def send_reminder(task_id, user_id):
-    session = Session()
-    task = session.query(Task).filter_by(id=task_id).first()
-    session.close()
-    if task and task.status == 'pending':
-        await bot.send_message(user_id, f"Напоминание: {task.title}")
-
-
-async def schedule_reminders(scheduler):
-    try:
-        session = Session()
-        tasks = session.query(Task).filter(Task.reminder_time.isnot(None), Task.status == 'pending').all()
-        session.close()
-        for task in tasks:
-            if task.reminder_time.tzinfo is None:
-                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
-            if task.reminder_time > datetime.now(pytz.UTC):
-                scheduler.add_job(send_reminder, 'date', run_date=task.reminder_time, args=[task.id, task.user_id])
-    except Exception as e:
-        print(f"Error in schedule_reminders: {e}")
-
-
 async def on_startup(app):
     global redis_client
     logger.info("Starting on_startup")
@@ -350,27 +319,16 @@ async def on_startup(app):
         logger.error(f"Error setting webhook: {e}")
     # Initialize Redis
     from config import REDIS_URL
-    try:
-        redis_client = Redis.from_url(REDIS_URL)
-        logger.info("Redis client initialized")
-        # Setup session storage
-        aiohttp_session.setup(app, RedisStorage(redis_client))
-        logger.info("Session storage initialized with Redis")
-    except Exception as e:
-        logger.error(f"Failed to initialize Redis: {e}")
-        # Fallback to simple storage
-        aiohttp_session.setup(app, aiohttp_session.SimpleCookieStorage())
-        logger.info("Session storage initialized with SimpleCookieStorage")
+    redis_client = Redis.from_url(REDIS_URL)
+    logger.info("Redis client initialized")
+    # Setup session storage
+    aiohttp_session.setup(app, RedisStorage(redis_client))
+    logger.info("Session storage initialized with Redis")
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis()
     logger.info("Handlers Redis initialized")
-    # Инициализировать AI и ReminderService
-    logger.info("Initializing AI and ReminderService")
     ai_service = AIIntegration()
-    reminder_service = ReminderService(bot, ai_service)
-    await reminder_service.start()
-    logger.info("ReminderService started")
 
 
 
@@ -564,13 +522,10 @@ async def api_reminders_handler(request):
     
     return web.json_response({'reminders': upcoming_reminders[:5]})
 
-bot = Bot(token=TELEGRAM_TOKEN)
-
 # Routes
 app.router.add_get('/', login_handler)
 app.router.add_get('/telegram_auth', auth_handler)
 app.router.add_get('/logout', logout_handler)
-app.router.add_get('/test_login', test_login_handler)
 app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)

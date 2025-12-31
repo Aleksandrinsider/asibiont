@@ -148,7 +148,7 @@ async def test_dialogue():
             if user:
                 interaction = Interaction(user_id=user.id, message_type='user', content=user_input)
                 db.add(interaction)
-                interaction = Interaction(user_id=user.id, message_type='agent', content=response)
+                interaction = Interaction(user_id=user.id, message_type='ai', content=response)
                 db.add(interaction)
                 db.commit()
             db.close()

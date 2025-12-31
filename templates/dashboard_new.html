@@ -120,8 +120,6 @@
         </div>
     </div>
     <script>
-        const isLocal = {{ is_local|tojson }};
-        async function sendMessage() {
             alert('Sending message');
             const input = document.getElementById('message-input');
             const message = input.value.trim();
@@ -145,7 +143,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ message: message }),
-                    credentials: isLocal ? undefined : 'include',
+                    credentials: 'include',
                     signal: controller.signal
                 });
                 console.log('Response status:', response.status);
@@ -167,7 +165,12 @@
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            messageDiv.textContent = text;
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            messageDiv.innerHTML = `
+                <div class="message-text">${text}</div>
+                <div class="message-time">${timeString}</div>
+            `;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
         }
@@ -193,7 +196,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message }),
-                    credentials: isLocal ? undefined : 'include'
+                    credentials: 'include'
                 });
                 console.log('Response status:', response.status);
                 if (response.ok) {

@@ -42,7 +42,7 @@ class Interaction(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    message_type = Column(String(50))  # user, agent
+    message_type = Column(String(50))  # user, ai
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
