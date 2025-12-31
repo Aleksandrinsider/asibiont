@@ -60,4 +60,9 @@ if not ENCRYPTION_KEY:
     else:
         raise ValueError("ENCRYPTION_KEY is required")
 
-SESSION_SECRET = os.getenv("SESSION_SECRET", "default_secret_change_in_prod")
+SESSION_SECRET = os.getenv("SESSION_SECRET")
+if not SESSION_SECRET:
+    if LOCAL:
+        SESSION_SECRET = "local_dev_secret_insecure"
+    else:
+        raise ValueError("SESSION_SECRET is required for production")

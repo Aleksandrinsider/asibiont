@@ -1,4 +1,5 @@
 import json
+import logging
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -8,6 +9,8 @@ from config import WEBHOOK_URL
 from config import WEB_APP_URL
 from redis.asyncio import Redis
 from config import REDIS_URL
+
+logger = logging.getLogger(__name__)
 
 # Global Redis client
 redis_client = None
@@ -187,20 +190,20 @@ async def chat_handler(message: Message):
                 print(f"Error loading context from Redis: {e}")
                 context = []
         response = await chat_with_ai(message.text, context, user_id)
-        print(f"Response: {response}")
+        logger.debug(f"AI response generated for user {user_id}")
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
         if redis_client:
             try:
                 await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
             except Exception as e:
-                print(f"Error saving context to Redis: {e}")
-        print(f"Sending response to {message.chat.id}")
+                logger.error(f"Error saving context to Redis: {e}")
+        
         try:
             await message.bot.send_message(message.chat.id, response)
-            print("Response sent successfully")
+            logger.info(f"Response sent successfully to user {user_id}")
         except Exception as e:
-            print(f"Error sending message: {e}")
+            logger.error(f"Error sending message to {message.chat.id}: {e}")
             await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при отправке ответа.")
         # Записать взаимодействие для проактивных проверок
         session = Session()
@@ -214,7 +217,7 @@ async def chat_handler(message: Message):
             session.commit()
         session.close()
     except Exception as e:
-        print(f"Error in chat_handler: {e}")
+        logger.error(f"Error in chat_handler for user {user_id}: {e}", exc_info=True)
         await message.bot.send_message(message.chat.id, "Извините, произошла ошибка. Попробуйте позже.")
 
 @router.message(Command("dashboard"))

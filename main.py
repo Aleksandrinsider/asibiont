@@ -34,8 +34,12 @@ import hmac
 import json
 import logging
 
-# Trigger rebuild on Railway - update 4
-logging.basicConfig(level=logging.INFO)
+# Production logging configuration
+log_level = logging.DEBUG if LOCAL else logging.INFO
+logging.basicConfig(
+    level=log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Global Redis client
@@ -827,19 +831,16 @@ else:
 # Add startup handler
 # app.on_startup.append(on_startup)
 
-print("App created")
+logger.info("App created successfully")
 
 if __name__ == "__main__":
-    print("Starting main - version 4")
+    logger.info(f"Starting application - LOCAL={LOCAL}, PORT={PORT}")
 
     try:
         port = PORT
         host = '127.0.0.1' if LOCAL else '0.0.0.0'
-        print(f"Starting web app on port {port}, host {host}")
-        print("Before run_app")
-        web.run_app(app, port=port, host=host)
-        print("After run_app")
+        logger.info(f"Starting web server on {host}:{port}")
+        web.run_app(app, port=port, host=host, access_log=logger if not LOCAL else None)
     except Exception as e:
-        print(f"Error starting app: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Failed to start application: {e}", exc_info=True)
+        raise
