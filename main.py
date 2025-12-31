@@ -632,7 +632,7 @@ async def on_startup(app):
     
     # Set webhook
     if not LOCAL:
-        webhook_url = f"{WEBHOOK_URL}/webhook"
+        webhook_url = WEBHOOK_URL
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook set to: {webhook_url}")
     else:
