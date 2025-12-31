@@ -13,8 +13,7 @@
             <div class="header-info">
                 {% if logged_in %}
                 <span style="white-space: nowrap;">{{ current_date }} · {{ current_time }} · Подписка активна до {{ formatted_end_date }}</span>
-                {% if user %}<span class="user-name">{{ user.username }}</span>{% endif %}
-                <a href="/logout" class="logout-btn">Выход</a>
+                <a href="/logout" class="logout-btn">Выход (<strong>{{ user.first_name or user.username or 'Пользователь' }}</strong>)</a>
                 {% endif %}
             </div>
         </div>

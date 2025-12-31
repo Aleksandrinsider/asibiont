@@ -24,6 +24,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Global Redis client
+redis_client = None
+
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
     token = TELEGRAM_TOKEN
@@ -203,54 +206,55 @@ async def profile_handler(request):
 async def chat_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
-    print("Chat handler called, session user_id:", user_id)
+    logger.info(f"Chat handler called, session user_id: {user_id}")
     
-    # For local demo, auto-login
-    if os.getenv("LOCAL") == "1" and not user_id:
-        user_id = 123456789
-        print("Set user_id to demo:", user_id)
-    
-    if os.getenv("LOCAL") != "1" and not user_id:
-        print("No user_id, returning 401")
+    if not user_id:
+        logger.warning("No user_id, returning 401")
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     data = await request.json()
     message = data.get('message', '')
-    print("Message received:", message)
+    logger.info(f"Message received: {message}")
 
     # Load context from Redis
     context = []
     try:
-        import redis
-        from config import REDIS_URL
-        r = redis.from_url(REDIS_URL)
-        context_data = r.get(f"context:{user_id}")
+        context_data = await redis_client.get(f"context:{user_id}")
         if context_data:
             context = json.loads(context_data.decode('utf-8'))
+            logger.info(f"Loaded context with {len(context)} messages")
+        else:
+            logger.info("No context found in Redis")
     except Exception as e:
-        print(f"Error loading context: {e}")
+        logger.error(f"Error loading context: {e}")
         context = []
 
     # Save user message
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
-    print("User found:", user is not None)
+    logger.info(f"User found: {user is not None}")
     if user:
         interaction_user = Interaction(user_id=user.id, message_type='user', content=message)
         session_db.add(interaction_user)
         session_db.commit()
 
     # Get AI response
-    response = await chat_with_ai(message, context, user_id)
+    try:
+        response = await chat_with_ai(message, context, user_id)
+        logger.info(f"AI response: {response[:100]}...")
+    except Exception as e:
+        logger.error(f"Error getting AI response: {e}")
+        response = "Извините, произошла ошибка при обработке сообщения."
 
     # Save context back to Redis
     context.append({"user": message, "agent": response})
     if len(context) > 10:
         context = context[-10:]
     try:
-        r.set(f"context:{user_id}", json.dumps(context))
+        await redis_client.set(f"context:{user_id}", json.dumps(context))
+        logger.info("Context saved to Redis")
     except Exception as e:
-        print(f"Error saving context: {e}")
+        logger.error(f"Error saving context: {e}")
 
     # Save agent response
     if user:
@@ -289,12 +293,21 @@ async def schedule_reminders(scheduler):
 
 
 async def on_startup(app):
+    global redis_client
     logger.info("Starting on_startup")
     try:
         await bot.set_webhook(WEBHOOK_URL)
         logger.info(f"Webhook set to: {WEBHOOK_URL}")
     except Exception as e:
         logger.error(f"Error setting webhook: {e}")
+    # Initialize Redis
+    from config import REDIS_URL
+    redis_client = aioredis.from_url(REDIS_URL)
+    logger.info("Redis client initialized")
+    # Initialize handlers Redis
+    from handlers import init_redis
+    await init_redis()
+    logger.info("Handlers Redis initialized")
     # Инициализировать AI и ReminderService
     logger.info("Initializing AI and ReminderService")
     ai_service = AIIntegration()

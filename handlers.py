@@ -6,25 +6,17 @@ from ai_integration import chat_with_ai
 from models import Session, User, UserProfile, Subscription
 import os
 from config import WEB_APP_URL
+import aioredis
+from config import REDIS_URL
 
-PREMIUM_DESCRIPTION = "🚀 Лаборатория искусственного интеллекта ASI Biont — ваш путь к успеху через умное управление задачами и мощное сообщество единомышленников!\n\nНаходите нужных вам людей в считанные минуты или просто наслаждайтесь общением с теми, у кого такие же интересы как и у вас!\n\nПредставьте: вы не просто планируете дела, а достигаете целей быстрее, чем когда-либо! С премиум-подпиской всего за 3000 рублей в месяц откройте доступ к эксклюзивным возможностям:\n\n🔹 Интеллектуальный ИИ-ассистент: Автоматическое планирование задач, умные напоминания и персональная мотивация — чтобы каждый день был продуктивным!\n🔹 Проактивные советы: Агент анализирует вашу ситуацию, делится инсайтами и предлагает шаги на основе ваших задач и интересов. Забудьте о хаосе — вперед к результатам!\n🔹 Сообщество лидеров: Найдите единомышленников по интересам — от программирования и дизайна до спорта и бизнеса. Общайтесь, коллаборируйте и меняйте жизнь вместе!\n🔹 Совместные возможности: Рекомендации по событиям, проектам и коллаборациям, которые откроют новые горизонты.\n🔹 Персонализированные инструменты: Управляйте задачами с приоритетами, дедлайнами и аналитикой прогресса — все в одном месте.\n🔹 Безопасность на первом месте: 🔒 Ваши данные шифруются, и даже мы не имеем к ним доступа. Полная конфиденциальность!\n\nНе ждите — присоединяйтесь к сообществу амбициозных профессионалов, где успех — это норма! Оформите премиум-подписку командой /subscribe и начните трансформировать жизнь уже сегодня! 💪✨\n\nПо вопросам поддержки обращайтесь: @aleksandrinsider"
+# Global Redis client
+redis_client = None
 
-def check_subscription(user_id):
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return False
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        return subscription and subscription.status == 'active'
-    finally:
-        session.close()
+async def init_redis():
+    global redis_client
+    redis_client = aioredis.from_url(REDIS_URL)
 
 router = Router()
-
-import redis
-from config import REDIS_URL
-r = redis.from_url(REDIS_URL)
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
@@ -165,13 +157,13 @@ async def chat_handler(message: Message):
         if message.text.lower() == "очистить историю":
             context = []
             try:
-                r.set(f"context:{user_id}", json.dumps(context))
+                await redis_client.set(f"context:{user_id}", json.dumps(context))
             except Exception as e:
                 print(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
         try:
-            context_data = r.get(f"context:{user_id}")
+            context_data = await redis_client.get(f"context:{user_id}")
             if context_data:
                 context = json.loads(context_data.decode('utf-8'))
             else:
@@ -184,7 +176,7 @@ async def chat_handler(message: Message):
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
         try:
-            r.set(f"context:{user_id}", json.dumps(context))
+            await redis_client.set(f"context:{user_id}", json.dumps(context))
         except Exception as e:
             print(f"Error saving context to Redis: {e}")
         print(f"Sending response to {message.chat.id}")
