@@ -337,10 +337,9 @@ body {
 }
 
 .person-card p {
-    margin: 0 0 20px 0;
-    color: #656D76;
+    margin: 0 0 5px 0;
+    color: #1F2328;
     line-height: 1.4;
-    font-size: 16px;
 }
 
 .timeline {
@@ -386,10 +385,9 @@ body {
 }
 
 .task-item p {
-    margin: 0 0 20px 0;
-    color: #656D76;
+    margin: 0 0 2px 0;
+    color: #1F2328;
     line-height: 1.4;
-    font-size: 16px;
 }
 
 .task-item small {
