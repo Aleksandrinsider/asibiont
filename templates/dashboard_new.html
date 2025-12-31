@@ -33,7 +33,7 @@
                 <div class="context-section">
                     {% if profile %}
                     <div class="context-item">
-                        <p>{{ user.first_name or 'Пользователь' }}</p>
+                        <p>{{ user.first_name or 'Пользователь' }} @{{ user.username or 'unknown' }}</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
