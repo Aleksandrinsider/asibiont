@@ -111,7 +111,6 @@ async def dashboard_handler(request):
     logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
     
     if not subscription or subscription.status != 'active':
-    if not subscription or subscription.status != 'active':
         logger.info("No active subscription, rendering no_subscription")
         session_db.close()
         return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
