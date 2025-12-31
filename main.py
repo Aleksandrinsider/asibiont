@@ -293,7 +293,7 @@ async def chat_handler(request):
         context = context[-10:]
     if redis_client:
         try:
-            await redis_client.set(f"context:{user_id}", json.dumps(context))
+            await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
             logger.info("Context saved to Redis")
         except Exception as e:
             logger.error(f"Error saving context: {e}")
@@ -318,7 +318,7 @@ async def clear_history_handler(request):
 
     if redis_client:
         try:
-            await redis_client.set(f"context:{user_id}", json.dumps([]))
+            await redis_client.set(f"context:{user_id}", json.dumps([]).encode('utf-8'))
             logger.info("Context cleared")
         except Exception as e:
             logger.error(f"Error clearing context: {e}")
@@ -409,35 +409,6 @@ async def clear_single_task_handler(request):
 
 
 bot = Bot(token=TELEGRAM_TOKEN)
-
-
-async def on_startup(app):
-    from config import REDIS_URL, LOCAL
-    global redis_client
-    if LOCAL:
-        # In local mode, use dict for Redis
-        redis_client = None
-        logger.info("Using local mode without Redis")
-    else:
-        try:
-            from redis.asyncio import Redis
-            redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
-            logger.info("Redis client initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize Redis: {e}")
-            redis_client = None
-    
-    # Setup session storage with memory
-    from aiohttp_session.memory_storage import MemoryStorage
-    aiohttp_session.setup(app, MemoryStorage())
-    logger.info("Session storage initialized with memory")
-    
-    # Initialize handlers Redis
-    from handlers import init_redis
-    await init_redis(redis_client)
-    logger.info("Handlers Redis initialized")
-    ai_service = AIIntegration()
-
 
 
 # Global app for Railway
@@ -641,7 +612,7 @@ async def on_startup(app):
     else:
         try:
             from redis.asyncio import Redis
-            redis_client = Redis.from_url(REDIS_URL, decode_responses=True)
+            redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
             logger.info("Redis client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Redis: {e}")
