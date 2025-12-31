@@ -330,10 +330,11 @@ async def on_startup(app):
         logger.info("Session storage initialized with Redis")
     else:
         redis_client = None
-        logger.info("Redis not configured, using cookie-based sessions")
-        # Setup cookie-based session storage
-        aiohttp_session.setup(app, aiohttp_session.SimpleCookieStorage(secure=False))
-        logger.info("Session storage initialized with SimpleCookieStorage")
+        logger.info("Redis not configured, using encrypted cookie-based sessions")
+        from config import SESSION_SECRET
+        # Setup encrypted cookie-based session storage
+        aiohttp_session.setup(app, aiohttp_session.EncryptedCookieStorage(SESSION_SECRET))
+        logger.info("Session storage initialized with EncryptedCookieStorage")
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis()

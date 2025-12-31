@@ -34,6 +34,8 @@ YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 if not ENCRYPTION_KEY:
     raise ValueError("ENCRYPTION_KEY is not set")
+
+SESSION_SECRET = os.getenv("SESSION_SECRET", "default_secret_change_in_prod")
 PORT = int(os.getenv("PORT", 8000))
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
 CURRENT_DATE = os.getenv("CURRENT_DATE")  # Optional for testing, leave unset for real time
