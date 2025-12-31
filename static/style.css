@@ -133,9 +133,9 @@ body {
 }
 
 .welcome-content p {
-    font-size: 16px;
-    margin-bottom: 20px;
-    color: #656D76;
+    margin: 0 0 5px 0;
+    color: #1F2328;
+    line-height: 1.4;
 }
 
 .auth-btn {
