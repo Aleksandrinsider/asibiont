@@ -728,7 +728,11 @@ TOOLS = [
 ]
 
 async def chat_with_ai(message, context=None, user_id=None):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}")
     if not DEEPSEEK_API_KEY:
+        logger.warning("DEEPSEEK_API_KEY not set")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
     
     try:
@@ -803,7 +807,9 @@ async def chat_with_ai(message, context=None, user_id=None):
             "tools": TOOLS,
             "tool_choice": "auto"
         }
+        logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         response = requests.post(url, headers=headers, json=data, timeout=30)
+        logger.info(f"DeepSeek API response status: {response.status_code}")
         if response.status_code == 200:
             result = response.json()
             message_response = result["choices"][0]["message"]
@@ -993,7 +999,7 @@ async def chat_with_ai(message, context=None, user_id=None):
         else:
             return "Ошибка."
     except Exception as e:
-        print(f"Error in chat_with_ai: {e}")
+        logger.error(f"Error in chat_with_ai: {e}")
         return "Ошибка."
 
 async def generate_reminder(user_id, task_title):
