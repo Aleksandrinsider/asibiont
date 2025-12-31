@@ -39,3 +39,4 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "default_secret_change_in_prod")
 PORT = int(os.getenv("PORT", 8000))
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
 CURRENT_DATE = os.getenv("CURRENT_DATE")  # Optional for testing, leave unset for real time
+LOCAL = os.getenv("LOCAL", "0") == "1"
