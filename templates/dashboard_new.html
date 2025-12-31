@@ -186,7 +186,6 @@
         }
 
         async function sendChatMessage() {
-            alert('Sending message');
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             if (!message) return;
@@ -196,25 +195,29 @@
             input.value = '';
 
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 сек timeout
                 console.log('Fetching /chat');
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message }),
-                    credentials: 'include'
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message }),
+                    credentials: 'include',
+                    signal: controller.signal
                 });
                 console.log('Response status:', response.status);
+                clearTimeout(timeoutId);
+                const data = await response.json();
+                console.log('Response data:', data);
                 if (response.ok) {
-                    const data = await response.json();
-                    console.log('Response data:', data);
                     addChatMessage(data.response, 'ai');
                 } else {
-                    const errorText = await response.text();
-                    console.log('Error response:', errorText);
-                    addChatMessage('Ошибка: ' + response.status + ' ' + errorText, 'ai');
+                    addChatMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
             } catch (error) {
-                console.error('Fetch error:', error);
+                console.error('Error:', error);
                 addChatMessage('Ошибка: ' + error.message, 'ai');
             }
         }
@@ -246,25 +249,28 @@
                     const data = await response.json();
                     const tasksSection = document.querySelector('.tasks-section');
                     if (data.tasks.length > 0) {
-                        let html = '<ul>';
+                        let html = '';
                         data.tasks.forEach(task => {
-                            html += `<li>${task.title}<br>`;
+                            html += `<div class="task-item">
+                                <div class="task-content">
+                                    <h4>${task.title}</h4>`;
                             if (task.reminder_time_local) {
-                                html += `Напоминание: ${task.reminder_time_local}`;
+                                html += `<p>Напоминание: ${task.reminder_time_local}</p>`;
                                 if (task.overdue) {
-                                    html += ' <span style="color: red;">(просрочено)</span>';
+                                    html += `<p style="color: red;">(просрочено)</p>`;
                                 }
-                                html += '<br>';
                             }
-                            html += 'Статус: ';
+                            html += `<p>Статус: `;
                             if (task.status === 'completed') html += 'Завершено';
                             else if (task.status === 'pending') html += 'В ожидании';
                             else if (task.status === 'in_progress') html += 'В работе';
                             else if (task.status === 'skipped') html += 'Пропущено';
                             else html += task.status;
-                            html += '</li>';
+                            html += `</p>
+                                </div>
+                                <button class="delete-btn" onclick="deleteTask(${task.id})">Удалить</button>
+                            </div>`;
                         });
-                        html += '</ul>';
                         tasksSection.innerHTML = html;
                     } else {
                         tasksSection.innerHTML = '<p>Здесь появятся информация о ваших задачах</p>';
@@ -272,6 +278,27 @@
                 }
             } catch (error) {
                 console.error('Error updating tasks:', error);
+            }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
+            try {
+                const response = await fetch('/clear_single_task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ task_id: taskId }),
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    updateTasks();
+                } else {
+                    console.error('Failed to delete task');
+                }
+            } catch (error) {
+                console.error('Error deleting task:', error);
             }
         }
 
