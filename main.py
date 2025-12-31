@@ -466,6 +466,8 @@ async def api_profile_handler(request):
     profile_data = {}
     if profile:
         profile_data = {
+            'username': user.username or 'unknown',
+            'first_name': user.first_name or 'Пользователь',
             'skills': profile.skills or 'Не указаны',
             'interests': profile.interests or 'Не указаны',
             'goals': profile.goals or 'Не указаны',

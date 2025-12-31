@@ -33,6 +33,7 @@
                 <div class="context-section">
                     {% if profile %}
                     <div class="context-item">
+                        <p>@{{ user.username or 'unknown' }} · {{ user.first_name or 'Пользователь' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
@@ -280,6 +281,7 @@
                     const contextSection = document.querySelector('.context-section');
                     if (Object.keys(data.profile).length > 0) {
                         let html = '<div class="context-item">';
+                        html += `<p>@${data.profile.username || 'unknown'} · ${data.profile.first_name || 'Пользователь'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills}</p>`;
                         html += `<p>Интересы: ${data.profile.interests}</p>`;
                         html += `<p>Цели: ${data.profile.goals}</p>`;
