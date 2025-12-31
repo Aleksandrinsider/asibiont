@@ -139,8 +139,6 @@ async def dashboard_handler(request):
     
     # Temporary: create subscription for testing user
     if user.telegram_id == 146333757 and not subscription:
-        from datetime import datetime, timedelta
-        import pytz
         subscription = Subscription(user_id=user.id, status='active', start_date=datetime.now(pytz.UTC), end_date=datetime.now(pytz.UTC) + timedelta(days=30), subscriber_number=1, login_count=0)
         session_db.add(subscription)
         session_db.commit()
