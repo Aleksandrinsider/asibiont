@@ -99,7 +99,7 @@
                         <li>
                             {{ task.title }}<br>
                             {% if task.reminder_time %}
-                            <small{% if task.overdue %} style="color: red;"{% endif %}>Напоминание: {{ task.reminder_time_local }}</small><br>
+                            Напоминание: {{ task.reminder_time_local }}<br>
                             {% endif %}
                             Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
                         </li>
@@ -218,7 +218,7 @@
                         data.tasks.forEach(task => {
                             html += `<li>${task.title}<br>`;
                             if (task.reminder_time_local) {
-                                html += `<small${task.overdue ? ' style="color: red;"' : ''}>Напоминание: ${task.reminder_time_local}</small><br>`;
+                                html += `Напоминание: ${task.reminder_time_local}<br>`;
                             }
                             html += 'Статус: ';
                             if (task.status === 'completed') html += 'Завершено';
