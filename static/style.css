@@ -344,11 +344,17 @@ body {
 
 .timeline {
     position: relative;
-    padding-left: 35px;
+    padding-left: 30px;
 }
 
 .timeline::before {
-    display: none;
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 10px;
+    bottom: 0;
+    width: 1px;
+    background-color: #D1D9E0;
 }
 
 .timeline-item {
@@ -357,18 +363,12 @@ body {
 }
 
 .timeline-item::after {
-    content: '';
-    position: absolute;
-    top: 16px;
-    left: 20px;
-    height: 20px;
-    width: 0;
-    border-left: 1px dashed #D1D9E0;
+    display: none;
 }
 
 .timeline-marker {
     position: absolute;
-    left: 14px;
+    left: 9px;
     top: 10px;
     width: 12px;
     height: 12px;
@@ -380,7 +380,7 @@ body {
 
 .timeline-content {
     background-color: #FFFFFF;
-    padding: 10px 10px 10px 25px;
+    padding: 10px;
 }
 
 .task-item {
