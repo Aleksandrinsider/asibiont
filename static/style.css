@@ -154,10 +154,10 @@ body {
 }
 
 .container {
-    margin-top: 150px;
+    margin-top: 120px;
     margin-bottom: 80px;
     width: 100%;
-    height: calc(100vh - 230px);
+    height: calc(100vh - 200px);
 }
 
 .main-layout {
@@ -165,7 +165,7 @@ body {
     grid-template-columns: 1fr 2fr 1fr;
     height: 100%;
     column-gap: 20px;
-    padding: 0 20px;
+    padding: 20px 20px 0 20px;
     align-items: start;
 }
 
@@ -216,32 +216,21 @@ body {
     line-height: 1.4;
     word-wrap: break-word;
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    margin-bottom: 8px;
 }
 
 .message.user {
-    justify-content: flex-end;
+    align-items: flex-end;
     background-color: #0D7DFD;
     color: #FFFFFF;
 }
 
 .message.ai {
-    justify-content: flex-start;
+    align-items: flex-start;
     background-color: #F6F8FA;
     color: #1F2328;
-}
-
-.message-avatar {
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-.message-content {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1;
 }
 
 .message-text {
@@ -250,12 +239,8 @@ body {
 
 .message-time {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
-    align-self: flex-end;
-}
-
-.message.ai .message-time {
-    color: #656D76;
+    margin-top: 4px;
+    opacity: 0.7;
 }
 
 .quick-actions {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
-    <link rel="stylesheet" href="/static/style.css?v=34">
+    <link rel="stylesheet" href="/static/style.css?v=35">
 </head>
 <body>
     <div class="app-header">
@@ -177,13 +177,9 @@
             messageDiv.className = `message ${sender}`;
             const now = new Date();
             const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            const avatar = sender === 'user' ? '👤' : '🤖';
             messageDiv.innerHTML = `
-                <div class="message-avatar">${avatar}</div>
-                <div class="message-content">
-                    <div class="message-text">${text}</div>
-                    <div class="message-time">${timeString}</div>
-                </div>
+                <div class="message-text">${text}</div>
+                <div class="message-time">${timeString}</div>
             `;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
