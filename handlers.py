@@ -14,7 +14,10 @@ redis_client = None
 
 async def init_redis():
     global redis_client
-    redis_client = Redis.from_url(REDIS_URL)
+    if REDIS_URL:
+        redis_client = Redis.from_url(REDIS_URL)
+    else:
+        redis_client = None
 
 router = Router()
 
@@ -156,29 +159,33 @@ async def chat_handler(message: Message):
         # Все сообщения обрабатываются через ИИ
         if message.text.lower() == "очистить историю":
             context = []
-            try:
-                await redis_client.set(f"context:{user_id}", json.dumps(context))
-            except Exception as e:
-                print(f"Error saving context to Redis: {e}")
+            if redis_client:
+                try:
+                    await redis_client.set(f"context:{user_id}", json.dumps(context))
+                except Exception as e:
+                    print(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
-        try:
-            context_data = await redis_client.get(f"context:{user_id}")
-            if context_data:
-                context = json.loads(context_data.decode('utf-8'))
-            else:
-                context = []
-        except Exception as e:
+        context = []
+        if redis_client:
+            try:
+                context_data = await redis_client.get(f"context:{user_id}")
+                if context_data:
+                    context = json.loads(context_data.decode('utf-8'))
+                else:
+                    context = []
+            except Exception as e:
                 print(f"Error loading context from Redis: {e}")
                 context = []
         response = await chat_with_ai(message.text, context, user_id)
         print(f"Response: {response}")
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
-        try:
-            await redis_client.set(f"context:{user_id}", json.dumps(context))
-        except Exception as e:
-            print(f"Error saving context to Redis: {e}")
+        if redis_client:
+            try:
+                await redis_client.set(f"context:{user_id}", json.dumps(context))
+            except Exception as e:
+                print(f"Error saving context to Redis: {e}")
         print(f"Sending response to {message.chat.id}")
         try:
             await message.bot.send_message(message.chat.id, response)

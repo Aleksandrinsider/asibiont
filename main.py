@@ -240,16 +240,17 @@ async def chat_handler(request):
 
     # Load context from Redis
     context = []
-    try:
-        context_data = await redis_client.get(f"context:{user_id}")
-        if context_data:
-            context = json.loads(context_data.decode('utf-8'))
-            logger.info(f"Loaded context with {len(context)} messages")
-        else:
-            logger.info("No context found in Redis")
-    except Exception as e:
-        logger.error(f"Error loading context: {e}")
-        context = []
+    if redis_client:
+        try:
+            context_data = await redis_client.get(f"context:{user_id}")
+            if context_data:
+                context = json.loads(context_data.decode('utf-8'))
+                logger.info(f"Loaded context with {len(context)} messages")
+            else:
+                logger.info("No context found in Redis")
+        except Exception as e:
+            logger.error(f"Error loading context: {e}")
+            context = []
 
     # Save user message
     session_db = Session()
@@ -273,11 +274,12 @@ async def chat_handler(request):
     context.append({"user": message, "agent": response})
     if len(context) > 10:
         context = context[-10:]
-    try:
-        await redis_client.set(f"context:{user_id}", json.dumps(context))
-        logger.info("Context saved to Redis")
-    except Exception as e:
-        logger.error(f"Error saving context: {e}")
+    if redis_client:
+        try:
+            await redis_client.set(f"context:{user_id}", json.dumps(context))
+            logger.info("Context saved to Redis")
+        except Exception as e:
+            logger.error(f"Error saving context: {e}")
 
     # Save agent response
     if user:
@@ -297,11 +299,12 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    try:
-        await redis_client.set(f"context:{user_id}", json.dumps([]))
-        logger.info("Context cleared")
-    except Exception as e:
-        logger.error(f"Error clearing context: {e}")
+    if redis_client:
+        try:
+            await redis_client.set(f"context:{user_id}", json.dumps([]))
+            logger.info("Context cleared")
+        except Exception as e:
+            logger.error(f"Error clearing context: {e}")
 
     return web.json_response({'message': 'History cleared'})
 
@@ -319,11 +322,18 @@ async def on_startup(app):
         logger.error(f"Error setting webhook: {e}")
     # Initialize Redis
     from config import REDIS_URL
-    redis_client = Redis.from_url(REDIS_URL)
-    logger.info("Redis client initialized")
-    # Setup session storage
-    aiohttp_session.setup(app, RedisStorage(redis_client))
-    logger.info("Session storage initialized with Redis")
+    if REDIS_URL:
+        redis_client = Redis.from_url(REDIS_URL)
+        logger.info("Redis client initialized")
+        # Setup session storage
+        aiohttp_session.setup(app, RedisStorage(redis_client))
+        logger.info("Session storage initialized with Redis")
+    else:
+        redis_client = None
+        logger.info("Redis not configured, using in-memory sessions")
+        # Setup in-memory session storage
+        aiohttp_session.setup(app, SimpleCookieStorage())
+        logger.info("Session storage initialized with SimpleCookieStorage")
     # Initialize handlers Redis
     from handlers import init_redis
     await init_redis()

@@ -12,8 +12,8 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 #     raise ValueError("DEEPSEEK_API_KEY is not set")
 
 REDIS_URL = os.getenv("REDIS_URL")
-if not REDIS_URL:
-    raise ValueError("REDIS_URL is not set")
+# if not REDIS_URL:
+#     raise ValueError("REDIS_URL is not set")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TELEGRAM_TOKEN:
