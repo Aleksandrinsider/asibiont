@@ -58,17 +58,8 @@ def check_telegram_authentication(data):
 
 @aiohttp_jinja2.template('login.html')
 async def login_handler(request):
-    # Check if already logged in
-    session = await get_session(request)
-    if session.get('user_id'):
-        return web.HTTPFound('/dashboard')
-    
-    # Render login page with bot username
-    context = {
-        'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-        'local': LOCAL
-    }
-    return context
+    # Redirect to dashboard for unified experience
+    return web.HTTPFound('/dashboard')
 
 
 # Temporary simple handler
