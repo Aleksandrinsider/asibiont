@@ -185,6 +185,10 @@ body {
     padding-top: 20px;
 }
 
+.right-column {
+    padding-top: 10px;
+}
+
 .chat-section {
     flex: 1;
     display: flex;
