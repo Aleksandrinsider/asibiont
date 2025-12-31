@@ -87,14 +87,12 @@ body {
 .logout-btn {
     color: #1F2328;
     text-decoration: none;
-    font-weight: bold;
     padding: 4px 8px;
     border-radius: 4px;
     transition: background-color 0.2s;
 }
 
 .logout-btn:hover {
-    background-color: #F6F8FA;
 }
 
 .welcome-section {
