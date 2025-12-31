@@ -436,18 +436,6 @@ bot = Bot(token=TELEGRAM_TOKEN)
 # Global app for Railway
 app = web.Application()
 
-# Middleware to add cache control headers
-@web.middleware
-async def cache_control_middleware(request, handler):
-    response = await handler(request)
-    if request.path.startswith('/static'):
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
-    return response
-
-app.middlewares.append(cache_control_middleware)
-
 cors = aiohttp_cors.setup(app, defaults={
     "*": aiohttp_cors.ResourceOptions(
         allow_credentials=True,
