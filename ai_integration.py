@@ -804,8 +804,7 @@ async def chat_with_ai(message, context=None, user_id=None):
         data = {
             "model": "deepseek-chat",
             "messages": messages,
-            "tools": TOOLS,
-            "tool_choice": "auto"
+            "tools": TOOLS
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         async with aiohttp.ClientSession() as session:

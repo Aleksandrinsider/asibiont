@@ -265,6 +265,7 @@ async def chat_handler(request):
 
     # Get AI response
     try:
+        logger.info(f"Calling chat_with_ai with user_id: {user_id}")
         response = await chat_with_ai(message, context, user_id)
         logger.info(f"AI response: {response[:100]}...")
     except Exception as e:
