@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 import aiohttp_session
 from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
+from aiohttp_session import SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL
 from datetime import datetime
 from handlers import router
