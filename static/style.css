@@ -196,7 +196,7 @@ body {
     border-radius: 6px;
     padding-top: 20px;
     margin-top: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 .chat-messages {
@@ -315,7 +315,7 @@ body {
     border-radius: 6px;
     background-color: #FFFFFF;
     margin-top: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 .people-section h3,
