@@ -197,6 +197,8 @@ body {
     padding-top: 15px;
     margin-top: 20px;
     margin-bottom: 10px;
+    height: 282.4px;
+    overflow-y: auto;
 }
 
 .chat-messages {
@@ -328,6 +330,8 @@ body {
     background-color: #FFFFFF;
     margin-top: 20px;
     margin-bottom: 10px;
+    height: 282.4px;
+    overflow-y: auto;
 }
 
 .people-section h3,
