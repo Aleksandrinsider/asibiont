@@ -426,15 +426,10 @@ async def on_startup(app):
             logger.error(f"Failed to initialize Redis: {e}")
             redis_client = None
     
-    # Setup session storage with Redis if available, else memory
-    if redis_client:
-        from aiohttp_session.redis_storage import RedisStorage
-        aiohttp_session.setup(app, RedisStorage(redis_client))
-        logger.info("Session storage initialized with Redis")
-    else:
-        from aiohttp_session.memory_storage import MemoryStorage
-        aiohttp_session.setup(app, MemoryStorage())
-        logger.info("Session storage initialized with memory")
+    # Setup session storage with memory
+    from aiohttp_session.memory_storage import MemoryStorage
+    aiohttp_session.setup(app, MemoryStorage())
+    logger.info("Session storage initialized with memory")
     
     # Initialize handlers Redis
     from handlers import init_redis
