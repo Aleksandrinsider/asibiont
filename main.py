@@ -93,7 +93,8 @@ async def dashboard_handler(request):
             'logged_in': False,
             'current_date': '',
             'current_time': '',
-            'formatted_end_date': None
+            'formatted_end_date': None,
+            'timestamp': int(datetime.now().timestamp())
         })
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -110,7 +111,8 @@ async def dashboard_handler(request):
             'logged_in': False,
             'current_date': '',
             'current_time': '',
-            'formatted_end_date': None
+            'formatted_end_date': None,
+            'timestamp': int(datetime.now().timestamp())
         })
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -242,7 +244,8 @@ async def dashboard_handler(request):
         'current_date': current_date,
         'current_time': current_time,
         'formatted_end_date': formatted_end_date,
-        'upcoming_reminders': upcoming_reminders[:5]  # Limit to 5
+        'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
+        'timestamp': int(datetime.now().timestamp())
     })
     response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
