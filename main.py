@@ -31,6 +31,9 @@ def check_telegram_authentication(data):
     secret_key = hashlib.sha256(token.encode()).digest()
     data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
     hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    logger.info(f"Data check string: {data_check_string}")
+    logger.info(f"Computed hash: {hash_computed}")
+    logger.info(f"Received hash: {data.get('hash')}")
     return hash_computed == data.get('hash')
 
 
@@ -46,6 +49,7 @@ async def simple_login_handler(request):
 
 async def auth_handler(request):
     data = request.query
+    logger.info(f"Auth data: {dict(data)}")
     if check_telegram_authentication(data):
         user_id = int(data['id'])
         session_db = Session()
