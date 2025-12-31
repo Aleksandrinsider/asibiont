@@ -154,10 +154,10 @@ body {
 }
 
 .container {
-    margin-top: 120px;
+    margin-top: 150px;
     margin-bottom: 80px;
     width: 100%;
-    height: calc(100vh - 200px);
+    height: calc(100vh - 230px);
 }
 
 .main-layout {
