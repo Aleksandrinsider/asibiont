@@ -332,7 +332,7 @@ async def on_startup(app):
         redis_client = None
         logger.info("Redis not configured, using cookie-based sessions")
         # Setup cookie-based session storage
-        aiohttp_session.setup(app, aiohttp_session.SimpleCookieStorage())
+        aiohttp_session.setup(app, aiohttp_session.SimpleCookieStorage(secure=False))
         logger.info("Session storage initialized with SimpleCookieStorage")
     # Initialize handlers Redis
     from handlers import init_redis
