@@ -3,6 +3,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 import aiohttp_jinja2
+import aiohttp_cors
 import jinja2
 from redis.asyncio import Redis
 import aiohttp_session
@@ -343,6 +344,13 @@ async def on_startup(app):
 
 # Global app for Railway
 app = web.Application()
+cors = aiohttp_cors.setup(app, defaults={
+    "*": aiohttp_cors.ResourceOptions(
+        allow_credentials=True,
+        expose_headers="*",
+        allow_headers="*",
+    )
+})
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 aiohttp_session.setup(app, SimpleCookieStorage())
 
