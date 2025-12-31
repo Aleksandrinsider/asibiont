@@ -23,8 +23,10 @@ if not DEEPSEEK_API_KEY:
 
 # Redis
 REDIS_URL = os.getenv("REDIS_URL")
-if not REDIS_URL:
+if not REDIS_URL and not LOCAL:
     raise ValueError("REDIS_URL is required")
+if LOCAL and not REDIS_URL:
+    REDIS_URL = "redis://localhost:6379"
 
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -36,8 +38,10 @@ if not TELEGRAM_BOT_USERNAME:
     raise ValueError("TELEGRAM_BOT_USERNAME is required")
 
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-if not WEBHOOK_URL:
+if not WEBHOOK_URL and not LOCAL:
     raise ValueError("WEBHOOK_URL is required")
+if LOCAL and not WEBHOOK_URL:
+    WEBHOOK_URL = "http://localhost:8000"
 
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://yourapp.railway.app")
 
@@ -49,6 +53,11 @@ YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 # Security
 ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
 if not ENCRYPTION_KEY:
-    raise ValueError("ENCRYPTION_KEY is required")
+    if LOCAL:
+        # Generate a default key for local development
+        from cryptography.fernet import Fernet
+        ENCRYPTION_KEY = Fernet.generate_key().decode()
+    else:
+        raise ValueError("ENCRYPTION_KEY is required")
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", "default_secret_change_in_prod")
