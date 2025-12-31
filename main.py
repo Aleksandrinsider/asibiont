@@ -85,9 +85,11 @@ async def logout_handler(request):
 
 @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
+    logger.info(f"Dashboard handler called for path: {request.path}")
     session = await get_session(request)
     try:
         user_id = session.get('user_id')
+        logger.info(f"User ID from session: {user_id}")
         
         logged_in = bool(user_id)
         
