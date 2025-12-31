@@ -9,7 +9,7 @@ from redis.asyncio import Redis
 import aiohttp_session
 from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL
 from datetime import datetime
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
@@ -82,6 +82,7 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
+@aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
@@ -89,36 +90,26 @@ async def dashboard_handler(request):
     logged_in = bool(user_id)
     
     if not logged_in:
-        response = aiohttp_jinja2.render_template('dashboard_new.html', request, {
+        return {
             'logged_in': False,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
             'timestamp': int(datetime.now().timestamp())
-        })
-        response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-        
-        
-        
-        return response
+        }
     
     # Получить задачи пользователя
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session_db.close()
-        response = aiohttp_jinja2.render_template('dashboard_new.html', request, {
+        return {
             'logged_in': False,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
             'timestamp': int(datetime.now().timestamp())
-        })
-        response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-        
-        
-        
-        return response
+        }
     
     logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
     
@@ -129,12 +120,7 @@ async def dashboard_handler(request):
     if not subscription or subscription.status != 'active':
         logger.info("No active subscription, rendering no_subscription")
         session_db.close()
-        response = aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
-        response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-        
-        
-        
-        return response
+        return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
     
     tasks = session_db.query(Task).filter_by(user_id=user.id).all()
     profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
@@ -229,7 +215,7 @@ async def dashboard_handler(request):
                     reminder_time_local = task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
                     upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
     
-    response = aiohttp_jinja2.render_template('dashboard_new.html', request, {
+    return {
         'logged_in': True,
         'tasks': tasks, 
         'user': user, 
@@ -246,12 +232,7 @@ async def dashboard_handler(request):
         'formatted_end_date': formatted_end_date,
         'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
         'timestamp': int(datetime.now().timestamp())
-    })
-    response.headers['Content-Security-Policy'] = "default-src *; script-src * 'unsafe-inline'; style-src * 'unsafe-inline'; img-src * data:; connect-src *;"
-    
-    
-    
-    return response
+    }
 
 
 async def tasks_handler(request):
@@ -430,32 +411,40 @@ async def clear_single_task_handler(request):
         session_db.close()
 
 
-bot = Bot(token=TELEGRAM_TOKEN)
+if not LOCAL:
+    try:
+        bot = Bot(token=TELEGRAM_TOKEN)
+    except Exception as e:
+        logger.error(f"Failed to create bot: {e}")
+        bot = None
+else:
+    bot = None
 
 
 # Global app for Railway
 app = web.Application()
 
-# Middleware to disable cache for static files
+# Middleware to add CSP headers and disable cache for static files
 @web.middleware
-async def no_cache_static_middleware(request, handler):
+async def csp_middleware(request, handler):
     response = await handler(request)
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.deepseek.com;"
     if request.path.startswith('/static'):
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     return response
 
-app.middlewares.append(no_cache_static_middleware)
+app.middlewares.append(csp_middleware)
 
-cors = aiohttp_cors.setup(app, defaults={
-    "*": aiohttp_cors.ResourceOptions(
-        allow_credentials=True,
-        expose_headers="*",
-        allow_headers="*",
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    )
-})
+# cors = aiohttp_cors.setup(app, defaults={
+#     "*": aiohttp_cors.ResourceOptions(
+#         allow_credentials=True,
+#         expose_headers="*",
+#         allow_headers="*",
+#         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+#     )
+# })
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 
 async def yookassa_webhook(request):
@@ -664,7 +653,7 @@ async def on_startup(app):
         storage = SimpleCookieStorage()
         logger.info("Session storage initialized with SimpleCookieStorage")
     
-    aiohttp_session.setup(app, storage)
+# aiohttp_session.setup(app, storage)
     
     # Set webhook
     if not LOCAL:
@@ -762,22 +751,51 @@ app.router.add_get('/api/reminders', api_reminders_handler)
 dp = Dispatcher()
 dp.include_router(router)
 
-webhook_requests_handler = SimpleRequestHandler(
-    dispatcher=dp,
-    bot=bot,
-)
-webhook_requests_handler.register(app, path="/webhook")
+# Setup session middleware
+if LOCAL:
+    from aiohttp_session import SimpleCookieStorage
+    aiohttp_session.setup(app, SimpleCookieStorage())
+else:
+    # For production, use Redis if available
+    if REDIS_URL:
+        try:
+            redis_client = Redis.from_url(REDIS_URL)
+            storage = RedisStorage(redis_client)
+            aiohttp_session.setup(app, storage)
+        except Exception as e:
+            logger.warning(f"Failed to setup Redis session storage: {e}")
+            from aiohttp_session import SimpleCookieStorage
+            aiohttp_session.setup(app, SimpleCookieStorage())
+    else:
+        from aiohttp_session import SimpleCookieStorage
+        aiohttp_session.setup(app, SimpleCookieStorage())
 
-setup_application(app, dp, bot=bot)
+if bot:
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    )
+    if not LOCAL:
+        webhook_requests_handler.register(app, path="/webhook")
+        setup_application(app, dp, bot=bot)
+else:
+    logger.warning("Bot not created, skipping webhook setup")
 
 # Add startup handler
-app.on_startup.append(on_startup)
+# app.on_startup.append(on_startup)
 
-
-print("Starting main - version 4")
-
+print("App created")
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    logger.info(f"Starting web app on port {port}")
-    web.run_app(app, port=port, host='0.0.0.0')
+    print("Starting main - version 4")
+
+    try:
+        port = 8000 if LOCAL else int(os.getenv("PORT", 8000))
+        print(f"Starting web app on port {port}")
+        print("Before run_app")
+        web.run_app(app, port=port, host='localhost')
+        print("After run_app")
+    except Exception as e:
+        print(f"Error starting app: {e}")
+        import traceback
+        traceback.print_exc()

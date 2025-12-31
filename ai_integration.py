@@ -275,7 +275,7 @@ def list_tasks(user_id=None, session=None):
     if close_session:
         session.close()
     if tasks:
-        task_list = [f"{t.title} ({t.status})" for t in tasks]
+        task_list = [f"{t.id}. {t.title} ({t.status})" for t in tasks]
         return f"Задачи: {', '.join(task_list)}."
     return "Нет задач."
 
