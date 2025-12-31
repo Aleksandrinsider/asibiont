@@ -21,7 +21,7 @@ router = Router()
 @router.message(Command("start"))
 async def start_handler(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/issues?telegram_id={message.from_user.id}"))]
+        [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/telegram_auth?id={message.from_user.id}&first_name={message.from_user.first_name or ''}&last_name={message.from_user.last_name or ''}&username={message.from_user.username or ''}&auth_date={int(message.date.timestamp())}&hash=placeholder"))]  # Placeholder hash, actual auth should be done properly
     ])
     await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
 

@@ -22,7 +22,7 @@ import hmac
 import json
 import logging
 
-# Trigger rebuild on Railway - update 2
+# Trigger rebuild on Railway - update 3
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
