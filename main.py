@@ -818,9 +818,10 @@ if __name__ == "__main__":
 
     try:
         port = int(os.getenv("PORT", 8000))
-        print(f"Starting web app on port {port}")
+        host = '127.0.0.1' if LOCAL else '0.0.0.0'
+        print(f"Starting web app on port {port}, host {host}")
         print("Before run_app")
-        web.run_app(app, port=port, host='0.0.0.0')
+        web.run_app(app, port=port, host=host)
         print("After run_app")
     except Exception as e:
         print(f"Error starting app: {e}")
