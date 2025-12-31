@@ -436,6 +436,18 @@ bot = Bot(token=TELEGRAM_TOKEN)
 # Global app for Railway
 app = web.Application()
 
+# Middleware to disable cache for static files
+@web.middleware
+async def no_cache_static_middleware(request, handler):
+    response = await handler(request)
+    if request.path.startswith('/static'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
+app.middlewares.append(no_cache_static_middleware)
+
 cors = aiohttp_cors.setup(app, defaults={
     "*": aiohttp_cors.ResourceOptions(
         allow_credentials=True,
