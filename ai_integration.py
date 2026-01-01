@@ -575,7 +575,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     if timezone:
         user.timezone = timezone
     profile.contact_info = f"user{user_id}"  # Простой username
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(pytz.UTC)
     session.commit()
     if close_session:
         session.close()
