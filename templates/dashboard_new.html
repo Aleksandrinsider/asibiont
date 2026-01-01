@@ -13,8 +13,7 @@
             <div class="header-info">
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
-                    <span>{{ current_time }} · {{ current_date }}</span>
-                    <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
+                    <span>{{ current_time }} <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button> · {{ current_date }}</span>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
                 {% endif %}
@@ -621,7 +620,7 @@
                     // Update header info
                     const headerInfo = document.getElementById('header-info');
                     if (headerInfo && data.current_time && data.current_date && data.formatted_end_date) {
-                        headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span><button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
+                        headerInfo.innerHTML = `<span>${data.current_time} <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button> · ${data.current_date}</span>`;
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
