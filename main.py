@@ -229,6 +229,7 @@ async def dashboard_handler(request):
         # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
         interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+        is_local = LOCAL  # Для использования в шаблоне
         try:
             partners = get_partners_list(user_id=user_id)
         except Exception as e:
@@ -403,7 +404,8 @@ async def dashboard_handler(request):
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': int(datetime.now().timestamp()),
-            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', '')
+            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
+            'is_local': is_local
         }
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -849,8 +851,10 @@ async def api_profile_handler(request):
     if profile:
         profile_data = {
             'username': user.username or 'unknown',
-        'first_name': user.first_name or '',
+            'first_name': user.first_name or '',
             'goals': profile.goals or 'Не указаны',
+            'skills': profile.skills or 'Не указаны',
+            'interests': profile.interests or 'Не указаны',
             'city': profile.city or 'Не указан'
         }
     
@@ -858,7 +862,8 @@ async def api_profile_handler(request):
         'profile': profile_data,
         'current_time': current_time,
         'current_date': current_date,
-        'formatted_end_date': formatted_end_date
+        'formatted_end_date': formatted_end_date,
+        'is_local': LOCAL
     })
 
 async def api_reminders_handler(request):
@@ -1053,6 +1058,52 @@ async def extend_subscription_handler(request):
         return web.Response(text=f'Ошибка создания платежа: {str(e)}', status=500)
 
 
+async def test_payment_handler(request):
+    """Тестовый эндпоинт для симуляции успешной оплаты (только для LOCAL)"""
+    if not LOCAL:
+        return web.Response(text='Not available in production', status=403)
+    
+    session_obj = await get_session(request)
+    user_id = session_obj.get('user_id')
+    
+    if not user_id:
+        return web.Response(text='Unauthorized', status=401)
+    
+    try:
+        session_db = Session()
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+            if not subscription:
+                subscription = Subscription(user_id=user.id)
+                session_db.add(subscription)
+            
+            subscription.status = 'active'
+            subscription.start_date = datetime.now(pytz.UTC)
+            
+            # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
+            now = datetime.now(pytz.UTC)
+            old_end_date = subscription.end_date
+            if subscription.end_date and subscription.end_date > now:
+                subscription.end_date = subscription.end_date + timedelta(days=30)
+            else:
+                subscription.end_date = now + timedelta(days=30)
+            
+            session_db.commit()
+            
+            # Форматируем даты для отображения
+            user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+            new_end = subscription.end_date.astimezone(user_tz).strftime('%d.%m.%Y')
+            old_end = old_end_date.astimezone(user_tz).strftime('%d.%m.%Y') if old_end_date else 'нет'
+            
+            logger.info(f"Test payment: extended subscription for user {user_id} from {old_end} to {new_end}")
+        session_db.close()
+        return web.HTTPFound('/dashboard')
+    except Exception as e:
+        logger.error(f"Error in test payment: {e}")
+        return web.Response(text=f'Ошибка: {str(e)}', status=500)
+
+
 # Routes
 app.router.add_get('/', login_handler)
 app.router.add_get('/tg_auth', auth_handler)
@@ -1068,6 +1119,7 @@ app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
+app.router.add_get('/test_payment', test_payment_handler)  # Тестовый эндпоинт для симуляции оплаты
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)

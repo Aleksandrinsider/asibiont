@@ -60,9 +60,9 @@
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
-                        <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
+                        <p>Intересы: {{ profile.interests or 'Не указаны' }}</p>
                         <p>Подписка: активна до {{ formatted_end_date }} 
-                            <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
+                            <a href="{% if is_local %}/test_payment{% else %}/extend_subscription{% endif %}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
                         </p>
                     </div>
                     {% else %}
@@ -609,12 +609,14 @@
                     const data = await response.json();
                     // Update header info
                     const headerInfo = document.getElementById('header-info');
-                    if (headerInfo && data.current_time && data.current_date && data.formatted_end_date) {
-                        headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span><button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
+                    if (headerInfo && data.current_time && data.current_date) {
+                        const nextReminderHeaderEl = document.getElementById('next-reminder-header');
+                        headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span>` + (nextReminderHeaderEl ? nextReminderHeaderEl.outerHTML : '') + `<button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
-                    if (Object.keys(data.profile).length > 0) {
+                    if (data.profile && Object.keys(data.profile).length > 0 && data.formatted_end_date) {
+                        const extendUrl = data.is_local ? '/test_payment' : '/extend_subscription';
                         let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>';
                         html += '<div class="context-item">';
                         html += `<p>Пользователь: @${data.profile.username || 'unknown'}</p>`;
@@ -622,7 +624,7 @@
                         html += `<p>Цели: ${data.profile.goals || 'Не указаны'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
-                        html += `<p>Подписка: активна до ${data.formatted_end_date} <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>`;
+                        html += `<p>Подписка: активна до ${data.formatted_end_date} <a href="${extendUrl}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>`;
                         html += '</div>';
                         contextSection.innerHTML = html;
                     } else {
