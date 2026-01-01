@@ -818,12 +818,13 @@ dp.include_router(router)
 # Custom storage to handle invalid JSON cookies
 class SafeSimpleCookieStorage(SimpleCookieStorage):
     async def load_session(self, request):
+        from aiohttp_session import Session as AiohttpSession
         cookie = self.load_cookie(request)
         if cookie is None:
             return await self.new_session()
         try:
             data = self._decoder(cookie)
-            return await self.new_session(data)
+            return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
         except json.JSONDecodeError:
             # Invalid cookie, create new session
             return await self.new_session()
