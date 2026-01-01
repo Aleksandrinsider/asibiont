@@ -319,31 +319,59 @@
             return groups;
         }
         
+        let currentPage = 1;
+        const TASKS_PER_PAGE = 10;
+        let allTasksData = [];
+        
         function renderTaskGroups(tasks) {
-            const groups = groupTasksByDue(tasks);
+            // Фильтруем выполненные задачи
+            const activeTasks = tasks.filter(t => t.status !== 'completed');
+            allTasksData = activeTasks;
+            
+            const groups = groupTasksByDue(activeTasks);
             const container = document.getElementById('task-groups');
             if (!container) return;
             
-            let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
+            // Новый порядок: сегодня → завтра → позже → просроченные → без даты
+            const groupOrder = ['today', 'tomorrow', 'later', 'overdue', 'nodate'];
+            let allSortedTasks = [];
             
-            // Рендерим задачи в правильном порядке без заголовков
-            const groupOrder = ['overdue', 'today', 'tomorrow', 'later', 'nodate', 'completed'];
             groupOrder.forEach(key => {
                 if (groups[key] && groups[key].length > 0) {
-                    groups[key].forEach(task => {
-                        if (currentFilter === 'active' && task.status === 'completed') return;
-                        if (currentFilter === 'completed' && task.status !== 'completed') return;
-                        
-                        html += '<li class="task-item" data-task-id="' + task.id + '">';
-                        html += renderTaskItem(task);
-                        html += '</li>';
-                    });
+                    allSortedTasks = allSortedTasks.concat(groups[key]);
                 }
             });
             
+            // Пагинация
+            const startIdx = 0;
+            const endIdx = currentPage * TASKS_PER_PAGE;
+            const tasksToShow = allSortedTasks.slice(startIdx, endIdx);
+            const hasMore = allSortedTasks.length > endIdx;
+            
+            let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
+            
+            tasksToShow.forEach(task => {
+                if (currentFilter === 'active' && task.status === 'completed') return;
+                if (currentFilter === 'completed' && task.status !== 'completed') return;
+                
+                html += '<li class="task-item" data-task-id="' + task.id + '">';
+                html += renderTaskItem(task);
+                html += '</li>';
+            });
+            
             html += '</ul>';
+            
+            if (hasMore) {
+                html += '<div style="text-align: center; margin-top: 16px;"><button onclick="loadMoreTasks()" style="background: #0969DA; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">Показать ещё</button></div>';
+            }
+            
             container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
             updateStats(tasks);
+        }
+        
+        function loadMoreTasks() {
+            currentPage++;
+            renderTaskGroups(allTasksData);
         }
         
         function renderTaskItem(task) {
@@ -771,7 +799,7 @@
             modal.style.display = 'flex';
             
             // Установить текущий timezone, если он есть
-            {% if logged_in %}
+            {% if logged_in and user.timezone %}
             const currentTz = {{ user.timezone|tojson }};
             if (currentTz) {
                 document.getElementById('timezoneSelect').value = currentTz;
