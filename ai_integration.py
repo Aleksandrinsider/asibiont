@@ -860,7 +860,7 @@ async def chat_with_ai(message, context=None, user_id=None):
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 logger.info(f"DeepSeek API response status: {response.status}")
                 if response.status == 200:
                     result = await response.json()
@@ -936,7 +936,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                     if response.status == 200:
                         final_message = (await response.json())["choices"][0]["message"]
                         content = final_message.get("content", "")
@@ -948,7 +948,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                                 "model": "deepseek-chat",
                                 "messages": messages
                             }
-                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                                 if response.status == 200:
                                     final_message = (await response.json())["choices"][0]["message"]
                                     content = final_message.get("content", "Запрос обработан.")
@@ -1006,7 +1006,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                     if response.status == 200:
                         final_message = (await response.json())["choices"][0]["message"]
                         content = final_message.get("content", "")
@@ -1018,7 +1018,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                                 "model": "deepseek-chat",
                                 "messages": messages
                             }
-                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                                 if response.status == 200:
                                     final_message = (await response.json())["choices"][0]["message"]
                                     content = final_message.get("content", "Расскажите подробнее.")
@@ -1037,7 +1037,7 @@ async def chat_with_ai(message, context=None, user_id=None):
                         "model": "deepseek-chat",
                         "messages": messages
                     }
-                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                         if response.status == 200:
                             final_message = (await response.json())["choices"][0]["message"]
                             content = final_message.get("content", "Расскажите подробнее.")
@@ -1085,7 +1085,7 @@ async def generate_reminder(user_id, task_title):
             "messages": messages
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
@@ -1130,7 +1130,7 @@ async def generate_result_check(user_id, task_title):
             "messages": messages
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
@@ -1197,7 +1197,7 @@ async def generate_proactive_message(user_id):
             "messages": messages
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
@@ -1251,7 +1251,7 @@ async def generate_daily_report(user_id):
             "messages": messages
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
@@ -1297,7 +1297,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             "messages": messages
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
                     return result["choices"][0]["message"]["content"]
