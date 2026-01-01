@@ -294,6 +294,30 @@ body {
     }
 }
 
+/* Reminder pulse animation */
+.reminder-pulse {
+    width: 8px;
+    height: 8px;
+    background-color: #d73a49;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.4;
+        transform: scale(1.2);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
 .message.user {
     background-color: transparent;
     color: #1F2328;
