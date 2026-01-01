@@ -21,7 +21,7 @@
                     <span>{{ current_time }} · {{ current_date }}</span>
                     <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
                 </span>
-                <a href="/logout" class="logout-btn">Выход</a>
+                <button onclick="logout()" class="logout-btn" style="background: #d73a49; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;">Выход</button>
                 {% endif %}
             </div>
         </div>
@@ -374,9 +374,17 @@
             // Навигация стрелками
             if (totalPages > 1) {
                 html += '<div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px;">';
-                html += '<button onclick="previousPage()" ' + (currentPage === 1 ? 'disabled' : '') + ' style="background: none; border: none; color: ' + (currentPage === 1 ? '#D1D9E0' : '#0969DA') + '; cursor: ' + (currentPage === 1 ? 'not-allowed' : 'pointer') + '; font-size: 20px; padding: 4px 8px;">←</button>';
+                if (currentPage > 1) {
+                    html += '<button onclick="previousPage()" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 20px; padding: 4px 8px;">←</button>';
+                } else {
+                    html += '<span style="color: #D1D9E0; font-size: 20px; padding: 4px 8px;">←</span>';
+                }
                 html += '<span style="font-size: 13px; color: #656D76;">' + currentPage + ' / ' + totalPages + '</span>';
-                html += '<button onclick="nextPage()" ' + (currentPage === totalPages ? 'disabled' : '') + ' style="background: none; border: none; color: ' + (currentPage === totalPages ? '#D1D9E0' : '#0969DA') + '; cursor: ' + (currentPage === totalPages ? 'not-allowed' : 'pointer') + '; font-size: 20px; padding: 4px 8px;">→</button>';
+                if (currentPage < totalPages) {
+                    html += '<button onclick="nextPage()" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 20px; padding: 4px 8px;">→</button>';
+                } else {
+                    html += '<span style="color: #D1D9E0; font-size: 20px; padding: 4px 8px;">→</span>';
+                }
                 html += '</div>';
             }
             
@@ -863,7 +871,7 @@
             document.getElementById('timezoneModal').style.display = 'none';
         }
         
-        async function saveTimezone() {
+        function saveTimezone() {
             const timezone = document.getElementById('timezoneSelect').value;
             
             try {
@@ -885,6 +893,10 @@
                 console.error('Error saving timezone:', error);
                 alert('Ошибка при сохранении часового пояса');
             }
+        }
+        
+        function logout() {
+            window.location.href = '/logout';
         }
         
         // Закрытие модального окна по клику вне его
