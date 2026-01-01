@@ -138,10 +138,6 @@
                             <span>Завтра: <span id="tomorrow-count">0</span></span>
                             <span>Позже: <span id="later-count">0</span></span>
                         </div>
-                        <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px;">
-                            <span>📊 Процент: <span id="completion-percent" style="font-weight: 600; color: #068487;">0%</span></span>
-                            <span>📅 На неделе: <span id="week-count">0</span></span>
-                        </div>
                         <div id="next-reminder" style="margin-top: 10px; padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 12px; color: #24292F; display: none;">
                             <div style="font-weight: 600; margin-bottom: 4px;">⏰ Ближайшее напоминание:</div>
                             <div id="next-reminder-text"></div>
@@ -403,15 +399,6 @@
                 return taskDay.getTime() >= dayAfterTomorrow.getTime() && t.status === 'pending';
             }).length;
             
-            // Подсчет задач на эту неделю
-            const weekEnd = new Date(today);
-            weekEnd.setDate(weekEnd.getDate() + 7);
-            const weekTasks = tasks.filter(t => {
-                if (!t.reminder_time) return false;
-                const taskDate = new Date(t.reminder_time);
-                return taskDate >= today && taskDate < weekEnd && t.status === 'pending';
-            }).length;
-            
             // Найти ближайшее напоминание
             const upcomingTasks = tasks.filter(t => t.reminder_time && t.status === 'pending')
                 .map(t => ({...t, date: new Date(t.reminder_time)}))
@@ -451,8 +438,6 @@
             const todayEl = document.getElementById('today-count');
             const tomorrowEl = document.getElementById('tomorrow-count');
             const laterEl = document.getElementById('later-count');
-            const weekEl = document.getElementById('week-count');
-            const percentEl = document.getElementById('completion-percent');
             const progressEl = document.getElementById('progress-fill');
             
             if (completedEl) completedEl.textContent = completed;
@@ -463,8 +448,6 @@
             if (todayEl) todayEl.textContent = todayTasks;
             if (tomorrowEl) tomorrowEl.textContent = tomorrowTasks;
             if (laterEl) laterEl.textContent = laterTasks;
-            if (weekEl) weekEl.textContent = weekTasks;
-            if (percentEl) percentEl.textContent = Math.round(percent) + '%';
             if (progressEl) progressEl.style.width = percent + '%';
         }
         
