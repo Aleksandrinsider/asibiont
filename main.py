@@ -1013,7 +1013,7 @@ async def extend_subscription_handler(request):
         from payments import create_payment
         # Создаем платеж на 30 дней (можно настроить сумму)
         payment_url = create_payment(
-            amount="199.00",  # Цена за месяц
+            amount="3000.00",  # Цена за месяц
             description="Продление подписки ASI Biont на 30 дней",
             user_id=user_id
         )
