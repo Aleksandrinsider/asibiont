@@ -342,8 +342,7 @@
                         
                         html += '<li class="task-item" data-task-id="' + task.id + '">';
                         const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
-                        html += '<div class="task-title"' + titleStyle + 't">';
-                        html += '<div class="task-title">' + task.title + '</div>';
+                        html += '<div class="task-title"' + titleStyle + '>' + task.title + '</div>';
                         if (task.reminder_time_local) {
                             html += '<div class="task-time">⏰ ' + task.reminder_time_local;
                             if (task.overdue) html += ' <span style="color: red;">(' + task.overdue_text + ')</span>';
