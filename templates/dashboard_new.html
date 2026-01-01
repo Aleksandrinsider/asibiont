@@ -14,6 +14,7 @@
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span>{{ current_time }} · {{ current_date }}</span>
+                    <span id="next-reminder-header" style="display: none;"></span>
                     <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
@@ -137,10 +138,6 @@
                             <span>Сегодня: <span id="today-count">0</span></span>
                             <span>Завтра: <span id="tomorrow-count">0</span></span>
                             <span>Позже: <span id="later-count">0</span></span>
-                        </div>
-                        <div id="next-reminder" style="margin-top: 10px; padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 12px; color: #24292F; display: none;">
-                            <div style="font-weight: 600; margin-bottom: 4px;">⏰ Ближайшее напоминание:</div>
-                            <div id="next-reminder-text"></div>
                         </div>
                     </div>
                     <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
@@ -413,8 +410,7 @@
                 .filter(t => t.date > now)
                 .sort((a, b) => a.date - b.date);
             
-            const nextReminderEl = document.getElementById('next-reminder');
-            const nextReminderTextEl = document.getElementById('next-reminder-text');
+            const nextReminderHeaderEl = document.getElementById('next-reminder-header');
             
             if (upcomingTasks.length > 0) {
                 const next = upcomingTasks[0];
@@ -432,10 +428,10 @@
                     timeText = `через ${minutes} мин.`;
                 }
                 
-                nextReminderTextEl.textContent = `${timeText} — ${next.title}`;
-                nextReminderEl.style.display = 'block';
+                nextReminderHeaderEl.textContent = ` · ${timeText} — ${next.title}`;
+                nextReminderHeaderEl.style.display = 'inline';
             } else {
-                nextReminderEl.style.display = 'none';
+                nextReminderHeaderEl.style.display = 'none';
             }
             
             const completedEl = document.getElementById('completed-count');
