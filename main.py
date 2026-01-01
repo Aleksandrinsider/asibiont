@@ -1061,7 +1061,8 @@ async def api_tasks_handler(request):
 async def update_timezone_handler(request):
     """Обновляет timezone пользователя через веб-панель"""
     try:
-        user_id = request.get('user_id')
+        session = await get_session(request)
+        user_id = session.get('user_id')
         if not user_id:
             return web.json_response({'status': 'error', 'message': 'Not authenticated'}, status=401)
         

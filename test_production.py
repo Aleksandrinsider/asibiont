@@ -68,14 +68,14 @@ async def test_step(step_num, description, message):
 async def main():
     print("""
 ╔════════════════════════════════════════════════════════════════════╗
-║                 ТЕСТ PRODUCTION СЕРВЕРА                            ║
+║                 ТЕСТ PRODUCTION СЕРВЕРА (20 ИТЕРАЦИЙ)              ║
 ║            https://task-production-31b6.up.railway.app             ║
 ╚════════════════════════════════════════════════════════════════════╝
 
 📱 User: aleksandrinsider (ID: 146333757)
 🌐 Dashboard: https://task-production-31b6.up.railway.app/dashboard
 
-СЦЕНАРИИ ТЕСТА:
+СЦЕНАРИИ ТЕСТА (по 20 итераций каждый):
 1. Просмотр текущих задач
 2. Добавление новой задачи с конкретным временем
 3. Добавление задачи с относительным временем
@@ -86,34 +86,72 @@ async def main():
 Все изменения будут видны на dashboard в реальном времени!
     """)
     
-    input("Откройте dashboard в браузере и нажмите Enter для начала...")
+    errors_count = 0
+    success_count = 0
     
-    # Шаг 1: Просмотр задач
-    await test_step(1, "Просмотр текущих задач", "Покажи мои задачи на сегодня")
-    
-    # Шаг 2: Добавление задачи
-    await test_step(2, "Добавление задачи на конкретное время", 
-                   "Добавь задачу: Проверить почту завтра в 09:00")
-    
-    # Шаг 3: Относительное время
-    await test_step(3, "Задача через 30 минут",
-                   "Напомни сделать перерыв через 30 минут")
-    
-    # Шаг 4: Обновление профиля
-    await test_step(4, "Добавление интереса в профиль",
-                   "Также интересуюсь криптовалютами и DeFi")
-    
-    # Шаг 5: Завершение задачи
-    await test_step(5, "Завершение задачи",
-                   "Я сделал перерыв, отметь задачу выполненной")
-    
-    # Шаг 6: Удаление задачи
-    await test_step(6, "Удаление задачи",
-                   "Удали задачу про почту")
+    for iteration in range(1, 21):
+        print(f"\n{'#'*70}")
+        print(f"ИТЕРАЦИЯ {iteration}/20")
+        print(f"{'#'*70}")
+        
+        # Шаг 1: Просмотр задач
+        result = await test_step(1, "Просмотр текущих задач", "Покажи мои задачи на сегодня")
+        if result:
+            success_count += 1
+        else:
+            errors_count += 1
+        
+        # Шаг 2: Добавление задачи
+        result = await test_step(2, "Добавление задачи на конкретное время", 
+                       f"Добавь задачу: Задача {iteration} завтра в 09:00")
+        if result:
+            success_count += 1
+        else:
+            errors_count += 1
+        
+        # Шаг 3: Относительное время
+        result = await test_step(3, "Задача через 30 минут",
+                       f"Напомни выполнить задачу {iteration} через 30 минут")
+        if result:
+            success_count += 1
+        else:
+            errors_count += 1
+        
+        # Шаг 4: Обновление профиля (каждые 5 итераций)
+        if iteration % 5 == 0:
+            result = await test_step(4, "Добавление интереса в профиль",
+                       f"Также интересуюсь технологией {iteration}")
+            if result:
+                success_count += 1
+            else:
+                errors_count += 1
+        
+        # Шаг 5: Завершение задачи
+        result = await test_step(5, "Завершение задачи",
+                       f"Я выполнил задачу {iteration}, отметь как выполненную")
+        if result:
+            success_count += 1
+        else:
+            errors_count += 1
+        
+        # Шаг 6: Удаление задачи
+        result = await test_step(6, "Удаление задачи",
+                       f"Удали задачу {iteration}")
+        if result:
+            success_count += 1
+        else:
+            errors_count += 1
+        
+        print(f"\n📊 Статистика итерации {iteration}: Успешно: {success_count}, Ошибок: {errors_count}")
+        await asyncio.sleep(1)
     
     print(f"\n{'='*70}")
-    print("✅ ВСЕ ТЕСТЫ ЗАВЕРШЕНЫ!")
+    print("✅ ВСЕ 20 ИТЕРАЦИЙ ЗАВЕРШЕНЫ!")
     print(f"{'='*70}")
+    print(f"\n📊 ИТОГОВАЯ СТАТИСТИКА:")
+    print(f"  ✅ Успешно: {success_count}")
+    print(f"  ❌ Ошибок: {errors_count}")
+    print(f"  📈 Процент успеха: {(success_count/(success_count+errors_count)*100):.1f}%")
     print("\nПроверьте финальное состояние на dashboard:")
     print("https://task-production-31b6.up.railway.app/dashboard")
     show_state()

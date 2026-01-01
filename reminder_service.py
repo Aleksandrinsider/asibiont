@@ -129,6 +129,7 @@ class ReminderService:
 
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
         from subscription_service import check_subscription
+        from models import Interaction
         
         # Проверить подписку - если нет доступа, не отправлять напоминание
         if not check_subscription(user_id):
@@ -136,6 +137,20 @@ class ReminderService:
         
         try:
             reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
+            
+            # Сохранить напоминание в историю чата
+            db = Session()
+            try:
+                interaction = Interaction(
+                    user_id=user_id,
+                    user_message="",  # пустое т.к. это напоминание от системы
+                    ai_response=reminder_text,
+                    timestamp=datetime.utcnow()
+                )
+                db.add(interaction)
+                db.commit()
+            finally:
+                db.close()
             
             if self.bot:
                 await self.bot.send_message(

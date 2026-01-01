@@ -60,15 +60,16 @@ def get_system_prompt():
 ИНСТРУМЕНТЫ:
 - add_task(title="название", description="", reminder_time="YYYY-MM-DD HH:MM", due_date="", user_id=число)
 - list_tasks(user_id=число)
-- complete_task(task_id=число, user_id=число)
+- complete_task(task_id=число ИЛИ task_title="название", user_id=число) - можно указать либо ID либо название
+- delete_task(task_id=число ИЛИ task_title="название", user_id=число) - можно указать либо ID либо название
 - set_reminder(task_id=число, reminder_time="YYYY-MM-DD HH:MM", user_id=число)
 - find_partners(user_id=число, interests="")
 - update_profile(user_id=число, current_plans="", interests="", city="", timezone="")
 - update_user_memory(user_id=число, memory="")
 
 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
-- Если пользователь говорит "добавь задачу X", СНАЧАЛА спроси когда напомнить, ЗАТЕМ вызови add_task(title="X", reminder_time="YYYY-MM-DD HH:MM").
-- Если пользователь указал время явно (например, "напомни купить молоко через 30 минут"), немедленно вызови add_task() с этим временем.
+- Если пользователь говорит "добавь задачу X" БЕЗ указания времени, спроси когда напомнить, ЗАТЕМ вызови add_task().
+- Если пользователь указал время явно (например, "встреча завтра в 10:00", "через 30 минут", "в 15:00"), НЕМЕДЛЕННО вызови add_task() с этим временем - не спрашивай дополнительно.
 - Если пользователь говорит "отложи на X минут", "перенеси на X минут", "продли на X минут" - это означает ИЗМЕНИТЬ ВРЕМЯ существующей задачи, добавив X минут к ТЕКУЩЕМУ времени. Используй edit_task() с новым reminder_time.
 - Всегда передавай все обязательные параметры в tool calls, особенно title и reminder_time для add_task.
 
@@ -79,11 +80,11 @@ def get_system_prompt():
 - ВАЖНО: Если пользователь НЕ указал время явно, ВСЕГДА спрашивай "Когда напомнить?" или "На какое время поставить напоминание?".
 - Если пользователь указал относительное время ("через X минут", "через час"), сразу создавай задачу без дополнительных вопросов.
 - КРИТИЧНО ДЛЯ УДАЛЕНИЯ: Если пользователь говорит "удали задачу X", "удали все задачи", "да удали" - НЕМЕДЛЕННО вызывай delete_task() БЕЗ дополнительных вопросов. НЕ СПРАШИВАЙ подтверждения повторно. ПОСЛЕ удаления НЕ вызывай list_tasks() снова - просто подтверди удаление.
-- КРИТИЧНО ДЛЯ ЗАВЕРШЕНИЯ: Если пользователь говорит "завершил X", "выполнил X", "готово" - НЕМЕДЛЕННО вызывай complete_task() БЕЗ дополнительных вопросов. ПОСЛЕ завершения НЕ вызывай list_tasks() снова.
+- КРИТИЧНО ДЛЯ ЗАВЕРШЕНИЯ: Если пользователь говорит "завершил X", "выполнил X", "сделал X", "готово" - НЕМЕДЛЕННО вызывай complete_task(task_title="X") БЕЗ дополнительных вопросов. Не нужно list_tasks() перед этим. ПОСЛЕ завершения НЕ вызывай list_tasks() снова. X должно быть максимально близко к оригинальному названию задачи - используй ключевые слова из фразы пользователя.
+- КРИТИЧНО ДЛЯ УДАЛЕНИЯ: Если пользователь говорит "удали X" где X - название задачи - НЕМЕДЛЕННО вызывай delete_task(task_title="X") БЕЗ дополнительных вопросов. Не нужно list_tasks() перед этим. X должно содержать ключевые слова из фразы пользователя для точного поиска.
 - КРИТИЧНО: Фразы "отложи на X минут", "перенеси на X минут", "продли на X минут" означают изменение времени СУЩЕСТВУЮЩЕЙ задачи, добавляя X минут к ТЕКУЩЕМУ времени {{current_time}}. Сначала вызови list_tasks(), найди task_id, затем вызови edit_task(task_id, reminder_time="новое_время") где новое_время = текущее_время + X минут.
 - Всегда проверяй текущие задачи через list_tasks() перед предложением новых.
 - Если видишь невыполненные задачи — мягко напомни и предложи завершить через complete_task().
-- Для завершения задач всегда сначала проверяй list_tasks(), чтобы получить актуальный task_id, затем вызывай complete_task(task_id, user_id).
 - Вместо совета "разбей на части" предлагай конкретные способы решения.
 - Избегай шаблонных методик — ищи индивидуальный подход для каждого пользователя.
 - Будь proactive: если пользователь говорит о планах или целях, предложи добавить задачу через add_task().
@@ -284,9 +285,10 @@ def list_tasks(user_id=None, session=None):
         return f"Задачи: {', '.join(task_list)}."
     return "Нет задач."
 
-def complete_task(task_id, user_id=None, session=None):
+def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     from models import Session, Task, UserProfile
     from datetime import datetime
+    from sqlalchemy import or_
     if session is None:
         session = Session()
         close_session = True
@@ -297,7 +299,25 @@ def complete_task(task_id, user_id=None, session=None):
         if close_session:
             session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    
+    # Найти задачу по ID или по названию
+    if task_id:
+        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    elif task_title:
+        # Ищем по словам в названии для более гибкого поиска
+        words = task_title.lower().split()
+        # OR вместо AND - ищем задачу содержащую хотя бы одно из слов
+        conditions = [Task.title.ilike(f"%{word}%") for word in words]
+        task = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status != 'completed',
+            or_(*conditions)
+        ).first()
+    else:
+        if close_session:
+            session.close()
+        return "Не указан ни task_id, ни task_title."
+    
     if task:
         task.status = "completed"
         session.commit()
@@ -397,18 +417,35 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
     session.close()
     return result
 
-def delete_task(task_id, user_id=None):
+def delete_task(task_id=None, task_title=None, user_id=None):
     from models import Session, Task
+    from sqlalchemy import or_
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    
+    # Найти задачу по ID или по названию
+    if task_id:
+        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    elif task_title:
+        # Ищем по словам в названии для более гибкого поиска (OR вместо AND)
+        words = task_title.lower().split()
+        conditions = [Task.title.ilike(f"%{word}%") for word in words]
+        task = session.query(Task).filter(
+            Task.user_id == user.id,
+            or_(*conditions)
+        ).first()
+    else:
+        session.close()
+        return "Не указан ни task_id, ни task_title."
+    
     if task:
+        title = task.title
         session.delete(task)
         session.commit()
-        result = f"Удалена задача '{task.title}'."
+        result = f"Удалена задача '{title}'."
     else:
         result = "Задача не найдена."
     session.close()
@@ -653,11 +690,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "complete_task",
-            "description": "Завершить задачу",
+            "description": "Завершить задачу по ID или названию",
             "parameters": {
                 "type": "object",
-                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
-                "required": ["task_id"]
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи (опционально если указан task_title)"},
+                    "task_title": {"type": "string", "description": "Название задачи или его часть (опционально если указан task_id)"}
+                },
+                "required": []
             }
         }
     },
@@ -711,11 +751,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delete_task",
-            "description": "Удалить задачу",
+            "description": "Удалить задачу по ID или названию",
             "parameters": {
                 "type": "object",
-                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
-                "required": ["task_id"]
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи (опционально если указан task_title)"},
+                    "task_title": {"type": "string", "description": "Название задачи или его часть (опционально если указан task_id)"}
+                },
+                "required": []
             }
         }
     },
@@ -1045,9 +1088,13 @@ async def chat_with_ai(message, context=None, user_id=None):
                         else:
                             content = "Расскажите подробнее."
                 content = clean_content(content)
+                if not content:
+                    content = "Готово! ✅"
                 return content
     except Exception as e:
+        import traceback
         logger.error(f"Error in chat_with_ai: {e}")
+        logger.error(traceback.format_exc())
         return "Ошибка."
 
 async def generate_reminder(user_id, task_title):
