@@ -116,9 +116,11 @@ async def dashboard_handler(request):
         
         if not logged_in:
             # Show login page in dashboard
+            base_url = WEBHOOK_URL.replace('/webhook', '')
             return {
                 'logged_in': False,
                 'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
+                'auth_url': f"{base_url}/telegram_auth",
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,

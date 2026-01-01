@@ -8,7 +8,18 @@ from models import Session, User, UserProfile, Subscription
 from config import WEBHOOK_URL
 from config import WEB_APP_URL
 from redis.asyncio import Redis
-from config import REDIS_URL
+from config import REDIS_URL, FREE_ACCESS_MODE
+
+PREMIUM_DESCRIPTION = """🌟 Добро пожаловать в ASI Biont!
+
+Для доступа ко всем функциям необходима подписка:
+• Умное управление задачами с ИИ
+• Поиск партнеров и единомышленников
+• Персональные напоминания и отчеты
+• Интеграция с веб-панелью
+
+Оформите подписку командой /subscribe
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +157,7 @@ async def chat_handler(message: Message):
             session.commit()
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
         session.close()
-        if not subscription or subscription.status != 'active':
+        if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
             await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
             return
         
@@ -182,22 +193,33 @@ async def chat_handler(message: Message):
         if redis_client:
             try:
                 context_data = await redis_client.get(f"context:{user_id}")
+                logger.debug(f"Redis get for user {user_id}: {context_data}")
                 if context_data:
                     context = json.loads(context_data.decode('utf-8'))
+                    logger.info(f"Loaded context for user {user_id}: {len(context)} messages")
                 else:
                     context = []
+                    logger.debug(f"No context found for user {user_id}")
             except Exception as e:
-                print(f"Error loading context from Redis: {e}")
+                logger.error(f"Error loading context from Redis: {e}", exc_info=True)
                 context = []
+        else:
+            logger.warning("Redis client not initialized, context will not persist")
         response = await chat_with_ai(message.text, context, user_id)
         logger.debug(f"AI response generated for user {user_id}")
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
+        if len(context) > 10:
+            context = context[-10:]  # Keep last 10 exchanges
         if redis_client:
             try:
-                await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                context_json = json.dumps(context).encode('utf-8')
+                await redis_client.set(f"context:{user_id}", context_json)
+                logger.info(f"Saved context for user {user_id}: {len(context)} messages")
             except Exception as e:
-                logger.error(f"Error saving context to Redis: {e}")
+                logger.error(f"Error saving context to Redis: {e}", exc_info=True)
+        else:
+            logger.warning("Redis client not initialized, context not saved")
         
         try:
             await message.bot.send_message(message.chat.id, response)
