@@ -71,13 +71,6 @@
                     {% endif %}
                 </div>
 
-                <div class="reminders-section" style="margin-top: 20px;">
-                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Напоминания</h3>
-                    <div id="reminders-list" style="font-size: 12px; color: #656D76;">
-                        <p style="margin: 0;">Нет активных напоминаний</p>
-                    </div>
-                </div>
-
                 <div class="people-section">
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
                     {% if partners %}
@@ -462,7 +455,6 @@
             const tomorrowStatsEl = document.getElementById('tomorrow-stats');
             const laterStatsEl = document.getElementById('later-stats');
             const reminderIndicator = document.getElementById('reminder-indicator');
-            const remindersList = document.getElementById('reminders-list');
             
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
@@ -487,41 +479,10 @@
                     : '';
             }
             
-            // Обновить блок напоминаний
-            if (remindersList) {
-                const upcoming = upcomingTasks.slice(0, 5); // Показываем до 5 ближайших
-                if (upcoming.length > 0) {
-                    let html = '';
-                    upcoming.forEach(task => {
-                        const delta = task.date - now;
-                        const minutes = Math.floor(delta / 60000);
-                        const hours = Math.floor(minutes / 60);
-                        
-                        let timeText = '';
-                        if (hours > 0) {
-                            timeText = `через ${hours} ч. ${minutes % 60} мин.`;
-                        } else {
-                            timeText = `через ${minutes} мин.`;
-                        }
-                        
-                        html += `<div style="margin-bottom: 8px; padding: 6px; background: #f6f8fa; border-radius: 4px;">`;
-                        html += `<div style="font-weight: 500; color: #1F2328; margin-bottom: 2px;">${task.title}</div>`;
-                        html += `<div style="color: #656D76; font-size: 11px;">${timeText}</div>`;
-                        html += `</div>`;
-                    });
-                    remindersList.innerHTML = html;
-                    
-                    // Показать мигающую точку если есть напоминания в ближайшие 10 минут
-                    const hasUrgentReminder = upcoming.some(t => (t.date - now) < 600000); // 10 минут
-                    if (reminderIndicator) {
-                        reminderIndicator.style.display = hasUrgentReminder ? 'inline-block' : 'none';
-                    }
-                } else {
-                    remindersList.innerHTML = '<p style="margin: 0;">Нет активных напоминаний</p>';
-                    if (reminderIndicator) {
-                        reminderIndicator.style.display = 'none';
-                    }
-                }
+            // Показать мигающую точку если есть напоминания в ближайшие 10 минут
+            const hasUrgentReminder = upcomingTasks.some(t => (t.date - now) < 600000); // 10 минут
+            if (reminderIndicator) {
+                reminderIndicator.style.display = hasUrgentReminder ? 'inline-block' : 'none';
             }
         }
         

@@ -241,6 +241,13 @@ async def dashboard_handler(request):
             user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
             user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
             
+            # Получаем список контактов, с которыми уже общались
+            contacted_usernames = set()
+            for interaction in interactions:
+                import re
+                mentions = re.findall(r'@(\w+)', interaction.content)
+                contacted_usernames.update(mentions)
+            
             for p in partners:
                 # Common interests
                 if p.interests:
@@ -268,6 +275,9 @@ async def dashboard_handler(request):
                 
                 # Determine recommendation reason
                 reasons = []
+                username = p.contact_info.replace('@', '')
+                if username in contacted_usernames:
+                    reasons.append('уже общались')
                 if p.common_skills:
                     reasons.append('общие навыки')
                 if p.common_interests:
@@ -277,8 +287,6 @@ async def dashboard_handler(request):
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
-        
-        # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
         if user and user.timezone:
             try:
@@ -752,6 +760,7 @@ async def api_partners_handler(request):
         session_db = Session()
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+        interactions = session_db.query(Interaction).filter_by(user_id=user.id).all() if user else []
         session_db.close()
         
         # Add common interests, skills, goals and recommendation reason
@@ -759,6 +768,13 @@ async def api_partners_handler(request):
             user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
             user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
             user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
+            
+            # Получаем список контактов, с которыми уже общались
+            contacted_usernames = set()
+            for interaction in interactions:
+                import re
+                mentions = re.findall(r'@(\w+)', interaction.content)
+                contacted_usernames.update(mentions)
             
             for p in partners:
                 # Common interests
@@ -787,6 +803,9 @@ async def api_partners_handler(request):
                 
                 # Determine recommendation reason
                 reasons = []
+                username = p.contact_info.replace('@', '')
+                if username in contacted_usernames:
+                    reasons.append('уже общались')
                 if p.common_skills:
                     reasons.append('общие навыки')
                 if p.common_interests:

@@ -433,7 +433,7 @@ def get_task_details(task_id, user_id=None):
     return "Задача не найдена."
 
 def get_partners_list(user_id=None, session=None):
-    from models import Session, UserProfile, User
+    from models import Session, UserProfile, User, Interaction
     if session is None:
         session = Session()
         close_session = True
@@ -446,6 +446,7 @@ def get_partners_list(user_id=None, session=None):
         return []
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+    
     # Получить память для исключения заблокированных
     blocked = []
     if user.memory:
@@ -457,26 +458,55 @@ def get_partners_list(user_id=None, session=None):
                 blocked.extend([m for m in match if m])
         except Exception as e:
             pass
+    
+    # Получить взаимодействия пользователя для определения с кем уже общался
+    user_interactions = session.query(Interaction).filter_by(user_id=user.id).all()
+    contacted_usernames = set()
+    for interaction in user_interactions:
+        # Ищем упоминания @username в сообщениях
+        import re
+        mentions = re.findall(r'@(\w+)', interaction.content)
+        contacted_usernames.update(mentions)
+    
     partners = []
+    contacted_partners = []  # Те, с кем уже общался
+    potential_partners = []   # Те, с кем еще не общался
+    
     if user_profile:
         if user_profile.city:
             city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
             if city_profiles:
                 profiles = city_profiles
+        
         for p in profiles:
             if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
                 continue
+            
+            # Проверка на совпадения
+            has_common = False
             if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
-                partners.append(p)
+                has_common = True
             elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
-                partners.append(p)
+                has_common = True
             elif user_profile.goals and p.goals and any(goal.strip().lower() in p.goals.lower() for goal in user_profile.goals.split(",")):
-                partners.append(p)
+                has_common = True
+            
+            if has_common:
+                # Проверяем, общались ли уже
+                username = p.contact_info.replace('@', '')
+                if username in contacted_usernames:
+                    contacted_partners.append(p)
+                else:
+                    potential_partners.append(p)
     else:
-        partners = profiles[:2] if profiles else []
+        potential_partners = profiles[:2] if profiles else []
+    
+    # Объединяем: сначала те, с кем уже общался, потом новые
+    partners = contacted_partners + potential_partners
+    
     if close_session:
         session.close()
-    return partners[:5]  # Ограничим до 5 для отображения
+    return partners[:10]  # Увеличим лимит до 10
 
 def find_partners(user_id=None, session=None):
     from models import Session, UserProfile, User
