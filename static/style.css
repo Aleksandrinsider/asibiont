@@ -431,7 +431,6 @@ body {
     background-color: #FFFFFF;
     margin-top: 0;
     margin-bottom: 40px;
-    min-height: 150px;
 }
 
 .task-stats-block {
@@ -479,27 +478,6 @@ body {
 .tasks-section::-webkit-scrollbar-thumb:hover {
     background: #656D76;
 }
-.tasks-section {
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.tasks-section::-webkit-scrollbar {
-    width: 6px;
-}
-
-.tasks-section::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.tasks-section::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 3px;
-}
-
-.tasks-section::-webkit-scrollbar-thumb:hover {
-    background: #656D76;
-}
 
 .context-section {
     padding: 16px;
@@ -508,7 +486,6 @@ body {
     background-color: transparent;
     margin-top: 0;
     margin-bottom: 20px;
-    min-height: 150px;
     overflow-y: auto;
     box-shadow: none;
     transition: none;
