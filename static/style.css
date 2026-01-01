@@ -422,7 +422,7 @@ body {
 }
 
 .tasks-section-wrapper {
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
