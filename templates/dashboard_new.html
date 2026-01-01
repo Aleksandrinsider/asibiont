@@ -325,6 +325,18 @@
                 else groups.later.push(task);
             });
             
+            // Сортируем каждую группу по времени
+            const sortByTime = (a, b) => {
+                const timeA = a.reminder_time ? new Date(a.reminder_time).getTime() : 0;
+                const timeB = b.reminder_time ? new Date(b.reminder_time).getTime() : 0;
+                return timeA - timeB;
+            };
+            
+            groups.overdue.sort(sortByTime);
+            groups.today.sort(sortByTime);
+            groups.tomorrow.sort(sortByTime);
+            groups.later.sort(sortByTime);
+            
             return groups;
         }
         
