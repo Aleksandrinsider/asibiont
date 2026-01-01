@@ -327,7 +327,7 @@
             for (const [key, label] of Object.entries(groupLabels)) {
                 if (groups[key].length > 0) {
                     // Показывать заголовки только для некоторых групп
-                    const showHeader = !['today', 'tomorrow'].includes(key);
+                    const showHeader = !['today', 'tomorrow', 'completed'].includes(key);
                     if (showHeader) {
                         html += `<div class="task-group"><h4>${label}</h4><ul>`;
                     } else {
