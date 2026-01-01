@@ -167,7 +167,7 @@ body {
     grid-template-columns: 1fr 2fr 1fr;
     height: 100%;
     max-height: calc(100vh - 140px);
-    column-gap: 40px;
+    column-gap: 20px;
     padding: 0 40px;
     padding-top: 40px;
     align-items: start;
