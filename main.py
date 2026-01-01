@@ -225,8 +225,8 @@ async def dashboard_handler(request):
         
         tasks = session_db.query(Task).filter_by(user_id=user.id).all()
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-        # Берем последние 50 сообщений (desc), затем разворачиваем для отображения от старых к новым
-        interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(50).all())) if user else []
+        # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
+        interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
         try:
             partners = get_partners_list(user_id=user_id)
