@@ -456,13 +456,13 @@
             if (totalEl) totalEl.textContent = total;
             if (progressEl) progressEl.style.width = percent + '%';
             
-            // Общая статистика по всем задачам
+            // Общая статистика по всем задачам (всегда показываем)
             const totalInProgress = tasks.filter(t => t.status === 'pending' && !t.overdue).length;
             const totalOverdue = tasks.filter(t => t.overdue === true).length;
             const totalCompleted = tasks.filter(t => t.status === 'completed').length;
             
             if (todayStatsEl) {
-                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">Просрочено: ${totalOverdue}</span> · Выполнено: ${totalCompleted}</span>`;
+                todayStatsEl.innerHTML = `<span>Активные: ${totalInProgress} · <span style="color: #d73a49;">С отставанием: ${totalOverdue}</span> · Завершено: ${totalCompleted}</span>`;
             }
             
             // Показать мигающую точку если есть напоминания в ближайшие 10 минут
