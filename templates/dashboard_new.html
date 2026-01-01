@@ -460,10 +460,9 @@
             const totalInProgress = tasks.filter(t => t.status === 'pending' && !t.overdue).length;
             const totalOverdue = tasks.filter(t => t.overdue === true).length;
             const totalCompleted = tasks.filter(t => t.status === 'completed').length;
-            const totalDeleted = tasks.filter(t => t.status === 'deleted').length;
             
             if (todayStatsEl) {
-                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">Просрочено: ${totalOverdue}</span> · Выполнено: ${totalCompleted} · Удалено: ${totalDeleted}</span>`;
+                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">Просрочено: ${totalOverdue}</span> · Выполнено: ${totalCompleted}</span>`;
             }
             
             // Показать мигающую точку если есть напоминания в ближайшие 10 минут
