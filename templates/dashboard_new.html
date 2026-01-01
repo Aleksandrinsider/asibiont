@@ -357,7 +357,6 @@
                         if (task.status !== 'completed') {
                             html += '<button onclick="completeTask(' + task.id + ')" class="quick-action">✓</button>';
                         }
-                        html += '<button onclick="editTask(' + task.id + ', \'' + task.title.replace(/'/g, "\\'") + '\')" class="quick-action">✎</button>';
                         html += '<button onclick="clearSingleTask(' + task.id + ')" class="delete-btn">×</button>';
                         html += '</div>';
                         html += '</li>';
