@@ -517,8 +517,8 @@ body {
 .task-stats {
     padding: 10px;
     margin-bottom: 12px;
-    background-color: #F6F8FA;
-    border-radius: 6px;
+    background-color: transparent;
+    border-radius: 0;
 }
 
 .stats-text {

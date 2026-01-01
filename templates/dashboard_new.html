@@ -125,6 +125,11 @@
                     <div class="task-stats">
                         <div class="stats-text">Завершено: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                        <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;">
+                            <span>Активные: <span id="active-count">0</span></span>
+                            <span style="color: #d73a49;">Просрочено: <span id="overdue-count">0</span></span>
+                            <span>Без даты: <span id="nodate-count">0</span></span>
+                        </div>
                     </div>
                     <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
                     <div class="tasks-header">
@@ -342,15 +347,24 @@
         
         function updateStats(tasks) {
             const completed = tasks.filter(t => t.status === 'completed').length;
+            const active = tasks.filter(t => t.status === 'pending').length;
+            const overdue = tasks.filter(t => t.overdue === true).length;
+            const nodate = tasks.filter(t => !t.reminder_time).length;
             const total = tasks.length;
             const percent = total > 0 ? (completed / total * 100) : 0;
             
             const completedEl = document.getElementById('completed-count');
             const totalEl = document.getElementById('total-count');
+            const activeEl = document.getElementById('active-count');
+            const overdueEl = document.getElementById('overdue-count');
+            const nodateEl = document.getElementById('nodate-count');
             const progressEl = document.getElementById('progress-fill');
             
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
+            if (activeEl) activeEl.textContent = active;
+            if (overdueEl) overdueEl.textContent = overdue;
+            if (nodateEl) nodateEl.textContent = nodate;
             if (progressEl) progressEl.style.width = percent + '%';
         }
         
