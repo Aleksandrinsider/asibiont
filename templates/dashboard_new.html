@@ -14,7 +14,18 @@
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span>{{ current_time }} · {{ current_date }}</span>
-                    <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 16px;" title="Изменить часовой пояс">🕐</button>
+                    <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center;" title="Изменить часовой пояс">
+                        <svg width="16" height="16" viewBox="0 0 512 512" fill="#6C727F" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M347,0c-5.522,0-10,4.478-10,10v37.028C318.33,41.679,299.303,40,280,40C125.452,40,0,165.451,0,320
+                                c0,154.548,125.452,280,280,280c154.549,0,280-125.452,280-280c0-74.658-29.351-145.582-82.641-199.641
+                                c-3.905-3.958-10.236-4.005-14.195-0.099c-3.958,3.905-4.005,10.237-0.099,14.195C512.031,183.166,540,250.597,540,320
+                                c0,143.521-116.479,260-260,260S20,463.521,20,320S136.479,60,280,60c17.941,0,35.666,1.556,52.844,4.605l-36.617,36.617
+                                c-3.905,3.905-3.905,10.237,0,14.143c1.953,1.953,4.512,2.929,7.071,2.929s5.119-0.977,7.071-2.929L357,68.736V10
+                                C357,4.478,352.522,0,347,0z"/>
+                            <path d="M280,100c-5.522,0-10,4.478-10,10v200h-60c-5.522,0-10,4.478-10,10s4.478,10,10,10h70c5.522,0,10-4.478,10-10V110
+                                C290,104.478,285.522,100,280,100z"/>
+                        </svg>
+                    </button>
                     <span>· Подписка активна до {{ formatted_end_date }}</span>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
