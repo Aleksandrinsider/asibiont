@@ -72,6 +72,9 @@
                 </div>
 
                 <div class="people-section">
+                    <div class="task-stats" style="margin-bottom: 15px;">
+                        <div class="stats-text">Мои контакты: <span id="contacts-count">{% if partners %}{{ partners|length }}{% else %}0{% endif %}</span></div>
+                    </div>
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
                     {% if partners %}
                     <div class="people-list" id="people-list">
@@ -598,8 +601,18 @@
                 if (response.ok) {
                     const data = await response.json();
                     const peopleSection = document.querySelector('.people-section');
+                    const contactsCount = document.getElementById('contacts-count');
+                    
+                    // Обновляем счетчик
+                    if (contactsCount) {
+                        contactsCount.textContent = data.partners.length;
+                    }
+                    
                     if (data.partners.length > 0) {
-                        let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
+                        let html = '<div class="task-stats" style="margin-bottom: 15px;">';
+                        html += `<div class="stats-text">Мои контакты: <span id="contacts-count">${data.partners.length}</span></div>`;
+                        html += '</div>';
+                        html += '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
                         html += '<div class="people-list">';
                         data.partners.forEach(partner => {
                             html += `<div class="person-card">
@@ -610,7 +623,7 @@
                         html += '</div>';
                         peopleSection.innerHTML = html;
                     } else {
-                        peopleSection.innerHTML = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3><p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
+                        peopleSection.innerHTML = '<div class="task-stats" style="margin-bottom: 15px;"><div class="stats-text">Мои контакты: <span id="contacts-count">0</span></div></div><h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3><p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
                     }
                 }
             } catch (error) {
