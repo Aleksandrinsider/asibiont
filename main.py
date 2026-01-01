@@ -10,7 +10,7 @@ import aiohttp_session
 from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL, PORT
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL, PORT, FREE_ACCESS_MODE
 from datetime import datetime, timedelta
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
@@ -155,7 +155,7 @@ async def dashboard_handler(request):
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
         logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
         
-        if not subscription or subscription.status != 'active':
+        if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
             logger.info("No active subscription, rendering no_subscription")
             session_db.close()
             return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
