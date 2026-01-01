@@ -51,7 +51,7 @@
                 <div class="context-section">
                     {% if profile %}
                     <div class="context-item">
-                        <p>{{ user.first_name or 'Пользователь' }}: @{{ user.username or 'unknown' }}</p>
+                        <p>Пользователь: {{ user.first_name or 'Пользователь' }} (@{{ user.username or 'unknown' }})</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
@@ -141,15 +141,23 @@
         {% endif %}
     </div>
     <script>
-        function addMessage(text, sender) {
+        function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            
+            let date;
+            if (timestamp) {
+                date = new Date(timestamp);
+            } else {
+                date = new Date();
+            }
+            
+            const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             messageDiv.innerHTML = `
                 <div class="message-text">${text}</div>
-                <div class="message-time">${timeString}</div>
+                <div class="message-time">${dateString} ${timeString}</div>
             `;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
@@ -195,7 +203,7 @@
 
         // Load previous interactions
         {% for interaction in interactions|reverse %}
-        addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }});
+        addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }}, {{ interaction.created_at.isoformat()|tojson }});
         {% endfor %}
 
         // Dynamic data updates
@@ -296,11 +304,11 @@
                     const contextSection = document.querySelector('.context-section');
                     if (Object.keys(data.profile).length > 0) {
                         let html = '<div class="context-item">';
-                        html += `<p>${data.profile.first_name || data.profile.username || 'Пользователь'}</p>`;
-                        html += `<p>Город: ${data.profile.city}</p>`;
-                        html += `<p>Навыки: ${data.profile.skills}</p>`;
-                        html += `<p>Интересы: ${data.profile.interests}</p>`;
-                        html += `<p>Цели: ${data.profile.goals}</p>`;
+                        html += `<p>Пользователь: ${data.profile.first_name || data.profile.username || 'Пользователь'} (@${data.profile.username || 'unknown'})</p>`;
+                        html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
+                        html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
+                        html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
+                        html += `<p>Цели: ${data.profile.goals || 'Не указаны'}</p>`;
                         html += '</div>';
                         contextSection.innerHTML = html;
                     } else {
