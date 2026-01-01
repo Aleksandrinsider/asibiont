@@ -566,14 +566,13 @@ body {
     padding: 10px;
     margin-bottom: 6px;
     border-radius: 6px;
-    border: 1px solid #D1D9E0;
+    border: none;
     background-color: #F6F8FA;
     transition: all 0.2s;
 }
 
 .task-item:hover {
     background-color: #FFFFFF;
-    border-color: #068487;
     transform: translateX(2px);
 }
 
