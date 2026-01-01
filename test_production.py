@@ -2,9 +2,17 @@
 Тест для production сервера на Railway
 Открывайте dashboard в браузере: https://task-production-31b6.up.railway.app/dashboard
 User: aleksandrinsider
+
+ВАЖНО: Запускать БЕЗ LOCAL=1 чтобы использовать production PostgreSQL!
 """
 import asyncio
 import sys
+import os
+
+# Убираем LOCAL чтобы использовать production БД
+if 'LOCAL' in os.environ:
+    del os.environ['LOCAL']
+
 from ai_integration import chat_with_ai
 from models import Session, Task, User, UserProfile
 from datetime import datetime
