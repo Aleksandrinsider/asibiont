@@ -301,9 +301,23 @@ async def dashboard_handler(request):
                         reminder_time_local = task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
                         upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
         
+        # Преобразуем задачи в словари для JSON сериализации
+        tasks_dict = []
+        for task in tasks:
+            task_dict = {
+                'id': task.id,
+                'title': task.title,
+                'description': task.description or '',
+                'status': task.status,
+                'reminder_time_local': getattr(task, 'reminder_time_local', None),
+                'overdue': getattr(task, 'overdue', False),
+                'overdue_text': getattr(task, 'overdue_text', None)
+            }
+            tasks_dict.append(task_dict)
+        
         return {
             'logged_in': True,
-            'tasks': tasks, 
+            'tasks': tasks_dict,
             'user': user, 
             'profile': profile,
             'interactions': interactions,
