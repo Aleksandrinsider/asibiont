@@ -140,6 +140,12 @@
                     </div>
                 </div>
                 
+                <!-- Индикатор просроченной задачи -->
+                <div id="overdue-indicator" style="display: none; margin-bottom: 16px; padding: 12px 16px; background: #FFF1F0; border-left: 3px solid #d73a49; border-radius: 6px;">
+                    <div style="font-size: 12px; color: #d73a49; font-weight: 600; margin-bottom: 4px;">Просрочено:</div>
+                    <div id="overdue-task-info" style="font-size: 13px; color: #24292F;"></div>
+                </div>
+                
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
@@ -336,6 +342,9 @@
             const container = document.getElementById('task-groups');
             if (!container) return;
             
+            // Показываем индикатор самой просроченной задачи
+            updateOverdueIndicator(groups.overdue);
+            
             // Новый порядок: сегодня → завтра → позже → просроченные → без даты
             const groupOrder = ['today', 'tomorrow', 'later', 'overdue', 'nodate'];
             let allSortedTasks = [];
@@ -347,10 +356,10 @@
             });
             
             // Пагинация
-            const startIdx = 0;
+            const startIdx = (currentPage - 1) * TASKS_PER_PAGE;
             const endIdx = currentPage * TASKS_PER_PAGE;
             const tasksToShow = allSortedTasks.slice(startIdx, endIdx);
-            const hasMore = allSortedTasks.length > endIdx;
+            const totalPages = Math.ceil(allSortedTasks.length / TASKS_PER_PAGE);
             
             let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
             
@@ -362,16 +371,43 @@
             
             html += '</ul>';
             
-            if (hasMore) {
-                html += '<div style="text-align: center; margin-top: 16px;"><button onclick="loadMoreTasks()" style="background: #0969DA; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">Показать ещё</button></div>';
+            // Навигация стрелками
+            if (totalPages > 1) {
+                html += '<div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px;">';
+                html += '<button onclick="previousPage()" ' + (currentPage === 1 ? 'disabled' : '') + ' style="background: none; border: none; color: ' + (currentPage === 1 ? '#D1D9E0' : '#0969DA') + '; cursor: ' + (currentPage === 1 ? 'not-allowed' : 'pointer') + '; font-size: 20px; padding: 4px 8px;">←</button>';
+                html += '<span style="font-size: 13px; color: #656D76;">' + currentPage + ' / ' + totalPages + '</span>';
+                html += '<button onclick="nextPage()" ' + (currentPage === totalPages ? 'disabled' : '') + ' style="background: none; border: none; color: ' + (currentPage === totalPages ? '#D1D9E0' : '#0969DA') + '; cursor: ' + (currentPage === totalPages ? 'not-allowed' : 'pointer') + '; font-size: 20px; padding: 4px 8px;">→</button>';
+                html += '</div>';
             }
             
             container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
             updateStats(tasks);
         }
         
-        function loadMoreTasks() {
-            currentPage++;
+        function updateOverdueIndicator(overdueTasks) {
+            const indicator = document.getElementById('overdue-indicator');
+            const taskInfo = document.getElementById('overdue-task-info');
+            
+            if (!indicator || !taskInfo) return;
+            
+            if (overdueTasks && overdueTasks.length > 0) {
+                // Показываем только самую просроченную задачу
+                const mostOverdue = overdueTasks[0];
+                taskInfo.textContent = mostOverdue.title + (mostOverdue.overdue_text ? ' · ' + mostOverdue.overdue_text : '');
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+        
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTaskGroups(allTasksData);
+            }
+        }
+        
+        function nextPage() {
             const groups = groupTasksByDue(allTasksData);
             const groupOrder = ['today', 'tomorrow', 'later', 'overdue', 'nodate'];
             let allSortedTasks = [];
@@ -382,29 +418,12 @@
                 }
             });
             
-            const container = document.getElementById('task-groups');
-            if (!container) return;
+            const totalPages = Math.ceil(allSortedTasks.length / TASKS_PER_PAGE);
             
-            const startIdx = 0;
-            const endIdx = currentPage * TASKS_PER_PAGE;
-            const tasksToShow = allSortedTasks.slice(startIdx, endIdx);
-            const hasMore = allSortedTasks.length > endIdx;
-            
-            let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
-            
-            tasksToShow.forEach(task => {
-                html += '<li class="task-item" data-task-id="' + task.id + '">';
-                html += renderTaskItem(task);
-                html += '</li>';
-            });
-            
-            html += '</ul>';
-            
-            if (hasMore) {
-                html += '<div style="text-align: center; margin-top: 16px;"><button onclick="loadMoreTasks()" style="background: #0969DA; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">Показать ещё</button></div>';
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTaskGroups(allTasksData);
             }
-            
-            container.innerHTML = html;
         }
         
         function renderTaskItem(task) {

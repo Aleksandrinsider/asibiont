@@ -429,15 +429,15 @@ body {
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 40px;
+    margin-bottom: 20px;
 }
 
 .task-stats-block {
-    padding: 16px;
+    padding: 12px 16px;
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .tasks-section-wrapper {
@@ -446,14 +446,7 @@ body {
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 40px;
-}
-.task-stats-block {
-    padding: 16px;
-    border: none;
-    border-radius: 8px;
-    background-color: #FFFFFF;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 .tasks-section {
