@@ -189,6 +189,14 @@ async def dashboard_handler(request):
                 user_tz = pytz.UTC
         base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
+        
+        # Convert interaction timestamps to user's timezone
+        for interaction in interactions:
+            if interaction.created_at:
+                if interaction.created_at.tzinfo is None:
+                    interaction.created_at = pytz.UTC.localize(interaction.created_at)
+                interaction.created_at = interaction.created_at.astimezone(user_tz)
+        
         for task in tasks:
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
