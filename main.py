@@ -681,11 +681,6 @@ async def clear_redis_handler(request):
 
 async def direct_login_handler(request):
     """Direct login endpoint for testing (bypasses Telegram auth)"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
-    
     user_id = request.query.get('user_id')
     if not user_id:
         return web.json_response({'error': 'user_id required'}, status=400)
@@ -695,13 +690,19 @@ async def direct_login_handler(request):
     except ValueError:
         return web.json_response({'error': 'Invalid user_id'}, status=400)
     
-    # Check user exists
+    # Check user exists and has active subscription
     session_db = Session()
     user = session_db.query(User).filter_by(telegram_id=user_id).first()
-    session_db.close()
-    
     if not user:
-        return web.json_response({'error': 'User not found'}, status=404)
+        session_db.close()
+        return web.json_response({'error': 'User not found in database'}, status=404)
+    
+    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+    if not subscription or subscription.status != 'active':
+        session_db.close()
+        return web.json_response({'error': 'User has no active subscription'}, status=403)
+    
+    session_db.close()
     
     # Set session
     session = await get_session(request)
@@ -1174,7 +1175,7 @@ app.router.add_get('/test_payment', test_payment_handler)  # Тестовый э
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
-app.router.add_get('/direct_login', direct_login_handler)  # Тестовый логин (требует admin secret)
+app.router.add_get('/direct_login', direct_login_handler)  # Тестовый логин (только для пользователей с активной подпиской)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
