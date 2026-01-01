@@ -285,10 +285,17 @@
                 today: [],
                 tomorrow: [],
                 later: [],
-                nodate: []
+                nodate: [],
+                completed: []
             };
             
             tasks.forEach(task => {
+                // Завершённые задачи в отдельную группу
+                if (task.status === 'completed') {
+                    groups.completed.push(task);
+                    return;
+                }
+                
                 if (!task.reminder_time) {
                     groups.nodate.push(task);
                     return;
@@ -316,7 +323,8 @@
                 today: '📅 Сегодня',
                 tomorrow: '📆 Завтра',
                 later: '📌 Позже',
-                nodate: '📋 Без даты'
+                nodate: '📋 Без даты',
+                completed: '✅ Завершено'
             };
             
             for (const [key, label] of Object.entries(groupLabels)) {
@@ -327,7 +335,8 @@
                         if (currentFilter === 'completed' && task.status !== 'completed') return;
                         
                         html += '<li class="task-item" data-task-id="' + task.id + '">';
-                        html += '<div class="task-content">';
+                        const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
+                        html += '<div class="task-title"' + titleStyle + 't">';
                         html += '<div class="task-title">' + task.title + '</div>';
                         if (task.reminder_time_local) {
                             html += '<div class="task-time">⏰ ' + task.reminder_time_local;
