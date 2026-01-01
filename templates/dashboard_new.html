@@ -320,18 +320,25 @@
         }
         
         function renderTaskGroups(tasks) {
+            const groups = groupTasksByDue(tasks);
             const container = document.getElementById('task-groups');
             if (!container) return;
             
             let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
             
-            tasks.forEach(task => {
-                if (currentFilter === 'active' && task.status === 'completed') return;
-                if (currentFilter === 'completed' && task.status !== 'completed') return;
-                
-                html += '<li class="task-item" data-task-id="' + task.id + '">';
-                html += renderTaskItem(task);
-                html += '</li>';
+            // Рендерим задачи в правильном порядке без заголовков
+            const groupOrder = ['overdue', 'today', 'tomorrow', 'later', 'nodate', 'completed'];
+            groupOrder.forEach(key => {
+                if (groups[key] && groups[key].length > 0) {
+                    groups[key].forEach(task => {
+                        if (currentFilter === 'active' && task.status === 'completed') return;
+                        if (currentFilter === 'completed' && task.status !== 'completed') return;
+                        
+                        html += '<li class="task-item" data-task-id="' + task.id + '">';
+                        html += renderTaskItem(task);
+                        html += '</li>';
+                    });
+                }
             });
             
             html += '</ul>';
