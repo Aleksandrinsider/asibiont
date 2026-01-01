@@ -437,20 +437,27 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .tasks-section-wrapper {
-    padding: 16px;
+    padding: 12px 16px;
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
 }
 
 .tasks-section {
     /* Убран scrollbar, используется пагинация */
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .context-section {
