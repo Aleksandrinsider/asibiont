@@ -248,8 +248,11 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Обновить список задач
-                    await updateTasks();
+                    // Обновить список задач с задержкой для синхронизации с бэкендом
+                    setTimeout(async () => {
+                        await updateTasks();
+                        console.log('Tasks updated after message');
+                    }, 1000);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
@@ -268,6 +271,13 @@
         {% if tasks %}
         const initialTasks = {{ tasks|tojson }};
         renderTaskGroups(initialTasks);
+        {% endif %}
+        
+        // Автоматическое обновление задач каждые 10 секунд
+        {% if logged_in %}
+        setInterval(async () => {
+            await updateTasks();
+        }, 10000);
         {% endif %}
 
         // Dynamic data updates
