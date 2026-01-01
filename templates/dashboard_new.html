@@ -19,7 +19,6 @@
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span>
                     <span>{{ current_time }} · {{ current_date }}</span>
-                    <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
                 </span>
                 <button onclick="logout()" class="logout-button">Выход</button>
                 {% endif %}
@@ -730,7 +729,7 @@
                     // Update header info
                     const headerInfo = document.getElementById('header-info');
                     if (headerInfo && data.current_time && data.current_date) {
-                        headerInfo.innerHTML = `<span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span><span>${data.current_time} · ${data.current_date}</span><button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
+                        headerInfo.innerHTML = `<span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span><span>${data.current_time} · ${data.current_date}</span>`;
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
@@ -820,103 +819,10 @@
         }
     </script>
 
-    <!-- Модальное окно для изменения timezone -->
-    <div id="timezoneModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%;">
-            <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600;">Изменить часовой пояс</h3>
-            <p style="color: #6C727F; margin-bottom: 20px; font-size: 14px;">Выберите ваш часовой пояс или укажите город</p>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500;">Часовой пояс:</label>
-                <select id="timezoneSelect" style="width: 100%; padding: 10px; border: 1px solid #D1D9E0; border-radius: 8px; font-size: 14px;">
-                    <optgroup label="Россия">
-                        <option value="Europe/Kaliningrad">Калининград (UTC+2)</option>
-                        <option value="Europe/Moscow">Москва (UTC+3)</option>
-                        <option value="Europe/Samara">Самара (UTC+4)</option>
-                        <option value="Asia/Yekaterinburg">Екатеринбург (UTC+5)</option>
-                        <option value="Asia/Omsk">Омск (UTC+6)</option>
-                        <option value="Asia/Krasnoyarsk">Красноярск (UTC+7)</option>
-                        <option value="Asia/Irkutsk">Иркутск (UTC+8)</option>
-                        <option value="Asia/Yakutsk">Якутск (UTC+9)</option>
-                        <option value="Asia/Vladivostok">Владивосток (UTC+10)</option>
-                        <option value="Asia/Magadan">Магадан (UTC+11)</option>
-                        <option value="Asia/Kamchatka">Камчатка (UTC+12)</option>
-                    </optgroup>
-                    <optgroup label="Другие популярные">
-                        <option value="Europe/London">Лондон (UTC+0)</option>
-                        <option value="Europe/Paris">Париж (UTC+1)</option>
-                        <option value="Europe/Kiev">Киев (UTC+2)</option>
-                        <option value="Asia/Dubai">Дубай (UTC+4)</option>
-                        <option value="Asia/Tashkent">Ташкент (UTC+5)</option>
-                        <option value="Asia/Almaty">Алматы (UTC+6)</option>
-                        <option value="Asia/Bangkok">Бангкок (UTC+7)</option>
-                        <option value="Asia/Shanghai">Шанхай (UTC+8)</option>
-                        <option value="Asia/Tokyo">Токио (UTC+9)</option>
-                        <option value="America/New_York">Нью-Йорк (UTC-5)</option>
-                        <option value="America/Los_Angeles">Лос-Анджелес (UTC-8)</option>
-                    </optgroup>
-                </select>
-            </div>
-            
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button onclick="closeTimezoneModal()" style="padding: 10px 20px; background: #F5F6F7; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Отмена</button>
-                <button onclick="saveTimezone()" style="padding: 10px 20px; background: #068487; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500;">Сохранить</button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        function openTimezoneModal() {
-            const modal = document.getElementById('timezoneModal');
-            modal.style.display = 'flex';
-            
-            // Установить текущий timezone, если он есть
-            {% if logged_in and user.timezone %}
-            const currentTz = {{ user.timezone|tojson }};
-            if (currentTz) {
-                document.getElementById('timezoneSelect').value = currentTz;
-            }
-            {% endif %}
-        }
-        
-        function closeTimezoneModal() {
-            document.getElementById('timezoneModal').style.display = 'none';
-        }
-        
-        async function saveTimezone() {
-            const timezone = document.getElementById('timezoneSelect').value;
-            
-            try {
-                const response = await fetch('/update_timezone', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ timezone: timezone })
-                });
-                
-                if (response.ok) {
-                    closeTimezoneModal();
-                    location.reload(); // Перезагрузить страницу для обновления времени
-                } else {
-                    alert('Ошибка при сохранении часового пояса');
-                }
-            } catch (error) {
-                console.error('Error saving timezone:', error);
-                alert('Ошибка при сохранении часового пояса');
-            }
-        }
-        
         function logout() {
             window.location.href = '/logout';
         }
-        
-        // Закрытие модального окна по клику вне его
-        document.getElementById('timezoneModal')?.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeTimezoneModal();
-            }
-        });
     </script>
 </body>
 </html>
