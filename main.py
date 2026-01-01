@@ -155,7 +155,7 @@ async def dashboard_handler(request):
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
         logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
         
-        if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
+        if not subscription or subscription.status != 'active':
             logger.info("No active subscription, rendering no_subscription")
             session_db.close()
             return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
@@ -487,6 +487,42 @@ async def clear_old_tasks_handler(request):
         return web.json_response({'error': str(e)}, status=500)
     finally:
         session_db.close()
+
+
+async def clear_database_handler(request):
+    """Admin endpoint to clear entire database"""
+    session_db = Session()
+    try:
+        # Delete all data
+        session_db.query(Interaction).delete()
+        session_db.query(Task).delete()
+        session_db.query(UserProfile).delete()
+        session_db.query(Subscription).delete()
+        session_db.query(User).delete()
+        
+        session_db.commit()
+        logger.info("Database cleared successfully")
+        return web.json_response({'message': 'Database cleared successfully'})
+    except Exception as e:
+        session_db.rollback()
+        logger.error(f"Error clearing database: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+
+async def clear_redis_handler(request):
+    """Admin endpoint to clear Redis cache"""
+    if not redis_client:
+        return web.json_response({'error': 'Redis not configured'}, status=400)
+    
+    try:
+        await redis_client.flushdb()
+        logger.info("Redis cleared successfully")
+        return web.json_response({'message': 'Redis cleared successfully'})
+    except Exception as e:
+        logger.error(f"Error clearing Redis: {e}")
+        return web.json_response({'error': str(e)}, status=500)
 
 
 try:
@@ -825,6 +861,8 @@ app.router.add_get('/clear_db', clear_db_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
+app.router.add_get('/clear_database', clear_database_handler)
+app.router.add_get('/clear_redis', clear_redis_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
