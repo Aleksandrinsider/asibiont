@@ -160,7 +160,9 @@ async def auth_handler(request):
         session = await get_session(request)
         session['user_id'] = user_id
         logger.info(f"Session set with user_id: {user_id}, redirecting to /dashboard")
-        return web.HTTPFound('/dashboard')
+        
+        response = web.HTTPFound('/dashboard')
+        return response
     else:
         logger.error(f"Authentication failed for data: {data}")
         return web.Response(text='Authentication failed', status=401)
@@ -709,7 +711,8 @@ async def direct_login_handler(request):
     session['user_id'] = user_id
     logger.info(f"Direct login successful for user_id: {user_id}")
     
-    return web.HTTPFound('/dashboard')
+    response = web.HTTPFound('/dashboard')
+    return response
 
 
 try:
