@@ -197,10 +197,6 @@ body {
     height: 100%;
 }
 
-.right-column {
-    align-self: start;
-}
-
 .chat-section {
     flex: 1;
     display: flex;
@@ -423,6 +419,20 @@ body {
     overflow-y: auto;
     box-shadow: 0 1px 3px rgba(31, 35, 40, 0.05);
     transition: box-shadow 0.2s;
+}
+
+.tasks-section-wrapper {
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    margin-top: 0;
+    margin-bottom: 40px;
+    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.05);
+    transition: box-shadow 0.2s;
+}
+
+.tasks-section-wrapper:hover {
+    box-shadow: 0 3px 8px rgba(31, 35, 40, 0.08);
 }
 
 .context-section {

@@ -14,7 +14,7 @@
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span>{{ current_time }} · {{ current_date }}</span>
-                    <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 16px;" title="Изменить часовой пояс">⚙️</button>
+                    <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 16px;" title="Изменить часовой пояс">🕐</button>
                     <span>· Подписка активна до {{ formatted_end_date }}</span>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
@@ -111,7 +111,7 @@
             {% if logged_in %}
             <div class="right-column">
                 <div class="tasks-section-wrapper">
-                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
+                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding: 16px 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
                     <div class="tasks-header">
                     <div class="task-filters">
                         <button class="filter-btn active" data-filter="all">Все</button>
