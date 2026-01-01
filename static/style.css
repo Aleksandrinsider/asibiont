@@ -22,7 +22,7 @@ body {
 .app-header {
     width: 100%;
     height: auto;
-    background-color: #FFFFFF;
+    background-color: rgba(6, 132, 135, 0.08);
     color: #1F2328;
     padding: 20px 16px;
     border-radius: 6px;
@@ -33,6 +33,7 @@ body {
     right: 0;
     z-index: 1000;
     border-bottom: 1px solid #D1D9E0;
+    transition: background-color 0.3s ease;
 }
 
 .header-content {
@@ -167,7 +168,8 @@ body {
     height: 100%;
     max-height: calc(100vh - 140px);
     column-gap: 20px;
-    padding: 20px 20px 0 20px;
+    padding: 0 20px;
+    padding-top: 20px;
     align-items: start;
     overflow: hidden;
 }
@@ -207,7 +209,7 @@ body {
     border: 1px solid #D1D9E0;
     border-radius: 8px;
     padding-top: 15px;
-    margin-top: 20px;
+    margin-top: 0;
     margin-bottom: 10px;
     height: 100%;
     max-height: calc(100vh - 220px);
@@ -354,7 +356,7 @@ body {
     border: 1px solid #D1D9E0;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-top: 10px;
+    margin-top: 0;
     margin-bottom: 10px;
     min-height: 150px;
     overflow-y: auto;

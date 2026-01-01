@@ -596,49 +596,7 @@ async def yookassa_webhook(request):
     return web.Response(text="OK")
 
 # API handlers for dynamic updates
-async def api_tasks_handler(request):
-    session_req = await get_session(request)
-    user_id = session_req.get('user_id')
-    if not user_id:
-        return web.json_response({'error': 'Not logged in'}, status=401)
-    
-    session_db = Session()
-    user = session_db.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        session_db.close()
-        return web.json_response({'error': 'User not found'}, status=404)
-    
-    tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-    session_db.close()
-    
-    # Format tasks
-    user_tz = pytz.UTC
-    if user.timezone:
-        try:
-            user_tz = pytz.timezone(user.timezone)
-        except:
-            user_tz = pytz.UTC
-    base_now = datetime.now(pytz.UTC)
-    user_now = base_now.astimezone(user_tz)
-    
-    tasks_data = []
-    for task in tasks:
-        task_data = {
-            'id': task.id,
-            'title': task.title,
-            'status': task.status,
-            'reminder_time_local': None,
-            'overdue': False
-        }
-        if task.reminder_time:
-            if task.reminder_time.tzinfo is None:
-                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
-            local_reminder = task.reminder_time.astimezone(user_tz)
-            task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
-            task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
-        tasks_data.append(task_data)
-    
-    return web.json_response({'tasks': tasks_data})
+
 
 async def api_partners_handler(request):
     try:

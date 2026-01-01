@@ -51,7 +51,7 @@
                 <div class="context-section">
                     {% if profile %}
                     <div class="context-item">
-                        <p>Пользователь: {{ user.first_name or 'Пользователь' }} (@{{ user.username or 'unknown' }})</p>
+                        <p>Пользователь: @{{ user.username or 'unknown' }}</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
@@ -304,7 +304,7 @@
                     const contextSection = document.querySelector('.context-section');
                     if (Object.keys(data.profile).length > 0) {
                         let html = '<div class="context-item">';
-                        html += `<p>Пользователь: ${data.profile.first_name || data.profile.username || 'Пользователь'} (@${data.profile.username || 'unknown'})</p>`;
+                        html += `<p>Пользователь: @${data.profile.username || 'unknown'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
@@ -342,12 +342,35 @@
             }
         }
 
+        // Check for overdue tasks and update header background
+        async function updateHeaderBackground() {
+            try {
+                const response = await fetch('/api/tasks');
+                if (response.ok) {
+                    const data = await response.json();
+                    const hasOverdue = data.tasks.some(task => task.overdue && task.status === 'pending');
+                    const header = document.querySelector('.app-header');
+                    if (hasOverdue) {
+                        header.style.backgroundColor = 'rgba(255, 129, 130, 0.15)';
+                    } else {
+                        header.style.backgroundColor = 'rgba(6, 132, 135, 0.08)';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating header:', error);
+            }
+        }
+
+        // Initial update
+        updateHeaderBackground();
+
         // Auto-update every 30 seconds
         setInterval(() => {
             updateTasks();
             updatePartners();
             updateProfile();
             updateReminders();
+            updateHeaderBackground();
         }, 30000);
 
         async function clearUserTasks() {
