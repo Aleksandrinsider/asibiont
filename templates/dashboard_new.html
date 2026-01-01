@@ -56,11 +56,13 @@
                     {% if profile %}
                     <div class="context-item">
                         <p>Пользователь: @{{ user.username or 'unknown' }}</p>
-                        <p>Подписка: активна до {{ formatted_end_date }}</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
+                        <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
-                        <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
+                        <p>Подписка: активна до {{ formatted_end_date }} 
+                            <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
+                        </p>
                     </div>
                     {% else %}
                     <p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>
@@ -112,7 +114,7 @@
             <div class="right-column">
                 <div class="tasks-section-wrapper">
                     <div class="task-stats">
-                        <div class="stats-text">Завершено: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
+                        <div class="stats-text">Завершено задач: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                         <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;">
                             <span>Активные: <span id="active-count">0</span></span>
@@ -572,11 +574,11 @@
                         let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>';
                         html += '<div class="context-item">';
                         html += `<p>Пользователь: @${data.profile.username || 'unknown'}</p>`;
-                        html += `<p>Подписка: активна до ${data.formatted_end_date}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
+                        html += `<p>Цели: ${data.profile.goals || 'Не указаны'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
-                        html += `<p>Цели: ${data.profile.goals || 'Не указаны'}</p>`;
+                        html += `<p>Подписка: активна до ${data.formatted_end_date} <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>`;
                         html += '</div>';
                         contextSection.innerHTML = html;
                     } else {

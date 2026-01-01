@@ -197,7 +197,8 @@ async def dashboard_handler(request):
         
         tasks = session_db.query(Task).filter_by(user_id=user.id).all()
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.asc()).limit(50).all() if user else []
+        # Берем последние 50 сообщений (desc), затем разворачиваем для отображения от старых к новым
+        interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(50).all())) if user else []
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
         try:
             partners = get_partners_list(user_id=user_id)
@@ -653,9 +654,17 @@ async def yookassa_webhook(request):
             if not subscription:
                 subscription = Subscription(user_id=user.id)
                 session.add(subscription)
+            
             subscription.status = 'active'
             subscription.start_date = datetime.now(pytz.UTC)
-            subscription.end_date = datetime.now(pytz.UTC) + timedelta(days=30)  # Месяц
+            
+            # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
+            now = datetime.now(pytz.UTC)
+            if subscription.end_date and subscription.end_date > now:
+                subscription.end_date = subscription.end_date + timedelta(days=30)
+            else:
+                subscription.end_date = now + timedelta(days=30)
+            
             session.commit()
             await bot.send_message(int(user_id), "Подписка активирована! Теперь у вас доступ ко всем премиум-функциям.")
         session.close()
@@ -924,6 +933,28 @@ async def update_timezone_handler(request):
         logger.error(f"Error updating timezone: {e}")
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+async def extend_subscription_handler(request):
+    """Создает платеж для продления подписки"""
+    session_obj = await get_session(request)
+    user_id = session_obj.get('user_id')
+    
+    if not user_id:
+        return web.Response(text='Unauthorized', status=401)
+    
+    try:
+        from payments import create_payment
+        # Создаем платеж на 30 дней (можно настроить сумму)
+        payment_url = create_payment(
+            amount="199.00",  # Цена за месяц
+            description="Продление подписки ASI Biont на 30 дней",
+            user_id=user_id
+        )
+        # Редирект на страницу оплаты
+        return web.HTTPFound(payment_url)
+    except Exception as e:
+        logger.error(f"Error creating payment: {e}")
+        return web.Response(text=f'Ошибка создания платежа: {str(e)}', status=500)
+
 
 # Routes
 app.router.add_get('/', login_handler)
@@ -939,6 +970,7 @@ app.router.add_get('/clear_db', clear_db_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
+app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
