@@ -43,36 +43,6 @@ class AIIntegration:
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
         return generate_overdue_reminder(user_id, overdue_tasks)
 
-def parse_relative_time(message, user_now=None):
-    if not user_now:
-        return message  # Don't parse if no user time
-    now = user_now
-    # Паттерны для русского языка
-    patterns = [
-        (r'через (\d+) минут', lambda m: now + timedelta(minutes=int(m.group(1)))),
-        (r'через (\d+) час', lambda m: now + timedelta(hours=int(m.group(1)))),
-        (r'через (\d+) часа', lambda m: now + timedelta(hours=int(m.group(1)))),
-        (r'через (\d+) часов', lambda m: now + timedelta(hours=int(m.group(1)))),
-        (r'завтра в (\d{1,2}):(\d{2})', lambda m: (now + timedelta(days=1)).replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)),
-        (r'послезавтра в (\d{1,2}):(\d{2})', lambda m: (now + timedelta(days=2)).replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)),
-    ]
-    for pattern, func in patterns:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            absolute_time = func(match)
-            if absolute_time.date() == now.date():
-                time_str = absolute_time.strftime("сегодня в %H:%M")
-            elif absolute_time.date() == (now + timedelta(days=1)).date():
-                time_str = absolute_time.strftime("завтра в %H:%M")
-            elif absolute_time.date() == (now + timedelta(days=2)).date():
-                time_str = absolute_time.strftime("послезавтра в %H:%M")
-            else:
-                time_str = absolute_time.strftime("%Y-%m-%d %H:%M")
-            # Заменить относительное на абсолютное в сообщении
-            message = re.sub(pattern, f"добавь задачу {match.group(1) if 'минут' in pattern else match.group(1) if 'час' in pattern else ''} с напоминанием {time_str}", message, flags=re.IGNORECASE)
-            break
-    return message
-
 def get_system_prompt():
     return f"""Ты — дружелюбный ИИ-помощник для управления задачами. Твой стиль общения — естественный, как с хорошим другом. Всегда будь позитивным, полезным и вовлечённым в разговор.
 
@@ -230,6 +200,7 @@ def get_progress_analytics(user_id):
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     from models import Session, Task, User
     from datetime import datetime
+    import pytz
     if session is None:
         session = Session()
         close_session = True
@@ -244,12 +215,22 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     task = Task(user_id=user.id, title=title, description=description)
     if reminder_time:
         try:
-            task.reminder_time = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            # Получить timezone пользователя
+            user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+            # Парсить как локальное время пользователя
+            local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+            # Локализовать в timezone пользователя
+            local_dt = user_tz.localize(local_dt)
+            # Конвертировать в UTC для хранения
+            task.reminder_time = local_dt.astimezone(pytz.UTC)
         except ValueError:
             pass  # Игнорировать неверный формат
     if due_date:
         try:
-            task.due_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+            user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+            local_dt = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
+            local_dt = user_tz.localize(local_dt)
+            task.due_date = local_dt.astimezone(pytz.UTC)
         except ValueError:
             pass
     session.add(task)
@@ -796,16 +777,18 @@ async def chat_with_ai(message, context=None, user_id=None):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        messages = [{"role": "system", "content": get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")) + user_memory}]
+        # Расширяем system prompt для работы с относительным временем
+        system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
+        system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Если пользователь говорит 'через X минут', добавь X минут к текущему времени {current_time_str}\n- Если пользователь говорит 'через X часов', добавь X часов к текущему времени\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Например: 'через 5 минут' от {current_time_str} = {(user_now + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M')}"
+        system_prompt += user_memory
+        
+        messages = [{"role": "system", "content": system_prompt}]
         if context:
             for item in context:
                 if "user" in item:
                     messages.append({"role": "user", "content": item["user"]})
                 if "agent" in item:
                     messages.append({"role": "assistant", "content": item["agent"]})
-        message = parse_relative_time(message, user_now)
-        # If message has relative time and no user_now, force AI to ask for current time
-        # Removed: since user_now is always set
         messages.append({"role": "user", "content": message})
         
         data = {

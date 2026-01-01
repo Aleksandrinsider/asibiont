@@ -15,7 +15,7 @@
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span>{{ current_time }} · {{ current_date }}</span>
                     <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
-                    <span>· Подписка активна до {{ formatted_end_date }}</span>
+                    <span>Подписка активна до {{ formatted_end_date }}</span>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
                 {% endif %}
@@ -121,13 +121,6 @@
                         </div>
                     </div>
                     <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
-                    <div class="tasks-header">
-                    <div class="task-filters">
-                        <button class="filter-btn active" data-filter="all">Все</button>
-                        <button class="filter-btn" data-filter="active">Активные</button>
-                        <button class="filter-btn" data-filter="completed">Завершено</button>
-                    </div>
-                </div>
                 <div class="tasks-section">
                     {% if tasks %}
                     <div class="task-groups" id="task-groups">
@@ -498,7 +491,7 @@
                     // Update header info
                     const headerInfo = document.getElementById('header-info');
                     if (headerInfo && data.current_time && data.current_date && data.formatted_end_date) {
-                        headerInfo.textContent = `${data.current_time} · ${data.current_date} · Подписка активна до ${data.formatted_end_date}`;
+                        headerInfo.textContent = `${data.current_time} · ${data.current_date} Подписка активна до ${data.formatted_end_date}`;
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
