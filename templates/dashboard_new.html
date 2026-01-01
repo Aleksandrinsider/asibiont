@@ -463,19 +463,19 @@
             // Форматирование статистики по датам
             if (todayStatsEl) {
                 todayStatsEl.innerHTML = todayTasks.length > 0 
-                    ? `<span>Сегодня: В работе: ${todayStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${todayStats.overdue}</span> · Выполнено: ${todayStats.completed}.</span>`
+                    ? `<span>Сегодня: В работе: ${todayStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${todayStats.overdue}</span> · Выполнено: ${todayStats.completed}</span>`
                     : '';
             }
             
             if (tomorrowStatsEl) {
                 tomorrowStatsEl.innerHTML = tomorrowTasks.length > 0
-                    ? `<span>Завтра: В работе: ${tomorrowStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${tomorrowStats.overdue}</span> · Выполнено: ${tomorrowStats.completed}.</span>`
+                    ? `<span>Завтра: В работе: ${tomorrowStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${tomorrowStats.overdue}</span> · Выполнено: ${tomorrowStats.completed}</span>`
                     : '';
             }
             
             if (laterStatsEl) {
                 laterStatsEl.innerHTML = laterTasks.length > 0
-                    ? `<span>Позже: В работе: ${laterStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${laterStats.overdue}</span> · Выполнено: ${laterStats.completed}.</span>`
+                    ? `<span>Позже: В работе: ${laterStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${laterStats.overdue}</span> · Выполнено: ${laterStats.completed}</span>`
                     : '';
             }
             
