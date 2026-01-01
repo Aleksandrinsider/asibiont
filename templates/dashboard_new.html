@@ -471,21 +471,6 @@
             }
         }
         
-        async function editTask(taskId, currentTitle) {
-            const newTitle = prompt('Новое название задачи:', currentTitle);
-            if (newTitle && newTitle !== currentTitle) {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: `Переименуй задачу ${taskId} в "${newTitle}"` }),
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    await updateTasks();
-                }
-            }
-        }
-        
         async function refreshTasks() {
             await updateTasks();
             await updatePeople();
