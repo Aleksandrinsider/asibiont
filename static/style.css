@@ -434,12 +434,71 @@ body {
     min-height: 150px;
 }
 
+.task-stats-block {
+    padding: 16px;
+    border: none;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    margin-bottom: 16px;
+}
+
 .tasks-section-wrapper {
+    padding: 16px;
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
     margin-bottom: 40px;
+}
+.task-stats-block {
+    padding: 16px;
+    border: none;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    margin-bottom: 16px;
+}
+
+.tasks-section {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.tasks-section::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tasks-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tasks-section::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 3px;
+}
+
+.tasks-section::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
+}
+.tasks-section {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.tasks-section::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tasks-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tasks-section::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 3px;
+}
+
+.tasks-section::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .context-section {
@@ -470,25 +529,6 @@ body {
     list-style-type: none;
     padding: 0;
     margin: 0;
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.tasks-section ul::-webkit-scrollbar {
-    width: 6px;
-}
-
-.tasks-section ul::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.tasks-section ul::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 3px;
-}
-
-.tasks-section ul::-webkit-scrollbar-thumb:hover {
-    background: #656D76;
 }
 
 .tasks-section li {

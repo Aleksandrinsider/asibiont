@@ -129,7 +129,8 @@
             <!-- Правая колонка - Задачи -->
             {% if logged_in %}
             <div class="right-column">
-                <div class="tasks-section-wrapper">
+                <!-- Блок статистики -->
+                <div class="task-stats-block">
                     <div class="task-stats">
                         <div class="stats-text">Мои задачи: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
@@ -137,16 +138,20 @@
                             <div id="today-stats"></div>
                         </div>
                     </div>
-                    <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
-                <div class="tasks-section">
-                    {% if tasks %}
-                    <div class="task-groups" id="task-groups">
-                        <!-- Задачи будут сгруппированы по срокам -->
-                    </div>
-                    {% else %}
-                    <p style="margin: 0; color: #656D76; font-size: 13px;">Нет задач</p>
-                    {% endif %}
                 </div>
+                
+                <!-- Блок списка задач -->
+                <div class="tasks-section-wrapper">
+                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
+                    <div class="tasks-section">
+                        {% if tasks %}
+                        <div class="task-groups" id="task-groups">
+                            <!-- Задачи будут сгруппированы по срокам -->
+                        </div>
+                        {% else %}
+                        <p style="margin: 0; color: #656D76; font-size: 13px;">Нет задач</p>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endif %}
