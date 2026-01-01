@@ -304,11 +304,20 @@ async def dashboard_handler(request):
         # Преобразуем задачи в словари для JSON сериализации
         tasks_dict = []
         for task in tasks:
+            # Подготовим reminder_time в ISO формате для JavaScript
+            reminder_time_iso = None
+            if task.reminder_time:
+                if task.reminder_time.tzinfo is None:
+                    task.reminder_time = pytz.UTC.localize(task.reminder_time)
+                local_reminder = task.reminder_time.astimezone(user_tz)
+                reminder_time_iso = local_reminder.isoformat()
+            
             task_dict = {
                 'id': task.id,
                 'title': task.title,
                 'description': task.description or '',
                 'status': task.status,
+                'reminder_time': reminder_time_iso,  # Для группировки в JS
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
                 'overdue': getattr(task, 'overdue', False),
                 'overdue_text': getattr(task, 'overdue_text', None)
