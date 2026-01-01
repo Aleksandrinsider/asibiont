@@ -235,6 +235,51 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.typing-indicator {
+    padding: 8px 0;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.typing-dots span {
+    width: 8px;
+    height: 8px;
+    background-color: #656D76;
+    border-radius: 50%;
+    display: inline-block;
+    animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.7;
+    }
+    30% {
+        transform: translateY(-10px);
+        opacity: 1;
+    }
 }
 
 .message.user {
@@ -350,7 +395,6 @@ body {
 
 .people-section,
 .tasks-section,
-.reminders-section,
 .context-section {
     padding: 16px;
     border: 1px solid #D1D9E0;
@@ -366,14 +410,12 @@ body {
 
 .people-section:hover,
 .tasks-section:hover,
-.reminders-section:hover,
 .context-section:hover {
     box-shadow: 0 3px 8px rgba(31, 35, 40, 0.08);
 }
 
 .people-section h3,
-.tasks-section h3,
-.reminders-section h3 {
+.tasks-section h3 {
     margin: 0 0 15px 0;
     font-size: 14px;
     font-weight: 600;
