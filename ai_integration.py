@@ -761,10 +761,10 @@ async def chat_with_ai(message, context=None, user_id=None):
             # Get user current time for relative time parsing and prompt
             # Use CURRENT_DATE if set (for testing), otherwise real time
             if CURRENT_DATE:
-                current_datetime_str = CURRENT_DATE + " " + datetime.now(timezone.utc).strftime("%H:%M:%S")
-                base_now = datetime.strptime(current_datetime_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                current_datetime_str = CURRENT_DATE + " " + datetime.now(pytz.UTC).strftime("%H:%M:%S")
+                base_now = datetime.strptime(current_datetime_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
             else:
-                base_now = datetime.now(timezone.utc)
+                base_now = datetime.now(pytz.UTC)
             user_now = base_now  # Default to base_now
             current_time_str = user_now.strftime("%H:%M")
             if user:
