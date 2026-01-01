@@ -10,12 +10,14 @@
     <div class="app-header">
         <div class="header-content">
             <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
+            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 500; display: none;">
+                На очереди: <span id="next-task-text"></span>
+            </div>
             <div class="header-info">
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span>
                     <span>{{ current_time }} · {{ current_date }}</span>
-                    <span id="next-reminder-header" style="display: none;"></span>
                     <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
@@ -421,7 +423,8 @@
                 .filter(t => t.date > now)
                 .sort((a, b) => a.date - b.date);
             
-            const nextReminderHeaderEl = document.getElementById('next-reminder-header');
+            const nextTaskCenterEl = document.getElementById('next-task-center');
+            const nextTaskTextEl = document.getElementById('next-task-text');
             
             if (upcomingTasks.length > 0) {
                 const next = upcomingTasks[0];
@@ -439,10 +442,10 @@
                     timeText = `через ${minutes} мин.`;
                 }
                 
-                nextReminderHeaderEl.textContent = ` · ${timeText} — ${next.title}`;
-                nextReminderHeaderEl.style.display = 'inline';
+                nextTaskTextEl.textContent = `${next.title} ${timeText}`;
+                nextTaskCenterEl.style.display = 'block';
             } else {
-                nextReminderHeaderEl.style.display = 'none';
+                nextTaskCenterEl.style.display = 'none';
             }
             
             // Обновить счетчики
@@ -629,8 +632,7 @@
                     // Update header info
                     const headerInfo = document.getElementById('header-info');
                     if (headerInfo && data.current_time && data.current_date) {
-                        const nextReminderHeaderEl = document.getElementById('next-reminder-header');
-                        headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span>` + (nextReminderHeaderEl ? nextReminderHeaderEl.outerHTML : '') + `<button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
+                        headerInfo.innerHTML = `<span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span><span>${data.current_time} · ${data.current_date}</span><button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
