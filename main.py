@@ -467,6 +467,28 @@ async def clear_single_task_handler(request):
         session_db.close()
 
 
+async def clear_old_tasks_handler(request):
+    """Admin endpoint to clear old test tasks"""
+    session_db = Session()
+    try:
+        cutoff_date = datetime(2026, 1, 1, tzinfo=pytz.UTC)
+        old_tasks = session_db.query(Task).filter(Task.reminder_time < cutoff_date).all()
+        
+        count = len(old_tasks)
+        for task in old_tasks:
+            session_db.delete(task)
+        
+        session_db.commit()
+        logger.info(f"Cleared {count} old tasks")
+        return web.json_response({'message': f'Cleared {count} old tasks'})
+    except Exception as e:
+        session_db.rollback()
+        logger.error(f"Error clearing old tasks: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+
 try:
     bot = Bot(token=TELEGRAM_TOKEN)
     logger.info("Bot created successfully")
@@ -802,6 +824,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_get('/clear_db', clear_db_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
+app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
