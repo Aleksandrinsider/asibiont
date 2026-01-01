@@ -573,6 +573,11 @@ body {
     margin: 0;
 }
 
+.task-meta {
+    font-size: 11px;
+    color: #656D76;
+}
+
 .task-time {
     font-size: 11px;
     color: #656D76;

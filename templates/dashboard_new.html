@@ -344,17 +344,19 @@
                         if (currentFilter === 'completed' && task.status !== 'completed') return;
                         
                         html += '<li class="task-item" data-task-id="' + task.id + '">';
-                        html += '<div style="flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">';
+                        html += '<div style="flex: 1;">';
                         const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
-                        html += '<span class="task-title"' + titleStyle + '>' + task.title + '</span>';
+                        html += '<div class="task-title"' + titleStyle + '>' + task.title + '</div>';
+                        html += '<div style="display: flex; gap: 12px; margin-top: 4px;">';
                         if (task.reminder_time_local) {
-                            html += '<span class="task-time">· ' + task.reminder_time_local + '</span>';
-                            if (task.overdue) html += ' <span class="task-time" style="color: #d73a49;">· ' + task.overdue_text + '</span>';
+                            html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
+                            if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
                         }
                         let statusText = task.status === 'completed' ? 'Завершено' : 
                                        task.status === 'in_progress' ? 'В работе' : 
                                        task.status === 'skipped' ? 'Пропущено' : 'В ожидании';
-                        html += '<span class="task-status">· ' + statusText + '</span>';
+                        html += '<span class="task-meta">' + statusText + '</span>';
+                        html += '</div>';
                         html += '</div>';
                         html += '<div class="task-actions">';
                         if (task.status !== 'completed') {
@@ -465,14 +467,21 @@
         }
         
         async function completeTask(taskId) {
+            // Отправляем сообщение в чат, чтобы AI уточнил результаты
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: `Отметь задачу ${taskId} как выполненную` }),
+                body: JSON.stringify({ message: `Отметь задачу ${taskId} как выполненную и уточни результаты` }),
                 credentials: 'include'
             });
             if (response.ok) {
-                await updateTasks();
+                const data = await response.json();
+                // Обновить чат с ответом AI
+                if (data.response) {
+                    addMessageToChat('ai', data.response);
+                }
+                // Обновить задачи через секунду для отображения изменений
+                setTimeout(() => updateTasks(), 1000);
             }
         }
         
