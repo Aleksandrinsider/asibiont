@@ -26,6 +26,34 @@ try:
 except Exception as e:
     logger.error(f"Failed to create database tables: {e}")
 
+# Run migrations
+def run_migrations():
+    """Run database migrations"""
+    from sqlalchemy import text, inspect
+    try:
+        session = Session()
+        inspector = inspect(engine)
+        
+        # Check if activity_streak column exists
+        columns = [col['name'] for col in inspector.get_columns('user_profiles')]
+        if 'activity_streak' not in columns:
+            logger.info("Adding activity_streak column to user_profiles table")
+            session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
+            session.commit()
+            logger.info("Migration: activity_streak column added successfully")
+        else:
+            logger.info("Migration: activity_streak column already exists")
+            
+        session.close()
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        
+try:
+    run_migrations()
+    logger.info("Database migrations completed")
+except Exception as e:
+    logger.error(f"Failed to run migrations: {e}")
+
 import os
 import pytz
 from datetime import timedelta
