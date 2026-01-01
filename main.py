@@ -679,6 +679,38 @@ async def clear_redis_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def direct_login_handler(request):
+    """Direct login endpoint for testing (bypasses Telegram auth)"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+    
+    user_id = request.query.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'user_id required'}, status=400)
+    
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return web.json_response({'error': 'Invalid user_id'}, status=400)
+    
+    # Check user exists
+    session_db = Session()
+    user = session_db.query(User).filter_by(telegram_id=user_id).first()
+    session_db.close()
+    
+    if not user:
+        return web.json_response({'error': 'User not found'}, status=404)
+    
+    # Set session
+    session = await get_session(request)
+    session['user_id'] = user_id
+    logger.info(f"Direct login successful for user_id: {user_id}")
+    
+    return web.HTTPFound('/dashboard')
+
+
 try:
     bot = Bot(token=TELEGRAM_TOKEN)
     logger.info("Bot created successfully")
@@ -1142,6 +1174,7 @@ app.router.add_get('/test_payment', test_payment_handler)  # Тестовый э
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
+app.router.add_get('/direct_login', direct_login_handler)  # Тестовый логин (требует admin secret)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
