@@ -359,7 +359,7 @@ async def dashboard_handler(request):
             if end_dt.tzinfo is None:
                 end_dt = end_dt.replace(tzinfo=pytz.UTC)
             end_local = end_dt.astimezone(user_tz if user.timezone else pytz.UTC)
-            formatted_end_date = f"{end_local.day} {months[end_local.month - 1]} {end_local.year}"
+            formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
         
         # Calculate upcoming reminders
         upcoming_reminders = []
@@ -864,7 +864,7 @@ async def api_profile_handler(request):
         if end_dt.tzinfo is None:
             end_dt = end_dt.replace(tzinfo=pytz.UTC)
         end_local = end_dt.astimezone(user_tz if user and user.timezone else pytz.UTC)
-        formatted_end_date = f"{end_local.day} {months[end_local.month - 1]} {end_local.year}"
+        formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
     
     profile_data = {}
     if profile:

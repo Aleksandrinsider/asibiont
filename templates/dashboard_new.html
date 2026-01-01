@@ -61,7 +61,7 @@
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
-                        <p>Intересы: {{ profile.interests or 'Не указаны' }}</p>
+                        <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                         <p>Подписка: активна до {{ formatted_end_date }} 
                             <a href="{% if is_local %}/test_payment{% else %}/extend_subscription{% endif %}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
                         </p>
@@ -668,6 +668,7 @@
 
 
         // Initial update
+        updateProfile();
 
         // Auto-update every 30 seconds
         setInterval(() => {
