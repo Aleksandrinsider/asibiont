@@ -136,6 +136,7 @@
                         <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;">
                             <span>Сегодня: <span id="today-count">0</span></span>
                             <span>Завтра: <span id="tomorrow-count">0</span></span>
+                            <span>Позже: <span id="later-count">0</span></span>
                         </div>
                         <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px;">
                             <span>📊 Процент: <span id="completion-percent" style="font-weight: 600; color: #068487;">0%</span></span>
@@ -383,6 +384,16 @@
                 return taskDay.getTime() === tomorrow.getTime();
             }).length;
             
+            // Подсчет задач позже (после завтра)
+            const dayAfterTomorrow = new Date(tomorrow);
+            dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+            const laterTasks = tasks.filter(t => {
+                if (!t.reminder_time) return false;
+                const taskDate = new Date(t.reminder_time);
+                const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+                return taskDay.getTime() >= dayAfterTomorrow.getTime() && t.status === 'pending';
+            }).length;
+            
             // Подсчет задач на эту неделю
             const weekEnd = new Date(today);
             weekEnd.setDate(weekEnd.getDate() + 7);
@@ -430,6 +441,7 @@
             const nodateEl = document.getElementById('nodate-count');
             const todayEl = document.getElementById('today-count');
             const tomorrowEl = document.getElementById('tomorrow-count');
+            const laterEl = document.getElementById('later-count');
             const weekEl = document.getElementById('week-count');
             const percentEl = document.getElementById('completion-percent');
             const progressEl = document.getElementById('progress-fill');
@@ -441,6 +453,7 @@
             if (nodateEl) nodateEl.textContent = nodate;
             if (todayEl) todayEl.textContent = todayTasks;
             if (tomorrowEl) tomorrowEl.textContent = tomorrowTasks;
+            if (laterEl) laterEl.textContent = laterTasks;
             if (weekEl) weekEl.textContent = weekTasks;
             if (percentEl) percentEl.textContent = Math.round(percent) + '%';
             if (progressEl) progressEl.style.width = percent + '%';
