@@ -156,9 +156,9 @@ body {
 
 .container {
     margin-top: 60px;
-    margin-bottom: 80px;
+    margin-bottom: 0;
     width: 100%;
-    height: calc(100vh - 140px);
+    height: calc(100vh - 60px);
     overflow: hidden;
 }
 
@@ -166,10 +166,9 @@ body {
     display: grid;
     grid-template-columns: 1fr 2fr 1fr;
     height: 100%;
-    max-height: calc(100vh - 140px);
+    max-height: calc(100vh - 60px);
     column-gap: 20px;
-    padding: 0 40px;
-    padding-top: 40px;
+    padding: 40px 40px;
     align-items: start;
     overflow: hidden;
 }
@@ -180,21 +179,15 @@ body {
     flex-direction: column;
     overflow-y: auto;
     height: 100%;
-    max-height: calc(100vh - 180px);
+    max-height: calc(100vh - 140px);
 }
 
 .center-column {
     display: flex;
     flex-direction: column;
     height: 100%;
-    max-height: calc(100vh - 180px);
+    max-height: calc(100vh - 140px);
     overflow: hidden;
-}
-
-.center-column {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
 }
 
 .chat-section {
