@@ -195,7 +195,7 @@
 
         // Load previous interactions
         {% for interaction in interactions|reverse %}
-        addMessage('{{ interaction.content }}', '{{ interaction.message_type }}');
+        addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }});
         {% endfor %}
 
         // Dynamic data updates
