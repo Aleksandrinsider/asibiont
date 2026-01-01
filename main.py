@@ -192,15 +192,16 @@ async def dashboard_handler(request):
         for task in tasks:
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
-                    task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+                    task.reminder_time = pytz.UTC.localize(task.reminder_time)
                 local_reminder = task.reminder_time.astimezone(user_tz)
                 task.overdue = local_reminder < user_now and task.status == 'pending'
                 task.reminder_time_local = local_reminder.strftime('%d.%m.%Y %H:%M')
                 if task.overdue:
                     delta = user_now - local_reminder
-                    days = delta.days
-                    hours = delta.seconds // 3600
-                    minutes = (delta.seconds % 3600) // 60
+                    total_seconds = int(delta.total_seconds())
+                    days = total_seconds // 86400
+                    hours = (total_seconds % 86400) // 3600
+                    minutes = (total_seconds % 3600) // 60
                     if days > 0:
                         task.overdue_text = f"просрочено на {days} дн."
                     elif hours > 0:
@@ -840,18 +841,22 @@ async def api_tasks_handler(request):
             }
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
-                    task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+                    task.reminder_time = pytz.UTC.localize(task.reminder_time)
                 local_reminder = task.reminder_time.astimezone(user_tz)
                 task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
                 task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
                 if task_data['overdue']:
                     delta = user_now - local_reminder
-                    if delta.days > 0:
-                        task_data['overdue_text'] = f'просрочено на {delta.days} дн.'
-                    elif delta.seconds // 3600 > 0:
-                        task_data['overdue_text'] = f'просрочено на {delta.seconds // 3600} ч.'
+                    total_seconds = int(delta.total_seconds())
+                    days = total_seconds // 86400
+                    hours = (total_seconds % 86400) // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    if days > 0:
+                        task_data['overdue_text'] = f'просрочено на {days} дн.'
+                    elif hours > 0:
+                        task_data['overdue_text'] = f'просрочено на {hours} ч.'
                     else:
-                        task_data['overdue_text'] = f'просрочено на {delta.seconds // 60} мин.'
+                        task_data['overdue_text'] = f'просрочено на {minutes} мин.'
             tasks_data.append(task_data)
         
         return web.json_response({'tasks': tasks_data})
