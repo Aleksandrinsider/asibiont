@@ -72,14 +72,6 @@
                 </div>
 
                 <div class="people-section">
-                    <div class="task-stats" style="margin-bottom: 15px;">
-                        <div class="stats-text">Мои контакты: <span id="contacts-count">{% if partners %}{{ partners|length }}{% else %}0{% endif %}</span> / {% if partners %}{{ partners|length }}{% else %}0{% endif %}</div>
-                    </div>
-                    <div class="task-stats" style="margin-bottom: 15px;">
-                        <div id="contacts-stats" class="stats-text">
-                            <span>Новые: {% if partners %}{{ partners|length }}{% else %}0{% endif %} · Уже общались: 0</span>
-                        </div>
-                    </div>
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
                     {% if partners %}
                     <div class="people-list" id="people-list">
@@ -606,31 +598,10 @@
                 if (response.ok) {
                     const data = await response.json();
                     const peopleSection = document.querySelector('.people-section');
-                    const contactsCount = document.getElementById('contacts-count');
                     
-                    // Подсчитываем статистику контактов
-                    const totalContacts = data.partners.length;
-                    const contacted = data.partners.filter(p => p.recommendation_reason && p.recommendation_reason.includes('уже общались')).length;
-                    const active = totalContacts - contacted;
-                    
-                    // Обновляем счетчик
-                    if (contactsCount) {
-                        contactsCount.textContent = totalContacts;
-                    }
-                    
-                    // Формируем HTML с аналогичной структурой как у задач
-                    let html = '<div class="task-stats" style="margin-bottom: 15px;">';
-                    html += `<div class="stats-text">Мои контакты: <span id="contacts-count">${active}</span> / ${totalContacts}</div>`;
-                    html += '</div>';
-                    
-                    // Добавляем детальную статистику
-                    html += '<div class="task-stats" style="margin-bottom: 15px;">';
-                    html += `<div id="contacts-stats" class="stats-text">`;
-                    html += `<span>Новые: ${active} · Уже общались: ${contacted}</span>`;
-                    html += `</div></div>`;
+                    let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
                     
                     if (data.partners.length > 0) {
-                        html += '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
                         html += '<div class="people-list">';
                         data.partners.forEach(partner => {
                             html += `<div class="person-card">
@@ -640,7 +611,6 @@
                         });
                         html += '</div>';
                     } else {
-                        html += '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
                         html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
                     }
                     
