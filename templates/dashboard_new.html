@@ -129,15 +129,10 @@
                     <div class="task-stats">
                         <div class="stats-text">Завершено задач: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-                        <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;">
-                            <span>Активные: <span id="active-count">0</span></span>
-                            <span style="color: #d73a49;">Просрочено: <span id="overdue-count">0</span></span>
-                            <span>Без даты: <span id="nodate-count">0</span></span>
-                        </div>
-                        <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;">
-                            <span>Сегодня: <span id="today-count">0</span></span>
-                            <span>Завтра: <span id="tomorrow-count">0</span></span>
-                            <span>Позже: <span id="later-count">0</span></span>
+                        <div class="stats-text" style="margin-top: 8px;">
+                            <div id="today-stats" style="margin-bottom: 4px;"></div>
+                            <div id="tomorrow-stats" style="margin-bottom: 4px;"></div>
+                            <div id="later-stats"></div>
                         </div>
                     </div>
                     <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
@@ -379,9 +374,6 @@
         
         function updateStats(tasks) {
             const completed = tasks.filter(t => t.status === 'completed').length;
-            const active = tasks.filter(t => t.status === 'pending').length;
-            const overdue = tasks.filter(t => t.overdue === true).length;
-            const nodate = tasks.filter(t => !t.reminder_time).length;
             const total = tasks.length;
             const percent = total > 0 ? (completed / total * 100) : 0;
             
@@ -390,30 +382,39 @@
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
-            
-            const todayTasks = tasks.filter(t => {
-                if (!t.reminder_time) return false;
-                const taskDate = new Date(t.reminder_time);
-                const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
-                return taskDay.getTime() === today.getTime();
-            }).length;
-            
-            const tomorrowTasks = tasks.filter(t => {
-                if (!t.reminder_time) return false;
-                const taskDate = new Date(t.reminder_time);
-                const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
-                return taskDay.getTime() === tomorrow.getTime();
-            }).length;
-            
-            // Подсчет задач позже (после завтра)
             const dayAfterTomorrow = new Date(tomorrow);
             dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+            
+            // Функция для подсчета задач по дате
+            function getTasksByDate(targetDate) {
+                return tasks.filter(t => {
+                    if (!t.reminder_time) return false;
+                    const taskDate = new Date(t.reminder_time);
+                    const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+                    return taskDay.getTime() === targetDate.getTime();
+                });
+            }
+            
+            // Функция для форматирования статистики
+            function formatStats(dateTasks) {
+                const inProgress = dateTasks.filter(t => t.status === 'pending' && !t.overdue).length;
+                const overdue = dateTasks.filter(t => t.overdue === true).length;
+                const completed = dateTasks.filter(t => t.status === 'completed').length;
+                return { inProgress, overdue, completed };
+            }
+            
+            const todayTasks = getTasksByDate(today);
+            const tomorrowTasks = getTasksByDate(tomorrow);
             const laterTasks = tasks.filter(t => {
                 if (!t.reminder_time) return false;
                 const taskDate = new Date(t.reminder_time);
                 const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
-                return taskDay.getTime() >= dayAfterTomorrow.getTime() && t.status === 'pending';
-            }).length;
+                return taskDay.getTime() >= dayAfterTomorrow.getTime();
+            });
+            
+            const todayStats = formatStats(todayTasks);
+            const tomorrowStats = formatStats(tomorrowTasks);
+            const laterStats = formatStats(laterTasks);
             
             // Найти ближайшее напоминание
             const upcomingTasks = tasks.filter(t => t.reminder_time && t.status === 'pending')
@@ -445,25 +446,36 @@
                 nextReminderHeaderEl.style.display = 'none';
             }
             
+            // Обновить счетчики
             const completedEl = document.getElementById('completed-count');
             const totalEl = document.getElementById('total-count');
-            const activeEl = document.getElementById('active-count');
-            const overdueEl = document.getElementById('overdue-count');
-            const nodateEl = document.getElementById('nodate-count');
-            const todayEl = document.getElementById('today-count');
-            const tomorrowEl = document.getElementById('tomorrow-count');
-            const laterEl = document.getElementById('later-count');
             const progressEl = document.getElementById('progress-fill');
+            const todayStatsEl = document.getElementById('today-stats');
+            const tomorrowStatsEl = document.getElementById('tomorrow-stats');
+            const laterStatsEl = document.getElementById('later-stats');
             
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
-            if (activeEl) activeEl.textContent = active;
-            if (overdueEl) overdueEl.textContent = overdue;
-            if (nodateEl) nodateEl.textContent = nodate;
-            if (todayEl) todayEl.textContent = todayTasks;
-            if (tomorrowEl) tomorrowEl.textContent = tomorrowTasks;
-            if (laterEl) laterEl.textContent = laterTasks;
             if (progressEl) progressEl.style.width = percent + '%';
+            
+            // Форматирование статистики по датам
+            if (todayStatsEl) {
+                todayStatsEl.innerHTML = todayTasks.length > 0 
+                    ? `<span>Сегодня — В работе: ${todayStats.inProgress} <span style="color: #d73a49;">Просрочено: ${todayStats.overdue}</span> Выполнено: ${todayStats.completed}</span>`
+                    : '<span style="color: #656D76;">Сегодня — нет задач</span>';
+            }
+            
+            if (tomorrowStatsEl) {
+                tomorrowStatsEl.innerHTML = tomorrowTasks.length > 0
+                    ? `<span>Завтра — В работе: ${tomorrowStats.inProgress} <span style="color: #d73a49;">Просрочено: ${tomorrowStats.overdue}</span> Выполнено: ${tomorrowStats.completed}</span>`
+                    : '<span style="color: #656D76;">Завтра — нет задач</span>';
+            }
+            
+            if (laterStatsEl) {
+                laterStatsEl.innerHTML = laterTasks.length > 0
+                    ? `<span>Позже — В работе: ${laterStats.inProgress} <span style="color: #d73a49;">Просрочено: ${laterStats.overdue}</span> Выполнено: ${laterStats.completed}</span>`
+                    : '<span style="color: #656D76;">Позже — нет задач</span>';
+            }
         }
         
         async function completeTask(taskId) {
