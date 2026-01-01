@@ -24,23 +24,56 @@
             <div class="welcome-content">
                 <h1>ASI BIONT</h1>
                 <p style="margin-bottom: 20px;">Лаборатория искусственного интеллекта ASI Biont — ваш путь к успеху через умное управление задачами и мощное сообщество единомышленников!<br><br>Находите нужных вам людей для совместной работы над задачами в считанные минуты или просто наслаждайтесь общением с теми, у кого такие же интересы как и у вас!<br><br>Авторизуйтесь через Telegram для начала.</p>
-                <div id="telegram-login-container" style="margin: 20px 0; min-height: 50px; border: 1px dashed #ccc; padding: 10px;">
-                    <p style="font-size: 12px; color: #666;">Загрузка виджета Telegram...</p>
+                
+                <!-- Временная кнопка для авторизации пока настраивается виджет -->
+                <div style="margin: 20px 0;">
+                    <a href="https://t.me/Asibiont_bot?start=auth" 
+                       style="display: inline-block; padding: 12px 24px; background: #0088cc; color: white; text-decoration: none; border-radius: 6px; font-weight: 500;">
+                        🔐 Авторизоваться через Telegram
+                    </a>
+                    <p style="margin-top: 10px; font-size: 13px; color: #666;">
+                        После авторизации в боте вернитесь на эту страницу
+                    </p>
+                </div>
+                
+                <!-- Telegram Login Widget (для отладки) -->
+                <div id="telegram-login-container" style="margin: 20px 0; padding: 10px; border: 1px dashed #ccc;">
+                    <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Виджет Telegram (если не работает, используйте кнопку выше):</p>
                     <script async src="https://telegram.org/js/telegram-widget.js?22" 
                             data-telegram-login="Asibiont_bot" 
                             data-size="large" 
                             data-auth-url="https://task-production-31b6.up.railway.app/telegram_auth" 
-                            data-request-access="write"
-                            data-onauth="onTelegramAuth(user)">
+                            data-request-access="write">
                     </script>
                 </div>
+                
+                <details style="margin-top: 20px; font-size: 13px; color: #666;">
+                    <summary style="cursor: pointer;">Инструкция по настройке (для разработчика)</summary>
+                    <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+                        <p><strong>Настройте домен в BotFather:</strong></p>
+                        <ol style="margin: 10px 0; padding-left: 20px;">
+                            <li>Откройте @BotFather в Telegram</li>
+                            <li>Отправьте команду: <code>/setdomain</code></li>
+                            <li>Выберите бота: @Asibiont_bot</li>
+                            <li>Введите домен: <code>task-production-31b6.up.railway.app</code></li>
+                        </ol>
+                        <p>После настройки виджет заработает автоматически.</p>
+                    </div>
+                </details>
+                
                 <script>
-                    console.log('Telegram widget script loaded');
-                    function onTelegramAuth(user) {
-                        console.log('Telegram auth callback', user);
-                        window.location.href = '/telegram_auth?' + new URLSearchParams(user).toString();
-                    }
+                    console.log('Page loaded, checking Telegram widget...');
+                    setTimeout(() => {
+                        const container = document.getElementById('telegram-login-container');
+                        const iframe = container.querySelector('iframe');
+                        if (iframe) {
+                            console.log('Telegram widget loaded successfully');
+                        } else {
+                            console.error('Telegram widget failed to load - domain not configured in BotFather');
+                        }
+                    }, 3000);
                 </script>
+                
                 <noscript>
                     <p style="color: red;">JavaScript необходим для авторизации через Telegram.</p>
                 </noscript>
