@@ -210,7 +210,6 @@ body {
     height: 100%;
     max-height: calc(100vh - 220px);
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.05);
 }
 
 .chat-messages {
@@ -417,8 +416,6 @@ body {
     margin-bottom: 40px;
     min-height: 150px;
     overflow-y: auto;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.05);
-    transition: box-shadow 0.2s;
 }
 
 .tasks-section-wrapper {
@@ -427,12 +424,6 @@ body {
     background-color: #FFFFFF;
     margin-top: 0;
     margin-bottom: 40px;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.05);
-    transition: box-shadow 0.2s;
-}
-
-.tasks-section-wrapper:hover {
-    box-shadow: 0 3px 8px rgba(31, 35, 40, 0.08);
 }
 
 .context-section {
@@ -546,7 +537,6 @@ body {
     color: #1F2328;
     margin-bottom: 8px;
     padding-bottom: 4px;
-    border-bottom: 1px solid #D1D9E0;
 }
 
 .task-group ul {
@@ -563,12 +553,12 @@ body {
     margin-bottom: 6px;
     border-radius: 6px;
     border: none;
-    background-color: #F6F8FA;
+    background-color: transparent;
     transition: all 0.2s;
 }
 
 .task-item:hover {
-    background-color: #FFFFFF;
+    background-color: transparent;
     transform: translateX(2px);
 }
 
@@ -601,17 +591,19 @@ body {
 }
 
 .quick-action {
-    padding: 10px 20px;
+    padding: 4px 8px;
     background-color: #FFFFFF;
     color: #59636E;
     border: 1px solid #D1D9E0;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-    font-size: 14px;
-    line-height: 21px;
+    font-size: 12px;
+    line-height: 16px;
     font-weight: 500;
     transition: all 0.2s;
+    min-width: 24px;
+    text-align: center;
 }
 
 .quick-action:hover {
@@ -639,7 +631,6 @@ body {
     background-color: #FFFFFF;
     border-color: #068487;
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(31, 35, 40, 0.08);
 }
 
 .person-card p {
@@ -798,19 +789,20 @@ body {
 }
 
 .delete-btn {
-    min-width: 100px;
-    padding: 10px 20px;
+    padding: 4px 8px;
     background-color: #FFFFFF;
     color: #59636E;
     border: 1px solid #D1D9E0;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-    font-size: 14px;
-    line-height: 21px;
+    font-size: 12px;
+    line-height: 16px;
     font-weight: 500;
-    margin-left: 10px;
+    margin-left: 0;
     transition: all 0.2s;
+    min-width: 24px;
+    text-align: center;
 }
 
 .delete-btn:hover {
