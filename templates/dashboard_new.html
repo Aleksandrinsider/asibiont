@@ -10,7 +10,8 @@
     <div class="app-header">
         <div class="header-content">
             <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
-            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 500; display: none;">
+            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 500; display: none; align-items: center; gap: 8px;">
+                <span class="reminder-pulse"></span>
                 На очереди: <span id="next-task-text"></span>
             </div>
             <div class="header-info">
@@ -443,7 +444,7 @@
                 }
                 
                 nextTaskTextEl.textContent = `${next.title} ${timeText}`;
-                nextTaskCenterEl.style.display = 'block';
+                nextTaskCenterEl.style.display = 'flex';
             } else {
                 nextTaskCenterEl.style.display = 'none';
             }
