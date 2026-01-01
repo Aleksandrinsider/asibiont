@@ -239,14 +239,6 @@
         }
 
         async function clearSingleTask(taskId) {
-            await deleteTask(taskId);
-        }
-
-        async function deleteTask(taskId) {
-            console.log('deleteTask called with', taskId);
-            if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
-            try {
-                console.log('Fetching /clear_single_task');
             if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
             try {
                 const response = await fetch('/clear_single_task', {
@@ -258,7 +250,11 @@
                     credentials: 'include'
                 });
                 if (response.ok) {
-                    updateTasks(
+                    await updateTasks();
+                }
+            } catch (error) {
+                console.error('Error deleting task:', error);
+            }
         }
 
         async function updatePartners() {
