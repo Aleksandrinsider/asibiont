@@ -343,6 +343,7 @@
             
             html += '</ul>';
             container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
+            updateStats(tasks);
         }
         
         function renderTaskItem(task) {
@@ -368,10 +369,6 @@
             html += '<button onclick="clearSingleTask(' + task.id + ')" class="delete-btn">×</button>';
             html += '</div>';
             return html;
-        }
-            
-            container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
-            updateStats(tasks);
         }
         
         function updateStats(tasks) {
