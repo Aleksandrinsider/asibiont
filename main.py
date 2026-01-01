@@ -68,15 +68,22 @@ async def simple_login_handler(request):
 
 
 async def auth_handler(request):
-    data = request.query
+    data = dict(request.query)
+    logger.info(f"Auth handler called with data: {data}")
+    
     if check_telegram_authentication(data):
         user_id = int(data['id'])
+        logger.info(f"Authentication successful for user_id: {user_id}")
+        
         session_db = Session()
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
+            logger.info(f"Creating new user with telegram_id: {user_id}")
             user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'))
             session_db.add(user)
             session_db.commit()
+        else:
+            logger.info(f"Found existing user: {user.id}")
         
         # Increment login count if subscription exists
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
@@ -88,8 +95,10 @@ async def auth_handler(request):
         
         session = await get_session(request)
         session['user_id'] = user_id
+        logger.info(f"Session set with user_id: {user_id}, redirecting to /dashboard")
         return web.HTTPFound('/dashboard')
     else:
+        logger.error(f"Authentication failed for data: {data}")
         return web.Response(text='Authentication failed', status=401)
 
 
