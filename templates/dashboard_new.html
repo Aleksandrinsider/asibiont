@@ -76,8 +76,20 @@
                         {% for partner in partners %}
                         {% if partner.contact_info %}
                         <div class="person-card">
-                            <p><strong>@{{ partner.contact_info }}</strong></p>
-                            <p>Общие интересы: {{ partner.common_interests or 'Нет общих интересов' }}</p>
+                            <p style="margin-bottom: 8px;"><strong>@{{ partner.contact_info }}</strong></p>
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ partner.recommendation_reason }}</p>
+                            {% if partner.city %}
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">📍 {{ partner.city }}</p>
+                            {% endif %}
+                            {% if partner.common_interests %}
+                            <p style="font-size: 12px; margin-bottom: 4px;">💡 Интересы: {{ partner.common_interests }}</p>
+                            {% endif %}
+                            {% if partner.common_skills %}
+                            <p style="font-size: 12px; margin-bottom: 4px;">🔧 Навыки: {{ partner.common_skills }}</p>
+                            {% endif %}
+                            {% if partner.common_goals %}
+                            <p style="font-size: 12px; margin-bottom: 4px;">🎯 Цели: {{ partner.common_goals }}</p>
+                            {% endif %}
                         </div>
                         {% endif %}
                         {% endfor %}
@@ -513,8 +525,20 @@
                         data.partners.forEach(partner => {
                             if (partner.contact_info) {
                                 html += '<div class="person-card">';
-                                html += `<p><strong>@${partner.contact_info}</strong></p>`;
-                                html += `<p>Общие интересы: ${partner.common_interests || 'Нет общих интересов'}</p>`;
+                                html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
+                                html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.recommendation_reason || 'подходящий контакт'}</p>`;
+                                if (partner.city) {
+                                    html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">📍 ${partner.city}</p>`;
+                                }
+                                if (partner.common_interests) {
+                                    html += `<p style="font-size: 12px; margin-bottom: 4px;">💡 Интересы: ${partner.common_interests}</p>`;
+                                }
+                                if (partner.common_skills) {
+                                    html += `<p style="font-size: 12px; margin-bottom: 4px;">🔧 Навыки: ${partner.common_skills}</p>`;
+                                }
+                                if (partner.common_goals) {
+                                    html += `<p style="font-size: 12px; margin-bottom: 4px;">🎯 Цели: ${partner.common_goals}</p>`;
+                                }
                                 html += '</div>';
                             }
                         });

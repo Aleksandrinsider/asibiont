@@ -627,8 +627,8 @@ body {
 }
 
 .person-card {
-    padding: 12px;
-    margin-bottom: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
     border-radius: 6px;
     border: 1px solid #D1D9E0;
     background-color: #F6F8FA;
@@ -645,7 +645,8 @@ body {
 .person-card p {
     margin: 0 0 5px 0;
     color: #1F2328;
-    line-height: 1.4;
+    line-height: 1.5;
+    font-size: 13px;
 }
 
 .timeline {

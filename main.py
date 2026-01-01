@@ -205,16 +205,48 @@ async def dashboard_handler(request):
         except Exception as e:
             logger.error(f"Error getting partners: {e}")
             partners = []
-        # Add common interests
-        if profile and profile.interests:
-            user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+        # Add common interests, skills, goals and recommendation reason
+        if profile and partners:
+            user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
+            user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
+            user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
+            
             for p in partners:
-                if hasattr(p, 'interests') and p.interests:
+                # Common interests
+                if p.interests:
                     partner_interests = set(i.strip().lower() for i in p.interests.split(','))
                     common = user_interests & partner_interests
-                    p.common_interests = ', '.join(common) if common else 'Нет общих интересов'
+                    p.common_interests = ', '.join(common) if common else None
                 else:
-                    p.common_interests = 'Интересы не указаны'
+                    p.common_interests = None
+                
+                # Common skills
+                if p.skills:
+                    partner_skills = set(s.strip().lower() for s in p.skills.split(','))
+                    common_skills = user_skills & partner_skills
+                    p.common_skills = ', '.join(common_skills) if common_skills else None
+                else:
+                    p.common_skills = None
+                
+                # Common goals
+                if p.goals:
+                    partner_goals = set(g.strip().lower() for g in p.goals.split(','))
+                    common_goals = user_goals & partner_goals
+                    p.common_goals = ', '.join(common_goals) if common_goals else None
+                else:
+                    p.common_goals = None
+                
+                # Determine recommendation reason
+                reasons = []
+                if p.common_skills:
+                    reasons.append('общие навыки')
+                if p.common_interests:
+                    reasons.append('общие интересы')
+                if p.common_goals:
+                    reasons.append('общие цели')
+                if p.city and profile.city and p.city.lower() == profile.city.lower():
+                    reasons.append('из вашего города')
+                p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
         
         # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
@@ -691,22 +723,58 @@ async def api_partners_handler(request):
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
         session_db.close()
         
-        # Add common interests
-        if profile and profile.interests:
-            user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+        # Add common interests, skills, goals and recommendation reason
+        if profile and partners:
+            user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
+            user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
+            user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
+            
             for p in partners:
-                if hasattr(p, 'interests') and p.interests:
+                # Common interests
+                if p.interests:
                     partner_interests = set(i.strip().lower() for i in p.interests.split(','))
                     common = user_interests & partner_interests
-                    p.common_interests = ', '.join(common) if common else 'Нет общих интересов'
+                    p.common_interests = ', '.join(common) if common else None
                 else:
-                    p.common_interests = 'Интересы не указаны'
+                    p.common_interests = None
+                
+                # Common skills
+                if p.skills:
+                    partner_skills = set(s.strip().lower() for s in p.skills.split(','))
+                    common_skills = user_skills & partner_skills
+                    p.common_skills = ', '.join(common_skills) if common_skills else None
+                else:
+                    p.common_skills = None
+                
+                # Common goals
+                if p.goals:
+                    partner_goals = set(g.strip().lower() for g in p.goals.split(','))
+                    common_goals = user_goals & partner_goals
+                    p.common_goals = ', '.join(common_goals) if common_goals else None
+                else:
+                    p.common_goals = None
+                
+                # Determine recommendation reason
+                reasons = []
+                if p.common_skills:
+                    reasons.append('общие навыки')
+                if p.common_interests:
+                    reasons.append('общие интересы')
+                if p.common_goals:
+                    reasons.append('общие цели')
+                if p.city and profile.city and p.city.lower() == profile.city.lower():
+                    reasons.append('из вашего города')
+                p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
         
         partners_data = []
         for p in partners:
             partners_data.append({
                 'contact_info': getattr(p, 'contact_info', ''),
-                'common_interests': getattr(p, 'common_interests', 'Нет общих интересов')
+                'city': getattr(p, 'city', None),
+                'common_interests': getattr(p, 'common_interests', None),
+                'common_skills': getattr(p, 'common_skills', None),
+                'common_goals': getattr(p, 'common_goals', None),
+                'recommendation_reason': getattr(p, 'recommendation_reason', 'подходящий контакт')
             })
         
         return web.json_response({'partners': partners_data})
