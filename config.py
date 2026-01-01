@@ -8,6 +8,7 @@ LOCAL = os.getenv("LOCAL", "0") == "1"
 PORT = int(os.getenv("PORT", 8000))
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
 CURRENT_DATE = os.getenv("CURRENT_DATE")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL")

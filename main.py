@@ -10,7 +10,7 @@ import aiohttp_session
 from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL, PORT, FREE_ACCESS_MODE
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET
 from datetime import datetime, timedelta
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
@@ -469,6 +469,11 @@ async def clear_single_task_handler(request):
 
 async def clear_old_tasks_handler(request):
     """Admin endpoint to clear old test tasks"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+    
     session_db = Session()
     try:
         cutoff_date = datetime(2026, 1, 1, tzinfo=pytz.UTC)
@@ -491,6 +496,11 @@ async def clear_old_tasks_handler(request):
 
 async def clear_database_handler(request):
     """Admin endpoint to clear entire database"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+    
     session_db = Session()
     try:
         # Delete all data
@@ -513,6 +523,11 @@ async def clear_database_handler(request):
 
 async def clear_redis_handler(request):
     """Admin endpoint to clear Redis cache"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+    
     if not redis_client:
         return web.json_response({'error': 'Redis not configured'}, status=400)
     
