@@ -448,11 +448,7 @@ body {
     transition: none;
 }
 
-.people-section:hover,
-.tasks-section:hover,
-.context-section:hover {
-    box-shadow: 0 3px 8px rgba(31, 35, 40, 0.08);
-}
+
 
 .people-section h3,
 .tasks-section h3 {

@@ -197,7 +197,7 @@ async def dashboard_handler(request):
         
         tasks = session_db.query(Task).filter_by(user_id=user.id).all()
         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(50).all() if user else []
+        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.asc()).limit(50).all() if user else []
         subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
         try:
             partners = get_partners_list(user_id=user_id)
@@ -859,6 +859,7 @@ async def api_tasks_handler(request):
                 'id': task.id,
                 'title': task.title,
                 'status': task.status,
+                'reminder_time': None,
                 'reminder_time_local': None,
                 'overdue': False,
                 'overdue_text': None
@@ -867,6 +868,7 @@ async def api_tasks_handler(request):
                 if task.reminder_time.tzinfo is None:
                     task.reminder_time = pytz.UTC.localize(task.reminder_time)
                 local_reminder = task.reminder_time.astimezone(user_tz)
+                task_data['reminder_time'] = local_reminder.isoformat()
                 task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
                 task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
                 if task_data['overdue']:

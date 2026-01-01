@@ -15,7 +15,6 @@
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span>{{ current_time }} · {{ current_date }}</span>
                     <button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>
-                    <span>Подписка активна до {{ formatted_end_date }}</span>
                 </span>
                 <a href="/logout" class="logout-btn">Выход</a>
                 {% endif %}
@@ -57,6 +56,7 @@
                     {% if profile %}
                     <div class="context-item">
                         <p>Пользователь: @{{ user.username or 'unknown' }}</p>
+                        <p>Подписка: активна до {{ formatted_end_date }}</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
@@ -118,6 +118,14 @@
                             <span>Активные: <span id="active-count">0</span></span>
                             <span style="color: #d73a49;">Просрочено: <span id="overdue-count">0</span></span>
                             <span>Без даты: <span id="nodate-count">0</span></span>
+                        </div>
+                        <div class="stats-text" style="margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;">
+                            <span>Сегодня: <span id="today-count">0</span></span>
+                            <span>Завтра: <span id="tomorrow-count">0</span></span>
+                        </div>
+                        <div id="next-reminder" style="margin-top: 10px; padding: 8px; background: #f6f8fa; border-radius: 6px; font-size: 12px; color: #24292F; display: none;">
+                            <div style="font-weight: 600; margin-bottom: 4px;">⏰ Ближайшее напоминание:</div>
+                            <div id="next-reminder-text"></div>
                         </div>
                     </div>
                     <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
@@ -222,6 +230,8 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
+                    // Обновить список задач
+                    await updateTasks();
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
@@ -232,7 +242,7 @@
         }
 
         // Load previous interactions
-        {% for interaction in interactions|reverse %}
+        {% for interaction in interactions %}
         addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }}, {{ interaction.created_at.isoformat()|tojson }});
         {% endfor %}
         
@@ -335,11 +345,64 @@
             const total = tasks.length;
             const percent = total > 0 ? (completed / total * 100) : 0;
             
+            // Подсчет задач на сегодня и завтра
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const todayTasks = tasks.filter(t => {
+                if (!t.reminder_time) return false;
+                const taskDate = new Date(t.reminder_time);
+                const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+                return taskDay.getTime() === today.getTime();
+            }).length;
+            
+            const tomorrowTasks = tasks.filter(t => {
+                if (!t.reminder_time) return false;
+                const taskDate = new Date(t.reminder_time);
+                const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+                return taskDay.getTime() === tomorrow.getTime();
+            }).length;
+            
+            // Найти ближайшее напоминание
+            const upcomingTasks = tasks.filter(t => t.reminder_time && t.status === 'pending')
+                .map(t => ({...t, date: new Date(t.reminder_time)}))
+                .filter(t => t.date > now)
+                .sort((a, b) => a.date - b.date);
+            
+            const nextReminderEl = document.getElementById('next-reminder');
+            const nextReminderTextEl = document.getElementById('next-reminder-text');
+            
+            if (upcomingTasks.length > 0) {
+                const next = upcomingTasks[0];
+                const delta = next.date - now;
+                const minutes = Math.floor(delta / 60000);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+                
+                let timeText = '';
+                if (days > 0) {
+                    timeText = `через ${days} дн. ${hours % 24} ч.`;
+                } else if (hours > 0) {
+                    timeText = `через ${hours} ч. ${minutes % 60} мин.`;
+                } else {
+                    timeText = `через ${minutes} мин.`;
+                }
+                
+                nextReminderTextEl.textContent = `${timeText} — ${next.title}`;
+                nextReminderEl.style.display = 'block';
+            } else {
+                nextReminderEl.style.display = 'none';
+            }
+            
             const completedEl = document.getElementById('completed-count');
             const totalEl = document.getElementById('total-count');
             const activeEl = document.getElementById('active-count');
             const overdueEl = document.getElementById('overdue-count');
             const nodateEl = document.getElementById('nodate-count');
+            const todayEl = document.getElementById('today-count');
+            const tomorrowEl = document.getElementById('tomorrow-count');
             const progressEl = document.getElementById('progress-fill');
             
             if (completedEl) completedEl.textContent = completed;
@@ -347,6 +410,8 @@
             if (activeEl) activeEl.textContent = active;
             if (overdueEl) overdueEl.textContent = overdue;
             if (nodateEl) nodateEl.textContent = nodate;
+            if (todayEl) todayEl.textContent = todayTasks;
+            if (tomorrowEl) tomorrowEl.textContent = tomorrowTasks;
             if (progressEl) progressEl.style.width = percent + '%';
         }
         
@@ -392,6 +457,14 @@
                     updateTasks();
                 });
             });
+            
+            // Обновлять счетчик времени каждые 30 секунд
+            setInterval(() => {
+                const nextReminderEl = document.getElementById('next-reminder');
+                if (nextReminderEl && nextReminderEl.style.display !== 'none') {
+                    updateTasks();
+                }
+            }, 30000);
         });
         
         async function updateTasks() {
@@ -491,13 +564,15 @@
                     // Update header info
                     const headerInfo = document.getElementById('header-info');
                     if (headerInfo && data.current_time && data.current_date && data.formatted_end_date) {
-                        headerInfo.textContent = `${data.current_time} · ${data.current_date} Подписка активна до ${data.formatted_end_date}`;
+                        headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span><button onclick="openTimezoneModal()" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline;" title="Изменить часовой пояс">изменить время</button>`;
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
                     if (Object.keys(data.profile).length > 0) {
-                        let html = '<div class="context-item">';
+                        let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>';
+                        html += '<div class="context-item">';
                         html += `<p>Пользователь: @${data.profile.username || 'unknown'}</p>`;
+                        html += `<p>Подписка: активна до ${data.formatted_end_date}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
