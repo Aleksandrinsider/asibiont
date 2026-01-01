@@ -344,36 +344,13 @@
 
 
 
-        // Check for overdue tasks and update tasks section background
-        async function updateTasksBackground() {
-            try {
-                const response = await fetch('/api/tasks');
-                if (response.ok) {
-                    const data = await response.json();
-                    const hasOverdue = data.tasks.some(task => task.overdue && task.status === 'pending');
-                    const tasksSection = document.querySelector('.tasks-section');
-                    if (tasksSection) {
-                        if (hasOverdue) {
-                            tasksSection.style.backgroundColor = 'rgba(255, 129, 130, 0.15)';
-                        } else {
-                            tasksSection.style.backgroundColor = 'rgba(6, 132, 135, 0.08)';
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error updating tasks background:', error);
-            }
-        }
-
         // Initial update
-        updateTasksBackground();
 
         // Auto-update every 30 seconds
         setInterval(() => {
             updateTasks();
             updatePartners();
             updateProfile();
-            updateTasksBackground();
         }, 30000);
 
         async function clearUserTasks() {
