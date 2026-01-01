@@ -600,7 +600,8 @@
                     const data = await response.json();
                     const peopleSection = document.querySelector('.people-section');
                     if (data.partners.length > 0) {
-                        let html = '<div class="people-list">';
+                        let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
+                        html += '<div class="people-list">';
                         data.partners.forEach(partner => {
                             html += `<div class="person-card">
                                 <p><strong>@${partner.contact_info}</strong></p>
@@ -610,7 +611,7 @@
                         html += '</div>';
                         peopleSection.innerHTML = html;
                     } else {
-                        peopleSection.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
+                        peopleSection.innerHTML = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3><p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
                     }
                 }
             } catch (error) {
