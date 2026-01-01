@@ -45,6 +45,25 @@ logger = logging.getLogger(__name__)
 # Global Redis client
 redis_client = None
 
+async def get_timezone_from_ip(ip_address):
+    """Определяет timezone по IP адресу через ipapi.co"""
+    try:
+        # Игнорируем локальные IP
+        if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
+            return 'Europe/Moscow', 'Moscow'  # По умолчанию для локальных
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f'https://ipapi.co/{ip_address}/json/', timeout=aiohttp.ClientTimeout(total=3)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    timezone = data.get('timezone')
+                    city = data.get('city')
+                    logger.info(f"Detected timezone: {timezone}, city: {city} for IP: {ip_address}")
+                    return timezone if timezone else 'UTC', city
+    except Exception as e:
+        logger.error(f"Error getting timezone from IP {ip_address}: {e}")
+    return 'UTC', None
+
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
     token = TELEGRAM_TOKEN
@@ -79,9 +98,25 @@ async def auth_handler(request):
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             logger.info(f"Creating new user with telegram_id: {user_id}")
-            user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'))
+            
+            # Определяем timezone по IP
+            ip_address = request.headers.get('X-Forwarded-For', request.remote).split(',')[0].strip()
+            timezone, city = await get_timezone_from_ip(ip_address)
+            logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
+            
+            user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), timezone=timezone)
             session_db.add(user)
             session_db.commit()
+            
+            # Создаем профиль с городом, если определили
+            if city:
+                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                if not profile:
+                    profile = UserProfile(user_id=user.id, city=city, contact_info=f"user{user_id}")
+                    session_db.add(profile)
+                else:
+                    profile.city = city
+                session_db.commit()
         else:
             logger.info(f"Found existing user: {user.id}")
         
@@ -832,6 +867,38 @@ async def api_tasks_handler(request):
     finally:
         session_db.close()
 
+async def update_timezone_handler(request):
+    """Обновляет timezone пользователя через веб-панель"""
+    try:
+        user_id = request.get('user_id')
+        if not user_id:
+            return web.json_response({'status': 'error', 'message': 'Not authenticated'}, status=401)
+        
+        data = await request.json()
+        timezone = data.get('timezone')
+        
+        if not timezone:
+            return web.json_response({'status': 'error', 'message': 'Timezone required'}, status=400)
+        
+        # Проверка валидности timezone
+        try:
+            pytz.timezone(timezone)
+        except:
+            return web.json_response({'status': 'error', 'message': 'Invalid timezone'}, status=400)
+        
+        session_db = Session()
+        user = session_db.query(User).filter_by(id=user_id).first()
+        if user:
+            user.timezone = timezone
+            session_db.commit()
+            logger.info(f"Updated timezone for user {user_id} to {timezone}")
+        session_db.close()
+        
+        return web.json_response({'status': 'ok'})
+    except Exception as e:
+        logger.error(f"Error updating timezone: {e}")
+        return web.json_response({'status': 'error', 'message': str(e)}, status=500)
+
 
 # Routes
 app.router.add_get('/', login_handler)
@@ -846,6 +913,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_get('/clear_db', clear_db_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
+app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
