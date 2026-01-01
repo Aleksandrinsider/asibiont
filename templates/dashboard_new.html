@@ -162,19 +162,16 @@
         }
 
         async function sendChatMessage() {
-            console.log('sendChatMessage called');
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             if (!message) return;
 
-            console.log('Sending message:', message);
             addMessage(message, 'user');
             input.value = '';
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 сек timeout
-                console.log('Fetching /chat');
+                const timeoutId = setTimeout(() => controller.abort(), 60000);
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {
@@ -184,32 +181,15 @@
                     credentials: 'include',
                     signal: controller.signal
                 });
-                console.log('Response status:', response.status);
                 clearTimeout(timeoutId);
                 const data = await response.json();
-                console.log('Response data:', data);
                 if (response.ok) {
                     addMessage(data.response, 'ai');
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
             } catch (error) {
-                console.error('Error:', error);
                 addMessage('Ошибка: ' + error.message, 'ai');
-            }
-        }
-
-        function sendQuickMessage(message) {
-            document.getElementById('message-input').value = message;
-            sendChatMessage();
-        }
-
-        async function login() {
-            try {
-                await fetch('/test_login');
-                location.reload();
-            } catch (error) {
-                console.error('Login failed:', error);
             }
         }
 
@@ -220,38 +200,34 @@
 
         // Dynamic data updates
         async function updateTasks() {
-            console.log('updateTasks called');
             try {
-                console.log('Fetching /api/tasks');
                 const response = await fetch('/api/tasks');
-                console.log('updateTasks response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('updateTasks data:', data);
                     const tasksSection = document.querySelector('.tasks-section');
                     if (data.tasks.length > 0) {
-                        let html = '';
+                        let html = '<ul>';
                         data.tasks.forEach(task => {
-                            html += `<div class="task-item">
-                                <div class="task-content">
-                                    <h4>${task.title}</h4>`;
+                            html += '<li style="display: flex; justify-content: space-between; align-items: center;">';
+                            html += '<div>';
+                            html += `${task.title}<br>`;
                             if (task.reminder_time_local) {
-                                html += `<p>Напоминание: ${task.reminder_time_local}</p>`;
+                                html += `Напоминание: ${task.reminder_time_local}`;
                                 if (task.overdue) {
-                                    html += `<p style="color: red;">(просрочено)</p>`;
+                                    html += ` <span style="color: red;">(${task.overdue_text})</span>`;
                                 }
+                                html += '<br>';
                             }
-                            html += `<p>Статус: `;
-                            if (task.status === 'completed') html += 'Завершено';
-                            else if (task.status === 'pending') html += 'В ожидании';
-                            else if (task.status === 'in_progress') html += 'В работе';
-                            else if (task.status === 'skipped') html += 'Пропущено';
-                            else html += task.status;
-                            html += `</p>
-                                </div>
-                                <button class="delete-btn" onclick="deleteTask(${task.id})">Удалить</button>
-                            </div>`;
+                            let statusText = 'В ожидании';
+                            if (task.status === 'completed') statusText = 'Завершено';
+                            else if (task.status === 'in_progress') statusText = 'В работе';
+                            else if (task.status === 'skipped') statusText = 'Пропущено';
+                            html += `Статус: ${statusText}`;
+                            html += '</div>';
+                            html += `<button onclick="clearSingleTask(${task.id})" class="delete-btn">Удалить</button>`;
+                            html += '</li>';
                         });
+                        html += '</ul>';
                         tasksSection.innerHTML = html;
                     } else {
                         tasksSection.innerHTML = '<p>Здесь появятся информация о ваших задачах</p>';
@@ -271,6 +247,8 @@
             if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
             try {
                 console.log('Fetching /clear_single_task');
+            if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
+            try {
                 const response = await fetch('/clear_single_task', {
                     method: 'POST',
                     headers: {
@@ -279,15 +257,8 @@
                     body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
-                console.log('Delete response status:', response.status);
                 if (response.ok) {
-                    updateTasks();
-                } else {
-                    console.error('Failed to delete task');
-                }
-            } catch (error) {
-                console.error('Error deleting task:', error);
-            }
+                    updateTasks(
         }
 
         async function updatePartners() {
@@ -372,45 +343,6 @@
                 const response = await fetch('/api/tasks');
                 if (response.ok) {
                     const data = await response.json();
-                    const tasksSection = document.querySelector('.tasks-section');
-                    if (data.tasks.length > 0) {
-                        let html = '<ul>';
-                        data.tasks.forEach(task => {
-                            html += '<li style="display: flex; justify-content: space-between; align-items: center;">';
-                            html += '<div>';
-                            html += `${task.title}<br>`;
-                            if (task.reminder_time_local) {
-                                html += `Напоминание: ${task.reminder_time_local}`;
-                                if (task.overdue) {
-                                    html += ` <span style="color: red;">(${task.overdue_text})</span>`;
-                                }
-                                html += '<br>';
-                            }
-                            let statusText = 'В ожидании';
-                            if (task.status === 'completed') statusText = 'Завершено';
-                            else if (task.status === 'in_progress') statusText = 'В работе';
-                            else if (task.status === 'skipped') statusText = 'Пропущено';
-                            html += `Статус: ${statusText}`;
-                            html += '</div>';
-                            html += `<button onclick="clearSingleTask(${task.id})" class="delete-btn">Удалить</button>`;
-                            html += '</li>';
-                        });
-                        html += '</ul>';
-                        tasksSection.innerHTML = html;
-                    } else {
-                        tasksSection.innerHTML = '<p>Здесь появятся информация о ваших задачах</p>';
-                    }
-                }
-            } catch (error) {
-                console.error('Error updating tasks:', error);
-            }
-        }
-
-        // Update data every 30 seconds
-        setInterval(() => {
-            updateTasks();
-            updatePartners();
-            updateProfile();
             updateReminders();
         }, 30000);
 
