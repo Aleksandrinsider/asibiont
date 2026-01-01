@@ -320,50 +320,22 @@
         }
         
         function renderTaskGroups(tasks) {
-            const groups = groupTasksByDue(tasks);
             const container = document.getElementById('task-groups');
             if (!container) return;
             
-            let html = '';
-            const groupLabels = {
-                overdue: 'Просрочено',
-                nodate: 'Без даты'
-            };
+            let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
             
-            // Рендерим группы с заголовками
-            for (const [key, label] of Object.entries(groupLabels)) {
-                if (groups[key].length > 0) {
-                    html += `<div class="task-group"><h4>${label}</h4><ul>`;
-                    groups[key].forEach(task => {
-                        if (currentFilter === 'active' && task.status === 'completed') return;
-                        if (currentFilter === 'completed' && task.status !== 'completed') return;
-                        
-                        html += '<li class="task-item" data-task-id="' + task.id + '">';
-                        html += renderTaskItem(task);
-                        html += '</li>';
-                    });
-                    html += '</ul></div>';
-                }
-            }
-            
-            // Рендерим группы без заголовков
-            const noHeaderGroups = ['today', 'tomorrow', 'later', 'completed'];
-            noHeaderGroups.forEach(key => {
-                if (groups[key].length > 0) {
-                    html += '<ul style="list-style: none; padding: 0; margin: 0;">';
-                    groups[key].forEach(task => {
-                        if (currentFilter === 'active' && task.status === 'completed') return;
-                        if (currentFilter === 'completed' && task.status !== 'completed') return;
-                        
-                        html += '<li class="task-item" data-task-id="' + task.id + '">';
-                        html += renderTaskItem(task);
-                        html += '</li>';
-                    });
-                    html += '</ul>';
-                }
+            tasks.forEach(task => {
+                if (currentFilter === 'active' && task.status === 'completed') return;
+                if (currentFilter === 'completed' && task.status !== 'completed') return;
+                
+                html += '<li class="task-item" data-task-id="' + task.id + '">';
+                html += renderTaskItem(task);
+                html += '</li>';
             });
             
-            container.innerHTML = html;
+            html += '</ul>';
+            container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
         }
         
         function renderTaskItem(task) {
