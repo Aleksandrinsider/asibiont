@@ -361,8 +361,10 @@ def update_user_memory(info, user_id=None):
     session.close()
     return result
 
-def edit_task(task_id, title=None, description=None, user_id=None):
+def edit_task(task_id, title=None, description=None, reminder_time=None, user_id=None):
     from models import Session, Task
+    from datetime import datetime
+    from reminder_service import ReminderService
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
@@ -374,6 +376,16 @@ def edit_task(task_id, title=None, description=None, user_id=None):
             task.title = title
         if description:
             task.description = description
+        if reminder_time:
+            try:
+                reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+                task.reminder_time = reminder_time_parsed
+                # Обновляем напоминание в ReminderService
+                reminder_service = ReminderService()
+                reminder_service.schedule_reminder(task.id, reminder_time_parsed, user_id)
+            except ValueError:
+                session.close()
+                return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM."
         session.commit()
         result = f"Обновлена задача '{task.title}'."
     else:
@@ -678,13 +690,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "edit_task",
-            "description": "Изменить название или описание задачи",
+            "description": "Изменить название, описание или время напоминания задачи",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи"},
                     "title": {"type": "string", "description": "Новое название, опционально"},
-                    "description": {"type": "string", "description": "Новое описание, опционально"}
+                    "description": {"type": "string", "description": "Новое описание, опционально"},
+                    "reminder_time": {"type": "string", "description": "Новое время напоминания в формате YYYY-MM-DD HH:MM, опционально"}
                 },
                 "required": ["task_id"]
             }
