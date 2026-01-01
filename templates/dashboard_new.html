@@ -332,23 +332,30 @@
             
             for (const [key, label] of Object.entries(groupLabels)) {
                 if (groups[key].length > 0) {
-                    html += `<div class="task-group"><h4>${label}</h4><ul>`;
+                    // Показывать заголовки только для некоторых групп
+                    const showHeader = !['today', 'tomorrow'].includes(key);
+                    if (showHeader) {
+                        html += `<div class="task-group"><h4>${label}</h4><ul>`;
+                    } else {
+                        html += '<ul style="list-style: none; padding: 0; margin: 0;">';
+                    }
                     groups[key].forEach(task => {
                         if (currentFilter === 'active' && task.status === 'completed') return;
                         if (currentFilter === 'completed' && task.status !== 'completed') return;
                         
                         html += '<li class="task-item" data-task-id="' + task.id + '">';
+                        html += '<div style="flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">';
                         const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
-                        html += '<div class="task-title"' + titleStyle + '>' + task.title + '</div>';
+                        html += '<span class="task-title"' + titleStyle + '>' + task.title + '</span>';
                         if (task.reminder_time_local) {
-                            html += '<div class="task-time">⏰ ' + task.reminder_time_local;
+                            html += '<span class="task-time">· ' + task.reminder_time_local;
                             if (task.overdue) html += ' <span style="color: red;">(' + task.overdue_text + ')</span>';
-                            html += '</div>';
+                            html += '</span>';
                         }
                         let statusText = task.status === 'completed' ? 'Завершено' : 
                                        task.status === 'in_progress' ? 'В работе' : 
                                        task.status === 'skipped' ? 'Пропущено' : 'В ожидании';
-                        html += '<div class="task-status">' + statusText + '</div>';
+                        html += '<span class="task-status">· ' + statusText + '</span>';
                         html += '</div>';
                         html += '<div class="task-actions">';
                         if (task.status !== 'completed') {
@@ -358,7 +365,10 @@
                         html += '</div>';
                         html += '</li>';
                     });
-                    html += '</ul></div>';
+                    html += '</ul>';
+                    if (showHeader) {
+                        html += '</div>';
+                    }
                 }
             }
             
