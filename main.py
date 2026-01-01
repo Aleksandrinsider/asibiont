@@ -407,8 +407,8 @@ async def chat_handler(request):
             response = await chat_with_ai(message, context, user_id)
             logger.info(f"AI response: {response[:100]}...")
         except Exception as e:
-            logger.error(f"Error getting AI response: {e}")
-            response = "Извините, произошла ошибка при обработке сообщения."
+            logger.error(f"Error getting AI response: {e}", exc_info=True)
+            response = f"Ошибка: {str(e)}"
 
         # Save context back to Redis
         context.append({"user": message, "agent": response})
