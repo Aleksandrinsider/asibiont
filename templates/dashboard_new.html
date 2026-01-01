@@ -334,11 +334,11 @@
             }
         }
 
-        async function updateTasks() {
-            try {
-                const response = await fetch('/api/tasks');
-                if (response.ok) {
-                    const data = await response.json();
+        // Auto-update every 30 seconds
+        setInterval(() => {
+            updateTasks();
+            updatePartners();
+            updateProfile();
             updateReminders();
         }, 30000);
 
