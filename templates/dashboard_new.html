@@ -63,8 +63,12 @@
                 </div>
 
                 <div class="people-section">
+                    <div class="tasks-header">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
+                        <button onclick="refreshPeople()" class="refresh-btn">↻</button>
+                    </div>
                     {% if partners %}
-                    <div class="people-list">
+                    <div class="people-list" id="people-list">
                         {% for partner in partners %}
                         {% if partner.contact_info %}
                         <div class="person-card">
@@ -75,7 +79,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>
+                    <p style="margin: 0; color: #656D76; font-size: 13px;" id="people-list">Нет контактов</p>
                     {% endif %}
                 </div>
             </div>
@@ -100,25 +104,26 @@
                 </div>
             </div>
 
-            <!-- Правая колонка - Задачи и напоминания -->
+            <!-- Правая колонка - Задачи -->
             {% if logged_in %}
             <div class="right-column">
+                <div class="tasks-header">
+                    <div class="task-filters">
+                        <button class="filter-btn active" data-filter="all">Все</button>
+                        <button class="filter-btn" data-filter="active">Активные</button>
+                        <button class="filter-btn" data-filter="completed">Завершено</button>
+                    </div>
+                    <button onclick="refreshTasks()" class="refresh-btn">↻</button>
+                </div>
                 <div class="tasks-section">
                     {% if tasks %}
-                    <ul>
-                        {% for task in tasks %}
-                        <li style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                {{ task.title }}<br>
-                                {% if task.reminder_time %}
-                                Напоминание: {{ task.reminder_time_local }}{% if task.overdue %} <span style="color: red;">({{ task.overdue_text }})</span>{% endif %}<br>
-                                {% endif %}
-                                Статус: {% if task.status == 'completed' %}Завершено{% elif task.status == 'pending' %}В ожидании{% elif task.status == 'in_progress' %}В работе{% elif task.status == 'skipped' %}Пропущено{% else %}{{ task.status }}{% endif %}
-                            </div>
-                            <button onclick="clearSingleTask({{ task.id }})" class="delete-btn">Удалить</button>
-                        </li>
-                        {% endfor %}
-                    </ul>
+                    <div class="task-stats">
+                        <div class="stats-text">Завершено: <span id="completed-count">0</span> / <span id="total-count">{{ tasks|length }}</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                    </div>
+                    <div class="task-groups" id="task-groups">
+                        <!-- Задачи будут сгруппированы по срокам -->
+                    </div>
                     {% else %}
                     <p style="margin: 0; color: #656D76; font-size: 13px;">Нет задач</p>
                     {% endif %}
@@ -227,44 +232,165 @@
         {% for interaction in interactions|reverse %}
         addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }}, {{ interaction.created_at.isoformat()|tojson }});
         {% endfor %}
+        
+        // Initialize task groups on load
+        {% if tasks %}
+        const initialTasks = {{ tasks|tojson }};
+        renderTaskGroups(initialTasks);
+        {% endif %}
 
         // Dynamic data updates
+        let currentFilter = 'all';
+        
+        function groupTasksByDue(tasks) {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const groups = {
+                overdue: [],
+                today: [],
+                tomorrow: [],
+                later: [],
+                nodate: []
+            };
+            
+            tasks.forEach(task => {
+                if (!task.reminder_time) {
+                    groups.nodate.push(task);
+                    return;
+                }
+                const taskDate = new Date(task.reminder_time);
+                const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
+                
+                if (taskDay < today) groups.overdue.push(task);
+                else if (taskDay.getTime() === today.getTime()) groups.today.push(task);
+                else if (taskDay.getTime() === tomorrow.getTime()) groups.tomorrow.push(task);
+                else groups.later.push(task);
+            });
+            
+            return groups;
+        }
+        
+        function renderTaskGroups(tasks) {
+            const groups = groupTasksByDue(tasks);
+            const container = document.getElementById('task-groups');
+            if (!container) return;
+            
+            let html = '';
+            const groupLabels = {
+                overdue: '⚠️ Просрочено',
+                today: '📅 Сегодня',
+                tomorrow: '📆 Завтра',
+                later: '📌 Позже',
+                nodate: '📋 Без даты'
+            };
+            
+            for (const [key, label] of Object.entries(groupLabels)) {
+                if (groups[key].length > 0) {
+                    html += `<div class="task-group"><h4>${label}</h4><ul>`;
+                    groups[key].forEach(task => {
+                        if (currentFilter === 'active' && task.status === 'completed') return;
+                        if (currentFilter === 'completed' && task.status !== 'completed') return;
+                        
+                        html += '<li class="task-item" data-task-id="' + task.id + '">';
+                        html += '<div class="task-content">';
+                        html += '<div class="task-title">' + task.title + '</div>';
+                        if (task.reminder_time_local) {
+                            html += '<div class="task-time">⏰ ' + task.reminder_time_local;
+                            if (task.overdue) html += ' <span style="color: red;">(' + task.overdue_text + ')</span>';
+                            html += '</div>';
+                        }
+                        let statusText = task.status === 'completed' ? 'Завершено' : 
+                                       task.status === 'in_progress' ? 'В работе' : 
+                                       task.status === 'skipped' ? 'Пропущено' : 'В ожидании';
+                        html += '<div class="task-status">' + statusText + '</div>';
+                        html += '</div>';
+                        html += '<div class="task-actions">';
+                        if (task.status !== 'completed') {
+                            html += '<button onclick="completeTask(' + task.id + ')" class="quick-action">✓</button>';
+                        }
+                        html += '<button onclick="editTask(' + task.id + ', \'' + task.title.replace(/'/g, "\\'") + '\')" class="quick-action">✎</button>';
+                        html += '<button onclick="clearSingleTask(' + task.id + ')" class="delete-btn">×</button>';
+                        html += '</div>';
+                        html += '</li>';
+                    });
+                    html += '</ul></div>';
+                }
+            }
+            
+            container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
+            updateStats(tasks);
+        }
+        
+        function updateStats(tasks) {
+            const completed = tasks.filter(t => t.status === 'completed').length;
+            const total = tasks.length;
+            const percent = total > 0 ? (completed / total * 100) : 0;
+            
+            const completedEl = document.getElementById('completed-count');
+            const totalEl = document.getElementById('total-count');
+            const progressEl = document.getElementById('progress-fill');
+            
+            if (completedEl) completedEl.textContent = completed;
+            if (totalEl) totalEl.textContent = total;
+            if (progressEl) progressEl.style.width = percent + '%';
+        }
+        
+        async function completeTask(taskId) {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: `Отметь задачу ${taskId} как выполненную` }),
+                credentials: 'include'
+            });
+            if (response.ok) {
+                await updateTasks();
+            }
+        }
+        
+        async function editTask(taskId, currentTitle) {
+            const newTitle = prompt('Новое название задачи:', currentTitle);
+            if (newTitle && newTitle !== currentTitle) {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: `Переименуй задачу ${taskId} в "${newTitle}"` }),
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    await updateTasks();
+                }
+            }
+        }
+        
+        async function refreshTasks() {
+            await updateTasks();
+            await updatePeople();
+        }
+        
+        // Filter buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentFilter = e.target.dataset.filter;
+                    updateTasks();
+                });
+            });
+        });
+        
         async function updateTasks() {
             try {
                 const response = await fetch('/api/tasks');
                 if (response.ok) {
                     const data = await response.json();
-                    const tasksSection = document.querySelector('.tasks-section');
-                    if (data.tasks.length > 0) {
-                        let html = '<ul>';
-                        data.tasks.forEach(task => {
-                            html += '<li style="display: flex; justify-content: space-between; align-items: center;">';
-                            html += '<div>';
-                            html += `${task.title}<br>`;
-                            if (task.reminder_time_local) {
-                                html += `Напоминание: ${task.reminder_time_local}`;
-                                if (task.overdue) {
-                                    html += ` <span style="color: red;">(${task.overdue_text})</span>`;
-                                }
-                                html += '<br>';
-                            }
-                            let statusText = 'В ожидании';
-                            if (task.status === 'completed') statusText = 'Завершено';
-                            else if (task.status === 'in_progress') statusText = 'В работе';
-                            else if (task.status === 'skipped') statusText = 'Пропущено';
-                            html += `Статус: ${statusText}`;
-                            html += '</div>';
-                            html += `<button onclick="clearSingleTask(${task.id})" class="delete-btn">Удалить</button>`;
-                            html += '</li>';
-                        });
-                        html += '</ul>';
-                        tasksSection.innerHTML = html;
-                    } else {
-                        tasksSection.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет задач</p>';
-                    }
+                    renderTaskGroups(data.tasks);
                 }
             } catch (error) {
-                console.error('Error updating tasks:', error);
+                console.error('Failed to update tasks:', error);
             }
         }
 
@@ -285,6 +411,39 @@
             } catch (error) {
                 console.error('Error deleting task:', error);
             }
+        }
+
+        async function updatePeople() {
+            try {
+                const response = await fetch('/api/partners');
+                if (response.ok) {
+                    const data = await response.json();
+                    const peopleList = document.getElementById('people-list');
+                    if (!peopleList) return;
+                    
+                    if (data.partners && data.partners.length > 0) {
+                        let html = '<div class="people-list">';
+                        data.partners.forEach(partner => {
+                            if (partner.contact_info) {
+                                html += '<div class="person-card">';
+                                html += `<p><strong>@${partner.contact_info}</strong></p>`;
+                                html += `<p>Общие интересы: ${partner.common_interests || 'Нет общих интересов'}</p>`;
+                                html += '</div>';
+                            }
+                        });
+                        html += '</div>';
+                        peopleList.outerHTML = html;
+                    } else {
+                        peopleList.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating people:', error);
+            }
+        }
+        
+        async function refreshPeople() {
+            await updatePeople();
         }
 
         async function updatePartners() {
