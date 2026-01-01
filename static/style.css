@@ -291,7 +291,7 @@ body {
 .reminder-pulse {
     width: 8px;
     height: 8px;
-    background-color: #d73a49;
+    background-color: #068487;
     border-radius: 50%;
     animation: pulse 2s infinite;
 }
