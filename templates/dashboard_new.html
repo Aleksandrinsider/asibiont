@@ -258,6 +258,9 @@
             }
         }
 
+        // Dynamic data updates
+        let currentFilter = 'all';
+
         // Load previous interactions
         {% for interaction in interactions %}
         addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }}, {{ interaction.created_at.isoformat()|tojson }});
@@ -275,9 +278,6 @@
             await updateTasks();
         }, 10000);
         {% endif %}
-
-        // Dynamic data updates
-        let currentFilter = 'all';
         
         function groupTasksByDue(tasks) {
             const now = new Date();
