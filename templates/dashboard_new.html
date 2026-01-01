@@ -124,47 +124,6 @@
         </div>
     </div>
     <script>
-            alert('Sending message');
-            const input = document.getElementById('message-input');
-            const message = input.value.trim();
-            console.log('Sending message:', message);
-            if (!message) {
-                console.log('Message is empty, sending test');
-                message = 'test';
-            }
-
-            // Add user message
-            addMessage(message, 'user');
-            input.value = '';
-
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 сек timeout
-                console.log('Fetching /chat');
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ message: message }),
-                    credentials: 'include',
-                    signal: controller.signal
-                });
-                console.log('Response status:', response.status);
-                clearTimeout(timeoutId);
-                const data = await response.json();
-                console.log('Response data:', data);
-                if (response.ok) {
-                    addMessage(data.response, 'agent');
-                } else {
-                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'agent');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage('Ошибка: ' + error.message, 'agent');
-            }
-        }
-
         function addMessage(text, sender) {
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
