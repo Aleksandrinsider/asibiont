@@ -25,8 +25,23 @@
                 <h1>ASI BIONT</h1>
                 <p style="margin-bottom: 20px;">Лаборатория искусственного интеллекта ASI Biont — ваш путь к успеху через умное управление задачами и мощное сообщество единомышленников!<br><br>Находите нужных вам людей для совместной работы над задачами в считанные минуты или просто наслаждайтесь общением с теми, у кого такие же интересы как и у вас!<br><br>Авторизуйтесь через Telegram для начала.</p>
                 <div style="display: flex; justify-content: center; margin-top: 20px;">
-                    <iframe src="https://oauth.telegram.org/embed/Asibiont_bot?origin=https%3A%2F%2Ftask-production-31b6.up.railway.app&return_to=https%3A%2F%2Ftask-production-31b6.up.railway.app%2Ftg_auth&size=large&request_access=write" width="280" height="50" frameborder="0" scrolling="no" style="border: none; border-radius: 8px; overflow: visible;"></iframe>
+                    <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                            data-telegram-login="Asibiont_bot" 
+                            data-size="large" 
+                            data-onauth="onTelegramAuth(user)" 
+                            data-request-access="write"></script>
                 </div>
+                <script type="text/javascript">
+                    function onTelegramAuth(user) {
+                        // Build query string from user data
+                        const params = new URLSearchParams();
+                        for (const key in user) {
+                            params.append(key, user[key]);
+                        }
+                        // Redirect to auth handler with user data
+                        window.location.href = '/tg_auth?' + params.toString();
+                    }
+                </script>
             </div>
         </div>
         {% else %}
