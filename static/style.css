@@ -432,7 +432,6 @@ body {
     margin-top: 0;
     margin-bottom: 40px;
     min-height: 150px;
-    overflow-y: auto;
 }
 
 .tasks-section-wrapper {
@@ -471,6 +470,25 @@ body {
     list-style-type: none;
     padding: 0;
     margin: 0;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.tasks-section ul::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tasks-section ul::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tasks-section ul::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 3px;
+}
+
+.tasks-section ul::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .tasks-section li {
@@ -584,8 +602,8 @@ body {
 }
 
 .task-title {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 400;
     color: #1F2328;
     margin: 0;
 }

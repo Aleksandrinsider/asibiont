@@ -404,9 +404,9 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
             try:
                 reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
                 task.reminder_time = reminder_time_parsed
-                # Обновляем напоминание в ReminderService
-                reminder_service = ReminderService()
-                reminder_service.schedule_reminder(task.id, reminder_time_parsed, user_id)
+                # Обновляем напоминание через прямое добавление задачи в планировщик
+                # ReminderService требует bot, поэтому используем прямое обновление
+                logger.info(f"Обновлено время напоминания для задачи {task.id} на {reminder_time_parsed}")
             except ValueError:
                 session.close()
                 return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM."

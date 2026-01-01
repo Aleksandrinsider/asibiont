@@ -1058,6 +1058,36 @@ async def api_tasks_handler(request):
     finally:
         session_db.close()
 
+async def api_interactions_handler(request):
+    """API для получения истории чата"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        
+        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all()
+        
+        interactions_data = []
+        for interaction in interactions:
+            interactions_data.append({
+                'content': interaction.content,
+                'message_type': interaction.message_type,
+                'created_at': interaction.created_at.isoformat()
+            })
+        
+        return web.json_response({'interactions': interactions_data})
+    except Exception as e:
+        logger.error(f"Error fetching interactions: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
 async def update_timezone_handler(request):
     """Обновляет timezone пользователя через веб-панель"""
     try:
@@ -1187,6 +1217,7 @@ app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
+app.router.add_get('/api/interactions', api_interactions_handler)
 
 # Setup for production
 dp = Dispatcher()

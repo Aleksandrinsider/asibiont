@@ -269,11 +269,11 @@
         renderTaskGroups(initialTasks);
         {% endif %}
         
-        // Автоматическое обновление задач каждые 10 секунд
+        // Автоматическое обновление задач каждые 3 секунды
         {% if logged_in %}
         setInterval(async () => {
             await updateTasks();
-        }, 10000);
+        }, 3000);
         {% endif %}
         
         function groupTasksByDue(tasks) {
@@ -665,12 +665,40 @@
         // Initial update
         updateProfile();
 
-        // Auto-update every 30 seconds
+        // Auto-update every 3 seconds
         setInterval(() => {
             updateTasks();
             updatePartners();
             updateProfile();
-        }, 30000);
+        }, 3000);
+
+        // Чат обновляется чаще - каждые 3 секунды
+        {% if logged_in %}
+        setInterval(() => {
+            updateChat();
+        }, 3000);
+        {% endif %}
+
+        let lastMessageCount = {{ interactions|length }};
+
+        async function updateChat() {
+            try {
+                const response = await fetch('/api/interactions');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.interactions && data.interactions.length > lastMessageCount) {
+                        // Добавляем только новые сообщения
+                        const newMessages = data.interactions.slice(lastMessageCount);
+                        newMessages.forEach(interaction => {
+                            addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                        });
+                        lastMessageCount = data.interactions.length;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating chat:', error);
+            }
+        }
 
         async function clearUserTasks() {
             if (confirm('Вы уверены, что хотите удалить все задачи? Это действие нельзя отменить.')) {
