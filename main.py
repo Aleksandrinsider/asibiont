@@ -124,38 +124,39 @@ async def auth_handler(request):
         logger.info(f"Authentication successful for user_id: {user_id}")
         
         session_db = Session()
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            logger.info(f"Creating new user with telegram_id: {user_id}")
-            
-            # Определяем timezone по IP
-            ip_address = request.headers.get('X-Forwarded-For', request.remote).split(',')[0].strip()
-            timezone, city = await get_timezone_from_ip(ip_address)
-            logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
-            
-            user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), timezone=timezone)
-            session_db.add(user)
-            session_db.commit()
-            
-            # Создаем профиль с городом, если определили
-            if city:
-                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
-                if not profile:
-                    profile = UserProfile(user_id=user.id, city=city, contact_info=f"user{user_id}")
-                    session_db.add(profile)
-                else:
-                    profile.city = city
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                logger.info(f"Creating new user with telegram_id: {user_id}")
+                
+                # Определяем timezone по IP
+                ip_address = request.headers.get('X-Forwarded-For', request.remote).split(',')[0].strip()
+                timezone, city = await get_timezone_from_ip(ip_address)
+                logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
+                
+                user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), timezone=timezone)
+                session_db.add(user)
                 session_db.commit()
-        else:
-            logger.info(f"Found existing user: {user.id}")
-        
-        # Increment login count if subscription exists
-        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-        if subscription:
-            subscription.login_count += 1
-            session_db.commit()
-        
-        session_db.close()
+                
+                # Создаем профиль с городом, если определили
+                if city:
+                    profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                    if not profile:
+                        profile = UserProfile(user_id=user.id, city=city, contact_info=f"user{user_id}")
+                        session_db.add(profile)
+                    else:
+                        profile.city = city
+                    session_db.commit()
+            else:
+                logger.info(f"Found existing user: {user.id}")
+            
+            # Increment login count if subscription exists
+            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+            if subscription:
+                subscription.login_count += 1
+                session_db.commit()
+        finally:
+            session_db.close()
         
         session = await get_session(request)
         session['user_id'] = user_id
@@ -204,33 +205,34 @@ async def dashboard_handler(request):
         
         # Получить задачи пользователя
         session_db = Session()
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return {
+                    'logged_in': False,
+                    'current_date': '',
+                    'current_time': '',
+                    'formatted_end_date': None,
+                    'timestamp': int(datetime.now().timestamp())
+                }
+            
+            logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
+            
+            # Проверить подписку
+            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+            logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
+            
+            if not subscription or subscription.status != 'active':
+                logger.info("No active subscription, rendering no_subscription")
+                return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
+            
+            tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+            # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
+            interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
+            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+        finally:
             session_db.close()
-            return {
-                'logged_in': False,
-                'current_date': '',
-                'current_time': '',
-                'formatted_end_date': None,
-                'timestamp': int(datetime.now().timestamp())
-            }
-        
-        logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
-        
-        # Проверить подписку
-        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-        logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
-        
-        if not subscription or subscription.status != 'active':
-            logger.info("No active subscription, rendering no_subscription")
-            session_db.close()
-            return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
-        
-        tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-        profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-        # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
-        interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
-        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
         is_local = LOCAL  # Для использования в шаблоне
         try:
             partners = get_partners_list(user_id=user_id)
@@ -332,8 +334,6 @@ async def dashboard_handler(request):
                 task.overdue = False
                 task.reminder_time_local = None
                 task.overdue_text = None
-        
-        session_db.close()
         
         # Calculate metrics
         total_tasks = len(tasks)
@@ -468,40 +468,41 @@ async def chat_handler(request):
 
         # Save user message
         session_db = Session()
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        logger.info(f"User found: {user is not None}")
-        if user:
-            interaction_user = Interaction(user_id=user.id, message_type='user', content=message)
-            session_db.add(interaction_user)
-            session_db.commit()
-
-        # Get AI response
         try:
-            logger.info(f"Calling chat_with_ai with user_id: {user_id}")
-            response = await chat_with_ai(message, context, user_id)
-            logger.info(f"AI response: {response[:100]}...")
-        except Exception as e:
-            logger.error(f"Error getting AI response: {e}", exc_info=True)
-            response = f"Ошибка: {str(e)}"
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            logger.info(f"User found: {user is not None}")
+            if user:
+                interaction_user = Interaction(user_id=user.id, message_type='user', content=message)
+                session_db.add(interaction_user)
+                session_db.commit()
 
-        # Save context back to Redis
-        context.append({"user": message, "agent": response})
-        if len(context) > 10:
-            context = context[-10:]
-        if redis_client:
+            # Get AI response
             try:
-                await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-                logger.info("Context saved to Redis")
+                logger.info(f"Calling chat_with_ai with user_id: {user_id}")
+                response = await chat_with_ai(message, context, user_id)
+                logger.info(f"AI response: {response[:100]}...")
             except Exception as e:
-                logger.error(f"Error saving context: {e}")
+                logger.error(f"Error getting AI response: {e}", exc_info=True)
+                response = f"Ошибка: {str(e)}"
 
-        # Save agent response
-        if user:
-            interaction_agent = Interaction(user_id=user.id, message_type='ai', content=response)
-            session_db.add(interaction_agent)
-            session_db.commit()
+            # Save context back to Redis
+            context.append({"user": message, "agent": response})
+            if len(context) > 10:
+                context = context[-10:]
+            if redis_client:
+                try:
+                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                    logger.info("Context saved to Redis")
+                except Exception as e:
+                    logger.error(f"Error saving context: {e}")
 
-        session_db.close()
+            # Save agent response
+            if user:
+                interaction_agent = Interaction(user_id=user.id, message_type='ai', content=response)
+                session_db.add(interaction_agent)
+                session_db.commit()
+        finally:
+            session_db.close()
 
         return web.json_response({'response': response})
     except Exception as e:
@@ -694,17 +695,16 @@ async def direct_login_handler(request):
     
     # Check user exists and has active subscription
     session_db = Session()
-    user = session_db.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found in database'}, status=404)
+        
+        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+        if not subscription or subscription.status != 'active':
+            return web.json_response({'error': 'User has no active subscription'}, status=403)
+    finally:
         session_db.close()
-        return web.json_response({'error': 'User not found in database'}, status=404)
-    
-    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-    if not subscription or subscription.status != 'active':
-        session_db.close()
-        return web.json_response({'error': 'User has no active subscription'}, status=403)
-    
-    session_db.close()
     
     # Set session
     session = await get_session(request)
@@ -794,10 +794,12 @@ async def api_partners_handler(request):
             partners = []
         
         session_db = Session()
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-        interactions = session_db.query(Interaction).filter_by(user_id=user.id).all() if user else []
-        session_db.close()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+            interactions = session_db.query(Interaction).filter_by(user_id=user.id).all() if user else []
+        finally:
+            session_db.close()
         
         # Add common interests, skills, goals and recommendation reason
         if profile and partners:
@@ -875,10 +877,12 @@ async def api_profile_handler(request):
         return web.json_response({'error': 'Not logged in'}, status=401)
     
     session_db = Session()
-    user = session_db.query(User).filter_by(telegram_id=user_id).first()
-    profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-    subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
-    session_db.close()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+    finally:
+        session_db.close()
     
     # Calculate current time and date
     base_now = datetime.now(pytz.UTC)
@@ -928,9 +932,11 @@ async def api_reminders_handler(request):
         return web.json_response({'error': 'Not logged in'}, status=401)
     
     session_db = Session()
-    user = session_db.query(User).filter_by(telegram_id=user_id).first()
-    tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-    session_db.close()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+    finally:
+        session_db.close()
     
     user_tz = pytz.UTC
     if user and user.timezone:
@@ -1109,12 +1115,14 @@ async def update_timezone_handler(request):
             return web.json_response({'status': 'error', 'message': 'Invalid timezone'}, status=400)
         
         session_db = Session()
-        user = session_db.query(User).filter_by(id=user_id).first()
-        if user:
-            user.timezone = timezone
-            session_db.commit()
-            logger.info(f"Updated timezone for user {user_id} to {timezone}")
-        session_db.close()
+        try:
+            user = session_db.query(User).filter_by(id=user_id).first()
+            if user:
+                user.timezone = timezone
+                session_db.commit()
+                logger.info(f"Updated timezone for user {user_id} to {timezone}")
+        finally:
+            session_db.close()
         
         return web.json_response({'status': 'ok'})
     except Exception as e:
