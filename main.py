@@ -14,6 +14,7 @@ from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, RE
 from datetime import datetime, timedelta
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
+from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
 import logging
 
@@ -1098,6 +1099,22 @@ class SafeSimpleCookieStorage(SimpleCookieStorage):
             return await self.new_session()
 
 aiohttp_session.setup(app, SafeSimpleCookieStorage())
+
+# Initialize ReminderService
+if bot:
+    ai_service = AIIntegration()
+    reminder_service = ReminderService(bot=bot, ai_service=ai_service)
+    logger.info("ReminderService initialized")
+    
+    # Start ReminderService on app startup
+    async def start_reminder_service(app):
+        await reminder_service.start()
+        logger.info("ReminderService started")
+    
+    app.on_startup.append(start_reminder_service)
+else:
+    logger.warning("Bot not created, skipping ReminderService setup")
+    reminder_service = None
 
 if bot:
     webhook_requests_handler = SimpleRequestHandler(

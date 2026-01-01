@@ -196,7 +196,7 @@
             typingDiv.id = 'typing-indicator';
             typingDiv.innerHTML = `
                 <div class="typing-dots">
-                    <span></span><span></span>
+                    <span></span><span></span><span></span>
                 </div>
             `;
             messages.appendChild(typingDiv);
@@ -348,9 +348,8 @@
                         const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
                         html += '<span class="task-title"' + titleStyle + '>' + task.title + '</span>';
                         if (task.reminder_time_local) {
-                            html += '<span class="task-time">· ' + task.reminder_time_local;
-                            if (task.overdue) html += ' <span style="color: red;">(' + task.overdue_text + ')</span>';
-                            html += '</span>';
+                            html += '<span class="task-time">· ' + task.reminder_time_local + '</span>';
+                            if (task.overdue) html += ' <span class="task-time" style="color: #d73a49;">· ' + task.overdue_text + '</span>';
                         }
                         let statusText = task.status === 'completed' ? 'Завершено' : 
                                        task.status === 'in_progress' ? 'В работе' : 

@@ -263,8 +263,8 @@ body {
 }
 
 .typing-dots span {
-    width: 8px;
-    height: 8px;
+    width: 5px;
+    height: 5px;
     background-color: #656D76;
     border-radius: 50%;
     display: inline-block;
@@ -587,7 +587,8 @@ body {
 
 .task-actions {
     display: flex;
-    gap: 6px;
+    flex-direction: column;
+    gap: 2px;
     align-items: center;
 }
 

@@ -236,6 +236,22 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     session.add(task)
     session.commit()
     task_id = task.id
+    
+    # Планировать напоминание если указано reminder_time
+    if task.reminder_time:
+        try:
+            from main import reminder_service
+            if reminder_service:
+                reminder_service.schedule_reminder(
+                    task_id=task.id,
+                    reminder_time=task.reminder_time,
+                    user_id=user.telegram_id,
+                    task_title=task.title
+                )
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to schedule reminder for task {task_id}: {e}")
+    
     # Обновить аналитику профиля
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if profile:
