@@ -334,6 +334,35 @@ async def dashboard_handler(request):
                         reminder_time_local = task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
                         upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
         
+        # Update activity streak
+        activity_streak = 0
+        if profile:
+            now_utc = datetime.now(pytz.UTC)
+            last_activity = profile.last_activity
+            if last_activity:
+                if last_activity.tzinfo is None:
+                    last_activity = pytz.UTC.localize(last_activity)
+                days_diff = (now_utc.date() - last_activity.date()).days
+                
+                if days_diff == 0:
+                    # Сегодня - сохраняем текущий streak
+                    activity_streak = profile.activity_streak if profile.activity_streak else 1
+                elif days_diff == 1:
+                    # Вчера - увеличиваем streak
+                    activity_streak = (profile.activity_streak or 0) + 1
+                    profile.activity_streak = activity_streak
+                else:
+                    # Пропуск дней - сбрасываем streak
+                    activity_streak = 1
+                    profile.activity_streak = 1
+            else:
+                activity_streak = 1
+                profile.activity_streak = 1
+            
+            # Обновляем last_activity
+            profile.last_activity = now_utc
+            session_db.commit()
+        
         # Преобразуем задачи в словари для JSON сериализации
         tasks_dict = []
         for task in tasks:
@@ -369,6 +398,7 @@ async def dashboard_handler(request):
             'completed_tasks': completed_tasks,
             'pending_tasks': pending_tasks,
             'skipped_tasks': skipped_tasks,
+            'activity_streak': activity_streak,
             'current_date': current_date,
             'current_time': current_time,
             'formatted_end_date': formatted_end_date,

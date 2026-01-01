@@ -65,6 +65,7 @@ class UserProfile(Base):
     skipped_tasks = Column(Integer, default=0)  # Tasks marked as skipped or overdue
     average_completion_time = Column(Integer, default=0)  # Average time to complete tasks in minutes
     last_activity = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))  # Last interaction time
+    activity_streak = Column(Integer, default=0)  # Days of continuous activity
     updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="profile")
