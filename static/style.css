@@ -227,6 +227,23 @@ body {
     margin-bottom: 5px;
 }
 
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
+}
+
 .message {
     padding: 8px 0;
     margin: 5px 0;
