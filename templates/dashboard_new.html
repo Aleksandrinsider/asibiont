@@ -677,10 +677,12 @@
             modal.style.display = 'flex';
             
             // Установить текущий timezone, если он есть
+            {% if logged_in %}
             const currentTz = {{ user.timezone|tojson }};
             if (currentTz) {
                 document.getElementById('timezoneSelect').value = currentTz;
             }
+            {% endif %}
         }
         
         function closeTimezoneModal() {
