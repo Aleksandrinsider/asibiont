@@ -131,9 +131,7 @@
                         <div class="stats-text">Завершено задач: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                         <div class="stats-text" style="margin-top: 8px;">
-                            <div id="today-stats" style="margin-bottom: 4px;"></div>
-                            <div id="tomorrow-stats" style="margin-bottom: 4px;"></div>
-                            <div id="later-stats"></div>
+                            <div id="today-stats"></div>
                         </div>
                     </div>
                     <h3 style="margin: 15px 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
@@ -452,31 +450,20 @@
             const totalEl = document.getElementById('total-count');
             const progressEl = document.getElementById('progress-fill');
             const todayStatsEl = document.getElementById('today-stats');
-            const tomorrowStatsEl = document.getElementById('tomorrow-stats');
-            const laterStatsEl = document.getElementById('later-stats');
             const reminderIndicator = document.getElementById('reminder-indicator');
             
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
             if (progressEl) progressEl.style.width = percent + '%';
             
-            // Форматирование статистики по датам
+            // Общая статистика по всем задачам
+            const totalInProgress = tasks.filter(t => t.status === 'pending' && !t.overdue).length;
+            const totalOverdue = tasks.filter(t => t.overdue === true).length;
+            const totalCompleted = tasks.filter(t => t.status === 'completed').length;
+            const totalDeleted = tasks.filter(t => t.status === 'deleted').length;
+            
             if (todayStatsEl) {
-                todayStatsEl.innerHTML = todayTasks.length > 0 
-                    ? `<span>Сегодня: В работе: ${todayStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${todayStats.overdue}</span> · Выполнено: ${todayStats.completed}</span>`
-                    : '';
-            }
-            
-            if (tomorrowStatsEl) {
-                tomorrowStatsEl.innerHTML = tomorrowTasks.length > 0
-                    ? `<span>Завтра: В работе: ${tomorrowStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${tomorrowStats.overdue}</span> · Выполнено: ${tomorrowStats.completed}</span>`
-                    : '';
-            }
-            
-            if (laterStatsEl) {
-                laterStatsEl.innerHTML = laterTasks.length > 0
-                    ? `<span>Позже: В работе: ${laterStats.inProgress} · <span style="color: #d73a49;">Просрочено: ${laterStats.overdue}</span> · Выполнено: ${laterStats.completed}</span>`
-                    : '';
+                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">Просрочено: ${totalOverdue}</span> · Выполнено: ${totalCompleted} · Удалено: ${totalDeleted}</span>`;
             }
             
             // Показать мигающую точку если есть напоминания в ближайшие 10 минут
