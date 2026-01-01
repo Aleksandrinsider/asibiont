@@ -63,10 +63,7 @@
                 </div>
 
                 <div class="people-section">
-                    <div class="tasks-header">
-                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
-                        <button onclick="refreshPeople()" class="refresh-btn">↻</button>
-                    </div>
+                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600;">Контакты</h3>
                     {% if partners %}
                     <div class="people-list" id="people-list">
                         {% for partner in partners %}
@@ -113,7 +110,6 @@
                         <button class="filter-btn" data-filter="active">Активные</button>
                         <button class="filter-btn" data-filter="completed">Завершено</button>
                     </div>
-                    <button onclick="refreshTasks()" class="refresh-btn">↻</button>
                 </div>
                 <div class="tasks-section">
                     {% if tasks %}
