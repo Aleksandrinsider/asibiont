@@ -242,8 +242,10 @@
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
                         await updateTasks();
+                        await updateProfile();
+                        await updatePartners();
                         console.log('Tasks updated after message');
-                    }, 1000);
+                    }, 1500);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
