@@ -34,40 +34,8 @@ router = Router()
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
-    user_id = message.from_user.id
-    
-    # Проверяем параметр команды
-    command_args = message.text.split(maxsplit=1)
-    if len(command_args) > 1 and command_args[1] == "auth":
-        # Создаем/обновляем пользователя
-        session = Session()
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            user = User(
-                telegram_id=user_id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name,
-                last_name=message.from_user.last_name
-            )
-            session.add(user)
-            session.commit()
-        session.close()
-        
-        # Отправляем ссылку для веб-панели с авторизацией
-        auth_link = f"{WEB_APP_URL}/telegram_auth?id={user_id}&first_name={message.from_user.first_name or ''}&username={message.from_user.username or ''}&auth_date={int(message.date.timestamp())}&hash=temp"
-        
-        await message.bot.send_message(
-            message.chat.id,
-            f"✅ Отлично! Авторизация подтверждена.\n\n"
-            f"Теперь перейдите по ссылке для входа в веб-панель:\n\n"
-            f"{auth_link}\n\n"
-            f"Ссылка действительна в течение 5 минут."
-        )
-        return
-    
-    # Обычное приветствие
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/telegram_auth?id={message.from_user.id}&first_name={message.from_user.first_name or ''}&last_name={message.from_user.last_name or ''}&username={message.from_user.username or ''}&auth_date={int(message.date.timestamp())}&hash=placeholder"))]  # Placeholder hash, actual auth should be done properly
+        [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
     await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
 
