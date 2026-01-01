@@ -456,14 +456,11 @@ async def clear_single_task_handler(request):
         session_db.close()
 
 
-if LOCAL:
-    try:
-        bot = Bot(token=TELEGRAM_TOKEN)
-    except Exception as e:
-        logger.error(f"Failed to create bot in LOCAL mode: {e}")
-        bot = None
-else:
-    # In production, bot is not needed for web app, skip creation to avoid warnings
+try:
+    bot = Bot(token=TELEGRAM_TOKEN)
+    logger.info("Bot created successfully")
+except Exception as e:
+    logger.error(f"Failed to create bot: {e}", exc_info=True)
     bot = None
 
 
