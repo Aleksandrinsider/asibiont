@@ -262,6 +262,9 @@
 
         // Dynamic data updates
         let currentFilter = 'all';
+        let currentPage = 1;
+        const TASKS_PER_PAGE = 10;
+        let allTasksData = [];
 
         // Load previous interactions
         {% for interaction in interactions %}
@@ -318,10 +321,6 @@
             
             return groups;
         }
-        
-        let currentPage = 1;
-        const TASKS_PER_PAGE = 10;
-        let allTasksData = [];
         
         function renderTaskGroups(tasks) {
             // Сбрасываем страницу при новой загрузке данных
