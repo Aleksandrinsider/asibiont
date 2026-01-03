@@ -18,6 +18,17 @@
             </div>
             <div class="header-info">
                 {% if logged_in %}
+                {% if user_avatar_url %}
+                <div class="header-avatar-small">
+                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
+                </div>
+                {% else %}
+                <div class="header-avatar-small">
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; border: 1px solid #D1D9E0;">
+                        {{ user.username[:1].upper() if user.username else '?' }}
+                    </div>
+                </div>
+                {% endif %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span>
                     <span>{{ current_time }} · {{ current_date }}</span>
@@ -61,19 +72,8 @@
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>
                     {% if profile %}
                     <div class="context-item">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                            <div>
-                                <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
-                                <p>Город: {{ profile.city or 'Не указан' }}</p>
-                            </div>
-                            {% if user_avatar_url %}
-                            <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #D1D9E0; margin-left: 12px;">
-                            {% else %}
-                            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px; border: 2px solid #D1D9E0; margin-left: 12px;">
-                                {{ user.username[:1].upper() if user.username else '?' }}
-                            </div>
-                            {% endif %}
-                        </div>
+                        <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
+                        <p>Город: {{ profile.city or 'Не указан' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
@@ -733,8 +733,7 @@
                         goals: data.profile?.goals,
                         skills: data.profile?.skills,
                         interests: data.profile?.interests,
-                        formatted_end_date: data.formatted_end_date,
-                        user_avatar_url: data.user_avatar_url?.split('?')[0] // Compare base URL
+                        formatted_end_date: data.formatted_end_date
                     });
                     
                     if (lastProfileData === currentProfileKey) {
@@ -748,10 +747,34 @@
                     
                     lastProfileData = currentProfileKey;
                     
-                    // Update header info
-                    const headerInfo = document.getElementById('header-info');
-                    if (headerInfo && data.current_time && data.current_date) {
-                        headerInfo.innerHTML = `<span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span><span>${data.current_time} · ${data.current_date}</span>`;
+                    // Update header avatar
+                    const headerInfoContainer = document.querySelector('.header-info');
+                    if (headerInfoContainer) {
+                        let headerAvatarSmall = headerInfoContainer.querySelector('.header-avatar-small');
+                        if (!headerAvatarSmall) {
+                            // Create header avatar if it doesn't exist
+                            headerAvatarSmall = document.createElement('div');
+                            headerAvatarSmall.className = 'header-avatar-small';
+                            const headerInfoSpan = document.getElementById('header-info');
+                            if (headerInfoSpan) {
+                                headerInfoContainer.insertBefore(headerAvatarSmall, headerInfoSpan);
+                            }
+                        }
+                        if (headerAvatarSmall) {
+                            if (data.user_avatar_url) {
+                                // Check if avatar URL changed to avoid flickering (compare base URL without random parameter)
+                                const currentImg = headerAvatarSmall.querySelector('img');
+                                const currentSrc = currentImg ? currentImg.src.split('?')[0] : null;
+                                const newSrc = data.user_avatar_url.split('?')[0];
+                                if (!currentImg || currentSrc !== newSrc) {
+                                    headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">`;
+                                }
+                            } else {
+                                // Show initial if no avatar
+                                const initial = (data.profile.username || 'unknown').charAt(0).toUpperCase();
+                                headerAvatarSmall.innerHTML = `<div style="width: 24px; height: 24px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; border: 1px solid #D1D9E0;">${initial}</div>`;
+                            }
+                        }
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
@@ -761,18 +784,8 @@
                         const extendUrl = data.is_local ? '/test_payment' : '/extend_subscription';
                         let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>';
                         html += '<div class="context-item">';
-                        html += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">';
-                        html += '<div>';
                         html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'unknown'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
-                        html += '</div>';
-                        if (data.user_avatar_url) {
-                            html += `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #D1D9E0; margin-left: 12px;">`;
-                        } else {
-                            const initial = (data.profile.username || 'unknown').charAt(0).toUpperCase();
-                            html += `<div style="width: 48px; height: 48px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px; border: 2px solid #D1D9E0; margin-left: 12px;">${initial}</div>`;
-                        }
-                        html += '</div>';
                         html += `<p>Цели: ${data.profile.goals || 'Не указаны'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;

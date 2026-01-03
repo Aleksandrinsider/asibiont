@@ -87,6 +87,12 @@ body {
     align-items: center;
 }
 
+.header-avatar-small {
+    display: flex;
+    align-items: center;
+    margin-right: 8px;
+}
+
 .header-info {
     display: flex;
     gap: 10px;
