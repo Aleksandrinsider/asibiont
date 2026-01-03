@@ -108,9 +108,9 @@ body {
 
 .logout-button {
     padding: 10px 20px;
-    background-color: #0969DA;
-    color: #FFFFFF;
-    border: 1px solid #0969DA;
+    background-color: #FFFFFF;
+    color: #59636E;
+    border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
@@ -121,8 +121,8 @@ body {
 }
 
 .logout-button:hover {
-    background-color: #0860CA;
-    border-color: #0860CA;
+    background-color: #F6F8FA;
+    border-color: #1F2328;
 }
 
 .welcome-section {
@@ -418,9 +418,9 @@ body {
 
 .chat-input button {
     padding: 10px 20px;
-    background-color: #0969DA;
-    color: #FFFFFF;
-    border: 1px solid #0969DA;
+    background-color: #FFFFFF;
+    color: #59636E;
+    border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
@@ -431,8 +431,8 @@ body {
 }
 
 .chat-input button:hover {
-    background-color: #0860CA;
-    border-color: #0860CA;
+    background-color: #F6F8FA;
+    border-color: #1F2328;
 }
 
 .context-section {
