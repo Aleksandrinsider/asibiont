@@ -299,9 +299,10 @@ async def dashboard_handler(request):
                 
                 # Determine recommendation reason
                 reasons = []
-                username = p.contact_info.replace('@', '')
-                if username in contacted_usernames:
-                    reasons.append('уже общались')
+                if p.contact_info:
+                    username = p.contact_info.replace('@', '')
+                    if username in contacted_usernames:
+                        reasons.append('уже общались')
                 if p.common_skills:
                     reasons.append('общие навыки')
                 if p.common_interests:
@@ -877,9 +878,10 @@ async def api_partners_handler(request):
                 
                 # Determine recommendation reason
                 reasons = []
-                username = p.contact_info.replace('@', '')
-                if username in contacted_usernames:
-                    reasons.append('уже общались')
+                if p.contact_info:
+                    username = p.contact_info.replace('@', '')
+                    if username in contacted_usernames:
+                        reasons.append('уже общались')
                 if p.common_skills:
                     reasons.append('общие навыки')
                 if p.common_interests:
