@@ -298,6 +298,8 @@
                 {% endif %}
                 {% if profile %}
                 <p><strong>Город:</strong> {{ profile.city or 'Не указан' }}</p>
+                <p><strong>Компания:</strong> {{ profile.company or 'Не указана' }}</p>
+                <p><strong>Должность:</strong> {{ profile.position or 'Не указана' }}</p>
                 <p><strong>Интересы:</strong> {{ profile.interests or 'Не указаны' }}</p>
                 <p><strong>Навыки:</strong> {{ profile.skills or 'Не указаны' }}</p>
                 <p><strong>Текущие планы:</strong> {{ profile.current_plans or 'Не указаны' }}</p>
