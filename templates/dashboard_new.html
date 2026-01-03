@@ -685,6 +685,8 @@
                     const data = await response.json();
                     const peopleSection = document.querySelector('.people-section');
                     
+                    if (!peopleSection) return; // Элемент не найден
+                    
                     let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
                     
                     if (data.partners.length > 0) {
@@ -719,6 +721,8 @@
                     }
                     // Update profile section
                     const contextSection = document.querySelector('.context-section');
+                    if (!contextSection) return; // Элемент не найден
+                    
                     if (data.profile && Object.keys(data.profile).length > 0 && data.formatted_end_date) {
                         const extendUrl = data.is_local ? '/test_payment' : '/extend_subscription';
                         let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>';

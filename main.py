@@ -409,6 +409,11 @@ async def dashboard_handler(request):
             }
             tasks_dict.append(task_dict)
         
+        # Get user avatar URL
+        user_avatar_url = None
+        if 'bot' in request.app:
+            user_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+        
         return {
             'logged_in': True,
             'tasks': tasks_dict,
@@ -428,7 +433,7 @@ async def dashboard_handler(request):
             'timestamp': int(datetime.now().timestamp()),
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
             'is_local': is_local,
-            'user_avatar_url': await get_user_avatar_url(request.app['bot'], user_id)
+            'user_avatar_url': user_avatar_url
         }
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -738,6 +743,10 @@ except Exception as e:
 
 # Global app for Railway
 app = web.Application()
+
+# Add bot to app
+if bot:
+    app['bot'] = bot
 
 # Middleware to add CSP headers and disable cache for static files
 @web.middleware
