@@ -58,6 +58,8 @@ class UserProfile(Base):
     goals = Column(Text)  # User's goals
     contact_info = Column(String(255))  # Telegram username or other contact
     city = Column(String(100))  # City for location-based matching
+    company = Column(String(255))  # Company name
+    position = Column(String(255))  # Job position
     current_plans = Column(Text)  # Current plans or events, e.g., "Сегодня иду в кино, завтра на выставку"
     current_time = Column(String(10))  # User's current time in HH:MM format, for relative time calculations
     total_tasks_created = Column(Integer, default=0)  # Total tasks created

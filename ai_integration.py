@@ -64,7 +64,7 @@ def get_system_prompt():
 - delete_task(task_id=число ИЛИ task_title="название", user_id=число) - можно указать либо ID либо название
 - set_reminder(task_id=число, reminder_time="YYYY-MM-DD HH:MM", user_id=число)
 - find_partners(user_id=число, interests="")
-- update_profile(user_id=число, current_plans="", interests="", city="", timezone="")
+- update_profile(user_id=число, current_plans="", interests="", city="", timezone="", company="", position="")
 - update_user_memory(user_id=число, memory="")
 
 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
@@ -118,10 +118,11 @@ def get_system_prompt():
 - Активно задавай вопросы: Чтобы лучше помочь, всегда спрашивай о деталях, мотивации, препятствиях в зависимости от контекста разговора.
 
 ПЕРСОНАЛЬНЫЙ ПОДХОД:
-- Узнавай интересы, цели и местоположение через естественные вопросы, но ВАРЬИРУЙ формулировки - не задавай одни и те же вопросы каждому пользователю.
-- Активно изучай: задавай вопросы о интересах, целях, городе, планах. Сохраняй info.
+- Узнавай интересы, цели, местоположение, компанию и должность через естественные вопросы, но ВАРЬИРУЙ формулировки - не задавай одни и те же вопросы каждому пользователю.
+- Активно изучай: задавай вопросы о интересах, целях, городе, планах, месте работы и должности. Сохраняй info.
 - Запоминай важные детали через update_user_memory().
 - Используй память для персонализации. Сохраняй новую info через update_user_memory. После завершения уточни результат.
+- При упоминании профессиональной деятельности или места работы ОБЯЗАТЕЛЬНО обновляй профиль через update_profile с указанием company и position.
 - Настраивай тон в зависимости от прогресса:
   * >80% — хвали и предлагай более сложное
   * 50-80% — поддерживай и направляй
@@ -605,6 +606,11 @@ def find_partners(user_id=None, session=None):
                 partners.append(p)
             elif user_profile.goals and p.goals and any(goal.strip().lower() in p.goals.lower() for goal in user_profile.goals.split(",")):
                 partners.append(p)
+            # Безопасная проверка новых полей
+            elif hasattr(user_profile, 'company') and hasattr(p, 'company') and user_profile.company and p.company and user_profile.company.lower() == p.company.lower():
+                partners.append(p)
+            elif hasattr(user_profile, 'position') and hasattr(p, 'position') and user_profile.position and p.position and user_profile.position.lower() in p.position.lower():
+                partners.append(p)
             # Проверяем планы на релевантность
             if p.current_plans and user_profile.interests:
                 for interest in user_profile.interests.split(","):
@@ -621,7 +627,15 @@ def find_partners(user_id=None, session=None):
     if partners:
         response += "Есть люди с похожими интересами: "
         for p in partners[:2]:
-            response += f"@{p.contact_info} (интересуется {p.interests}), "
+            info_parts = []
+            if p.interests:
+               hasattr(p, 'position') and p.position:
+                info_parts.append(f"{p.position}")
+            if hasattr(p, 'company') and  info_parts.append(f"{p.position}")
+            if p.company:
+                info_parts.append(f"работает в {p.company}")
+            info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
+            response += f"@{p.contact_info} ({info_str}), "
         response = response.rstrip(", ") + ". "
     if tips:
         response += " ".join(tips[:2])
@@ -629,7 +643,7 @@ def find_partners(user_id=None, session=None):
         response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу ASI Biont — так у вас появится больше возможностей для общения и совместных проектов! 😊"
     return response
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, user_id=None, session=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, company=None, position=None, user_id=None, session=None):
     from models import Session, User, UserProfile
     if session is None:
         session = Session()
@@ -651,6 +665,11 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.city = city if city else profile.city
     profile.current_plans = current_plans if current_plans else profile.current_plans
     profile.current_time = current_time if current_time else profile.current_time
+    # Безопасно добавляем новые поля (могут отсутствовать в старой БД)
+    if hasattr(profile, 'company'):
+        profile.company = company if company else profile.company
+    if hasattr(profile, 'position'):
+        profile.position = position if position else profile.position
     if timezone:
         user.timezone = timezone
     profile.contact_info = f"user{user_id}"  # Простой username
@@ -801,7 +820,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом, текущими планами, текущим временем и часовым поясом",
+            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом, текущими планами, текущим временем, часовым поясом, компанией и должностью",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -811,7 +830,9 @@ TOOLS = [
                     "city": {"type": "string", "description": "Город пользователя, опционально"},
                     "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"},
                     "current_time": {"type": "string", "description": "Текущее время пользователя в формате HH:MM, опционально"},
-                    "timezone": {"type": "string", "description": "Часовой пояс пользователя, например 'Europe/Moscow', опционально"}
+                    "timezone": {"type": "string", "description": "Часовой пояс пользователя, например 'Europe/Moscow', опционально"},
+                    "company": {"type": "string", "description": "Компания, в которой работает пользователь, опционально"},
+                    "position": {"type": "string", "description": "Должность пользователя, опционально"}
                 }
             }
         }
