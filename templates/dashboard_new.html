@@ -9,12 +9,14 @@
 <body>
     <div class="app-header">
         <div class="header-content">
-            <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
-            {% if logged_in and user_avatar_url %}
-            <div class="header-avatar">
-                <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #D1D9E0;">
+            <div class="header-left">
+                <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
+                {% if logged_in and user_avatar_url %}
+                <div class="header-avatar">
+                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #D1D9E0;">
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
             <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 400; display: none; align-items: center; gap: 8px;">
                 <span class="reminder-pulse"></span>
                 На очереди: <span id="next-task-text"></span>
@@ -715,15 +717,23 @@
                 if (response.ok) {
                     const data = await response.json();
                     // Update header avatar
-                    let headerAvatar = document.querySelector('.header-avatar');
+                    let headerLeft = document.querySelector('.header-left');
+                    if (!headerLeft) {
+                        // Create header-left if it doesn't exist
+                        headerLeft = document.createElement('div');
+                        headerLeft.className = 'header-left';
+                        const logo = document.querySelector('.logo');
+                        if (logo) {
+                            logo.parentNode.insertBefore(headerLeft, logo);
+                            headerLeft.appendChild(logo);
+                        }
+                    }
+                    let headerAvatar = headerLeft.querySelector('.header-avatar');
                     if (!headerAvatar) {
                         // Create header avatar if it doesn't exist
                         headerAvatar = document.createElement('div');
                         headerAvatar.className = 'header-avatar';
-                        const logo = document.querySelector('.logo');
-                        if (logo) {
-                            logo.insertAdjacentElement('afterend', headerAvatar);
-                        }
+                        headerLeft.appendChild(headerAvatar);
                     }
                     if (headerAvatar) {
                         if (data.user_avatar_url) {
