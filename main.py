@@ -97,10 +97,15 @@ async def get_user_avatar_url(bot, user_id):
     """Получает URL аватара пользователя из Telegram"""
     try:
         photos = await bot.get_user_profile_photos(user_id, limit=1)
+        logger.info(f"User {user_id} has {photos.total_count} profile photos")
         if photos.total_count > 0:
             photo = photos.photos[0][-1]  # Берем самое большое фото
             file = await bot.get_file(photo.file_id)
-            return f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file.file_path}"
+            avatar_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file.file_path}"
+            logger.info(f"Avatar URL for user {user_id}: {avatar_url}")
+            return avatar_url
+        else:
+            logger.info(f"User {user_id} has no profile photos")
     except Exception as e:
         logger.error(f"Error getting user avatar for {user_id}: {e}")
     return None
