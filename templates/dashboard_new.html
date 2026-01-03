@@ -74,6 +74,8 @@
                     <div class="context-item">
                         <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
                         <p>Город: {{ profile.city or 'Не указан' }}</p>
+                        <p>Компания: {{ profile.company or 'Не указана' }}</p>
+                        <p>Должность: {{ profile.position or 'Не указана' }}</p>
                         <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                         <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                         <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
