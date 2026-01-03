@@ -241,6 +241,7 @@
 
             addMessage(message, 'user');
             input.value = '';
+            lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
             showTypingIndicator();
 
             try {
@@ -260,6 +261,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
+                    lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
                         await updateTasks();
