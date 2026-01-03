@@ -948,12 +948,22 @@ async def api_profile_handler(request):
             'city': profile.city or 'Не указан'
         }
     
+    # Get user avatar URL
+    user_avatar_url = None
+    if 'bot' in request.app:
+        user_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+        # Add random parameter to prevent caching
+        if user_avatar_url:
+            import random
+            user_avatar_url += f"?r={random.randint(100000, 999999)}"
+    
     return web.json_response({
         'profile': profile_data,
         'current_time': current_time,
         'current_date': current_date,
         'formatted_end_date': formatted_end_date,
-        'is_local': LOCAL
+        'is_local': LOCAL,
+        'user_avatar_url': user_avatar_url
     })
 
 async def api_reminders_handler(request):
