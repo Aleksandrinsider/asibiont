@@ -149,6 +149,15 @@ async def chat_handler(message: Message):
     print(f"Received message from {message.from_user.id}: {message.text}")
     try:
         user_id = message.from_user.id
+        
+        # Check for duplicate message processing
+        message_key = f"processed_message:{message.message_id}"
+        if redis_client:
+            if await redis_client.exists(message_key):
+                print(f"Duplicate message {message.message_id} ignored")
+                return
+            await redis_client.set(message_key, "1", ex=60)  # Expire in 60 seconds
+        
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
