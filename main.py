@@ -211,14 +211,14 @@ async def dashboard_handler(request):
             # Show login page in dashboard
             bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
             logger.info(f"Rendering login page with bot_username: {bot_user}")
-            return {
+            return aiohttp_jinja2.render_template('dashboard_new.html', request, {
                 'logged_in': False,
                 'bot_username': bot_user,
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
                 'timestamp': int(datetime.now().timestamp())
-            }
+            })
         
         # Получить задачи пользователя
         session_db = Session()
@@ -226,14 +226,14 @@ async def dashboard_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-                return {
+                return aiohttp_jinja2.render_template('dashboard_new.html', request, {
                     'logged_in': False,
                     'bot_username': bot_user,
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
                     'timestamp': int(datetime.now().timestamp())
-                }
+                })
             
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
             
@@ -427,7 +427,7 @@ async def dashboard_handler(request):
                 import random
                 user_avatar_url += f"?r={random.randint(100000, 999999)}"
         
-        return {
+        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
             'tasks': tasks_dict,
             'user': user, 
@@ -447,18 +447,18 @@ async def dashboard_handler(request):
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
             'is_local': is_local,
             'user_avatar_url': user_avatar_url
-        }
+        })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
         bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-        return {
+        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'bot_username': bot_user,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
             'timestamp': int(datetime.now().timestamp())
-        }
+        })
 
 
 async def tasks_handler(request):
