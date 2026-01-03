@@ -418,9 +418,10 @@ async def dashboard_handler(request):
         user_avatar_url = None
         if 'bot' in request.app:
             user_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-            # Add timestamp to prevent caching
+            # Add random parameter to prevent caching
             if user_avatar_url:
-                user_avatar_url += f"?t={int(datetime.now().timestamp())}"
+                import random
+                user_avatar_url += f"?r={random.randint(100000, 999999)}"
         
         return {
             'logged_in': True,
