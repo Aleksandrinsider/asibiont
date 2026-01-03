@@ -93,6 +93,18 @@ async def get_timezone_from_ip(ip_address):
         logger.error(f"Error getting timezone from IP {ip_address}: {e}")
     return 'UTC', None
 
+async def get_user_avatar_url(bot, user_id):
+    """Получает URL аватара пользователя из Telegram"""
+    try:
+        photos = await bot.get_user_profile_photos(user_id, limit=1)
+        if photos.total_count > 0:
+            photo = photos.photos[0][-1]  # Берем самое большое фото
+            file = await bot.get_file(photo.file_id)
+            return f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file.file_path}"
+    except Exception as e:
+        logger.error(f"Error getting user avatar for {user_id}: {e}")
+    return None
+
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
     token = TELEGRAM_TOKEN
@@ -415,7 +427,8 @@ async def dashboard_handler(request):
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': int(datetime.now().timestamp()),
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-            'is_local': is_local
+            'is_local': is_local,
+            'user_avatar_url': await get_user_avatar_url(request.app['bot'], user_id)
         }
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
