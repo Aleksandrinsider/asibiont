@@ -629,10 +629,10 @@ def find_partners(user_id=None, session=None):
         for p in partners[:2]:
             info_parts = []
             if p.interests:
-               hasattr(p, 'position') and p.position:
+                info_parts.append(f"интересуется {p.interests}")
+            if hasattr(p, 'position') and p.position:
                 info_parts.append(f"{p.position}")
-            if hasattr(p, 'company') and  info_parts.append(f"{p.position}")
-            if p.company:
+            if hasattr(p, 'company') and p.company:
                 info_parts.append(f"работает в {p.company}")
             info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
             response += f"@{p.contact_info} ({info_str}), "
