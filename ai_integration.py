@@ -497,69 +497,37 @@ def get_partners_list(user_id=None, session=None):
         if close_session:
             session.close()
         return []
-    user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-    profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
     
-    # Получить память для исключения заблокированных
-    blocked = []
-    if user.memory:
-        try:
-            decrypted = decrypt_data(user.memory)
-            import re
-            matches = re.findall(r'не показывать @(\w+)|заблокировать @(\w+)', decrypted, re.IGNORECASE)
-            for match in matches:
-                blocked.extend([m for m in match if m])
-        except Exception as e:
-            pass
-    
-    # Получить взаимодействия пользователя для определения с кем уже общался
+    # Получить взаимодействия пользователя для определения кого AI рекомендовал
     user_interactions = session.query(Interaction).filter_by(user_id=user.id).all()
-    contacted_usernames = set()
+    
+    # Ищем упоминания @username в сообщениях AI (тип agent)
+    recommended_usernames = set()
+    import re
     for interaction in user_interactions:
-        # Ищем упоминания @username в сообщениях
-        import re
-        mentions = re.findall(r'@(\w+)', interaction.content)
-        contacted_usernames.update(mentions)
+        if interaction.message_type == 'agent':  # Только сообщения от AI
+            mentions = re.findall(r'@(\w+)', interaction.content)
+            recommended_usernames.update(mentions)
     
+    # Если AI никого не рекомендовал, возвращаем пустой список
+    if not recommended_usernames:
+        if close_session:
+            session.close()
+        return []
+    
+    # Получаем профили только рекомендованных пользователей
     partners = []
-    contacted_partners = []  # Те, с кем уже общался
-    potential_partners = []   # Те, с кем еще не общался
-    
-    if user_profile:
-        if user_profile.city:
-            city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
-            if city_profiles:
-                profiles = city_profiles
-        
-        for p in profiles:
-            if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
-                continue
-            
-            # Проверка на совпадения
-            has_common = False
-            if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
-                has_common = True
-            elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
-                has_common = True
-            elif user_profile.goals and p.goals and any(goal.strip().lower() in p.goals.lower() for goal in user_profile.goals.split(",")):
-                has_common = True
-            
-            if has_common:
-                # Проверяем, общались ли уже
-                username = p.contact_info.replace('@', '') if p.contact_info else ''
-                if username and username in contacted_usernames:
-                    contacted_partners.append(p)
-                else:
-                    potential_partners.append(p)
-    else:
-        potential_partners = profiles[:2] if profiles else []
-    
-    # Объединяем: сначала те, с кем уже общался, потом новые
-    partners = contacted_partners + potential_partners
+    for username in recommended_usernames:
+        # Ищем по contact_info (который содержит username)
+        profile = session.query(UserProfile).filter(
+            UserProfile.contact_info.ilike(f'%{username}%')
+        ).first()
+        if profile and profile.user_id != user.id:
+            partners.append(profile)
     
     if close_session:
         session.close()
-    return partners[:10]  # Увеличим лимит до 10
+    return partners[:10]
 
 def find_partners(user_id=None, session=None):
     from models import Session, UserProfile, User
