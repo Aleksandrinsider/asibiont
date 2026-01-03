@@ -531,9 +531,16 @@ body {
     background-color: transparent;
     margin-top: 0;
     margin-bottom: 20px;
-    overflow-y: auto;
+    overflow-y: visible;
     box-shadow: none;
     transition: none;
+}
+
+.context-item p {
+    margin: 0 0 6px 0;
+    color: #1F2328;
+    line-height: 1.5;
+    font-size: 13px;
 }
 
 

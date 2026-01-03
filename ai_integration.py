@@ -821,7 +821,7 @@ async def chat_with_ai(message, context=None, user_id=None):
         # Get user memory and all tasks for extended context
         user_memory = ""
         if user_id:
-            from models import Session, User, Task
+            from models import Session, User, Task, UserProfile
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -830,6 +830,26 @@ async def chat_with_ai(message, context=None, user_id=None):
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except:
                     user_memory = ""  # If decryption fails, skip
+            
+            # Добавляем информацию из профиля (компания, должность и т.д.)
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile:
+                profile_info = []
+                if profile.city:
+                    profile_info.append(f"Город: {profile.city}")
+                if profile.company:
+                    profile_info.append(f"Компания: {profile.company}")
+                if profile.position:
+                    profile_info.append(f"Должность: {profile.position}")
+                if profile.skills:
+                    profile_info.append(f"Навыки: {profile.skills}")
+                if profile.interests:
+                    profile_info.append(f"Интересы: {profile.interests}")
+                if profile.goals:
+                    profile_info.append(f"Цели: {profile.goals}")
+                if profile_info:
+                    user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+            
             # Get all tasks for extended memory
             all_tasks = list_tasks(user_id=user_id)
             user_memory += f"\nВсе задачи пользователя: {all_tasks}"
