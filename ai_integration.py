@@ -546,8 +546,8 @@ def get_partners_list(user_id=None, session=None):
             
             if has_common:
                 # Проверяем, общались ли уже
-                username = p.contact_info.replace('@', '')
-                if username in contacted_usernames:
+                username = p.contact_info.replace('@', '') if p.contact_info else ''
+                if username and username in contacted_usernames:
                     contacted_partners.append(p)
                 else:
                     potential_partners.append(p)
