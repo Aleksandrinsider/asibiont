@@ -790,6 +790,8 @@
                         html += '<div class="context-item">';
                         html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'unknown'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
+                        html += `<p>Компания: ${data.profile.company || 'Не указана'}</p>`;
+                        html += `<p>Должность: ${data.profile.position || 'Не указана'}</p>`;
                         html += `<p>Цели: ${data.profile.goals || 'Не указаны'}</p>`;
                         html += `<p>Навыки: ${data.profile.skills || 'Не указаны'}</p>`;
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
