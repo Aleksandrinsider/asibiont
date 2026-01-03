@@ -329,6 +329,17 @@ body {
     }
 }
 
+/* Overdue task pulse animation */
+.overdue-pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #d73a49;
+    border-radius: 50%;
+    margin-right: 6px;
+    animation: pulse 2s infinite;
+}
+
 .message.user {
     background-color: transparent;
     color: #1F2328;
