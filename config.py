@@ -34,9 +34,9 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_TOKEN is required")
 
-TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "Asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
-    raise ValueError("TELEGRAM_BOT_USERNAME is required")
+    TELEGRAM_BOT_USERNAME = "Asibiont_bot"
 
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 if not WEBHOOK_URL and not LOCAL:

@@ -209,7 +209,7 @@ async def dashboard_handler(request):
         
         if not logged_in:
             # Show login page in dashboard
-            bot_user = TELEGRAM_BOT_USERNAME.replace('@', '')
+            bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
             logger.info(f"Rendering login page with bot_username: {bot_user}")
             return {
                 'logged_in': False,
@@ -225,8 +225,10 @@ async def dashboard_handler(request):
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
+                bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
                 return {
                     'logged_in': False,
+                    'bot_username': bot_user,
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
@@ -241,7 +243,8 @@ async def dashboard_handler(request):
             
             if not subscription or subscription.status != 'active':
                 logger.info("No active subscription, rendering no_subscription")
-                return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': TELEGRAM_BOT_USERNAME})
+                bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
+                return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': bot_user})
             
             tasks = session_db.query(Task).filter_by(user_id=user.id).all()
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
@@ -446,8 +449,10 @@ async def dashboard_handler(request):
         }
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
+        bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
         return {
             'logged_in': False,
+            'bot_username': bot_user,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
