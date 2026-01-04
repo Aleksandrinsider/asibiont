@@ -962,11 +962,11 @@
             updateProfile();
         }, 3000);
 
-        // Чат обновляется чаще - каждые 3 секунды
+        // Чат обновляется реже - каждые 10 секунд (только для синхронизации между вкладками)
         {% if logged_in %}
         setInterval(() => {
             updateChat();
-        }, 3000);
+        }, 10000);
         {% endif %}
 
         let lastMessageCount = {{ interactions|length }};
