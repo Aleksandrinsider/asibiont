@@ -120,6 +120,7 @@ def get_system_prompt():
 
 ДЕЛЕГИРОВАНИЕ ЗАДАЧ:
 - Если пользователь просит поставить задачу для другого пользователя (например, "попроси @username сделать X к дате"), используй delegate_task().
+- Если @username совпадает с вашим текущим username, это означает создать задачу для себя - используй add_task() вместо delegate_task().
 - ВАЖНО: Если пользователь УЖЕ указал в своем сообщении: получателя (@username), название задачи, дедлайн - НЕМЕДЛЕННО вызывай delegate_task() с этими данными БЕЗ дополнительных вопросов.
 - Если данных недостаточно (нет username, или нет времени, или непонятна задача), ТОГДА уточни недостающие детали.
 - КРИТИЧНО ДЛЯ КОНТЕКСТА: Если ты уже спросил про детали делегируемой задачи (например "Какой отчет нужен?"), и пользователь отвечает (например "отчет о продажах за 2025 год"), это ОТВЕТ НА ТВОЙ ВОПРОС о делегируемой задаче для @username, а НЕ новая задача для самого пользователя. Сразу используй эту информацию для вызова delegate_task().
@@ -469,6 +470,51 @@ def delegate_task(title, description, reminder_time, delegated_to_username, dele
         
         if not recipient:
             return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
+        
+        # If delegating to self, create regular task instead
+        if recipient.id == delegator.id:
+            # Create regular task for self
+            task = Task(
+                user_id=delegator.id,
+                title=title,
+                description=description,
+                status='pending'
+            )
+            if reminder_time:
+                try:
+                    user_tz = pytz.timezone(delegator.timezone if delegator.timezone else 'Europe/Moscow')
+                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                    local_dt = user_tz.localize(local_dt)
+                    task.reminder_time = local_dt.astimezone(pytz.UTC)
+                except ValueError:
+                    pass
+            session.add(task)
+            session.commit()
+            task_id = task.id
+            
+            # Schedule reminder if set
+            if task.reminder_time:
+                try:
+                    from main import reminder_service
+                    if reminder_service:
+                        reminder_service.schedule_reminder(
+                            task_id=task.id,
+                            reminder_time=task.reminder_time,
+                            user_id=delegator.telegram_id,
+                            task_title=task.title
+                        )
+                except Exception as e:
+                    import logging
+                    logging.error(f"Failed to schedule reminder for self-delegated task {task_id}: {e}")
+            
+            # Update profile analytics
+            profile = session.query(UserProfile).filter_by(user_id=delegator.id).first()
+            if profile:
+                profile.total_tasks_created = (profile.total_tasks_created or 0) + 1
+                session.commit()
+            
+            session.close()
+            return f"Задача '{title}' добавлена для вас с напоминанием на {reminder_time}."
         
         # Create task with pending delegation status
         task = Task(
