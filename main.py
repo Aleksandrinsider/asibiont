@@ -10,7 +10,7 @@ import aiohttp_session
 from aiohttp_session import get_session
 from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, LOCAL, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET
 from datetime import datetime, timedelta
 from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
@@ -31,12 +31,7 @@ except Exception as e:
 def run_migrations():
     """Run database migrations"""
     from sqlalchemy import text, inspect
-    from config import LOCAL
     try:
-        # Skip migrations for local SQLite
-        if LOCAL:
-            logger.info("Skipping migrations for local SQLite database")
-            return
             
         session = Session()
         inspector = inspect(engine)
@@ -76,7 +71,7 @@ import json
 import logging
 
 # Production logging configuration
-log_level = logging.DEBUG if LOCAL else logging.INFO
+log_level = logging.INFO
 logging.basicConfig(
     level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -214,11 +209,6 @@ async def dashboard_handler(request):
         
         logged_in = bool(user_id)
         
-        # For local testing, auto-login with test user
-        if not logged_in and LOCAL:
-            user_id = 146333757
-            logged_in = True
-        
         if not logged_in:
             # Show login page in dashboard
             bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
@@ -314,7 +304,6 @@ async def dashboard_handler(request):
                 
         finally:
             session_db.close()
-        is_local = LOCAL  # Для использования в шаблоне
         try:
             partners = get_partners_list(user_id=user_id)
         except Exception as e:
@@ -509,7 +498,6 @@ async def dashboard_handler(request):
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': int(datetime.now().timestamp()),
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-            'is_local': is_local,
             'user_avatar_url': user_avatar_url
         })
     except Exception as e:
@@ -1150,7 +1138,6 @@ async def api_profile_handler(request):
         'current_time': current_time,
         'current_date': current_date,
         'formatted_end_date': formatted_end_date,
-        'is_local': LOCAL,
         'user_avatar_url': user_avatar_url
     })
 

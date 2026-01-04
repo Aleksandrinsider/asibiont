@@ -91,7 +91,7 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Подписка: активна до {{ formatted_end_date }} 
-                                <a href="{% if is_local %}/test_payment{% else %}/extend_subscription{% endif %}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
+                                <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
                             </p>
                         </div>
                         {% else %}
@@ -1097,7 +1097,7 @@
                     if (!contextSection) return; // Элемент не найден
                     
                     if (data.profile && Object.keys(data.profile).length > 0 && data.formatted_end_date) {
-                        const extendUrl = data.is_local ? '/test_payment' : '/extend_subscription';
+                        const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
                         html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▲</button>';
