@@ -20,7 +20,7 @@
                 {% if logged_in %}
                 {% if user_avatar_url %}
                 <div class="header-avatar-small">
-                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
+                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
                 </div>
                 {% else %}
                 <div class="header-avatar-small">
@@ -771,7 +771,7 @@
                                 const currentSrc = currentImg ? currentImg.src.split('?')[0] : null;
                                 const newSrc = data.user_avatar_url.split('?')[0];
                                 if (!currentImg || currentSrc !== newSrc) {
-                                    headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">`;
+                                    headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">`;
                                 }
                             } else {
                                 // Show initial if no avatar
