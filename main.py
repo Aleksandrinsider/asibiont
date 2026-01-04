@@ -633,31 +633,6 @@ async def clear_history_handler(request):
 
     return web.json_response({'message': 'History cleared'})
 
-
-async def clear_db_handler(request):
-    from config import PORT
-    if not LOCAL:
-        return web.json_response({'error': 'Not allowed in production'}, status=403)
-    
-    session_db = Session()
-    try:
-        # Clear all tables
-        session_db.query(Interaction).delete()
-        session_db.query(Task).delete()
-        session_db.query(UserProfile).delete()
-        session_db.query(Subscription).delete()
-        session_db.query(User).delete()
-        session_db.commit()
-        logger.info("Database cleared")
-        return web.json_response({'message': 'Database cleared'})
-    except Exception as e:
-        session_db.rollback()
-        logger.error(f"Error clearing database: {e}")
-        return web.json_response({'error': str(e)}, status=500)
-    finally:
-        session_db.close()
-
-
 async def clear_user_tasks_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
@@ -1437,7 +1412,7 @@ app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
 app.router.add_post('/clear_history', clear_history_handler)
-app.router.add_get('/clear_db', clear_db_handler)
+
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/complete_task', complete_task_handler)
@@ -1501,9 +1476,8 @@ if bot:
         dispatcher=dp,
         bot=bot,
     )
-    if not LOCAL:
-        webhook_requests_handler.register(app, path="/webhook")
-        setup_application(app, dp, bot=bot)
+    webhook_requests_handler.register(app, path="/webhook")
+    setup_application(app, dp, bot=bot)
 else:
     logger.warning("Bot not created, skipping webhook setup")
 
@@ -1513,11 +1487,11 @@ else:
 logger.info("App created successfully")
 
 if __name__ == "__main__":
-    logger.info(f"Starting application - LOCAL={LOCAL}, PORT={PORT}")
+    logger.info(f"Starting application on port {PORT}")
 
     try:
         port = PORT
-        host = '127.0.0.1' if LOCAL else '0.0.0.0'
+        host = '0.0.0.0'
         logger.info(f"Starting web server on {host}:{port}")
         
         # Use asyncio AppRunner
