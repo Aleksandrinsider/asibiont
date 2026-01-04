@@ -1123,11 +1123,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Clean message from mentions
     message = re.sub(r'@[\w]+', '', message).strip()
     logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
+    logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
     
     try:
+        logger.info("Starting chat_with_ai processing")
         # Get user memory and all tasks for extended context
         user_memory = ""
         if user_id:
@@ -1444,8 +1446,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     except Exception as e:
         import traceback
         logger.error(f"Error in chat_with_ai: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
         logger.error(traceback.format_exc())
-        return "Ошибка."
+        return f"Ошибка: {str(e)}"
 
 async def generate_reminder(user_id, task_title):
     """Генерирует текст напоминания о задаче"""
