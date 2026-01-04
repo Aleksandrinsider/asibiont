@@ -346,6 +346,10 @@
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
                     addMessage('История чата очищена', 'ai');
+                    // Перезагрузить сообщения через API
+                    setTimeout(() => {
+                        loadInitialMessages();
+                    }, 1000);
                 } else {
                     const data = await response.json();
                     addMessage(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'ai');
@@ -375,11 +379,24 @@
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
 
-        // Load previous interactions
-        {% for interaction in interactions %}
-        addMessage({{ interaction.content|tojson }}, {{ interaction.message_type|tojson }}, {{ interaction.created_at.isoformat()|tojson }});
-        {% endfor %}
-        
+        // Load previous interactions via API instead of template
+        async function loadInitialMessages() {
+            try {
+                const response = await fetch('/api/interactions');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.interactions) {
+                        data.interactions.forEach(interaction => {
+                            addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                        });
+                        lastMessageCount = data.interactions.length;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading initial messages:', error);
+            }
+        }
+
         // Initialize task groups on load
         {% if tasks %}
         const initialTasks = {{ tasks|tojson }};
@@ -1094,6 +1111,7 @@
 
 
         // Initial update
+        loadInitialMessages();
         updateProfile();
 
         // Auto-update every 3 seconds
@@ -1103,7 +1121,7 @@
             updateProfile();
         }, 3000);
 
-        let lastMessageCount = {{ interactions|length }};
+        let lastMessageCount = 0;
 
         async function updateChat() {
             try {
