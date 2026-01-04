@@ -150,7 +150,7 @@
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
                     <div class="task-stats">
-                        <div class="stats-text">Мои задачи: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
+                        <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                         <div class="stats-text" style="margin-top: 8px;">
                             <div id="today-stats"></div>
@@ -163,6 +163,12 @@
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
                     <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
+                    <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 6px 12px; background-color: #0066FF; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Все задачи</button>
+                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 6px 12px; background-color: #F5F7FA; color: #59636E; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Мои задачи</button>
+                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 6px 12px; background-color: #F5F7FA; color: #59636E; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Назначенные мне</button>
+                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 6px 12px; background-color: #F5F7FA; color: #59636E; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Назначенные мной</button>
+                    </div>
                     <div class="tasks-section" id="tasks-scroll-container">
                         {% if tasks %}
                         <div class="task-groups" id="task-groups">
@@ -179,6 +185,8 @@
         {% endif %}
     </div>
     <script>
+        let currentTaskFilter = 'all'; // Текущий фильтр задач
+        
         function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
@@ -458,6 +466,41 @@
                 currentPage++;
                 renderTaskGroups(allTasksData);
             }
+        }
+        
+        function filterTasks(filterType) {
+            currentTaskFilter = filterType;
+            currentPage = 1; // Сброс страницы при смене фильтра
+            
+            // Обновляем стили кнопок
+            document.querySelectorAll('.task-filter-btn').forEach(btn => {
+                if (btn.getAttribute('data-filter') === filterType) {
+                    btn.style.backgroundColor = '#0066FF';
+                    btn.style.color = 'white';
+                    btn.classList.add('active');
+                } else {
+                    btn.style.backgroundColor = '#F5F7FA';
+                    btn.style.color = '#59636E';
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Применяем фильтр к задачам
+            let filteredTasks = allTasksData;
+            
+            if (filterType === 'my') {
+                // Мои задачи - задачи без делегирования
+                filteredTasks = allTasksData.filter(task => !task.is_delegated);
+            } else if (filterType === 'assigned-to-me') {
+                // Назначенные мне - задачи которые мне делегировали
+                filteredTasks = allTasksData.filter(task => task.is_delegated && task.title.includes('от @'));
+            } else if (filterType === 'assigned-by-me') {
+                // Назначенные мной - задачи которые я делегировал
+                filteredTasks = allTasksData.filter(task => task.is_delegated && task.title.includes('для @'));
+            }
+            // 'all' - показываем все задачи, ничего не фильтруем
+            
+            renderTaskGroups(filteredTasks);
         }
         
         function renderTaskItem(task) {
