@@ -68,6 +68,10 @@ def get_system_prompt():
 - find_partners(user_id=число, interests="")
 - update_profile(user_id=число, current_plans="", interests="", city="", timezone="", company="", position="")
 - update_user_memory(user_id=число, memory="")
+- delegate_task(title="название", description="описание", reminder_time="YYYY-MM-DD HH:MM", delegated_to_username="@username", delegation_details="подробности", user_id=число)
+- accept_delegated_task(task_id=число, user_id=число)
+- reject_delegated_task(task_id=число, user_id=число)
+- get_delegation_progress(task_id=число, user_id=число)
 
 ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ ИНСТРУМЕНТОВ:
 - Если пользователь говорит "добавь задачу X" БЕЗ указания времени, спроси когда напомнить, ЗАТЕМ вызови add_task().
@@ -109,6 +113,16 @@ def get_system_prompt():
 - Если пользователь упомянул хобби, интересы, навыки или проекты, тогда вызови find_partners() и упомяни найденных людей в ответе, чтобы помочь с сотрудничеством.
 - Используй результаты инструментов только когда они релевантны — например, если find_partners нашел подходящих людей, кратко упомяни их: "Кстати, я нашел Алексея, который тоже занимается дизайном..."
 - Будь социально, но не навязчиво: предлагай продолжить общение с предыдущими контактами только если пользователь проявляет интерес.
+
+ДЕЛЕГИРОВАНИЕ ЗАДАЧ:
+- Если пользователь просит поставить задачу для другого пользователя (например, "поставь задачу для @username"), используй delegate_task().
+- ВАЖНО: ВСЕГДА сначала уточни у инициатора ВСЕ детали: название задачи, описание, дедлайн, желаемый результат в подробностях.
+- После уточнения деталей вызови delegate_task() с параметрами: title, description, reminder_time, delegated_to_username (с @), delegation_details (желаемый результат).
+- Система автоматически отправит предложение задачи получателю через Telegram с кнопками принять/отклонить.
+- Если пользователь хочет узнать статус делегированной задачи, используй get_delegation_progress(task_id).
+- После принятия задачи получателем, ты будешь отслеживать прогресс и информировать инициатора о статусе выполнения.
+- Если задача отклонена, сообщи инициатору и НЕ продолжай следить за этой задачей.
+- При упоминании делегированных задач всегда проверяй их статус через get_delegation_progress() перед ответом.
 
 ВЫЯВЛЕНИЕ ПОТРЕБНОСТЕЙ И ПЕРСОНАЛИЗАЦИЯ РЕШЕНИЙ:
 - Анализируй истинные потребности пользователя на основе контекста: задач, интересов, планов, прогресса и предыдущих взаимодействий.
@@ -324,6 +338,21 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     if task:
         task.status = "completed"
         session.commit()
+        
+        # If this is a delegated task, notify the delegator
+        if task.delegated_by and task.delegation_status == 'accepted':
+            try:
+                delegator = session.query(User).filter_by(id=task.delegated_by).first()
+                if delegator:
+                    from main import bot
+                    if bot:
+                        import asyncio
+                        message = f"✅ @{user.username} выполнил делегированную задачу: {task.title}"
+                        asyncio.create_task(bot.send_message(delegator.telegram_id, message))
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to notify delegator about task completion: {e}")
+        
         # Обновить аналитику профиля
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
@@ -387,6 +416,198 @@ def update_user_memory(info, user_id=None):
         result = "Пользователь не найден."
     session.close()
     return result
+
+def delegate_task(title, description, reminder_time, delegated_to_username, delegation_details, user_id=None):
+    """Create a delegated task that requires acceptance by the recipient"""
+    from models import Session, Task, User
+    from datetime import datetime
+    import pytz
+    
+    session = Session()
+    try:
+        # Find delegator (creator)
+        delegator = session.query(User).filter_by(telegram_id=user_id).first()
+        if not delegator:
+            return "Ошибка: Пользователь не найден."
+        
+        # Find recipient by username
+        recipient_username = delegated_to_username.replace('@', '').lower()
+        recipient = session.query(User).filter(User.username.ilike(recipient_username)).first()
+        
+        if not recipient:
+            return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
+        
+        # Create task with pending delegation status
+        task = Task(
+            user_id=recipient.id,
+            title=title,
+            description=description,
+            delegated_by=delegator.id,
+            delegated_to_username=recipient_username,
+            delegation_status='pending',
+            delegation_details=delegation_details,
+            status='pending'
+        )
+        
+        if reminder_time:
+            try:
+                user_tz = pytz.timezone(recipient.timezone if recipient.timezone else 'Europe/Moscow')
+                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                local_dt = user_tz.localize(local_dt)
+                task.reminder_time = local_dt.astimezone(pytz.UTC)
+            except ValueError:
+                pass
+        
+        session.add(task)
+        session.commit()
+        task_id = task.id
+        
+        # Send notification to recipient via Telegram
+        try:
+            from main import bot
+            if bot:
+                message = f"🔔 Новое предложение задачи от @{delegator.username}:\n\n"
+                message += f"📋 Задача: {title}\n"
+                if description:
+                    message += f"📝 Описание: {description}\n"
+                if reminder_time:
+                    message += f"⏰ Дедлайн: {reminder_time}\n"
+                if delegation_details:
+                    message += f"ℹ️ Детали: {delegation_details}\n"
+                message += f"\n💬 Напишите боту 'принять задачу {task_id}' для подтверждения или 'отклонить задачу {task_id}' для отказа."
+                
+                import asyncio
+                asyncio.create_task(bot.send_message(recipient.telegram_id, message))
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to send delegation notification: {e}")
+        
+        session.close()
+        return f"Предложение задачи отправлено @{recipient_username}. Ожидается подтверждение."
+    except Exception as e:
+        session.close()
+        return f"Ошибка при создании делегированной задачи: {str(e)}"
+
+def accept_delegated_task(task_id, user_id=None):
+    """Accept a delegated task"""
+    from models import Session, Task, User
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Ошибка: Пользователь не найден."
+        
+        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id, delegation_status='pending').first()
+        if not task:
+            return "Задача не найдена или уже обработана."
+        
+        # Update delegation status
+        task.delegation_status = 'accepted'
+        session.commit()
+        
+        # Schedule reminder if set
+        if task.reminder_time:
+            try:
+                from main import reminder_service
+                if reminder_service:
+                    reminder_service.schedule_reminder(
+                        task_id=task.id,
+                        reminder_time=task.reminder_time,
+                        user_id=user.telegram_id,
+                        task_title=task.title
+                    )
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to schedule reminder: {e}")
+        
+        # Notify delegator
+        try:
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            if delegator:
+                from main import bot
+                if bot:
+                    message = f"✅ @{user.username} принял задачу: {task.title}"
+                    import asyncio
+                    asyncio.create_task(bot.send_message(delegator.telegram_id, message))
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to notify delegator: {e}")
+        
+        session.close()
+        return f"Вы приняли задачу '{task.title}'. Она добавлена в ваш список задач."
+    except Exception as e:
+        session.close()
+        return f"Ошибка: {str(e)}"
+
+def reject_delegated_task(task_id, user_id=None):
+    """Reject a delegated task"""
+    from models import Session, Task, User
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Ошибка: Пользователь не найден."
+        
+        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id, delegation_status='pending').first()
+        if not task:
+            return "Задача не найдена или уже обработана."
+        
+        # Update delegation status
+        task.delegation_status = 'rejected'
+        task.status = 'rejected'
+        session.commit()
+        
+        # Notify delegator
+        try:
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            if delegator:
+                from main import bot
+                if bot:
+                    message = f"❌ @{user.username} отклонил задачу: {task.title}"
+                    import asyncio
+                    asyncio.create_task(bot.send_message(delegator.telegram_id, message))
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to notify delegator: {e}")
+        
+        session.close()
+        return f"Вы отклонили задачу '{task.title}'."
+    except Exception as e:
+        session.close()
+        return f"Ошибка: {str(e)}"
+
+def get_delegation_progress(task_id, user_id=None):
+    """Get progress report for a delegated task"""
+    from models import Session, Task, User
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Ошибка: Пользователь не найден."
+        
+        task = session.query(Task).filter_by(id=int(task_id), delegated_by=user.id).first()
+        if not task:
+            return "Делегированная задача не найдена."
+        
+        recipient = session.query(User).filter_by(id=task.user_id).first()
+        
+        if task.delegation_status == 'pending':
+            status_msg = f"⏳ @{task.delegated_to_username} еще не ответил на предложение."
+        elif task.delegation_status == 'accepted':
+            if task.status == 'completed':
+                status_msg = f"✅ Задача выполнена @{task.delegated_to_username}!"
+            else:
+                status_msg = f"📌 @{task.delegated_to_username} принял задачу и работает над ней (статус: {task.status})."
+        elif task.delegation_status == 'rejected':
+            status_msg = f"❌ @{task.delegated_to_username} отклонил эту задачу."
+        else:
+            status_msg = "Статус неизвестен."
+        
+        session.close()
+        return f"Задача: {task.title}\n{status_msg}"
+    except Exception as e:
+        session.close()
+        return f"Ошибка: {str(e)}"
 
 def edit_task(task_id, title=None, description=None, reminder_time=None, user_id=None):
     from models import Session, Task
@@ -722,6 +943,66 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "delegate_task",
+            "description": "Создать задачу для другого пользователя, которая требует его подтверждения. Сначала уточни все детали у инициатора.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Название задачи"},
+                    "description": {"type": "string", "description": "Подробное описание задачи"},
+                    "reminder_time": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM"},
+                    "delegated_to_username": {"type": "string", "description": "Username получателя с @ (например @username)"},
+                    "delegation_details": {"type": "string", "description": "Детали: желаемый результат, критерии выполнения, важность"}
+                },
+                "required": ["title", "delegated_to_username", "delegation_details"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "accept_delegated_task",
+            "description": "Принять делегированную задачу",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи"}
+                },
+                "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reject_delegated_task",
+            "description": "Отклонить делегированную задачу",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи"}
+                },
+                "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_delegation_progress",
+            "description": "Получить статус выполнения делегированной задачи для инициатора",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи"}
+                },
+                "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "edit_task",
             "description": "Изменить название, описание или время напоминания задачи",
             "parameters": {
@@ -982,6 +1263,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         result_text = find_partners(user_id=user_id)
                     elif func_name == "update_profile":
                         result_text = update_profile(**args, user_id=user_id)
+                    elif func_name == "delegate_task":
+                        result_text = delegate_task(**args, user_id=user_id)
+                    elif func_name == "accept_delegated_task":
+                        result_text = accept_delegated_task(**args, user_id=user_id)
+                    elif func_name == "reject_delegated_task":
+                        result_text = reject_delegated_task(**args, user_id=user_id)
+                    elif func_name == "get_delegation_progress":
+                        result_text = get_delegation_progress(**args, user_id=user_id)
                     tool_messages.append({
                         "role": "tool",
                         "tool_call_id": f"call_{func_name}",
@@ -1052,6 +1341,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         result_text = find_partners(user_id=user_id)
                     elif func_name == "update_profile":
                         result_text = update_profile(**args, user_id=user_id)
+                    elif func_name == "delegate_task":
+                        result_text = delegate_task(**args, user_id=user_id)
+                    elif func_name == "accept_delegated_task":
+                        result_text = accept_delegated_task(**args, user_id=user_id)
+                    elif func_name == "reject_delegated_task":
+                        result_text = reject_delegated_task(**args, user_id=user_id)
+                    elif func_name == "get_delegation_progress":
+                        result_text = get_delegation_progress(**args, user_id=user_id)
                     tool_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call["id"],

@@ -33,9 +33,13 @@ class Task(Base):
     result_check_sent = Column(Boolean, default=False)
     estimated_duration = Column(Integer)  # in minutes
     priority = Column(String(20), default='medium')  # high, medium, low
+    delegated_by = Column(Integer, ForeignKey('users.id'))  # User who delegated the task
+    delegated_to_username = Column(String(255))  # Username of the person who should do it
+    delegation_status = Column(String(50), default=None)  # None, pending, accepted, rejected
+    delegation_details = Column(Text)  # Additional details about delegation
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
-    user = relationship("User", backref="tasks")
+    user = relationship("User", backref="tasks", foreign_keys=[user_id])
 
 class Interaction(Base):
     __tablename__ = 'interactions'

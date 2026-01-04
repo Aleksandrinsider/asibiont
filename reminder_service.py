@@ -224,8 +224,33 @@ class ReminderService:
                 print(f"[DAILY REPORT] To user {user_id}: {report_text}")
         except Exception as e:
             import logging
-            logging.error(f"Failed to send daily report to user {user_id}: {e}")
-
+            logging.error(f"Failed to send daily report to user {user_id}: {e}")    
+    async def send_delegation_progress_update(self, task_id: int):
+        """Send progress update about delegated task to delegator"""
+        db = Session()
+        try:
+            task = db.query(Task).filter_by(id=task_id).first()
+            if not task or not task.delegated_by or task.delegation_status != 'accepted':
+                return
+            
+            delegator = db.query(User).filter_by(id=task.delegated_by).first()
+            recipient = db.query(User).filter_by(id=task.user_id).first()
+            
+            if not delegator or not recipient:
+                return
+            
+            if task.status == 'completed':
+                message = f"✅ @{recipient.username} выполнил задачу: {task.title}"
+            else:
+                message = f"📌 Статус задачи '{task.title}' (делегирована @{recipient.username}): {task.status}"
+            
+            if self.bot:
+                await self.bot.send_message(delegator.telegram_id, message)
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to send delegation progress update: {e}")
+        finally:
+            db.close()
     def schedule_proactive_checks(self):
         """Планирование проактивных проверок каждые 30 минут"""
         from models import Session

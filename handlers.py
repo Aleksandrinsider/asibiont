@@ -198,6 +198,27 @@ async def chat_handler(message: Message):
                     print(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
+        
+        # Handle delegation commands
+        if message.text.lower().startswith("принять задачу "):
+            task_id = message.text.split()[-1]
+            try:
+                from ai_integration import accept_delegated_task
+                result = accept_delegated_task(int(task_id), user_id=user_id)
+                await message.bot.send_message(message.chat.id, result)
+            except Exception as e:
+                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
+            return
+        
+        if message.text.lower().startswith("отклонить задачу "):
+            task_id = message.text.split()[-1]
+            try:
+                from ai_integration import reject_delegated_task
+                result = reject_delegated_task(int(task_id), user_id=user_id)
+                await message.bot.send_message(message.chat.id, result)
+            except Exception as e:
+                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
+            return
         context = []
         if redis_client:
             try:
