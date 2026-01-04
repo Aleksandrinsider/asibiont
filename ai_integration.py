@@ -1323,31 +1323,35 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                    if response.status == 200:
-                        final_message = (await response.json())["choices"][0]["message"]
-                        content = final_message.get("content", "")
-                        content = re.sub(r'<\|.*?\|>', '', content).strip()
-                        if not content or '<|' in content:
-                            # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
-                            messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
-                            data = {
-                                "model": "deepseek-chat",
-                                "messages": messages
-                            }
-                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                                if response.status == 200:
-                                    final_message = (await response.json())["choices"][0]["message"]
-                                    content = final_message.get("content", "Запрос обработан.")
-                                    content = re.sub(r'<\|.*?\|>', '', content).strip()
-                                    if '<|' in content:
+                try:
+                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                        if response.status == 200:
+                            final_message = (await response.json())["choices"][0]["message"]
+                            content = final_message.get("content", "")
+                            content = re.sub(r'<\|.*?\|>', '', content).strip()
+                            if not content or '<|' in content:
+                                # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
+                                messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
+                                data = {
+                                    "model": "deepseek-chat",
+                                    "messages": messages
+                                }
+                                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                                    if response.status == 200:
+                                        final_message = (await response.json())["choices"][0]["message"]
+                                        content = final_message.get("content", "Запрос обработан.")
+                                        content = re.sub(r'<\|.*?\|>', '', content).strip()
+                                        if '<|' in content:
+                                            content = "Запрос обработан."
+                                    else:
                                         content = "Запрос обработан."
-                                else:
-                                    content = "Запрос обработан."
-                        content = clean_content(content)
-                        return content
-                    else:
-                        return "Ошибка ответа."
+                            content = clean_content(content)
+                            return content
+                        else:
+                            return "Ошибка ответа."
+                except Exception as e:
+                    logger.error(f"Error in second API call for tool results: {e}")
+                    return "Запрос обработан."
             elif "tool_calls" in message_response:
                 # Выполнить tool calls
                 tool_messages = []
@@ -1401,27 +1405,31 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     "model": "deepseek-chat",
                     "messages": messages
                 }
-                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                    if response.status == 200:
-                        final_message = (await response.json())["choices"][0]["message"]
-                        content = final_message.get("content", "")
-                        content = re.sub(r'<\|.*?\|>', '', content).strip()
-                        if not content or '<|' in content:
-                            # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
-                            messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
-                            data = {
-                                "model": "deepseek-chat",
-                                "messages": messages
-                            }
-                            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                                if response.status == 200:
-                                    final_message = (await response.json())["choices"][0]["message"]
-                                    content = final_message.get("content", "Расскажите подробнее.")
-                                    content = re.sub(r'<\|.*?\|>', '', content).strip()
-                                else:
-                                    content = "Расскажите подробнее."
-                    content = clean_content(content)
-                    return content
+                try:
+                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                        if response.status == 200:
+                            final_message = (await response.json())["choices"][0]["message"]
+                            content = final_message.get("content", "")
+                            content = re.sub(r'<\|.*?\|>', '', content).strip()
+                            if not content or '<|' in content:
+                                # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
+                                messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
+                                data = {
+                                    "model": "deepseek-chat",
+                                    "messages": messages
+                                }
+                                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                                    if response.status == 200:
+                                        final_message = (await response.json())["choices"][0]["message"]
+                                        content = final_message.get("content", "Расскажите подробнее.")
+                                        content = re.sub(r'<\|.*?\|>', '', content).strip()
+                                    else:
+                                        content = "Расскажите подробнее."
+                        content = clean_content(content)
+                        return content
+                except Exception as e:
+                    logger.error(f"Error in second API call for tool_calls: {e}")
+                    return "Запрос обработан."
             else:
                 content = message_response.get("content", "")
                 content = re.sub(r'<\|.*?\|>', '', content).strip()
@@ -1432,13 +1440,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         "model": "deepseek-chat",
                         "messages": messages
                     }
-                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                        if response.status == 200:
-                            final_message = (await response.json())["choices"][0]["message"]
-                            content = final_message.get("content", "Расскажите подробнее.")
-                            content = re.sub(r'<\|.*?\|>', '', content).strip()
-                        else:
-                            content = "Расскажите подробнее."
+                    try:
+                        async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                            if response.status == 200:
+                                final_message = (await response.json())["choices"][0]["message"]
+                                content = final_message.get("content", "Расскажите подробнее.")
+                                content = re.sub(r'<\|.*?\|>', '', content).strip()
+                            else:
+                                content = "Расскажите подробнее."
+                    except Exception as e:
+                        logger.error(f"Error in fallback API call: {e}")
+                        content = "Расскажите подробнее."
                 content = clean_content(content)
                 if not content:
                     content = "Готово! ✅"
