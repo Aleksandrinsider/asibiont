@@ -78,7 +78,7 @@
                 <div class="context-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
-                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▲</button>
+                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▶</button>
                     </div>
                     <div id="profile-content" class="profile-content">
                         {% if profile %}
@@ -307,6 +307,8 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
+                    // Reset chat cleared flag when new message is sent
+                    localStorage.removeItem('chatCleared');
                     lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
@@ -345,6 +347,8 @@
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
+                    // Set flag to prevent loading messages on page reload
+                    localStorage.setItem('chatCleared', 'true');
                     addMessage('История чата очищена', 'ai');
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
                     setTimeout(async () => {
@@ -376,7 +380,7 @@
                 button.textContent = '▼';
             } else {
                 content.style.display = 'none';
-                button.textContent = '▲';
+                button.textContent = '▶';
             }
         }
 
@@ -389,6 +393,12 @@
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
+            // Check if chat was cleared - don't load messages if cleared
+            if (localStorage.getItem('chatCleared') === 'true') {
+                lastMessageCount = 0;
+                return;
+            }
+            
             try {
                 const response = await fetch('/api/interactions');
                 if (response.ok) {
@@ -1085,7 +1095,7 @@
                         const extendUrl = data.is_local ? '/test_payment' : '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▲</button>';
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▶</button>';
                         html += '</div>';
                         html += '<div id="profile-content" class="profile-content">';
                         html += '<div class="context-item">';
@@ -1103,7 +1113,7 @@
                     } else {
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▲</button>';
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #068487; font-size: 12px; font-weight: bold;">▶</button>';
                         html += '</div>';
                         html += '<div id="profile-content" class="profile-content">';
                         html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>';
