@@ -505,7 +505,7 @@ body {
     /* flex: 1; */
     overflow-y: auto;
     overflow-x: hidden;
-    /* max-height: calc(100vh - 350px); /* Ограничить высоту панели задач */
+    max-height: calc(100vh - 400px); /* Ограничить высоту панели задач */
     min-height: 200px; /* Минимальная высота для задач */
 }
 
