@@ -152,9 +152,6 @@ class ReminderService:
         
         try:
             reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
-        
-        try:
-            reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
             
             # Сохранить напоминание в историю чата
             db = Session()
