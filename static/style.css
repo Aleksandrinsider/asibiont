@@ -222,7 +222,7 @@ body {
     height: 100%;
     overflow: hidden;
     max-height: 100vh; /* Ограничить максимальную высоту */
-}
+    margin-top: -2px; /* Уменьшить отступ от шапки на 2px */
 
 .chat-section {
     flex: 1;
