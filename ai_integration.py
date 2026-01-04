@@ -1490,8 +1490,8 @@ async def generate_reminder(user_id, task_title):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы генерируешь краткое напоминание о задаче '{task_title}'. Будь мотивирующим, строгим, краток (1-2 предложения).{user_memory}"
+        base_prompt = "Ты — помощник для напоминаний. Генерируй краткие, мотивирующие напоминания о задачах. Будь прямым и конкретным. НЕ задавай дополнительные вопросы. НЕ предлагай новые задачи. НЕ упоминай другие напоминания. Только напомни о конкретной задаче."
+        system_prompt = f"{base_prompt}\n{user_memory}"
         
         messages = [
             {"role": "system", "content": system_prompt},
