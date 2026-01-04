@@ -42,6 +42,9 @@ class AIIntegration:
     
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
         return generate_overdue_reminder(user_id, overdue_tasks)
+    
+    async def generate_delegation_update(self, user_id, task_title, recipient_username, task_status, reminder_time, update_type):
+        return generate_delegation_update(user_id, task_title, recipient_username, task_status, reminder_time, update_type)
 
 def get_system_prompt():
     return f"""Ты — дружелюбный ИИ-помощник для управления задачами. Твой стиль общения — естественный, как с хорошим другом. Всегда будь позитивным, полезным и вовлечённым в разговор.
@@ -359,11 +362,13 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
             try:
                 delegator = session.query(User).filter_by(id=task.delegated_by).first()
                 if delegator:
-                    from main import bot
-                    if bot:
+                    from main import bot, reminder_service
+                    if bot and reminder_service:
                         import asyncio
-                        message = f"✅ @{user.username} выполнил делегированную задачу: {task.title}"
-                        asyncio.create_task(bot.send_message(delegator.telegram_id, message))
+                        # Используем AI для генерации уведомления
+                        asyncio.create_task(
+                            reminder_service.send_delegation_progress_update(task.id, update_type="completed")
+                        )
             except Exception as e:
                 import logging
                 logging.error(f"Failed to notify delegator about task completion: {e}")
@@ -1683,3 +1688,97 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
     except Exception as e:
         print(f"Error in generate_overdue_reminder: {e}")
         return "Просроченные задачи."
+
+async def generate_delegation_update(user_id, task_title, recipient_username, task_status, reminder_time, update_type):
+    """Генерирует обновление о прогрессе делегированной задачи через AI с использованием полного промпта"""
+    try:
+        # Получить полный контекст пользователя
+        user_memory = ""
+        user_timezone = "UTC"
+        if user_id:
+            from models import Session, User
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                if user.memory:
+                    try:
+                        decrypted = decrypt_data(user.memory)
+                        user_memory = f"\nИнформация о пользователе: {decrypted}"
+                    except:
+                        user_memory = ""
+                user_timezone = user.timezone or "UTC"
+            session.close()
+        
+        # Конвертируем время в часовой пояс пользователя
+        user_tz = pytz.timezone(user_timezone)
+        local_time = datetime.now(user_tz)
+        current_date = local_time.strftime("%d %B %Y")
+        current_time = local_time.strftime("%H:%M")
+        tomorrow = (local_time + timedelta(days=1)).strftime("%d %B")
+        day_after = (local_time + timedelta(days=2)).strftime("%d %B")
+        
+        # Форматируем reminder_time
+        if reminder_time:
+            if reminder_time.tzinfo is None:
+                reminder_time = pytz.UTC.localize(reminder_time)
+            local_reminder = reminder_time.astimezone(user_tz)
+            deadline_str = local_reminder.strftime("%d.%m.%Y %H:%M")
+        else:
+            deadline_str = "не указан"
+        
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        base_prompt = get_system_prompt()
+        
+        # Формируем контекст в зависимости от типа обновления
+        if update_type == "approaching_deadline":
+            context = f"Делегированная задача '@{recipient_username}: {task_title}' приближается к дедлайну ({deadline_str}). Дедлайн через 2 часа или меньше. Текущий статус: {task_status}"
+            instruction = "Проинформируй инициатора о приближающемся дедлайне делегированной задачи. Будь конкретным, напомни о времени и получателе. Используй естественный диалог без шаблонов."
+        elif update_type == "midpoint":
+            context = f"Делегированная задача '@{recipient_username}: {task_title}' на полпути к дедлайну ({deadline_str}). Текущий статус: {task_status}"
+            instruction = "Проинформируй инициатора о прогрессе делегированной задачи. Напомни о задаче и получателе, уточни что задача находится в процессе. Используй естественный диалог."
+        elif update_type == "completed":
+            context = f"Делегированная задача '@{recipient_username}: {task_title}' выполнена. Дедлайн был: {deadline_str}"
+            instruction = "Проинформируй инициатора о завершении делегированной задачи. Похвали получателя за выполнение. Используй естественный диалог."
+        else:  # status update
+            context = f"Делегированная задача '@{recipient_username}: {task_title}'. Дедлайн: {deadline_str}. Текущий статус: {task_status}"
+            instruction = "Проинформируй инициатора о текущем статусе делегированной задачи. Используй естественный диалог без шаблонов."
+        
+        system_prompt = f"""{base_prompt}
+
+ТЕКУЩИЙ КОНТЕКСТ:
+Дата: {current_date}
+Время: {current_time}
+{user_memory}
+
+ЗАДАЧА: {instruction}
+
+КОНТЕКСТ ДЕЛЕГИРОВАНИЯ: {context}
+
+ВАЖНО: Генерируй УНИКАЛЬНОЕ сообщение на основе текущего контекста. НЕ используй шаблонные фразы. Будь естественным и конкретным."""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Сообщи об обновлении делегированной задачи"}
+        ]
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": messages
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    return clean_content(content)
+                else:
+                    return f"Обновление по задаче '{task_title}' для @{recipient_username}"
+    except Exception as e:
+        print(f"Error in generate_delegation_update: {e}")
+        return f"Обновление по задаче '{task_title}' для @{recipient_username}"
