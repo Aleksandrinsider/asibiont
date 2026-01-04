@@ -454,6 +454,7 @@ body {
 
 .context-section {
     padding: 20px;
+    margin-bottom: 4px;
 }
 
 .context-section h3 {
@@ -476,7 +477,7 @@ body {
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 10px;
+    margin-bottom: 4px;
 }
 
 .task-stats-block {
