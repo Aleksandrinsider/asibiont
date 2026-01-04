@@ -155,6 +155,11 @@
                         <div class="stats-text" style="margin-top: 8px;">
                             <div id="today-stats"></div>
                         </div>
+                        <div class="week-timeline" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #D1D9E0;">
+                            <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
+                                <!-- Дни недели будут добавлены через JS -->
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -493,6 +498,55 @@
             }
         }
         
+        function updateWeekTimeline(tasks) {
+            const weekDaysEl = document.getElementById('week-days');
+            if (!weekDaysEl) return;
+            
+            const now = new Date();
+            now.setHours(0, 0, 0, 0);
+            
+            const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            const monthNames = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+            
+            let html = '';
+            
+            for (let i = 0; i < 7; i++) {
+                const date = new Date(now);
+                date.setDate(date.getDate() + i);
+                
+                const dayOfWeek = dayNames[date.getDay()];
+                const dayOfMonth = date.getDate();
+                const month = monthNames[date.getMonth()];
+                
+                const nextDay = new Date(date);
+                nextDay.setDate(nextDay.getDate() + 1);
+                
+                // Подсчитываем задачи на этот день (незавершенные)
+                const tasksForDay = tasks.filter(t => {
+                    if (t.status === 'completed') return false;
+                    if (!t.reminder_time) return false;
+                    const taskDate = new Date(t.reminder_time);
+                    return taskDate >= date && taskDate < nextDay;
+                }).length;
+                
+                const isToday = i === 0;
+                const hasTasks = tasksForDay > 0;
+                
+                html += `
+                    <div style="flex: 1; text-align: center; font-size: 11px;">
+                        <div style="color: ${isToday ? '#068487' : '#59636E'}; font-weight: ${isToday ? '600' : '400'}; margin-bottom: 4px;">${dayOfWeek}</div>
+                        <div style="color: ${isToday ? '#068487' : '#8B949E'}; font-size: 10px; margin-bottom: 6px;">${dayOfMonth} ${month}</div>
+                        <div style="width: 100%; height: 6px; background: #D1D9E0; border-radius: 3px; position: relative; overflow: hidden;">
+                            ${hasTasks ? `<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: ${isToday ? '#068487' : '#59636E'}; border-radius: 3px;"></div>` : ''}
+                        </div>
+                        <div style="color: ${hasTasks ? (isToday ? '#068487' : '#24292F') : '#8B949E'}; font-weight: ${hasTasks ? '500' : '400'}; margin-top: 4px; font-size: 11px;">${tasksForDay}</div>
+                    </div>
+                `;
+            }
+            
+            weekDaysEl.innerHTML = html;
+        }
+        
         function filterTasks(filterType) {
             currentTaskFilter = filterType;
             currentPage = 1; // Сброс страницы при смене фильтра
@@ -626,14 +680,18 @@
             if (totalEl) totalEl.textContent = total;
             if (progressEl) progressEl.style.width = percent + '%';
             
-            // Общая статистика по всем задачам (всегда показываем)
-            const totalInProgress = tasks.filter(t => t.status === 'pending' && !t.overdue).length;
-            const totalOverdue = tasks.filter(t => t.overdue === true).length;
-            const totalCompleted = tasks.filter(t => t.status === 'completed').length;
+            // Общая статистика по всем задачам (включая завершенные из allTasksFromServer)
+            const allTasks = allTasksFromServer.length > 0 ? allTasksFromServer : tasks;
+            const totalInProgress = allTasks.filter(t => t.status === 'pending' && !t.overdue).length;
+            const totalOverdue = allTasks.filter(t => t.overdue === true).length;
+            const totalCompleted = allTasks.filter(t => t.status === 'completed').length;
             
             if (todayStatsEl) {
                 todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">С отставанием: ${totalOverdue}</span> · Завершено: ${totalCompleted}</span>`;
             }
+            
+            // Обновить визуализацию задач по дням недели
+            updateWeekTimeline(allTasks);
             
             // Показать мигающую точку если есть напоминания в ближайшие 10 минут
             const hasUrgentReminder = upcomingTasks.some(t => (t.date - now) < 600000); // 10 минут
