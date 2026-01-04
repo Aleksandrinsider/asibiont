@@ -176,6 +176,8 @@
                         <span style="color: #D1D9E0;">·</span>
                         <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначенные мной</button>
                         <span style="color: #D1D9E0;">·</span>
+                        <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">С отставанием</button>
+                        <span style="color: #D1D9E0;">·</span>
                         <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Завершенные</button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container">
@@ -415,6 +417,9 @@
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // Назначенные мной - задачи делегированные другим, незавершенные
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('для @'));
+            } else if (currentTaskFilter === 'overdue') {
+                // С отставанием - просроченные задачи
+                filteredTasks = allTasksFromServer.filter(t => t.overdue === true);
             } else {
                 // Все задачи - показываем незавершенные
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed');
