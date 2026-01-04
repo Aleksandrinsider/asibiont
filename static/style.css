@@ -631,14 +631,14 @@ body {
 }
 
 .task-group {
-    margin-bottom: 16px;
+    margin-bottom: 10px;
 }
 
 .task-group h4 {
     font-size: 13px;
     font-weight: 600;
     color: #1F2328;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     padding-bottom: 4px;
 }
 
