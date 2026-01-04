@@ -163,11 +163,16 @@
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
                     <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
-                    <div style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 6px 12px; background-color: #0066FF; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Все задачи</button>
-                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 6px 12px; background-color: #F5F7FA; color: #59636E; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Мои задачи</button>
-                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 6px 12px; background-color: #F5F7FA; color: #59636E; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Назначенные мне</button>
-                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 6px 12px; background-color: #F5F7FA; color: #59636E; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s;">Назначенные мной</button>
+                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #0066FF; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Личные задачи</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначенные мне</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначенные мной</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Завершенные</button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container">
                         {% if tasks %}
@@ -384,11 +389,29 @@
                 currentPage = 1;
             }
             
-            // Фильтруем выполненные задачи
-            const activeTasks = tasks.filter(t => t.status !== 'completed');
-            allTasksData = activeTasks;
+            // Применяем фильтр
+            let filteredTasks = tasks;
             
-            const groups = groupTasksByDue(activeTasks);
+            if (currentTaskFilter === 'completed') {
+                // Показываем только завершенные задачи
+                filteredTasks = tasks.filter(t => t.status === 'completed');
+            } else if (currentTaskFilter === 'my') {
+                // Личные задачи - задачи без делегирования, незавершенные
+                filteredTasks = tasks.filter(t => t.status !== 'completed' && !t.is_delegated);
+            } else if (currentTaskFilter === 'assigned-to-me') {
+                // Назначенные мне - задачи делегированные мне, незавершенные
+                filteredTasks = tasks.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('от @'));
+            } else if (currentTaskFilter === 'assigned-by-me') {
+                // Назначенные мной - задачи делегированные другим, незавершенные
+                filteredTasks = tasks.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('для @'));
+            } else {
+                // Все задачи - показываем незавершенные
+                filteredTasks = tasks.filter(t => t.status !== 'completed');
+            }
+            
+            allTasksData = filteredTasks;
+            
+            const groups = groupTasksByDue(filteredTasks);
             const container = document.getElementById('task-groups');
             if (!container) return;
             
@@ -475,32 +498,18 @@
             // Обновляем стили кнопок
             document.querySelectorAll('.task-filter-btn').forEach(btn => {
                 if (btn.getAttribute('data-filter') === filterType) {
-                    btn.style.backgroundColor = '#0066FF';
-                    btn.style.color = 'white';
+                    btn.style.color = '#0066FF';
+                    btn.style.fontWeight = '500';
                     btn.classList.add('active');
                 } else {
-                    btn.style.backgroundColor = '#F5F7FA';
                     btn.style.color = '#59636E';
+                    btn.style.fontWeight = '400';
                     btn.classList.remove('active');
                 }
             });
             
             // Применяем фильтр к задачам
-            let filteredTasks = allTasksData;
-            
-            if (filterType === 'my') {
-                // Мои задачи - задачи без делегирования
-                filteredTasks = allTasksData.filter(task => !task.is_delegated);
-            } else if (filterType === 'assigned-to-me') {
-                // Назначенные мне - задачи которые мне делегировали
-                filteredTasks = allTasksData.filter(task => task.is_delegated && task.title.includes('от @'));
-            } else if (filterType === 'assigned-by-me') {
-                // Назначенные мной - задачи которые я делегировал
-                filteredTasks = allTasksData.filter(task => task.is_delegated && task.title.includes('для @'));
-            }
-            // 'all' - показываем все задачи, ничего не фильтруем
-            
-            renderTaskGroups(filteredTasks);
+            updateTasks(); // Перезагружаем задачи с сервера с учетом фильтра
         }
         
         function renderTaskItem(task) {
