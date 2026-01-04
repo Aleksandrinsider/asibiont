@@ -484,7 +484,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     margin-top: -2px;
 }
 
@@ -493,8 +493,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-top: 0;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
     display: flex;
     flex-direction: column;
     flex: 1;
