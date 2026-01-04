@@ -1058,7 +1058,11 @@
                     
                     if (data.profile && Object.keys(data.profile).length > 0 && data.formatted_end_date) {
                         const extendUrl = data.is_local ? '/test_payment' : '/extend_subscription';
-                        let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>';
+                        let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
+                        html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 14px; font-weight: bold;">▼</button>';
+                        html += '</div>';
+                        html += '<div id="profile-content" class="profile-content">';
                         html += '<div class="context-item">';
                         html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'unknown'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
@@ -1069,9 +1073,17 @@
                         html += `<p>Интересы: ${data.profile.interests || 'Не указаны'}</p>`;
                         html += `<p>Подписка: активна до ${data.formatted_end_date} <a href="${extendUrl}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>`;
                         html += '</div>';
+                        html += '</div>';
                         contextSection.innerHTML = html;
                     } else {
-                        contextSection.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>';
+                        let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
+                        html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 14px; font-weight: bold;">▼</button>';
+                        html += '</div>';
+                        html += '<div id="profile-content" class="profile-content">';
+                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>';
+                        html += '</div>';
+                        contextSection.innerHTML = html;
                     }
                 }
             } catch (error) {
