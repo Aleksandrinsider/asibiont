@@ -423,8 +423,8 @@
             if (!container) return;
             
             // Показываем просроченные задачи в начале списка "На очереди"
-            // Порядок: просроченные → сегодня → завтра → позже → без даты
-            const groupOrder = ['overdue', 'today', 'tomorrow', 'later', 'nodate'];
+            // Порядок: просроченные → сегодня → завтра → позже → без даты → завершенные
+            const groupOrder = ['overdue', 'today', 'tomorrow', 'later', 'nodate', 'completed'];
             let allSortedTasks = [];
             
             groupOrder.forEach(key => {
