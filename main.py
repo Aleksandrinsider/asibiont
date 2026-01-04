@@ -1176,7 +1176,7 @@ async def on_startup(app):
         storage = SimpleCookieStorage()
         logger.info("Session storage initialized with SimpleCookieStorage")
     
-# aiohttp_session.setup(app, storage)
+aiohttp_session.setup(app, storage)
     
     # Set webhook
     if not LOCAL:
