@@ -304,7 +304,12 @@
                         await updateProfile();
                         await updatePartners();
                         console.log('Tasks updated after message');
-                    }, 1500);
+                        // Повторное обновление через 2 секунды на случай задержки в БД
+                        setTimeout(async () => {
+                            await updateTasks();
+                            console.log('Tasks updated again after message');
+                        }, 2000);
+                    }, 2000);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
