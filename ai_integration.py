@@ -210,23 +210,27 @@ def get_system_prompt():
 
 ВАЖНО: Отвечай только естественным текстом на русском языке. Не включай tool calls, JSON, код или технические детали в ответ. Используй инструменты только через внутренние tool calls, но никогда не показывай их в тексте ответа пользователю."""
 
-def get_progress_analytics(user_id):
-    from models import Session, UserProfile
-    session = Session()
-    try:
-        profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-        if not profile:
-            return "Аналитика недоступна — профиль не найден."
-        total = profile.total_tasks_created or 0
-        completed = profile.completed_tasks or 0
-        skipped = profile.skipped_tasks or 0
-        avg_time = profile.average_completion_time or 0
-        if total == 0:
-            return "У пользователя ещё нет задач для аналитики."
-        completion_rate = (completed / total) * 100
-        return f"Всего задач создано: {total}, выполнено: {completed}, пропущено: {skipped}, процент выполнения: {completion_rate:.1f}%, среднее время выполнения: {avg_time} мин."
-    finally:
-        session.close()
+def parse_relative_time(message, current_time):
+    """Parse relative time expressions like 'через 5 минут', 'через 2 часа' and return datetime"""
+    import re
+    from datetime import datetime, timedelta
+    
+    # Patterns for Russian time expressions
+    patterns = [
+        (r'через\s+(\d+)\s*мин', lambda m: timedelta(minutes=int(m.group(1)))),
+        (r'через\s+(\d+)\s*минут', lambda m: timedelta(minutes=int(m.group(1)))),
+        (r'через\s+(\d+)\s*час', lambda m: timedelta(hours=int(m.group(1)))),
+        (r'через\s+(\d+)\s*часа', lambda m: timedelta(hours=int(m.group(1)))),
+        (r'через\s+(\d+)\s*часов', lambda m: timedelta(hours=int(m.group(1)))),
+    ]
+    
+    for pattern, delta_func in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            delta = delta_func(match)
+            return current_time + delta
+    
+    return None
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     from models import Session, Task, User
@@ -1221,6 +1225,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     current_time_str = user_now.strftime("%H:%M")
             session.close()
         
+        # Parse relative time from message
+        parsed_time = parse_relative_time(message, user_now)
+        time_hint = ""
+        if parsed_time:
+            time_hint = f"\nОБНАРУЖЕНО ОТНОСИТЕЛЬНОЕ ВРЕМЯ: '{message}' содержит указание времени. Рассчитанное время напоминания: {parsed_time.strftime('%Y-%m-%d %H:%M')}. Используй это время для reminder_time в add_task."
+        
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -1230,6 +1240,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
         system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Если пользователь говорит 'через X минут', добавь X минут к текущему времени {current_time_str}\n- Если пользователь говорит 'через X часов', добавь X часов к текущему времени\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Например: 'через 5 минут' от {current_time_str} = {(user_now + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M')}"
         system_prompt += user_memory
+        system_prompt += time_hint
         
         messages = [{"role": "system", "content": system_prompt}]
         if context:
