@@ -64,7 +64,10 @@
             <!-- Левая колонка - Люди -->
             <div class="left-column">
                 <div class="context-section">
-                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Профиль</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
+                        <button onclick="showInfoModal('profile')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                    </div>
                     {% if profile %}
                     <div class="context-item">
                         <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
@@ -84,7 +87,10 @@
                 </div>
 
                 <div class="people-section">
-                    <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
+                        <button onclick="showInfoModal('contacts')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                    </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
@@ -101,7 +107,10 @@
             <!-- Центральная колонка - Чат -->
             <div class="center-column">
                 <div class="chat-section">
-                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">Чат</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 15px 0; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Чат</h3>
+                        <button onclick="showInfoModal('chat')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                    </div>
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
@@ -154,7 +163,10 @@
                 
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
-                    <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Задачи</h3>
+                        <button onclick="showInfoModal('tasks')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                    </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
                         <span style="color: #D1D9E0;">·</span>
@@ -1147,6 +1159,122 @@
             }
             
             recognition.start();
+        }
+    </script>
+
+    <!-- Модальные окна с информацией -->
+    <div id="info-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeInfoModal()">&times;</span>
+            <div id="modal-body">
+                <!-- Содержимое будет вставлено через JS -->
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal {
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #000;
+        }
+    </style>
+
+    <script>
+        function showInfoModal(section) {
+            const modal = document.getElementById('info-modal');
+            const modalBody = document.getElementById('modal-body');
+            
+            let content = '';
+            switch(section) {
+                case 'profile':
+                    content = `
+                        <h3>Профиль</h3>
+                        <p>В этом разделе отображается ваша личная информация: имя пользователя, город, компания, должность, цели, навыки и интересы. Здесь вы можете увидеть статус подписки и ссылку на её продление.</p>
+                        <p><strong>Как использовать:</strong> Информация автоматически обновляется при изменении профиля через бота.</p>
+                    `;
+                    break;
+                case 'contacts':
+                    content = `
+                        <h3>Контакты</h3>
+                        <p>Здесь показываются рекомендованные контакты для сотрудничества, а также люди, которые делегируют вам задачи или которым вы делегируете задачи.</p>
+                        <p><strong>Фильтры:</strong></p>
+                        <ul>
+                            <li><strong>Рекомендуемые:</strong> Контакты, подходящие по интересам, навыкам и целям</li>
+                            <li><strong>Делегируют мне:</strong> Люди, которые поручили вам задачи</li>
+                            <li><strong>Делегирую я:</strong> Люди, которым вы поручили задачи</li>
+                        </ul>
+                    `;
+                    break;
+                case 'chat':
+                    content = `
+                        <h3>Чат</h3>
+                        <p>Интерактивный чат с AI-ассистентом для управления задачами. Здесь вы можете создавать, редактировать и завершать задачи с помощью естественного языка.</p>
+                        <p><strong>Возможности:</strong></p>
+                        <ul>
+                            <li>Создание задач с указанием даты и времени</li>
+                            <li>Просмотр и управление существующими задачами</li>
+                            <li>Получение напоминаний и уведомлений</li>
+                            <li>Голосовой ввод (если поддерживается браузером)</li>
+                        </ul>
+                    `;
+                    break;
+                case 'tasks':
+                    content = `
+                        <h3>Задачи</h3>
+                        <p>Список всех ваших задач с группировкой по срокам выполнения. В верхней части отображается статистика выполнения задач.</p>
+                        <p><strong>Фильтры задач:</strong></p>
+                        <ul>
+                            <li><strong>Все задачи:</strong> Показать все незавершенные задачи</li>
+                            <li><strong>Личные задачи:</strong> Только ваши собственные задачи</li>
+                            <li><strong>Назначенные мне:</strong> Задачи, делегированные вам другими</li>
+                            <li><strong>Назначенные мной:</strong> Задачи, которые вы делегировали другим</li>
+                            <li><strong>С отставанием:</strong> Просроченные задачи</li>
+                            <li><strong>Завершенные:</strong> Выполненные задачи</li>
+                        </ul>
+                        <p><strong>Статистика:</strong> Показывает количество завершенных задач из общего числа, а также задачи с отставанием.</p>
+                    `;
+                    break;
+            }
+            
+            modalBody.innerHTML = content;
+            modal.style.display = 'block';
+        }
+        
+        function closeInfoModal() {
+            document.getElementById('info-modal').style.display = 'none';
+        }
+        
+        // Закрытие модального окна при клике вне его
+        window.onclick = function(event) {
+            const modal = document.getElementById('info-modal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
         }
     </script>
 </body>
