@@ -31,10 +31,22 @@ except Exception as e:
 def run_migrations():
     """Run database migrations"""
     from sqlalchemy import text, inspect
+    from config import LOCAL
     try:
+        # Skip migrations for local SQLite
+        if LOCAL:
+            logger.info("Skipping migrations for local SQLite database")
+            return
+            
         session = Session()
         inspector = inspect(engine)
         
+        # Check if user_profiles table exists first
+        if 'user_profiles' not in inspector.get_table_names():
+            logger.info("user_profiles table does not exist, skipping migration")
+            session.close()
+            return
+            
         # Check if activity_streak column exists
         columns = [col['name'] for col in inspector.get_columns('user_profiles')]
         if 'activity_streak' not in columns:
@@ -248,8 +260,8 @@ async def dashboard_handler(request):
             
             tasks = session_db.query(Task).filter_by(user_id=user.id).all()
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-            # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
-            interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
+            # Берем последние 50 сообщений за последние 24 часа (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
+            interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).filter(Interaction.created_at > datetime.now() - timedelta(hours=24)).order_by(Interaction.id.desc()).limit(50).all())) if user else []
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
         finally:
             session_db.close()
@@ -793,8 +805,12 @@ async def direct_login_handler(request):
 
 
 try:
-    bot = Bot(token=TELEGRAM_TOKEN)
-    logger.info("Bot created successfully")
+    if TELEGRAM_TOKEN:
+        bot = Bot(token=TELEGRAM_TOKEN)
+        logger.info("Bot created successfully")
+    else:
+        bot = None
+        logger.info("Bot not created (no token)")
 except Exception as e:
     logger.error(f"Failed to create bot: {e}", exc_info=True)
     bot = None
@@ -1184,7 +1200,7 @@ async def api_interactions_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
         
-        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all()
+        interactions = session_db.query(Interaction).filter_by(user_id=user.id).filter(Interaction.created_at > datetime.now() - timedelta(hours=24)).order_by(Interaction.created_at).all()
         
         interactions_data = []
         for interaction in interactions:
