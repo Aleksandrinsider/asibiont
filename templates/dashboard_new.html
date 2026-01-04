@@ -301,6 +301,8 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
+                    // Озвучить ответ AI
+                    speakText(data.response);
                     lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
@@ -706,21 +708,24 @@
         }
         
         async function completeTask(taskId) {
-            // Отправляем сообщение в чат, чтобы AI уточнил результаты
-            const response = await fetch('/chat', {
+            // Отправляем запрос на завершение задачи напрямую
+            const response = await fetch('/complete_task', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: `Отметь задачу ${taskId} как выполненную и уточни результаты` }),
+                body: JSON.stringify({ task_id: taskId }),
                 credentials: 'include'
             });
             if (response.ok) {
                 const data = await response.json();
-                // Обновить чат с ответом AI
-                if (data.response) {
-                    addMessageToChat('ai', data.response);
-                }
+                // Добавляем сообщение об успешном завершении в чат
+                addMessage(`✅ ${data.message}`, 'ai');
+                // Озвучить сообщение
+                speakText(`Задача выполнена. ${data.message}`);
                 // Обновить задачи через секунду для отображения изменений
                 setTimeout(() => updateTasks(), 1000);
+            } else {
+                const error = await response.json();
+                addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
             }
         }
         
@@ -976,6 +981,10 @@
                         const newMessages = data.interactions.slice(lastMessageCount);
                         newMessages.forEach(interaction => {
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                            // Озвучить новые сообщения AI
+                            if (interaction.message_type === 'ai') {
+                                speakText(interaction.content);
+                            }
                         });
                         lastMessageCount = data.interactions.length;
                     }
@@ -1016,7 +1025,73 @@
         }
 
         function startVoiceChat() {
-            alert('Голосовое общение пока не реализовано');
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Ваш браузер не поддерживает распознавание речи');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            
+            recognition.lang = 'ru-RU'; // Русский язык
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+            
+            recognition.onstart = function() {
+                console.log('Голосовое распознавание запущено');
+            };
+            
+            recognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                console.log('Распознанный текст:', transcript);
+                
+                // Вставить текст в поле ввода
+                const messageInput = document.getElementById('message-input');
+                messageInput.value = transcript;
+                
+                // Автоматически отправить сообщение
+                sendChatMessage();
+            };
+            
+            recognition.onerror = function(event) {
+                console.error('Ошибка распознавания:', event.error);
+                alert('Ошибка распознавания речи: ' + event.error);
+            };
+            
+            recognition.onend = function() {
+                console.log('Голосовое распознавание завершено');
+            };
+            
+            recognition.start();
+        }
+
+        function speakText(text) {
+            if (!('speechSynthesis' in window)) {
+                console.log('Синтез речи не поддерживается');
+                return;
+            }
+
+            // Остановить предыдущий синтез
+            speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ru-RU'; // Русский язык
+            utterance.rate = 0.9; // Немного медленнее для лучшей понятности
+            utterance.pitch = 1.0;
+
+            utterance.onstart = function() {
+                console.log('Синтез речи запущен');
+            };
+
+            utterance.onend = function() {
+                console.log('Синтез речи завершен');
+            };
+
+            utterance.onerror = function(event) {
+                console.error('Ошибка синтеза речи:', event.error);
+            };
+
+            speechSynthesis.speak(utterance);
         }
     </script>
 </body>

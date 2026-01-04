@@ -651,6 +651,28 @@ async def clear_single_task_handler(request):
         session_db.close()
 
 
+async def complete_task_handler(request):
+    """Завершает задачу по ID"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    data = await request.json()
+    task_id = data.get('task_id')
+    if not task_id:
+        return web.json_response({'error': 'Task ID required'}, status=400)
+    
+    from ai_integration import complete_task
+    try:
+        result = complete_task(task_id=task_id, user_id=user_id)
+        logger.info(f"Task {task_id} completed by user {user_id}: {result}")
+        return web.json_response({'message': result})
+    except Exception as e:
+        logger.error(f"Error completing task {task_id}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def clear_old_tasks_handler(request):
     """Admin endpoint to clear old test tasks"""
     # Check admin secret
@@ -1283,6 +1305,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_get('/clear_db', clear_db_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
+app.router.add_post('/complete_task', complete_task_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/test_payment', test_payment_handler)  # Тестовый эндпоинт для симуляции оплаты
@@ -1321,20 +1344,16 @@ class SafeSimpleCookieStorage(SimpleCookieStorage):
 aiohttp_session.setup(app, SafeSimpleCookieStorage())
 
 # Initialize ReminderService
-if bot:
-    ai_service = AIIntegration()
-    reminder_service = ReminderService(bot=bot, ai_service=ai_service)
-    logger.info("ReminderService initialized")
-    
-    # Start ReminderService on app startup
-    async def start_reminder_service(app):
-        await reminder_service.start()
-        logger.info("ReminderService started")
-    
-    app.on_startup.append(start_reminder_service)
-else:
-    logger.warning("Bot not created, skipping ReminderService setup")
-    reminder_service = None
+ai_service = AIIntegration()
+reminder_service = ReminderService(bot=bot, ai_service=ai_service)
+logger.info("ReminderService initialized")
+
+# Start ReminderService on app startup
+async def start_reminder_service(app):
+    await reminder_service.start()
+    logger.info("ReminderService started")
+
+app.on_startup.append(start_reminder_service)
 
 if bot:
     webhook_requests_handler = SimpleRequestHandler(
