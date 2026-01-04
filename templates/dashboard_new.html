@@ -11,6 +11,18 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+        
+        .profile-content {
+            transition: all 0.3s ease;
+        }
+        
+        .section-toggle-btn {
+            transition: transform 0.2s ease;
+        }
+        
+        .section-toggle-btn:hover {
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -66,23 +78,26 @@
                 <div class="context-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
+                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px;">▼</button>
                     </div>
-                    {% if profile %}
-                    <div class="context-item">
-                        <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
-                        <p>Город: {{ profile.city or 'Не указан' }}</p>
-                        <p>Компания: {{ profile.company or 'Не указана' }}</p>
-                        <p>Должность: {{ profile.position or 'Не указана' }}</p>
-                        <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
-                        <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
-                        <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
-                        <p>Подписка: активна до {{ formatted_end_date }} 
-                            <a href="{% if is_local %}/test_payment{% else %}/extend_subscription{% endif %}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
-                        </p>
+                    <div id="profile-content" class="profile-content">
+                        {% if profile %}
+                        <div class="context-item">
+                            <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
+                            <p>Город: {{ profile.city or 'Не указан' }}</p>
+                            <p>Компания: {{ profile.company or 'Не указана' }}</p>
+                            <p>Должность: {{ profile.position or 'Не указана' }}</p>
+                            <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
+                            <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
+                            <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
+                            <p>Подписка: активна до {{ formatted_end_date }} 
+                                <a href="{% if is_local %}/test_payment{% else %}/extend_subscription{% endif %}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
+                            </p>
+                        </div>
+                        {% else %}
+                        <p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    <p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>
-                    {% endif %}
                 </div>
 
                 <div class="people-section">
@@ -336,6 +351,19 @@
                 }
             } catch (error) {
                 addMessage('Ошибка: ' + error.message, 'ai');
+            }
+        }
+
+        function toggleProfileSection() {
+            const content = document.getElementById('profile-content');
+            const button = document.getElementById('profile-toggle-btn');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                button.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                button.textContent = '▶';
             }
         }
 
