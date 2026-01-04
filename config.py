@@ -11,11 +11,12 @@ CURRENT_DATE = os.getenv("CURRENT_DATE")
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL and not LOCAL:
-    raise ValueError("DATABASE_URL is required")
-if LOCAL and not DATABASE_URL:
+if LOCAL:
     DATABASE_URL = "sqlite:///local.db"
+else:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL is required")
 
 # AI
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")

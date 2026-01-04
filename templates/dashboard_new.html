@@ -910,10 +910,8 @@
                             // Create header avatar if it doesn't exist
                             headerAvatarSmall = document.createElement('div');
                             headerAvatarSmall.className = 'header-avatar-small';
-                            const headerInfoSpan = document.getElementById('header-info');
-                            if (headerInfoSpan) {
-                                headerInfoContainer.insertBefore(headerAvatarSmall, headerInfoSpan);
-                            }
+                            headerAvatarSmall.style.marginLeft = '10px'; // Add spacing
+                            headerInfoContainer.appendChild(headerAvatarSmall);
                         }
                         if (headerAvatarSmall) {
                             if (data.user_avatar_url) {
