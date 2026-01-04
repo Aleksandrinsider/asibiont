@@ -150,15 +150,15 @@
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
                     <div class="task-stats">
-                        <div class="week-timeline" style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #D1D9E0;">
-                            <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
-                                <!-- Дни недели будут добавлены через JS -->
-                            </div>
-                        </div>
                         <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                         <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                         <div class="stats-text" style="margin-top: 8px;">
                             <div id="today-stats"></div>
+                        </div>
+                        <div class="week-timeline" style="margin-top: 12px;">
+                            <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
+                                <!-- Дни недели будут добавлены через JS -->
+                            </div>
                         </div>
                     </div>
                 </div>
