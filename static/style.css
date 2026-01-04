@@ -216,6 +216,10 @@ body {
     /* max-height: 100vh; /* Ограничить максимальную высоту */
 }
 
+.right-column {
+    margin-top: -10px;
+}
+
 .center-column {
     display: flex;
     flex-direction: column;
