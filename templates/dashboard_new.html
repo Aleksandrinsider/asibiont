@@ -84,12 +84,22 @@
                 </div>
 
                 <div class="people-section">
-                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
-                    {% if partners %}
+                    <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
+                    <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                        <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначают мне</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначаю я</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button onclick="filterContacts('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все</button>
+                    </div>
+                    {% if partners or delegating_to_me or delegating_by_me %}
                     <div class="people-list" id="people-list">
+                        <!-- Рекомендуемые контакты -->
                         {% for partner in partners %}
                         {% if partner.contact_info %}
-                        <div class="person-card">
+                        <div class="person-card contact-recommended">
                             <p style="margin-bottom: 8px;"><strong>@{{ partner.contact_info }}</strong></p>
                             <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ partner.recommendation_reason }}</p>
                             {% if partner.city %}
@@ -107,9 +117,31 @@
                         </div>
                         {% endif %}
                         {% endfor %}
+                        
+                        <!-- Контакты, которые делегируют мне -->
+                        {% for contact in delegating_to_me %}
+                        <div class="person-card contact-delegating-to-me" style="display: none;">
+                            <p style="margin-bottom: 8px;"><strong>@{{ contact.username }}</strong></p>
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ contact.reason }}</p>
+                            {% if contact.first_name %}
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 {{ contact.first_name }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Контакты, которым я делегирую -->
+                        {% for contact in delegating_by_me %}
+                        <div class="person-card contact-delegating-by-me" style="display: none;">
+                            <p style="margin-bottom: 8px;"><strong>@{{ contact.username }}</strong></p>
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ contact.reason }}</p>
+                            {% if contact.first_name %}
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 {{ contact.first_name }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
                     </div>
                     {% else %}
-                    <p style="margin: 0; color: #656D76; font-size: 13px;" id="people-list">Нет контактов</p>
+                    <p style="margin: 0; color: #656D76; font-size: 13px;" id="people-list"><!-- Контакты будут загружены --></p>
                     {% endif %}
                 </div>
             </div>
@@ -307,7 +339,7 @@
                     setTimeout(async () => {
                         await updateTasks();
                         await updateProfile();
-                        await updatePartners();
+                        await updatePeople();
                         console.log('Tasks updated after message');
                         // Повторное обновление через 2 секунды на случай задержки в БД
                         setTimeout(async () => {
@@ -581,13 +613,102 @@
             renderTaskGroups(allTasksFromServer);
         }
         
+        let currentContactFilter = 'all'; // Текущий фильтр контактов
+        
+        function filterContacts(filterType) {
+            currentContactFilter = filterType;
+            
+            // Обновляем стили кнопок фильтров контактов
+            const buttons = document.querySelectorAll('.people-section button[onclick*="filterContacts"]');
+            buttons.forEach(btn => {
+                const btnFilterType = btn.getAttribute('onclick').match(/filterContacts\('([^']+)'\)/)?.[1];
+                if (btnFilterType === filterType) {
+                    btn.style.color = '#068487';
+                    btn.style.fontWeight = '500';
+                } else {
+                    btn.style.color = '#59636E';
+                    btn.style.fontWeight = '400';
+                }
+            });
+            
+            // Перерендерим контакты с новым фильтром
+            renderContacts();
+        }
+        
+        function renderContacts() {
+            const peopleList = document.getElementById('people-list');
+            if (!peopleList) return;
+            
+            let allContacts = [];
+            
+            // Собираем все контакты из всех категорий
+            const recommendedCards = peopleList.querySelectorAll('.contact-recommended');
+            recommendedCards.forEach(card => {
+                const contactData = {
+                    type: 'recommended',
+                    html: card.innerHTML,
+                    username: card.querySelector('strong')?.textContent || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            const delegatingToMeCards = peopleList.querySelectorAll('.contact-delegating-to-me');
+            delegatingToMeCards.forEach(card => {
+                const contactData = {
+                    type: 'delegating_to_me',
+                    html: card.innerHTML,
+                    username: card.querySelector('strong')?.textContent || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            const delegatingByMeCards = peopleList.querySelectorAll('.contact-delegating-by-me');
+            delegatingByMeCards.forEach(card => {
+                const contactData = {
+                    type: 'delegating_by_me',
+                    html: card.innerHTML,
+                    username: card.querySelector('strong')?.textContent || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            // Убираем дубликаты по username
+            const uniqueContacts = [];
+            const seenUsernames = new Set();
+            
+            allContacts.forEach(contact => {
+                if (!seenUsernames.has(contact.username)) {
+                    seenUsernames.add(contact.username);
+                    uniqueContacts.push(contact);
+                }
+            });
+            
+            // Применяем фильтр: показываем все, но выделяем соответствующие
+            uniqueContacts.forEach(contact => {
+                const element = contact.element;
+                if (currentContactFilter === 'all') {
+                    element.style.display = 'block';
+                    element.style.opacity = '1';
+                } else if (contact.type === currentContactFilter) {
+                    element.style.display = 'block';
+                    element.style.opacity = '1';
+                } else {
+                    element.style.display = 'block';
+                    element.style.opacity = '0.4';
+                }
+            });
+        }
+        
         function renderTaskItem(task) {
             let html = '';
             html += '<div style="flex: 1;">';
             const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
             const overdueIndicator = task.overdue ? '<span class="overdue-pulse"></span>' : '';
             html += '<div class="task-title"' + titleStyle + '>' + overdueIndicator + task.title + '</div>';
-            html += '<div style="display: flex; gap: 12px; margin-top: 4px;">';
+            html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
                 if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
@@ -745,6 +866,12 @@
                 });
             });
             
+            // Инициализировать фильтр контактов - показать все по умолчанию
+            filterContacts('all');
+            
+            // Применить фильтр к существующим контактам
+            renderContacts();
+            
             // Обновлять счетчик времени каждые 30 секунд
             setInterval(() => {
                 const nextReminderEl = document.getElementById('next-reminder');
@@ -797,7 +924,7 @@
                         let html = '<div class="people-list">';
                         data.partners.forEach(partner => {
                             if (partner.contact_info) {
-                                html += '<div class="person-card">';
+                                html += '<div class="person-card contact-recommended">';
                                 html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
                                 html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.recommendation_reason || 'подходящий контакт'}</p>`;
                                 if (partner.city) {
@@ -817,8 +944,10 @@
                         });
                         html += '</div>';
                         peopleList.outerHTML = html;
+                        // После обновления контактов применяем текущий фильтр
+                        setTimeout(() => renderContacts(), 100);
                     } else {
-                        peopleList.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
+                        peopleList.innerHTML = '';
                     }
                 }
             } catch (error) {
@@ -828,37 +957,6 @@
         
         async function refreshPeople() {
             await updatePeople();
-        }
-
-        async function updatePartners() {
-            try {
-                const response = await fetch('/api/partners');
-                if (response.ok) {
-                    const data = await response.json();
-                    const peopleSection = document.querySelector('.people-section');
-                    
-                    if (!peopleSection) return; // Элемент не найден
-                    
-                    let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
-                    
-                    if (data.partners.length > 0) {
-                        html += '<div class="people-list">';
-                        data.partners.forEach(partner => {
-                            html += `<div class="person-card">
-                                <p><strong>@${partner.contact_info}</strong></p>
-                                <p>Общие интересы: ${partner.common_interests}</p>
-                            </div>`;
-                        });
-                        html += '</div>';
-                    } else {
-                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
-                    }
-                    
-                    peopleSection.innerHTML = html;
-                }
-            } catch (error) {
-                console.error('Error updating partners:', error);
-            }
         }
 
         // Global variable to store last profile data
@@ -882,9 +980,9 @@
                     
                     if (lastProfileData === currentProfileKey) {
                         // Profile data hasn't changed, only update time
-                        const headerInfo = document.getElementById('header-info');
-                        if (headerInfo && data.current_time && data.current_date) {
-                            headerInfo.textContent = `${data.current_time} · ${data.current_date}`;
+                        const timeSpan = document.querySelector('.header-info span span');
+                        if (timeSpan && data.current_time && data.current_date) {
+                            timeSpan.textContent = `${data.current_time} · ${data.current_date}`;
                         }
                         return; // Skip full profile update
                     }
@@ -958,15 +1056,15 @@
         // Auto-update every 3 seconds
         setInterval(() => {
             updateTasks();
-            updatePartners();
+            updatePeople();
             updateProfile();
         }, 3000);
 
-        // Чат обновляется чаще - каждые 3 секунды
+        // Чат обновляется реже - каждые 10 секунд (только для синхронизации между вкладками)
         {% if logged_in %}
         setInterval(() => {
             updateChat();
-        }, 3000);
+        }, 10000);
         {% endif %}
 
         let lastMessageCount = {{ interactions|length }};
