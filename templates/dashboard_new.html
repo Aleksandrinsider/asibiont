@@ -726,6 +726,9 @@
         
         // Filter buttons
         document.addEventListener('DOMContentLoaded', () => {
+            // Инициализировать задачи при загрузке страницы
+            updateTasks();
+            
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
