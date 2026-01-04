@@ -502,12 +502,10 @@ body {
 
 .tasks-section {
     /* Вернуть пагинацию вместо scrollbar */
+    flex: 1;
     /* overflow-y: auto; */
     /* overflow-x: hidden; */
-    /* max-height: calc(100vh - 350px); /* Ограничить высоту, чтобы не съезжала панель */
-    /* scrollbar-width: thin; /* Для Firefox */
-    /* scrollbar-color: #D1D9E0 transparent; /* Для Firefox */
-    max-height: calc(100vh - 350px); /* Ограничить высоту панели задач */
+    /* max-height: calc(100vh - 350px); /* Ограничить высоту панели задач */
 }
 
 /* .tasks-section::-webkit-scrollbar {
@@ -881,12 +879,11 @@ body {
     /* Вернуть пагинацию для мобильных */
     .tasks-section,
     .people-list {
-        /* max-height: calc(100vh - 400px) !important; */
+        /* max-height: calc(100vh - 450px) !important; */
         /* overflow-y: auto !important; */
         /* overflow-x: hidden !important; */
         /* scrollbar-width: thin !important; /* Для Firefox */
         /* scrollbar-color: #D1D9E0 transparent !important; /* Для Firefox */
-        max-height: calc(100vh - 450px) !important; /* Ограничить высоту для мобильных */
     }
     
     .task-item {
