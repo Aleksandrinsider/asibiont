@@ -78,7 +78,7 @@
                 <div class="context-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
-                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px;">▼</button>
+                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 14px; font-weight: bold;">▼</button>
                     </div>
                     <div id="profile-content" class="profile-content">
                         {% if profile %}
@@ -142,8 +142,9 @@
                             <img src="https://cdn-icons-png.flaticon.com/512/229/229930.png" alt="Прикрепить файл" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
                         <button onclick="clearChatHistory()" class="chat-action-btn" style="padding: 10px; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                            🧹
+                            <img src="https://cdn-icons-png.flaticon.com/512/3096/3096673.png" alt="Очистить чат" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
+                        <button onclick="sendChatMessage()">Отправить</button>
                     </div>
                     {% endif %}
                 </div>
