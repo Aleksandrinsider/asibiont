@@ -453,7 +453,7 @@ body {
 }
 
 .context-section {
-    padding: 20px;
+    padding: 12px;
     margin-bottom: 4px;
 }
 
@@ -472,7 +472,7 @@ body {
 
 .people-section,
 .tasks-section {
-    padding: 16px;
+    padding: 12px;
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
@@ -526,7 +526,7 @@ body {
 }
 
 .context-section {
-    padding: 16px;
+    padding: 12px;
     border: none;
     border-radius: 0;
     background-color: transparent;
