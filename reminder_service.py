@@ -69,6 +69,7 @@ class ReminderService:
             id=f"reminder_{task_id}",
             replace_existing=True
         )
+        logger.info(f"Reminder scheduled for {reminder_time} (in {(reminder_time - datetime.now(pytz.UTC)).total_seconds() / 60:.1f} minutes)")
 
     def schedule_result_check(self, task_id: int, result_check_time: datetime, user_id: int, task_title: str):
         # Конвертируем naive datetime в aware с UTC
@@ -141,6 +142,7 @@ class ReminderService:
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
         import logging
         logger = logging.getLogger(__name__)
+        logger.info(f"=== STARTING REMINDER SEND ===")
         logger.info(f"Sending reminder for task {task_id}, user {user_id}, title: {task_title}")
         from subscription_service import check_subscription
         from models import Interaction
@@ -156,13 +158,17 @@ class ReminderService:
             # Сохранить напоминание в историю чата
             db = Session()
             try:
-                interaction = Interaction(
-                    user_id=user_id,
-                    message_type="ai",
-                    content=reminder_text
-                )
-                db.add(interaction)
-                db.commit()
+                # Найти user.id по telegram_id
+                from models import User
+                user = db.query(User).filter_by(telegram_id=user_id).first()
+                if user:
+                    interaction = Interaction(
+                        user_id=user.id,
+                        message_type="ai",
+                        content=reminder_text
+                    )
+                    db.add(interaction)
+                    db.commit()
             finally:
                 db.close()
             

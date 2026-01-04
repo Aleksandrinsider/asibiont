@@ -29,10 +29,10 @@ def clean_content(content):
 
 class AIIntegration:
     async def generate_reminder(self, user_id, task_title):
-        return generate_reminder(user_id, task_title)
+        return await generate_reminder(user_id, task_title)
     
     async def generate_result_check(self, user_id, task_title):
-        return generate_result_check(user_id, task_title)
+        return await generate_result_check(user_id, task_title)
     
     async def generate_proactive_message(self, user_id):
         return generate_proactive_message(user_id)
@@ -254,6 +254,8 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             local_dt = user_tz.localize(local_dt)
             # Конвертировать в UTC для хранения
             task.reminder_time = local_dt.astimezone(pytz.UTC)
+            import logging
+            logging.info(f"Task {title} reminder_time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
         except ValueError:
             pass  # Игнорировать неверный формат
     if due_date:
