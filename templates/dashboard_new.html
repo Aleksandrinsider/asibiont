@@ -94,55 +94,10 @@
                         <span style="color: #D1D9E0;">·</span>
                         <button onclick="filterContacts('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все</button>
                     </div>
-                    {% if partners or delegating_to_me or delegating_by_me %}
                     <div class="people-list" id="people-list">
-                        <!-- Рекомендуемые контакты -->
-                        {% for partner in partners %}
-                        {% if partner.contact_info %}
-                        <div class="person-card contact-recommended">
-                            <p style="margin-bottom: 8px;"><strong>@{{ partner.contact_info }}</strong></p>
-                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ partner.recommendation_reason }}</p>
-                            {% if partner.city %}
-                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">📍 {{ partner.city }}</p>
-                            {% endif %}
-                            {% if partner.common_interests %}
-                            <p style="font-size: 12px; margin-bottom: 4px;">💡 Интересы: {{ partner.common_interests }}</p>
-                            {% endif %}
-                            {% if partner.common_skills %}
-                            <p style="font-size: 12px; margin-bottom: 4px;">🔧 Навыки: {{ partner.common_skills }}</p>
-                            {% endif %}
-                            {% if partner.common_goals %}
-                            <p style="font-size: 12px; margin-bottom: 4px;">🎯 Цели: {{ partner.common_goals }}</p>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-                        {% endfor %}
-                        
-                        <!-- Контакты, которые делегируют мне -->
-                        {% for contact in delegating_to_me %}
-                        <div class="person-card contact-delegating-to-me" style="display: none;">
-                            <p style="margin-bottom: 8px;"><strong>@{{ contact.username }}</strong></p>
-                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ contact.reason }}</p>
-                            {% if contact.first_name %}
-                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 {{ contact.first_name }}</p>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-                        
-                        <!-- Контакты, которым я делегирую -->
-                        {% for contact in delegating_by_me %}
-                        <div class="person-card contact-delegating-by-me" style="display: none;">
-                            <p style="margin-bottom: 8px;"><strong>@{{ contact.username }}</strong></p>
-                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ contact.reason }}</p>
-                            {% if contact.first_name %}
-                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 {{ contact.first_name }}</p>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
+                        <!-- Контакты будут загружены динамически -->
+                        <p style="margin: 0; color: #656D76; font-size: 13px;">Загрузка контактов...</p>
                     </div>
-                    {% else %}
-                    <p style="margin: 0; color: #656D76; font-size: 13px;" id="people-list"><!-- Контакты будут загружены --></p>
-                    {% endif %}
                 </div>
             </div>
 
@@ -854,8 +809,9 @@
         
         // Filter buttons
         document.addEventListener('DOMContentLoaded', () => {
-            // Инициализировать задачи при загрузке страницы
+            // Инициализировать задачи и контакты при загрузке страницы
             updateTasks();
+            updatePeople();
             
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -921,9 +877,9 @@
                     if (!peopleList) return;
                     
                     if (data.partners && data.partners.length > 0) {
-                        let html = '<div class="people-list">';
+                        let html = '';
                         data.partners.forEach(partner => {
-                            if (partner.contact_info) {
+                            if (partner.type === 'recommended' && partner.contact_info) {
                                 html += '<div class="person-card contact-recommended">';
                                 html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
                                 html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.recommendation_reason || 'подходящий контакт'}</p>`;
@@ -940,14 +896,29 @@
                                     html += `<p style="font-size: 12px; margin-bottom: 4px;">🎯 Цели: ${partner.common_goals}</p>`;
                                 }
                                 html += '</div>';
+                            } else if (partner.type === 'delegating_to_me') {
+                                html += '<div class="person-card contact-delegating-to-me" style="display: none;">';
+                                html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
+                                html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.reason}</p>`;
+                                if (partner.first_name) {
+                                    html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 ${partner.first_name}</p>`;
+                                }
+                                html += '</div>';
+                            } else if (partner.type === 'delegating_by_me') {
+                                html += '<div class="person-card contact-delegating-by-me" style="display: none;">';
+                                html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
+                                html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.reason}</p>`;
+                                if (partner.first_name) {
+                                    html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 ${partner.first_name}</p>`;
+                                }
+                                html += '</div>';
                             }
                         });
-                        html += '</div>';
-                        peopleList.outerHTML = html;
+                        peopleList.innerHTML = html;
                         // После обновления контактов применяем текущий фильтр
                         setTimeout(() => renderContacts(), 100);
                     } else {
-                        peopleList.innerHTML = '';
+                        peopleList.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Контакты не найдены</p>';
                     }
                 }
             } catch (error) {

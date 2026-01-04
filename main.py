@@ -263,6 +263,55 @@ async def dashboard_handler(request):
             # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
             interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+            
+            # Получить контакты по делегированию
+            delegating_to_me = []  # Люди, которые делегировали мне задачи
+            delegating_by_me = []  # Люди, которым я делегировал задачи
+            
+            try:
+                # Люди, которые делегировали мне задачи (я получаю задачи от них)
+                delegated_tasks = session_db.query(Task).filter(
+                    Task.delegated_to_username == user.username,
+                    Task.delegation_status.in_(['pending', 'accepted'])
+                ).all()
+                
+                delegator_ids = set()
+                for task in delegated_tasks:
+                    if task.delegated_by and task.delegated_by not in delegator_ids:
+                        delegator_ids.add(task.delegated_by)
+                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                        if delegator and delegator.id != user.id:
+                            delegating_to_me.append({
+                                'id': delegator.id,
+                                'username': delegator.username,
+                                'first_name': delegator.first_name,
+                                'reason': f'делегировал {len([t for t in delegated_tasks if t.delegated_by == delegator.id])} задач'
+                            })
+                
+                # Люди, которым я делегировал задачи
+                my_delegated_tasks = session_db.query(Task).filter(
+                    Task.delegated_by == user.id,
+                    Task.delegation_status.in_(['pending', 'accepted'])
+                ).all()
+                
+                delegatee_usernames = set()
+                for task in my_delegated_tasks:
+                    if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
+                        delegatee_usernames.add(task.delegated_to_username)
+                        delegatee = session_db.query(User).filter(User.username.ilike(task.delegated_to_username.replace('@', ''))).first()
+                        if delegatee and delegatee.id != user.id:
+                            delegating_by_me.append({
+                                'id': delegatee.id,
+                                'username': delegatee.username,
+                                'first_name': delegatee.first_name,
+                                'reason': f'я делегировал {len([t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username])} задач'
+                            })
+            
+            except Exception as e:
+                logger.error(f"Error getting delegation contacts: {e}")
+                delegating_to_me = []
+                delegating_by_me = []
+                
         finally:
             session_db.close()
         is_local = LOCAL  # Для использования в шаблоне
@@ -271,54 +320,6 @@ async def dashboard_handler(request):
         except Exception as e:
             logger.error(f"Error getting partners: {e}")
             partners = []
-        
-        # Получить контакты по делегированию
-        delegating_to_me = []  # Люди, которые делегировали мне задачи
-        delegating_by_me = []  # Люди, которым я делегировал задачи
-        
-        try:
-            # Люди, которые делегировали мне задачи (я получаю задачи от них)
-            delegated_tasks = session_db.query(Task).filter(
-                Task.delegated_to_username == user.username,
-                Task.delegation_status.in_(['pending', 'accepted'])
-            ).all()
-            
-            delegator_ids = set()
-            for task in delegated_tasks:
-                if task.delegated_by and task.delegated_by not in delegator_ids:
-                    delegator_ids.add(task.delegated_by)
-                    delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
-                    if delegator and delegator.id != user.id:
-                        delegating_to_me.append({
-                            'id': delegator.id,
-                            'username': delegator.username,
-                            'first_name': delegator.first_name,
-                            'reason': f'делегировал {len([t for t in delegated_tasks if t.delegated_by == delegator.id])} задач'
-                        })
-            
-            # Люди, которым я делегировал задачи
-            my_delegated_tasks = session_db.query(Task).filter(
-                Task.delegated_by == user.id,
-                Task.delegation_status.in_(['pending', 'accepted'])
-            ).all()
-            
-            delegatee_usernames = set()
-            for task in my_delegated_tasks:
-                if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
-                    delegatee_usernames.add(task.delegated_to_username)
-                    delegatee = session_db.query(User).filter(User.username.ilike(task.delegated_to_username.replace('@', ''))).first()
-                    if delegatee and delegatee.id != user.id:
-                        delegating_by_me.append({
-                            'id': delegatee.id,
-                            'username': delegatee.username,
-                            'first_name': delegatee.first_name,
-                            'reason': f'я делегировал {len([t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username])} задач'
-                        })
-        
-        except Exception as e:
-            logger.error(f"Error getting delegation contacts: {e}")
-            delegating_to_me = []
-            delegating_by_me = []
         
         # Add common interests, skills, goals and recommendation reason
         if profile and partners:
@@ -946,6 +947,55 @@ async def api_partners_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all() if user else []
+            
+            # Получить контакты по делегированию
+            delegating_to_me = []  # Люди, которые делегировали мне задачи
+            delegating_by_me = []  # Люди, которым я делегировал задачи
+            
+            try:
+                # Люди, которые делегировали мне задачи (я получаю задачи от них)
+                delegated_tasks = session_db.query(Task).filter(
+                    Task.delegated_to_username == user.username,
+                    Task.delegation_status.in_(['pending', 'accepted'])
+                ).all()
+                
+                delegator_ids = set()
+                for task in delegated_tasks:
+                    if task.delegated_by and task.delegated_by not in delegator_ids:
+                        delegator_ids.add(task.delegated_by)
+                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                        if delegator and delegator.id != user.id:
+                            delegating_to_me.append({
+                                'id': delegator.id,
+                                'username': delegator.username,
+                                'first_name': delegator.first_name,
+                                'reason': f'делегировал {len([t for t in delegated_tasks if t.delegated_by == delegator.id])} задач'
+                            })
+                
+                # Люди, которым я делегировал задачи
+                my_delegated_tasks = session_db.query(Task).filter(
+                    Task.delegated_by == user.id,
+                    Task.delegation_status.in_(['pending', 'accepted'])
+                ).all()
+                
+                delegatee_usernames = set()
+                for task in my_delegated_tasks:
+                    if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
+                        delegatee_usernames.add(task.delegated_to_username)
+                        delegatee = session_db.query(User).filter(User.username.ilike(task.delegated_to_username.replace('@', ''))).first()
+                        if delegatee and delegatee.id != user.id:
+                            delegating_by_me.append({
+                                'id': delegatee.id,
+                                'username': delegatee.username,
+                                'first_name': delegatee.first_name,
+                                'reason': f'я делегировал {len([t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username])} задач'
+                            })
+            
+            except Exception as e:
+                logger.error(f"Error getting delegation contacts: {e}")
+                delegating_to_me = []
+                delegating_by_me = []
+                
         finally:
             session_db.close()
         
@@ -1011,7 +1061,25 @@ async def api_partners_handler(request):
                 'common_interests': getattr(p, 'common_interests', None),
                 'common_skills': getattr(p, 'common_skills', None),
                 'common_goals': getattr(p, 'common_goals', None),
-                'recommendation_reason': getattr(p, 'recommendation_reason', 'подходящий контакт')
+                'recommendation_reason': getattr(p, 'recommendation_reason', 'подходящий контакт'),
+                'type': 'recommended'
+            })
+        
+        # Add delegating contacts
+        for contact in delegating_to_me:
+            partners_data.append({
+                'contact_info': contact['username'],
+                'first_name': contact['first_name'],
+                'reason': contact['reason'],
+                'type': 'delegating_to_me'
+            })
+        
+        for contact in delegating_by_me:
+            partners_data.append({
+                'contact_info': contact['username'],
+                'first_name': contact['first_name'],
+                'reason': contact['reason'],
+                'type': 'delegating_by_me'
             })
         
         return web.json_response({'partners': partners_data})
