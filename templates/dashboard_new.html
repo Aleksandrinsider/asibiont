@@ -37,7 +37,7 @@
                 </div>
                 {% endif %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
-                    <span>{{ current_time }} · {{ current_date }}</span>
+                    <span style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
                 </span>
                 <button onclick="logout()" class="logout-button">Выход</button>
                 {% endif %}
@@ -895,7 +895,7 @@
                         // Profile data hasn't changed, only update time
                         const headerInfo = document.getElementById('header-info');
                         if (headerInfo && data.current_time && data.current_date) {
-                            headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span>`;
+                            headerInfo.innerHTML = `<span style="margin-right: 5px;">${data.current_time} · ${data.current_date}</span>`;
                         }
                         return; // Skip full profile update
                     }
