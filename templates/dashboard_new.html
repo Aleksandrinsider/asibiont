@@ -94,7 +94,6 @@
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
-                        <p style="margin: 0; color: #656D76; font-size: 13px;">Загрузка контактов...</p>
                     </div>
                 </div>
             </div>
@@ -170,11 +169,9 @@
                         <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Завершенные</button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container">
-                        {% if tasks %}
                         <div class="task-groups" id="task-groups">
                             <!-- Задачи будут сгруппированы по срокам -->
                         </div>
-                        {% endif %}
                     </div>
                 </div>
             </div>
