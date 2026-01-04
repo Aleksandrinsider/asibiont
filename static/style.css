@@ -1010,6 +1010,7 @@ body {
 .chat-action-btn:hover {
     background-color: #F6F8FA;
     border-color: #1F2328;
+    box-shadow: 0 0 0 1px #1F2328;
 }
 
 .delete-btn {
