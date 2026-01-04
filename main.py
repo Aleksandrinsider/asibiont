@@ -1,6 +1,7 @@
 import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+import aiohttp
 from aiohttp import web
 import aiohttp_jinja2
 import aiohttp_cors
@@ -1357,9 +1358,9 @@ async def extend_subscription_handler(request):
 
 
 async def test_payment_handler(request):
-    """Тестовый эндпоинт для симуляции успешной оплаты (только для LOCAL)"""
-    if not LOCAL:
-        return web.Response(text='Not available in production', status=403)
+    """Тестовый эндпоинт для симуляции успешной оплаты (только для разработки)"""
+    # Отключено в продакшене
+    return web.Response(text='Not available in production', status=403)
     
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')

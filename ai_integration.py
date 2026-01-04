@@ -3,11 +3,13 @@ from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE
 import json
 from datetime import datetime, timezone, timedelta
 import re
+import logging
 from cryptography.fernet import Fernet
 from models import User, UserProfile
 import pytz
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
+logger = logging.getLogger(__name__)
 
 def encrypt_data(data):
     if data:
@@ -249,6 +251,13 @@ def parse_relative_time(message, current_time):
             return current_time + delta
     
     return None
+
+def parse_tool_arguments(arguments_str):
+    """Parse tool arguments from string, fallback to empty dict if parsing fails"""
+    try:
+        return json.loads(arguments_str)
+    except:
+        return {}
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     from models import Session, Task, User
@@ -1964,7 +1973,7 @@ async def generate_delegation_update(user_id, task_title, recipient_username, ta
         
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Сообщи об обновлении делегированной задачи"}
+            {"role": "user", "content": "Сообщи об обновлении делегированной задачи"}
         ]
         
         data = {

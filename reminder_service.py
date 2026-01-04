@@ -142,7 +142,7 @@ class ReminderService:
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"=== STARTING REMINDER SEND ===")
+        logger.info("=== STARTING REMINDER SEND ===")
         logger.info(f"Sending reminder for task {task_id}, user {user_id}, title: {task_title}")
         from subscription_service import check_subscription
         from models import Interaction

@@ -9,6 +9,7 @@ from config import WEBHOOK_URL
 from config import WEB_APP_URL
 from redis.asyncio import Redis
 from config import REDIS_URL, FREE_ACCESS_MODE
+from timezonefinder import TimezoneFinder
 
 PREMIUM_DESCRIPTION = """🚀 ASI Biont — ваш путь к успеху через умное управление задачами и мощное сообщество единомышленников!
 
