@@ -211,266 +211,128 @@ async def dashboard_handler(request):
     try:
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id}")
-        
+
         logged_in = bool(user_id)
-        
+
         # For local testing, auto-login with test user
         if not logged_in and LOCAL:
             user_id = 146333757
             logged_in = True
-        
+
         if not logged_in:
             # Show login page in dashboard
             bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
             logger.info(f"Rendering login page with bot_username: {bot_user}")
-            return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+            return {
                 'logged_in': False,
                 'bot_username': bot_user,
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
                 'timestamp': int(datetime.now().timestamp())
-            })
-        
+            }
+
         # Получить задачи пользователя
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-                return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+                return {
                     'logged_in': False,
                     'bot_username': bot_user,
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
                     'timestamp': int(datetime.now().timestamp())
-                })
-            
+                }
+
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
-            
+
             # Проверить подписку
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
             logger.info(f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}")
-            
+
             if not subscription or subscription.status != 'active':
                 logger.info("No active subscription, rendering no_subscription")
                 bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-                return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': bot_user})
-            
-            tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-            # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
-            interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
-            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+                return aiohttp_jinja2.render_template('no_subscription.html', request, {
+                    'logged_in': True,
+                    'bot_username': bot_user,
+                    'current_date': '',
+                    'current_time': '',
+                    'formatted_end_date': None,
+                    'timestamp': int(datetime.now().timestamp())
+                })
+
+            # Get current date/time
+            now = datetime.now()
+            current_date = now.strftime('%d.%m.%Y')
+            current_time = now.strftime('%H:%M')
+
+            # Calculate subscription end date
+            formatted_end_date = None
+            if subscription and subscription.end_date:
+                formatted_end_date = subscription.end_date.strftime('%d.%m.%Y')
+
+            # Get tasks
+            tasks = session_db.query(Task).filter_by(user_id=user.id).order_by(Task.created_at.desc()).all()
+            logger.info(f"Found {len(tasks)} tasks for user {user.id}")
+
+            # Group tasks by date
+            from collections import defaultdict
+            tasks_by_date = defaultdict(list)
+            for task in tasks:
+                date_key = task.created_at.strftime('%Y-%m-%d')
+                tasks_by_date[date_key].append(task)
+
+            # Sort dates descending
+            sorted_dates = sorted(tasks_by_date.keys(), reverse=True)
+
+            # Get partners
+            partners = get_partners_list(user_id)
+            logger.info(f"Found {len(partners)} partners for user {user_id}")
+
+            # Get user profile
+            user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            if user_profile:
+                logger.info(f"User profile found: {user_profile.id}")
+            else:
+                logger.info("No user profile found")
+
+            # Get recent interactions
+            interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).limit(10).all()
+            logger.info(f"Found {len(interactions)} recent interactions")
+
+            return {
+                'logged_in': True,
+                'user': user,
+                'subscription': subscription,
+                'tasks_by_date': tasks_by_date,
+                'sorted_dates': sorted_dates,
+                'partners': partners,
+                'user_profile': user_profile,
+                'interactions': interactions,
+                'current_date': current_date,
+                'current_time': current_time,
+                'formatted_end_date': formatted_end_date,
+                'timestamp': int(now.timestamp())
+            }
+
         finally:
             session_db.close()
-        is_local = LOCAL  # Для использования в шаблоне
-        try:
-            partners = get_partners_list(user_id=user_id)
-        except Exception as e:
-            logger.error(f"Error getting partners: {e}")
-            partners = []
-        # Add common interests, skills, goals and recommendation reason
-        if profile and partners:
-            user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
-            user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
-            user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
-            
-            # Получаем список контактов, с которыми уже общались
-            contacted_usernames = set()
-            for interaction in interactions:
-                import re
-                mentions = re.findall(r'@(\w+)', interaction.content)
-                contacted_usernames.update(mentions)
-            
-            for p in partners:
-                # Common interests
-                if p.interests:
-                    partner_interests = set(i.strip().lower() for i in p.interests.split(','))
-                    common = user_interests & partner_interests
-                    p.common_interests = ', '.join(common) if common else None
-                else:
-                    p.common_interests = None
-                
-                # Common skills
-                if p.skills:
-                    partner_skills = set(s.strip().lower() for s in p.skills.split(','))
-                    common_skills = user_skills & partner_skills
-                    p.common_skills = ', '.join(common_skills) if common_skills else None
-                else:
-                    p.common_skills = None
-                
-                # Common goals
-                if p.goals:
-                    partner_goals = set(g.strip().lower() for g in p.goals.split(','))
-                    common_goals = user_goals & partner_goals
-                    p.common_goals = ', '.join(common_goals) if common_goals else None
-                else:
-                    p.common_goals = None
-                
-                # Determine recommendation reason
-                reasons = []
-                if p.contact_info:
-                    username = p.contact_info.replace('@', '')
-                    if username in contacted_usernames:
-                        reasons.append('уже общались')
-                if p.common_skills:
-                    reasons.append('общие навыки')
-                if p.common_interests:
-                    reasons.append('общие интересы')
-                if p.common_goals:
-                    reasons.append('общие цели')
-                if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('из вашего города')
-                p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
-        user_tz = pytz.UTC
-        if user and user.timezone:
-            try:
-                user_tz = pytz.timezone(user.timezone)
-            except pytz.exceptions.UnknownTimeZoneError:
-                user_tz = pytz.UTC
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now.astimezone(user_tz)
-        
-        # Convert interaction timestamps to user's timezone
-        for interaction in interactions:
-            if interaction.created_at:
-                if interaction.created_at.tzinfo is None:
-                    interaction.created_at = pytz.UTC.localize(interaction.created_at)
-                interaction.created_at = interaction.created_at.astimezone(user_tz)
-        
-        for task in tasks:
-            if task.reminder_time:
-                if task.reminder_time.tzinfo is None:
-                    task.reminder_time = pytz.UTC.localize(task.reminder_time)
-                local_reminder = task.reminder_time.astimezone(user_tz)
-                task.overdue = local_reminder < user_now and task.status == 'pending'
-                task.reminder_time_local = local_reminder.strftime('%d.%m.%Y %H:%M')
-                if task.overdue:
-                    delta = user_now - local_reminder
-                    total_seconds = int(delta.total_seconds())
-                    days = total_seconds // 86400
-                    hours = (total_seconds % 86400) // 3600
-                    minutes = (total_seconds % 3600) // 60
-                    if days > 0:
-                        task.overdue_text = f"просрочено на {days} дн."
-                    elif hours > 0:
-                        task.overdue_text = f"просрочено на {hours} ч."
-                    elif minutes > 0:
-                        task.overdue_text = f"просрочено на {minutes} мин."
-                    else:
-                        task.overdue_text = "просрочено"
-                else:
-                    task.overdue_text = None
-            else:
-                task.overdue = False
-                task.reminder_time_local = None
-                task.overdue_text = None
-        
-        # Calculate metrics
-        total_tasks = len(tasks)
-        completed_tasks = len([t for t in tasks if t.status == 'completed'])
-        pending_tasks = len([t for t in tasks if t.status == 'pending'])
-        skipped_tasks = len([t for t in tasks if t.status == 'skipped'])
-        
-        # Format date and time in user's timezone
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now
-        if user and user.timezone:
-            try:
-                user_tz = pytz.timezone(user.timezone)
-                user_now = base_now.astimezone(user_tz)
-            except pytz.exceptions.UnknownTimeZoneError:
-                user_now = base_now
-        months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
-        current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-        current_time = user_now.strftime('%H:%M')
-        
-        # Format subscription end date
-        formatted_end_date = None
-        if subscription and subscription.end_date:
-            end_dt = subscription.end_date
-            if end_dt.tzinfo is None:
-                end_dt = end_dt.replace(tzinfo=pytz.UTC)
-            end_local = end_dt.astimezone(user_tz if user.timezone else pytz.UTC)
-            formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
-        
-        # Calculate upcoming reminders
-        upcoming_reminders = []
-        if user:
-            for task in tasks:
-                if task.reminder_time:
-                    if task.reminder_time.tzinfo is None:
-                        task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
-                    if task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC) > user_now and task.status == 'pending':
-                        reminder_time_local = task.reminder_time.astimezone(user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
-                        upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
-        
-        # Преобразуем задачи в словари для JSON сериализации
-        tasks_dict = []
-        for task in tasks:
-            # Подготовим reminder_time в ISO формате для JavaScript
-            reminder_time_iso = None
-            if task.reminder_time:
-                if task.reminder_time.tzinfo is None:
-                    task.reminder_time = pytz.UTC.localize(task.reminder_time)
-                local_reminder = task.reminder_time.astimezone(user_tz)
-                reminder_time_iso = local_reminder.isoformat()
-            
-            task_dict = {
-                'id': task.id,
-                'title': task.title,
-                'description': task.description or '',
-                'status': task.status,
-                'reminder_time': reminder_time_iso,  # Для группировки в JS
-                'reminder_time_local': getattr(task, 'reminder_time_local', None),
-                'overdue': getattr(task, 'overdue', False),
-                'overdue_text': getattr(task, 'overdue_text', None)
-            }
-            tasks_dict.append(task_dict)
-        
-        # Get user avatar URL
-        user_avatar_url = None
-        if 'bot' in request.app:
-            user_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-            # Add random parameter to prevent caching
-            if user_avatar_url:
-                import random
-                user_avatar_url += f"?r={random.randint(100000, 999999)}"
-        
-        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-            'logged_in': True,
-            'tasks': tasks_dict,
-            'user': user, 
-            'profile': profile,
-            'interactions': interactions,
-            'partners': partners,
-            'subscription': subscription,
-            'total_tasks': total_tasks,
-            'completed_tasks': completed_tasks,
-            'pending_tasks': pending_tasks,
-            'skipped_tasks': skipped_tasks,
-            'current_date': current_date,
-            'current_time': current_time,
-            'formatted_end_date': formatted_end_date,
-            'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': int(datetime.now().timestamp()),
-            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-            'is_local': is_local,
-            'user_avatar_url': user_avatar_url
-        })
+
     except Exception as e:
-        logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
+        logger.error(f"Error in dashboard_handler: {e}", exc_info=True)
         bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+        return {
             'logged_in': False,
             'bot_username': bot_user,
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
             'timestamp': int(datetime.now().timestamp())
-        })
+        }
 
 
 async def tasks_handler(request):
@@ -1380,13 +1242,18 @@ logger.info("ReminderService initialized")
 # Start ReminderService on app startup
 async def start_reminder_service(app):
     logger.info("Starting ReminderService...")
-    await reminder_service.start()
-    logger.info("ReminderService started successfully")
-    # Log existing jobs
-    jobs = reminder_service.scheduler.get_jobs()
-    logger.info(f"Scheduled jobs after start: {len(jobs)}")
-    for job in jobs[:5]:  # Log first 5 jobs
-        logger.info(f"Job: {job.id} at {job.next_run_time}")
+    try:
+        # Temporarily disable ReminderService for testing
+        # await reminder_service.start()
+        logger.info("ReminderService disabled for testing")
+        # Log existing jobs
+        # jobs = reminder_service.scheduler.get_jobs()
+        # logger.info(f"Scheduled jobs after start: {len(jobs)}")
+        # for job in jobs[:5]:  # Log first 5 jobs
+        #     logger.info(f"Job: {job.id} at {job.next_run_time}")
+    except Exception as e:
+        logger.error(f"Error starting ReminderService: {e}", exc_info=True)
+        raise
 
 app.on_startup.append(start_reminder_service)
 
@@ -1413,7 +1280,34 @@ if __name__ == "__main__":
         port = PORT
         host = '127.0.0.1' if LOCAL else '0.0.0.0'
         logger.info(f"Starting web server on {host}:{port}")
-        web.run_app(app, port=port, host=host, access_log=logger if not LOCAL else None)
+        
+        # Use asyncio AppRunner
+        logger.info("Using asyncio AppRunner")
+        try:
+            async def run_server():
+                runner = web.AppRunner(app)
+                await runner.setup()
+                site = web.TCPSite(runner, host, port)
+                await site.start()
+                logger.info(f"Server started on {host}:{port}")
+                
+                # Keep the server running
+                try:
+                    while True:
+                        await asyncio.sleep(1)
+                except KeyboardInterrupt:
+                    logger.info("Shutting down server...")
+                finally:
+                    await runner.cleanup()
+                    logger.info("Server shut down")
+
+            asyncio.run(run_server())
+        except Exception as serve_error:
+            logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
+            raise
     except Exception as e:
         logger.error(f"Failed to start application: {e}", exc_info=True)
         raise
+
+# For uvicorn
+application = app
