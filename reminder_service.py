@@ -18,7 +18,6 @@ class ReminderService:
         self.schedule_daily_reports()
         self.schedule_proactive_checks()
         self.schedule_overdue_checks()
-        self.schedule_delegation_checks()
 
     def schedule_existing_reminders(self):
         db = Session()
@@ -520,74 +519,3 @@ class ReminderService:
             import logging
             logging.error(f"Failed to send overdue reminder to user {user_id}: {e}")
 
-    def schedule_delegation_checks(self):
-        """Планирование промежуточных проверок делегированных задач каждые 60 минут"""
-        from models import Session
-        from models import User
-        
-        db = Session()
-        try:
-            users = db.query(User).all()
-            for user in users:
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                
-                # Планируем проверки делегированных задач каждый час
-                self.scheduler.add_job(
-                    self.check_delegation_progress,
-                    trigger="cron",
-                    minute=0,
-                    timezone=user_tz,
-                    args=[user.telegram_id],
-                    id=f"delegation_check_{user.telegram_id}",
-                    replace_existing=True
-                )
-        finally:
-            db.close()
-
-    async def check_delegation_progress(self, user_id: int):
-        """Проверка прогресса делегированных задач и отправка обновлений инициатору"""
-        from models import Session
-        from datetime import timedelta
-        
-        db = Session()
-        try:
-            # Находим пользователя
-            user = db.query(User).filter(User.telegram_id == user_id).first()
-            if not user:
-                return
-            
-            now = datetime.now(pytz.UTC)
-            
-            # Находим задачи, которые пользователь делегировал другим
-            delegated_tasks = db.query(Task).filter(
-                Task.delegated_by == user.id,
-                Task.delegation_status == 'accepted',
-                Task.status.in_(['pending', 'in_progress'])
-            ).all()
-            
-            for task in delegated_tasks:
-                # Пропускаем если задача только что создана (меньше 30 минут)
-                if task.created_at and (now - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() < 1800:
-                    continue
-                
-                # Проверяем приближающийся дедлайн (за 2 часа)
-                if task.reminder_time:
-                    reminder_time = task.reminder_time
-                    if reminder_time.tzinfo is None:
-                        reminder_time = pytz.UTC.localize(reminder_time)
-                    
-                    time_until_deadline = (reminder_time - now).total_seconds() / 3600  # в часах
-                    
-                    # Если до дедлайна меньше 2 часов - отправляем промежуточное обновление
-                    if 0 < time_until_deadline <= 2:
-                        await self.send_delegation_progress_update(task.id, update_type="approaching_deadline")
-                    # Если до дедлайна больше 2 часов но меньше половины времени - статус
-                    elif task.created_at:
-                        total_time = (reminder_time - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() / 3600
-                        elapsed_time = (now - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() / 3600
-                        
-                        # Если прошло больше 50% времени - отправляем обновление
-                        if elapsed_time >= total_time * 0.5:
-                            await self.send_delegation_progress_update(task.id, update_type="midpoint")
-        finally:
-            db.close()
