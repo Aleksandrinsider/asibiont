@@ -504,7 +504,7 @@ body {
     /* Используем пагинацию */
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - 350px);
+    max-height: calc(100vh - 450px);
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
 }
@@ -880,7 +880,7 @@ body {
     /* Ограничить высоту для мобильных */
     .tasks-section,
     .people-list {
-        max-height: calc(100vh - 400px) !important;
+        max-height: calc(100vh - 500px) !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: thin !important;
