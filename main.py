@@ -481,8 +481,14 @@ async def chat_handler(request):
             logger.warning("No user_id in session for chat")
             return web.json_response({'error': 'Not authenticated'}, status=401)
 
-        data = await request.json()
+        data = await request.post()
         message = data.get('message', '')
+        file = data.get('file')
+        file_content = None
+        if file:
+            # Read file content
+            file_content = file.file.read().decode('utf-8', errors='ignore')  # For text files, ignore errors for binary
+            logger.info(f"File received: {file.filename}, size: {len(file_content)}")
         logger.info(f"Message received: {message}")
 
         # Load context from Redis
@@ -505,14 +511,17 @@ async def chat_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             logger.info(f"User found: {user is not None}")
             if user:
-                interaction_user = Interaction(user_id=user.id, message_type='user', content=message)
+                content = message
+                if file:
+                    content += f" [Файл: {file.filename}]"
+                interaction_user = Interaction(user_id=user.id, message_type='user', content=content)
                 session_db.add(interaction_user)
                 session_db.commit()
 
             # Get AI response
             try:
                 logger.info(f"Calling chat_with_ai with user_id: {user_id}")
-                response = await chat_with_ai(message, context, user_id)
+                response = await chat_with_ai(message, context, user_id, file_content)
                 logger.info(f"AI response: {response[:100]}...")
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)

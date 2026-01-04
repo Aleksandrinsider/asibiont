@@ -46,6 +46,8 @@ class AIIntegration:
 def get_system_prompt():
     return f"""Ты — дружелюбный ИИ-помощник для управления задачами. Твой стиль общения — естественный, как с хорошим другом. Всегда будь позитивным, полезным и вовлечённым в разговор.
 
+Пользователь может прикреплять файлы для анализа. Если в сообщении есть содержимое файла, внимательно изучи его и предоставь полезный анализ, советы или ответы на основе этого содержимого.
+
 ТЕКУЩАЯ ДАТА И ВРЕМЯ: {{{{current_date}}}} {{{{current_time}}}}. Это уже учитывает часовой пояс пользователя. НИКОГДА не спрашивай про время или часовой пояс — у тебя уже есть точное локальное время пользователя. Используй его для расчета напоминаний.
 
 ОСНОВНЫЕ ПРАВИЛА:
@@ -807,14 +809,12 @@ TOOLS = [
     }
 ]
 
-async def chat_with_ai(message, context=None, user_id=None):
+async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     import logging
     logger = logging.getLogger(__name__)
     # Clean message from mentions
     message = re.sub(r'@[\w]+', '', message).strip()
-    logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}")
-    if not DEEPSEEK_API_KEY:
-        logger.warning("DEEPSEEK_API_KEY not set")
+        logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
     
     try:
@@ -853,6 +853,9 @@ async def chat_with_ai(message, context=None, user_id=None):
             # Get all tasks for extended memory
             all_tasks = list_tasks(user_id=user_id)
             user_memory += f"\nВсе задачи пользователя: {all_tasks}"
+            # Add file content if provided
+            if file_content:
+                user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
             # Get user current time for relative time parsing and prompt
             # Use CURRENT_DATE if set (for testing), otherwise real time
             if CURRENT_DATE:

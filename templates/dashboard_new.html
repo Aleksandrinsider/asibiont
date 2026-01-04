@@ -134,6 +134,8 @@
                     {% if logged_in %}
                     <div class="chat-input">
                         <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
+                        <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
+                        <button onclick="document.getElementById('file-input').click()" style="padding: 10px; background-color: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;">📎</button>
                         <button onclick="sendChatMessage()">Отправить</button>
                     </div>
                     {% endif %}
@@ -236,23 +238,37 @@
 
         async function sendChatMessage() {
             const input = document.getElementById('message-input');
+            const fileInput = document.getElementById('file-input');
             const message = input.value.trim();
-            if (!message) return;
+            const file = fileInput.files[0];
 
-            addMessage(message, 'user');
+            if (!message && !file) return;
+
+            // Add user message
+            if (message) {
+                addMessage(message, 'user');
+            }
+            if (file) {
+                addMessage(`📎 ${file.name}`, 'user');
+            }
             input.value = '';
+            fileInput.value = '';
             lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
             showTypingIndicator();
 
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 60000);
+                
+                const formData = new FormData();
+                formData.append('message', message);
+                if (file) {
+                    formData.append('file', file);
+                }
+                
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ message: message }),
+                    body: formData,
                     credentials: 'include',
                     signal: controller.signal
                 });
