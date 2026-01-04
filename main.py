@@ -636,12 +636,27 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
+    # Clear Redis context
     if redis_client:
         try:
             await redis_client.set(f"context:{user_id}", json.dumps([]).encode('utf-8'))
             logger.info("Context cleared")
         except Exception as e:
             logger.error(f"Error clearing context: {e}")
+
+    # Clear database interactions
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            session_db.query(Interaction).filter_by(user_id=user.id).delete()
+            session_db.commit()
+            logger.info(f"Database interactions cleared for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error clearing database interactions: {e}")
+        session_db.rollback()
+    finally:
+        session_db.close()
 
     return web.json_response({'message': 'History cleared'})
 
