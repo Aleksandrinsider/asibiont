@@ -814,7 +814,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     logger = logging.getLogger(__name__)
     # Clean message from mentions
     message = re.sub(r'@[\w]+', '', message).strip()
-        logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
+    logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
+    if not DEEPSEEK_API_KEY:
+        logger.warning("DEEPSEEK_API_KEY not set")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
     
     try:
