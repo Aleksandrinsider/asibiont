@@ -22,7 +22,7 @@ body {
 .app-header {
     width: 100%;
     height: auto;
-    background-color: #F6F8FA;
+    background-color: #FFFFFF;
     color: #1F2328;
     padding: 20px 16px;
     border-radius: 6px;
@@ -69,7 +69,7 @@ body {
     font-weight: bold;
     font-family: 'Horta', sans-serif;
     color: #068487;
-    background-color: #F6F8FA;
+    background-color: #FFFFFF;
     padding: 4px 8px;
     border-radius: 4px;
     display: inline-block;
