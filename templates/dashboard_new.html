@@ -339,7 +339,7 @@
                     setTimeout(async () => {
                         await updateTasks();
                         await updateProfile();
-                        await updatePartners();
+                        await updatePeople();
                         console.log('Tasks updated after message');
                         // Повторное обновление через 2 секунды на случай задержки в БД
                         setTimeout(async () => {
@@ -954,37 +954,6 @@
             await updatePeople();
         }
 
-        async function updatePartners() {
-            try {
-                const response = await fetch('/api/partners');
-                if (response.ok) {
-                    const data = await response.json();
-                    const peopleSection = document.querySelector('.people-section');
-                    
-                    if (!peopleSection) return; // Элемент не найден
-                    
-                    let html = '<h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>';
-                    
-                    if (data.partners.length > 0) {
-                        html += '<div class="people-list">';
-                        data.partners.forEach(partner => {
-                            html += `<div class="person-card">
-                                <p><strong>@${partner.contact_info}</strong></p>
-                                <p>Общие интересы: ${partner.common_interests}</p>
-                            </div>`;
-                        });
-                        html += '</div>';
-                    } else {
-                        html += '';
-                    }
-                    
-                    peopleSection.innerHTML = html;
-                }
-            } catch (error) {
-                console.error('Error updating partners:', error);
-            }
-        }
-
         // Global variable to store last profile data
         let lastProfileData = null;
 
@@ -1006,9 +975,9 @@
                     
                     if (lastProfileData === currentProfileKey) {
                         // Profile data hasn't changed, only update time
-                        const headerInfo = document.getElementById('header-info');
-                        if (headerInfo && data.current_time && data.current_date) {
-                            headerInfo.textContent = `${data.current_time} · ${data.current_date}`;
+                        const timeSpan = document.querySelector('.header-info span span');
+                        if (timeSpan && data.current_time && data.current_date) {
+                            timeSpan.textContent = `${data.current_time} · ${data.current_date}`;
                         }
                         return; // Skip full profile update
                     }
@@ -1082,7 +1051,7 @@
         // Auto-update every 3 seconds
         setInterval(() => {
             updateTasks();
-            updatePartners();
+            updatePeople();
             updateProfile();
         }, 3000);
 
