@@ -390,6 +390,7 @@
         const TASKS_PER_PAGE = 10;
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
+        let lastMessageCount = 0;
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -1140,8 +1141,6 @@
             updateChat();
         }, 3000);
 
-        let lastMessageCount = 0;
-
         async function updateChat() {
             // Don't update chat if it was cleared
             if (localStorage.getItem('chatCleared') === 'true') {
@@ -1153,6 +1152,8 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions && data.interactions.length > lastMessageCount) {
+                        // Reset cleared flag when new messages arrive (e.g., from Telegram)
+                        localStorage.removeItem('chatCleared');
                         // Добавляем только новые сообщения
                         const newMessages = data.interactions.slice(lastMessageCount);
                         newMessages.forEach(interaction => {
