@@ -496,16 +496,17 @@ body {
     margin-bottom: 4px;
     display: flex;
     flex-direction: column;
-    /* flex: 1; */
+    flex: 1;
     overflow: hidden;
 }
 
 .tasks-section {
     /* Вернуть пагинацию вместо scrollbar */
-    flex: 1;
+    /* flex: 1; */
     overflow-y: auto;
     overflow-x: hidden;
     /* max-height: calc(100vh - 350px); /* Ограничить высоту панели задач */
+    min-height: 200px; /* Минимальная высота для задач */
 }
 
 /* .tasks-section::-webkit-scrollbar {
