@@ -346,10 +346,18 @@
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
                     addMessage('История чата очищена', 'ai');
-                    // Перезагрузить сообщения через API
-                    setTimeout(() => {
-                        loadInitialMessages();
-                    }, 1000);
+                    // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
+                    setTimeout(async () => {
+                        try {
+                            const response = await fetch('/api/interactions');
+                            if (response.ok) {
+                                const data = await response.json();
+                                lastMessageCount = data.interactions ? data.interactions.length : 0;
+                            }
+                        } catch (error) {
+                            console.error('Error getting message count:', error);
+                        }
+                    }, 500);
                 } else {
                     const data = await response.json();
                     addMessage(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'ai');
@@ -1119,6 +1127,7 @@
             updateTasks();
             updatePeople();
             updateProfile();
+            updateChat();
         }, 3000);
 
         let lastMessageCount = 0;
