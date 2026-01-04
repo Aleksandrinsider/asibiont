@@ -501,15 +501,16 @@ body {
 }
 
 .tasks-section {
-    /* Убран scrollbar, используется пагинация */
-    overflow-y: auto;
-    overflow-x: hidden;
-    max-height: calc(100vh - 350px); /* Увеличить отступ для надежности */
-    scrollbar-width: thin; /* Для Firefox */
-    scrollbar-color: #D1D9E0 transparent; /* Для Firefox */
+    /* Вернуть пагинацию вместо scrollbar */
+    /* overflow-y: auto; */
+    /* overflow-x: hidden; */
+    /* max-height: calc(100vh - 350px); /* Ограничить высоту, чтобы не съезжала панель */
+    /* scrollbar-width: thin; /* Для Firefox */
+    /* scrollbar-color: #D1D9E0 transparent; /* Для Firefox */
+    max-height: calc(100vh - 200px); /* Ограничить высоту панели задач */
 }
 
-.tasks-section::-webkit-scrollbar {
+/* .tasks-section::-webkit-scrollbar {
     width: 8px;
 }
 
@@ -524,7 +525,7 @@ body {
 
 .tasks-section::-webkit-scrollbar-thumb:hover {
     background: #656D76;
-}
+} */
 
 .context-section {
     padding: 12px;
@@ -877,14 +878,15 @@ body {
         margin-bottom: 10px;
     }
     
-    /* Ограничить высоту для маленьких экранов тоже */
+    /* Вернуть пагинацию для мобильных */
     .tasks-section,
     .people-list {
-        max-height: calc(100vh - 400px) !important; /* Увеличить отступ для мобильных */
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        scrollbar-width: thin !important; /* Для Firefox */
-        scrollbar-color: #D1D9E0 transparent !important; /* Для Firefox */
+        /* max-height: calc(100vh - 400px) !important; */
+        /* overflow-y: auto !important; */
+        /* overflow-x: hidden !important; */
+        /* scrollbar-width: thin !important; /* Для Firefox */
+        /* scrollbar-color: #D1D9E0 transparent !important; /* Для Firefox */
+        max-height: calc(100vh - 300px) !important; /* Ограничить высоту для мобильных */
     }
     
     .task-item {
