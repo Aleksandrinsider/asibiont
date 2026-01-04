@@ -223,6 +223,7 @@ body {
     overflow: hidden;
     /* max-height: 100vh; /* Ограничить максимальную высоту */
     margin-top: -2px; /* Уменьшить отступ от шапки на 2px */
+}
 
 .chat-section {
     flex: 1;
@@ -496,21 +497,19 @@ body {
     margin-bottom: 4px;
     display: flex;
     flex-direction: column;
-    flex: 1;
     overflow: hidden;
 }
 
 .tasks-section {
-    /* Вернуть пагинацию вместо scrollbar */
-    /* overflow-y: auto; */
-    /* overflow-x: hidden; */
-    /* max-height: calc(100vh - 350px); /* Ограничить высоту, чтобы не съезжала панель */
-    /* scrollbar-width: thin; /* Для Firefox */
-    /* scrollbar-color: #D1D9E0 transparent; /* Для Firefox */
-    max-height: calc(100vh - 200px); /* Ограничить высоту панели задач */
+    /* Используем пагинацию */
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(100vh - 350px);
+    scrollbar-width: thin;
+    scrollbar-color: #D1D9E0 transparent;
 }
 
-/* /* .tasks-section::-webkit-scrollbar {
+.tasks-section::-webkit-scrollbar {
     width: 8px;
 }
 
@@ -525,7 +524,7 @@ body {
 
 .tasks-section::-webkit-scrollbar-thumb:hover {
     background: #656D76;
-} */ */
+} */
 
 .context-section {
     padding: 12px;
@@ -878,15 +877,14 @@ body {
         margin-bottom: 10px;
     }
     
-    /* Вернуть пагинацию для мобильных */
+    /* Ограничить высоту для мобильных */
     .tasks-section,
     .people-list {
-        /* max-height: calc(100vh - 450px) !important; */
-        /* overflow-y: auto !important; */
-        /* overflow-x: hidden !important; */
-        /* scrollbar-width: thin !important; /* Для Firefox */
-        /* scrollbar-color: #D1D9E0 transparent !important; /* Для Firefox */        
-        max-height: calc(100vh - 300px) !important; /* Ограничить высоту для мобильных */
+        max-height: calc(100vh - 400px) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        scrollbar-width: thin !important;
+        scrollbar-color: #D1D9E0 transparent !important;
     }
     
     .task-item {
