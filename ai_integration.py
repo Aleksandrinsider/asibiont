@@ -1265,9 +1265,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Get user memory and all tasks for extended context
         user_memory = ""
         if user_id:
-            from models import Session, User, Task, UserProfile
+            from models import Session, User, Task, UserProfile, Subscription
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
+            
+            # Check subscription
+            from config import FREE_ACCESS_MODE
+            if not FREE_ACCESS_MODE:
+                subscription = session.query(Subscription).filter_by(user_id=user.id, status='active').first()
+                if not subscription:
+                    session.close()
+                    return "У вас нет активной подписки. Для использования AI-ассистента активируйте подписку в Telegram боте @asibiont_bot. После активации подписки я смогу помогать вам с управлением задачами!"
+            
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
