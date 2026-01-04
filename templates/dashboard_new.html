@@ -1044,10 +1044,15 @@
             recognition.onstart = function() {
                 isRecording = true;
                 console.log('Голосовое распознавание запущено');
-                // Изменить стиль кнопки - красный фон для индикации записи
-                voiceButton.style.backgroundColor = '#dc3545';
+                // Изменить стиль кнопки - синий фон как у лого GitHub
+                voiceButton.style.backgroundColor = '#0969DA';
                 voiceButton.style.color = '#ffffff';
-                voiceButton.style.borderColor = '#dc3545';
+                voiceButton.style.borderColor = '#0969DA';
+                // Сделать иконку белой
+                const micIcon = voiceButton.querySelector('img');
+                if (micIcon) {
+                    micIcon.style.filter = 'brightness(0) invert(1)';
+                }
                 // Можно добавить пульсацию
                 voiceButton.style.animation = 'pulse 1s infinite';
             };
@@ -1081,6 +1086,11 @@
                 voiceButton.style.color = '#59636E';
                 voiceButton.style.borderColor = '#D1D9E0';
                 voiceButton.style.animation = '';
+                // Вернуть иконку к серому цвету
+                const micIcon = voiceButton.querySelector('img');
+                if (micIcon) {
+                    micIcon.style.filter = 'brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%)';
+                }
             }
             
             recognition.start();
