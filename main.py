@@ -271,6 +271,55 @@ async def dashboard_handler(request):
         except Exception as e:
             logger.error(f"Error getting partners: {e}")
             partners = []
+        
+        # Получить контакты по делегированию
+        delegating_to_me = []  # Люди, которые делегировали мне задачи
+        delegating_by_me = []  # Люди, которым я делегировал задачи
+        
+        try:
+            # Люди, которые делегировали мне задачи (я получаю задачи от них)
+            delegated_tasks = session_db.query(Task).filter(
+                Task.delegated_to_username == user.username,
+                Task.delegation_status.in_(['pending', 'accepted'])
+            ).all()
+            
+            delegator_ids = set()
+            for task in delegated_tasks:
+                if task.delegated_by and task.delegated_by not in delegator_ids:
+                    delegator_ids.add(task.delegated_by)
+                    delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                    if delegator and delegator.id != user.id:
+                        delegating_to_me.append({
+                            'id': delegator.id,
+                            'username': delegator.username,
+                            'first_name': delegator.first_name,
+                            'reason': f'делегировал {len([t for t in delegated_tasks if t.delegated_by == delegator.id])} задач'
+                        })
+            
+            # Люди, которым я делегировал задачи
+            my_delegated_tasks = session_db.query(Task).filter(
+                Task.delegated_by == user.id,
+                Task.delegation_status.in_(['pending', 'accepted'])
+            ).all()
+            
+            delegatee_usernames = set()
+            for task in my_delegated_tasks:
+                if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
+                    delegatee_usernames.add(task.delegated_to_username)
+                    delegatee = session_db.query(User).filter(User.username.ilike(task.delegated_to_username.replace('@', ''))).first()
+                    if delegatee and delegatee.id != user.id:
+                        delegating_by_me.append({
+                            'id': delegatee.id,
+                            'username': delegatee.username,
+                            'first_name': delegatee.first_name,
+                            'reason': f'я делегировал {len([t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username])} задач'
+                        })
+        
+        except Exception as e:
+            logger.error(f"Error getting delegation contacts: {e}")
+            delegating_to_me = []
+            delegating_by_me = []
+        
         # Add common interests, skills, goals and recommendation reason
         if profile and partners:
             user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
@@ -446,6 +495,8 @@ async def dashboard_handler(request):
             'profile': profile,
             'interactions': interactions,
             'partners': partners,
+            'delegating_to_me': delegating_to_me,
+            'delegating_by_me': delegating_by_me,
             'subscription': subscription,
             'total_tasks': total_tasks,
             'completed_tasks': completed_tasks,

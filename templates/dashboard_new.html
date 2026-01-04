@@ -85,11 +85,17 @@
 
                 <div class="people-section">
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
-                    {% if partners %}
+                    <div class="filters" style="margin-bottom: 15px;">
+                        <a href="#" class="filter-link active" onclick="filterContacts('recommended')">Рекомендуемые</a>
+                        <a href="#" class="filter-link" onclick="filterContacts('delegating_to_me')">Назначают мне</a>
+                        <a href="#" class="filter-link" onclick="filterContacts('delegating_by_me')">Назначаю я</a>
+                    </div>
+                    {% if partners or delegating_to_me or delegating_by_me %}
                     <div class="people-list" id="people-list">
+                        <!-- Рекомендуемые контакты -->
                         {% for partner in partners %}
                         {% if partner.contact_info %}
-                        <div class="person-card">
+                        <div class="person-card contact-recommended">
                             <p style="margin-bottom: 8px;"><strong>@{{ partner.contact_info }}</strong></p>
                             <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ partner.recommendation_reason }}</p>
                             {% if partner.city %}
@@ -106,6 +112,28 @@
                             {% endif %}
                         </div>
                         {% endif %}
+                        {% endfor %}
+                        
+                        <!-- Контакты, которые делегируют мне -->
+                        {% for contact in delegating_to_me %}
+                        <div class="person-card contact-delegating-to-me" style="display: none;">
+                            <p style="margin-bottom: 8px;"><strong>@{{ contact.username }}</strong></p>
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ contact.reason }}</p>
+                            {% if contact.first_name %}
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 {{ contact.first_name }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Контакты, которым я делегирую -->
+                        {% for contact in delegating_by_me %}
+                        <div class="person-card contact-delegating-by-me" style="display: none;">
+                            <p style="margin-bottom: 8px;"><strong>@{{ contact.username }}</strong></p>
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">{{ contact.reason }}</p>
+                            {% if contact.first_name %}
+                            <p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 {{ contact.first_name }}</p>
+                            {% endif %}
+                        </div>
                         {% endfor %}
                     </div>
                     {% else %}
@@ -581,6 +609,33 @@
             renderTaskGroups(allTasksFromServer);
         }
         
+        function filterContacts(filterType) {
+            // Обновляем стили кнопок фильтров контактов
+            document.querySelectorAll('.people-section .filter-link').forEach(btn => {
+                if (btn.getAttribute('onclick').includes(filterType)) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Показываем/скрываем соответствующие карточки контактов
+            const peopleList = document.getElementById('people-list');
+            if (!peopleList) return;
+            
+            const allCards = peopleList.querySelectorAll('.person-card');
+            
+            allCards.forEach(card => {
+                if (filterType === 'recommended') {
+                    card.style.display = card.classList.contains('contact-recommended') ? 'block' : 'none';
+                } else if (filterType === 'delegating_to_me') {
+                    card.style.display = card.classList.contains('contact-delegating-to-me') ? 'block' : 'none';
+                } else if (filterType === 'delegating_by_me') {
+                    card.style.display = card.classList.contains('contact-delegating-by-me') ? 'block' : 'none';
+                }
+            });
+        }
+        
         function renderTaskItem(task) {
             let html = '';
             html += '<div style="flex: 1;">';
@@ -744,6 +799,9 @@
                     updateTasks();
                 });
             });
+            
+            // Инициализировать фильтр контактов - показать рекомендуемые по умолчанию
+            filterContacts('recommended');
             
             // Обновлять счетчик времени каждые 30 секунд
             setInterval(() => {

@@ -185,6 +185,7 @@ def get_system_prompt():
 ТЕКУЩИЙ КОНТЕКСТ:
 Сейчас: {{current_date}}, {{current_time}}
 Твой username: {{current_username}}
+Известные пользователи: @testuser, @testuser_delegate (для тестирования)
 Ближайшие дни: завтра {{tomorrow}}, послезавтра {{day_after}}
 
 ВАЖНО: Ты знаешь текущую дату и время. Используй эту информацию как БАЗУ для всех расчетов времени. Если пользователь говорит "через 5 минут", рассчитай абсолютное время, добавив 5 минут к ТЕКУЩЕМУ времени на ТЕКУЩЕЙ дате. Не спрашивай о времени или дате — всегда рассчитывай самостоятельно.
@@ -708,8 +709,25 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
     if not user:
         session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    task = session.query(Task).filter_by(id=int(task_id)).first()
     if task:
+        # Проверить права доступа: задача должна принадлежать пользователю ИЛИ быть делегирована ему
+        has_access = False
+        if task.user_id == user.id:
+            has_access = True  # Обычная задача пользователя
+        elif task.delegated_to_username:
+            # Проверить, является ли пользователь получателем делегированной задачи
+            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            if user.username and user.username.lower() == recipient_username:
+                has_access = True
+            # Также проверить, не является ли пользователь отправителем (для случаев когда user_id != delegator_id)
+            elif task.delegated_by == user.id:
+                has_access = True
+        
+        if not has_access:
+            session.close()
+            return "У вас нет прав на редактирование этой задачи."
+        
         if title:
             task.title = title
         if description:
@@ -742,7 +760,22 @@ def delete_task(task_id=None, task_title=None, user_id=None):
     
     # Найти задачу по ID или по названию
     if task_id:
-        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+        task = session.query(Task).filter_by(id=int(task_id)).first()
+        if task:
+            # Проверить права доступа
+            has_access = False
+            if task.user_id == user.id:
+                has_access = True
+            elif task.delegated_to_username:
+                recipient_username = task.delegated_to_username.replace('@', '').lower()
+                if user.username and user.username.lower() == recipient_username:
+                    has_access = True
+                elif task.delegated_by == user.id:
+                    has_access = True
+            
+            if not has_access:
+                session.close()
+                return "У вас нет прав на удаление этой задачи."
     elif task_title:
         # Ищем по словам в названии для более гибкого поиска (OR вместо AND)
         words = task_title.lower().split()
@@ -772,8 +805,23 @@ def set_priority(task_id, priority, user_id=None):
     if not user:
         session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    task = session.query(Task).filter_by(id=int(task_id)).first()
     if task:
+        # Проверить права доступа
+        has_access = False
+        if task.user_id == user.id:
+            has_access = True
+        elif task.delegated_to_username:
+            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            if user.username and user.username.lower() == recipient_username:
+                has_access = True
+            elif task.delegated_by == user.id:
+                has_access = True
+        
+        if not has_access:
+            session.close()
+            return "У вас нет прав на изменение приоритета этой задачи."
+        
         if priority in ['high', 'medium', 'low']:
             task.priority = priority
             session.commit()
@@ -792,10 +840,28 @@ def get_task_details(task_id, user_id=None):
     if not user:
         session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
-    session.close()
+    task = session.query(Task).filter_by(id=int(task_id)).first()
     if task:
+        # Проверить права доступа
+        has_access = False
+        if task.user_id == user.id:
+            has_access = True  # Обычная задача пользователя
+        elif task.delegated_to_username:
+            # Проверить, является ли пользователь получателем делегированной задачи
+            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            if user.username and user.username.lower() == recipient_username:
+                has_access = True
+            # Также проверить, не является ли пользователь отправителем
+            elif task.delegated_by == user.id:
+                has_access = True
+        
+        if not has_access:
+            session.close()
+            return "У вас нет прав на просмотр этой задачи."
+        
+        session.close()
         return f"Задача: {task.title}, статус {task.status}, приоритет {task.priority}."
+    session.close()
     return "Задача не найдена."
 
 def get_partners_list(user_id=None, session=None):
@@ -1183,9 +1249,12 @@ TOOLS = [
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     import logging
     logger = logging.getLogger(__name__)
-    # Clean message from mentions
-    message = re.sub(r'@[\w]+', '', message).strip()
-    logger.info(f"chat_with_ai called with message: {message[:50]}..., context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
+    # Extract mentions before cleaning message
+    mentions = re.findall(r'@[\w]+', message)
+    mentions_str = ', '.join(mentions) if mentions else 'нет'
+    # Clean message from mentions for processing
+    clean_message = re.sub(r'@[\w]+', '', message).strip()
+    logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
@@ -1231,6 +1300,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             pending_tasks = [t for t in all_tasks.split(', ') if 'pending' in t.lower()]
             if pending_tasks:
                 user_memory += f"\nТекущие задачи: {', '.join(pending_tasks[:5])}"
+            
+            # Add delegated tasks info
+            delegated_tasks = session.query(Task).filter(
+                Task.delegated_to_username == user.username,
+                Task.delegation_status == 'pending'
+            ).all()
+            if delegated_tasks:
+                delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{t.delegated_by}" for t in delegated_tasks[:3]]
+                user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
+            
             # Add file content if provided
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
@@ -1297,6 +1376,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         user_username = f"@{user.username}" if user and user.username else "@unknown"
         system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")).replace("{{current_username}}", user_username)
         system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Если пользователь говорит 'через X минут', добавь X минут к текущему времени {current_time_str}\n- Если пользователь говорит 'через X часов', добавь X часов к текущему времени\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Например: 'через 5 минут' от {current_time_str} = {(user_now + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M')}"
+        system_prompt += f"\n\nОБНАРУЖЕННЫЕ @MENTIONS В СООБЩЕНИИ: {mentions_str}\nЕСЛИ ПОЛЬЗОВАТЕЛЬ ПРОСИТ ПОРУЧИТЬ/ДЕЛЕГИРОВАТЬ ЗАДАЧУ, ИСПОЛЬЗУЙ delegate_task С delegated_to_username ИЗ ЭТИХ MENTIONS!"
         system_prompt += user_memory
         system_prompt += time_hint
         
