@@ -143,9 +143,8 @@ class ReminderService:
             try:
                 interaction = Interaction(
                     user_id=user_id,
-                    user_message="",  # пустое т.к. это напоминание от системы
-                    ai_response=reminder_text,
-                    timestamp=datetime.utcnow()
+                    message_type="ai",
+                    content=reminder_text
                 )
                 db.add(interaction)
                 db.commit()
@@ -153,13 +152,17 @@ class ReminderService:
                 db.close()
             
             if self.bot:
-                await self.bot.send_message(
+                result = await self.bot.send_message(
                     chat_id=user_id,
                     text=reminder_text
                 )
+                import logging
+                logging.info(f"Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
             else:
                 # Для тестов - вывод в консоль
                 print(f"\n[REMINDER SENT] To user {user_id}: {reminder_text}")
+                import logging
+                logging.info(f"Reminder printed to console for user {user_id} for task {task_id}")
         except Exception as e:
             import logging
             logging.error(f"Failed to send reminder for task {task_id}: {e}")
