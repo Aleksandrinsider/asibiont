@@ -701,7 +701,7 @@
             const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
             const overdueIndicator = task.overdue ? '<span class="overdue-pulse"></span>' : '';
             html += '<div class="task-title"' + titleStyle + '>' + overdueIndicator + task.title + '</div>';
-            html += '<div style="display: flex; gap: 12px; margin-top: 4px;">';
+            html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
                 if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';

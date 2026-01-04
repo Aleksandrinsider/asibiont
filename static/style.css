@@ -652,7 +652,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 3px 5px;
+    padding: 2px 5px;
     margin-bottom: 0px;
     border-radius: 6px;
     border: none;
@@ -892,8 +892,8 @@ body {
     }
     
     .task-item {
-        padding: 10px;
-        margin-bottom: 8px;
+        padding: 5px;
+        margin-bottom: 4px;
     }
     
     .task-header h4 {
