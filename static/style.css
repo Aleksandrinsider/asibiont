@@ -873,11 +873,12 @@ body {
         margin-bottom: 10px;
     }
     
-    /* Убрать ограничение высоты для всех секций */
+    /* Ограничить высоту для маленьких экранов тоже */
     .tasks-section,
     .people-list {
-        max-height: none !important;
-        overflow: visible !important;
+        max-height: calc(100vh - 350px) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
     }
     
     .task-item {
