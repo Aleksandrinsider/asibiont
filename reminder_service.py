@@ -20,14 +20,22 @@ class ReminderService:
         self.schedule_overdue_checks()
 
     def schedule_existing_reminders(self):
+        import logging
+        logger = logging.getLogger(__name__)
         db = Session()
         try:
             tasks = db.query(Task).filter(Task.reminder_time.isnot(None), Task.reminder_sent == False).all()
+            logger.info(f"Found {len(tasks)} tasks with reminders to schedule")
             for task in tasks:
                 if task.reminder_time > datetime.utcnow():
                     # Безопасная проверка наличия user
                     if task.user and task.user.telegram_id:
+                        logger.info(f"Scheduling reminder for task {task.id} at {task.reminder_time}")
                         self.schedule_reminder(task.id, task.reminder_time, task.user.telegram_id, task.title)
+                    else:
+                        logger.warning(f"Task {task.id} has no user or telegram_id")
+                else:
+                    logger.info(f"Task {task.id} reminder time {task.reminder_time} is in the past")
             
             # Планируем проверки результатов для задач с reminder_sent=True и estimated_duration
             result_tasks = db.query(Task).filter(
@@ -137,10 +145,13 @@ class ReminderService:
         from subscription_service import check_subscription
         from models import Interaction
         
-        # Проверить подписку - если нет доступа, не отправлять напоминание
-        if not check_subscription(user_id):
-            logger.info(f"Subscription check failed for user {user_id}")
-            return
+        # Для напоминаний всегда отправляем, независимо от подписки
+        # if not check_subscription(user_id):
+        #     logger.info(f"Subscription check failed for user {user_id}")
+        #     return
+        
+        try:
+            reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
         
         try:
             reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
