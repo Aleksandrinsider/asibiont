@@ -843,7 +843,7 @@ async def api_partners_handler(request):
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-            interactions = session_db.query(Interaction).filter_by(user_id=user.id).all() if user else []
+            interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all() if user else []
         finally:
             session_db.close()
         
