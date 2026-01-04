@@ -88,11 +88,9 @@
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначают мне</button>
+                        <button onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначаю я</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button onclick="filterContacts('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все</button>
+                        <button onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегирую я</button>
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
@@ -568,7 +566,7 @@
             renderTaskGroups(allTasksFromServer);
         }
         
-        let currentContactFilter = 'all'; // Текущий фильтр контактов
+        let currentContactFilter = 'recommended'; // Текущий фильтр контактов
         
         function filterContacts(filterType) {
             currentContactFilter = filterType;
@@ -822,8 +820,8 @@
                 });
             });
             
-            // Инициализировать фильтр контактов - показать все по умолчанию
-            filterContacts('all');
+            // Инициализировать фильтр контактов - показать рекомендованные по умолчанию
+            filterContacts('recommended');
             
             // Применить фильтр к существующим контактам
             renderContacts();
