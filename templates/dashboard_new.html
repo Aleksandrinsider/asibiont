@@ -30,7 +30,6 @@
                 </div>
                 {% endif %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
-                    <span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span>
                     <span>{{ current_time }} · {{ current_date }}</span>
                 </span>
                 <button onclick="logout()" class="logout-button">Выход</button>
@@ -679,7 +678,6 @@
             const totalEl = document.getElementById('total-count');
             const progressEl = document.getElementById('progress-fill');
             const todayStatsEl = document.getElementById('today-stats');
-            const reminderIndicator = document.getElementById('reminder-indicator');
             
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
@@ -697,12 +695,6 @@
             
             // Обновить визуализацию задач по дням недели
             updateWeekTimeline(allTasks);
-            
-            // Показать мигающую точку если есть напоминания в ближайшие 10 минут
-            const hasUrgentReminder = upcomingTasks.some(t => (t.date - now) < 600000); // 10 минут
-            if (reminderIndicator) {
-                reminderIndicator.style.display = hasUrgentReminder ? 'inline-block' : 'none';
-            }
         }
         
         async function completeTask(taskId) {
@@ -882,7 +874,7 @@
                         // Profile data hasn't changed, only update time
                         const headerInfo = document.getElementById('header-info');
                         if (headerInfo && data.current_time && data.current_date) {
-                            headerInfo.innerHTML = `<span id="reminder-indicator" class="reminder-pulse" style="display: none;"></span><span>${data.current_time} · ${data.current_date}</span>`;
+                            headerInfo.innerHTML = `<span>${data.current_time} · ${data.current_date}</span>`;
                         }
                         return; // Skip full profile update
                     }
