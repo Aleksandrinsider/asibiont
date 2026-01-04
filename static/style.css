@@ -213,6 +213,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    max-height: 100vh; /* Ограничить максимальную высоту */
 }
 
 .center-column {
@@ -220,6 +221,7 @@ body {
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    max-height: 100vh; /* Ограничить максимальную высоту */
 }
 
 .chat-section {
@@ -502,7 +504,7 @@ body {
     /* Убран scrollbar, используется пагинация */
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - 250px); /* Ограничить высоту, чтобы не съезжала панель */
+    max-height: calc(100vh - 350px); /* Увеличить отступ для надежности */
     scrollbar-width: thin; /* Для Firefox */
     scrollbar-color: #D1D9E0 transparent; /* Для Firefox */
 }
@@ -878,7 +880,7 @@ body {
     /* Ограничить высоту для маленьких экранов тоже */
     .tasks-section,
     .people-list {
-        max-height: calc(100vh - 350px) !important;
+        max-height: calc(100vh - 400px) !important; /* Увеличить отступ для мобильных */
         overflow-y: auto !important;
         overflow-x: hidden !important;
         scrollbar-width: thin !important; /* Для Firefox */
