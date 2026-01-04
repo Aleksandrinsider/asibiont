@@ -572,9 +572,10 @@ body {
     padding-bottom: 10px;
 }
 
-.task-filters {
+.filters {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
 }
 
 .filter-btn {

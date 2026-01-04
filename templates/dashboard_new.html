@@ -86,10 +86,10 @@
                 <div class="people-section">
                     <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
                     <div class="filters" style="margin-bottom: 15px;">
-                        <a href="#" class="filter-link" onclick="filterContacts('recommended')">Рекомендуемые</a>
-                        <a href="#" class="filter-link" onclick="filterContacts('delegating_to_me')">Назначают мне</a>
-                        <a href="#" class="filter-link" onclick="filterContacts('delegating_by_me')">Назначаю я</a>
-                        <a href="#" class="filter-link active" onclick="filterContacts('all')">Все</a>
+                        <button class="filter-btn" onclick="filterContacts('recommended')">Рекомендуемые</button>
+                        <button class="filter-btn" onclick="filterContacts('delegating_to_me')">Назначают мне</button>
+                        <button class="filter-btn" onclick="filterContacts('delegating_by_me')">Назначаю я</button>
+                        <button class="filter-btn active" onclick="filterContacts('all')">Все</button>
                     </div>
                     {% if partners or delegating_to_me or delegating_by_me %}
                     <div class="people-list" id="people-list">
@@ -138,7 +138,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p style="margin: 0; color: #656D76; font-size: 13px;" id="people-list">Нет контактов</p>
+                    <p style="margin: 0; color: #656D76; font-size: 13px;" id="people-list"><!-- Контакты будут загружены --></p>
                     {% endif %}
                 </div>
             </div>
@@ -616,7 +616,7 @@
             currentContactFilter = filterType;
             
             // Обновляем стили кнопок фильтров контактов
-            document.querySelectorAll('.people-section .filter-link').forEach(btn => {
+            document.querySelectorAll('.people-section .filter-btn').forEach(btn => {
                 if (btn.getAttribute('onclick').includes(filterType)) {
                     btn.classList.add('active');
                 } else {
@@ -914,7 +914,7 @@
                         let html = '<div class="people-list">';
                         data.partners.forEach(partner => {
                             if (partner.contact_info) {
-                                html += '<div class="person-card">';
+                                html += '<div class="person-card contact-recommended">';
                                 html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
                                 html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.recommendation_reason || 'подходящий контакт'}</p>`;
                                 if (partner.city) {
@@ -935,7 +935,7 @@
                         html += '</div>';
                         peopleList.outerHTML = html;
                     } else {
-                        peopleList.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
+                        peopleList.innerHTML = '';
                     }
                 }
             } catch (error) {
@@ -968,7 +968,7 @@
                         });
                         html += '</div>';
                     } else {
-                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Нет контактов</p>';
+                        html += '';
                     }
                     
                     peopleSection.innerHTML = html;
