@@ -1007,6 +1007,11 @@ body {
     background-color: #056B6E;
 }
 
+.chat-action-btn {
+    background-color: #FFFFFF;
+    transition: all 0.2s;
+}
+
 .chat-action-btn:hover {
     background-color: #F6F8FA;
     border-color: #1F2328;

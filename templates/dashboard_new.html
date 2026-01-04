@@ -130,10 +130,10 @@
                     <div class="chat-input">
                         <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
                         <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
-                        <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn" style="padding: 10px; background-color: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                        <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn" style="padding: 10px; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px;">
                             <img src="https://cdn-icons-png.flaticon.com/512/1082/1082810.png" alt="Голосовое общение" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
-                        <button onclick="document.getElementById('file-input').click()" class="chat-action-btn" style="padding: 10px; background-color: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                        <button onclick="document.getElementById('file-input').click()" class="chat-action-btn" style="padding: 10px; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px;">
                             <img src="https://cdn-icons-png.flaticon.com/512/229/229930.png" alt="Прикрепить файл" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
                         <button onclick="sendChatMessage()">Отправить</button>
