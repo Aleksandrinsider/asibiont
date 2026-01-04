@@ -502,23 +502,6 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    position: relative;
-}
-
-.tasks-section-wrapper::after {
-    content: '↓';
-    position: absolute;
-    bottom: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 18px;
-    color: #068487;
-    opacity: 0.6;
-    pointer-events: none;
-    transition: opacity 0.3s;
-    z-index: 10;
-    background: linear-gradient(to top, #FFFFFF 0%, rgba(255,255,255,0.95) 50%, transparent 100%);
-    padding: 8px 16px 0 16px;
 }
 
 .tasks-section {
