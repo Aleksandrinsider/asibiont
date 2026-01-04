@@ -164,7 +164,7 @@
                 <div class="tasks-section-wrapper">
                     <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Задачи</h3>
                     <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
-                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #0066FF; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
+                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Личные задачи</button>
                         <span style="color: #D1D9E0;">·</span>
@@ -314,6 +314,7 @@
         let currentPage = 1;
         const TASKS_PER_PAGE = 10;
         let allTasksData = [];
+        let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
 
         // Load previous interactions
         {% for interaction in interactions %}
@@ -384,29 +385,30 @@
         }
         
         function renderTaskGroups(tasks) {
-            // Сбрасываем страницу при новой загрузке данных
+            // Сохраняем все задачи с сервера
             if (tasks !== allTasksData) {
+                allTasksFromServer = tasks;
                 currentPage = 1;
             }
             
             // Применяем фильтр
-            let filteredTasks = tasks;
+            let filteredTasks = allTasksFromServer;
             
             if (currentTaskFilter === 'completed') {
                 // Показываем только завершенные задачи
-                filteredTasks = tasks.filter(t => t.status === 'completed');
+                filteredTasks = allTasksFromServer.filter(t => t.status === 'completed');
             } else if (currentTaskFilter === 'my') {
                 // Личные задачи - задачи без делегирования, незавершенные
-                filteredTasks = tasks.filter(t => t.status !== 'completed' && !t.is_delegated);
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
                 // Назначенные мне - задачи делегированные мне, незавершенные
-                filteredTasks = tasks.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('от @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('от @'));
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // Назначенные мной - задачи делегированные другим, незавершенные
-                filteredTasks = tasks.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('для @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('для @'));
             } else {
                 // Все задачи - показываем незавершенные
-                filteredTasks = tasks.filter(t => t.status !== 'completed');
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed');
             }
             
             allTasksData = filteredTasks;
@@ -498,7 +500,7 @@
             // Обновляем стили кнопок
             document.querySelectorAll('.task-filter-btn').forEach(btn => {
                 if (btn.getAttribute('data-filter') === filterType) {
-                    btn.style.color = '#0066FF';
+                    btn.style.color = '#068487';
                     btn.style.fontWeight = '500';
                     btn.classList.add('active');
                 } else {
@@ -508,8 +510,8 @@
                 }
             });
             
-            // Применяем фильтр к задачам
-            updateTasks(); // Перезагружаем задачи с сервера с учетом фильтра
+            // Перерендерим задачи с новым фильтром
+            renderTaskGroups(allTasksFromServer);
         }
         
         function renderTaskItem(task) {

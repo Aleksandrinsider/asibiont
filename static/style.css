@@ -485,6 +485,7 @@ body {
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-bottom: 4px;
+    margin-top: -2px;
 }
 
 .tasks-section-wrapper {
