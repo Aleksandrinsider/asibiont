@@ -200,7 +200,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 300px 1fr 350px;
+    grid-template-columns: 300px 1fr 370px;
     height: 100%;
     max-height: calc(100vh - 60px);
     column-gap: 10px;
@@ -1030,23 +1030,4 @@ body {
 .delete-btn:hover {
     background-color: #F6F8FA;
     border-color: #1F2328;
-}
-
-/* На очереди */
-.upcoming-section {
-    margin-top: 20px;
-}
-
-.upcoming-tasks {
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.upcoming-task-item {
-    padding: 8px 0;
-    border-bottom: 1px solid #F6F8FA;
-}
-
-.upcoming-task-item:last-child {
-    border-bottom: none;
 }
