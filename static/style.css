@@ -503,8 +503,8 @@ body {
 .tasks-section {
     /* Вернуть пагинацию вместо scrollbar */
     flex: 1;
-    /* overflow-y: auto; */
-    /* overflow-x: hidden; */
+    overflow-y: auto;
+    overflow-x: hidden;
     /* max-height: calc(100vh - 350px); /* Ограничить высоту панели задач */
 }
 
@@ -880,8 +880,8 @@ body {
     .tasks-section,
     .people-list {
         /* max-height: calc(100vh - 450px) !important; */
-        /* overflow-y: auto !important; */
-        /* overflow-x: hidden !important; */
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
         /* scrollbar-width: thin !important; /* Для Firefox */
         /* scrollbar-color: #D1D9E0 transparent !important; /* Для Firefox */
     }
