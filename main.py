@@ -497,8 +497,12 @@ async def chat_handler(request):
             try:
                 context_data = await redis_client.get(f"context:{user_id}")
                 if context_data:
-                    context = json.loads(context_data.decode('utf-8'))
-                    logger.info(f"Loaded context with {len(context)} messages")
+                    full_context = json.loads(context_data.decode('utf-8'))
+                    # Filter messages from last 24 hours
+                    from datetime import datetime
+                    cutoff_time = datetime.utcnow().timestamp() - 24 * 3600
+                    context = [msg for msg in full_context if datetime.fromisoformat(msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
+                    logger.info(f"Loaded and filtered context with {len(context)} messages from last 24h")
                 else:
                     logger.info("No context found in Redis")
             except Exception as e:
@@ -527,14 +531,23 @@ async def chat_handler(request):
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
                 response = f"Ошибка: {str(e)}"
 
-            # Save context back to Redis
-            context.append({"user": message, "agent": response})
-            if len(context) > 10:
-                context = context[-10:]
+            # Save context back to Redis with timestamp
+            from datetime import datetime
+            context.append({
+                "user": message, 
+                "agent": response, 
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            # Keep only messages from last 24 hours
+            cutoff_time = datetime.utcnow().timestamp() - 24 * 3600
+            context = [msg for msg in context if datetime.fromisoformat(msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
+            # Limit to last 50 messages to prevent excessive storage
+            if len(context) > 50:
+                context = context[-50:]
             if redis_client:
                 try:
-                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-                    logger.info("Context saved to Redis")
+                    await redis_client.setex(f"context:{user_id}", 24*3600, json.dumps(context).encode('utf-8'))  # Expire in 24 hours
+                    logger.info(f"Context saved to Redis with {len(context)} messages")
                 except Exception as e:
                     logger.error(f"Error saving context: {e}")
 
