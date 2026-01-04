@@ -174,8 +174,6 @@
                         <div class="task-groups" id="task-groups">
                             <!-- Задачи будут сгруппированы по срокам -->
                         </div>
-                        {% else %}
-                        <p style="margin: 0; color: #656D76; font-size: 13px;">Нет задач</p>
                         {% endif %}
                     </div>
                 </div>
@@ -464,7 +462,7 @@
                 html += '</div>';
             }
             
-            container.innerHTML = html || '<p style="color: #656D76;">Нет задач</p>';
+            container.innerHTML = html || '';
             updateStats(tasks);
         }
         
@@ -917,7 +915,7 @@
                         // После обновления контактов применяем текущий фильтр
                         setTimeout(() => renderContacts(), 100);
                     } else {
-                        peopleList.innerHTML = '<p style="margin: 0; color: #656D76; font-size: 13px;">Контакты не найдены</p>';
+                        peopleList.innerHTML = '';
                     }
                 }
             } catch (error) {
