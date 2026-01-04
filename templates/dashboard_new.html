@@ -345,7 +345,7 @@
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
-                    addMessage('🧹 История чата очищена', 'ai');
+                    addMessage('История чата очищена', 'ai');
                 } else {
                     const data = await response.json();
                     addMessage(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'ai');
