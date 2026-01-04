@@ -66,9 +66,6 @@
                 <div class="context-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
-                        <button style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;" title="Профиль: персональная информация для персонализации рекомендаций и поиска контактов">
-                            <img src="https://cdn-icons-png.flaticon.com/512/189/189664.png" alt="Информация" style="width: 14px; height: 14px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
-                        </button>
                     </div>
                     {% if profile %}
                     <div class="context-item">
@@ -91,9 +88,6 @@
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
-                        <button style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;" title="Контакты: список пользователей для общения и совместной работы">
-                            <img src="https://cdn-icons-png.flaticon.com/512/189/189664.png" alt="Информация" style="width: 14px; height: 14px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
-                        </button>
                     </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
@@ -113,9 +107,6 @@
                 <div class="chat-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 15px 0; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Чат</h3>
-                        <button style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;" title="Чат: AI-ассистент для создания и управления задачами через естественный язык">
-                            <img src="https://cdn-icons-png.flaticon.com/512/189/189664.png" alt="Информация" style="width: 14px; height: 14px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
-                        </button>
                     </div>
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
@@ -166,14 +157,10 @@
                 </div>
                 
 
-                
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Задачи</h3>
-                        <button style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;" title="Задачи: управление задачами с группировкой по срокам и статистикой продуктивности">
-                            <img src="https://cdn-icons-png.flaticon.com/512/189/189664.png" alt="Информация" style="width: 14px; height: 14px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
-                        </button>
                     </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
