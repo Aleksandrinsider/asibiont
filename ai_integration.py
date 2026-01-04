@@ -57,10 +57,11 @@ def get_system_prompt():
 - Отвечай естественно, без списков, пунктов или форматирования.
 - Используй tool calls для действий, но не упоминай их в ответе.
 - ВАЖНО: Каждый ответ должен быть УНИКАЛЬНЫМ и адаптированным под контекст разговора. НЕ используй шаблонные фразы или повторяющиеся формулировки.
-- При приветствии: поприветствуй пользователя тепло и естественно, расскажи, чем можешь помочь (задачи, планирование, поиск людей), спроси о текущих делах, планах и интересах. Вари формулировки в зависимости от времени суток и контекста.
+- Приветствие: поприветствуй пользователя тепло и естественно, используя информацию из профиля (работа, интересы). Упомяни ближайшие задачи из "Ближайшие напоминания" с точным временем, не адаптируя и не группируя их произвольно. Если задач нет, просто спроси о делах.
 - При добавлении задач: ВСЕГДА уточняй время, если пользователь не указал его явно. Только после подтверждения времени используй tool call.
 - Адаптируй тон и содержание ответа под конкретную ситуацию пользователя, его задачи и предыдущие сообщения.
 - КРИТИЧНО: Если пользователь говорит "через X минут/часов", просто добавь это к текущему времени. НЕ СПРАШИВАЙ про часовой пояс — он уже учтен в текущем времени.
+- КРИТИЧНО: Всегда используй точную информацию из предоставленного контекста. Не придумывай или не адаптируй время задач — бери из "Ближайшие напоминания". НИКОГДА не меняй время презентаций или других задач на "стандартное" - используй только указанное время.
 
 ИНСТРУМЕНТЫ:
 - add_task(title="название", description="", reminder_time="YYYY-MM-DD HH:MM", due_date="", user_id=число)
@@ -1159,9 +1160,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
             
-            # Get all tasks for extended memory
+            # Get all tasks for extended memory - only pending tasks
             all_tasks = list_tasks(user_id=user_id)
-            user_memory += f"\nВсе задачи пользователя: {all_tasks}"
+            # Filter to only include pending tasks in the summary
+            pending_tasks = [t for t in all_tasks.split(', ') if 'pending' in t.lower()]
+            if pending_tasks:
+                user_memory += f"\nТекущие задачи: {', '.join(pending_tasks[:5])}"
             # Add file content if provided
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
@@ -1180,18 +1184,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.timezone(tz_str)
                     user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
-                    # Get upcoming reminders
+                    # Get upcoming reminders - include pending tasks in next 7 days
                     upcoming_reminders = []
                     tasks = session.query(Task).filter_by(user_id=user.id).filter(Task.reminder_time.isnot(None)).all()
                     for task in tasks:
-                        if task.reminder_time:
+                        if task.reminder_time and task.status == 'pending':
                             if task.reminder_time.tzinfo is None:
                                 task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
-                            if task.reminder_time.astimezone(user_tz) > user_now and task.status == 'pending':
-                                reminder_time_local = task.reminder_time.astimezone(user_tz).strftime("%H:%M")
-                                upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
+                            task_time_local = task.reminder_time.astimezone(user_tz)
+                            # Include tasks within next 7 days
+                            if task_time_local > user_now - timedelta(days=1) and task_time_local < user_now + timedelta(days=7):
+                                reminder_time_local = task_time_local.strftime("%H:%M")
+                                date_str = ""
+                                if task_time_local.date() == user_now.date():
+                                    date_str = "сегодня"
+                                elif task_time_local.date() == (user_now + timedelta(days=1)).date():
+                                    date_str = "завтра"
+                                else:
+                                    date_str = task_time_local.strftime("%d.%m")
+                                upcoming_reminders.append(f"{task.title} {date_str} в {reminder_time_local}")
                     if upcoming_reminders:
-                        user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:3])}"
+                        user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:5])}"
                 except pytz.exceptions.UnknownTimeZoneError:
                     # Fallback to UTC if invalid timezone
                     user_now = base_now
