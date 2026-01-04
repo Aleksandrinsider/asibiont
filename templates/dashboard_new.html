@@ -347,6 +347,7 @@
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
+                    localStorage.setItem('lastMessageCount', '0');
                     // Set flag to prevent loading messages on page reload
                     localStorage.setItem('chatCleared', 'true');
                     addMessage('История чата очищена', 'ai');
@@ -357,6 +358,7 @@
                             if (response.ok) {
                                 const data = await response.json();
                                 lastMessageCount = data.interactions ? data.interactions.length : 0;
+                                localStorage.setItem('lastMessageCount', lastMessageCount.toString());
                             }
                         } catch (error) {
                             console.error('Error getting message count:', error);
@@ -390,13 +392,14 @@
         const TASKS_PER_PAGE = 10;
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
-        let lastMessageCount = 0;
+        let lastMessageCount = parseInt(localStorage.getItem('lastMessageCount') || '0');
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
             // Check if chat was cleared - don't load messages if cleared
             if (localStorage.getItem('chatCleared') === 'true') {
                 lastMessageCount = 0;
+                localStorage.setItem('lastMessageCount', '0');
                 return;
             }
             
@@ -409,6 +412,7 @@
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                         lastMessageCount = data.interactions.length;
+                        localStorage.setItem('lastMessageCount', lastMessageCount.toString());
                     }
                 }
             } catch (error) {
@@ -1160,6 +1164,7 @@
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                         lastMessageCount = data.interactions.length;
+                        localStorage.setItem('lastMessageCount', lastMessageCount.toString());
                     }
                 }
             } catch (error) {
