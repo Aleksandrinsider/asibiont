@@ -823,7 +823,9 @@
         // Filter buttons
         document.addEventListener('DOMContentLoaded', () => {
             // Инициализировать задачи и контакты при загрузке страницы
+            {% if tasks %}
             updateStats(initialTasks);
+            {% endif %}
             updateTasks();
             updatePeople();
             
