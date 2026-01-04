@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Дашборд</title>
     <link rel="stylesheet" href="/static/style.css?v={{ current_time }}">
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
 </head>
 <body>
     <div class="app-header">
@@ -134,7 +141,7 @@
                     <div class="chat-input">
                         <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
                         <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
-                        <button onclick="startVoiceChat()" style="padding: 10px; background-color: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;">
+                        <button id="voice-button" onclick="startVoiceChat()" style="padding: 10px; background-color: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;">
                             <img src="https://cdn-icons-png.flaticon.com/512/1082/1082810.png" alt="Голосовое общение" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
                         <button onclick="document.getElementById('file-input').click()" style="padding: 10px; background-color: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;">
@@ -1016,12 +1023,17 @@
             window.location.href = '/logout';
         }
 
+        let isRecording = false;
+
         function startVoiceChat() {
+            if (isRecording) return; // Предотвратить повторный запуск
+            
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                 alert('Ваш браузер не поддерживает распознавание речи');
                 return;
             }
 
+            const voiceButton = document.getElementById('voice-button');
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
             
@@ -1030,7 +1042,14 @@
             recognition.maxAlternatives = 1;
             
             recognition.onstart = function() {
+                isRecording = true;
                 console.log('Голосовое распознавание запущено');
+                // Изменить стиль кнопки - красный фон для индикации записи
+                voiceButton.style.backgroundColor = '#dc3545';
+                voiceButton.style.color = '#ffffff';
+                voiceButton.style.borderColor = '#dc3545';
+                // Можно добавить пульсацию
+                voiceButton.style.animation = 'pulse 1s infinite';
             };
             
             recognition.onresult = function(event) {
@@ -1048,11 +1067,21 @@
             recognition.onerror = function(event) {
                 console.error('Ошибка распознавания:', event.error);
                 alert('Ошибка распознавания речи: ' + event.error);
+                resetVoiceButton();
             };
             
             recognition.onend = function() {
                 console.log('Голосовое распознавание завершено');
+                resetVoiceButton();
             };
+            
+            function resetVoiceButton() {
+                isRecording = false;
+                voiceButton.style.backgroundColor = '#FFFFFF';
+                voiceButton.style.color = '#59636E';
+                voiceButton.style.borderColor = '#D1D9E0';
+                voiceButton.style.animation = '';
+            }
             
             recognition.start();
         }
