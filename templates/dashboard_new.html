@@ -84,12 +84,15 @@
                 </div>
 
                 <div class="people-section">
-                    <h3 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
-                    <div class="filters" style="margin-bottom: 15px;">
-                        <button class="filter-btn" onclick="filterContacts('recommended')">Рекомендуемые</button>
-                        <button class="filter-btn" onclick="filterContacts('delegating_to_me')">Назначают мне</button>
-                        <button class="filter-btn" onclick="filterContacts('delegating_by_me')">Назначаю я</button>
-                        <button class="filter-btn active" onclick="filterContacts('all')">Все</button>
+                    <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">Контакты</h3>
+                    <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                        <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначают мне</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Назначаю я</button>
+                        <span style="color: #D1D9E0;">·</span>
+                        <button onclick="filterContacts('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все</button>
                     </div>
                     {% if partners or delegating_to_me or delegating_by_me %}
                     <div class="people-list" id="people-list">
@@ -616,11 +619,15 @@
             currentContactFilter = filterType;
             
             // Обновляем стили кнопок фильтров контактов
-            document.querySelectorAll('.people-section .filter-btn').forEach(btn => {
-                if (btn.getAttribute('onclick').includes(filterType)) {
-                    btn.classList.add('active');
+            const buttons = document.querySelectorAll('.people-section button[onclick*="filterContacts"]');
+            buttons.forEach(btn => {
+                const btnFilterType = btn.getAttribute('onclick').match(/filterContacts\('([^']+)'\)/)?.[1];
+                if (btnFilterType === filterType) {
+                    btn.style.color = '#068487';
+                    btn.style.fontWeight = '500';
                 } else {
-                    btn.classList.remove('active');
+                    btn.style.color = '#59636E';
+                    btn.style.fontWeight = '400';
                 }
             });
             
