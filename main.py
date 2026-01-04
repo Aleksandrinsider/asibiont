@@ -1086,14 +1086,27 @@ async def api_tasks_handler(request):
         
         tasks_data = []
         for task in tasks:
+            # Format task title based on delegation
+            title = task.title
+            if task.delegated_by and task.delegated_by != user.id:
+                # Task delegated TO me
+                delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                if delegator:
+                    title = f"{task.title} от @{delegator.username}"
+            elif task.delegated_to_username:
+                # Task delegated BY me to someone else
+                title = f"{task.title} для @{task.delegated_to_username}"
+            
             task_data = {
                 'id': task.id,
-                'title': task.title,
+                'title': title,
                 'status': task.status,
                 'reminder_time': None,
                 'reminder_time_local': None,
                 'overdue': False,
-                'overdue_text': None
+                'overdue_text': None,
+                'is_delegated': task.delegated_by is not None or task.delegated_to_username is not None,
+                'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None
             }
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:

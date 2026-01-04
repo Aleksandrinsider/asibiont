@@ -116,13 +116,17 @@ def get_system_prompt():
 
 ДЕЛЕГИРОВАНИЕ ЗАДАЧ:
 - Если пользователь просит поставить задачу для другого пользователя (например, "поставь задачу для @username"), используй delegate_task().
-- ВАЖНО: ВСЕГДА сначала уточни у инициатора ВСЕ детали: название задачи, описание, дедлайн, желаемый результат в подробностях.
-- После уточнения деталей вызови delegate_task() с параметрами: title, description, reminder_time, delegated_to_username (с @), delegation_details (желаемый результат).
-- Система автоматически отправит предложение задачи получателю через Telegram с кнопками принять/отклонить.
+- КРИТИЧНО: ВСЕГДА сначала уточни у инициатора ВСЕ детали: название задачи, описание, ТОЧНУЮ дату и время дедлайна, желаемый результат в подробностях.
+- ОБЯЗАТЕЛЬНО: reminder_time должен быть указан в формате YYYY-MM-DD HH:MM. Если пользователь не указал время, уточни его.
+- После уточнения деталей вызови delegate_task() с параметрами: title, description, reminder_time (обязательно!), delegated_to_username (с @), delegation_details (желаемый результат).
+- Система автоматически отправит предложение задачи получателю через Telegram.
+- Делегированные задачи имеют ВСЕ те же возможности что и обычные: их можно редактировать через edit_task(), завершать через complete_task(), удалять через delete_task().
+- При работе с делегированными задачами учитывай контекст: если задача "для @username" - это задача которую ты делегировал, если "от @username" - это задача которую делегировали тебе.
 - Если пользователь хочет узнать статус делегированной задачи, используй get_delegation_progress(task_id).
-- После принятия задачи получателем, ты будешь отслеживать прогресс и информировать инициатора о статусе выполнения.
+- После принятия задачи получателем, отслеживай прогресс и информируй инициатора о статусе выполнения.
 - Если задача отклонена, сообщи инициатору и НЕ продолжай следить за этой задачей.
 - При упоминании делегированных задач всегда проверяй их статус через get_delegation_progress() перед ответом.
+- Веди естественный диалог о делегированных задачах как о любых других задачах в контексте разговора.
 
 ВЫЯВЛЕНИЕ ПОТРЕБНОСТЕЙ И ПЕРСОНАЛИЗАЦИЯ РЕШЕНИЙ:
 - Анализируй истинные потребности пользователя на основе контекста: задач, интересов, планов, прогресса и предыдущих взаимодействий.
@@ -298,7 +302,18 @@ def list_tasks(user_id=None, session=None):
     if close_session:
         session.close()
     if tasks:
-        task_list = [f"{t.id}. {t.title} ({t.status})" for t in tasks]
+        task_list = []
+        for t in tasks:
+            title = t.title
+            # Add delegation context to title
+            if t.delegated_by and t.delegated_by != user.id:
+                delegator = session.query(User).filter_by(id=t.delegated_by).first()
+                if delegator:
+                    title = f"{t.title} от @{delegator.username}"
+            elif t.delegated_to_username:
+                title = f"{t.title} для @{t.delegated_to_username}"
+            
+            task_list.append(f"{t.id}. {title} ({t.status})")
         return f"Задачи: {', '.join(task_list)}."
     return "Нет задач."
 
@@ -425,6 +440,10 @@ def delegate_task(title, description, reminder_time, delegated_to_username, dele
     
     session = Session()
     try:
+        # Validate reminder_time is provided
+        if not reminder_time:
+            return "Ошибка: Дата и время дедлайна обязательны для делегированных задач. Укажите точное время в формате YYYY-MM-DD HH:MM."
+        
         # Find delegator (creator)
         delegator = session.query(User).filter_by(telegram_id=user_id).first()
         if not delegator:
@@ -944,17 +963,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delegate_task",
-            "description": "Создать задачу для другого пользователя, которая требует его подтверждения. Сначала уточни все детали у инициатора.",
+            "description": "Создать задачу для другого пользователя, которая требует его подтверждения. Сначала уточни все детали включая точную дату и время.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Название задачи"},
                     "description": {"type": "string", "description": "Подробное описание задачи"},
-                    "reminder_time": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM"},
+                    "reminder_time": {"type": "string", "description": "ОБЯЗАТЕЛЬНО: Дедлайн в формате YYYY-MM-DD HH:MM"},
                     "delegated_to_username": {"type": "string", "description": "Username получателя с @ (например @username)"},
                     "delegation_details": {"type": "string", "description": "Детали: желаемый результат, критерии выполнения, важность"}
                 },
-                "required": ["title", "delegated_to_username", "delegation_details"]
+                "required": ["title", "reminder_time", "delegated_to_username", "delegation_details"]
             }
         }
     },
