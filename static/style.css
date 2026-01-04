@@ -496,7 +496,7 @@ body {
     margin-bottom: 4px;
     display: flex;
     flex-direction: column;
-    flex: 1;
+    /* flex: 1; */
     overflow: hidden;
 }
 
