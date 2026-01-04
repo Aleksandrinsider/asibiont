@@ -66,7 +66,7 @@
                 <div class="context-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
-                        <button onclick="showInfoModal('profile')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                        <button onclick="showInfoModal('profile')" style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;">ℹ️</button>
                     </div>
                     {% if profile %}
                     <div class="context-item">
@@ -89,7 +89,7 @@
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
-                        <button onclick="showInfoModal('contacts')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                        <button onclick="showInfoModal('contacts')" style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;">ℹ️</button>
                     </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
@@ -109,7 +109,7 @@
                 <div class="chat-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 15px 0; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Чат</h3>
-                        <button onclick="showInfoModal('chat')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                        <button onclick="showInfoModal('chat')" style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;">ℹ️</button>
                     </div>
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
@@ -165,7 +165,7 @@
                 <div class="tasks-section-wrapper">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Задачи</h3>
-                        <button onclick="showInfoModal('tasks')" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 16px; padding: 4px;">ℹ️</button>
+                        <button onclick="showInfoModal('tasks')" style="background: none; border: 1px solid #D1D9E0; color: #0969DA; cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 4px;">ℹ️</button>
                     </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
@@ -1184,23 +1184,44 @@
         }
         .modal-content {
             background-color: #fff;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 500px;
+            margin: 10% auto;
+            padding: 24px;
+            border: 1px solid #D1D9E0;
+            width: 90%;
+            max-width: 600px;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .modal-content h3 {
+            margin-top: 0;
+            color: #24292F;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .modal-content p {
+            color: #656D76;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .modal-content ul {
+            color: #656D76;
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .modal-content li {
+            margin-bottom: 4px;
         }
         .close {
-            color: #aaa;
+            color: #656D76;
             float: right;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: bold;
             cursor: pointer;
+            margin-top: -8px;
         }
         .close:hover {
-            color: #000;
+            color: #24292F;
         }
     </style>
 
@@ -1213,50 +1234,98 @@
             switch(section) {
                 case 'profile':
                     content = `
-                        <h3>Профиль</h3>
-                        <p>В этом разделе отображается ваша личная информация: имя пользователя, город, компания, должность, цели, навыки и интересы. Здесь вы можете увидеть статус подписки и ссылку на её продление.</p>
-                        <p><strong>Как использовать:</strong> Информация автоматически обновляется при изменении профиля через бота.</p>
+                        <h3>👤 Профиль пользователя</h3>
+                        <p>Этот раздел содержит вашу персональную информацию и настройки аккаунта. Здесь отображаются данные, которые вы указали при регистрации и заполнении профиля.</p>
+                        <p><strong>Что здесь можно увидеть:</strong></p>
+                        <ul>
+                            <li><strong>Имя пользователя:</strong> Ваш уникальный идентификатор в системе (@username)</li>
+                            <li><strong>Город:</strong> Местоположение для поиска локальных контактов</li>
+                            <li><strong>Компания и должность:</strong> Информация о вашей профессиональной деятельности</li>
+                            <li><strong>Цели:</strong> Ваши профессиональные и личные цели</li>
+                            <li><strong>Навыки:</strong> Ключевые компетенции и умения</li>
+                            <li><strong>Интересы:</strong> Темы, которые вас интересуют</li>
+                            <li><strong>Статус подписки:</strong> Дата окончания активной подписки с ссылкой на продление</li>
+                        </ul>
+                        <p><strong>Как обновить информацию:</strong> Отправьте сообщение боту с командой "заполнить профиль" или используйте соответствующие команды в чате.</p>
                     `;
                     break;
                 case 'contacts':
                     content = `
-                        <h3>Контакты</h3>
-                        <p>Здесь показываются рекомендованные контакты для сотрудничества, а также люди, которые делегируют вам задачи или которым вы делегируете задачи.</p>
-                        <p><strong>Фильтры:</strong></p>
+                        <h3>👥 Контакты и связи</h3>
+                        <p>Раздел для поиска и управления профессиональными контактами. Здесь вы можете найти подходящих партнеров для сотрудничества и отслеживать делегированные задачи.</p>
+                        <p><strong>Типы контактов:</strong></p>
                         <ul>
-                            <li><strong>Рекомендуемые:</strong> Контакты, подходящие по интересам, навыкам и целям</li>
-                            <li><strong>Делегируют мне:</strong> Люди, которые поручили вам задачи</li>
-                            <li><strong>Делегирую я:</strong> Люди, которым вы поручили задачи</li>
+                            <li><strong>Рекомендуемые контакты:</strong> Пользователи, подобранные системой на основе совпадения интересов, навыков, целей и географического положения. Идеально для поиска партнеров по проектам.</li>
+                            <li><strong>Делегируют мне:</strong> Люди, которые поручили вам выполнение задач. Здесь вы можете видеть активные делегирования и отслеживать их статус.</li>
+                            <li><strong>Делегирую я:</strong> Контакты, которым вы передали задачи для выполнения. Удобно для контроля над делегированными задачами.</li>
+                        </ul>
+                        <p><strong>Как использовать:</strong></p>
+                        <ul>
+                            <li>Используйте фильтры для быстрого поиска нужных контактов</li>
+                            <li>Контакты обновляются автоматически при новых взаимодействиях</li>
+                            <li>Рекомендации основаны на вашем профиле и истории общения</li>
                         </ul>
                     `;
                     break;
                 case 'chat':
                     content = `
-                        <h3>Чат</h3>
-                        <p>Интерактивный чат с AI-ассистентом для управления задачами. Здесь вы можете создавать, редактировать и завершать задачи с помощью естественного языка.</p>
-                        <p><strong>Возможности:</strong></p>
+                        <h3>💬 Интеллектуальный чат-ассистент</h3>
+                        <p>Основной инструмент для взаимодействия с системой управления задачами. AI-ассистент понимает естественный язык и помогает управлять вашими задачами.</p>
+                        <p><strong>Основные возможности:</strong></p>
                         <ul>
-                            <li>Создание задач с указанием даты и времени</li>
-                            <li>Просмотр и управление существующими задачами</li>
-                            <li>Получение напоминаний и уведомлений</li>
-                            <li>Голосовой ввод (если поддерживается браузером)</li>
+                            <li><strong>Создание задач:</strong> "Создай задачу: Встреча с клиентом завтра в 15:00"</li>
+                            <li><strong>Просмотр задач:</strong> "Покажи мои задачи" или "Что у меня на сегодня"</li>
+                            <li><strong>Редактирование:</strong> "Перенеси задачу на завтра" или "Изменить время"</li>
+                            <li><strong>Завершение задач:</strong> "Отметь задачу как выполненную"</li>
+                            <li><strong>Делегирование:</strong> "Поручи задачу @username"</li>
+                            <li><strong>Напоминания:</strong> Автоматические уведомления о приближающихся сроках</li>
+                            <li><strong>Голосовой ввод:</strong> Диктовка сообщений (если поддерживается браузером)</li>
                         </ul>
+                        <p><strong>Примеры команд:</strong></p>
+                        <ul>
+                            <li>"Добавь задачу: Подготовить отчет к пятнице"</li>
+                            <li>"Напомни мне о встрече через час"</li>
+                            <li>"Покажи просроченные задачи"</li>
+                            <li>"Статистика за неделю"</li>
+                        </ul>
+                        <p><strong>Совет:</strong> Чем подробнее вы описываете задачу, тем лучше система поймет ваши намерения.</p>
                     `;
                     break;
                 case 'tasks':
                     content = `
-                        <h3>Задачи</h3>
-                        <p>Список всех ваших задач с группировкой по срокам выполнения. В верхней части отображается статистика выполнения задач.</p>
+                        <h3>📋 Управление задачами</h3>
+                        <p>Центральный раздел для просмотра и управления всеми вашими задачами. Задачи автоматически группируются по срокам выполнения для удобства навигации.</p>
+                        <p><strong>Статистика задач:</strong></p>
+                        <ul>
+                            <li><strong>Завершенные / Всего:</strong> Показывает прогресс выполнения задач</li>
+                            <li><strong>В работе:</strong> Количество активных задач без просрочки</li>
+                            <li><strong>С отставанием:</strong> Просроченные задачи (выделены красным)</li>
+                            <li><strong>Завершенные:</strong> Выполненные задачи за все время</li>
+                        </ul>
                         <p><strong>Фильтры задач:</strong></p>
                         <ul>
-                            <li><strong>Все задачи:</strong> Показать все незавершенные задачи</li>
-                            <li><strong>Личные задачи:</strong> Только ваши собственные задачи</li>
-                            <li><strong>Назначенные мне:</strong> Задачи, делегированные вам другими</li>
+                            <li><strong>Все задачи:</strong> Показывает все незавершенные задачи, сгруппированные по срокам</li>
+                            <li><strong>Личные задачи:</strong> Только задачи, созданные вами лично (без делегирования)</li>
+                            <li><strong>Назначенные мне:</strong> Задачи, которые вам делегировали другие пользователи</li>
                             <li><strong>Назначенные мной:</strong> Задачи, которые вы делегировали другим</li>
-                            <li><strong>С отставанием:</strong> Просроченные задачи</li>
-                            <li><strong>Завершенные:</strong> Выполненные задачи</li>
+                            <li><strong>С отставанием:</strong> Только просроченные задачи для срочного внимания</li>
+                            <li><strong>Завершенные:</strong> Архив выполненных задач</li>
                         </ul>
-                        <p><strong>Статистика:</strong> Показывает количество завершенных задач из общего числа, а также задачи с отставанием.</p>
+                        <p><strong>Группировка по срокам:</strong></p>
+                        <ul>
+                            <li><strong>Просроченные:</strong> Задачи с прошедшим сроком (красный индикатор)</li>
+                            <li><strong>Сегодня:</strong> Задачи на текущий день</li>
+                            <li><strong>Завтра:</strong> Задачи на следующий день</li>
+                            <li><strong>Позже:</strong> Задачи на будущие даты</li>
+                            <li><strong>Без даты:</strong> Задачи без указанного срока</li>
+                        </ul>
+                        <p><strong>Управление задачами:</strong></p>
+                        <ul>
+                            <li>✓ - отметить задачу как выполненную</li>
+                            <li>× - удалить задачу</li>
+                            <li>Клик по задаче - подробная информация</li>
+                        </ul>
+                        <p><strong>Календарь:</strong> В нижней части отображается недельная визуализация задач по дням.</p>
                     `;
                     break;
             }
