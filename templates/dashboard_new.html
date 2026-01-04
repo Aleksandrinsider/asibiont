@@ -895,7 +895,7 @@
                         // Profile data hasn't changed, only update time
                         const headerInfo = document.getElementById('header-info');
                         if (headerInfo && data.current_time && data.current_date) {
-                            headerInfo.innerHTML = `<span style="margin-right: 5px;">${data.current_time} · ${data.current_date}</span>`;
+                            headerInfo.textContent = `${data.current_time} · ${data.current_date}`;
                         }
                         return; // Skip full profile update
                     }

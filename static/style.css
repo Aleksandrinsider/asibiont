@@ -90,7 +90,7 @@ body {
 .header-avatar-small {
     display: flex;
     align-items: center;
-    margin-right: 8px;
+    /* margin-right: 8px; */ /* Removed since avatar is now on the right */
 }
 
 .header-info {
