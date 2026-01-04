@@ -1350,8 +1350,14 @@ logger.info("ReminderService initialized")
 
 # Start ReminderService on app startup
 async def start_reminder_service(app):
+    logger.info("Starting ReminderService...")
     await reminder_service.start()
-    logger.info("ReminderService started")
+    logger.info("ReminderService started successfully")
+    # Log existing jobs
+    jobs = reminder_service.scheduler.get_jobs()
+    logger.info(f"Scheduled jobs: {len(jobs)}")
+    for job in jobs:
+        logger.info(f"Job: {job.id} at {job.next_run_time}")
 
 app.on_startup.append(start_reminder_service)
 

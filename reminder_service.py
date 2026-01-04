@@ -46,10 +46,13 @@ class ReminderService:
             db.close()
 
     def schedule_reminder(self, task_id: int, reminder_time: datetime, user_id: int, task_title: str):
+        import logging
+        logger = logging.getLogger(__name__)
         # Конвертируем naive datetime в aware с UTC
         if reminder_time.tzinfo is None:
             reminder_time = pytz.UTC.localize(reminder_time)
         
+        logger.info(f"Scheduling reminder for task {task_id}, user {user_id}, time: {reminder_time}")
         trigger = DateTrigger(run_date=reminder_time, timezone=pytz.UTC)
         self.scheduler.add_job(
             self.send_reminder,
@@ -128,11 +131,15 @@ class ReminderService:
             db.close()
 
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Sending reminder for task {task_id}, user {user_id}, title: {task_title}")
         from subscription_service import check_subscription
         from models import Interaction
         
         # Проверить подписку - если нет доступа, не отправлять напоминание
         if not check_subscription(user_id):
+            logger.info(f"Subscription check failed for user {user_id}")
             return
         
         try:

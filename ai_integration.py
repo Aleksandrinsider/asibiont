@@ -1174,18 +1174,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             # Get user current time for relative time parsing and prompt
             # Use CURRENT_DATE if set (for testing), otherwise real time
             if CURRENT_DATE:
-                current_datetime_str = CURRENT_DATE + " " + datetime.now(pytz.UTC).strftime("%H:%M:%S")
-                base_now = datetime.strptime(current_datetime_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.UTC)
+                # Use CURRENT_DATE for date, but real time for time
+                current_date = datetime.strptime(CURRENT_DATE, "%Y-%m-%d").date()
+                real_now = datetime.now(pytz.UTC)
+                base_now = datetime.combine(current_date, real_now.time(), tzinfo=pytz.UTC)
+                logger.info(f"Using CURRENT_DATE: {CURRENT_DATE}, real time: {real_now}, base_now: {base_now}")
             else:
                 base_now = datetime.now(pytz.UTC)
+                logger.info(f"Using real time, base_now: {base_now}")
             user_now = base_now  # Default to base_now
             current_time_str = user_now.strftime("%H:%M")
             if user:
                 tz_str = user.timezone if user.timezone else 'UTC'
+                logger.info(f"User timezone: {tz_str}")
                 try:
                     user_tz = pytz.timezone(tz_str)
                     user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
+                    logger.info(f"User local time: {user_now}, current_time_str: {current_time_str}")
                     # Get upcoming reminders - include pending tasks in next 7 days
                     upcoming_reminders = []
                     tasks = session.query(Task).filter_by(user_id=user.id).filter(Task.reminder_time.isnot(None)).all()
