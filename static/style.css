@@ -500,9 +500,9 @@ body {
 
 .tasks-section {
     /* Убран scrollbar, используется пагинация */
-    flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
+    max-height: calc(100vh - 250px); /* Ограничить высоту, чтобы не съезжала панель */
 }
 
 .tasks-section::-webkit-scrollbar {
