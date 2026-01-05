@@ -1,5 +1,5 @@
 import aiohttp
-from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE
+from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE, LOCAL
 import json
 from datetime import datetime, timezone, timedelta
 import re
