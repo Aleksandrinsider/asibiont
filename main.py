@@ -420,12 +420,14 @@ async def dashboard_handler(request):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
         
-        # Convert interaction timestamps to user's timezone
-        for interaction in interactions:
-            if interaction.created_at:
-                if interaction.created_at.tzinfo is None:
-                    interaction.created_at = pytz.UTC.localize(interaction.created_at)
-                interaction.created_at = interaction.created_at.astimezone(user_tz)
+        # Use profile.current_time if set, otherwise calculate from timezone
+        if profile and profile.current_time:
+            current_time = profile.current_time
+        else:
+            current_time = user_now.strftime('%H:%M')
+        
+        months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+        current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         
         for task in tasks:
             if task.reminder_time:
