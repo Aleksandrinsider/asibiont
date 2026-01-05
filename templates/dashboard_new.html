@@ -315,8 +315,6 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Reset chat cleared flag when new message is sent
-                    localStorage.removeItem('chatCleared');
                     lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
@@ -398,7 +396,6 @@
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
-                    localStorage.setItem('lastMessageCount', '0');
                     addMessage('История чата очищена', 'ai');
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
                     setTimeout(async () => {
@@ -408,7 +405,6 @@
                             if (response.ok) {
                                 const data = await response.json();
                                 lastMessageCount = data.interactions ? data.interactions.length : 0;
-                                localStorage.setItem('lastMessageCount', lastMessageCount.toString());
                             }
                         } catch (error) {
                             console.error('Error getting message count:', error);
@@ -442,7 +438,7 @@
         const TASKS_PER_PAGE = 10;
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
-        let lastMessageCount = parseInt(localStorage.getItem('lastMessageCount') || '0');
+        let lastMessageCount = 0;
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -456,7 +452,6 @@
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                         lastMessageCount = data.interactions.length;
-                        localStorage.setItem('lastMessageCount', lastMessageCount.toString());
                     }
                 }
             } catch (error) {
@@ -1199,26 +1194,18 @@
         }, 3000);
 
         async function updateChat() {
-            // Don't update chat if it was cleared
-            if (localStorage.getItem('chatCleared') === 'true') {
-                return;
-            }
-            
             try {
                 const response = await fetch('/api/interactions');
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions && data.interactions.length > lastMessageCount) {
-                        // Reset cleared flag when new messages arrive (e.g., from Telegram)
-                        localStorage.removeItem('chatCleared');
                         // Добавляем только новые сообщения
                         const newMessages = data.interactions.slice(lastMessageCount);
                         newMessages.forEach(interaction => {
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                         lastMessageCount = data.interactions.length;
-                        localStorage.setItem('lastMessageCount', lastMessageCount.toString());
                     }
                 }
             } catch (error) {
