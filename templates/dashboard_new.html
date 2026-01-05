@@ -38,6 +38,7 @@
             <div class="header-info">
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
+                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px;">изменить</a>
                     <span style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
                 </span>
                 <button onclick="logout()" class="logout-button">Выход</button>
@@ -322,6 +323,39 @@
                             console.log('Tasks updated again after message');
                         }, 2000);
                     }, 2000);
+                } else {
+                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('Ошибка: ' + error.message, 'ai');
+            }
+        }
+
+        async function changeTime() {
+            const message = "измени время";
+            
+            // Add user message
+            addMessage(message, 'user');
+            showTypingIndicator();
+            
+            try {
+                const formData = new FormData();
+                formData.append('message', message);
+                
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                hideTypingIndicator();
+                const data = await response.json();
+                if (response.ok) {
+                    addMessage(data.response, 'ai');
+                    // Обновить профиль и время
+                    setTimeout(async () => {
+                        await updateProfile();
+                    }, 1000);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
