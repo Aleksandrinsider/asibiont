@@ -251,8 +251,22 @@ async def dashboard_handler(request):
             
             tasks = session_db.query(Task).filter_by(user_id=user.id).all()
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-            # Берем последние 50 сообщений (desc по id для гарантии порядка), затем разворачиваем для отображения от старых к новым
-            interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
+            
+            # Проверяем, была ли история очищена
+            history_cleared = False
+            if redis_client:
+                try:
+                    cleared_flag = await redis_client.get(f"history_cleared:{user_id}")
+                    history_cleared = cleared_flag is not None
+                except Exception as e:
+                    logger.error(f"Error checking history_cleared flag: {e}")
+            
+            # Берем последние 50 сообщений только если история не очищена
+            if history_cleared:
+                interactions = []
+            else:
+                interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
+            
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
             
             # Получить контакты по делегированию
@@ -600,7 +614,9 @@ async def chat_handler(request):
             if redis_client:
                 try:
                     await redis_client.setex(f"context:{user_id}", 24*3600, json.dumps(context).encode('utf-8'))  # Expire in 24 hours
-                    logger.info(f"Context saved to Redis with {len(context)} messages")
+                    # Сбрасываем флаг очистки истории, так как пользователь начал новый диалог
+                    await redis_client.delete(f"history_cleared:{user_id}")
+                    logger.info(f"Context saved to Redis with {len(context)} messages and history_cleared flag reset")
                 except Exception as e:
                     logger.error(f"Error saving context: {e}")
 
@@ -628,7 +644,8 @@ async def clear_history_handler(request):
     if redis_client:
         try:
             await redis_client.set(f"context:{user_id}", json.dumps([]).encode('utf-8'))
-            logger.info("Context cleared")
+            await redis_client.setex(f"history_cleared:{user_id}", 24*3600, "1")  # Флаг, что история очищена
+            logger.info("Context cleared and history_cleared flag set")
         except Exception as e:
             logger.error(f"Error clearing context: {e}")
 

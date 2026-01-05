@@ -265,7 +265,10 @@
                     {% endif %}
                 </div>
                 <div class="chat-container">
-                    <h3>Диалог с агентом</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3>Диалог с агентом</h3>
+                        <button onclick="clearHistory()" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Очистить историю</button>
+                    </div>
                     <div class="chat-messages" id="chat-messages">
                         <div class="message agent">Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>
                     </div>
@@ -362,6 +365,28 @@
                     item.style.display = 'none';
                 }
             });
+        }
+
+        async function clearHistory() {
+            try {
+                const response = await fetch('/clear_history', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    // Очищаем сообщения в интерфейсе
+                    const messages = document.getElementById('chat-messages');
+                    messages.innerHTML = '<div class="message agent">История очищена. Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>';
+                    alert('История чата очищена');
+                } else {
+                    alert('Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
         }
     </script>
 </body>
