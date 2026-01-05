@@ -208,6 +208,16 @@
     <script>
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         
+        // Глобальная функция для проверки авторизации
+        async function checkAuth(response) {
+            if (response.status === 401 || response.status === 403) {
+                console.log('Session expired, redirecting to login');
+                window.location.href = '/dashboard';
+                return false;
+            }
+            return true;
+        }
+        
         function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
@@ -296,6 +306,7 @@
                 });
                 clearTimeout(timeoutId);
                 hideTypingIndicator();
+                if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
@@ -344,6 +355,7 @@
                     credentials: 'include'
                 });
                 hideTypingIndicator();
+                if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
@@ -375,6 +387,7 @@
                     credentials: 'include'
                 });
                 
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     // Очистить все сообщения из DOM
                     const chatMessages = document.getElementById('chat-messages');
@@ -388,6 +401,7 @@
                     setTimeout(async () => {
                         try {
                             const response = await fetch('/api/interactions');
+                            if (!await checkAuth(response)) return;
                             if (response.ok) {
                                 const data = await response.json();
                                 lastMessageCount = data.interactions ? data.interactions.length : 0;
@@ -438,6 +452,7 @@
             
             try {
                 const response = await fetch('/api/interactions');
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
@@ -920,6 +935,7 @@
                 body: JSON.stringify({ task_id: taskId }),
                 credentials: 'include'
             });
+            if (!await checkAuth(response)) return;
             if (response.ok) {
                 const data = await response.json();
                 // Добавляем сообщение об успешном завершении в чат
@@ -973,6 +989,7 @@
         async function updateTasks() {
             try {
                 const response = await fetch('/api/tasks');
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     renderTaskGroups(data.tasks);
@@ -993,6 +1010,7 @@
                     body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     await updateTasks();
                 }
@@ -1004,6 +1022,7 @@
         async function updatePeople() {
             try {
                 const response = await fetch('/api/partners');
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     const peopleList = document.getElementById('people-list');
@@ -1069,6 +1088,7 @@
         async function updateProfile() {
             try {
                 const response = await fetch('/api/profile');
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     
@@ -1186,6 +1206,7 @@
             
             try {
                 const response = await fetch('/api/interactions');
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions && data.interactions.length > lastMessageCount) {
@@ -1215,6 +1236,7 @@
                         },
                         credentials: 'include'
                     });
+                    if (!await checkAuth(response)) return;
                     if (response.ok) {
                         alert('Задачи очищены');
                         updateTasks(); // Refresh tasks
