@@ -1138,6 +1138,10 @@ async def api_profile_handler(request):
     current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
     current_time = user_now.strftime('%H:%M')
     
+    # Use profile.current_time if set
+    if profile and profile.current_time:
+        current_time = profile.current_time
+    
     # Format subscription end date
     formatted_end_date = None
     if subscription and subscription.end_date:

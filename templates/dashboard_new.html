@@ -1085,7 +1085,7 @@
                     
                     if (lastProfileData === currentProfileKey) {
                         // Profile data hasn't changed, only update time
-                        const timeSpan = document.querySelector('.header-info span span');
+                        const timeSpan = document.querySelector('#header-info span');
                         if (timeSpan && data.current_time && data.current_date) {
                             timeSpan.textContent = `${data.current_time} · ${data.current_date}`;
                         }
