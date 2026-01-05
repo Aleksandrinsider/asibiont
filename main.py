@@ -1596,12 +1596,21 @@ if __name__ == "__main__":
                 await site.start()
                 logger.info(f"Server started on {host}:{port}")
                 
+                # Start polling if local mode
+                if LOCAL and bot:
+                    logger.info("Starting bot polling for local mode")
+                    polling_task = asyncio.create_task(dp.start_polling(bot))
+                else:
+                    polling_task = None
+                
                 # Keep the server running
                 try:
                     while True:
                         await asyncio.sleep(1)
                 except KeyboardInterrupt:
                     logger.info("Shutting down server...")
+                    if polling_task:
+                        polling_task.cancel()
                 finally:
                     await runner.cleanup()
                     logger.info("Server shut down")

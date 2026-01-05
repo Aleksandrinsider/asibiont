@@ -362,14 +362,8 @@ body {
 }
 
 .message.user {
-    background-color: #0366d6;
-    color: #ffffff;
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-left: auto;
-    margin-right: 0;
-    max-width: 80%;
-    text-align: left;
+    background-color: transparent;
+    color: #068487;
 }
 
 .message.user .message-text {
@@ -377,12 +371,8 @@ body {
 }
 
 .message.ai {
-    background-color: #ffffff;
+    background-color: transparent;
     color: #1F2328;
-    border: 1px solid #d1d9e0;
-    border-radius: 8px;
-    padding: 8px 12px;
-    max-width: 80%;
 }
 
 .message.ai .message-text {
@@ -581,6 +571,8 @@ body {
     margin-bottom: 12px;
     padding-bottom: 10px;
 }
+
+.tasks-header:hover {
     border-color: #1F2328;
     color: #1F2328;
 }
