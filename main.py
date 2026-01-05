@@ -129,6 +129,11 @@ def check_telegram_authentication(data):
     return hash_computed == data.get('hash')
 
 
+async def health_handler(request):
+    """Health check endpoint for Railway"""
+    return web.Response(text='OK', status=200)
+
+
 @aiohttp_jinja2.template('login.html')
 async def login_handler(request):
     # Redirect to dashboard for unified experience
@@ -1521,6 +1526,7 @@ async def test_payment_handler(request):
 
 
 # Routes
+app.router.add_get('/health', health_handler)
 app.router.add_get('/', login_handler)
 app.router.add_get('/tg_auth', auth_handler)
 app.router.add_get('/telegram_auth', auth_handler)  # Keep old route for compatibility

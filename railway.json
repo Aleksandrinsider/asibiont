@@ -25,7 +25,7 @@
     "runtime": "Python 3.13",
     "buildCommand": "pip install -r requirements.txt",
     "startCommand": "python main.py",
-    "healthcheck": "/",
+    "healthcheck": "/health",
     "port": 8000
   },
   "features": {
