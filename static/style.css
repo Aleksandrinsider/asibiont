@@ -302,7 +302,7 @@ body {
     padding: 10px 12px;
     margin: 10px 0;
     max-width: 85%;
-    background-color: #FAFBFC;
+    background-color: transparent;
     border-radius: 8px;
     align-self: flex-start;
     animation: message-appear 0.3s ease-out;
