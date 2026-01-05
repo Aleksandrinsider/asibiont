@@ -272,7 +272,24 @@ async def dashboard_handler(request):
                 all_interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all()))
                 if history_cleared_timestamp:
                     # Фильтруем только сообщения после очистки
-                    interactions = [i for i in all_interactions if i.created_at.timestamp() > history_cleared_timestamp]
+                    import pytz
+                    filtered_interactions = []
+                    for i in all_interactions:
+                        try:
+                            # Убедимся, что created_at имеет timezone
+                            if i.created_at.tzinfo is None:
+                                interaction_ts = pytz.UTC.localize(i.created_at).timestamp()
+                            else:
+                                interaction_ts = i.created_at.timestamp()
+                            
+                            if interaction_ts > history_cleared_timestamp:
+                                filtered_interactions.append(i)
+                        except Exception as e:
+                            logger.error(f"Error processing interaction timestamp: {e}")
+                            # В случае ошибки включаем сообщение
+                            filtered_interactions.append(i)
+                    
+                    interactions = filtered_interactions
                     logger.info(f"Filtered {len(interactions)} interactions after timestamp {history_cleared_timestamp}")
                 else:
                     interactions = all_interactions
