@@ -271,6 +271,27 @@ def parse_relative_time(message, current_time):
     
     return None
 
+def parse_absolute_time(message):
+    """Parse absolute time expressions like 'сейчас 12:18', 'время 15:30' and return HH:MM"""
+    import re
+    
+    # Patterns for absolute time
+    patterns = [
+        r'сейчас\s+(\d{1,2}):(\d{2})',
+        r'время\s+(\d{1,2}):(\d{2})',
+        r'(\d{1,2}):(\d{2})',  # Just HH:MM
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            hours = int(match.group(1))
+            minutes = int(match.group(2))
+            if 0 <= hours <= 23 and 0 <= minutes <= 59:
+                return f"{hours:02d}:{minutes:02d}"
+    
+    return None
+
 def parse_tool_arguments(arguments_str):
     """Parse tool arguments from string, fallback to empty dict if parsing fails"""
     try:
@@ -1434,6 +1455,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         time_hint = ""
         if parsed_time:
             time_hint = f"\nОБНАРУЖЕНО ОТНОСИТЕЛЬНОЕ ВРЕМЯ: '{message}' содержит указание времени. Рассчитанное время напоминания: {parsed_time.strftime('%Y-%m-%d %H:%M')}. Используй это время для reminder_time в add_task."
+        
+        # Parse absolute time from message
+        parsed_absolute_time = parse_absolute_time(message)
+        if parsed_absolute_time:
+            logger.info(f"Detected absolute time in message: {parsed_absolute_time}")
+            update_profile(current_time=parsed_absolute_time, user_id=user_id)
+            # Update user_now for subsequent processing
+            try:
+                time_obj = datetime.strptime(parsed_absolute_time, '%H:%M').time()
+                user_now = datetime.combine(user_now.date(), time_obj, tzinfo=user_tz)
+                current_time_str = parsed_absolute_time
+                logger.info(f"Updated user_now to: {user_now}")
+            except Exception as e:
+                logger.error(f"Failed to update user_now: {e}")
         
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
