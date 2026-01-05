@@ -420,17 +420,7 @@ async def dashboard_handler(request):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
         
-        # Use profile.current_time if set, otherwise calculate from timezone
-        if profile and profile.current_time:
-            current_time = profile.current_time
-            # Also adjust user_now for overdue calculations
-            try:
-                hours, minutes = map(int, profile.current_time.split(':'))
-                user_now = user_now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-            except ValueError:
-                pass
-        else:
-            current_time = user_now.strftime('%H:%M')
+        current_time = user_now.strftime('%H:%M')
         
         months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
         current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"

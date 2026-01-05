@@ -1417,15 +1417,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
             
-            # If profile has custom current_time, use it
-            if profile and profile.current_time:
-                try:
-                    time_obj = datetime.strptime(profile.current_time, '%H:%M').time()
-                    user_now = datetime.combine(base_now.date(), time_obj, tzinfo=user_tz)
-                    current_time_str = profile.current_time
-                    logger.info(f"Using profile current_time: {profile.current_time}, user_now: {user_now}")
-                except Exception as e:
-                    logger.error(f"Failed to parse profile.current_time: {e}")
+            # Removed profile.current_time override for production
                     for task in tasks:
                         if task.reminder_time and task.status == 'pending':
                             if task.reminder_time.tzinfo is None:
