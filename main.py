@@ -912,6 +912,18 @@ if bot:
 
 # Middleware to add CSP headers and disable cache for static files
 @web.middleware
+async def logging_middleware(request, handler):
+    """Log all incoming requests"""
+    logger.info(f"Incoming request: {request.method} {request.path} from {request.remote}")
+    try:
+        response = await handler(request)
+        logger.info(f"Response: {request.method} {request.path} -> {response.status}")
+        return response
+    except Exception as e:
+        logger.error(f"Error handling {request.method} {request.path}: {e}")
+        raise
+
+@web.middleware
 async def csp_middleware(request, handler):
     response = await handler(request)
     response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.deepseek.com; frame-src https://oauth.telegram.org;"
@@ -921,6 +933,7 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
+app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
 # cors = aiohttp_cors.setup(app, defaults={
@@ -1610,6 +1623,9 @@ if __name__ == "__main__":
                 site = web.TCPSite(runner, host, port)
                 await site.start()
                 logger.info(f"Server started on {host}:{port}")
+                logger.info(f"Health check endpoint: http://{host}:{port}/health")
+                logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
+                logger.info("Server is ready to accept connections")
                 
                 # Start polling if local mode
                 if LOCAL and bot:  # Enabled for local testing
