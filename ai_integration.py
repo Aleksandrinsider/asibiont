@@ -408,7 +408,7 @@ def update_user_memory(info, user_id=None):
     session.close()
     return result
 
-def delegate_task(title, description, reminder_time, delegated_to_username, delegation_details, user_id=None):
+def delegate_task(title, description="", reminder_time=None, delegated_to_username=None, delegation_details="", user_id=None):
     """Create a delegated task that requires acceptance by the recipient"""
     from models import Session, Task, User
     from datetime import datetime
@@ -1086,12 +1086,12 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Название задачи"},
-                    "description": {"type": "string", "description": "Подробное описание задачи"},
+                    "description": {"type": "string", "description": "Подробное описание задачи (опционально)"},
                     "reminder_time": {"type": "string", "description": "ОБЯЗАТЕЛЬНО: Дедлайн в формате YYYY-MM-DD HH:MM"},
                     "delegated_to_username": {"type": "string", "description": "Username получателя с @ (например @username)"},
                     "delegation_details": {"type": "string", "description": "Детали: желаемый результат, критерии выполнения, важность"}
                 },
-                "required": ["title", "reminder_time", "delegated_to_username", "delegation_details"]
+                "required": ["title", "reminder_time", "delegated_to_username"]
             }
         }
     },

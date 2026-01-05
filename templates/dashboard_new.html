@@ -1208,11 +1208,13 @@
         setInterval(async () => {
             try {
                 const response = await fetch('/api/profile');
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     const headerTimeDisplay = document.getElementById('header-time-display');
                     if (headerTimeDisplay && data.current_time && data.current_date) {
                         headerTimeDisplay.textContent = `${data.current_time} · ${data.current_date}`;
+                        console.log('Time updated:', data.current_time);
                     }
                 }
             } catch (error) {
