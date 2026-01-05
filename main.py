@@ -604,8 +604,8 @@ async def chat_handler(request):
                 if context_data:
                     full_context = json.loads(context_data.decode('utf-8'))
                     # Filter messages from last 24 hours
-                    from datetime import datetime
-                    cutoff_time = datetime.utcnow().timestamp() - 24 * 3600
+                    from datetime import datetime, timezone
+                    cutoff_time = datetime.now(timezone.utc).timestamp() - 24 * 3600
                     context = [msg for msg in full_context if datetime.fromisoformat(msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
                     logger.info(f"Loaded and filtered context with {len(context)} messages from last 24h")
                 else:
@@ -637,14 +637,14 @@ async def chat_handler(request):
                 response = f"Ошибка: {str(e)}"
 
             # Save context back to Redis with timestamp
-            from datetime import datetime
+            from datetime import datetime, timezone
             context.append({
                 "user": message, 
                 "agent": response, 
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
             # Keep only messages from last 24 hours
-            cutoff_time = datetime.utcnow().timestamp() - 24 * 3600
+            cutoff_time = datetime.now(timezone.utc).timestamp() - 24 * 3600
             context = [msg for msg in context if datetime.fromisoformat(msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
             # Limit to last 50 messages to prevent excessive storage
             if len(context) > 50:

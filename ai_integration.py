@@ -277,7 +277,7 @@ def get_system_prompt():
 - set_reminder() — напоминания
 - Для планов — update_profile(current_plans=Z)
 - Для часового пояса — update_profile(timezone="Europe/Moscow") когда пользователь говорит "я переехал", "я в другом городе", "измени часовой пояс"
-- Для текущего времени — update_profile(current_time="HH:MM") когда пользователь сообщает новое время (например, "сейчас 12:18", "время 15:30")
+- ВАЖНО: НЕ используй update_profile для текущего времени - оно определяется автоматически
 - Для мотивации: мягко предложи завершить
 - Для справки: расскажи повествовательно
 - Не предлагай тестовые задачи
@@ -1128,7 +1128,7 @@ def find_partners(user_id=None, session=None):
         response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу ASI Biont — так у вас появится больше возможностей для общения и совместных проектов! 😊"
     return response
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, company=None, position=None, user_id=None, session=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, timezone=None, company=None, position=None, user_id=None, session=None):
     from models import Session, User, UserProfile
     if session is None:
         session = Session()
@@ -1166,7 +1166,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.goals = update_list_field(profile.goals, goals)
     profile.city = city if city else profile.city
     profile.current_plans = current_plans if current_plans else profile.current_plans
-    profile.current_time = current_time if current_time else profile.current_time
+    # current_time removed - should not persist in DB
     # Безопасно добавляем новые поля (могут отсутствовать в старой БД)
     if hasattr(profile, 'company'):
         profile.company = company if company else profile.company
@@ -1506,15 +1506,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     current_time_str = user_now.strftime("%H:%M")
                     logger.info(f"User local time: {user_now}, current_time_str: {current_time_str}")
                     
-                    # Use profile.current_time if set (allows manual time override)
-                    if profile and profile.current_time:
-                        try:
-                            hours, minutes = map(int, profile.current_time.split(':'))
-                            user_now = user_now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-                            current_time_str = profile.current_time
-                            logger.info(f"Using profile.current_time: {profile.current_time}, updated user_now: {user_now}")
-                        except Exception as e:
-                            logger.error(f"Failed to parse profile.current_time: {e}")
+                    # Always use real current time - removed profile.current_time override
+                    # Current time is dynamic and should not persist in profile
                 except Exception as e:
                     user_tz = pytz.UTC
                     user_now = base_now
@@ -1558,7 +1551,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         parsed_absolute_time = parse_absolute_time(message)
         if parsed_absolute_time:
             logger.info(f"Detected absolute time in message: {parsed_absolute_time}")
-            update_profile(current_time=parsed_absolute_time, user_id=user_id)
+            # Don't save to profile - just update user_now for current context
+            # update_profile(current_time=parsed_absolute_time, user_id=user_id)  # REMOVED
             # Update user_now for subsequent processing
             try:
                 time_obj = datetime.strptime(parsed_absolute_time, '%H:%M').time()
