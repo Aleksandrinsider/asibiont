@@ -212,8 +212,8 @@ async def dashboard_handler(request):
         
         if not logged_in:
             # Show login page in dashboard
-            bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-            logger.info(f"Rendering login page with bot_username: {bot_user}")
+            bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
+            logger.info(f"Rendering login page with bot_username: {bot_user}, original: {TELEGRAM_BOT_USERNAME}")
             return aiohttp_jinja2.render_template('dashboard_new.html', request, {
                 'logged_in': False,
                 'bot_username': bot_user,
