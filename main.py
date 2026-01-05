@@ -1587,8 +1587,9 @@ if __name__ == "__main__":
                 logger.info(f"Server started on {host}:{port}")
                 
                 # Start polling if local mode
-                if LOCAL and bot:
+                if LOCAL and bot and False:  # Disabled for testing
                     logger.info("Starting bot polling for local mode")
+                    await bot.delete_webhook()
                     polling_task = asyncio.create_task(dp.start_polling(bot))
                 else:
                     polling_task = None
