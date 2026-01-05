@@ -1396,12 +1396,24 @@ async def api_interactions_handler(request):
             if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() > history_cleared_timestamp
         ]
         
+        # Get user timezone
+        user_tz = pytz.UTC
+        if user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+            except pytz.exceptions.UnknownTimeZoneError:
+                user_tz = pytz.UTC
+        
         interactions_data = []
         for interaction in filtered_interactions:
+            # Convert UTC time to user timezone
+            created_at_utc = interaction.created_at.replace(tzinfo=pytz.UTC) if interaction.created_at.tzinfo is None else interaction.created_at
+            created_at_local = created_at_utc.astimezone(user_tz)
+            
             interactions_data.append({
                 'content': interaction.content,
                 'message_type': interaction.message_type,
-                'created_at': interaction.created_at.isoformat()
+                'created_at': created_at_local.isoformat()
             })
         
         return web.json_response({'interactions': interactions_data})
