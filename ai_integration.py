@@ -292,32 +292,46 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         user = User(telegram_id=user_id)
         session.add(user)
         session.commit()
-    task = Task(user_id=user.id, title=title, description=description)
-    if reminder_time:
-        try:
-            # Получить timezone пользователя
-            user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
-            # Парсить как локальное время пользователя
-            local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-            # Локализовать в timezone пользователя
-            local_dt = user_tz.localize(local_dt)
-            # Конвертировать в UTC для хранения
-            task.reminder_time = local_dt.astimezone(pytz.UTC)
-            import logging
-            logging.info(f"Task {title} reminder_time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
-        except ValueError:
-            pass  # Игнорировать неверный формат
-    if due_date:
-        try:
-            user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
-            local_dt = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
-            local_dt = user_tz.localize(local_dt)
-            task.due_date = local_dt.astimezone(pytz.UTC)
-        except ValueError:
-            pass
-    session.add(task)
-    session.commit()
-    task_id = task.id
+    
+    # Проверить, существует ли задача с таким же названием
+    existing_task = session.query(Task).filter_by(user_id=user.id, title=title).first()
+    if existing_task:
+        # Обновить существующую задачу
+        if reminder_time:
+            existing_task.reminder_time = reminder_time
+        if description:
+            existing_task.description = description
+        session.commit()
+        task_id = existing_task.id
+        task = existing_task  # Для дальнейшего использования
+    else:
+        # Создать новую задачу
+        task = Task(user_id=user.id, title=title, description=description)
+        if reminder_time:
+            try:
+                # Получить timezone пользователя
+                user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+                # Парсить как локальное время пользователя
+                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                # Локализовать в timezone пользователя
+                local_dt = user_tz.localize(local_dt)
+                # Конвертировать в UTC для хранения
+                task.reminder_time = local_dt.astimezone(pytz.UTC)
+                import logging
+                logging.info(f"Task {title} reminder_time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+            except ValueError:
+                pass  # Игнорировать неверный формат
+        if due_date:
+            try:
+                user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+                local_dt = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
+                local_dt = user_tz.localize(local_dt)
+                task.due_date = local_dt.astimezone(pytz.UTC)
+            except ValueError:
+                pass
+        session.add(task)
+        session.commit()
+        task_id = task.id
     
     # Планировать напоминание если указано reminder_time
     if task.reminder_time:
