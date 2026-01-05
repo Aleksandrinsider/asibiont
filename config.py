@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -7,7 +8,11 @@ load_dotenv()
 PORT = int(os.getenv("PORT", 8000))
 LOCAL = os.getenv("LOCAL", "False").lower() in ("true", "1", "yes")
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
-CURRENT_DATE = os.getenv("CURRENT_DATE")
+CURRENT_DATE_STR = os.getenv("CURRENT_DATE")
+if CURRENT_DATE_STR:
+    CURRENT_DATE = datetime.fromisoformat(CURRENT_DATE_STR)
+else:
+    CURRENT_DATE = datetime.now()
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database

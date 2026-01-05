@@ -417,7 +417,13 @@ async def dashboard_handler(request):
                 user_tz = pytz.timezone(user.timezone)
             except pytz.exceptions.UnknownTimeZoneError:
                 user_tz = pytz.UTC
-        base_now = datetime.now(pytz.UTC)
+        
+        # Использовать CURRENT_DATE из конфига если установлен, иначе текущее время
+        from config import CURRENT_DATE
+        if CURRENT_DATE:
+            base_now = CURRENT_DATE.replace(tzinfo=pytz.UTC) if CURRENT_DATE.tzinfo is None else CURRENT_DATE
+        else:
+            base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
         
         current_time = user_now.strftime('%H:%M')
@@ -460,7 +466,11 @@ async def dashboard_handler(request):
         skipped_tasks = len([t for t in tasks if t.status == 'skipped'])
         
         # Format date and time in user's timezone
-        base_now = datetime.now(pytz.UTC)
+        from config import CURRENT_DATE
+        if CURRENT_DATE:
+            base_now = CURRENT_DATE.replace(tzinfo=pytz.UTC) if CURRENT_DATE.tzinfo is None else CURRENT_DATE
+        else:
+            base_now = datetime.now(pytz.UTC)
         user_now = base_now
         if user and user.timezone:
             try:
@@ -1122,7 +1132,10 @@ async def api_profile_handler(request):
         session_db.close()
     
     # Calculate current time and date
-    base_now = datetime.now(pytz.UTC)
+    if CURRENT_DATE:
+        base_now = CURRENT_DATE.replace(tzinfo=pytz.UTC) if CURRENT_DATE.tzinfo is None else CURRENT_DATE
+    else:
+        base_now = datetime.now(pytz.UTC)
     user_now = base_now
     if user and user.timezone:
         try:
@@ -1196,7 +1209,10 @@ async def api_reminders_handler(request):
             user_tz = pytz.timezone(user.timezone)
         except:
             user_tz = pytz.UTC
-    base_now = datetime.now(pytz.UTC)
+    if CURRENT_DATE:
+        base_now = CURRENT_DATE.replace(tzinfo=pytz.UTC) if CURRENT_DATE.tzinfo is None else CURRENT_DATE
+    else:
+        base_now = datetime.now(pytz.UTC)
     user_now = base_now.astimezone(user_tz)
     
     upcoming_reminders = []
@@ -1288,7 +1304,10 @@ async def api_tasks_handler(request):
                 user_tz = pytz.timezone(user.timezone)
             except pytz.exceptions.UnknownTimeZoneError:
                 user_tz = pytz.UTC
-        base_now = datetime.now(pytz.UTC)
+        if CURRENT_DATE:
+            base_now = CURRENT_DATE.replace(tzinfo=pytz.UTC) if CURRENT_DATE.tzinfo is None else CURRENT_DATE
+        else:
+            base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
         
         # Use profile.current_time if set
@@ -1587,7 +1606,7 @@ if __name__ == "__main__":
                 logger.info(f"Server started on {host}:{port}")
                 
                 # Start polling if local mode
-                if LOCAL and bot and False:  # Disabled for testing
+                if LOCAL and bot:  # Enabled for local testing
                     logger.info("Starting bot polling for local mode")
                     await bot.delete_webhook()
                     polling_task = asyncio.create_task(dp.start_polling(bot))
@@ -1596,7 +1615,7 @@ if __name__ == "__main__":
                 
                 # Keep the server running
                 try:
-                    while True:
+                    for _ in range(60):  # Run for 60 seconds for testing
                         await asyncio.sleep(1)
                 except KeyboardInterrupt:
                     logger.info("Shutting down server...")
