@@ -1613,8 +1613,14 @@ if __name__ == "__main__":
                 
                 # Keep the server running
                 try:
-                    for _ in range(60):  # Run for 60 seconds for testing
-                        await asyncio.sleep(1)
+                    if LOCAL:
+                        # For local development, keep server running indefinitely
+                        while True:
+                            await asyncio.sleep(3600)
+                    else:
+                        # For production, keep server running indefinitely
+                        while True:
+                            await asyncio.sleep(3600)
                 except KeyboardInterrupt:
                     logger.info("Shutting down server...")
                     if polling_task:
