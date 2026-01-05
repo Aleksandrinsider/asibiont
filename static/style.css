@@ -272,19 +272,17 @@ body {
 }
 
 .message {
-    padding: 12px 16px;
-    margin: 6px 0;
-    max-width: 80%;
+    padding: 10px 0;
+    margin: 4px 0;
+    max-width: 100%;
     word-wrap: break-word;
     display: flex;
     flex-direction: column;
-    border-radius: 6px;
     opacity: 1;
     transform: translateY(0);
-    transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.2s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease;
     animation: message-appear 0.3s ease-out;
     position: relative;
-    border: 1px solid transparent;
 }
 
 @keyframes message-appear {
@@ -299,11 +297,8 @@ body {
 }
 
 .typing-indicator {
-    padding: 12px;
-    margin: 8px 0;
-    max-width: 85%;
-    background-color: #F6F8FA;
-    border-radius: 12px;
+    padding: 8px 0;
+    margin: 4px 0;
     align-self: flex-start;
     animation: message-appear 0.3s ease-out;
 }
@@ -382,52 +377,40 @@ body {
 }
 
 .message.user {
-    background-color: #DDF4FF;
-    border-color: #54AEFF66;
     color: #1F2328;
     align-self: flex-end;
     margin-left: auto;
 }
 
-.message.user:hover {
-    background-color: #B6E3FF;
-    border-color: #0969DA;
-}
-
 .message.user .message-text {
     font-weight: 400;
     font-size: 14px;
+    color: #656D76;
 }
 
 .message.ai {
-    background-color: #F6F8FA;
-    border-color: #D1D9E0;
     color: #1F2328;
     align-self: flex-start;
-}
-
-.message.ai:hover {
-    background-color: #EAEEF2;
-    border-color: #8C959F;
 }
 
 .message.ai .message-text {
     font-weight: 400;
     font-size: 14px;
+    color: #1F2328;
 }
 
 .message-text {
     word-wrap: break-word;
-    line-height: 1.5;
+    line-height: 1.6;
     width: 100%;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .message-time {
     font-size: 11px;
-    color: #656D76;
-    margin-top: 4px;
-    opacity: 0.8;
+    color: #8C959F;
+    margin-top: 2px;
+    opacity: 0.7;
     font-weight: 400;
 }
 
