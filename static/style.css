@@ -406,6 +406,7 @@ body {
     word-wrap: break-word;
     line-height: 1.6;
     width: 100%;
+    text-align: justify;
 }
 
 .message-time {
