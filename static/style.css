@@ -383,13 +383,13 @@ body {
 
 .message.user {
     background-color: #E7F3FF;
-    color: #0366D6;
+    color: #1F2328;
     align-self: flex-end;
     margin-left: auto;
 }
 
 .message.user .message-text {
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .message.ai {
