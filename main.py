@@ -4,7 +4,6 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 import aiohttp
 from aiohttp import web
 import aiohttp_jinja2
-import aiohttp_cors
 import jinja2
 from redis.asyncio import Redis
 import aiohttp_session
@@ -134,15 +133,9 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 
-@aiohttp_jinja2.template('login.html')
 async def login_handler(request):
     # Redirect to dashboard for unified experience
     return web.HTTPFound('/dashboard')
-
-
-# Temporary simple handler
-async def simple_login_handler(request):
-    return web.Response(text="Login page - Telegram auth available at /tg_auth")
 
 
 async def auth_handler(request):
@@ -936,14 +929,6 @@ async def csp_middleware(request, handler):
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
-# cors = aiohttp_cors.setup(app, defaults={
-#     "*": aiohttp_cors.ResourceOptions(
-#         allow_credentials=True,
-#         expose_headers="*",
-#         allow_headers="*",
-#         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-#     )
-# })
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 
 async def yookassa_webhook(request):
