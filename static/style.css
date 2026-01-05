@@ -274,7 +274,7 @@ body {
 .message {
     padding: 12px;
     margin: 8px 0;
-    max-width: 85%;
+    max-width: 100%;
     word-wrap: break-word;
     display: flex;
     flex-direction: column;
