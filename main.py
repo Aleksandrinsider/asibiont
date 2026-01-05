@@ -252,27 +252,33 @@ async def dashboard_handler(request):
             tasks = session_db.query(Task).filter_by(user_id=user.id).all()
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             
-            # Проверяем, была ли история очищена
-            history_cleared = False
+            # Проверяем timestamp очистки истории
+            history_cleared_timestamp = None
             if redis_client:
                 try:
-                    cleared_flag = await redis_client.get(f"history_cleared:{user_id}")
-                    history_cleared = cleared_flag is not None
-                    logger.info(f"History cleared flag from Redis: {history_cleared}")
+                    timestamp_bytes = await redis_client.get(f"history_cleared_timestamp:{user_id}")
+                    if timestamp_bytes:
+                        history_cleared_timestamp = float(timestamp_bytes.decode('utf-8'))
+                        logger.info(f"History cleared timestamp from Redis: {history_cleared_timestamp}")
                 except Exception as e:
-                    logger.error(f"Error checking history_cleared flag: {e}")
+                    logger.error(f"Error checking history_cleared_timestamp: {e}")
             else:
                 # Fallback на session если Redis недоступен
-                history_cleared = session_req.get('history_cleared', False)
-                logger.info(f"History cleared flag from session: {history_cleared}")
+                history_cleared_timestamp = session_req.get('history_cleared_timestamp')
+                logger.info(f"History cleared timestamp from session: {history_cleared_timestamp}")
             
-            # Берем последние 50 сообщений только если история не очищена
-            if history_cleared:
-                interactions = []
-                logger.info("Interactions hidden due to history_cleared flag")
+            # Берем последние 50 сообщений, но фильтруем по timestamp очистки
+            if user:
+                all_interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all()))
+                if history_cleared_timestamp:
+                    # Фильтруем только сообщения после очистки
+                    interactions = [i for i in all_interactions if i.created_at.timestamp() > history_cleared_timestamp]
+                    logger.info(f"Filtered {len(interactions)} interactions after timestamp {history_cleared_timestamp}")
+                else:
+                    interactions = all_interactions
+                    logger.info(f"Loaded {len(interactions)} interactions (no filtering)")
             else:
-                interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all())) if user else []
-                logger.info(f"Loaded {len(interactions)} interactions")
+                interactions = []
             
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
             
@@ -621,15 +627,10 @@ async def chat_handler(request):
             if redis_client:
                 try:
                     await redis_client.setex(f"context:{user_id}", 24*3600, json.dumps(context).encode('utf-8'))  # Expire in 24 hours
-                    # Сбрасываем флаг очистки истории, так как пользователь начал новый диалог
-                    await redis_client.delete(f"history_cleared:{user_id}")
-                    logger.info(f"Context saved to Redis with {len(context)} messages and history_cleared flag reset")
+                    # НЕ удаляем timestamp - новые сообщения будут после него и будут видны
+                    logger.info(f"Context saved to Redis with {len(context)} messages")
                 except Exception as e:
                     logger.error(f"Error saving context: {e}")
-            else:
-                # Сбрасываем флаг в session если Redis недоступен
-                session['history_cleared'] = False
-                logger.info("History cleared flag reset in session")
 
             # Save agent response
             if user:
@@ -652,18 +653,22 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    # Очищаем контекст в Redis
+    # Очищаем контекст в Redis и сохраняем timestamp
+    from datetime import datetime
+    clear_timestamp = datetime.utcnow().timestamp()
+    
     if redis_client:
         try:
             await redis_client.set(f"context:{user_id}", json.dumps([]).encode('utf-8'))
-            await redis_client.setex(f"history_cleared:{user_id}", 24*3600, "1")  # Флаг на 24 часа
-            logger.info("Context cleared and history_cleared flag set")
+            # Сохраняем timestamp очистки на 24 часа
+            await redis_client.setex(f"history_cleared_timestamp:{user_id}", 24*3600, str(clear_timestamp))
+            logger.info(f"Context cleared and history_cleared_timestamp set to {clear_timestamp}")
         except Exception as e:
             logger.error(f"Error clearing context: {e}")
     else:
         # Если Redis недоступен, используем session
-        session['history_cleared'] = True
-        logger.info("History cleared flag set in session")
+        session['history_cleared_timestamp'] = clear_timestamp
+        logger.info(f"History cleared timestamp set in session: {clear_timestamp}")
 
     return web.json_response({'success': True, 'message': 'History cleared'})
 
