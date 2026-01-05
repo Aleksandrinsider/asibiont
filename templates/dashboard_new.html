@@ -348,6 +348,7 @@
             
             // Add user message
             addMessage(message, 'user');
+            lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
             showTypingIndicator();
             
             try {
@@ -365,14 +366,17 @@
                     addMessage(data.response, 'ai');
                     // Обновить профиль и время сразу
                     await updateProfile();
+                    lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
                     window.changingTime = false; // Reset flag after update
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    lastMessageCount += 1; // Увеличиваем счетчик для сообщения ошибки
                     window.changingTime = false; // Reset flag on error
                 }
             } catch (error) {
                 hideTypingIndicator();
                 addMessage('Ошибка: ' + error.message, 'ai');
+                lastMessageCount += 1; // Увеличиваем счетчик для сообщения ошибки
                 window.changingTime = false; // Reset flag on error
             }
         }
