@@ -333,6 +333,9 @@
         }
 
         async function changeTime() {
+            if (window.changingTime) return; // Prevent multiple clicks
+            window.changingTime = true;
+            
             const message = "измени время";
             
             // Add user message
@@ -355,13 +358,16 @@
                     // Обновить профиль и время
                     setTimeout(async () => {
                         await updateProfile();
+                        window.changingTime = false; // Reset flag after update
                     }, 1000);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    window.changingTime = false; // Reset flag on error
                 }
             } catch (error) {
                 hideTypingIndicator();
                 addMessage('Ошибка: ' + error.message, 'ai');
+                window.changingTime = false; // Reset flag on error
             }
         }
 
