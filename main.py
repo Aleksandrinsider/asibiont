@@ -272,17 +272,19 @@ async def dashboard_handler(request):
                 all_interactions = list(reversed(session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.id.desc()).limit(50).all()))
                 if history_cleared_timestamp:
                     # Фильтруем только сообщения после очистки
-                    import pytz
+                    from datetime import timezone as dt_timezone
                     filtered_interactions = []
                     for i in all_interactions:
                         try:
-                            # Убедимся, что created_at имеет timezone
+                            # Если created_at naive (без tzinfo), считаем его UTC и просто берем timestamp
+                            # Если с tzinfo, используем его timestamp
                             if i.created_at.tzinfo is None:
-                                interaction_ts = pytz.UTC.localize(i.created_at).timestamp()
+                                # Naive datetime - интерпретируем как UTC напрямую через replace
+                                interaction_ts = i.created_at.replace(tzinfo=dt_timezone.utc).timestamp()
                             else:
                                 interaction_ts = i.created_at.timestamp()
                             
-                            logger.debug(f"Interaction ID {i.id}: timestamp={interaction_ts}, clear_timestamp={history_cleared_timestamp}, include={interaction_ts > history_cleared_timestamp}")
+                            logger.info(f"Interaction ID {i.id}: created_at={i.created_at}, timestamp={interaction_ts}, clear_timestamp={history_cleared_timestamp}, include={interaction_ts > history_cleared_timestamp}")
                             
                             if interaction_ts > history_cleared_timestamp:
                                 filtered_interactions.append(i)
@@ -672,8 +674,8 @@ async def clear_history_handler(request):
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     # Очищаем контекст в Redis и сохраняем timestamp
-    from datetime import datetime
-    clear_timestamp = datetime.utcnow().timestamp()
+    from datetime import datetime, timezone
+    clear_timestamp = datetime.now(timezone.utc).timestamp()
     
     if redis_client:
         try:
