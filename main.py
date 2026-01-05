@@ -1550,6 +1550,10 @@ app.router.add_get('/api/interactions', api_interactions_handler)
 # Setup for production
 dp = Dispatcher()
 
+# Include router from handlers
+from handlers import router as handlers_router
+dp.include_router(handlers_router)
+
 # Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
