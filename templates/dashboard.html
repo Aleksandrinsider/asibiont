@@ -265,12 +265,20 @@
                     {% endif %}
                 </div>
                 <div class="chat-container">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3>Диалог с агентом</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin: 0;">Диалог с агентом</h3>
                         <button onclick="clearHistory()" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Очистить историю</button>
                     </div>
                     <div class="chat-messages" id="chat-messages">
+                        {% if not interactions %}
                         <div class="message agent">Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>
+                        {% else %}
+                        {% for interaction in interactions %}
+                        <div class="message {{ 'user' if interaction.message_type == 'user' else 'agent' }}">
+                            {{ interaction.content }}
+                        </div>
+                        {% endfor %}
+                        {% endif %}
                     </div>
                     <div class="chat-input">
                         <input type="text" id="message-input" placeholder="Введите сообщение...">
@@ -368,6 +376,10 @@
         }
 
         async function clearHistory() {
+            if (!confirm('Очистить историю чата? Сообщения будут скрыты из интерфейса.')) {
+                return;
+            }
+            
             try {
                 const response = await fetch('/clear_history', {
                     method: 'POST',
@@ -376,16 +388,14 @@
                     },
                 });
                 const data = await response.json();
-                if (response.ok) {
-                    // Очищаем сообщения в интерфейсе
-                    const messages = document.getElementById('chat-messages');
-                    messages.innerHTML = '<div class="message agent">История очищена. Привет! Я ваш помощник по управлению задачами. Чем могу помочь?</div>';
-                    alert('История чата очищена');
+                if (response.ok && data.success) {
+                    // Перезагружаем страницу чтобы обновить список сообщений
+                    window.location.reload();
                 } else {
-                    alert('Ошибка: ' + data.error);
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
                 }
             } catch (error) {
-                alert('Ошибка: ' + error.message);
+                alert('Ошибка очистки истории: ' + error.message);
             }
         }
     </script>
