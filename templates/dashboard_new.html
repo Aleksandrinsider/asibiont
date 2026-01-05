@@ -500,7 +500,7 @@
                 const taskDate = new Date(task.reminder_time);
                 const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
                 
-                if (taskDay < today) groups.overdue.push(task);
+                if (taskDate < now) groups.overdue.push(task);
                 else if (taskDay.getTime() === today.getTime()) groups.today.push(task);
                 else if (taskDay.getTime() === tomorrow.getTime()) groups.tomorrow.push(task);
                 else groups.later.push(task);
