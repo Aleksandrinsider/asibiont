@@ -1521,7 +1521,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     current_time_str = user_now.strftime("%H:%M")
             
             # Get upcoming reminders for context
+            upcoming_reminders = []
             try:
+                # Get user's tasks from database
+                tasks = session.query(Task).filter_by(user_id=user.id, status='pending').all()
                 for task in tasks:
                     if task.reminder_time and task.status == 'pending':
                         if task.reminder_time.tzinfo is None:
@@ -1540,10 +1543,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             upcoming_reminders.append(f"{task.title} {date_str} в {reminder_time_local}")
                 if upcoming_reminders:
                     user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:5])}"
-            except pytz.exceptions.UnknownTimeZoneError:
-                # Fallback to UTC if invalid timezone
-                user_now = base_now
-                current_time_str = user_now.strftime("%H:%M")
+            except Exception as e:
+                logger.error(f"Error getting upcoming reminders: {e}")
+                # Continue without reminders
             session.close()
         
         # Parse relative time from message
