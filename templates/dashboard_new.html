@@ -39,7 +39,7 @@
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
                     <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px;">изменить</a>
-                    <span style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
+                    <span id="header-time-display" style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
                 </span>
                 <button onclick="logout()" class="logout-button">Выход</button>
                 {% endif %}
@@ -1090,6 +1090,12 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
+                    
+                    // Update time display in header
+                    const headerTimeDisplay = document.getElementById('header-time-display');
+                    if (headerTimeDisplay && data.current_time && data.current_date) {
+                        headerTimeDisplay.textContent = `${data.current_time} · ${data.current_date}`;
+                    }
                     
                     // Check if profile data actually changed
                     const currentProfileKey = JSON.stringify({
