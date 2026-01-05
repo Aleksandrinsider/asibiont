@@ -1206,11 +1206,25 @@ async def on_startup(app):
         storage = RedisStorage(redis_client)
         logger.info("Session storage initialized with Redis")
     else:
-        from aiohttp_session import SimpleCookieStorage
-        storage = SimpleCookieStorage()
-        logger.info("Session storage initialized with SimpleCookieStorage")
+        # Custom storage to handle invalid JSON cookies
+        class SafeSimpleCookieStorage(SimpleCookieStorage):
+            async def load_session(self, request):
+                from aiohttp_session import Session as AiohttpSession
+                cookie = self.load_cookie(request)
+                if cookie is None:
+                    return await self.new_session()
+                try:
+                    data = self._decoder(cookie)
+                    return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
+                except json.JSONDecodeError:
+                    # Invalid cookie, create new session
+                    return await self.new_session()
+        
+        storage = SafeSimpleCookieStorage()
+        logger.info("Session storage initialized with SafeSimpleCookieStorage")
     
     aiohttp_session.setup(app, storage)
+    logger.info("Session middleware configured successfully")
     
     # Set webhook
     if not LOCAL:
@@ -1470,22 +1484,7 @@ app.router.add_get('/api/interactions', api_interactions_handler)
 dp = Dispatcher()
 dp.include_router(router)
 
-# Setup session middleware
-# Custom storage to handle invalid JSON cookies
-class SafeSimpleCookieStorage(SimpleCookieStorage):
-    async def load_session(self, request):
-        from aiohttp_session import Session as AiohttpSession
-        cookie = self.load_cookie(request)
-        if cookie is None:
-            return await self.new_session()
-        try:
-            data = self._decoder(cookie)
-            return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
-        except json.JSONDecodeError:
-            # Invalid cookie, create new session
-            return await self.new_session()
-
-aiohttp_session.setup(app, SafeSimpleCookieStorage())
+# Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
 ai_service = AIIntegration()
@@ -1504,6 +1503,7 @@ async def start_reminder_service(app):
         logger.info(f"Job: {job.id} at {job.next_run_time}")
 
 app.on_startup.append(start_reminder_service)
+app.on_startup.append(on_startup)
 
 if bot:
     webhook_requests_handler = SimpleRequestHandler(
@@ -1514,9 +1514,6 @@ if bot:
     setup_application(app, dp, bot=bot)
 else:
     logger.warning("Bot not created, skipping webhook setup")
-
-# Add startup handler
-# app.on_startup.append(on_startup)
 
 logger.info("App created successfully")
 
