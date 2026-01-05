@@ -355,11 +355,9 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Обновить профиль и время
-                    setTimeout(async () => {
-                        await updateProfile();
-                        window.changingTime = false; // Reset flag after update
-                    }, 1000);
+                    // Обновить профиль и время сразу
+                    await updateProfile();
+                    window.changingTime = false; // Reset flag after update
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                     window.changingTime = false; // Reset flag on error
