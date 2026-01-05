@@ -1133,11 +1133,8 @@ async def api_profile_handler(request):
     finally:
         session_db.close()
     
-    # Calculate current time and date
-    if CURRENT_DATE:
-        base_now = CURRENT_DATE.replace(tzinfo=pytz.UTC) if CURRENT_DATE.tzinfo is None else CURRENT_DATE
-    else:
-        base_now = datetime.now(pytz.UTC)
+    # Calculate current time and date - always use real time
+    base_now = datetime.now(pytz.UTC)
     user_now = base_now
     if user and user.timezone:
         try:
