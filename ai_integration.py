@@ -1505,34 +1505,45 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
                     logger.info(f"User local time: {user_now}, current_time_str: {current_time_str}")
+                    
+                    # Use profile.current_time if set (allows manual time override)
+                    if profile and profile.current_time:
+                        try:
+                            hours, minutes = map(int, profile.current_time.split(':'))
+                            user_now = user_now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+                            current_time_str = profile.current_time
+                            logger.info(f"Using profile.current_time: {profile.current_time}, updated user_now: {user_now}")
+                        except Exception as e:
+                            logger.error(f"Failed to parse profile.current_time: {e}")
                 except Exception as e:
                     user_tz = pytz.UTC
                     user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
             
-            # Removed profile.current_time override for production
-                    for task in tasks:
-                        if task.reminder_time and task.status == 'pending':
-                            if task.reminder_time.tzinfo is None:
-                                task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
-                            task_time_local = task.reminder_time.astimezone(user_tz)
-                            # Include tasks within next 7 days
-                            if task_time_local > user_now - timedelta(days=1) and task_time_local < user_now + timedelta(days=7):
-                                reminder_time_local = task_time_local.strftime("%H:%M")
-                                date_str = ""
-                                if task_time_local.date() == user_now.date():
-                                    date_str = "сегодня"
-                                elif task_time_local.date() == (user_now + timedelta(days=1)).date():
-                                    date_str = "завтра"
-                                else:
-                                    date_str = task_time_local.strftime("%d.%m")
-                                upcoming_reminders.append(f"{task.title} {date_str} в {reminder_time_local}")
-                    if upcoming_reminders:
-                        user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:5])}"
-                except pytz.exceptions.UnknownTimeZoneError:
-                    # Fallback to UTC if invalid timezone
-                    user_now = base_now
-                    current_time_str = user_now.strftime("%H:%M")
+            # Get upcoming reminders for context
+            try:
+                for task in tasks:
+                    if task.reminder_time and task.status == 'pending':
+                        if task.reminder_time.tzinfo is None:
+                            task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
+                        task_time_local = task.reminder_time.astimezone(user_tz)
+                        # Include tasks within next 7 days
+                        if task_time_local > user_now - timedelta(days=1) and task_time_local < user_now + timedelta(days=7):
+                            reminder_time_local = task_time_local.strftime("%H:%M")
+                            date_str = ""
+                            if task_time_local.date() == user_now.date():
+                                date_str = "сегодня"
+                            elif task_time_local.date() == (user_now + timedelta(days=1)).date():
+                                date_str = "завтра"
+                            else:
+                                date_str = task_time_local.strftime("%d.%m")
+                            upcoming_reminders.append(f"{task.title} {date_str} в {reminder_time_local}")
+                if upcoming_reminders:
+                    user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:5])}"
+            except pytz.exceptions.UnknownTimeZoneError:
+                # Fallback to UTC if invalid timezone
+                user_now = base_now
+                current_time_str = user_now.strftime("%H:%M")
             session.close()
         
         # Parse relative time from message
