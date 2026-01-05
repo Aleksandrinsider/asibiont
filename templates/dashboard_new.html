@@ -211,8 +211,13 @@
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
             if (response.status === 401 || response.status === 403) {
-                console.log('Session expired, redirecting to login');
-                window.location.href = '/dashboard';
+                console.log('Session expired or unauthorized');
+                // Перезагрузить страницу только если мы не на странице логина
+                const isLoggedIn = document.querySelector('.main-layout') !== null;
+                if (isLoggedIn) {
+                    console.log('Redirecting to login page');
+                    window.location.reload();
+                }
                 return false;
             }
             return true;
@@ -955,6 +960,14 @@
         
         // Filter buttons
         document.addEventListener('DOMContentLoaded', () => {
+            // Проверить, залогинен ли пользователь
+            const isLoggedIn = document.querySelector('.main-layout') !== null;
+            
+            if (!isLoggedIn) {
+                console.log('User not logged in, skipping data load');
+                return;
+            }
+            
             // Инициализировать задачи и контакты при загрузке страницы
             {% if tasks %}
             updateStats(initialTasks);
