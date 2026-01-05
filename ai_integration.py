@@ -1486,7 +1486,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             # Get user current time for relative time parsing and prompt
             # Always use real current time in production
             base_now = datetime.now(pytz.UTC)
-            logger.info(f"Using real time, base_now: {base_now}")
+            logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
+            logger.info(f"[TIME CHECK] Formatted: {base_now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
             user_now = base_now  # Default to base_now
             current_time_str = user_now.strftime("%H:%M")
             user_tz = pytz.UTC  # Default
@@ -1497,7 +1498,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.timezone(tz_str)
                     user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
-                    logger.info(f"User local time: {user_now}, current_time_str: {current_time_str}")
+                    logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
+                    logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
+                    logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
                     
                     # Always use real current time - removed profile.current_time override
                     # Current time is dynamic and should not persist in profile
@@ -1505,6 +1508,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.UTC
                     user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
+                    logger.error(f"[TIME CHECK] Timezone error: {e}")
             
             # Get upcoming reminders for context
             upcoming_reminders = []
