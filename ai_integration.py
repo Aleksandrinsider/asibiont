@@ -79,7 +79,7 @@ def get_system_prompt():
 - delete_task(task_id=число ИЛИ task_title="название", user_id=число) - можно указать либо ID либо название
 - set_reminder(task_id=число, reminder_time="YYYY-MM-DD HH:MM", user_id=число)
 - find_partners(user_id=число, interests="")
-- update_profile(user_id=число, current_plans="", interests="", city="", timezone="", company="", position="")
+- update_profile(user_id=число, current_plans="", interests="", city="", timezone="", company="", position="") - для обновления профиля. Для добавления к списку (interests, skills, goals) используй префикс '+', например interests="+программирование". Для удаления '-', например interests="-рисование". Для полной замены - без префикса.
 - update_user_memory(user_id=число, memory="")
 - delegate_task(title="название", description="описание", reminder_time="YYYY-MM-DD HH:MM", delegated_to_username="@username", delegation_details="подробности", user_id=число)
 - accept_delegated_task(task_id=число, user_id=число)
@@ -182,6 +182,7 @@ def get_system_prompt():
 ПЕРСОНАЛЬНЫЙ ПОДХОД:
 - Узнавай интересы, цели, местоположение, компанию и должность через естественные вопросы, но ВАРЬИРУЙ формулировки - не задавай одни и те же вопросы каждому пользователю.
 - Активно изучай: задавай вопросы о интересах, целях, городе, планах, месте работы и должности. Сохраняй info.
+- При добавлении новых интересов, навыков или целей - добавляй к существующим через update_profile с префиксом '+'. При удалении старых - используй префикс '-'. Не заменяй целиком, если не сказано заменить.
 - Запоминай важные детали через update_user_memory().
 - Используй память для персонализации. Сохраняй новую info через update_user_memory. После завершения уточни результат.
 - При упоминании профессиональной деятельности или места работы ОБЯЗАТЕЛЬНО обновляй профиль через update_profile с указанием company и position.
@@ -1075,9 +1076,26 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     if not profile:
         profile = UserProfile(user_id=user.id)
         session.add(profile)
-    profile.skills = skills if skills else profile.skills
-    profile.interests = interests if interests else profile.interests
-    profile.goals = goals if goals else profile.goals
+    
+    def update_list_field(field, value):
+        if not value:
+            return field
+        current = set((field or "").split(", ")) - {""}  # Разделяем по ", " и убираем пустые
+        if value.startswith("+"):
+            new_item = value[1:].strip()
+            if new_item:
+                current.add(new_item)
+        elif value.startswith("-"):
+            remove_item = value[1:].strip()
+            current.discard(remove_item)
+        else:
+            # Замена целиком
+            current = set(value.split(", ")) - {""}
+        return ", ".join(sorted(current))
+    
+    profile.skills = update_list_field(profile.skills, skills)
+    profile.interests = update_list_field(profile.interests, interests)
+    profile.goals = update_list_field(profile.goals, goals)
     profile.city = city if city else profile.city
     profile.current_plans = current_plans if current_plans else profile.current_plans
     profile.current_time = current_time if current_time else profile.current_time
