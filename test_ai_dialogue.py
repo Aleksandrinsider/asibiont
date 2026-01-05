@@ -61,22 +61,22 @@ async def test_ai_dialogue():
     session = SessionLocal()
     
     try:
-        # Находим тестового пользователя
+        # Находим или создаём тестового пользователя
         user = session.query(User).filter_by(telegram_id=146333757).first()
         
         if not user:
-            print("❌ Пользователь не найден!")
-            return
+            print("[INFO] Пользователь не найден, создаём...")
+            user = User(
+                telegram_id=146333757,
+                username="test_user",
+                timezone="Europe/Moscow"
+            )
+            session.add(user)
+            session.commit()
+            print("[OK] Пользователь создан")
         
         print(f"[OK] Пользователь найден: {user.username} (ID: {user.telegram_id})")
-        # profile is a list, take first element
-        profile = user.profile[0] if user.profile else None
-        if profile:
-            print(f"   Профиль: {profile.company or 'N/A'} - {profile.position or 'N/A'}")
-            print(f"   Город: {profile.city or 'N/A'}, Timezone: {user.timezone or 'UTC'}")
-        else:
-            print(f"   Профиль не заполнен")
-            print(f"   Timezone: {user.timezone or 'UTC'}")
+        print(f"   Timezone: {user.timezone or 'UTC'}")
         print()
         
         # Запускаем тесты
