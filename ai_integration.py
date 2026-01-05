@@ -246,7 +246,13 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     if existing_task:
         # Обновить существующую задачу
         if reminder_time:
-            existing_task.reminder_time = reminder_time
+            try:
+                user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                local_dt = user_tz.localize(local_dt)
+                existing_task.reminder_time = local_dt.astimezone(pytz.UTC)
+            except ValueError:
+                pass
         if description:
             existing_task.description = description
         session.commit()

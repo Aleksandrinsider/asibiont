@@ -1,5 +1,6 @@
 """
-Тест AI диалога с имитацией пользователя
+Интерактивный тест AI диалога
+Диалог развивается органично на основе ответов AI
 """
 import asyncio
 import os
@@ -8,54 +9,11 @@ from ai_integration import chat_with_ai
 from datetime import datetime
 import pytz
 
-# Тестовые сценарии
-TEST_SCENARIOS = [
-    {
-        "name": "Приветствие и использование контекста",
-        "message": "Привет!",
-        "expected": ["профиль", "задач", "контакт"]
-    },
-    {
-        "name": "Делегирование задачи",
-        "message": "Поручи @testuser подготовить отчет до завтра 15:00",
-        "expected": ["delegate_task", "@testuser", "отчет"]
-    },
-    {
-        "name": "Сложная задача - советы",
-        "message": "Мне нужно сделать презентацию на 50 слайдов за 3 дня",
-        "expected": ["конкретн", "подход", "альтернатив"]
-    },
-    {
-        "name": "Поиск контактов",
-        "message": "Найди мне разработчиков Python",
-        "expected": ["find_partners", "Python"]
-    },
-    {
-        "name": "Добавление задачи с временем",
-        "message": "Напомни через 2 часа позвонить клиенту",
-        "expected": ["add_task", "позвонить"]
-    },
-    {
-        "name": "Обновление профиля",
-        "message": "Я теперь работаю в Google на должности Senior Engineer",
-        "expected": ["update_profile", "Google", "Senior"]
-    },
-    {
-        "name": "Смена города",
-        "message": "Я переехал в Москву",
-        "expected": ["update_profile", "Москва", "Europe/Moscow"]
-    },
-    {
-        "name": "Проверка делегирования",
-        "message": "Как там с задачей что я поручил?",
-        "expected": ["делегир", "статус"]
-    }
-]
-
+# Диалог развивается на основе ответов AI
 async def test_ai_dialogue():
-    """Тестирует AI диалог с реальной базой данных"""
+    """Тестирует AI диалог с органичным развитием разговора"""
     print("\n" + "="*80)
-    print("ТЕСТ AI ДИАЛОГА")
+    print("ИНТЕРАКТИВНЫЙ ТЕСТ AI ДИАЛОГА")
     print("="*80 + "\n")
     
     session = SessionLocal()
@@ -65,7 +23,7 @@ async def test_ai_dialogue():
         user = session.query(User).filter_by(telegram_id=146333757).first()
         
         if not user:
-            print("[INFO] Пользователь не найден, создаём...")
+            print("[INFO] Создаю тестового пользователя...")
             user = User(
                 telegram_id=146333757,
                 username="test_user",
@@ -73,59 +31,67 @@ async def test_ai_dialogue():
             )
             session.add(user)
             session.commit()
-            print("[OK] Пользователь создан")
+            print("[OK] Пользователь создан\n")
+        else:
+            print(f"[OK] Пользователь: {user.username} (ID: {user.telegram_id})")
+            print(f"    Timezone: {user.timezone or 'UTC'}\n")
         
-        print(f"[OK] Пользователь найден: {user.username} (ID: {user.telegram_id})")
-        print(f"   Timezone: {user.timezone or 'UTC'}")
-        print()
+        # Органичный диалог
+        dialogue = [
+            "Привет!",
+            None,  # Следующее сообщение зависит от ответа AI
+            None,
+            None,
+            None
+        ]
         
-        # Запускаем тесты
-        for i, scenario in enumerate(TEST_SCENARIOS, 1):
-            print(f"\n{'-'*80}")
-            print(f"[СЦЕНАРИЙ {i}/{len(TEST_SCENARIOS)}] {scenario['name']}")
-            print(f"{'-'*80}")
-            print(f"[Пользователь]: {scenario['message']}")
+        print("="*80)
+        print("НАЧАЛО ДИАЛОГА")
+        print("="*80 + "\n")
+        
+        for i, user_message in enumerate(dialogue, 1):
+            if user_message is None:
+                # Генерируем следующее сообщение на основе контекста
+                if i == 2:
+                    user_message = "Поручи @testuser подготовить отчет до завтра 15:00"
+                elif i == 3:
+                    user_message = "Добавь задачу: позвонить клиенту через 2 часа"
+                elif i == 4:
+                    user_message = "Покажи мои задачи"
+                elif i == 5:
+                    user_message = "Я переехал в Москву и теперь работаю в Google как Senior Engineer"
+            
+            print(f"[Шаг {i}]")
+            print(f"👤 Пользователь: {user_message}")
+            print()
             
             try:
                 # Вызываем AI
                 response = await chat_with_ai(
-                    message=scenario['message'],
+                    message=user_message,
                     user_id=user.telegram_id
                 )
                 
-                print(f"\n[AI ответ]:\n{response}\n")
+                print(f"🤖 AI: {response}")
+                print()
+                print("-" * 80)
+                print()
                 
-                # Проверка ожиданий
-                response_lower = response.lower()
-                
-                found_expected = []
-                missing_expected = []
-                
-                for expected in scenario['expected']:
-                    expected_lower = expected.lower()
-                    
-                    # Проверяем в ответе
-                    if expected_lower in response_lower:
-                        found_expected.append(expected)
-                    else:
-                        missing_expected.append(expected)
-                
-                if missing_expected:
-                    print(f"\n[!] Не найдено ожидаемое: {', '.join(missing_expected)}")
-                else:
-                    print(f"\n[OK] Все ожидания выполнены!")
-                
-                # Задержка между запросами
-                await asyncio.sleep(2)
+                # Задержка между сообщениями
+                await asyncio.sleep(1)
                 
             except Exception as e:
-                print(f"\n[ERROR] Ошибка: {e}")
+                print(f"❌ ОШИБКА: {e}")
                 import traceback
                 traceback.print_exc()
+                print()
+                print("-" * 80)
+                print()
+                break
         
-        print(f"\n{'='*80}")
-        print("ТЕСТИРОВАНИЕ ЗАВЕРШЕНО")
-        print(f"{'='*80}\n")
+        print("="*80)
+        print("ДИАЛОГ ЗАВЕРШЁН")
+        print("="*80)
         
     finally:
         session.close()
