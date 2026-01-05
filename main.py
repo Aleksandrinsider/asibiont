@@ -282,15 +282,16 @@ async def dashboard_handler(request):
                             else:
                                 interaction_ts = i.created_at.timestamp()
                             
+                            logger.debug(f"Interaction ID {i.id}: timestamp={interaction_ts}, clear_timestamp={history_cleared_timestamp}, include={interaction_ts > history_cleared_timestamp}")
+                            
                             if interaction_ts > history_cleared_timestamp:
                                 filtered_interactions.append(i)
                         except Exception as e:
-                            logger.error(f"Error processing interaction timestamp: {e}")
-                            # В случае ошибки включаем сообщение
-                            filtered_interactions.append(i)
+                            logger.error(f"Error processing interaction {i.id} timestamp: {e}")
+                            # В случае ошибки НЕ включаем сообщение (безопаснее скрыть)
                     
                     interactions = filtered_interactions
-                    logger.info(f"Filtered {len(interactions)} interactions after timestamp {history_cleared_timestamp}")
+                    logger.info(f"Filtered {len(interactions)} interactions from {len(all_interactions)} total after timestamp {history_cleared_timestamp}")
                 else:
                     interactions = all_interactions
                     logger.info(f"Loaded {len(interactions)} interactions (no filtering)")
