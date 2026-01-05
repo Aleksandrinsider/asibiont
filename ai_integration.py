@@ -305,8 +305,6 @@ def list_tasks(user_id=None, session=None):
     base_now = datetime.now(pytz.UTC)
     user_now = base_now.astimezone(user_tz)
     
-    if close_session:
-        session.close()
     if tasks:
         task_list = []
         for t in tasks:
@@ -348,7 +346,13 @@ def list_tasks(user_id=None, session=None):
                         task_info += f", через {minutes}мин"
             task_info += ")"
             task_list.append(task_info)
+        
+        if close_session:
+            session.close()
         return f"Задачи: {', '.join(task_list)}."
+    
+    if close_session:
+        session.close()
     return "Нет задач."
 
 def complete_task(task_id=None, task_title=None, user_id=None, session=None):
