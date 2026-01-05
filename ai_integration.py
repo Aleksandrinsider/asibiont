@@ -1484,16 +1484,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
             # Get user current time for relative time parsing and prompt
-            # Use CURRENT_DATE only for local testing, always use real time in production
-            if LOCAL and CURRENT_DATE:
-                # Use CURRENT_DATE for date, but real time for time (local testing only)
-                current_date = CURRENT_DATE.date()
-                real_now = datetime.now(pytz.UTC)
-                base_now = datetime.combine(current_date, real_now.time(), tzinfo=pytz.UTC)
-                logger.info(f"LOCAL MODE: Using CURRENT_DATE: {CURRENT_DATE}, real time: {real_now}, base_now: {base_now}")
-            else:
-                base_now = datetime.now(pytz.UTC)
-                logger.info(f"Using real time, base_now: {base_now}")
+            # Always use real current time in production
+            base_now = datetime.now(pytz.UTC)
+            logger.info(f"Using real time, base_now: {base_now}")
             user_now = base_now  # Default to base_now
             current_time_str = user_now.strftime("%H:%M")
             user_tz = pytz.UTC  # Default
