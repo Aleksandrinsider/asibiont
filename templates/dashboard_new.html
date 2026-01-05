@@ -224,10 +224,6 @@
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             messageDiv.innerHTML = `
                 <div class="message-text">${text}</div>
-                <div class="message-actions">
-                    <button class="message-action-btn" onclick="copyMessage('${text.replace(/'/g, "\\'")}')">📋 Копировать</button>
-                    <button class="message-action-btn" onclick="replyToMessage('${text.replace(/'/g, "\\'")}')">↩️ Ответить</button>
-                </div>
                 <div class="message-time">${dateString} ${timeString}</div>
             `;
             messages.appendChild(messageDiv);
@@ -261,18 +257,6 @@
             if (event.key === 'Enter') {
                 sendChatMessage();
             }
-        }
-
-        function copyMessage(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                // Можно добавить уведомление, но пока просто копируем
-            });
-        }
-
-        function replyToMessage(text) {
-            const input = document.getElementById('message-input');
-            input.value = `> ${text}\n\n`;
-            input.focus();
         }
 
         async function sendChatMessage() {

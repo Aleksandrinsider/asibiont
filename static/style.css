@@ -408,36 +408,11 @@ body {
     width: 100%;
 }
 
-.message:hover .message-time {
-    opacity: 1;
-}
-
-.message:hover .message-actions {
-    opacity: 1;
-}
-
-.message-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.message-action-btn {
-    background: none;
-    border: none;
-    color: #656D76;
-    cursor: pointer;
-    font-size: 12px;
-    padding: 2px 4px;
-    border-radius: 4px;
-    transition: background-color 0.2s ease;
-}
-
-.message-action-btn:hover {
-    background-color: #D1D9E0;
-    color: #1F2328;
+.message-time {
+    font-size: 11px;
+    margin-top: 6px;
+    opacity: 0.7;
+    font-weight: 400;
 }
 
 .quick-actions {
