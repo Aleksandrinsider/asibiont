@@ -29,6 +29,25 @@ def clean_content(content):
     content = re.sub(r'\w+\s*\{[^}]*\}', '', content).strip()
     return content
 
+def replace_placeholders(content, user_now=None, current_time_str=None):
+    """Заменяет плейсхолдеры типа {{current_time}} на реальные значения"""
+    if not user_now:
+        user_now = datetime.now(pytz.UTC)
+    if not current_time_str:
+        current_time_str = user_now.strftime('%H:%M')
+    
+    # Форматируем дату по-русски
+    months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+    
+    content = content.replace("{{current_time}}", current_time_str)
+    content = content.replace("{{current_date}}", current_date_str)
+    content = content.replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime('%Y-%m-%d'))
+    content = content.replace("{{day_after}}", (user_now + timedelta(days=2)).strftime('%Y-%m-%d'))
+    
+    return content
+
+
 class AIIntegration:
     async def generate_reminder(self, user_id, task_title):
         return await generate_reminder(user_id, task_title)
@@ -1623,6 +1642,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         content = clean_content(content)
                         if not content:
                             content = "Задача обновлена."
+                        content = replace_placeholders(content, user_now, current_time_str)
                         return content
                 except Exception as e:
                     logger.error(f"Error in second API call for tool_calls: {e}")
@@ -1651,6 +1671,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 content = clean_content(content)
                 if not content:
                     content = "Готово! ✅"
+                content = replace_placeholders(content, user_now, current_time_str)
                 return content
     except Exception as e:
         import traceback
@@ -1697,7 +1718,10 @@ async def generate_reminder(user_id, task_title):
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result["choices"][0]["message"]["content"]
+                    content = result["choices"][0]["message"]["content"]
+                    # Заменяем плейсхолдеры на реальные значения
+                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    return content
                 else:
                     return "Ошибка генерации напоминания."
     except Exception as e:
@@ -1742,7 +1766,10 @@ async def generate_result_check(user_id, task_title):
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result["choices"][0]["message"]["content"]
+                    content = result["choices"][0]["message"]["content"]
+                    # Заменяем плейсхолдеры на реальные значения
+                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    return content
                 else:
                     return "Ошибка генерации вопроса."
     except Exception as e:
@@ -1809,7 +1836,10 @@ async def generate_proactive_message(user_id):
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result["choices"][0]["message"]["content"]
+                    content = result["choices"][0]["message"]["content"]
+                    # Заменяем плейсхолдеры на реальные значения
+                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    return content
                 else:
                     return "Ошибка генерации сообщения."
     except Exception as e:
@@ -1863,7 +1893,10 @@ async def generate_daily_report(user_id):
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result["choices"][0]["message"]["content"]
+                    content = result["choices"][0]["message"]["content"]
+                    # Заменяем плейсхолдеры на реальные значения
+                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    return content
                 else:
                     return "Ошибка генерации отчета."
     except Exception as e:
@@ -1909,7 +1942,10 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result["choices"][0]["message"]["content"]
+                    content = result["choices"][0]["message"]["content"]
+                    # Заменяем плейсхолдеры на реальные значения
+                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    return content
                 else:
                     return "Ошибка генерации напоминания."
     except Exception as e:
