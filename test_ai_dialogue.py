@@ -36,58 +36,58 @@ async def test_ai_dialogue():
             print(f"[OK] Пользователь: {user.username} (ID: {user.telegram_id})")
             print(f"    Timezone: {user.timezone or 'UTC'}\n")
         
-        # Органичный диалог
-        dialogue = [
-            "Привет!",
-            None,  # Следующее сообщение зависит от ответа AI
-            None,
-            None,
-            None
+        # Диалог: ответы пользователя зависят от вопросов AI
+        conversation = [
+            ("user", "Привет!"),
+            ("ai", None),  # AI ответит
+            ("user", "Поручи @testuser подготовить отчет до завтра 15:00"),
+            ("ai", None),  # AI должен вызвать delegate_task БЕЗ вопросов
+            ("user", "Добавь задачу: позвонить клиенту через 2 часа"),
+            ("ai", None),
+            ("user", "Покажи мои задачи"),
+            ("ai", None),
+            ("user", "Я переехал в Москву и теперь работаю в Google как Senior Engineer"),
+            ("ai", None)
         ]
         
         print("="*80)
-        print("НАЧАЛО ДИАЛОГА")
+        print("ИНТЕРАКТИВНЫЙ ДИАЛОГ")
+        print("Пользователь отвечает на основе вопросов AI")
         print("="*80 + "\n")
         
-        for i, user_message in enumerate(dialogue, 1):
-            if user_message is None:
-                # Генерируем следующее сообщение на основе контекста
-                if i == 2:
-                    user_message = "Поручи @testuser подготовить отчет до завтра 15:00"
-                elif i == 3:
-                    user_message = "Добавь задачу: позвонить клиенту через 2 часа"
-                elif i == 4:
-                    user_message = "Покажи мои задачи"
-                elif i == 5:
-                    user_message = "Я переехал в Москву и теперь работаю в Google как Senior Engineer"
-            
-            print(f"[Шаг {i}]")
-            print(f"👤 Пользователь: {user_message}")
-            print()
-            
-            try:
-                # Вызываем AI
-                response = await chat_with_ai(
-                    message=user_message,
-                    user_id=user.telegram_id
-                )
+        step = 0
+        for i, (role, content) in enumerate(conversation):
+            if role == "user":
+                step += 1
+                user_message = content
                 
-                print(f"🤖 AI: {response}")
-                print()
-                print("-" * 80)
+                print(f"[Шаг {step}]")
+                print(f"👤 Пользователь: {user_message}")
                 print()
                 
-                # Задержка между сообщениями
-                await asyncio.sleep(1)
-                
-            except Exception as e:
-                print(f"❌ ОШИБКА: {e}")
-                import traceback
-                traceback.print_exc()
-                print()
-                print("-" * 80)
-                print()
-                break
+                try:
+                    # Вызываем AI
+                    response = await chat_with_ai(
+                        message=user_message,
+                        user_id=user.telegram_id
+                    )
+                    
+                    print(f"🤖 AI: {response}")
+                    print()
+                    print("-" * 80)
+                    print()
+                    
+                    # Задержка между сообщениями
+                    await asyncio.sleep(1)
+                    
+                except Exception as e:
+                    print(f"❌ ОШИБКА: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print()
+                    print("-" * 80)
+                    print()
+                    break
         
         print("="*80)
         print("ДИАЛОГ ЗАВЕРШЁН")
