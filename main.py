@@ -12,7 +12,6 @@ from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET, LOCAL, CURRENT_DATE
 from datetime import datetime, timedelta
-from handlers import router
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction
@@ -1281,8 +1280,11 @@ async def on_startup(app):
         logger.info("Local mode: skipping webhook setup")
     
     # Initialize handlers Redis
-    from handlers import init_redis
-    await init_redis(redis_client)
+    async def init_handlers_redis(client):
+        from handlers import init_redis as handlers_init_redis
+        await handlers_init_redis(client)
+    
+    await init_handlers_redis(redis_client)
     logger.info("Handlers Redis initialized")
 
 
@@ -1556,7 +1558,6 @@ app.router.add_get('/api/interactions', api_interactions_handler)
 
 # Setup for production
 dp = Dispatcher()
-dp.include_router(router)
 
 # Session storage will be initialized in on_startup handler
 
