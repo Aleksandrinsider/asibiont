@@ -5,6 +5,7 @@ load_dotenv()
 
 # App settings first
 PORT = int(os.getenv("PORT", 8000))
+LOCAL = os.getenv("LOCAL", "False").lower() in ("true", "1", "yes")
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
 CURRENT_DATE = os.getenv("CURRENT_DATE")
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
