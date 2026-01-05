@@ -399,7 +399,6 @@ body {
 
 .message.ai {
     background-color: #FAFBFC;
-    border-left: 2px solid #068487;
     color: #1F2328;
     align-self: flex-start;
 }
