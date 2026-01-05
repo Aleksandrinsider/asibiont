@@ -274,7 +274,8 @@ body {
 .message {
     padding: 10px 12px;
     margin: 10px 0;
-    max-width: 85%;
+    max-width: 100%;
+    width: 100%;
     word-wrap: break-word;
     display: flex;
     flex-direction: column;
@@ -384,16 +385,16 @@ body {
 .message.user {
     background-color: transparent;
     color: #1F2328;
-    align-self: flex-end;
-    margin-left: auto;
-    padding: 6px 0;
+    align-self: flex-start;
+    margin-right: auto;
+    padding: 6px 12px;
 }
 
 .message.user .message-text {
     font-weight: 400;
     font-size: 14px;
     color: #656D76;
-    text-align: right;
+    text-align: justify;
 }
 
 .message.ai {
@@ -413,6 +414,7 @@ body {
     font-size: 14px;
     color: #1F2328;
     line-height: 1.6;
+    text-align: justify;
 }
 
 .message-text {

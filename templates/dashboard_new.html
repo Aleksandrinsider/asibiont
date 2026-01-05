@@ -1203,6 +1203,22 @@
             updateProfile();
             updateChat();
         }, 3000);
+        
+        // Force time update every second to ensure it's always current
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/profile');
+                if (response.ok) {
+                    const data = await response.json();
+                    const headerTimeDisplay = document.getElementById('header-time-display');
+                    if (headerTimeDisplay && data.current_time && data.current_date) {
+                        headerTimeDisplay.textContent = `${data.current_time} · ${data.current_date}`;
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to update time:', error);
+            }
+        }, 1000);
 
         async function updateChat() {
             try {
