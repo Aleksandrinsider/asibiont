@@ -89,6 +89,7 @@ def get_system_prompt():
    • "через X минут/часов" → add_task(reminder_time=текущее+X) СРАЗУ
    • "в 15:00" → add_task(reminder_time="...15:00") СРАЗУ
    • БЕЗ времени → СПРОСИ → ДОЖДИСЬ → add_task()
+   • ПРОСРОЧЕННЫЕ задачи: если видишь "просрочена на X мин/ч" - ОБЯЗАТЕЛЬНО упомяни в ответе!
 
 3. ДЕЛЕГИРОВАНИЕ (ПРИОРИТЕТ!)
    • @username != {{{{current_username}}}} → delegate_task()
@@ -292,6 +293,18 @@ def list_tasks(user_id=None, session=None):
             session.close()
         return "Пользователь не найден."
     tasks = session.query(Task).filter_by(user_id=user.id).all()
+    
+    # Get user timezone
+    user_tz = pytz.UTC
+    if user and user.timezone:
+        try:
+            user_tz = pytz.timezone(user.timezone)
+        except:
+            user_tz = pytz.UTC
+    
+    base_now = datetime.now(pytz.UTC)
+    user_now = base_now.astimezone(user_tz)
+    
     if close_session:
         session.close()
     if tasks:
@@ -306,7 +319,35 @@ def list_tasks(user_id=None, session=None):
             elif t.delegated_to_username:
                 title = f"{t.title} для @{t.delegated_to_username}"
             
-            task_list.append(f"{t.id}. {title} ({t.status})")
+            # Add time info and overdue status
+            task_info = f"{t.id}. {title} ({t.status}"
+            if t.reminder_time:
+                if t.reminder_time.tzinfo is None:
+                    reminder_utc = pytz.UTC.localize(t.reminder_time)
+                else:
+                    reminder_utc = t.reminder_time
+                reminder_local = reminder_utc.astimezone(user_tz)
+                task_info += f", напоминание {reminder_local.strftime('%d.%m %H:%M')}"
+                
+                # Check if overdue
+                if reminder_local < user_now and t.status == 'pending':
+                    delta = user_now - reminder_local
+                    minutes = int(delta.total_seconds() / 60)
+                    hours = minutes // 60
+                    if hours > 0:
+                        task_info += f", просрочена на {hours}ч {minutes % 60}мин"
+                    else:
+                        task_info += f", просрочена на {minutes}мин"
+                elif reminder_local > user_now and t.status == 'pending':
+                    delta = reminder_local - user_now
+                    minutes = int(delta.total_seconds() / 60)
+                    hours = minutes // 60
+                    if hours > 0:
+                        task_info += f", через {hours}ч {minutes % 60}мин"
+                    else:
+                        task_info += f", через {minutes}мин"
+            task_info += ")"
+            task_list.append(task_info)
         return f"Задачи: {', '.join(task_list)}."
     return "Нет задач."
 
