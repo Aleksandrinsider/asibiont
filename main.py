@@ -1356,8 +1356,22 @@ async def api_interactions_handler(request):
         
         interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all()
         
+        # Get history cleared timestamp from Redis
+        history_cleared_timestamp = 0
+        if redis_client:
+            cleared_data = await redis_client.get(f"history_cleared_timestamp:{user_id}")
+            if cleared_data:
+                history_cleared_timestamp = float(cleared_data.decode('utf-8'))
+        
+        # Filter interactions based on cleared timestamp
+        from datetime import timezone as dt_timezone
+        filtered_interactions = [
+            i for i in interactions 
+            if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() > history_cleared_timestamp
+        ]
+        
         interactions_data = []
-        for interaction in interactions:
+        for interaction in filtered_interactions:
             interactions_data.append({
                 'content': interaction.content,
                 'message_type': interaction.message_type,
