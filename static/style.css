@@ -272,18 +272,18 @@ body {
 }
 
 .message {
-    padding: 10px 14px;
-    margin: 8px 0;
-    max-width: 75%;
+    padding: 10px 12px;
+    margin: 10px 0;
+    max-width: 85%;
     word-wrap: break-word;
     display: flex;
     flex-direction: column;
     opacity: 1;
     transform: translateY(0);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition: all 0.2s ease;
     animation: message-appear 0.3s ease-out;
     position: relative;
-    border-radius: 16px;
+    border-radius: 8px;
 }
 
 @keyframes message-appear {
@@ -298,11 +298,12 @@ body {
 }
 
 .typing-indicator {
-    padding: 10px 14px;
-    margin: 8px 0;
-    max-width: 75%;
-    background-color: #F8F9FA;
-    border-radius: 16px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    max-width: 85%;
+    background-color: #FAFBFC;
+    border-left: 2px solid #068487;
+    border-radius: 8px;
     align-self: flex-start;
     animation: message-appear 0.3s ease-out;
 }
@@ -381,43 +382,53 @@ body {
 }
 
 .message.user {
-    background-color: #E3F2FD;
+    background-color: transparent;
     color: #1F2328;
     align-self: flex-end;
     margin-left: auto;
+    padding: 6px 0;
 }
 
 .message.user .message-text {
     font-weight: 400;
     font-size: 14px;
-    color: #1F2328;
+    color: #656D76;
+    text-align: right;
 }
 
 .message.ai {
-    background-color: #F8F9FA;
+    background-color: #FAFBFC;
+    border-left: 2px solid #068487;
     color: #1F2328;
     align-self: flex-start;
+}
+
+.message.ai:hover {
+    background-color: #F6F8FA;
+    box-shadow: 0 1px 3px rgba(27, 31, 35, 0.06);
 }
 
 .message.ai .message-text {
     font-weight: 400;
     font-size: 14px;
     color: #1F2328;
+    line-height: 1.6;
 }
 
 .message-text {
     word-wrap: break-word;
     line-height: 1.6;
     width: 100%;
-    margin-bottom: 2px;
+    margin-bottom: 0;
 }
 
 .message-time {
     font-size: 10px;
     color: #8C959F;
-    margin-top: 2px;
-    opacity: 0.7;
+    margin-top: 4px;
+    opacity: 0.6;
     font-weight: 400;
+    font-variant-numeric: tabular-nums;
 }
 
 .message-time {
