@@ -373,12 +373,14 @@ body {
 /* Overdue task pulse animation */
 .overdue-pulse {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     background-color: #d73a49;
     border-radius: 50%;
-    margin-right: 6px;
+    margin-right: 8px;
+    vertical-align: middle;
     animation: pulse 2s infinite;
+    flex-shrink: 0;
 }
 
 .message.user {
@@ -694,6 +696,8 @@ body {
     font-weight: 400;
     color: #1F2328;
     margin: 0 0 2px 0;
+    display: flex;
+    align-items: center;
 }
 
 .task-meta {
