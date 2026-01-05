@@ -164,7 +164,7 @@ async def subscribe_handler(message: Message):
 
 @router.message()
 async def chat_handler(message: Message):
-    print(f"Received message from {message.from_user.id}: {message.text}")
+    logger.info(f"Received message from {message.from_user.id}: {message.text}")
     try:
         user_id = message.from_user.id
         
@@ -172,7 +172,7 @@ async def chat_handler(message: Message):
         message_key = f"processed_message:{message.message_id}"
         if redis_client:
             if await redis_client.exists(message_key):
-                print(f"Duplicate message {message.message_id} ignored")
+                logger.info(f"Duplicate message {message.message_id} ignored")
                 return
             await redis_client.set(message_key, "1", ex=60)  # Expire in 60 seconds
         
@@ -213,7 +213,7 @@ async def chat_handler(message: Message):
                 try:
                     await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
                 except Exception as e:
-                    print(f"Error saving context to Redis: {e}")
+                    logger.error(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
         
