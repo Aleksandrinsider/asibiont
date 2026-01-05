@@ -1367,6 +1367,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 logger.info(f"Using real time, base_now: {base_now}")
             user_now = base_now  # Default to base_now
             current_time_str = user_now.strftime("%H:%M")
+            user_tz = pytz.UTC  # Default
             if user:
                 tz_str = user.timezone if user.timezone else 'UTC'
                 logger.info(f"User timezone: {tz_str}")
@@ -1375,9 +1376,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
                     logger.info(f"User local time: {user_now}, current_time_str: {current_time_str}")
-                    # Get upcoming reminders - include pending tasks in next 7 days
-                    upcoming_reminders = []
-                    tasks = session.query(Task).filter_by(user_id=user.id).filter(Task.reminder_time.isnot(None)).all()
+                except Exception as e:
+                    user_tz = pytz.UTC
+                    user_now = base_now
+                    current_time_str = user_now.strftime("%H:%M")
+            
+            # If profile has custom current_time, use it
+            if profile and profile.current_time:
+                try:
+                    time_obj = datetime.strptime(profile.current_time, '%H:%M').time()
+                    user_now = datetime.combine(base_now.date(), time_obj, tzinfo=user_tz)
+                    current_time_str = profile.current_time
+                    logger.info(f"Using profile current_time: {profile.current_time}, user_now: {user_now}")
+                except Exception as e:
+                    logger.error(f"Failed to parse profile.current_time: {e}")
                     for task in tasks:
                         if task.reminder_time and task.status == 'pending':
                             if task.reminder_time.tzinfo is None:
