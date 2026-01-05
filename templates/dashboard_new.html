@@ -399,8 +399,6 @@
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
                     localStorage.setItem('lastMessageCount', '0');
-                    // Set flag to prevent loading messages on page reload
-                    localStorage.setItem('chatCleared', 'true');
                     addMessage('История чата очищена', 'ai');
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
                     setTimeout(async () => {
@@ -448,13 +446,6 @@
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
-            // Check if chat was cleared - don't load messages if cleared
-            if (localStorage.getItem('chatCleared') === 'true') {
-                lastMessageCount = 0;
-                localStorage.setItem('lastMessageCount', '0');
-                return;
-            }
-            
             try {
                 const response = await fetch('/api/interactions');
                 if (!await checkAuth(response)) return;
