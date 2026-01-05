@@ -423,6 +423,12 @@ async def dashboard_handler(request):
         # Use profile.current_time if set, otherwise calculate from timezone
         if profile and profile.current_time:
             current_time = profile.current_time
+            # Also adjust user_now for overdue calculations
+            try:
+                hours, minutes = map(int, profile.current_time.split(':'))
+                user_now = user_now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+            except ValueError:
+                pass
         else:
             current_time = user_now.strftime('%H:%M')
         
@@ -1294,6 +1300,16 @@ async def api_tasks_handler(request):
                 user_tz = pytz.UTC
         base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
+        
+        # Use profile.current_time if set
+        profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile and profile.current_time:
+            # Parse current_time as HH:MM and set to today's date in user timezone
+            try:
+                hours, minutes = map(int, profile.current_time.split(':'))
+                user_now = user_now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+            except ValueError:
+                pass  # Keep default user_now
         
         tasks_data = []
         for task in tasks:
