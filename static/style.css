@@ -272,20 +272,40 @@ body {
 }
 
 .message {
-    padding: 8px 0;
-    margin: 5px 0;
-    max-width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    max-width: 85%;
     word-wrap: break-word;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    border-radius: 12px;
     opacity: 1;
     transform: translateY(0);
     transition: opacity 0.3s ease, transform 0.3s ease;
+    animation: message-appear 0.3s ease-out;
+    position: relative;
+}
+
+@keyframes message-appear {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .typing-indicator {
-    padding: 8px 0;
+    padding: 12px;
+    margin: 8px 0;
+    max-width: 85%;
+    background-color: #F6F8FA;
+    border-radius: 12px;
+    align-self: flex-start;
+    animation: message-appear 0.3s ease-out;
 }
 
 .typing-dots {
@@ -362,17 +382,20 @@ body {
 }
 
 .message.user {
-    background-color: transparent;
-    color: #068487;
+    background-color: #E7F3FF;
+    color: #0366D6;
+    align-self: flex-end;
+    margin-left: auto;
 }
 
 .message.user .message-text {
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .message.ai {
-    background-color: transparent;
+    background-color: #F6F8FA;
     color: #1F2328;
+    align-self: flex-start;
 }
 
 .message.ai .message-text {
@@ -381,16 +404,40 @@ body {
 
 .message-text {
     word-wrap: break-word;
-    line-height: 1.5;
+    line-height: 1.6;
     width: 100%;
-    text-align: justify;
 }
 
-.message-time {
-    font-size: 11px;
-    margin-top: 6px;
-    opacity: 0.5;
-    font-weight: 400;
+.message:hover .message-time {
+    opacity: 1;
+}
+
+.message:hover .message-actions {
+    opacity: 1;
+}
+
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.message-action-btn {
+    background: none;
+    border: none;
+    color: #656D76;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.message-action-btn:hover {
+    background-color: #D1D9E0;
+    color: #1F2328;
 }
 
 .quick-actions {

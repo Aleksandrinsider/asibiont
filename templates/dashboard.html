@@ -349,7 +349,7 @@
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            messageDiv.textContent = text;
+            messageDiv.innerHTML = `<div class="message-text">${text}</div>`;
             messages.appendChild(messageDiv);
             messages.scrollTop = messages.scrollHeight;
         }

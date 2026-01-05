@@ -212,8 +212,6 @@
             const messages = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
-            messageDiv.style.opacity = '0';
-            messageDiv.style.transform = 'translateY(10px)';
             
             let date;
             if (timestamp) {
@@ -226,16 +224,13 @@
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             messageDiv.innerHTML = `
                 <div class="message-text">${text}</div>
+                <div class="message-actions">
+                    <button class="message-action-btn" onclick="copyMessage('${text.replace(/'/g, "\\'")}')">📋 Копировать</button>
+                    <button class="message-action-btn" onclick="replyToMessage('${text.replace(/'/g, "\\'")}')">↩️ Ответить</button>
+                </div>
                 <div class="message-time">${dateString} ${timeString}</div>
             `;
             messages.appendChild(messageDiv);
-            
-            // Анимация появления
-            setTimeout(() => {
-                messageDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                messageDiv.style.opacity = '1';
-                messageDiv.style.transform = 'translateY(0)';
-            }, 10);
             
             messages.scrollTop = messages.scrollHeight;
         }
@@ -246,6 +241,7 @@
             typingDiv.className = 'message ai typing-indicator';
             typingDiv.id = 'typing-indicator';
             typingDiv.innerHTML = `
+                <div class="message-text">AI печатает...</div>
                 <div class="typing-dots">
                     <span></span><span></span><span></span>
                 </div>
@@ -265,6 +261,18 @@
             if (event.key === 'Enter') {
                 sendChatMessage();
             }
+        }
+
+        function copyMessage(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Можно добавить уведомление, но пока просто копируем
+            });
+        }
+
+        function replyToMessage(text) {
+            const input = document.getElementById('message-input');
+            input.value = `> ${text}\n\n`;
+            input.focus();
         }
 
         async function sendChatMessage() {
