@@ -165,15 +165,25 @@
             <div class="right-column">
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
-                    <div class="task-stats">
-                        <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
-                        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-                        <div class="stats-text" style="margin-top: 8px;">
-                            <div id="today-stats"></div>
-                        </div>
-                        <div class="week-timeline" style="margin-top: 24px;">
-                            <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
-                                <!-- Дни недели будут добавлены через JS -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Статистика</h3>
+                        <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="stats-content" class="stats-content">
+                        <div class="task-stats">
+                            <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
+                            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                            <div class="stats-text" style="margin-top: 8px;">
+                                <div id="today-stats"></div>
+                            </div>
+                            <div class="week-timeline" style="margin-top: 24px;">
+                                <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
+                                    <!-- Дни недели будут добавлены через JS -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -475,6 +485,20 @@
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
             const button = document.getElementById('profile-toggle-btn');
+            const svg = button.querySelector('svg');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                svg.style.transform = 'rotate(0deg)';
+            } else {
+                content.style.display = 'none';
+                svg.style.transform = 'rotate(-90deg)';
+            }
+        }
+
+        function toggleStatsSection() {
+            const content = document.getElementById('stats-content');
+            const button = document.getElementById('stats-toggle-btn');
             const svg = button.querySelector('svg');
             
             if (content.style.display === 'none') {
