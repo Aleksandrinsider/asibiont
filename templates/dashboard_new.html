@@ -348,15 +348,19 @@
                     }, 500);
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
-                        await updateTasks();
-                        await updateProfile();
-                        await updatePeople();
-                        console.log('Tasks updated after message');
-                        // Повторное обновление через 2 секунды на случай задержки в БД
-                        setTimeout(async () => {
+                        try {
                             await updateTasks();
-                            console.log('Tasks updated again after message');
-                        }, 2000);
+                            await updateProfile();
+                            await updatePeople();
+                            console.log('Tasks updated after message');
+                            // Повторное обновление через 2 секунды на случай задержки в БД
+                            setTimeout(async () => {
+                                await updateTasks();
+                                console.log('Tasks updated again after message');
+                            }, 2000);
+                        } catch (e) {
+                            console.error('Error updating after message:', e);
+                        }
                     }, 2000);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
