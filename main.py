@@ -1011,7 +1011,8 @@ async def api_partners_handler(request):
                                 'first_name': delegator.first_name,
                                 'position': delegator_profile.position if delegator_profile else None,
                                 'interests': delegator_profile.interests if delegator_profile else None,
-                                'tasks': task_titles[:3],
+                                'city': delegator_profile.city if delegator_profile else None,
+                                'company': delegator_profile.company if delegator_profile else None,
                                 'task_count': len(task_titles),
                                 'reason': f'делегировал {len(task_titles)} задач'
                             })
@@ -1037,7 +1038,8 @@ async def api_partners_handler(request):
                                 'first_name': delegatee.first_name,
                                 'position': delegatee_profile.position if delegatee_profile else None,
                                 'interests': delegatee_profile.interests if delegatee_profile else None,
-                                'tasks': task_titles[:3],
+                                'city': delegatee_profile.city if delegatee_profile else None,
+                                'company': delegatee_profile.company if delegatee_profile else None,
                                 'task_count': len(task_titles),
                                 'reason': f'я делегировал {len(task_titles)} задач'
                             })
@@ -1123,8 +1125,9 @@ async def api_partners_handler(request):
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),
+                'city': contact.get('city'),
+                'company': contact.get('company'),
                 'reason': contact['reason'],
-                'tasks': contact.get('tasks', []),
                 'task_count': contact.get('task_count', 0),
                 'type': 'delegating_to_me'
             })
@@ -1135,8 +1138,9 @@ async def api_partners_handler(request):
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),
+                'city': contact.get('city'),
+                'company': contact.get('company'),
                 'reason': contact['reason'],
-                'tasks': contact.get('tasks', []),
                 'task_count': contact.get('task_count', 0),
                 'type': 'delegating_by_me'
             })

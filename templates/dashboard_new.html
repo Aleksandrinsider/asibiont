@@ -1083,8 +1083,7 @@
                             } else if (partner.type === 'delegating_to_me') {
                                 html += `<li class="task-item contact-delegating-to-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
-                                const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">${partner.position}</span>`;
@@ -1092,18 +1091,14 @@
                                 if (partner.interests) {
                                     html += `<span class="task-meta">${partner.interests}</span>`;
                                 }
+                                if (partner.city) {
+                                    html += `<span class="task-meta">${partner.city}</span>`;
+                                }
+                                if (partner.company) {
+                                    html += `<span class="task-meta">${partner.company}</span>`;
+                                }
                                 if (partner.task_count) {
                                     html += `<span class="task-meta" style="color: #068487;">Делегировал мне ${partner.task_count} задач</span>`;
-                                }
-                                if (partner.tasks && partner.tasks.length > 0) {
-                                    html += '<div style="width: 100%; margin-top: 4px; font-size: 11px; color: #59636E;">';
-                                    partner.tasks.slice(0, 2).forEach(taskTitle => {
-                                        html += `• ${taskTitle}<br>`;
-                                    });
-                                    if (partner.task_count > 2) {
-                                        html += `и еще ${partner.task_count - 2}...`;
-                                    }
-                                    html += '</div>';
                                 }
                                 html += '</div>';
                                 html += '</div>';
@@ -1111,8 +1106,7 @@
                             } else if (partner.type === 'delegating_by_me') {
                                 html += `<li class="task-item contact-delegating-by-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
-                                const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">${partner.position}</span>`;
@@ -1120,18 +1114,14 @@
                                 if (partner.interests) {
                                     html += `<span class="task-meta">${partner.interests}</span>`;
                                 }
+                                if (partner.city) {
+                                    html += `<span class="task-meta">${partner.city}</span>`;
+                                }
+                                if (partner.company) {
+                                    html += `<span class="task-meta">${partner.company}</span>`;
+                                }
                                 if (partner.task_count) {
                                     html += `<span class="task-meta" style="color: #068487;">Я делегировал ${partner.task_count} задач</span>`;
-                                }
-                                if (partner.tasks && partner.tasks.length > 0) {
-                                    html += '<div style="width: 100%; margin-top: 4px; font-size: 11px; color: #59636E;">';
-                                    partner.tasks.slice(0, 2).forEach(taskTitle => {
-                                        html += `• ${taskTitle}<br>`;
-                                    });
-                                    if (partner.task_count > 2) {
-                                        html += `и еще ${partner.task_count - 2}...`;
-                                    }
-                                    html += '</div>';
                                 }
                                 html += '</div>';
                                 html += '</div>';
