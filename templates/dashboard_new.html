@@ -825,7 +825,32 @@
             html += '<div style="flex: 1;">';
             const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
             const overdueIndicator = task.overdue ? '<span class="overdue-pulse"></span>' : '';
-            html += '<div class="task-title"' + titleStyle + '>' + overdueIndicator + task.title + '</div>';
+            
+            // Извлекаем чистый заголовок и информацию о делегировании
+            let cleanTitle = task.title;
+            let delegationInfo = '';
+            
+            // Проверяем делегирование "от"
+            const fromMatch = task.title.match(/^(.+?) - делегирована от (@\w+)$/);
+            if (fromMatch) {
+                cleanTitle = fromMatch[1];
+                delegationInfo = 'делегирована от ' + fromMatch[2];
+            } else {
+                // Проверяем делегирование "на"
+                const toMatch = task.title.match(/^(.+?) - делегирована на (@\w+)$/);
+                if (toMatch) {
+                    cleanTitle = toMatch[1];
+                    delegationInfo = 'делегирована на ' + toMatch[2];
+                }
+            }
+            
+            html += '<div class="task-title"' + titleStyle + '>' + overdueIndicator + cleanTitle + '</div>';
+            
+            // Если есть делегирование, показываем отдельной строкой
+            if (delegationInfo) {
+                html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + delegationInfo + '</span></div>';
+            }
+            
             html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
@@ -1084,6 +1109,9 @@
                                 html += `<li class="task-item contact-delegating-to-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
+                                if (partner.task_count) {
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} задач</span></div>`;
+                                }
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">${partner.position}</span>`;
@@ -1096,9 +1124,6 @@
                                 }
                                 if (partner.company) {
                                     html += `<span class="task-meta">${partner.company}</span>`;
-                                }
-                                if (partner.task_count) {
-                                    html += `<span class="task-meta" style="color: #068487;">Делегировал мне ${partner.task_count} задач</span>`;
                                 }
                                 html += '</div>';
                                 html += '</div>';
@@ -1107,6 +1132,9 @@
                                 html += `<li class="task-item contact-delegating-by-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
+                                if (partner.task_count) {
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} задач</span></div>`;
+                                }
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">${partner.position}</span>`;
@@ -1119,9 +1147,6 @@
                                 }
                                 if (partner.company) {
                                     html += `<span class="task-meta">${partner.company}</span>`;
-                                }
-                                if (partner.task_count) {
-                                    html += `<span class="task-meta" style="color: #068487;">Я делегировал ${partner.task_count} задач</span>`;
                                 }
                                 html += '</div>';
                                 html += '</div>';
