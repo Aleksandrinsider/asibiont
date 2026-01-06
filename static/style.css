@@ -219,7 +219,7 @@ body {
 
 .left-column::-webkit-scrollbar,
 .right-column::-webkit-scrollbar {
-    width: 4px;
+    width: 8px;
 }
 
 .left-column::-webkit-scrollbar-track,
@@ -230,7 +230,7 @@ body {
 .left-column::-webkit-scrollbar-thumb,
 .right-column::-webkit-scrollbar-thumb {
     background: #D1D9E0;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 .left-column::-webkit-scrollbar-thumb:hover,
@@ -633,7 +633,7 @@ body {
 }
 
 .tasks-section::-webkit-scrollbar {
-    width: 4px;
+    width: 8px;
 }
 
 .tasks-section::-webkit-scrollbar-track {
@@ -642,7 +642,7 @@ body {
 
 .tasks-section::-webkit-scrollbar-thumb {
     background: #D1D9E0;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 .tasks-section::-webkit-scrollbar-thumb:hover {
@@ -836,7 +836,7 @@ body {
 }
 
 .people-list::-webkit-scrollbar {
-    width: 4px;
+    width: 8px;
 }
 
 .people-list::-webkit-scrollbar-track {
@@ -845,7 +845,7 @@ body {
 
 .people-list::-webkit-scrollbar-thumb {
     background-color: #D1D9E0;
-    border-radius: 2px;
+    border-radius: 4px;
 }
 
 .people-list::-webkit-scrollbar-thumb:hover {
