@@ -831,7 +831,7 @@ body {
     transition: max-height 0.3s ease;
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
-    padding-right: 8px;
+    padding-right: 13px;
 }
 
 .people-list::-webkit-scrollbar {
