@@ -629,6 +629,7 @@ body {
     max-height: calc(100vh - 510px);
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
+    padding-top: 0;
 }
 
 .tasks-section::-webkit-scrollbar {
