@@ -239,10 +239,6 @@ body {
     background: #656D76;
 }
 
-.right-column {
-    margin-top: -10px;
-}
-
 .center-column {
     display: flex;
     flex-direction: column;
