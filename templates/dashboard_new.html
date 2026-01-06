@@ -262,6 +262,9 @@
         function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
             
+            // Normalize sender: 'agent' -> 'ai' for consistent styling
+            const normalizedSender = sender === 'agent' ? 'ai' : sender;
+            
             let date;
             if (timestamp) {
                 date = new Date(timestamp);
@@ -272,7 +275,7 @@
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
             const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
+            messageDiv.className = `message ${normalizedSender}`;
             messageDiv.innerHTML = `
                 <div class="message-text">${text}</div>
                 <div class="message-time">${dateString} ${timeString}</div>
@@ -1186,6 +1189,12 @@
                                 }
                                 if (partner.common_interests) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                }
+                                if (partner.common_skills) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие навыки: ${partner.common_skills}</span>`;
+                                }
+                                if (partner.common_goals) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
                                 html += '</div>';
                                 html += '</div>';
