@@ -2053,6 +2053,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             "temperature": 0.1
                         }
                         
+                        url = "https://api.deepseek.com/v1/chat/completions"
+                        headers = {
+                            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
+                        
                         async with session.post(url, headers=headers, json=data_retry, timeout=aiohttp.ClientTimeout(total=60)) as retry_response:
                             if retry_response.status == 200:
                                 retry_result = await retry_response.json()
@@ -2115,6 +2121,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             "model": "deepseek-chat",
                             "messages": messages_with_results,
                             "temperature": 0.1
+                        }
+                        
+                        url = "https://api.deepseek.com/v1/chat/completions"
+                        headers = {
+                            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                            "Content-Type": "application/json"
                         }
                         
                         async with session.post(url, headers=headers, json=data_retry, timeout=aiohttp.ClientTimeout(total=60)) as retry_response:
