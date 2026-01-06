@@ -1332,15 +1332,18 @@ async def api_tasks_handler(request):
             # Format task title based on delegation
             title = task.title
             if task.delegated_to_username:
+                # Remove leading @ if present
+                delegated_username = task.delegated_to_username.lstrip('@')
+                
                 # Check if task is delegated TO me or BY me
-                if task.delegated_to_username.lower() == user.username.lower():
+                if task.delegated_to_username.lower() == user.username.lower() or task.delegated_to_username.lower() == f"@{user.username.lower()}":
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.user_id).first()
                     if creator:
-                        title = f"{task.title} от @{creator.username}"
+                        title = f"{task.title} (делегирована от @{creator.username})"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
-                    title = f"{task.title} для @{task.delegated_to_username}"
+                    title = f"{task.title} (делегирована для @{delegated_username})"
             
             task_data = {
                 'id': task.id,

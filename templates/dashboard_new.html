@@ -572,10 +572,10 @@
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
                 // Назначенные мне - задачи делегированные мне, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('от @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('(делегирована от @'));
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // Назначенные мной - задачи делегированные другим, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('для @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('(делегирована для @'));
             } else if (currentTaskFilter === 'overdue') {
                 // С отставанием - просроченные задачи
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true);
