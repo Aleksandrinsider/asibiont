@@ -1274,9 +1274,6 @@
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
-                                if (partner.first_name) {
-                                    html += `<span class="task-meta">${partner.first_name}</span>`;
-                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
@@ -1316,9 +1313,6 @@
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
-                                if (partner.first_name) {
-                                    html += `<span class="task-meta">${partner.first_name}</span>`;
-                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
@@ -1360,11 +1354,8 @@
                             } else if (partner.type === 'delegating_by_me') {
                                 html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 22px;">`;
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none.">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
-                                if (partner.first_name) {
-                                    html += `<span class="task-meta">${partner.first_name}</span>`;
-                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
