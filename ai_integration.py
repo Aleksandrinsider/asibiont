@@ -216,7 +216,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         # Обновить существующую задачу
         if reminder_time:
             try:
-                user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                 local_dt = user_tz.localize(local_dt)
                 existing_task.reminder_time = local_dt.astimezone(pytz.UTC)
@@ -233,7 +233,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         if reminder_time:
             try:
                 # Получить timezone пользователя
-                user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 # Парсить как локальное время пользователя
                 local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                 # Локализовать в timezone пользователя
@@ -246,7 +246,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 pass  # Игнорировать неверный формат
         if due_date:
             try:
-                user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 local_dt = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
                 local_dt = user_tz.localize(local_dt)
                 task.due_date = local_dt.astimezone(pytz.UTC)
@@ -507,7 +507,7 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
             )
             if reminder_time:
                 try:
-                    user_tz = pytz.timezone(delegator.timezone if delegator.timezone else 'Europe/Moscow')
+                    user_tz = pytz.timezone(delegator.timezone) if delegator.timezone else pytz.UTC
                     local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                     local_dt = user_tz.localize(local_dt)
                     task.reminder_time = local_dt.astimezone(pytz.UTC)
@@ -555,7 +555,7 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
         
         if reminder_time:
             try:
-                user_tz = pytz.timezone(recipient.timezone if recipient.timezone else 'Europe/Moscow')
+                user_tz = pytz.timezone(recipient.timezone) if recipient.timezone else pytz.UTC
                 local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                 local_dt = user_tz.localize(local_dt)
                 task.reminder_time = local_dt.astimezone(pytz.UTC)
@@ -1346,8 +1346,12 @@ def force_tool_calls(message, content, mentions_str, user_id):
                     from datetime import datetime, timedelta
                     import pytz
                     
-                    # Используем Europe/Moscow как дефолт
-                    user_tz = pytz.timezone('Europe/Moscow')
+                    # Используем timezone пользователя или UTC
+                    from models import Session, User
+                    temp_session = Session()
+                    temp_user = temp_session.query(User).filter_by(telegram_id=user_id).first()
+                    user_tz = pytz.timezone(temp_user.timezone) if temp_user and temp_user.timezone else pytz.UTC
+                    temp_session.close()
                     now = datetime.now(user_tz)
                     
                     if day_word == 'завтра':
@@ -1404,7 +1408,65 @@ def force_tool_calls(message, content, mentions_str, user_id):
         result = update_profile(user_id=user_id, **profile_updates)
         forced_calls.append({"function": "update_profile", "result": result})
     
-    # 4. Проверка на delete_task (удаление задачи)
+    # 4. Проверка на add_task (добавление задачи)
+    add_triggers = ["добавь", "добавить", "создай", "создать", "напомни", "поставь задачу"]
+    if any(trigger in message_lower for trigger in add_triggers):
+        logger.info(f"[FORCE] Add task trigger detected in message")
+        # Проверяем, что AI не вызвал add_task, но говорит что собирается это сделать
+        if "add_task" not in content.lower() and ("добавлю" in content.lower() or "создам" in content.lower() or "поставлю" in content.lower()):
+            logger.info(f"[FORCE] AI responded with text instead of calling add_task - forcing tool call")
+            
+            # Извлекаем название задачи из кавычек
+            title_match = re.search(r'["«"]([^"»"]+)["»"]', message)
+            if not title_match:
+                # Пробуем без кавычек: "добавь задачу X на завтра"
+                title_match = re.search(r'(?:добавь|создай|напомни)\s+(?:задачу\s+)?([^на]+)', message, re.IGNORECASE)
+            
+            if title_match:
+                title = title_match.group(1).strip()
+                logger.info(f"[FORCE] Extracted title: {title}")
+                
+                # Извлекаем время напоминания
+                reminder_time = None
+                time_match = re.search(r'(завтра|послезавтра|сегодня|через\s+\d+\s+(?:минут|час))\s+в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
+                
+                if time_match:
+                    day_word = time_match.group(1).lower()
+                    hour = int(time_match.group(2))
+                    minute = int(time_match.group(3))
+                    
+                    from datetime import datetime, timedelta
+                    import pytz
+                    # Используем timezone пользователя или UTC
+                    from models import Session, User
+                    session = Session()
+                    user = session.query(User).filter_by(telegram_id=user_id).first()
+                    user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
+                    session.close()
+                    now = datetime.now(user_tz)
+                    
+                    if 'завтра' in day_word:
+                        target_date = (now + timedelta(days=1)).date()
+                    elif 'послезавтра' in day_word:
+                        target_date = (now + timedelta(days=2)).date()
+                    else:
+                        target_date = now.date()
+                    
+                    target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+                    target_dt = user_tz.localize(target_dt)
+                    reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
+                    logger.info(f"[FORCE] Extracted reminder_time: {reminder_time}")
+                
+                if reminder_time:
+                    logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
+                    result = add_task(title=title, reminder_time=reminder_time, user_id=user_id)
+                    forced_calls.append({"function": "add_task", "result": result})
+                else:
+                    logger.info(f"[FORCE] No valid reminder_time found, skipping add_task")
+            else:
+                logger.info(f"[FORCE] Could not extract task title from message")
+    
+    # 5. Проверка на delete_task (удаление задачи)
     delete_triggers = ["удали", "удалить", "убери", "убрать", "delete"]
     if any(trigger in message_lower for trigger in delete_triggers):
         logger.info(f"[FORCE] Delete trigger detected in message")
@@ -1719,6 +1781,34 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 
                 if not content:
                     content = "Готово! ✅"
+                
+                # Сохраняем взаимодействие в базу данных для отображения в панели
+                if user_id:
+                    try:
+                        from models import Session, User, Interaction
+                        save_session = Session()
+                        user_obj = save_session.query(User).filter_by(telegram_id=user_id).first()
+                        if user_obj:
+                            # Сохраняем сообщение пользователя
+                            user_interaction = Interaction(
+                                user_id=user_obj.id,
+                                message_type='user',
+                                content=original_message  # Используем оригинальное сообщение с @mentions
+                            )
+                            save_session.add(user_interaction)
+                            
+                            # Сохраняем ответ AI
+                            ai_interaction = Interaction(
+                                user_id=user_obj.id,
+                                message_type='agent',
+                                content=content
+                            )
+                            save_session.add(ai_interaction)
+                            save_session.commit()
+                            logger.info(f"Saved interaction to DB for user {user_id}")
+                        save_session.close()
+                    except Exception as e:
+                        logger.error(f"Failed to save interaction: {e}")
                 
                 return content
     

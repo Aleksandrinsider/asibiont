@@ -11,28 +11,42 @@ import requests
 import json
 
 def generate_user_response(ai_message, conversation_context, scenario_step):
-    """Генерирует ответ пользователя на основе сообщения AI"""
+    """Генерирует ответ пользователя на основе сообщения AI-агента"""
     
-    # Упрощённые сценарии - по одному действию за раз
-    scenarios = {
-        2: "Попроси поручить задачу @testuser на подготовку отчета до завтра 15:00. Будь кратким.",
-        3: "Попроси добавить задачу позвонить клиенту через 2 часа. Одно короткое предложение.",
-        4: "Попроси показать все задачи. Одно предложение.",
-        5: "Скажи что переехал в Москву и работаешь в Google как Senior Engineer. Одно предложение.",
-        6: "Попрощайся коротко.",
-        7: "Скажи спасибо и закончи разговор."
-    }
+    # Собираем контекст последних сообщений
+    context_summary = "\n".join(conversation_context[-6:]) if conversation_context else "Начало диалога"
     
-    scenario = scenarios.get(scenario_step, "Ответь коротко на вопрос AI")
+    # Специальные случаи для начала и конца
+    if scenario_step == 1:
+        return "Привет!"
+    elif scenario_step >= 19:
+        return "Спасибо, пока!"
     
-    prompt = f"""Ты пользователь, который общается с AI-ассистентом по управлению задачами.
+    # Анализируем сообщение AI и генерируем естественный ответ
+    prompt = f"""Ты пользователь, который общается с AI-ассистентом по задачам.
 
-Последнее сообщение от AI:
-{ai_message}
+История диалога:
+{context_summary}
 
-Твоя задача: {scenario}
+AI только что сказал:
+"{ai_message}"
 
-Ответь ОДНИМ коротким предложением (максимум 10-15 слов). Пиши только текст сообщения."""
+Проанализируй ответ AI и реагируй ЕСТЕСТВЕННО:
+
+- Если AI спросил что-то или предложил помощь → дай конкретную команду (добавь задачу, покажи список, делегируй @test_user, удали задачу, расскажи о работе/городе)
+- Если AI показал задачи → попроси удалить/добавить/делегировать или скажи что-то о задачах
+- Если AI добавил задачу → попроси показать список ИЛИ добавь ещё задачу ИЛИ делегируй что-то
+- Если AI удалил задачу → попроси показать что осталось ИЛИ добавь новую
+- Варьируй действия: добавление, удаление, делегирование @test_user, просмотр списка, информация о себе
+
+Правила:
+- КОРОТКИЙ ответ (5-12 слов)
+- Конкретная команда/действие
+- Варьируй формулировки
+- Используй разные времена: "через 2 часа", "завтра в 10:00", "послезавтра в 15:00"
+- Только текст команды, БЕЗ кавычек и пояснений
+
+Ответ пользователя:"""
 
     try:
         response = requests.post(
@@ -44,7 +58,7 @@ def generate_user_response(ai_message, conversation_context, scenario_step):
             json={
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.5,
+                "temperature": 0.9,
                 "max_tokens": 50
             },
             timeout=30
@@ -52,24 +66,17 @@ def generate_user_response(ai_message, conversation_context, scenario_step):
         
         if response.status_code == 200:
             result = response.json()["choices"][0]["message"]["content"].strip()
-            # Убираем кавычки если есть
             result = result.strip('"\'')
+            # Убираем лишние пояснения если AI добавил
+            if '\n' in result:
+                result = result.split('\n')[0]
             return result
         else:
-            # Fallback на простые команды
-            fallbacks = {
-                1: "Поручи @testuser подготовить отчет до завтра 15:00",
-                2: "Добавь задачу позвонить клиенту через 2 часа",
-                3: "Покажи мои задачи",
-                4: "Я переехал в Москву и работаю в Google как Senior Engineer",
-                5: "Спасибо, пока!",
-                6: "До свидания!"
-            }
-            return fallbacks.get(scenario_step, "Хорошо")
+            return "Покажи мои задачи"
             
     except Exception as e:
         print(f"[Предупреждение] Ошибка генерации: {e}")
-        return scenarios.get(scenario_step, "Привет!")
+        return "Что у меня в списке?"
 
 
 async def test_ai_dialogue():
@@ -81,14 +88,15 @@ async def test_ai_dialogue():
     session = SessionLocal()
     
     try:
-        # Находим или создаём тестового пользователя
+        # Используем реального пользователя (ID 146333757) для тестирования
+        # Данные будут видны в панели управления в реальном времени
         user = session.query(User).filter_by(telegram_id=146333757).first()
         
         if not user:
-            print("[INFO] Creating test user...")
+            print("[INFO] Creating user...")
             user = User(
                 telegram_id=146333757,
-                username="test_user",
+                username="Aleksandrinsider",
                 timezone="Europe/Moscow"
             )
             session.add(user)
@@ -98,50 +106,44 @@ async def test_ai_dialogue():
             print(f"[OK] User: {user.username} (ID: {user.telegram_id})")
             print(f"    Timezone: {user.timezone or 'UTC'}")
             
-            # ОЧИЩАЕМ старые задачи для чистого теста
-            old_tasks = session.query(Task).filter_by(user_id=user.id).all()
-            if old_tasks:
-                for task in old_tasks:
-                    session.delete(task)
-                session.commit()
-                print(f"    Cleaned {len(old_tasks)} old tasks")
+            # НЕ очищаем задачи - работаем с реальными данными
+            tasks_count = session.query(Task).filter_by(user_id=user.id).count()
+            print(f"    Existing tasks in DB: {tasks_count}")
+            print(f"    [NOTE] Working with REAL user data - check dashboard!")
             
             # Проверяем что БД чистая
             tasks_count = session.query(Task).filter_by(user_id=user.id).count()
             print(f"    Tasks in DB: {tasks_count}\n")
         
         print("="*80)
-        print("DIALOGUE START")
+        print("DIALOGUE START - 20 ITERATIONS (AI-GENERATED RESPONSES)")
         print("="*80 + "\n")
         
         conversation_context = []
-        max_steps = 7
+        max_steps = 20
         
-        # Жесткий список тестовых команд
-        test_commands = [
-            "Привет!",
-            "Поручи @test_user подготовить отчет до завтра 15:00",  # self-delegation
-            "Добавь задачу позвонить клиенту через 2 часа",
-            "Покажи все мои задачи",
-            "Я переехал в Москву и работаю Senior Engineer в Google",
-            "Удали первую задачу",
-            "Спасибо, пока!"
-        ]
-        
-        for step in range(1, min(max_steps + 1, len(test_commands) + 1)):
-            user_message = test_commands[step - 1]
+        for step in range(1, max_steps + 1):
+            # Генерируем ответ пользователя на основе предыдущего сообщения AI
+            if step == 1:
+                user_message = "Привет!"
+            else:
+                # Используем последний AI ответ для генерации следующей команды
+                last_ai_message = conversation_context[-1].replace("AI: ", "") if conversation_context else ""
+                print(f"[Генерация команды пользователя на основе: {last_ai_message[:60]}...]")
+                user_message = generate_user_response(last_ai_message, conversation_context, step)
             print(f"[Shag {step}]")
             print(f"User: {user_message}")
             print()
             
             try:
                 # Вызываем AI агента с таймаутом
+                # AI агент теперь сам сохраняет Interactions в базу
                 ai_response = await asyncio.wait_for(
                     chat_with_ai(
                         message=user_message,
                         user_id=user.telegram_id
                     ),
-                    timeout=45.0
+                    timeout=90.0
                 )
                 
                 # Удаляем emoji для безопасного вывода в Windows консоль
