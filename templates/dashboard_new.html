@@ -16,6 +16,10 @@
             transition: all 0.3s ease;
         }
         
+        .stats-content {
+            transition: all 0.3s ease;
+        }
+        
         .section-toggle-btn {
             transition: transform 0.2s ease;
         }
@@ -105,6 +109,32 @@
                     </div>
                 </div>
 
+                <!-- Блок статистики -->
+                <div class="task-stats-block">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Статистика</h3>
+                        <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="stats-content" class="stats-content">
+                        <div class="task-stats">
+                            <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
+                            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                            <div class="stats-text" style="margin-top: 8px;">
+                                <div id="today-stats"></div>
+                            </div>
+                            <div class="week-timeline" style="margin-top: 24px;">
+                                <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
+                                    <!-- Дни недели будут добавлены через JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
@@ -163,33 +193,6 @@
             <!-- Правая колонка - Задачи -->
             {% if logged_in %}
             <div class="right-column">
-                <!-- Блок статистики -->
-                <div class="task-stats-block">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Статистика</h3>
-                        <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
-                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-                            </svg>
-                        </button>
-                    </div>
-                    <div id="stats-content" class="stats-content">
-                        <div class="task-stats">
-                            <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
-                            <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-                            <div class="stats-text" style="margin-top: 8px;">
-                                <div id="today-stats"></div>
-                            </div>
-                            <div class="week-timeline" style="margin-top: 24px;">
-                                <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
-                                    <!-- Дни недели будут добавлены через JS -->
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
@@ -486,6 +489,7 @@
             const content = document.getElementById('profile-content');
             const button = document.getElementById('profile-toggle-btn');
             const svg = button.querySelector('svg');
+            const peopleSection = document.querySelector('.people-section');
             
             if (content.style.display === 'none') {
                 content.style.display = 'block';
@@ -494,12 +498,18 @@
                 content.style.display = 'none';
                 svg.style.transform = 'rotate(-90deg)';
             }
+            
+            // Пересчитать высоту контактов
+            if (peopleSection) {
+                peopleSection.style.flex = content.style.display === 'none' ? '1' : 'initial';
+            }
         }
 
         function toggleStatsSection() {
             const content = document.getElementById('stats-content');
             const button = document.getElementById('stats-toggle-btn');
             const svg = button.querySelector('svg');
+            const tasksWrapper = document.querySelector('.tasks-section-wrapper');
             
             if (content.style.display === 'none') {
                 content.style.display = 'block';
@@ -507,6 +517,11 @@
             } else {
                 content.style.display = 'none';
                 svg.style.transform = 'rotate(-90deg)';
+            }
+            
+            // Пересчитать высоту задач
+            if (tasksWrapper) {
+                tasksWrapper.style.flex = content.style.display === 'none' ? '1' : 'initial';
             }
         }
 
@@ -892,7 +907,7 @@
                 html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + delegationInfo + '</span></div>';
             }
             
-            html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
+            html += '<div style="display: flex; gap: 6px; margin-top: 8px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
                 if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
@@ -1130,7 +1145,7 @@
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 22px;">`;
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.first_name) {
                                     html += `<span class="task-meta">${partner.first_name}</span>`;
                                 }
@@ -1159,7 +1174,7 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
@@ -1182,7 +1197,7 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }

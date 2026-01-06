@@ -541,6 +541,10 @@ body {
     background-color: #FFFFFF;
     margin-top: 0;
     margin-bottom: 4px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: flex 0.3s ease;
 }
 
 .tasks-section {
@@ -557,7 +561,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: -8px;
+    margin-bottom: -18px;
     margin-top: 0px;
 }
 
@@ -570,6 +574,7 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: flex 0.3s ease;
 }
 
 .tasks-section {
@@ -724,6 +729,7 @@ body {
 .task-meta {
     font-size: 11px;
     color: #656D76;
+    line-height: 1.2;
 }
 
 .task-time {
