@@ -501,7 +501,8 @@
                     peopleSection.style.minHeight = '';
                 }
                 if (peopleList) {
-                    peopleList.style.maxHeight = '';
+                    peopleList.style.maxHeight = 'calc(100vh - 490px)';
+                    peopleList.style.overflowY = 'auto';
                 }
             } else {
                 content.style.display = 'none';
@@ -511,7 +512,7 @@
                     peopleSection.style.minHeight = '0';
                 }
                 if (peopleList) {
-                    peopleList.style.maxHeight = 'calc(100vh - 150px)';
+                    peopleList.style.maxHeight = 'calc(100vh - 200px)';
                     peopleList.style.overflowY = 'auto';
                 }
             }
