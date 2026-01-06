@@ -1652,24 +1652,53 @@ def force_tool_calls(message, content, mentions_str, user_id):
                     reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
                     logger.info(f"[FORCE] Extracted reminder_time (relative): {reminder_time}")
                 else:
-                    # Проверяем "завтра/сегодня в XX:XX"
-                    time_match = re.search(r'(завтра|послезавтра|сегодня)\s+в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
-                    if time_match:
-                        day_word = time_match.group(1).lower()
-                        hour = int(time_match.group(2))
-                        minute = int(time_match.group(3))
-                        
-                        if 'завтра' in day_word:
-                            target_date = (now + timedelta(days=1)).date()
-                        elif 'послезавтра' in day_word:
-                            target_date = (now + timedelta(days=2)).date()
-                        else:
-                            target_date = now.date()
-                        
-                        target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
-                        target_dt = user_tz.localize(target_dt)
+                    # Проверяем "через полчаса/полтора часа"
+                    half_hour_match = re.search(r'через\s+(полчаса|полтора\s+часа)', message, re.IGNORECASE)
+                    if half_hour_match:
+                        unit = half_hour_match.group(1).lower()
+                        if 'полчас' in unit:
+                            target_dt = now + timedelta(minutes=30)
+                        else:  # полтора часа
+                            target_dt = now + timedelta(minutes=90)
                         reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                        logger.info(f"[FORCE] Extracted reminder_time (absolute): {reminder_time}")
+                        logger.info(f"[FORCE] Extracted reminder_time (half hour): {reminder_time}")
+                    else:
+                        # Проверяем "завтра/сегодня в XX:XX"
+                        time_match = re.search(r'(завтра|послезавтра|сегодня)\s+в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
+                        if time_match:
+                            day_word = time_match.group(1).lower()
+                            hour = int(time_match.group(2))
+                            minute = int(time_match.group(3))
+                            
+                            if 'завтра' in day_word:
+                                target_date = (now + timedelta(days=1)).date()
+                            elif 'послезавтра' in day_word:
+                                target_date = (now + timedelta(days=2)).date()
+                            else:
+                                target_date = now.date()
+                            
+                            target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+                            target_dt = user_tz.localize(target_dt)
+                            reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
+                            logger.info(f"[FORCE] Extracted reminder_time (absolute with day): {reminder_time}")
+                        else:
+                            # Проверяем просто "в HH:MM" (подразумевается сегодня или завтра)
+                            simple_time_match = re.search(r'в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
+                            if simple_time_match:
+                                hour = int(simple_time_match.group(1))
+                                minute = int(simple_time_match.group(2))
+                                
+                                # Если время уже прошло сегодня - ставим на завтра
+                                target_time = datetime.min.time().replace(hour=hour, minute=minute)
+                                if target_time <= now.time():
+                                    target_date = (now + timedelta(days=1)).date()
+                                else:
+                                    target_date = now.date()
+                                
+                                target_dt = datetime.combine(target_date, target_time)
+                                target_dt = user_tz.localize(target_dt)
+                                reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
+                                logger.info(f"[FORCE] Extracted reminder_time (simple time): {reminder_time}")
                 
                 if reminder_time:
                     logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
@@ -1798,11 +1827,29 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
                 else:
                     user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
+                    # Проактивное заполнение при первом сообщении
+                    if len(context) if context else 0 < 2:
+                        user_memory += "\n🎯 КРИТИЧНО ВАЖНО: Профиль ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
             else:
                 user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
             
             # НЕ загружаем задачи в user_memory! Агент должен сам вызвать list_tasks()
             # Это критично для предотвращения выдумывания задач
+            
+            # НО добавляем КРАТКУЮ сводку для контекста
+            tasks_summary = session.query(Task).filter_by(user_id=user.id, status='pending').count()
+            overdue_tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.reminder_time < user_now,
+                Task.status == 'pending'
+            ).limit(5).all()
+            
+            if tasks_summary > 0:
+                user_memory += f"\nСводка: всего активных задач {tasks_summary}"
+            
+            if overdue_tasks:
+                overdue_titles = [f"{t.title}" for t in overdue_tasks]
+                user_memory += f"\n⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
             
             # Add delegated tasks info
             delegated_tasks = session.query(Task).filter(
