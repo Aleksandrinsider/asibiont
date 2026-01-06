@@ -1598,9 +1598,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
                     profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
                 else:
-                    user_memory += f"\n⚠️ ПРОФИЛЬ НЕ ЗАПОЛНЕН - начни с заполнения профиля!"
+                    user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: имя, город, компанию, должность, навыки, интересы, цели)"
             else:
-                user_memory += f"\n⚠️ ПРОФИЛЬ НЕ ЗАПОЛНЕН - начни с заполнения профиля!"
+                user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: имя, город, компанию, должность, навыки, интересы, цели)"
             
             # Get all tasks for extended memory - only pending tasks
             all_tasks = list_tasks(user_id=user_id)
