@@ -35,7 +35,7 @@
             <div class="header-left">
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
             </div>
-            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 400; display: none; align-items: center; gap: 8px;">
+            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
                 <span class="reminder-pulse"></span>
                 На очереди: <span id="next-task-text"></span>
             </div>
@@ -92,7 +92,7 @@
                     <div id="profile-content" class="profile-content">
                         {% if profile %}
                         <div class="context-item">
-                            <p style="margin-bottom: 8px;">Пользователь: @{{ user.username or 'unknown' }}</p>
+                            <p>Пользователь: @{{ user.username or 'unknown' }}</p>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -515,14 +515,16 @@
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 svg.style.transform = 'rotate(0deg)';
+                if (tasksWrapper) {
+                    tasksWrapper.style.flex = '';
+                }
             } else {
                 content.style.display = 'none';
                 svg.style.transform = 'rotate(-90deg)';
-            }
-            
-            // Пересчитать высоту задач
-            if (tasksWrapper) {
-                tasksWrapper.style.flex = content.style.display === 'none' ? '1' : 'initial';
+                if (tasksWrapper) {
+                    tasksWrapper.style.flex = '1 1 auto';
+                    tasksWrapper.style.minHeight = '0';
+                }
             }
         }
 
