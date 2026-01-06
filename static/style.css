@@ -634,7 +634,7 @@ body {
 }
 
 .tasks-section::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
 }
 
 .tasks-section::-webkit-scrollbar-track {
@@ -846,6 +846,10 @@ body {
 .people-list::-webkit-scrollbar-thumb {
     background-color: #D1D9E0;
     border-radius: 2px;
+}
+
+.people-list::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .person-card {
