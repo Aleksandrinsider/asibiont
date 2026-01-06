@@ -129,7 +129,9 @@ async def test_ai_dialogue():
             else:
                 # Используем последний AI ответ для генерации следующей команды
                 last_ai_message = conversation_context[-1].replace("AI: ", "") if conversation_context else ""
-                print(f"[Генерация команды пользователя на основе: {last_ai_message[:60]}...]")
+                # Удаляем emoji и спецсимволы для безопасного вывода
+                safe_message = last_ai_message.encode('ascii', 'ignore').decode('ascii')
+                print(f"[Генерация команды пользователя на основе: {safe_message[:60]}...]")
                 user_message = generate_user_response(last_ai_message, conversation_context, step)
             print(f"[Shag {step}]")
             print(f"User: {user_message}")
