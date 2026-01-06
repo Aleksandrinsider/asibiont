@@ -1756,30 +1756,62 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     forced = force_tool_calls(original_message, content, mentions_str, user_id)
                     
                     if forced:
-                        # Возвращаем результаты напрямую БЕЗ повторного вызова AI (избегаем дубликатов)
-                        logger.info(f"[FORCE] Forced {len(forced)} tool calls, returning direct response")
+                        # После принудительных tool calls нужно сгенерировать НОРМАЛЬНЫЙ ответ через AI
+                        logger.info(f"[FORCE] Forced {len(forced)} tool calls, generating AI response based on results")
                         
-                        # Генерируем короткий ответ на основе результатов
-                        responses = []
+                        # Собираем результаты для контекста
+                        tool_results_summary = []
                         for fc in forced:
                             func_name = fc['function']
                             result = fc['result']
-                            
-                            if func_name == 'list_tasks':
-                                responses.append(result)
-                            elif func_name == 'delegate_task':
-                                if 'Ошибка' in result or 'не найден' in result:
-                                    responses.append(result)
-                                else:
-                                    responses.append("Задача успешно делегирована.")
-                            elif func_name == 'update_profile':
-                                responses.append("Профиль обновлён.")
-                            elif func_name == 'delete_task':
-                                responses.append("Задача удалена.")
-                            else:
-                                responses.append(result)
+                            tool_results_summary.append(f"{func_name}() вернул: {result[:200]}")
                         
-                        return ' '.join(responses)
+                        # Делаем повторный запрос к AI с результатами tool calls для генерации естественного ответа
+                        system_prompt_with_results = system_prompt + f"\n\n🔧 ВЫПОЛНЕННЫЕ ФУНКЦИИ:\n" + "\n".join(tool_results_summary) + "\n\nТеперь сформулируй естественный ответ пользователю на основе этих данных. Следуй стилю из промпта!"
+                        
+                        messages_with_results = [{"role": "system", "content": system_prompt_with_results}]
+                        if context:
+                            for item in context:
+                                if "user" in item:
+                                    messages_with_results.append({"role": "user", "content": item["user"]})
+                                if "agent" in item:
+                                    messages_with_results.append({"role": "assistant", "content": item["agent"]})
+                        messages_with_results.append({"role": "user", "content": original_message})
+                        
+                        data_retry = {
+                            "model": "deepseek-chat",
+                            "messages": messages_with_results,
+                            "temperature": 0.1
+                        }
+                        
+                        async with session.post(url, headers=headers, json=data_retry, timeout=aiohttp.ClientTimeout(total=60)) as retry_response:
+                            if retry_response.status == 200:
+                                retry_result = await retry_response.json()
+                                content = retry_result["choices"][0]["message"].get("content", "")
+                                content = clean_content(content)
+                                content = replace_placeholders(content, user_now, current_time_str)
+                                
+                                # Сохраняем взаимодействие
+                                if user_id and content:
+                                    try:
+                                        from models import Session, User, Interaction
+                                        save_session = Session()
+                                        user_obj = save_session.query(User).filter_by(telegram_id=user_id).first()
+                                        if user_obj:
+                                            user_interaction = Interaction(user_id=user_obj.id, message_type='user', content=original_message)
+                                            save_session.add(user_interaction)
+                                            ai_interaction = Interaction(user_id=user_obj.id, message_type='agent', content=content)
+                                            save_session.add(ai_interaction)
+                                            save_session.commit()
+                                            logger.info(f"Saved interaction to DB for user {user_id}")
+                                        save_session.close()
+                                    except Exception as e:
+                                        logger.error(f"Failed to save interaction: {e}")
+                                
+                                return content
+                            else:
+                                # Если повторный запрос неудачен, вернем простой результат
+                                return tool_results_summary[0] if tool_results_summary else "Выполнено"
                 
                 # Обрабатываем обычный ответ AI без tool calls
                 content = message_response.get("content", "")
