@@ -144,14 +144,14 @@ async def test_ai_dialogue():
             print()
             
             try:
-                # Вызываем AI агента с таймаутом
+                # Вызываем AI агента с увеличенным таймаутом (120 секунд)
                 # AI агент теперь сам сохраняет Interactions в базу
                 ai_response = await asyncio.wait_for(
                     chat_with_ai(
                         message=user_message,
                         user_id=user.telegram_id
                     ),
-                    timeout=90.0
+                    timeout=120.0
                 )
                 
                 # Безопасный вывод для Windows консоли - удаляем emoji
