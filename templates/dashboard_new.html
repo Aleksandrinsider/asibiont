@@ -213,6 +213,23 @@
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
         
+        // Функция склонения слова "задача"
+        function pluralizeTask(count) {
+            const lastDigit = count % 10;
+            const lastTwoDigits = count % 100;
+            
+            if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+                return 'задач';
+            }
+            if (lastDigit === 1) {
+                return 'задачу';
+            }
+            if (lastDigit >= 2 && lastDigit <= 4) {
+                return 'задачи';
+            }
+            return 'задач';
+        }
+        
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
             if (response.status === 401 || response.status === 403) {
@@ -1116,7 +1133,7 @@
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} задач</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.position) {
@@ -1139,7 +1156,7 @@
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} задач</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.position) {

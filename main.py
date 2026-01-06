@@ -976,6 +976,19 @@ async def yookassa_webhook(request):
 
 
 async def api_partners_handler(request):
+    def pluralize_task(count):
+        """Склонение слова 'задача' по числу"""
+        last_digit = count % 10
+        last_two_digits = count % 100
+        
+        if 11 <= last_two_digits <= 19:
+            return 'задач'
+        if last_digit == 1:
+            return 'задачу'
+        if 2 <= last_digit <= 4:
+            return 'задачи'
+        return 'задач'
+    
     try:
         session_req = await get_session(request)
         user_id = session_req.get('user_id')
@@ -1022,7 +1035,7 @@ async def api_partners_handler(request):
                                 'city': delegator_profile.city if delegator_profile else None,
                                 'company': delegator_profile.company if delegator_profile else None,
                                 'task_count': len(task_titles),
-                                'reason': f'делегировал {len(task_titles)} задач'
+                                'reason': f'делегировал {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
                 
                 # Люди, которым я делегировал задачи
@@ -1049,7 +1062,7 @@ async def api_partners_handler(request):
                                 'city': delegatee_profile.city if delegatee_profile else None,
                                 'company': delegatee_profile.company if delegatee_profile else None,
                                 'task_count': len(task_titles),
-                                'reason': f'я делегировал {len(task_titles)} задач'
+                                'reason': f'я делегировал {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
             
             except Exception as e:
