@@ -374,12 +374,16 @@ def list_tasks(user_id=None, session=None):
         for t in tasks:
             title = t.title
             # Add delegation context to title
-            if t.delegated_by and t.delegated_by != user.id:
-                delegator = session.query(User).filter_by(id=t.delegated_by).first()
-                if delegator:
-                    title = f"{t.title} от @{delegator.username}"
-            elif t.delegated_to_username:
-                title = f"{t.title} для @{t.delegated_to_username}"
+            if t.delegated_to_username:
+                # Check if task is delegated TO me or BY me
+                if t.delegated_to_username.lower() == user.username.lower():
+                    # Task delegated TO me
+                    creator = session.query(User).filter_by(id=t.user_id).first()
+                    if creator:
+                        title = f"{t.title} от @{creator.username}"
+                elif t.user_id == user.id:
+                    # Task delegated BY me to someone else
+                    title = f"{t.title} для @{t.delegated_to_username}"
             
             # Add time info and overdue status
             task_info = f"{t.id}. {title} ({t.status}"
@@ -456,11 +460,11 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         task.status = "completed"
         session.commit()
         
-        # If this is a delegated task, notify the delegator
-        if task.delegated_by and task.delegation_status == 'accepted':
+        # If this is a delegated task, notify the delegator (creator)
+        if task.delegated_to_username and task.delegation_status == 'accepted':
             try:
-                delegator = session.query(User).filter_by(id=task.delegated_by).first()
-                if delegator:
+                delegator = session.query(User).filter_by(id=task.user_id).first()
+                if delegator and delegator.telegram_id != user_id:
                     from main import bot, reminder_service
                     if bot and reminder_service:
                         import asyncio
@@ -607,10 +611,10 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
         
         # Create task with pending delegation status
         task = Task(
-            user_id=recipient.id,
+            user_id=delegator.id,
             title=title,
             description=description,
-            delegated_by=delegator.id,
+            delegated_by=None,
             delegated_to_username=recipient_username,
             delegation_status='pending',
             delegation_details=delegation_details,
@@ -688,10 +692,10 @@ def accept_delegated_task(task_id, user_id=None):
                 import logging
                 logging.error(f"Failed to schedule reminder: {e}")
         
-        # Notify delegator
+        # Notify delegator (creator)
         try:
-            delegator = session.query(User).filter_by(id=task.delegated_by).first()
-            if delegator:
+            delegator = session.query(User).filter_by(id=task.user_id).first()
+            if delegator and delegator.telegram_id != user_id:
                 from main import bot
                 if bot:
                     message = f"✅ @{user.username} принял задачу: {task.title}"
@@ -725,10 +729,10 @@ def reject_delegated_task(task_id, user_id=None):
         task.status = 'rejected'
         session.commit()
         
-        # Notify delegator
+        # Notify delegator (creator)
         try:
-            delegator = session.query(User).filter_by(id=task.delegated_by).first()
-            if delegator:
+            delegator = session.query(User).filter_by(id=task.user_id).first()
+            if delegator and delegator.telegram_id != user_id:
                 from main import bot
                 if bot:
                     message = f"❌ @{user.username} отклонил задачу: {task.title}"
@@ -753,11 +757,11 @@ def get_delegation_progress(task_id, user_id=None):
         if not user:
             return "Ошибка: Пользователь не найден."
         
-        task = session.query(Task).filter_by(id=int(task_id), delegated_by=user.id).first()
-        if not task:
+        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+        if not task or not task.delegated_to_username:
             return "Делегированная задача не найдена."
         
-        recipient = session.query(User).filter_by(id=task.user_id).first()
+        recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
         
         if task.delegation_status == 'pending':
             status_msg = f"⏳ @{task.delegated_to_username} еще не ответил на предложение."
@@ -791,14 +795,11 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
         # Проверить права доступа: задача должна принадлежать пользователю ИЛИ быть делегирована ему
         has_access = False
         if task.user_id == user.id:
-            has_access = True  # Обычная задача пользователя
+            has_access = True  # Обычная задача пользователя или делегированная им
         elif task.delegated_to_username:
             # Проверить, является ли пользователь получателем делегированной задачи
             recipient_username = task.delegated_to_username.replace('@', '').lower()
             if user.username and user.username.lower() == recipient_username:
-                has_access = True
-            # Также проверить, не является ли пользователь отправителем (для случаев когда user_id != delegator_id)
-            elif task.delegated_by == user.id:
                 has_access = True
         
         if not has_access:
@@ -846,8 +847,6 @@ def delete_task(task_id=None, task_title=None, user_id=None):
             elif task.delegated_to_username:
                 recipient_username = task.delegated_to_username.replace('@', '').lower()
                 if user.username and user.username.lower() == recipient_username:
-                    has_access = True
-                elif task.delegated_by == user.id:
                     has_access = True
             
             if not has_access:
@@ -907,8 +906,6 @@ def set_priority(task_id, priority, user_id=None):
             recipient_username = task.delegated_to_username.replace('@', '').lower()
             if user.username and user.username.lower() == recipient_username:
                 has_access = True
-            elif task.delegated_by == user.id:
-                has_access = True
         
         if not has_access:
             session.close()
@@ -942,9 +939,6 @@ def get_task_details(task_id, user_id=None):
             # Проверить, является ли пользователь получателем делегированной задачи
             recipient_username = task.delegated_to_username.replace('@', '').lower()
             if user.username and user.username.lower() == recipient_username:
-                has_access = True
-            # Также проверить, не является ли пользователь отправителем
-            elif task.delegated_by == user.id:
                 has_access = True
         
         if not has_access:
@@ -1656,16 +1650,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             
             # Add delegated tasks info
             delegated_tasks = session.query(Task).filter(
-                Task.delegated_to_username == user.username,
+                Task.delegated_to_username.ilike(user.username),
                 Task.delegation_status == 'pending'
             ).all()
             if delegated_tasks:
-                delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{delegator.username if (delegator := session.query(User).filter_by(id=t.delegated_by).first()) else 'unknown'}" for t in delegated_tasks[:3]]
+                delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}" for t in delegated_tasks[:3]]
                 user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
             
             # Add info about tasks delegated BY user
             my_delegated_tasks = session.query(Task).filter(
-                Task.delegated_by == user.id,
+                Task.user_id == user.id,
+                Task.delegated_to_username.isnot(None),
                 Task.delegation_status.in_(['pending', 'accepted'])
             ).all()
             if my_delegated_tasks:

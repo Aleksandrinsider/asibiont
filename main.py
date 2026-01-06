@@ -306,26 +306,27 @@ async def dashboard_handler(request):
             try:
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
                 delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_to_username == user.username,
+                    Task.delegated_to_username.ilike(user.username),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
                 
                 delegator_ids = set()
                 for task in delegated_tasks:
-                    if task.delegated_by and task.delegated_by not in delegator_ids:
-                        delegator_ids.add(task.delegated_by)
-                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                    if task.user_id and task.user_id not in delegator_ids:
+                        delegator_ids.add(task.user_id)
+                        delegator = session_db.query(User).filter_by(id=task.user_id).first()
                         if delegator and delegator.id != user.id:
                             delegating_to_me.append({
                                 'id': delegator.id,
                                 'username': delegator.username,
                                 'first_name': delegator.first_name,
-                                'reason': f'делегировал {len([t for t in delegated_tasks if t.delegated_by == delegator.id])} задач'
+                                'reason': f'делегировал {len([t for t in delegated_tasks if t.user_id == delegator.id])} задач'
                             })
                 
                 # Люди, которым я делегировал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_by == user.id,
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
                 
@@ -982,26 +983,27 @@ async def api_partners_handler(request):
             try:
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
                 delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_to_username == user.username,
+                    Task.delegated_to_username.ilike(user.username),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
                 
                 delegator_ids = set()
                 for task in delegated_tasks:
-                    if task.delegated_by and task.delegated_by not in delegator_ids:
-                        delegator_ids.add(task.delegated_by)
-                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                    if task.user_id and task.user_id not in delegator_ids:
+                        delegator_ids.add(task.user_id)
+                        delegator = session_db.query(User).filter_by(id=task.user_id).first()
                         if delegator and delegator.id != user.id:
                             delegating_to_me.append({
                                 'id': delegator.id,
                                 'username': delegator.username,
                                 'first_name': delegator.first_name,
-                                'reason': f'делегировал {len([t for t in delegated_tasks if t.delegated_by == delegator.id])} задач'
+                                'reason': f'делегировал {len([t for t in delegated_tasks if t.user_id == delegator.id])} задач'
                             })
                 
                 # Люди, которым я делегировал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_by == user.id,
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
                 
@@ -1290,7 +1292,14 @@ async def api_tasks_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
         
-        tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+        # Get tasks created by me OR delegated to me
+        from sqlalchemy import or_
+        tasks = session_db.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        ).all()
         
         # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
@@ -1308,14 +1317,16 @@ async def api_tasks_handler(request):
         for task in tasks:
             # Format task title based on delegation
             title = task.title
-            if task.delegated_by and task.delegated_by != user.id:
-                # Task delegated TO me
-                delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
-                if delegator:
-                    title = f"{task.title} от @{delegator.username}"
-            elif task.delegated_to_username:
-                # Task delegated BY me to someone else
-                title = f"{task.title} для @{task.delegated_to_username}"
+            if task.delegated_to_username:
+                # Check if task is delegated TO me or BY me
+                if task.delegated_to_username.lower() == user.username.lower():
+                    # Task delegated TO me
+                    creator = session_db.query(User).filter_by(id=task.user_id).first()
+                    if creator:
+                        title = f"{task.title} от @{creator.username}"
+                elif task.user_id == user.id:
+                    # Task delegated BY me to someone else
+                    title = f"{task.title} для @{task.delegated_to_username}"
             
             task_data = {
                 'id': task.id,
@@ -1325,7 +1336,7 @@ async def api_tasks_handler(request):
                 'reminder_time_local': None,
                 'overdue': False,
                 'overdue_text': None,
-                'is_delegated': task.delegated_by is not None or task.delegated_to_username is not None,
+                'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None
             }
             if task.reminder_time:
@@ -1378,10 +1389,13 @@ async def api_delegations_handler(request):
                 user_tz = pytz.UTC
         
         # Tasks delegated TO me
-        incoming = session_db.query(Task).filter_by(delegated_by=user.id).all()
+        incoming = session_db.query(Task).filter(
+            Task.delegated_to_username.ilike(user.username),
+            Task.delegation_status == 'pending'
+        ).all()
         incoming_data = []
         for task in incoming:
-            delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+            delegator = session_db.query(User).filter_by(id=task.user_id).first()
             task_data = {
                 'id': task.id,
                 'title': task.title,
