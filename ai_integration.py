@@ -1780,6 +1780,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     import logging
+    import re
     logger = logging.getLogger(__name__)
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
