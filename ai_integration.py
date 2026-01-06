@@ -1610,8 +1610,11 @@ def force_tool_calls(message, content, mentions_str, user_id):
             # Извлекаем название задачи из кавычек
             title_match = re.search(r'["«"]([^"»"]+)["»"]', message)
             if not title_match:
-                # Пробуем без кавычек: "добавь задачу X на завтра"
-                title_match = re.search(r'(?:добавь|создай|напомни)\s+(?:задачу\s+)?([^на]+)', message, re.IGNORECASE)
+                # Пробуем без кавычек: "напомни заказать продукты через 5 минут"
+                title_match = re.search(r'(?:добавь|создай|напомни)\s+(?:задачу\s+)?(.+?)\s+(?:через|завтра|сегодня|послезавтра|на\s+завтра|на\s+сегодня)', message, re.IGNORECASE)
+                if not title_match:
+                    # Если нет времени в сообщении, берём всё до конца
+                    title_match = re.search(r'(?:добавь|создай|напомни)\s+(?:задачу\s+)?(.+)', message, re.IGNORECASE)
             
             if title_match:
                 title = title_match.group(1).strip()
