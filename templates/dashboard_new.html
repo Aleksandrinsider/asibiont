@@ -100,7 +100,7 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
-                            <p>Рекомендация: {{ profile.average_rating }}/10 ({{ profile.rating_count }} рекомендаций)</p>
+                            <p>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
                             <p>Рекомендация: нет рекомендаций</p>
                             {% endif %}
@@ -1298,9 +1298,9 @@
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
                                 html += '</div>';
-                                // Оценка на отдельной строке
+                                // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10</span></div>`;
                                 } else {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
                                 }
@@ -1342,9 +1342,9 @@
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
                                 html += '</div>';
-                                // Оценка на отдельной строке
+                                // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10</span></div>`;
                                 } else {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
                                 }
@@ -1386,9 +1386,9 @@
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
                                 html += '</div>';
-                                // Оценка на отдельной строке
+                                // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10</span></div>`;
                                 } else {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
                                 }
