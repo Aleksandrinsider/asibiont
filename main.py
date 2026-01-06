@@ -1356,6 +1356,67 @@ async def api_tasks_handler(request):
     finally:
         session_db.close()
 
+async def api_delegations_handler(request):
+    """API для получения делегированных задач"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        
+        # Get user timezone
+        user_tz = pytz.UTC
+        if user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+            except pytz.exceptions.UnknownTimeZoneError:
+                user_tz = pytz.UTC
+        
+        # Tasks delegated TO me
+        incoming = session_db.query(Task).filter_by(delegated_by=user.id).all()
+        incoming_data = []
+        for task in incoming:
+            delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+            task_data = {
+                'id': task.id,
+                'title': task.title,
+                'from_user': f"@{delegator.username}" if delegator else "Unknown",
+                'status': task.delegation_status if hasattr(task, 'delegation_status') else 'pending',
+                'reminder_time': task.reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M') if task.reminder_time else None
+            }
+            incoming_data.append(task_data)
+        
+        # Tasks delegated BY me
+        outgoing = session_db.query(Task).filter(
+            Task.user_id == user.id,
+            Task.delegated_to_username.isnot(None)
+        ).all()
+        outgoing_data = []
+        for task in outgoing:
+            task_data = {
+                'id': task.id,
+                'title': task.title,
+                'to_user': f"@{task.delegated_to_username}",
+                'status': task.delegation_status if hasattr(task, 'delegation_status') else 'pending',
+                'reminder_time': task.reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M') if task.reminder_time else None
+            }
+            outgoing_data.append(task_data)
+        
+        return web.json_response({
+            'incoming': incoming_data,
+            'outgoing': outgoing_data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching delegations: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
 async def api_interactions_handler(request):
     """API для получения истории чата"""
     session = await get_session(request)
@@ -1545,6 +1606,7 @@ app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
+app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)
 
 # Setup for production

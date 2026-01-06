@@ -1082,6 +1082,64 @@
             }
         }
         
+        async function updateDelegations() {
+            try {
+                const response = await fetch('/api/delegations');
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update incoming delegations
+                    const incomingSection = document.querySelector('.delegation-incoming');
+                    if (incomingSection && data.incoming) {
+                        let html = '<h4>📥 Делегировано мне</h4>';
+                        if (data.incoming.length > 0) {
+                            data.incoming.forEach(task => {
+                                const statusText = task.status === 'accepted' ? '✅ Принято' : 
+                                                  task.status === 'rejected' ? '❌ Отклонено' : '⏳ Ожидание';
+                                html += `<div class="delegation-card">`;
+                                html += `<p><strong>${task.title}</strong></p>`;
+                                html += `<p>От: ${task.from_user}</p>`;
+                                html += `<p>Статус: ${statusText}</p>`;
+                                if (task.reminder_time) {
+                                    html += `<p>⏰ ${task.reminder_time}</p>`;
+                                }
+                                html += `</div>`;
+                            });
+                        } else {
+                            html += '<p style="color: #656D76;">Нет входящих делегирований</p>';
+                        }
+                        incomingSection.innerHTML = html;
+                    }
+                    
+                    // Update outgoing delegations
+                    const outgoingSection = document.querySelector('.delegation-outgoing');
+                    if (outgoingSection && data.outgoing) {
+                        let html = '<h4>📤 Делегировано мной</h4>';
+                        if (data.outgoing.length > 0) {
+                            data.outgoing.forEach(task => {
+                                const statusText = task.status === 'accepted' ? '✅ Принято' : 
+                                                  task.status === 'rejected' ? '❌ Отклонено' : '⏳ Ожидание';
+                                html += `<div class="delegation-card">`;
+                                html += `<p><strong>${task.title}</strong></p>`;
+                                html += `<p>Кому: ${task.to_user}</p>`;
+                                html += `<p>Статус: ${statusText}</p>`;
+                                if (task.reminder_time) {
+                                    html += `<p>⏰ ${task.reminder_time}</p>`;
+                                }
+                                html += `</div>`;
+                            });
+                        } else {
+                            html += '<p style="color: #656D76;">Нет исходящих делегирований</p>';
+                        }
+                        outgoingSection.innerHTML = html;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating delegations:', error);
+            }
+        }
+        
         async function refreshPeople() {
             await updatePeople();
         }
