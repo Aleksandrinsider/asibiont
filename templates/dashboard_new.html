@@ -1061,38 +1061,63 @@
                     if (data.partners && data.partners.length > 0) {
                         let html = '';
                         data.partners.forEach(partner => {
+                            const telegramUrl = `https://t.me/${partner.contact_info}`;
+                            
                             if (partner.type === 'recommended' && partner.contact_info) {
                                 html += '<div class="person-card contact-recommended">';
-                                html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
-                                html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.recommendation_reason || 'подходящий контакт'}</p>`;
-                                if (partner.city) {
-                                    html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">📍 ${partner.city}</p>`;
+                                html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">';
+                                html += '<div style="flex: 1;">';
+                                html += `<a href="${telegramUrl}" target="_blank" style="font-weight: 600; color: #068487; text-decoration: none; font-size: 14px;">@${partner.contact_info}</a>`;
+                                if (partner.first_name) {
+                                    html += `<p style="font-size: 12px; color: #656D76; margin: 2px 0 0 0;">${partner.first_name}</p>`;
                                 }
-                                if (partner.common_interests) {
-                                    html += `<p style="font-size: 12px; margin-bottom: 4px;">💡 Интересы: ${partner.common_interests}</p>`;
-                                }
-                                if (partner.common_skills) {
-                                    html += `<p style="font-size: 12px; margin-bottom: 4px;">🔧 Навыки: ${partner.common_skills}</p>`;
-                                }
-                                if (partner.common_goals) {
-                                    html += `<p style="font-size: 12px; margin-bottom: 4px;">🎯 Цели: ${partner.common_goals}</p>`;
+                                html += '</div>';
+                                html += '<span style="padding: 2px 8px; background: #DFF8F9; color: #068487; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap;">Рекомендован</span>';
+                                html += '</div>';
+                                html += `<p style="font-size: 12px; color: #59636E; margin-bottom: 8px; line-height: 1.5;">${partner.recommendation_reason || 'Подходящий контакт'}</p>`;
+                                
+                                if (partner.city || partner.common_interests || partner.common_skills || partner.common_goals) {
+                                    html += '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">';
+                                    if (partner.city) {
+                                        html += `<span style="font-size: 11px; padding: 4px 8px; background: #F6F8FA; border-radius: 6px; color: #59636E;">📍 ${partner.city}</span>`;
+                                    }
+                                    if (partner.common_interests) {
+                                        html += `<span style="font-size: 11px; padding: 4px 8px; background: #F6F8FA; border-radius: 6px; color: #59636E;">💡 ${partner.common_interests}</span>`;
+                                    }
+                                    if (partner.common_skills) {
+                                        html += `<span style="font-size: 11px; padding: 4px 8px; background: #F6F8FA; border-radius: 6px; color: #59636E;">🔧 ${partner.common_skills}</span>`;
+                                    }
+                                    if (partner.common_goals) {
+                                        html += `<span style="font-size: 11px; padding: 4px 8px; background: #F6F8FA; border-radius: 6px; color: #59636E;">🎯 ${partner.common_goals}</span>`;
+                                    }
+                                    html += '</div>';
                                 }
                                 html += '</div>';
                             } else if (partner.type === 'delegating_to_me') {
                                 html += '<div class="person-card contact-delegating-to-me" style="display: none;">';
-                                html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
-                                html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.reason}</p>`;
+                                html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">';
+                                html += '<div style="flex: 1;">';
+                                html += `<a href="${telegramUrl}" target="_blank" style="font-weight: 600; color: #068487; text-decoration: none; font-size: 14px;">@${partner.contact_info}</a>`;
                                 if (partner.first_name) {
-                                    html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 ${partner.first_name}</p>`;
+                                    html += `<p style="font-size: 12px; color: #656D76; margin: 2px 0 0 0;">${partner.first_name}</p>`;
                                 }
+                                html += '</div>';
+                                html += '<span style="padding: 2px 8px; background: #FFF4E5; color: #D97706; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap;">Делегируют мне</span>';
+                                html += '</div>';
+                                html += `<p style="font-size: 12px; color: #59636E; margin: 0; line-height: 1.5;">${partner.reason}</p>`;
                                 html += '</div>';
                             } else if (partner.type === 'delegating_by_me') {
                                 html += '<div class="person-card contact-delegating-by-me" style="display: none;">';
-                                html += `<p style="margin-bottom: 8px;"><strong>@${partner.contact_info}</strong></p>`;
-                                html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 6px;">${partner.reason}</p>`;
+                                html += '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">';
+                                html += '<div style="flex: 1;">';
+                                html += `<a href="${telegramUrl}" target="_blank" style="font-weight: 600; color: #068487; text-decoration: none; font-size: 14px;">@${partner.contact_info}</a>`;
                                 if (partner.first_name) {
-                                    html += `<p style="font-size: 12px; color: #656D76; margin-bottom: 4px;">👤 ${partner.first_name}</p>`;
+                                    html += `<p style="font-size: 12px; color: #656D76; margin: 2px 0 0 0;">${partner.first_name}</p>`;
                                 }
+                                html += '</div>';
+                                html += '<span style="padding: 2px 8px; background: #E8F5FF; color: #0969DA; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap;">Делегирую я</span>';
+                                html += '</div>';
+                                html += `<p style="font-size: 12px; color: #59636E; margin: 0; line-height: 1.5;">${partner.reason}</p>`;
                                 html += '</div>';
                             }
                         });

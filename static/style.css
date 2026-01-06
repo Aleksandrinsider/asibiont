@@ -766,25 +766,35 @@ body {
 }
 
 .person-card {
-    padding: 14px;
-    margin-bottom: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
     border-radius: 6px;
     border: 1px solid #D1D9E0;
-    background-color: #F6F8FA;
+    background-color: #FFFFFF;
     transition: all 0.2s;
+    cursor: default;
 }
 
 .person-card:hover {
-    background-color: #FFFFFF;
+    background-color: #F6F8FA;
     border-color: #068487;
-    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.12);
 }
 
 .person-card p {
-    margin: 0 0 5px 0;
+    margin: 0;
     color: #1F2328;
     line-height: 1.5;
     font-size: 13px;
+}
+
+.person-card a {
+    transition: color 0.2s;
+}
+
+.person-card a:hover {
+    color: #0550ae !important;
+    text-decoration: underline !important;
 }
 
 .timeline {
