@@ -99,7 +99,7 @@
                             <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
-                            {% if profile.average_rating > 0 %}
+                            {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p>Рекомендация: {{ profile.average_rating }}/10 ({{ profile.rating_count }} рекомендаций)</p>
                             {% else %}
                             <p>Рекомендация: нет рекомендаций</p>
@@ -545,7 +545,7 @@
                     peopleSection.style.minHeight = '0';
                 }
                 if (peopleList) {
-                    peopleList.style.maxHeight = 'calc(100vh - 510px)';
+                    peopleList.style.maxHeight = 'calc(100vh - 300px)';
                     peopleList.style.overflowY = 'auto';
                 }
             }
