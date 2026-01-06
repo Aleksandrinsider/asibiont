@@ -109,7 +109,7 @@
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
                     </div>
-                    <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
@@ -1064,11 +1064,20 @@
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle};">`;
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
-                                html += `<span class="task-meta">${partner.recommendation_reason || 'Подходящий контакт'}</span>`;
+                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                if (partner.common_interests) {
+                                    html += `<span class="task-meta">💡 ${partner.common_interests}</span>`;
+                                }
+                                if (partner.common_skills) {
+                                    html += `<span class="task-meta">🛠️ ${partner.common_skills}</span>`;
+                                }
+                                if (partner.common_goals) {
+                                    html += `<span class="task-meta">🎯 ${partner.common_goals}</span>`;
+                                }
                                 if (partner.city) {
                                     html += `<span class="task-meta">📍 ${partner.city}</span>`;
                                 }
+                                html += `<span class="task-meta" style="color: #068487;">${partner.recommendation_reason || 'Подходящий контакт'}</span>`;
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1078,9 +1087,10 @@
                             } else if (partner.type === 'delegating_to_me') {
                                 html += `<li class="task-item contact-delegating-to-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
+                                const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
-                                html += `<span class="task-meta">${partner.reason}</span>`;
+                                html += `<span class="task-meta">📥 ${partner.reason}</span>`;
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1090,9 +1100,10 @@
                             } else if (partner.type === 'delegating_by_me') {
                                 html += `<li class="task-item contact-delegating-by-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
+                                const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
-                                html += `<span class="task-meta">${partner.reason}</span>`;
+                                html += `<span class="task-meta">📤 ${partner.reason}</span>`;
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
