@@ -100,7 +100,9 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             {% if profile.average_rating > 0 %}
-                            <p>Средний рейтинг: ⭐ {{ profile.average_rating }}/10 ({{ profile.rating_count }} оценок)</p>
+                            <p>Рекомендация: {{ profile.average_rating }}/10 ({{ profile.rating_count }} рекомендаций)</p>
+                            {% else %}
+                            <p>Рекомендация: нет рекомендаций</p>
                             {% endif %}
                             <p>Подписка: активна до {{ formatted_end_date }} 
                                 <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
@@ -231,11 +233,11 @@
     <div id="rating-modal" class="rating-modal">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3>Оценить контакт</h3>
+                <h3>Рекомендовать контакт</h3>
                 <button onclick="closeRatingModal()" class="rating-close-btn">×</button>
             </div>
             <div class="rating-modal-body">
-                <p>Оцените <span id="rating-username" style="font-weight: 600; color: #068487;"></span></p>
+                <p>Рекомендуете <span id="rating-username" style="font-weight: 600; color: #068487;"></span></p>
                 <p style="font-size: 12px; color: #59636E; margin-bottom: 16px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
                 <div class="rating-slider-container">
                     <input type="range" id="rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="updateRatingValue(this.value)">
@@ -245,7 +247,7 @@
                 </div>
                 <div class="rating-modal-actions">
                     <button onclick="closeRatingModal()" class="rating-cancel-btn">Отмена</button>
-                    <button onclick="submitRating()" class="rating-submit-btn">Оценить</button>
+                    <button onclick="submitRating()" class="rating-submit-btn">Рекомендовать</button>
                 </div>
             </div>
         </div>
@@ -1298,9 +1300,9 @@
                                 html += '</div>';
                                 // Оценка на отдельной строке
                                 if (partner.average_rating > 0) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Оценка: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
                                 } else {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Оценка: нет рекомендаций</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1342,9 +1344,9 @@
                                 html += '</div>';
                                 // Оценка на отдельной строке
                                 if (partner.average_rating > 0) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Оценка: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
                                 } else {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Оценка: нет рекомендаций</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1386,9 +1388,9 @@
                                 html += '</div>';
                                 // Оценка на отдельной строке
                                 if (partner.average_rating > 0) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Оценка: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #D7AC0C;">Рекомендация: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
                                 } else {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Оценка: нет рекомендаций</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
