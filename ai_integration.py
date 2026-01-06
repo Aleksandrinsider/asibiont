@@ -1516,6 +1516,9 @@ def force_tool_calls(message, content, mentions_str, user_id):
     Возвращает список результатов вызовов функций или None.
     """
     import logging
+    import re
+    from datetime import datetime, timedelta
+    import pytz
     logger = logging.getLogger(__name__)
     logger.info(f"[FORCE] force_tool_calls called: message_len={len(message)}, mentions_str='{mentions_str}', has_@={('@' in message)}")
     
