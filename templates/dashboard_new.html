@@ -92,7 +92,7 @@
                     <div id="profile-content" class="profile-content">
                         {% if profile %}
                         <div class="context-item">
-                            <p>Пользователь: @{{ user.username or 'unknown' }}</p>
+                            <p>Пользователь: @{{ user.username or 'неизвестен' }}</p>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -1565,7 +1565,7 @@
                         html += '</div>';
                         html += '<div id="profile-content" class="profile-content">';
                         html += '<div class="context-item">';
-                        html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'unknown'}</p>`;
+                        html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'неизвестен'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
                         html += `<p>Компания: ${data.profile.company || 'Не указана'}</p>`;
                         html += `<p>Должность: ${data.profile.position || 'Не указана'}</p>`;
