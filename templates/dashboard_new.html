@@ -110,11 +110,11 @@
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
-                        <button onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегирую я</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегирую я</button>
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
@@ -211,6 +211,7 @@
     </div>
     <script>
         let currentTaskFilter = 'all'; // Текущий фильтр задач
+        let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
         
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
@@ -808,18 +809,15 @@
                 }
             });
             
-            // Применяем фильтр: показываем все, но выделяем соответствующие
+            // Применяем фильтр: показываем только соответствующие типу
             uniqueContacts.forEach(contact => {
                 const element = contact.element;
                 if (currentContactFilter === 'all') {
                     element.style.display = 'flex';
-                    element.style.opacity = '1';
                 } else if (contact.type === currentContactFilter) {
                     element.style.display = 'flex';
-                    element.style.opacity = '1';
                 } else {
-                    element.style.display = 'flex';
-                    element.style.opacity = '0.4';
+                    element.style.display = 'none';
                 }
             });
         }
@@ -1062,11 +1060,12 @@
                         let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                         data.partners.forEach(partner => {
                             const telegramUrl = `https://t.me/${partner.contact_info}`;
+                            const displayStyle = partner.type === 'recommended' ? 'flex' : 'none';
                             
                             if (partner.type === 'recommended' && partner.contact_info) {
-                                html += '<li class="task-item contact-recommended">';
+                                html += `<li class="task-item contact-recommended" style="display: ${displayStyle};">`;
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">@${partner.contact_info}</a></div>`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
                                 html += `<span class="task-meta">${partner.recommendation_reason || 'Подходящий контакт'}</span>`;
                                 if (partner.city) {
@@ -1075,31 +1074,31 @@
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
-                                html += '<span style="padding: 2px 8px; background: #DFF8F9; color: #068487; border-radius: 12px; font-size: 11px; font-weight: 500;">Рекомендован</span>';
+                                html += '<span style="padding: 2px 8px; background: #DFF8F9; color: #068487; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap;">Рекомендован</span>';
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
-                                html += '<li class="task-item contact-delegating-to-me" style="display: none;">';
+                                html += `<li class="task-item contact-delegating-to-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">@${partner.contact_info}</a></div>`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
                                 html += `<span class="task-meta">${partner.reason}</span>`;
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
-                                html += '<span style="padding: 2px 8px; background: #FFF4E5; color: #D97706; border-radius: 12px; font-size: 11px; font-weight: 500;">Делегируют мне</span>';
+                                html += '<span style="padding: 2px 8px; background: #FFF4E5; color: #D97706; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap;">Делегируют мне</span>';
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
-                                html += '<li class="task-item contact-delegating-by-me" style="display: none;">';
+                                html += `<li class="task-item contact-delegating-by-me" style="display: none;">`;
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">@${partner.contact_info}</a></div>`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px;">';
                                 html += `<span class="task-meta">${partner.reason}</span>`;
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
-                                html += '<span style="padding: 2px 8px; background: #E8F5FF; color: #0969DA; border-radius: 12px; font-size: 11px; font-weight: 500;">Делегирую я</span>';
+                                html += '<span style="padding: 2px 8px; background: #E8F5FF; color: #0969DA; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap;">Делегирую я</span>';
                                 html += '</div>';
                                 html += '</li>';
                             }
