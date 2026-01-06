@@ -907,7 +907,7 @@
                 html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + delegationInfo + '</span></div>';
             }
             
-            html += '<div style="display: flex; gap: 6px; margin-top: 8px;">';
+            html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
                 if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
@@ -972,7 +972,7 @@
             const laterStats = formatStats(laterTasks);
             
             // Найти ближайшее напоминание
-            const upcomingTasks = tasks.filter(t => t.reminder_time && t.status === 'pending')
+            const upcomingTasks = tasks.filter(t => t.reminder_time && t.status !== 'completed' && t.status !== 'skipped')
                 .map(t => ({...t, date: new Date(t.reminder_time)}))
                 .filter(t => t.date > now)
                 .sort((a, b) => a.date - b.date);
@@ -1145,7 +1145,7 @@
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 22px;">`;
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
-                                html += '<div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 2px; flex-wrap: wrap;">';
                                 if (partner.first_name) {
                                     html += `<span class="task-meta">${partner.first_name}</span>`;
                                 }
@@ -1174,7 +1174,7 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">';
+                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
@@ -1197,7 +1197,7 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">';
+                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }

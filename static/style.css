@@ -213,7 +213,30 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
     /* max-height: 100vh; /* Ограничить максимальную высоту */
+}
+
+.left-column::-webkit-scrollbar,
+.right-column::-webkit-scrollbar {
+    width: 4px;
+}
+
+.left-column::-webkit-scrollbar-track,
+.right-column::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.left-column::-webkit-scrollbar-thumb,
+.right-column::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 3px;
+}
+
+.left-column::-webkit-scrollbar-thumb:hover,
+.right-column::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .right-column {
