@@ -1298,6 +1298,10 @@ def force_tool_calls(message, content, mentions_str, user_id):
     
     Возвращает список результатов вызовов функций или None.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[FORCE] force_tool_calls called: message_len={len(message)}, mentions_str='{mentions_str}', has_@={('@' in message)}")
+    
     forced_calls = []
     message_lower = message.lower()
     
@@ -1311,24 +1315,53 @@ def force_tool_calls(message, content, mentions_str, user_id):
             forced_calls.append({"function": "list_tasks", "result": result})
     
     # 2. Проверка на delegate_task (упоминание @username)
+    logger.info(f"[FORCE] Checking delegate: mentions_str != 'нет' = {mentions_str != 'нет'}, '@' in message = {'@' in message}")
     if mentions_str != 'нет' and '@' in message:
+        logger.info(f"[FORCE] Detected @mention: mentions_str={mentions_str}, message has @")
         # Проверяем, что в content нет вызова delegate_task
         if "delegate_task" not in content.lower() and "Args for delegate_task" not in content:
+            logger.info(f"[FORCE] No delegate_task in content")
             # Извлекаем @username
             mention_match = re.search(r'@(\w+)', message)
             if mention_match:
+                logger.info(f"[FORCE] Mention found: {mention_match.group(0)}")
                 delegated_to = f"@{mention_match.group(1)}"
                 # Пытаемся извлечь описание задачи из сообщения
                 task_title = re.sub(r'@\w+', '', message).strip()
                 task_title = re.sub(r'^(поручи|делегируй|передай)\s+', '', task_title, flags=re.IGNORECASE).strip()
+                # Убираем "до завтра 15:00" и т.д. из названия
+                task_title = re.sub(r'\s+до\s+(завтра|послезавтра|сегодня)(\s+\d{1,2}:\d{2})?', '', task_title, flags=re.IGNORECASE).strip()
                 
-                # Извлекаем deadline если есть
+                logger.info(f"[FORCE] Extracted: delegated_to={delegated_to}, title={task_title}")
+                
+                # Извлекаем deadline если есть: "до завтра 15:00"
                 reminder_time = None
-                deadline_match = re.search(r'до\s+(завтра|послезавтра|\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2})', message, re.IGNORECASE)
+                deadline_match = re.search(r'до\s+(завтра|послезавтра|сегодня)\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
                 if deadline_match:
-                    reminder_time = deadline_match.group(1)
+                    day_word = deadline_match.group(1).lower()
+                    hour = deadline_match.group(2)
+                    minute = deadline_match.group(3)
+                    
+                    # Вычисляем дату
+                    from datetime import datetime, timedelta
+                    import pytz
+                    
+                    # Используем Europe/Moscow как дефолт
+                    user_tz = pytz.timezone('Europe/Moscow')
+                    now = datetime.now(user_tz)
+                    
+                    if day_word == 'завтра':
+                        target_date = (now + timedelta(days=1)).date()
+                    elif day_word == 'послезавтра':
+                        target_date = (now + timedelta(days=2)).date()
+                    else:  # сегодня
+                        target_date = now.date()
+                    
+                    # Формируем строку "YYYY-MM-DD HH:MM"
+                    reminder_time = f"{target_date.strftime('%Y-%m-%d')} {hour.zfill(2)}:{minute}"
+                    logger.info(f"[FORCE] Deadline parsed: {deadline_match.group(0)} → {reminder_time}")
                 
-                logger.info(f"[FORCE] Triggering delegate_task() - found @mention {delegated_to}")
+                logger.info(f"[FORCE] Triggering delegate_task() - found @mention {delegated_to}, title: '{task_title}'")
                 result = delegate_task(
                     title=task_title if task_title else "Задача",
                     delegated_to_username=delegated_to,
@@ -1336,6 +1369,15 @@ def force_tool_calls(message, content, mentions_str, user_id):
                     user_id=user_id
                 )
                 forced_calls.append({"function": "delegate_task", "result": result})
+            else:
+                logger.info(f"[FORCE] No @username match in message: {message}")
+        else:
+            logger.info(f"[FORCE] Skipping delegate_task - already in content")
+    else:
+        if mentions_str == 'нет':
+            logger.info(f"[FORCE] No mentions detected (mentions_str='нет')")
+        elif '@' not in message:
+            logger.info(f"[FORCE] No @ symbol in message")
     
     # 3. Проверка на update_profile (упоминание работы, города)
     profile_triggers = [
@@ -1362,11 +1404,56 @@ def force_tool_calls(message, content, mentions_str, user_id):
         result = update_profile(user_id=user_id, **profile_updates)
         forced_calls.append({"function": "update_profile", "result": result})
     
+    # 4. Проверка на delete_task (удаление задачи)
+    delete_triggers = ["удали", "удалить", "убери", "убрать", "delete"]
+    if any(trigger in message_lower for trigger in delete_triggers):
+        logger.info(f"[FORCE] Delete trigger detected in message")
+        if "delete_task" not in content.lower() and "complete_task" not in content.lower():
+            logger.info(f"[FORCE] No delete_task in content, proceeding...")
+            # Пытаемся извлечь позицию (первую, вторую и т.д.)
+            task_id_match = re.search(r'(первую|первая|вторую|вторая|третью|третья|\d+)\s+(задач|task)', message_lower)
+            if task_id_match:
+                logger.info(f"[FORCE] Found position match: {task_id_match.group(0)}")
+                position = task_id_match.group(1)
+                # Преобразуем в число
+                position_map = {"первую": 1, "первая": 1, "вторую": 2, "вторая": 2, "третью": 3, "третья": 3}
+                position_num = position_map.get(position, int(position) if position.isdigit() else 1)
+                
+                # Получаем список задач пользователя
+                tasks_result = list_tasks(user_id=user_id)
+                logger.info(f"[FORCE] Got tasks ({len(tasks_result)} chars):")
+                logger.info(f"[FORCE] tasks_result preview: {tasks_result[:200]}")
+                if tasks_result:
+                    # Парсим список задач из результата
+                    # Формат: "Задачи: 2. Название..., 3. Название..."
+                    # Извлекаем все ID в порядке появления
+                    task_ids = []
+                    for match in re.finditer(r'(\d+)\.\s+([^(]+)', tasks_result):
+                        task_id = int(match.group(1))
+                        task_ids.append(task_id)
+                    
+                    logger.info(f"[FORCE] Parsed task IDs (in order): {task_ids}")
+                    # Берём N-ую задачу по порядку
+                    if position_num <= len(task_ids):
+                        task_id = task_ids[position_num - 1]  # -1 потому что индекс с 0
+                        logger.info(f"[FORCE] Triggering delete_task() - deleting task #{position_num} (ID={task_id})")
+                        result = delete_task(task_id=task_id, user_id=user_id)
+                        forced_calls.append({"function": "delete_task", "result": result})
+                    else:
+                        logger.info(f"[FORCE] Cannot delete task #{position_num} - only {len(task_ids)} tasks available")
+            else:
+                logger.info(f"[FORCE] No position match found in message")
+        else:
+            logger.info(f"[FORCE] Skipping delete - already in content")
+    
+    
     return forced_calls if forced_calls else None
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     import logging
     logger = logging.getLogger(__name__)
+    # Сохраняем оригинальное сообщение ДО очистки
+    original_message = message
     # Extract mentions before cleaning message
     mentions = re.findall(r'@[\w]+', message)
     mentions_str = ', '.join(mentions) if mentions else 'нет'
@@ -1595,254 +1682,46 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     # Проверяем tool_calls в API response
                     tool_calls = message_response.get("tool_calls")
                     
-                    # Если tool_calls нет, пытаемся форсировать
-                    if not tool_calls:
-                        logger.info("[FORCE CHECK] No tool_calls in API response, analyzing message...")
-                        forced = force_tool_calls(message, content, mentions_str, user_id)
-                        if forced:
-                            # Формируем сообщения с результатами для отправки обратно в AI
-                            logger.info(f"[FORCE] Forced {len(forced)} tool calls, sending results back to AI")
+                    # ВСЕГДА проверяем триггеры принудительного вызова
+                    logger.info("[FORCE CHECK] Checking for forced tool call triggers...")
+                    forced = force_tool_calls(original_message, content, mentions_str, user_id)
+                    
+                    if forced:
+                        # Возвращаем результаты напрямую БЕЗ повторного вызова AI (избегаем дубликатов)
+                        logger.info(f"[FORCE] Forced {len(forced)} tool calls, returning direct response")
+                        
+                        # Генерируем короткий ответ на основе результатов
+                        responses = []
+                        for fc in forced:
+                            func_name = fc['function']
+                            result = fc['result']
                             
-                            # Добавляем исходный ответ AI в историю
-                            messages.append({"role": "assistant", "content": content})
-                            
-                            # Добавляем результаты вызванных функций как system message
-                            tool_results = []
-                            for call in forced:
-                                tool_results.append(f"[RESULT] {call['function']}:\n{call['result']}")
-                            
-                            messages.append({
-                                "role": "system",
-                                "content": "РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ФУНКЦИЙ:\n" + "\n\n".join(tool_results) + "\n\nНа основе этих данных сформируй КОРОТКИЙ естественный ответ пользователю."
-                            })
-                            
-                            # Повторный запрос к AI для финального ответа
-                            data = {
-                                "model": "deepseek-chat",
-                                "messages": messages,
-                                "temperature": 0.1
-                            }
-                            
-                            async with aiohttp.ClientSession() as session:
-                                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                                    if response.status == 200:
-                                        final_result = await response.json()
-                                        content = final_result["choices"][0]["message"].get("content", "")
-                                        content = clean_content(content)
-                                        logger.info(f"[FORCE] Generated final response after forced calls")
-                                    else:
-                                        # Fallback если второй запрос не удался
-                                        content = "\n".join([f"{c['result']}" for c in forced])
-            tool_calls_in_content = False
-            if "<｜DSML｜function_calls>" in content:
-                tool_calls_in_content = True
-                # Парсить tool calls из content
-                tool_call_blocks = re.findall(r'<｜DSML｜invoke name="([^"]+)">(.*?)</｜DSML｜invoke>', content, re.DOTALL)
-                tool_messages = []
-                # Очистить content от tool calls перед добавлением в messages
-                cleaned_content = re.sub(r'<.*?>', '', content).strip()
-                messages.append({"role": "assistant", "content": cleaned_content})  # Добавить очищенный content
-                for func_name, block in tool_call_blocks:
-                    # Try JSON first
-                    arguments_match = re.search(r'<｜DSML｜function_input>(.*?)</｜DSML｜function_input>', block, re.DOTALL)
-                    if arguments_match:
-                        arguments_str = arguments_match.group(1)
-                        try:
-                            args = json.loads(arguments_str)
-                        except:
-                            args = parse_tool_arguments(arguments_str)
-                    else:
-                        # Try JSON in tool_call
-                        json_match = re.search(r'<｜DSML｜tool_call>(.*?)</｜DSML｜tool_call>', block, re.DOTALL)
-                        if json_match:
-                            try:
-                                args = json.loads(json_match.group(1))
-                            except:
-                                args = {}
-                        else:
-                            # Fallback to arg format
-                            args = {}
-                            arg_matches = re.findall(r'<｜DSML｜(?:arg|parameter) name="([^"]+)">(.*?)</｜DSML｜(?:arg|parameter)>', block, re.DOTALL)
-                            for key, value in arg_matches:
-                                args[key] = value.strip()
-                    if func_name == "add_task":
-                        print(f"Args for add_task (content): {args}")
-                        result_text = add_task(**args, user_id=user_id)
-                    elif func_name == "list_tasks":
-                        result_text = list_tasks(user_id=user_id)
-                    elif func_name == "complete_task":
-                        result_text = complete_task(**args, user_id=user_id)
-                    elif func_name == "set_reminder":
-                        result_text = set_reminder(**args, user_id=user_id)
-                    elif func_name == "update_user_memory":
-                        result_text = update_user_memory(**args, user_id=user_id)
-                    elif func_name == "edit_task":
-                        result_text = edit_task(**args, user_id=user_id)
-                    elif func_name == "delete_task":
-                        result_text = delete_task(**args, user_id=user_id)
-                    elif func_name == "set_priority":
-                        result_text = set_priority(**args, user_id=user_id)
-                    elif func_name == "get_task_details":
-                        result_text = get_task_details(**args, user_id=user_id)
-                    elif func_name == "find_partners":
-                        result_text = find_partners(user_id=user_id)
-                    elif func_name == "update_profile":
-                        result_text = update_profile(**args, user_id=user_id)
-                    elif func_name == "delegate_task":
-                        result_text = delegate_task(**args, user_id=user_id)
-                    elif func_name == "accept_delegated_task":
-                        result_text = accept_delegated_task(**args, user_id=user_id)
-                    elif func_name == "reject_delegated_task":
-                        result_text = reject_delegated_task(**args, user_id=user_id)
-                    elif func_name == "get_delegation_progress":
-                        result_text = get_delegation_progress(**args, user_id=user_id)
-                    tool_messages.append({
-                        "role": "tool",
-                        "tool_call_id": f"call_{func_name}",
-                        "content": result_text
-                    })
-                # Отправить результат tools обратно ИИ для финального ответа
-                messages.extend(tool_messages)
-                data = {
-                    "model": "deepseek-chat",
-                    "messages": messages
-                }
-                try:
-                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                        if response.status == 200:
-                            final_message = (await response.json())["choices"][0]["message"]
-                            content = final_message.get("content", "")
-                            content = re.sub(r'<\|.*?\|>', '', content).strip()
-                            if not content or '<|' in content:
-                                # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
-                                messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
-                                data = {
-                                    "model": "deepseek-chat",
-                                    "messages": messages
-                                }
-                                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                                    if response.status == 200:
-                                        final_message = (await response.json())["choices"][0]["message"]
-                                        content = final_message.get("content", "Запрос обработан.")
-                                        content = re.sub(r'<\|.*?\|>', '', content).strip()
-                                        if '<|' in content:
-                                            content = "Запрос обработан."
-                                    else:
-                                        content = "Запрос обработан."
-                            content = clean_content(content)
-                            return content
-                        else:
-                            return "Ошибка ответа."
-                except Exception as e:
-                    logger.error(f"Error in second API call for tool results: {e}")
-                    return "Запрос обработан."
-            elif "tool_calls" in message_response:
-                # Выполнить tool calls
-                tool_messages = []
-                # Добавить assistant message с tool_calls
-                messages.append(message_response)
-                for tool_call in message_response["tool_calls"]:
-                    func_name = tool_call["function"]["name"]
-                    try:
-                        args = json.loads(tool_call["function"]["arguments"])
-                    except:
-                        args = parse_tool_arguments(tool_call["function"]["arguments"])
-                    if func_name == "add_task":
-                        print(f"Args for add_task (tool_calls): {args}")
-                        result_text = add_task(**args, user_id=user_id)
-                    elif func_name == "list_tasks":
-                        result_text = list_tasks(user_id=user_id)
-                    elif func_name == "complete_task":
-                        result_text = complete_task(**args, user_id=user_id)
-                    elif func_name == "set_reminder":
-                        result_text = set_reminder(**args, user_id=user_id)
-                    elif func_name == "update_user_memory":
-                        result_text = update_user_memory(**args, user_id=user_id)
-                    elif func_name == "edit_task":
-                        result_text = edit_task(**args, user_id=user_id)
-                    elif func_name == "delete_task":
-                        result_text = delete_task(**args, user_id=user_id)
-                    elif func_name == "set_priority":
-                        result_text = set_priority(**args, user_id=user_id)
-                    elif func_name == "get_task_details":
-                        result_text = get_task_details(**args, user_id=user_id)
-                    elif func_name == "find_partners":
-                        result_text = find_partners(user_id=user_id)
-                    elif func_name == "update_profile":
-                        result_text = update_profile(**args, user_id=user_id)
-                    elif func_name == "delegate_task":
-                        result_text = delegate_task(**args, user_id=user_id)
-                    elif func_name == "accept_delegated_task":
-                        result_text = accept_delegated_task(**args, user_id=user_id)
-                    elif func_name == "reject_delegated_task":
-                        result_text = reject_delegated_task(**args, user_id=user_id)
-                    elif func_name == "get_delegation_progress":
-                        result_text = get_delegation_progress(**args, user_id=user_id)
-                    tool_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "content": result_text
-                    })
-                # Отправить результат tools обратно ИИ для финального ответа
-                messages.extend(tool_messages)
-                data = {
-                    "model": "deepseek-chat",
-                    "messages": messages
-                }
-                try:
-                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                        if response.status == 200:
-                            final_message = (await response.json())["choices"][0]["message"]
-                            content = final_message.get("content", "")
-                            content = re.sub(r'<\|.*?\|>', '', content).strip()
-                            if not content or '<|' in content:
-                                # Если ИИ не сгенерировал ответ или вернул tool calls, запросить его
-                                messages.append({"role": "user", "content": "На основе выполненных действий, дай краткий естественный ответ пользователю на русском языке."})
-                                data = {
-                                    "model": "deepseek-chat",
-                                    "messages": messages
-                                }
-                                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                                    if response.status == 200:
-                                        final_message = (await response.json())["choices"][0]["message"]
-                                        content = final_message.get("content", "Расскажите подробнее.")
-                                        content = re.sub(r'<\|.*?\|>', '', content).strip()
-                                    else:
-                                        content = "Расскажите подробнее."
-                        content = clean_content(content)
-                        if not content:
-                            content = "Задача обновлена."
-                        content = replace_placeholders(content, user_now, current_time_str)
-                        return content
-                except Exception as e:
-                    logger.error(f"Error in second API call for tool_calls: {e}")
-                    return "Запрос обработан."
-            else:
-                content = message_response.get("content", "")
-                content = re.sub(r'<\|.*?\|>', '', content).strip()
-                if not content:
-                    # Если ИИ не сгенерировал ответ, запросить его
-                    messages.append({"role": "user", "content": "Дай естественный ответ на запрос пользователя на русском языке."})
-                    data = {
-                        "model": "deepseek-chat",
-                        "messages": messages
-                    }
-                    try:
-                        async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
-                            if response.status == 200:
-                                final_message = (await response.json())["choices"][0]["message"]
-                                content = final_message.get("content", "Расскажите подробнее.")
-                                content = re.sub(r'<\|.*?\|>', '', content).strip()
+                            if func_name == 'list_tasks':
+                                responses.append(result)
+                            elif func_name == 'delegate_task':
+                                if 'Ошибка' in result or 'не найден' in result:
+                                    responses.append(result)
+                                else:
+                                    responses.append("Задача успешно делегирована.")
+                            elif func_name == 'update_profile':
+                                responses.append("Профиль обновлён.")
+                            elif func_name == 'delete_task':
+                                responses.append("Задача удалена.")
                             else:
-                                content = "Расскажите подробнее."
-                    except Exception as e:
-                        logger.error(f"Error in fallback API call: {e}")
-                        content = "Расскажите подробнее."
+                                responses.append(result)
+                        
+                        return ' '.join(responses)
+                
+                # Обрабатываем обычный ответ AI без tool calls
+                content = message_response.get("content", "")
                 content = clean_content(content)
+                content = replace_placeholders(content, user_now, current_time_str)
+                
                 if not content:
                     content = "Готово! ✅"
-                content = replace_placeholders(content, user_now, current_time_str)
+                
                 return content
+    
     except Exception as e:
         import traceback
         logger.error(f"Error in chat_with_ai: {e}")

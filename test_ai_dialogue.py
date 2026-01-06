@@ -98,7 +98,15 @@ async def test_ai_dialogue():
             print(f"[OK] User: {user.username} (ID: {user.telegram_id})")
             print(f"    Timezone: {user.timezone or 'UTC'}")
             
-            # Проверяем реальные данные
+            # ОЧИЩАЕМ старые задачи для чистого теста
+            old_tasks = session.query(Task).filter_by(user_id=user.id).all()
+            if old_tasks:
+                for task in old_tasks:
+                    session.delete(task)
+                session.commit()
+                print(f"    Cleaned {len(old_tasks)} old tasks")
+            
+            # Проверяем что БД чистая
             tasks_count = session.query(Task).filter_by(user_id=user.id).count()
             print(f"    Tasks in DB: {tasks_count}\n")
         
@@ -112,7 +120,7 @@ async def test_ai_dialogue():
         # Жесткий список тестовых команд
         test_commands = [
             "Привет!",
-            "Поручи @testuser подготовить отчет до завтра 15:00",
+            "Поручи @test_user подготовить отчет до завтра 15:00",  # self-delegation
             "Добавь задачу позвонить клиенту через 2 часа",
             "Покажи все мои задачи",
             "Я переехал в Москву и работаю Senior Engineer в Google",
