@@ -628,7 +628,7 @@ body {
     /* Используем пагинацию */
     overflow-y: auto;
     overflow-x: hidden;
-    max-height: calc(100vh - 490px);
+    max-height: calc(100vh - 510px);
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
 }
@@ -824,9 +824,25 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: calc(100vh - 490px);
+    max-height: calc(100vh - 510px);
     overflow-y: auto;
+    overflow-x: hidden;
     transition: max-height 0.3s ease;
+    scrollbar-width: thin;
+    scrollbar-color: #D1D9E0 transparent;
+}
+
+.people-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.people-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.people-list::-webkit-scrollbar-thumb {
+    background-color: #D1D9E0;
+    border-radius: 2px;
 }
 
 .person-card {

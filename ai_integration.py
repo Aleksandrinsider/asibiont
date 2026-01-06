@@ -1033,7 +1033,7 @@ def get_partners_list(user_id=None, session=None):
             delegated_usernames.add(task.delegated_to_username.replace('@', '').lower())
     
     # Получаем все профили с заполненными данными, кроме своего и тех, с кем уже есть делегирование
-    profiles = session.query(UserProfile).join(User, UserProfile.user_id == User.id).filter(
+    all_profiles = session.query(UserProfile).join(User, UserProfile.user_id == User.id).filter(
         UserProfile.user_id != user.id,
         # Хотя бы одно поле должно быть заполнено
         (UserProfile.interests.isnot(None)) | 
@@ -1042,19 +1042,76 @@ def get_partners_list(user_id=None, session=None):
         (UserProfile.city.isnot(None))
     ).all()
     
-    # Фильтруем тех, с кем уже есть делегирование
+    # Получаем профиль текущего пользователя для сравнения
+    user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    if not user_profile:
+        if close_session:
+            session.close()
+        return []
+    
+    # Фильтруем только тех, у кого есть совпадения
     partners = []
-    for profile in profiles:
+    for profile in all_profiles:
         profile_user = session.query(User).filter_by(id=profile.user_id).first()
-        if profile_user and profile_user.username:
-            if profile_user.username.lower() not in delegated_usernames:
-                partners.append(profile)
+        if not profile_user or not profile_user.username:
+            continue
+        if profile_user.username.lower() in delegated_usernames:
+            continue
+        
+        # Проверяем наличие совпадений по интересам, навыкам или целям
+        has_match = False
+        
+        # Проверка по навыкам
+        if user_profile.skills and profile.skills:
+            user_skills = set(s.strip().lower() for s in user_profile.skills.split(','))
+            profile_skills = set(s.strip().lower() for s in profile.skills.split(','))
+            if user_skills & profile_skills:
+                has_match = True
+        
+        # Проверка по интересам
+        if user_profile.interests and profile.interests:
+            user_interests = set(i.strip().lower() for i in user_profile.interests.split(','))
+            profile_interests = set(i.strip().lower() for i in profile.interests.split(','))
+            if user_interests & profile_interests:
+                has_match = True
+        
+        # Проверка по целям
+        if user_profile.goals and profile.goals:
+            user_goals = set(g.strip().lower() for g in user_profile.goals.split(','))
+            profile_goals = set(g.strip().lower() for g in profile.goals.split(','))
+            if user_goals & profile_goals:
+                has_match = True
+        
+        # Проверка по компании
+        if hasattr(user_profile, 'company') and hasattr(profile, 'company'):
+            if user_profile.company and profile.company:
+                if user_profile.company.lower() == profile.company.lower():
+                    has_match = True
+        
+        # Добавляем только если есть совпадение
+        if has_match:
+            partners.append(profile)
+    
+    # Сортируем: сначала пользователи из одного города, потом остальные
+    user_city = user_profile.city.lower() if user_profile.city else None
+    partners_same_city = []
+    partners_other_city = []
+    
+    for partner in partners:
+        partner_city = partner.city.lower() if partner.city else None
+        if user_city and partner_city == user_city:
+            partners_same_city.append(partner)
+        else:
+            partners_other_city.append(partner)
+    
+    # Объединяем: сначала из того же города, потом остальные
+    sorted_partners = partners_same_city + partners_other_city
     
     if close_session:
         session.close()
     
     # Возвращаем до 20 пользователей (можно увеличить при необходимости)
-    return partners[:20]
+    return sorted_partners[:20]
 
 def find_partners(user_id=None, session=None):
     from models import Session, UserProfile, User
