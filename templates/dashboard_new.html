@@ -341,8 +341,12 @@
                             console.log('Tasks updated after message');
                             // Повторное обновление через 2 секунды на случай задержки в БД
                             setTimeout(async () => {
-                                await updateTasks();
-                                console.log('Tasks updated again after message');
+                                try {
+                                    await updateTasks();
+                                    console.log('Tasks updated again after message');
+                                } catch (e) {
+                                    console.error('Error in delayed update:', e);
+                                }
                             }, 2000);
                         } catch (e) {
                             console.error('Error updating after message:', e);
