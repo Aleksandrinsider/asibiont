@@ -1478,8 +1478,8 @@ def force_tool_calls(message, content, mentions_str, user_id):
     add_triggers = ["добавь", "добавить", "создай", "создать", "напомни", "поставь задачу"]
     if any(trigger in message_lower for trigger in add_triggers):
         logger.info(f"[FORCE] Add task trigger detected in message")
-        # Проверяем, что AI не вызвал add_task, но говорит что собирается это сделать
-        if "add_task" not in content.lower() and ("добавлю" in content.lower() or "создам" in content.lower() or "поставлю" in content.lower()):
+        # Проверяем, что AI не вызвал add_task, но говорит что собирается или уже добавил
+        if "add_task" not in content.lower() and ("добавлю" in content.lower() or "создам" in content.lower() or "поставлю" in content.lower() or "добавил" in content.lower() or "добавлена" in content.lower()):
             logger.info(f"[FORCE] AI responded with text instead of calling add_task - forcing tool call")
             
             # Извлекаем название задачи из кавычек
