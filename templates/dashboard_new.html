@@ -226,6 +226,31 @@
         </div>
         {% endif %}
     </div>
+
+    <!-- Rating Modal -->
+    <div id="rating-modal" class="rating-modal">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3>Оценить контакт</h3>
+                <button onclick="closeRatingModal()" class="rating-close-btn">×</button>
+            </div>
+            <div class="rating-modal-body">
+                <p>Оцените <span id="rating-username" style="font-weight: 600; color: #068487;"></span></p>
+                <p style="font-size: 12px; color: #59636E; margin-bottom: 16px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
+                <div class="rating-slider-container">
+                    <input type="range" id="rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="updateRatingValue(this.value)">
+                    <div class="rating-value-display">
+                        <span id="rating-value">5</span>/10
+                    </div>
+                </div>
+                <div class="rating-modal-actions">
+                    <button onclick="closeRatingModal()" class="rating-cancel-btn">Отмена</button>
+                    <button onclick="submitRating()" class="rating-submit-btn">Оценить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
@@ -1076,39 +1101,61 @@
             }
         }
 
-        async function rateUser(username, event) {
-            event.stopPropagation();
+        let currentRatingUsername = null;
+        
+        async function openRatingModal(username) {
+            currentRatingUsername = username;
+            const modal = document.getElementById('rating-modal');
+            const usernameEl = document.getElementById('rating-username');
+            const slider = document.getElementById('rating-slider');
+            const valueDisplay = document.getElementById('rating-value');
+            
+            usernameEl.textContent = `@${username}`;
             
             // Получить текущую оценку пользователя
-            const getCurrentRating = await fetch(`/api/get_user_rating?username=${username}`, {
-                credentials: 'include'
-            });
-            if (!await checkAuth(getCurrentRating)) return;
-            
-            let currentRatingText = '';
-            if (getCurrentRating.ok) {
-                const data = await getCurrentRating.json();
-                if (data.rating) {
-                    currentRatingText = `\nТекущая оценка: ${data.rating}/10`;
+            try {
+                const getCurrentRating = await fetch(`/api/get_user_rating?username=${username}`, {
+                    credentials: 'include'
+                });
+                if (await checkAuth(getCurrentRating) && getCurrentRating.ok) {
+                    const data = await getCurrentRating.json();
+                    if (data.rating) {
+                        slider.value = data.rating;
+                        valueDisplay.textContent = data.rating;
+                    } else {
+                        slider.value = 5;
+                        valueDisplay.textContent = '5';
+                    }
+                } else {
+                    slider.value = 5;
+                    valueDisplay.textContent = '5';
                 }
+            } catch (e) {
+                slider.value = 5;
+                valueDisplay.textContent = '5';
             }
             
-            const rating = prompt(`Оцените @${username} от 1 до 10:${currentRatingText}\n(1 - очень плохая рекомендация, 10 - отличная рекомендация)`, '');
+            modal.style.display = 'flex';
+        }
+        
+        function closeRatingModal() {
+            document.getElementById('rating-modal').style.display = 'none';
+            currentRatingUsername = null;
+        }
+        
+        function updateRatingValue(value) {
+            document.getElementById('rating-value').textContent = value;
+        }
+        
+        async function submitRating() {
+            if (!currentRatingUsername) return;
             
-            if (rating === null || rating === '') {
-                return; // Пользователь отменил
-            }
-            
-            const ratingNum = parseInt(rating);
-            if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
-                alert('Пожалуйста, введите число от 1 до 10');
-                return;
-            }
+            const rating = parseInt(document.getElementById('rating-slider').value);
             
             const response = await fetch('/api/rate_user', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, rating: ratingNum }),
+                body: JSON.stringify({ username: currentRatingUsername, rating: rating }),
                 credentials: 'include'
             });
             
@@ -1117,6 +1164,7 @@
             if (response.ok) {
                 const data = await response.json();
                 addMessage(`✅ ${data.message}`, 'ai');
+                closeRatingModal();
                 await updatePeople(); // Обновить список контактов
             } else {
                 const error = await response.json();
@@ -1251,7 +1299,9 @@
                                     html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
                                 }
                                 html += '</div>';
-                                html += `<button class="task-action-btn" onclick="rateUser('${partner.contact_info}', event)" style="margin-top: 8px;">Оценить</button>`;
+                                html += '</div>';
+                                html += '<div class="task-actions">';
+                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action" title="Оценить контакт">⭐</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
