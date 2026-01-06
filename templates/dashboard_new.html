@@ -511,12 +511,7 @@
         renderTaskGroups(initialTasks);
         {% endif %}
         
-        // Автоматическое обновление задач каждые 3 секунды
-        {% if logged_in %}
-        setInterval(async () => {
-            await updateTasks();
-        }, 3000);
-        {% endif %}
+        // Задачи обновляются в главном цикле (см. ниже)
         
         function groupTasksByDue(tasks) {
             const now = new Date();
@@ -1022,13 +1017,13 @@
             // Применить фильтр к существующим контактам
             renderContacts();
             
-            // Обновлять счетчик времени каждые 30 секунд
+            // Обновлять счетчик времени каждую минуту (оптимизировано)
             setInterval(() => {
                 const nextReminderEl = document.getElementById('next-reminder');
                 if (nextReminderEl && nextReminderEl.style.display !== 'none') {
                     updateTasks();
                 }
-            }, 30000);
+            }, 60000);
         });
         
         async function updateTasks() {
@@ -1303,13 +1298,13 @@
         loadInitialMessages();
         updateProfile();
 
-        // Auto-update every 3 seconds
+        // Auto-update every 5 seconds (оптимизировано для снижения нагрузки)
         setInterval(() => {
             updateTasks();
             updatePeople();
             updateProfile();
             updateChat();
-        }, 3000);
+        }, 5000);
 
         async function updateChat() {
             try {
