@@ -483,7 +483,7 @@ body {
 }
 
 .message-time {
-    font-size: 10px;
+    font-size: 12px;
     color: #8C959F;
     margin-top: 4px;
     opacity: 0.6;
@@ -492,7 +492,7 @@ body {
 }
 
 .message-time {
-    font-size: 11px;
+    font-size: 12px;
     margin-top: 6px;
     opacity: 0.7;
     font-weight: 400;
@@ -774,19 +774,19 @@ body {
 }
 
 .task-meta {
-    font-size: 11px;
+    font-size: 12px;
     color: #656D76;
     line-height: 1.2;
 }
 
 .task-time {
-    font-size: 11px;
+    font-size: 12px;
     color: #656D76;
     margin: 0;
 }
 
 .task-status {
-    font-size: 11px;
+    font-size: 12px;
     color: #656D76;
     margin: 0;
 }
@@ -971,13 +971,13 @@ body {
     }
     
     .header-info {
-        font-size: 11px;
+        font-size: 12px;
         white-space: normal;
     }
     
     .logout-btn {
         padding: 4px 8px;
-        font-size: 11px;
+        font-size: 12px;
     }
     
     .container {
@@ -1040,7 +1040,7 @@ body {
     }
     
     .task-actions button {
-        font-size: 11px;
+        font-size: 12px;
         padding: 4px 8px;
     }
     
