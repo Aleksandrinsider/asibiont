@@ -1600,12 +1600,39 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         logger.info("[FORCE CHECK] No tool_calls in API response, analyzing message...")
                         forced = force_tool_calls(message, content, mentions_str, user_id)
                         if forced:
-                            # Формируем ответ на основе вызванных функций
-                            results = []
+                            # Формируем сообщения с результатами для отправки обратно в AI
+                            logger.info(f"[FORCE] Forced {len(forced)} tool calls, sending results back to AI")
+                            
+                            # Добавляем исходный ответ AI в историю
+                            messages.append({"role": "assistant", "content": content})
+                            
+                            # Добавляем результаты вызванных функций как system message
+                            tool_results = []
                             for call in forced:
-                                results.append(f"{call['function']}: {call['result']}")
-                            content = "\n".join(results) + "\n\n" + content
-                            logger.info(f"[FORCE] Applied {len(forced)} forced tool calls")
+                                tool_results.append(f"[RESULT] {call['function']}:\n{call['result']}")
+                            
+                            messages.append({
+                                "role": "system",
+                                "content": "РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ФУНКЦИЙ:\n" + "\n\n".join(tool_results) + "\n\nНа основе этих данных сформируй КОРОТКИЙ естественный ответ пользователю."
+                            })
+                            
+                            # Повторный запрос к AI для финального ответа
+                            data = {
+                                "model": "deepseek-chat",
+                                "messages": messages,
+                                "temperature": 0.1
+                            }
+                            
+                            async with aiohttp.ClientSession() as session:
+                                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                                    if response.status == 200:
+                                        final_result = await response.json()
+                                        content = final_result["choices"][0]["message"].get("content", "")
+                                        content = clean_content(content)
+                                        logger.info(f"[FORCE] Generated final response after forced calls")
+                                    else:
+                                        # Fallback если второй запрос не удался
+                                        content = "\n".join([f"{c['result']}" for c in forced])
             tool_calls_in_content = False
             if "<｜DSML｜function_calls>" in content:
                 tool_calls_in_content = True
