@@ -185,7 +185,7 @@
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Задачи</h3>
                     </div>
-                    <div style="margin-bottom: 6px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                    <div style="margin-bottom: 22px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Все задачи</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Личные задачи</button>
@@ -572,10 +572,10 @@
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
                 // Назначенные мне - задачи делегированные мне, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('(делегирована от @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - делегирована от @'));
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // Назначенные мной - задачи делегированные другим, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes('(делегирована для @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - делегирована на @'));
             } else if (currentTaskFilter === 'overdue') {
                 // С отставанием - просроченные задачи
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true);
