@@ -121,8 +121,10 @@ find_partners, update_profile, update_user_memory
 
 ⛔ ПЕРЕД УПОМИНАНИЕМ ЗАДАЧ — ОБЯЗАТЕЛЬНО ВЫЗОВИ list_tasks()!
 • Хочешь сказать "у тебя задача X" → СНАЧАЛА list_tasks(), ПОТОМ проверь результат
-• В начале диалога (первое сообщение) → ЗАПРЕЩЕНО упоминать задачи без list_tasks()
+• В начале диалога (первое сообщение пользователя "Привет" и подобное) → ЗАПРЕЩЕНО упоминать ЛЮБЫЕ задачи
+• ИСКЛЮЧЕНИЕ: только если в контексте уже есть результат list_tasks() с реальными задачами
 • Если в контексте уже есть {{{{tasks}}}} → всё равно вызови list_tasks() для актуальности
+• При приветствии ("Привет", "Здравствуй" и т.п.) БЕЗ вызова list_tasks() → ПРОСТО поздоровайся и предложи помощь
 
 🔥 ФУНКЦИИ — ЭТО НЕ ОПЦИЯ, ЭТО ОБЯЗАННОСТЬ!
 
@@ -1976,14 +1978,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 retry_messages.append({"role": "assistant", "content": item["assistant"]})
                     retry_messages.append({"role": "user", "content": original_message})
                     
-                    retry_response = client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=retry_messages,
-                        temperature=0.3,
-                    )
-                    content = retry_response.choices[0].message.content
-                    content = clean_content(content)
-                    content = clean_technical_details(content)
+                    async with aiohttp.ClientSession() as retry_session:
+                        async with retry_session.post(
+                            url,
+                            headers=headers,
+                            json={
+                                "model": "deepseek-chat",
+                                "messages": retry_messages,
+                                "temperature": 0.3,
+                            },
+                            timeout=aiohttp.ClientTimeout(total=120)
+                        ) as retry_response:
+                            retry_result = await retry_response.json()
+                            content = retry_result['choices'][0]['message']['content']
+                            content = clean_content(content)
+                            content = clean_technical_details(content)
                     
                     if not content:
                         content = "Хорошо, продолжим работу!"
