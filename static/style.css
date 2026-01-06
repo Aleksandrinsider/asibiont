@@ -212,10 +212,10 @@ body {
 .right-column {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: calc(100vh - 90px);
     overflow-y: auto;
     overflow-x: hidden;
-    /* max-height: 100vh; /* Ограничить максимальную высоту */
+    padding-bottom: 20px;
 }
 
 .left-column::-webkit-scrollbar,
@@ -242,10 +242,10 @@ body {
 .center-column {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: calc(100vh - 90px);
     overflow: hidden;
-    /* max-height: 100vh; /* Ограничить максимальную высоту */
-    margin-top: 0px; /* Увеличить отступ от шапки на 3px */
+    margin-top: 0px;
+    padding-bottom: 20px;
 }
 
 .chat-section {
@@ -753,6 +753,7 @@ body {
     border: none;
     background-color: transparent;
     transition: all 0.2s;
+    gap: 8px;
 }
 
 .task-item:hover {
@@ -796,7 +797,8 @@ body {
     flex-direction: column;
     gap: 2px;
     align-items: center;
-    margin-left: -2px;
+    margin-left: 8px;
+    flex-shrink: 0;
 }
 
 .quick-action {
