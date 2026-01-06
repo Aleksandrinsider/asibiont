@@ -67,6 +67,38 @@ class AIIntegration:
     async def generate_delegation_update(self, user_id, task_title, recipient_username, task_status, reminder_time, update_type):
         return generate_delegation_update(user_id, task_title, recipient_username, task_status, reminder_time, update_type)
 
+def clean_technical_details(text):
+    """Удаляет технические детали из ответа AI"""
+    import re
+    
+    # Удаляем названия функций в любой форме
+    text = re.sub(r'\b(list_tasks|add_task|delete_task|complete_task|delegate_task|update_profile|find_partners|update_user_memory)\s*\(\s*\)', '', text, flags=re.IGNORECASE)
+    
+    # Удаляем фразы о вызове функций
+    patterns_to_remove = [
+        r'вызываю\s+\w+\(\)',
+        r'вызову\s+\w+\(\)',
+        r'сейчас\s+вызову',
+        r'буду\s+вызывать',
+        r'Args for.*?(?=\n|$)',
+        r'🔧\s*ВЫПОЛНЕННЫЕ ФУНКЦИИ:.*?(?=\n\n|\Z)',
+        r'🔧\s*\*\*Выполняю:\*\*.*?(?=\n|$)',
+        r'📋\s*\*\*Результат:\*\*.*?(?=\n\n|\Z)',
+    ]
+    
+    for pattern in patterns_to_remove:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Удаляем блоки кода Python
+    text = re.sub(r'```python.*?```', '', text, flags=re.DOTALL)
+    text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
+    
+    # Убираем множественные пробелы и пустые строки
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+    text = re.sub(r' +', ' ', text)
+    
+    return text.strip()
+
 def get_system_prompt():
     return f"""Ты ASI — AI-помощник по управлению задачами. Общайся естественно, помогай решать задачи.
 
@@ -156,7 +188,36 @@ add_task (время):
 Известные пользователи: @testuser, @testuser_delegate (для тестирования)
 Ближайшие дни: завтра {{{{tomorrow}}}}, послезавтра {{{{day_after}}}}
 
-Используй ВСЕ данные из контекста для персонализации ответов. НЕ выдумывай задачи которых нет!"""
+Используй ВСЕ данные из контекста для персонализации ответов. НЕ выдумывай задачи которых нет!
+
+═══════════════════════════════════════════════════════════════════
+💼 ПРОФЕССИОНАЛЬНАЯ ПОСТАНОВКА ЗАДАЧ
+═══════════════════════════════════════════════════════════════════
+
+❌ ПЛОХИЕ ЗАДАЧИ (поверхностные, без контекста):
+• "проверить почту"
+• "позвонить клиенту"  
+• "заказать еду"
+
+✅ ХОРОШИЕ ЗАДАЧИ (конкретные, с контекстом):
+• "Проверить почту: ответить на письмо от партнера о сделке, переслать договор юристу"
+• "Звонок клиенту ООО 'Альфа': обсудить правки в ТЗ (пункты 3.2, 4.1), согласовать сроки"
+• "Заказ обеда для совещания: 8 персон, безглютеновое меню для Марины, доставка к 13:00"
+
+КОГДА ПОЛЬЗОВАТЕЛЬ ПРОСИТ СОЗДАТЬ ЗАДАЧУ - ЗАДАВАЙ УТОЧНЯЮЩИЕ ВОПРОСЫ:
+• "Какова цель? Какие конкретно действия?"
+• "Есть ли важные детали, дедлайны, люди?"
+Пример: "Добавь позвонить клиенту" → "Какой клиент? Что обсудить? Когда дедлайн?"
+
+🧠 ПРОАКТИВНОСТЬ - АНАЛИЗИРУЙ И ПРЕДЛАГАЙ:
+• "Встреча через час — подготовил материалы?"
+• "У тебя 3 дедлайна на завтра — начнем с важного?"
+• "Это часть проекта? Может, разобьем на подзадачи?"
+
+🔥 АБСОЛЮТНЫЙ ЗАПРЕТ - НИКОГДА НЕ ПОКАЗЫВАЙ:
+❌ "list_tasks()", "add_task()", названия функций
+❌ ```python код```, "вызываю", "Args for"
+✅ Используй функции МОЛЧА, отвечай только результатом"""
 
 
 def parse_relative_time(message, current_time):
@@ -1781,7 +1842,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             tool_results_summary.append(f"{func_name}() вернул: {result[:200]}")
                         
                         # Делаем повторный запрос к AI с результатами tool calls для генерации естественного ответа
-                        system_prompt_with_results = system_prompt + f"\n\nВЫПОЛНЕННЫЕ ФУНКЦИИ (НЕ ПОКАЗЫВАЙ ЭТО ПОЛЬЗОВАТЕЛЮ):\n" + "\n".join(tool_results_summary) + "\n\nСформулируй естественный ответ пользователю на основе ТОЛЬКО этих данных. НЕ упоминай функции в ответе! Следуй стилю из промпта!"
+                        system_prompt_with_results = system_prompt + f"\n\nВЫПОЛНЕННЫЕ ФУНКЦИИ (НЕ ПОКАЗЫВАЙ ЭТО ПОЛЬЗОВАТЕЛЮ, МОЛЧА ИСПОЛЬЗУЙ ДАННЫЕ):\n" + "\n".join(tool_results_summary) + "\n\nСформулируй естественный ответ на основе ТОЛЬКО этих данных. СТРОГО ЗАПРЕЩЕНО показывать названия функций, код или технические детали!"
                         
                         messages_with_results = [{"role": "system", "content": system_prompt_with_results}]
                         if context:
@@ -1804,6 +1865,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 content = retry_result["choices"][0]["message"].get("content", "")
                                 content = clean_content(content)
                                 content = replace_placeholders(content, user_now, current_time_str)
+                                content = clean_technical_details(content)  # Очистка от технических деталей
                                 
                                 # Сохраняем взаимодействие
                                 if user_id and content:
@@ -1831,9 +1893,33 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 content = message_response.get("content", "")
                 content = clean_content(content)
                 content = replace_placeholders(content, user_now, current_time_str)
+                content = clean_technical_details(content)  # Очистка от технических деталей
                 
-                if not content:
-                    content = "Готово! ✅"
+                # Если после очистки ответ пустой - повторный запрос
+                if not content or len(content.strip()) < 3:
+                    logger.warning("[RETRY] Response empty after cleaning, retrying with explicit instruction")
+                    retry_system = system_prompt + "\n\nВАЖНО: Пользователь ждет ПОЛНОГО ответа, не просто 'Готово'. Отвечай развернуто и профессионально!"
+                    
+                    retry_messages = [{"role": "system", "content": retry_system}]
+                    if context:
+                        for item in context:
+                            if "user" in item:
+                                retry_messages.append({"role": "user", "content": item["user"]})
+                            if "assistant" in item:
+                                retry_messages.append({"role": "assistant", "content": item["assistant"]})
+                    retry_messages.append({"role": "user", "content": original_message})
+                    
+                    retry_response = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=retry_messages,
+                        temperature=0.3,
+                    )
+                    content = retry_response.choices[0].message.content
+                    content = clean_content(content)
+                    content = clean_technical_details(content)
+                    
+                    if not content:
+                        content = "Хорошо, продолжим работу!"
                 
                 # Сохраняем взаимодействие в базу данных для отображения в панели
                 if user_id:
@@ -1863,6 +1949,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     except Exception as e:
                         logger.error(f"Failed to save interaction: {e}")
                 
+                # Очистка от технических деталей перед возвратом
+                content = clean_technical_details(content)
                 return content
     
     except Exception as e:
