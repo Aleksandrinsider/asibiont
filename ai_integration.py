@@ -441,7 +441,14 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     
     # Найти задачу по ID или по названию
     if task_id:
-        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+        # Ищем задачу: созданную мной ИЛИ делегированную мне
+        task = session.query(Task).filter(
+            Task.id == int(task_id),
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        ).first()
     elif task_title:
         # Ищем по словам в названии для более гибкого поиска
         words = task_title.lower().split()

@@ -958,8 +958,8 @@
                 const data = await response.json();
                 // Добавляем сообщение об успешном завершении в чат
                 addMessage(`✅ ${data.message}`, 'ai');
-                // Обновить задачи через секунду для отображения изменений
-                setTimeout(() => updateTasks(), 1000);
+                // Обновить задачи сразу
+                await updateTasks();
             } else {
                 const error = await response.json();
                 addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
@@ -1081,7 +1081,7 @@
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
-                                html += '<button onclick="alert(\'Написать @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Написать</button>';
+                                html += '<button onclick="alert(\'Контакт @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Подробнее</button>';
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
@@ -1103,7 +1103,7 @@
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions">';
-                                html += '<button onclick="alert(\'Написать @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Написать</button>';
+                                html += '<button onclick="alert(\'Контакт @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Подробнее</button>';
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1125,7 +1125,7 @@
                                 html += '</div>';
                                 html += '</div>';
                                 html += '<div class="task-actions" style="display: flex; gap: 4px;">';
-                                html += '<button onclick="alert(\'Написать @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Написать</button>';
+                                html += '<button onclick="alert(\'Контакт @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Подробнее</button>';
                                 html += '</div>';
                                 html += '</li>';
                             }
