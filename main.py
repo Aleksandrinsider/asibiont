@@ -745,7 +745,15 @@ async def clear_single_task_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
         
-        task = session_db.query(Task).filter_by(id=task_id, user_id=user.id).first()
+        # Ищем задачу либо среди своих, либо среди делегированных мне
+        from sqlalchemy import or_
+        task = session_db.query(Task).filter(
+            Task.id == task_id,
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        ).first()
         if not task:
             return web.json_response({'error': 'Task not found'}, status=404)
         
