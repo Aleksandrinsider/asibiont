@@ -1955,6 +1955,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     messages.append({"role": "assistant", "content": item["agent"]})
         messages.append({"role": "user", "content": message})
         
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
         data = {
             "model": "deepseek-chat",
             "messages": messages,
