@@ -1207,16 +1207,17 @@
                         formatted_end_date: data.formatted_end_date
                     });
                     
-                    if (lastProfileData === currentProfileKey) {
-                        // Profile data hasn't changed, skip full profile update
-                        return;
+                    // Всегда обновляем если данные изменились
+                    const profileDataChanged = lastProfileData !== currentProfileKey;
+                    if (profileDataChanged) {
+                        lastProfileData = currentProfileKey;
                     }
                     
-                    lastProfileData = currentProfileKey;
-                    
-                    // Update header avatar
-                    const headerInfoContainer = document.querySelector('.header-info');
-                    if (headerInfoContainer) {
+                    // Обновляем аватар только если данные профиля изменились
+                    if (profileDataChanged) {
+                        // Update header avatar
+                        const headerInfoContainer = document.querySelector('.header-info');
+                        if (headerInfoContainer) {
                         let headerAvatarSmall = headerInfoContainer.querySelector('.header-avatar-small');
                         if (!headerAvatarSmall) {
                             // Create header avatar if it doesn't exist
@@ -1246,14 +1247,18 @@
                             }
                         }
                     }
-                    // Update profile section
-                    const contextSection = document.querySelector('.context-section');
-                    if (!contextSection) return; // Элемент не найден
+                    }
                     
-                    // Check if profile has meaningful data (not just username)
-                    const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests);
-                    
-                    if (hasProfileData && data.formatted_end_date) {
+                    // Обновляем секцию профиля только если данные изменились
+                    if (profileDataChanged) {
+                        // Update profile section
+                        const contextSection = document.querySelector('.context-section');
+                        if (!contextSection) return; // Элемент не найден
+                        
+                        // Check if profile has meaningful data (not just username)
+                        const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests);
+                        
+                        if (hasProfileData && data.formatted_end_date) {
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
@@ -1282,9 +1287,7 @@
                         html += '</div>';
                         contextSection.innerHTML = html;
                     }
-                }
-            } catch (error) {
-                console.error('Error updating profile:', error);
+                    }
             }
         }
 
