@@ -79,12 +79,12 @@ def clear_user_data(database_url):
         # Clear Redis context
         try:
             import redis.asyncio as aioredis
-            from config import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+            from config import REDIS_URL
             import asyncio
             
             async def clear_redis():
                 redis_client = await aioredis.from_url(
-                    f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}",
+                    REDIS_URL,
                     encoding="utf-8",
                     decode_responses=False
                 )
@@ -95,6 +95,7 @@ def clear_user_data(database_url):
             asyncio.run(clear_redis())
         except Exception as e:
             print(f"[WARNING] Could not clear Redis: {e}")
+
         
         session.close()
         return True
