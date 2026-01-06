@@ -1340,10 +1340,10 @@ async def api_tasks_handler(request):
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.user_id).first()
                     if creator:
-                        title = f"{task.title} (делегирована от @{creator.username})"
+                        title = f"{task.title} - делегирована от @{creator.username}"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
-                    title = f"{task.title} (делегирована для @{delegated_username})"
+                    title = f"{task.title} - делегирована на @{delegated_username}"
             
             task_data = {
                 'id': task.id,
