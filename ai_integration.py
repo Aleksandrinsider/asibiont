@@ -339,7 +339,14 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         if reminder_time:
             try:
                 # Получить timezone пользователя
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                user_tz = pytz.UTC
+                if user.timezone:
+                    try:
+                        user_tz = pytz.timezone(user.timezone)
+                    except pytz.exceptions.UnknownTimeZoneError:
+                        import logging
+                        logging.warning(f"Unknown timezone {user.timezone}, using UTC")
+                        user_tz = pytz.UTC
                 # Парсить как локальное время пользователя
                 local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                 # Локализовать в timezone пользователя
@@ -382,9 +389,18 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     if profile:
         profile.total_tasks_created = (profile.total_tasks_created or 0) + 1
         session.commit()
+    
+    # Формируем подробный ответ с ID для edit_task
+    result_msg = f"Добавлена задача '{title}' (ID: {task_id})"
+    if task.reminder_time:
+        # Показываем время в timezone пользователя
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        local_time = task.reminder_time.astimezone(user_tz)
+        result_msg += f" с напоминанием на {local_time.strftime('%d.%m.%Y %H:%M')}"
+    
     if close_session:
         session.close()
-    return f"Добавлена задача '{title}' с ID {task_id}."
+    return result_msg
 
 def list_tasks(user_id=None, session=None):
     from models import Session, Task
@@ -895,22 +911,14 @@ def delete_task(task_id=None, task_title=None, user_id=None):
         session.close()
         return "Пользователь не найден."
     
+    task = None
     # Найти задачу по ID или по названию
     if task_id:
-        task = session.query(Task).filter_by(id=int(task_id)).first()
-        if task:
-            # Проверить права доступа
-            has_access = False
-            if task.user_id == user.id:
-                has_access = True
-            elif task.delegated_to_username:
-                recipient_username = task.delegated_to_username.replace('@', '').lower()
-                if user.username and user.username.lower() == recipient_username:
-                    has_access = True
-            
-            if not has_access:
-                session.close()
-                return "У вас нет прав на удаление этой задачи."
+        try:
+            task = session.query(Task).filter_by(id=int(task_id)).first()
+        except (ValueError, TypeError):
+            session.close()
+            return f"Некорректный ID задачи: {task_id}"
     elif task_title:
         # Ищем по словам в названии для более гибкого поиска (OR вместо AND)
         words = task_title.lower().split()
@@ -923,7 +931,20 @@ def delete_task(task_id=None, task_title=None, user_id=None):
         session.close()
         return "Не указан ни task_id, ни task_title."
     
+    # Проверяем права доступа для ЛЮБОГО способа поиска
     if task:
+        has_access = False
+        if task.user_id == user.id:
+            has_access = True
+        elif task.delegated_to_username:
+            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            if user.username and user.username.lower() == recipient_username:
+                has_access = True
+        
+        if not has_access:
+            session.close()
+            return "У вас нет прав на удаление этой задачи."
+        
         title = task.title
         session.delete(task)
         session.commit()
@@ -2035,8 +2056,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     result = update_profile(user_id=user_id, **args)
                                 elif func_name == 'update_user_memory':
                                     result = update_user_memory(user_id=user_id, **args)
+                                elif func_name == 'edit_task':
+                                    result = edit_task(user_id=user_id, **args)
+                                elif func_name == 'set_priority':
+                                    result = set_priority(user_id=user_id, **args)
+                                elif func_name == 'get_task_details':
+                                    result = get_task_details(user_id=user_id, **args)
                                 else:
                                     result = f"Неизвестная функция: {func_name}"
+                                
+                                # Сохраняем ID последней созданной задачи для возможного edit_task
+                                if func_name == 'add_task' and 'ID:' in result:
+                                    # Извлекаем ID из результата
+                                    import re
+                                    id_match = re.search(r'ID:\s*(\d+)', result)
+                                    if id_match:
+                                        last_task_id = id_match.group(1)
+                                        # Добавляем в system_prompt для следующего сообщения
+                                        tool_results.append(f"ПОСЛЕДНЯЯ СОЗДАННАЯ ЗАДАЧА: ID={last_task_id}, title='{args.get('title', '')}' - ИСПОЛЬЗУЙ edit_task(ЭТОТ ID) при уточнениях!")
                                 
                                 tool_results.append(f"{func_name}() вернул: {result[:200]}")
                                 logger.info(f"[TOOL CALLS] {func_name} result: {result[:100]}...")
@@ -2088,9 +2125,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             else:
                                 return f"Ошибка при генерации ответа: {retry_response.status}"
                     
-                    # ВСЕГДА проверяем триггеры принудительного вызова
+                    # Проверяем триггеры принудительного вызова ТОЛЬКО если AI НЕ вызвал tool_calls
                     logger.info("[FORCE CHECK] Checking for forced tool call triggers...")
-                    forced = force_tool_calls(original_message, content, mentions_str, user_id)
+                    logger.info(f"[FORCE CHECK] AI tool_calls present: {tool_calls is not None}")
+                    
+                    forced = None
+                    if not tool_calls:  # ТОЛЬКО если AI не вызвал функции сам
+                        forced = force_tool_calls(original_message, content, mentions_str, user_id)
+                    else:
+                        logger.info("[FORCE CHECK] Skipping forced calls - AI already called tools")
                     
                     if forced:
                         # После принудительных tool calls нужно сгенерировать НОРМАЛЬНЫЙ ответ через AI
