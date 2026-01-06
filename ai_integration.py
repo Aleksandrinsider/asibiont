@@ -959,48 +959,66 @@ def get_task_details(task_id, user_id=None):
     return "Задача не найдена."
 
 def get_partners_list(user_id=None, session=None):
-    from models import Session, UserProfile, User, Interaction
+    """Возвращает список всех пользователей с профилями (кроме самого пользователя и тех, с кем уже есть делегирование)"""
+    from models import Session, UserProfile, User, Task
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
+    
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
             session.close()
         return []
     
-    # Получить взаимодействия пользователя для определения кого AI рекомендовал
-    user_interactions = session.query(Interaction).filter_by(user_id=user.id).all()
+    # Получаем список пользователей, с которыми уже есть делегирование
+    delegated_usernames = set()
     
-    # Ищем упоминания @username в сообщениях AI (тип agent)
-    recommended_usernames = set()
-    import re
-    for interaction in user_interactions:
-        if interaction.message_type == 'agent':  # Только сообщения от AI
-            mentions = re.findall(r'@(\w+)', interaction.content)
-            recommended_usernames.update(mentions)
+    # Задачи, которые делегировали мне
+    delegated_to_me = session.query(Task).filter(
+        Task.delegated_to_username.ilike(user.username),
+        Task.delegation_status.in_(['pending', 'accepted'])
+    ).all()
+    for task in delegated_to_me:
+        delegated_user = session.query(User).filter_by(id=task.user_id).first()
+        if delegated_user:
+            delegated_usernames.add(delegated_user.username.lower() if delegated_user.username else '')
     
-    # Если AI никого не рекомендовал, возвращаем пустой список
-    if not recommended_usernames:
-        if close_session:
-            session.close()
-        return []
+    # Задачи, которые я делегировал
+    delegated_by_me = session.query(Task).filter(
+        Task.user_id == user.id,
+        Task.delegated_to_username.isnot(None),
+        Task.delegation_status.in_(['pending', 'accepted'])
+    ).all()
+    for task in delegated_by_me:
+        if task.delegated_to_username:
+            delegated_usernames.add(task.delegated_to_username.replace('@', '').lower())
     
-    # Получаем профили только рекомендованных пользователей
+    # Получаем все профили с заполненными данными, кроме своего и тех, с кем уже есть делегирование
+    profiles = session.query(UserProfile).join(User, UserProfile.user_id == User.id).filter(
+        UserProfile.user_id != user.id,
+        # Хотя бы одно поле должно быть заполнено
+        (UserProfile.interests.isnot(None)) | 
+        (UserProfile.skills.isnot(None)) | 
+        (UserProfile.position.isnot(None)) |
+        (UserProfile.city.isnot(None))
+    ).all()
+    
+    # Фильтруем тех, с кем уже есть делегирование
     partners = []
-    for username in recommended_usernames:
-        # Ищем по contact_info (который содержит username)
-        profile = session.query(UserProfile).filter(
-            UserProfile.contact_info.ilike(f'%{username}%')
-        ).first()
-        if profile and profile.user_id != user.id:
-            partners.append(profile)
+    for profile in profiles:
+        profile_user = session.query(User).filter_by(id=profile.user_id).first()
+        if profile_user and profile_user.username:
+            if profile_user.username.lower() not in delegated_usernames:
+                partners.append(profile)
     
     if close_session:
         session.close()
-    return partners[:10]
+    
+    # Возвращаем до 20 пользователей (можно увеличить при необходимости)
+    return partners[:20]
 
 def find_partners(user_id=None, session=None):
     from models import Session, UserProfile, User
