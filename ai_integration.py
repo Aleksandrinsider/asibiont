@@ -2234,8 +2234,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         import traceback
         logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
-        logger.error(traceback.format_exc())
-        return f"Ошибка: {str(e)}"
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        # Добавляем номер строки для отладки
+        tb = traceback.extract_tb(e.__traceback__)
+        if tb:
+            last_frame = tb[-1]
+            logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
+        return f"Ошибка: {str(e)} [v2]"
 
 async def generate_reminder(user_id, task_title):
     """Генерирует текст напоминания о задаче"""

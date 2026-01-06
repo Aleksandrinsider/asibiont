@@ -601,7 +601,11 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
-                        data.interactions.forEach(interaction => {
+                        // Sort interactions by timestamp before displaying
+                        const sortedInteractions = data.interactions.sort((a, b) => {
+                            return new Date(a.created_at) - new Date(b.created_at);
+                        });
+                        sortedInteractions.forEach(interaction => {
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                         lastMessageCount = data.interactions.length;
@@ -1620,14 +1624,22 @@
                             // Первая загрузка - очищаем и показываем все сообщения
                             const chatMessages = document.getElementById('chat-messages');
                             chatMessages.innerHTML = '';
-                            data.interactions.forEach(interaction => {
+                            // Sort by timestamp
+                            const sortedInteractions = data.interactions.sort((a, b) => {
+                                return new Date(a.created_at) - new Date(b.created_at);
+                            });
+                            sortedInteractions.forEach(interaction => {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                             });
                             lastMessageCount = data.interactions.length;
                         } else if (data.interactions.length > lastMessageCount) {
                             // Добавляем только новые сообщения
                             const newMessages = data.interactions.slice(lastMessageCount);
-                            newMessages.forEach(interaction => {
+                            // Sort new messages by timestamp
+                            const sortedNewMessages = newMessages.sort((a, b) => {
+                                return new Date(a.created_at) - new Date(b.created_at);
+                            });
+                            sortedNewMessages.forEach(interaction => {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                             });
                             lastMessageCount = data.interactions.length;
