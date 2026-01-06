@@ -1143,6 +1143,35 @@ async def api_partners_handler(request):
         
         # Add delegating contacts
         for contact in delegating_to_me:
+            # Получить профиль делегатора для расчета общих интересов/навыков/целей
+            delegator_profile = session_db.query(UserProfile).filter_by(user_id=contact['id']).first() if 'id' in contact else None
+            
+            common_interests = None
+            common_skills = None
+            common_goals = None
+            
+            if profile and delegator_profile:
+                # Common interests
+                if delegator_profile.interests and profile.interests:
+                    user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                    partner_interests = set(i.strip().lower() for i in delegator_profile.interests.split(','))
+                    common = user_interests & partner_interests
+                    common_interests = ', '.join(common) if common else None
+                
+                # Common skills
+                if delegator_profile.skills and profile.skills:
+                    user_skills = set(s.strip().lower() for s in profile.skills.split(','))
+                    partner_skills = set(s.strip().lower() for s in delegator_profile.skills.split(','))
+                    common_sk = user_skills & partner_skills
+                    common_skills = ', '.join(common_sk) if common_sk else None
+                
+                # Common goals
+                if delegator_profile.goals and profile.goals:
+                    user_goals = set(g.strip().lower() for g in profile.goals.split(','))
+                    partner_goals = set(g.strip().lower() for g in delegator_profile.goals.split(','))
+                    common_g = user_goals & partner_goals
+                    common_goals = ', '.join(common_g) if common_g else None
+            
             partners_data.append({
                 'contact_info': contact['username'],
                 'first_name': contact['first_name'],
@@ -1150,12 +1179,46 @@ async def api_partners_handler(request):
                 'interests': contact.get('interests'),
                 'city': contact.get('city'),
                 'company': contact.get('company'),
+                'common_interests': common_interests,
+                'common_skills': common_skills,
+                'common_goals': common_goals,
+                'average_rating': delegator_profile.average_rating if delegator_profile else 0,
+                'rating_count': delegator_profile.rating_count if delegator_profile else 0,
                 'reason': contact['reason'],
                 'task_count': contact.get('task_count', 0),
                 'type': 'delegating_to_me'
             })
         
         for contact in delegating_by_me:
+            # Получить профиль делегата для расчета общих интересов/навыков/целей
+            delegatee_profile = session_db.query(UserProfile).filter_by(user_id=contact['id']).first() if 'id' in contact else None
+            
+            common_interests = None
+            common_skills = None
+            common_goals = None
+            
+            if profile and delegatee_profile:
+                # Common interests
+                if delegatee_profile.interests and profile.interests:
+                    user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                    partner_interests = set(i.strip().lower() for i in delegatee_profile.interests.split(','))
+                    common = user_interests & partner_interests
+                    common_interests = ', '.join(common) if common else None
+                
+                # Common skills
+                if delegatee_profile.skills and profile.skills:
+                    user_skills = set(s.strip().lower() for s in profile.skills.split(','))
+                    partner_skills = set(s.strip().lower() for s in delegatee_profile.skills.split(','))
+                    common_sk = user_skills & partner_skills
+                    common_skills = ', '.join(common_sk) if common_sk else None
+                
+                # Common goals
+                if delegatee_profile.goals and profile.goals:
+                    user_goals = set(g.strip().lower() for g in profile.goals.split(','))
+                    partner_goals = set(g.strip().lower() for g in delegatee_profile.goals.split(','))
+                    common_g = user_goals & partner_goals
+                    common_goals = ', '.join(common_g) if common_g else None
+            
             partners_data.append({
                 'contact_info': contact['username'],
                 'first_name': contact['first_name'],
@@ -1163,6 +1226,11 @@ async def api_partners_handler(request):
                 'interests': contact.get('interests'),
                 'city': contact.get('city'),
                 'company': contact.get('company'),
+                'common_interests': common_interests,
+                'common_skills': common_skills,
+                'common_goals': common_goals,
+                'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
+                'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
                 'reason': contact['reason'],
                 'task_count': contact.get('task_count', 0),
                 'type': 'delegating_by_me'

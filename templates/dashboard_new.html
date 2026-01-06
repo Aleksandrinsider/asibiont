@@ -1312,6 +1312,9 @@
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
+                                if (partner.first_name) {
+                                    html += `<span class="task-meta">${partner.first_name}</span>`;
+                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
@@ -1324,7 +1327,22 @@
                                 if (partner.company) {
                                     html += `<span class="task-meta">Компания: ${partner.company}</span>`;
                                 }
+                                if (partner.common_interests) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                }
+                                if (partner.common_skills) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие навыки: ${partner.common_skills}</span>`;
+                                }
+                                if (partner.common_goals) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                }
+                                if (partner.average_rating > 0) {
+                                    html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
+                                }
                                 html += '</div>';
+                                html += '</div>';
+                                html += '<div class="task-actions">';
+                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action" title="Оценить контакт">★</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1335,6 +1353,9 @@
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
+                                if (partner.first_name) {
+                                    html += `<span class="task-meta">${partner.first_name}</span>`;
+                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
@@ -1347,7 +1368,22 @@
                                 if (partner.company) {
                                     html += `<span class="task-meta">Компания: ${partner.company}</span>`;
                                 }
+                                if (partner.common_interests) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                }
+                                if (partner.common_skills) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие навыки: ${partner.common_skills}</span>`;
+                                }
+                                if (partner.common_goals) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                }
+                                if (partner.average_rating > 0) {
+                                    html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
+                                }
                                 html += '</div>';
+                                html += '</div>';
+                                html += '<div class="task-actions">';
+                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action" title="Оценить контакт">★</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             }
