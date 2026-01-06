@@ -1823,6 +1823,28 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     session.close()
                     return "У вас нет активной подписки. Для использования AI-ассистента активируйте подписку в Telegram боте @asibiont_bot. После активации подписки я смогу помогать вам с управлением задачами!"
             
+            # Get user current time FIRST before using it
+            base_now = datetime.now(pytz.UTC)
+            logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
+            logger.info(f"[TIME CHECK] Formatted: {base_now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            user_now = base_now  # Default to base_now
+            current_time_str = user_now.strftime("%H:%M")
+            user_tz = pytz.UTC  # Default
+            if user:
+                tz_str = user.timezone if user.timezone else 'UTC'
+                logger.info(f"User timezone: {tz_str}")
+                try:
+                    user_tz = pytz.timezone(tz_str)
+                    user_now = base_now.astimezone(user_tz)
+                    current_time_str = user_now.strftime("%H:%M")
+                    logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
+                    logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
+                    logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
+                except Exception as e:
+                    user_tz = pytz.UTC
+                    user_now = base_now
+                    current_time_str = user_now.strftime("%H:%M")
+            
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
@@ -1908,87 +1930,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             # Add file content if provided
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
-            # Get user current time for relative time parsing and prompt
-            # Always use real current time in production
-            base_now = datetime.now(pytz.UTC)
-            logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
-            logger.info(f"[TIME CHECK] Formatted: {base_now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            user_now = base_now  # Default to base_now
-            current_time_str = user_now.strftime("%H:%M")
-            user_tz = pytz.UTC  # Default
-            if user:
-                tz_str = user.timezone if user.timezone else 'UTC'
-                logger.info(f"User timezone: {tz_str}")
-                try:
-                    user_tz = pytz.timezone(tz_str)
-                    user_now = base_now.astimezone(user_tz)
-                    current_time_str = user_now.strftime("%H:%M")
-                    logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
-                    logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
-                    logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
-                    
-                    # Always use real current time - removed profile.current_time override
-                    # Current time is dynamic and should not persist in profile
-                except Exception as e:
-                    user_tz = pytz.UTC
-                    user_now = base_now
-                    current_time_str = user_now.strftime("%H:%M")
-                    logger.error(f"[TIME CHECK] Timezone error: {e}")
             
-            # Get upcoming reminders for context
-            upcoming_reminders = []
-            try:
-                # Get user's tasks from database
-                tasks = session.query(Task).filter_by(user_id=user.id, status='pending').all()
-                for task in tasks:
-                    if task.reminder_time and task.status == 'pending':
-                        if task.reminder_time.tzinfo is None:
-                            task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
-                        task_time_local = task.reminder_time.astimezone(user_tz)
-                        # Include tasks within next 7 days
-                        if task_time_local > user_now - timedelta(days=1) and task_time_local < user_now + timedelta(days=7):
-                            reminder_time_local = task_time_local.strftime("%H:%M")
-                            date_str = ""
-                            if task_time_local.date() == user_now.date():
-                                date_str = "сегодня"
-                            elif task_time_local.date() == (user_now + timedelta(days=1)).date():
-                                date_str = "завтра"
-                            else:
-                                date_str = task_time_local.strftime("%d.%m")
-                            upcoming_reminders.append(f"{task.title} {date_str} в {reminder_time_local}")
-                if upcoming_reminders:
-                    user_memory += f"\nБлижайшие напоминания: {', '.join(upcoming_reminders[:5])}"
-            except Exception as e:
-                logger.error(f"Error getting upcoming reminders: {e}")
-                # Continue without reminders
             session.close()
         
-        # Parse relative time from message
-        parsed_time = parse_relative_time(message, user_now)
-        time_hint = ""
-        if parsed_time:
-            time_hint = f"\nОБНАРУЖЕНО ОТНОСИТЕЛЬНОЕ ВРЕМЯ: '{message}' содержит указание времени. Рассчитанное время напоминания: {parsed_time.strftime('%Y-%m-%d %H:%M')}. Используй это время для reminder_time в add_task."
-        
-        # Parse absolute time from message
-        parsed_absolute_time = parse_absolute_time(message)
-        if parsed_absolute_time:
-            logger.info(f"Detected absolute time in message: {parsed_absolute_time}")
-            # Don't save to profile - just update user_now for current context
-            # update_profile(current_time=parsed_absolute_time, user_id=user_id)  # REMOVED
-            # Update user_now for subsequent processing
-            try:
-                time_obj = datetime.strptime(parsed_absolute_time, '%H:%M').time()
-                user_now = datetime.combine(user_now.date(), time_obj, tzinfo=user_tz)
-                current_time_str = parsed_absolute_time
-                logger.info(f"Updated user_now to: {user_now}")
-            except Exception as e:
-                logger.error(f"Failed to update user_now: {e}")
-        
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
         system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")).replace("{{current_username}}", user_username)
