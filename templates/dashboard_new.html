@@ -1614,7 +1614,9 @@
                     const data = await response.json();
                     if (data.interactions) {
                         if (lastMessageCount === 0) {
-                            // Первая загрузка - показываем все сообщения
+                            // Первая загрузка - очищаем и показываем все сообщения
+                            const chatMessages = document.getElementById('chat-messages');
+                            chatMessages.innerHTML = '';
                             data.interactions.forEach(interaction => {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                             });
