@@ -713,7 +713,12 @@ def accept_delegated_task(task_id, user_id=None):
         if not user:
             return "Ошибка: Пользователь не найден."
         
-        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id, delegation_status='pending').first()
+        # Ищем задачу делегированную МНЕ (по delegated_to_username)
+        task = session.query(Task).filter(
+            Task.id == int(task_id),
+            Task.delegated_to_username.ilike(user.username),
+            Task.delegation_status == 'pending'
+        ).first()
         if not task:
             return "Задача не найдена или уже обработана."
         
@@ -764,7 +769,12 @@ def reject_delegated_task(task_id, user_id=None):
         if not user:
             return "Ошибка: Пользователь не найден."
         
-        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id, delegation_status='pending').first()
+        # Ищем задачу делегированную МНЕ (по delegated_to_username)
+        task = session.query(Task).filter(
+            Task.id == int(task_id),
+            Task.delegated_to_username.ilike(user.username),
+            Task.delegation_status == 'pending'
+        ).first()
         if not task:
             return "Задача не найдена или уже обработана."
         
