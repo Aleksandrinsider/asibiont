@@ -1355,15 +1355,19 @@ async def api_tasks_handler(request):
                 # Remove leading @ if present
                 delegated_username = task.delegated_to_username.lstrip('@')
                 
+                # Remove existing delegation markers from title to avoid duplication
+                import re
+                title = re.sub(r' - делегирована (от|на) @\w+$', '', title)
+                
                 # Check if task is delegated TO me or BY me
                 if task.delegated_to_username.lower() == user.username.lower() or task.delegated_to_username.lower() == f"@{user.username.lower()}":
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.user_id).first()
                     if creator:
-                        title = f"{task.title} - делегирована от @{creator.username}"
+                        title = f"{title} - делегирована от @{creator.username}"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
-                    title = f"{task.title} - делегирована на @{delegated_username}"
+                    title = f"{title} - делегирована на @{delegated_username}"
             
             task_data = {
                 'id': task.id,
