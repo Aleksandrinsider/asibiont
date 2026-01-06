@@ -825,7 +825,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: calc(100vh - 580px);
+    max-height: calc(100vh - 510px);
     overflow-y: auto;
     overflow-x: hidden;
     transition: max-height 0.3s ease;
