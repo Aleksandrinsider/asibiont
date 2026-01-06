@@ -215,7 +215,6 @@ body {
     height: calc(100vh - 90px);
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: 20px;
 }
 
 .left-column::-webkit-scrollbar,
@@ -245,7 +244,6 @@ body {
     height: calc(100vh - 90px);
     overflow: hidden;
     margin-top: 0px;
-    padding-bottom: 20px;
 }
 
 .chat-section {
@@ -257,7 +255,7 @@ body {
     border-radius: 8px;
     padding-top: 15px;
     margin-top: 0;
-    margin-bottom: 0;
+    margin-bottom: 20px;
     height: 100%;
     max-height: 100%;
     overflow: hidden;
@@ -587,7 +585,7 @@ body {
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 4px;
+    margin-bottom: 20px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -617,7 +615,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 4px;
+    margin-bottom: 20px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
