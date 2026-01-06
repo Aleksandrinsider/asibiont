@@ -592,6 +592,7 @@
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
         let lastMessageCount = 0;
+        const displayedMessageIds = new Set(); // Для отслеживания уже показанных сообщений
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -601,12 +602,22 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
-                        // Sort interactions by timestamp before displaying
-                        const sortedInteractions = data.interactions.sort((a, b) => {
-                            return new Date(a.created_at) - new Date(b.created_at);
-                        });
-                        sortedInteractions.forEach(interaction => {
-                            addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                        // Sort interactions by timestamp AND index to preserve order
+                        const sortedInteractions = data.interactions
+                            .map((interaction, index) => ({...interaction, originalIndex: index}))
+                            .sort((a, b) => {
+                                const timeA = new Date(a.created_at).getTime();
+                                const timeB = new Date(b.created_at).getTime();
+                                if (timeA !== timeB) return timeA - timeB;
+                                return a.originalIndex - b.originalIndex; // Preserve order for same timestamp
+                            });
+                        
+                        sortedInteractions.forEach((interaction, index) => {
+                            const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
+                            if (!displayedMessageIds.has(msgId)) {
+                                addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                                displayedMessageIds.add(msgId);
+                            }
                         });
                         lastMessageCount = data.interactions.length;
                     }
@@ -1624,23 +1635,43 @@
                             // Первая загрузка - очищаем и показываем все сообщения
                             const chatMessages = document.getElementById('chat-messages');
                             chatMessages.innerHTML = '';
-                            // Sort by timestamp
-                            const sortedInteractions = data.interactions.sort((a, b) => {
-                                return new Date(a.created_at) - new Date(b.created_at);
-                            });
-                            sortedInteractions.forEach(interaction => {
-                                addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                            displayedMessageIds.clear();
+                            
+                            // Sort by timestamp AND index
+                            const sortedInteractions = data.interactions
+                                .map((interaction, index) => ({...interaction, originalIndex: index}))
+                                .sort((a, b) => {
+                                    const timeA = new Date(a.created_at).getTime();
+                                    const timeB = new Date(b.created_at).getTime();
+                                    if (timeA !== timeB) return timeA - timeB;
+                                    return a.originalIndex - b.originalIndex;
+                                });
+                            
+                            sortedInteractions.forEach((interaction, index) => {
+                                const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
+                                if (!displayedMessageIds.has(msgId)) {
+                                    addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                                    displayedMessageIds.add(msgId);
+                                }
                             });
                             lastMessageCount = data.interactions.length;
                         } else if (data.interactions.length > lastMessageCount) {
                             // Добавляем только новые сообщения
-                            const newMessages = data.interactions.slice(lastMessageCount);
-                            // Sort new messages by timestamp
-                            const sortedNewMessages = newMessages.sort((a, b) => {
-                                return new Date(a.created_at) - new Date(b.created_at);
-                            });
-                            sortedNewMessages.forEach(interaction => {
-                                addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                            const sortedInteractions = data.interactions
+                                .map((interaction, index) => ({...interaction, originalIndex: index}))
+                                .sort((a, b) => {
+                                    const timeA = new Date(a.created_at).getTime();
+                                    const timeB = new Date(b.created_at).getTime();
+                                    if (timeA !== timeB) return timeA - timeB;
+                                    return a.originalIndex - b.originalIndex;
+                                });
+                            
+                            sortedInteractions.forEach((interaction, index) => {
+                                const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
+                                if (!displayedMessageIds.has(msgId)) {
+                                    addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                                    displayedMessageIds.add(msgId);
+                                }
                             });
                             lastMessageCount = data.interactions.length;
                         }
