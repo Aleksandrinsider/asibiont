@@ -1086,36 +1086,48 @@
                                 const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                if (partner.position) {
+                                    html += `<span class="task-meta">${partner.position}</span>`;
+                                }
+                                if (partner.interests) {
+                                    html += `<span class="task-meta">${partner.interests}</span>`;
+                                }
+                                if (partner.task_count) {
+                                    html += `<span class="task-meta" style="color: #068487;">Делегировал мне ${partner.task_count} задач</span>`;
+                                }
                                 if (partner.tasks && partner.tasks.length > 0) {
-                                    partner.tasks.forEach(taskTitle => {
-                                        html += `<span class="task-meta">${taskTitle}</span>`;
+                                    html += '<div style="width: 100%; margin-top: 4px; font-size: 11px; color: #59636E;">';
+                                    partner.tasks.slice(0, 2).forEach(taskTitle => {
+                                        html += `• ${taskTitle}<br>`;
                                     });
-                                    if (partner.task_count > 3) {
-                                        html += `<span class="task-meta">+${partner.task_count - 3} еще</span>`;
+                                    if (partner.task_count > 2) {
+                                        html += `и еще ${partner.task_count - 2}...`;
                                     }
-                                } else {
-                                    html += `<span class="task-meta">${partner.reason}</span>`;
+                                    html += '</div>';
                                 }
                                 html += '</div>';
                                 html += '</div>';
-                                html += '<div class="task-actions">';
-                                html += '<button onclick="alert(\'Контакт @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Подробнее</button>';
-                                html += '</div>';
                                 html += '</li>';
-                            } else if (partner.type === 'delegating_by_me') {
-                                html += `<li class="task-item contact-delegating-by-me" style="display: none;">`;
-                                html += '<div style="flex: 1;">';
-                                const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                            } else if (partnposition) {
+                                    html += `<span class="task-meta">${partner.position}</span>`;
+                                }
+                                if (partner.interests) {
+                                    html += `<span class="task-meta">${partner.interests}</span>`;
+                                }
+                                if (partner.task_count) {
+                                    html += `<span class="task-meta" style="color: #068487;">Я делегировал ${partner.task_count} задач</span>`;
+                                }
                                 if (partner.tasks && partner.tasks.length > 0) {
-                                    partner.tasks.forEach(taskTitle => {
-                                        html += `<span class="task-meta">${taskTitle}</span>`;
+                                    html += '<div style="width: 100%; margin-top: 4px; font-size: 11px; color: #59636E;">';
+                                    partner.tasks.slice(0, 2).forEach(taskTitle => {
+                                        html += `• ${taskTitle}<br>`;
                                     });
-                                    if (partner.task_count > 3) {
-                                        html += `<span class="task-meta">+${partner.task_count - 3} еще</span>`;
+                                    if (partner.task_count > 2) {
+                                        html += `и еще ${partner.task_count - 2}...`;
                                     }
-                                } else {
+                                    html += '</div>';
+                                }
+                                html += '</div
                                     html += `<span class="task-meta">${partner.reason}</span>`;
                                 }
                                 html += '</div>';

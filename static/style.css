@@ -534,7 +534,15 @@ body {
     line-height: 1.4;
 }
 
-.people-section,
+.people-section {
+    padding: 2px 12px;
+    border: none;
+    border-radius: 8px;
+    background-color: #FFFFFF;
+    margin-top: 0;
+    margin-bottom: 4px;
+}
+
 .tasks-section {
     padding: 12px;
     border: none;
@@ -549,7 +557,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 0px;
+    margin-bottom: -8px;
     margin-top: 0px;
 }
 
