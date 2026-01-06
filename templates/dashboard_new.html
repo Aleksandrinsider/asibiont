@@ -1295,10 +1295,13 @@
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
-                                if (partner.average_rating > 0) {
-                                    html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
-                                }
                                 html += '</div>';
+                                // Оценка на отдельной строке
+                                if (partner.average_rating > 0) {
+                                    html += `<div style="margin-top: 4px;"><span style="font-size: 12px; color: #D7AC0C;">Оценка: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                } else {
+                                    html += `<div style="margin-top: 4px;"><span style="font-size: 12px; color: #656D76;">Оценка: нет рекомендаций</span></div>`;
+                                }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action" title="Оценить контакт">○</button>`;
@@ -1336,10 +1339,13 @@
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
-                                if (partner.average_rating > 0) {
-                                    html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
-                                }
                                 html += '</div>';
+                                // Оценка на отдельной строке
+                                if (partner.average_rating > 0) {
+                                    html += `<div style="margin-top: 4px;"><span style="font-size: 12px; color: #D7AC0C;">Оценка: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                } else {
+                                    html += `<div style="margin-top: 4px;"><span style="font-size: 12px; color: #656D76;">Оценка: нет рекомендаций</span></div>`;
+                                }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action" title="Оценить контакт">○</button>`;
@@ -1377,10 +1383,13 @@
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
-                                if (partner.average_rating > 0) {
-                                    html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
-                                }
                                 html += '</div>';
+                                // Оценка на отдельной строке
+                                if (partner.average_rating > 0) {
+                                    html += `<div style="margin-top: 4px;"><span style="font-size: 12px; color: #D7AC0C;">Оценка: ${partner.average_rating}/10 (${partner.rating_count})</span></div>`;
+                                } else {
+                                    html += `<div style="margin-top: 4px;"><span style="font-size: 12px; color: #656D76;">Оценка: нет рекомендаций</span></div>`;
+                                }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action" title="Оценить контакт">○</button>`;
