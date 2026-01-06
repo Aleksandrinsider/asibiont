@@ -1003,11 +1003,17 @@ async def api_partners_handler(request):
                         delegator_ids.add(task.user_id)
                         delegator = session_db.query(User).filter_by(id=task.user_id).first()
                         if delegator and delegator.id != user.id:
+                            delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first()
+                            task_titles = [t.title for t in delegated_tasks if t.user_id == delegator.id]
                             delegating_to_me.append({
                                 'id': delegator.id,
                                 'username': delegator.username,
                                 'first_name': delegator.first_name,
-                                'reason': f'делегировал {len([t for t in delegated_tasks if t.user_id == delegator.id])} задач'
+                                'position': delegator_profile.position if delegator_profile else None,
+                                'interests': delegator_profile.interests if delegator_profile else None,
+                                'tasks': task_titles[:3],
+                                'task_count': len(task_titles),
+                                'reason': f'делегировал {len(task_titles)} задач'
                             })
                 
                 # Люди, которым я делегировал задачи
@@ -1023,11 +1029,17 @@ async def api_partners_handler(request):
                         delegatee_usernames.add(task.delegated_to_username)
                         delegatee = session_db.query(User).filter(User.username.ilike(task.delegated_to_username.replace('@', ''))).first()
                         if delegatee and delegatee.id != user.id:
+                            delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first()
+                            task_titles = [t.title for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
                             delegating_by_me.append({
                                 'id': delegatee.id,
                                 'username': delegatee.username,
                                 'first_name': delegatee.first_name,
-                                'reason': f'я делегировал {len([t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username])} задач'
+                                'position': delegatee_profile.position if delegatee_profile else None,
+                                'interests': delegatee_profile.interests if delegatee_profile else None,
+                                'tasks': task_titles[:3],
+                                'task_count': len(task_titles),
+                                'reason': f'я делегировал {len(task_titles)} задач'
                             })
             
             except Exception as e:
@@ -1109,6 +1121,8 @@ async def api_partners_handler(request):
             partners_data.append({
                 'contact_info': contact['username'],
                 'first_name': contact['first_name'],
+                'position': contact.get('position'),
+                'interests': contact.get('interests'),
                 'reason': contact['reason'],
                 'tasks': contact.get('tasks', []),
                 'task_count': contact.get('task_count', 0),
@@ -1119,6 +1133,8 @@ async def api_partners_handler(request):
             partners_data.append({
                 'contact_info': contact['username'],
                 'first_name': contact['first_name'],
+                'position': contact.get('position'),
+                'interests': contact.get('interests'),
                 'reason': contact['reason'],
                 'tasks': contact.get('tasks', []),
                 'task_count': contact.get('task_count', 0),
