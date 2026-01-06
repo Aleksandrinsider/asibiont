@@ -1065,23 +1065,19 @@
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
                                 html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
-                                if (partner.common_interests) {
-                                    html += `<span class="task-meta">${partner.common_interests}</span>`;
+                                if (partner.first_name) {
+                                    html += `<span class="task-meta">${partner.first_name}</span>`;
                                 }
-                                if (partner.common_skills) {
-                                    html += `<span class="task-meta">${partner.common_skills}</span>`;
-                                }
-                                if (partner.common_goals) {
-                                    html += `<span class="task-meta">${partner.common_goals}</span>`;
+                                if (partner.position) {
+                                    html += `<span class="task-meta">${partner.position}</span>`;
                                 }
                                 if (partner.city) {
                                     html += `<span class="task-meta">${partner.city}</span>`;
                                 }
-                                html += `<span class="task-meta" style="color: #068487;">${partner.recommendation_reason || 'Подходящий контакт'}</span>`;
+                                if (partner.common_interests) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                }
                                 html += '</div>';
-                                html += '</div>';
-                                html += '<div class="task-actions">';
-                                html += '<button onclick="alert(\'Контакт @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Подробнее</button>';
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
