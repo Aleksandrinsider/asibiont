@@ -136,7 +136,9 @@ async def test_ai_dialogue():
                     timeout=45.0
                 )
                 
-                print(f"AI: {ai_response}")
+                # Удаляем emoji для безопасного вывода в Windows консоль
+                safe_response = ai_response.encode('ascii', 'ignore').decode('ascii')
+                print(f"AI: {safe_response}")
                 print()
                 
                 # Проверяем на наличие tool calls в логах

@@ -1291,6 +1291,79 @@ TOOLS = [
     }
 ]
 
+def force_tool_calls(message, content, mentions_str, user_id):
+    """
+    Анализирует ответ модели и принудительно вызывает tools,
+    если модель их описала, но не вызвала формально.
+    
+    Возвращает список результатов вызовов функций или None.
+    """
+    forced_calls = []
+    message_lower = message.lower()
+    
+    # 1. Проверка на list_tasks триггеры
+    list_triggers = ["покажи", "список", "какие задач", "что у меня", "что там", "мои дела", "все задачи"]
+    if any(trigger in message_lower for trigger in list_triggers):
+        # Проверяем, что в content нет признаков вызова list_tasks
+        if "list_tasks" not in content.lower() and "Args for list_tasks" not in content:
+            logger.info("[FORCE] Triggering list_tasks() - detected request but no tool call")
+            result = list_tasks(user_id=user_id)
+            forced_calls.append({"function": "list_tasks", "result": result})
+    
+    # 2. Проверка на delegate_task (упоминание @username)
+    if mentions_str != 'нет' and '@' in message:
+        # Проверяем, что в content нет вызова delegate_task
+        if "delegate_task" not in content.lower() and "Args for delegate_task" not in content:
+            # Извлекаем @username
+            mention_match = re.search(r'@(\w+)', message)
+            if mention_match:
+                delegated_to = f"@{mention_match.group(1)}"
+                # Пытаемся извлечь описание задачи из сообщения
+                task_title = re.sub(r'@\w+', '', message).strip()
+                task_title = re.sub(r'^(поручи|делегируй|передай)\s+', '', task_title, flags=re.IGNORECASE).strip()
+                
+                # Извлекаем deadline если есть
+                reminder_time = None
+                deadline_match = re.search(r'до\s+(завтра|послезавтра|\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2})', message, re.IGNORECASE)
+                if deadline_match:
+                    reminder_time = deadline_match.group(1)
+                
+                logger.info(f"[FORCE] Triggering delegate_task() - found @mention {delegated_to}")
+                result = delegate_task(
+                    title=task_title if task_title else "Задача",
+                    delegated_to_username=delegated_to,
+                    reminder_time=reminder_time,
+                    user_id=user_id
+                )
+                forced_calls.append({"function": "delegate_task", "result": result})
+    
+    # 3. Проверка на update_profile (упоминание работы, города)
+    profile_triggers = [
+        (r'(переехал|живу|нахожусь)\s+в\s+(\w+)', 'city'),
+        (r'работаю\s+(?:в\s+)?(\w+)(?:\s+как\s+)?(.*)', 'company'),
+        (r'должность\s+(.*)', 'position')
+    ]
+    
+    profile_updates = {}
+    for pattern, field in profile_triggers:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            if field == 'city':
+                profile_updates['city'] = match.group(2)
+            elif field == 'company':
+                profile_updates['company'] = match.group(1)
+                if len(match.groups()) > 1 and match.group(2):
+                    profile_updates['position'] = match.group(2).strip()
+            elif field == 'position':
+                profile_updates['position'] = match.group(1)
+    
+    if profile_updates and "update_profile" not in content.lower():
+        logger.info(f"[FORCE] Triggering update_profile() - detected profile info: {profile_updates}")
+        result = update_profile(user_id=user_id, **profile_updates)
+        forced_calls.append({"function": "update_profile", "result": result})
+    
+    return forced_calls if forced_calls else None
+
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     import logging
     logger = logging.getLogger(__name__)
@@ -1518,6 +1591,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     content = clean_content(content)
                     content = re.sub(r'<\|.*?\|>', '', content).strip()
                     content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
+                    
+                    # Проверяем tool_calls в API response
+                    tool_calls = message_response.get("tool_calls")
+                    
+                    # Если tool_calls нет, пытаемся форсировать
+                    if not tool_calls:
+                        logger.info("[FORCE CHECK] No tool_calls in API response, analyzing message...")
+                        forced = force_tool_calls(message, content, mentions_str, user_id)
+                        if forced:
+                            # Формируем ответ на основе вызванных функций
+                            results = []
+                            for call in forced:
+                                results.append(f"{call['function']}: {call['result']}")
+                            content = "\n".join(results) + "\n\n" + content
+                            logger.info(f"[FORCE] Applied {len(forced)} forced tool calls")
             tool_calls_in_content = False
             if "<｜DSML｜function_calls>" in content:
                 tool_calls_in_content = True
