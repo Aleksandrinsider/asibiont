@@ -15,24 +15,24 @@ def generate_user_response(ai_message, conversation_context, scenario_step):
     
     # Упрощённые сценарии - по одному действию за раз
     scenarios = {
-        1: "Попроси поручить задачу @testuser на подготовку отчета до завтра 15:00. Будь кратким.",
-        2: "Попроси добавить задачу позвонить клиенту через 2 часа. Одно короткое предложение.",
-        3: "Попроси показать все задачи. Одно предложение.",
-        4: "Скажи что переехал в Москву и работаешь в Google как Senior Engineer. Одно предложение.",
-        5: "Попрощайся коротко.",
-        6: "Скажи спасибо и закончи разговор."
+        2: "Попроси поручить задачу @testuser на подготовку отчета до завтра 15:00. Будь кратким.",
+        3: "Попроси добавить задачу позвонить клиенту через 2 часа. Одно короткое предложение.",
+        4: "Попроси показать все задачи. Одно предложение.",
+        5: "Скажи что переехал в Москву и работаешь в Google как Senior Engineer. Одно предложение.",
+        6: "Попрощайся коротко.",
+        7: "Скажи спасибо и закончи разговор."
     }
     
     scenario = scenarios.get(scenario_step, "Ответь коротко на вопрос AI")
     
-    prompt = f"""Ты пользователь, который общается с AI-ассистентом по управлению задачами в Telegram.
+    prompt = f"""Ты пользователь, который общается с AI-ассистентом по управлению задачами.
 
 Последнее сообщение от AI:
 {ai_message}
 
 Твоя задача: {scenario}
 
-Сгенерируй ОДНО короткое предложение (максимум 10-15 слов). Отвечай только текстом сообщения без пояснений и кавычек."""
+Ответь ОДНИМ коротким предложением (максимум 10-15 слов). Пиши только текст сообщения."""
 
     try:
         response = requests.post(
@@ -107,12 +107,21 @@ async def test_ai_dialogue():
         print("="*80 + "\n")
         
         conversation_context = []
-        max_steps = 7  # Увеличим до 7 шагов
+        max_steps = 7
         
-        # Первое сообщение
-        user_message = "Привет!"
+        # Жесткий список тестовых команд
+        test_commands = [
+            "Привет!",
+            "Поручи @testuser подготовить отчет до завтра 15:00",
+            "Добавь задачу позвонить клиенту через 2 часа",
+            "Покажи все мои задачи",
+            "Я переехал в Москву и работаю Senior Engineer в Google",
+            "Удали первую задачу",
+            "Спасибо, пока!"
+        ]
         
-        for step in range(1, max_steps + 1):
+        for step in range(1, min(max_steps + 1, len(test_commands) + 1)):
+            user_message = test_commands[step - 1]
             print(f"[Shag {step}]")
             print(f"User: {user_message}")
             print()
@@ -141,10 +150,6 @@ async def test_ai_dialogue():
                 # Проверяем реальные изменения в БД
                 session.expire_all()  # Обновляем данные из БД
                 tasks = session.query(Task).filter_by(user_id=user.id).order_by(Task.id).all()
-            except asyncio.TimeoutError:
-                print(f"ERROR: Timeout after 45 seconds on step {step}")
-                ai_response = "[TIMEOUT]"
-                continue
                 
                 print(f">> Database state after step:")
                 print(f"   Total tasks: {len(tasks)}")
@@ -163,13 +168,13 @@ async def test_ai_dialogue():
                 print()
                 print("-" * 80)
                 print()
-                
-                # Генерируем следующий ответ пользователя
-                if step < max_steps:
-                    context_str = "\n".join(conversation_context[-6:])  # Последние 3 обмена
-                    user_message = generate_user_response(ai_response, context_str, step + 1)
-                    await asyncio.sleep(1)
                     
+            except asyncio.TimeoutError:
+                print(f"ERROR: Timeout after 45 seconds on step {step}")
+                print()
+                print("-" * 80)
+                print()
+                continue
             except Exception as e:
                 print(f"ERROR: {e}")
                 import traceback

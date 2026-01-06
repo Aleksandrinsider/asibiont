@@ -92,9 +92,13 @@ list_tasks:
   • Даже если контекст уже содержит задачи — ВСЁ РАВНО вызови list_tasks() для свежих данных
 
 delegate_task (ПРИОРИТЕТ!):
-  • @username упомянут → delegate_task() НЕМЕДЛЕННО
-  • НЕ спрашивай "какой отчет?" или "зарегистрирован ли?"
-  • Детали спросит сам исполнитель
+  ❌ "Какой отчет? Какие детали?" — ПЛОХО!
+  ✅ @username упомянут → delegate_task() НЕМЕДЛЕННО без вопросов
+  • НЕ спрашивай детали
+  • Исполнитель сам уточнит если нужно
+
+update_profile:
+  • Если пользователь сообщает о работе, городе, интересах → update_profile() НЕМЕДЛЕННО
 
 add_task (время):
   • "через X мин/часов" → add_task(reminder_time=текущее+X) СРАЗУ
@@ -114,10 +118,13 @@ add_task (время):
 ✅ ХОРОШО: [delegate_task()] "Поручил @testuser подготовить отчет до завтра 15:00"
 
 ❌ ПЛОХО: "У тебя 2 задачи: 1. Позвонить 2. Отчет"
-✅ ХОРОШО: "Вижу звонок клиенту через час и отчет на завтра — с чего начнём?"
+✅ ХОРОШО: [list_tasks()] "Вижу звонок клиенту через час и отчет на завтра — с чего начнём?"
 
 ❌ ПЛОХО: "Можешь: 1. Открыть систему 2. Проверить логи"
 ✅ ХОРОШО: "Можешь открыть систему мониторинга, проверить логи или подготовить чек-лист"
+
+❌ ПЛОХО: "Вижу две задачи на сегодня — один звонок…" (без list_tasks)
+✅ ХОРОШО: [list_tasks()] "Вижу две задачи на сегодня…"
 
 КОНТЕКСТ:
 ```
@@ -1294,6 +1301,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     clean_message = re.sub(r'@[\w]+', '', message).strip()
     logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
+    
+    # Препроцессинг: форсим list_tasks() для триггерных фраз
+    list_triggers = ["покажи", "список", "какие задач", "что у меня", "что там", "мои дела", "все задачи"]
+    should_force_list = any(trigger in message.lower() for trigger in list_triggers)
+    
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
@@ -1471,6 +1483,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")).replace("{{current_username}}", user_username)
         system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Если пользователь говорит 'через X минут', добавь X минут к текущему времени {current_time_str}\n- Если пользователь говорит 'через X часов', добавь X часов к текущему времени\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Например: 'через 5 минут' от {current_time_str} = {(user_now + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M')}"
         system_prompt += f"\n\nОБНАРУЖЕННЫЕ @MENTIONS В СООБЩЕНИИ: {mentions_str}\nЕСЛИ ПОЛЬЗОВАТЕЛЬ ПРОСИТ ПОРУЧИТЬ/ДЕЛЕГИРОВАТЬ ЗАДАЧУ, ИСПОЛЬЗУЙ delegate_task С delegated_to_username ИЗ ЭТИХ MENTIONS!"
+        
+        # Если обнаружены триггеры для list_tasks, добавляем в промпт принудительное требование
+        if should_force_list:
+            system_prompt += "\n\n🚨 КРИТИЧЕСКИ ВАЖНО: ПОЛЬЗОВАТЕЛЬ ПРОСИТ ПОКАЗАТЬ ЗАДАЧИ - ОБЯЗАТЕЛЬНО ВЫЗОВИ list_tasks() ПЕРВЫМ ДЕЛОМ, ДАЖЕ ЕСЛИ В КОНТЕКСТЕ УЖЕ ЕСТЬ ИНФОРМАЦИЯ О ЗАДАЧАХ!"
+        
         system_prompt += user_memory
         system_prompt += time_hint
         
