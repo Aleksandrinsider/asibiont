@@ -100,7 +100,7 @@
                             </p>
                         </div>
                         {% else %}
-                        <p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>
+                        <p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен. Начните диалог с ботом для заполнения профиля.</p>
                         {% endif %}
                     </div>
                 </div>
@@ -1180,7 +1180,7 @@
                         html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
                         html += '</div>';
                         html += '<div id="profile-content" class="profile-content">';
-                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен</p>';
+                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен. Начните диалог с ботом для заполнения профиля.</p>';
                         html += '</div>';
                         contextSection.innerHTML = html;
                     }
