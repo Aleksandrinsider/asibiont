@@ -132,7 +132,11 @@ async def test_ai_dialogue():
                 print(f"[Генерация команды пользователя на основе: {last_ai_message[:60]}...]")
                 user_message = generate_user_response(last_ai_message, conversation_context, step)
             print(f"[Shag {step}]")
-            print(f"User: {user_message}")
+            try:
+                print(f"User: {user_message}")
+            except UnicodeEncodeError:
+                safe_user = user_message.encode('cp1251', 'replace').decode('cp1251')
+                print(f"User: {safe_user}")
             print()
             
             try:
@@ -146,7 +150,13 @@ async def test_ai_dialogue():
                     timeout=90.0
                 )
                 
-                print(f"AI: {ai_response}")
+                # Безопасный вывод для Windows консоли - удаляем emoji
+                try:
+                    print(f"AI: {ai_response}")
+                except UnicodeEncodeError:
+                    # Если не удается вывести - заменяем emoji на пробелы
+                    safe_response = ai_response.encode('cp1251', 'replace').decode('cp1251')
+                    print(f"AI: {safe_response}")
                 print()
                 
                 # Проверяем на наличие tool calls в логах
