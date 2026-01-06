@@ -1108,7 +1108,13 @@
                                 html += '</div>';
                                 html += '</div>';
                                 html += '</li>';
-                            } else if (partnposition) {
+                            } else if (partner.type === 'delegating_by_me') {
+                                html += `<li class="task-item contact-delegating-by-me" style="display: none;">`;
+                                html += '<div style="flex: 1;">';
+                                const displayName = partner.first_name ? partner.first_name : `@${partner.contact_info}`;
+                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">${displayName}</a></div>`;
+                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                if (partner.position) {
                                     html += `<span class="task-meta">${partner.position}</span>`;
                                 }
                                 if (partner.interests) {
@@ -1127,13 +1133,7 @@
                                     }
                                     html += '</div>';
                                 }
-                                html += '</div
-                                    html += `<span class="task-meta">${partner.reason}</span>`;
-                                }
                                 html += '</div>';
-                                html += '</div>';
-                                html += '<div class="task-actions" style="display: flex; gap: 4px;">';
-                                html += '<button onclick="alert(\'Контакт @' + partner.contact_info + '\')" style="padding: 2px 8px; background: none; border: 1px solid #D1D9E0; border-radius: 6px; color: #59636E; cursor: pointer; font-size: 11px;">Подробнее</button>';
                                 html += '</div>';
                                 html += '</li>';
                             }
