@@ -76,6 +76,26 @@ def clear_user_data(database_url):
         
         print(f"[Verification] Tasks: {tasks_count}, Profiles: {profile_count}")
         
+        # Clear Redis context
+        try:
+            import redis.asyncio as aioredis
+            from config import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+            import asyncio
+            
+            async def clear_redis():
+                redis_client = await aioredis.from_url(
+                    f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}",
+                    encoding="utf-8",
+                    decode_responses=False
+                )
+                await redis_client.delete(f"context:{USER_TELEGRAM_ID}")
+                await redis_client.close()
+                print("[OK] Cleared Redis context")
+            
+            asyncio.run(clear_redis())
+        except Exception as e:
+            print(f"[WARNING] Could not clear Redis: {e}")
+        
         session.close()
         return True
         
