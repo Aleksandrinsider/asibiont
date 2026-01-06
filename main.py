@@ -1336,7 +1336,9 @@ async def api_profile_handler(request):
             'interests': profile.interests or 'Не указаны',
             'city': profile.city or 'Не указан',
             'company': profile.company or 'Не указана',
-            'position': profile.position or 'Не указана'
+            'position': profile.position or 'Не указана',
+            'average_rating': profile.average_rating or 0,
+            'rating_count': profile.rating_count or 0
         }
     
     # Get user avatar URL
