@@ -229,18 +229,30 @@
         
         function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
             
+            // Проверка на дубликат по содержанию и времени
             let date;
             if (timestamp) {
                 date = new Date(timestamp);
             } else {
                 date = new Date();
             }
-            
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            
+            // Проверяем, есть ли уже такое сообщение (по содержанию и времени)
+            const existingMessages = messages.querySelectorAll('.message');
+            for (let msg of existingMessages) {
+                const msgText = msg.querySelector('.message-text')?.textContent;
+                const msgTime = msg.querySelector('.message-time')?.textContent;
+                const expectedTime = `${dateString} ${timeString}`;
+                if (msgText === text && msgTime === expectedTime) {
+                    return; // Сообщение уже существует, не добавляем
+                }
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
             messageDiv.innerHTML = `
                 <div class="message-text">${text}</div>
                 <div class="message-time">${dateString} ${timeString}</div>
@@ -319,7 +331,19 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
+                    // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
+                    setTimeout(async () => {
+                        try {
+                            const syncResponse = await fetch('/api/interactions');
+                            if (syncResponse.ok) {
+                                const syncData = await syncResponse.json();
+                                lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
+                            }
+                        } catch (e) {
+                            // Если не удалось синхронизировать, увеличиваем на 2
+                            lastMessageCount += 2;
+                        }
+                    }, 500);
                     // Обновить список задач с задержкой для синхронизации с бэкендом
                     setTimeout(async () => {
                         await updateTasks();
@@ -368,7 +392,18 @@
                     addMessage(data.response, 'ai');
                     // Обновить профиль и время сразу
                     await updateProfile();
-                    lastMessageCount += 2; // Увеличиваем счетчик, чтобы избежать дублирования при следующем updateChat
+                    // Синхронизировать счетчик через API
+                    setTimeout(async () => {
+                        try {
+                            const syncResponse = await fetch('/api/interactions');
+                            if (syncResponse.ok) {
+                                const syncData = await syncResponse.json();
+                                lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
+                            }
+                        } catch (e) {
+                            lastMessageCount += 2;
+                        }
+                    }, 500);
                     window.changingTime = false; // Reset flag after update
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
