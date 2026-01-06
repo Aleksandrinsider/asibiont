@@ -1945,7 +1945,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             system_prompt += "\n\n🚨 КРИТИЧЕСКИ ВАЖНО: ПОЛЬЗОВАТЕЛЬ ПРОСИТ ПОКАЗАТЬ ЗАДАЧИ - ОБЯЗАТЕЛЬНО ВЫЗОВИ list_tasks() ПЕРВЫМ ДЕЛОМ, ДАЖЕ ЕСЛИ В КОНТЕКСТЕ УЖЕ ЕСТЬ ИНФОРМАЦИЯ О ЗАДАЧАХ!"
         
         system_prompt += user_memory
-        system_prompt += time_hint
         
         messages = [{"role": "system", "content": system_prompt}]
         if context:
