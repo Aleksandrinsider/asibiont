@@ -1114,6 +1114,10 @@ def get_partners_list(user_id=None, session=None):
         else:
             partners_other_city.append(partner)
     
+    # Сортируем каждую группу по среднему рейтингу (от большего к меньшему)
+    partners_same_city.sort(key=lambda p: (p.average_rating or 0), reverse=True)
+    partners_other_city.sort(key=lambda p: (p.average_rating or 0), reverse=True)
+    
     # Объединяем: сначала из того же города, потом остальные
     sorted_partners = partners_same_city + partners_other_city
     

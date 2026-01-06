@@ -99,6 +99,9 @@
                             <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
+                            {% if profile.average_rating > 0 %}
+                            <p>Средний рейтинг: ⭐ {{ profile.average_rating }}/10 ({{ profile.rating_count }} оценок)</p>
+                            {% endif %}
                             <p>Подписка: активна до {{ formatted_end_date }} 
                                 <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a>
                             </p>
@@ -1072,6 +1075,54 @@
                 addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
             }
         }
+
+        async function rateUser(username, event) {
+            event.stopPropagation();
+            
+            // Получить текущую оценку пользователя
+            const getCurrentRating = await fetch(`/api/get_user_rating?username=${username}`, {
+                credentials: 'include'
+            });
+            if (!await checkAuth(getCurrentRating)) return;
+            
+            let currentRatingText = '';
+            if (getCurrentRating.ok) {
+                const data = await getCurrentRating.json();
+                if (data.rating) {
+                    currentRatingText = `\nТекущая оценка: ${data.rating}/10`;
+                }
+            }
+            
+            const rating = prompt(`Оцените @${username} от 1 до 10:${currentRatingText}\n(1 - очень плохая рекомендация, 10 - отличная рекомендация)`, '');
+            
+            if (rating === null || rating === '') {
+                return; // Пользователь отменил
+            }
+            
+            const ratingNum = parseInt(rating);
+            if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+                alert('Пожалуйста, введите число от 1 до 10');
+                return;
+            }
+            
+            const response = await fetch('/api/rate_user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, rating: ratingNum }),
+                credentials: 'include'
+            });
+            
+            if (!await checkAuth(response)) return;
+            
+            if (response.ok) {
+                const data = await response.json();
+                addMessage(`✅ ${data.message}`, 'ai');
+                await updatePeople(); // Обновить список контактов
+            } else {
+                const error = await response.json();
+                addMessage(`Ошибка: ${error.error}`, 'ai');
+            }
+        }
         
         async function refreshTasks() {
             await updateTasks();
@@ -1196,7 +1247,11 @@
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
+                                if (partner.average_rating > 0) {
+                                    html += `<span class="task-meta" style="color: #D7AC0C;">⭐ ${partner.average_rating}/10 (${partner.rating_count})</span>`;
+                                }
                                 html += '</div>';
+                                html += `<button class="task-action-btn" onclick="rateUser('${partner.contact_info}', event)" style="margin-top: 8px;">Оценить</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {

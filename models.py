@@ -72,8 +72,23 @@ class UserProfile(Base):
     average_completion_time = Column(Integer, default=0)  # Average time to complete tasks in minutes
     last_activity = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))  # Last interaction time
     updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    average_rating = Column(Integer, default=0)  # Average rating from other users (0-10)
+    rating_count = Column(Integer, default=0)  # Number of ratings received
 
     user = relationship("User", backref="profile")
+
+class UserRating(Base):
+    __tablename__ = 'user_ratings'
+
+    id = Column(Integer, primary_key=True)
+    rater_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # User who gives the rating
+    rated_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)  # User who receives the rating
+    rating = Column(Integer, nullable=False)  # Rating value 1-10
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    rater = relationship("User", foreign_keys=[rater_user_id])
+    rated_user = relationship("User", foreign_keys=[rated_user_id])
 
 class Subscription(Base):
     __tablename__ = 'subscriptions'
