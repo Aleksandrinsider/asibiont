@@ -1236,6 +1236,17 @@ async def api_partners_handler(request):
                 'type': 'delegating_by_me'
             })
         
+        # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
+        user_city = profile.city.lower() if profile and profile.city else None
+        
+        def sort_key(partner):
+            partner_city = partner.get('city', '').lower() if partner.get('city') else None
+            same_city = 0 if (user_city and partner_city == user_city) else 1
+            rating = -(partner.get('average_rating', 0) or 0)  # Negative for descending order
+            return (same_city, rating)
+        
+        partners_data.sort(key=sort_key)
+        
         return web.json_response({'partners': partners_data})
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
