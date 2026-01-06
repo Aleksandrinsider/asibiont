@@ -796,6 +796,7 @@ body {
     flex-direction: column;
     gap: 2px;
     align-items: center;
+    margin-left: 8px;
 }
 
 .quick-action {
