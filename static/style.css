@@ -318,7 +318,7 @@ body {
 }
 
 .typing-indicator {
-    padding: 10px 12px;
+    padding: 10px 0px;
     margin: 10px 0;
     max-width: 85%;
     background-color: transparent;

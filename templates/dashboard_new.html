@@ -491,18 +491,29 @@
             const button = document.getElementById('profile-toggle-btn');
             const svg = button.querySelector('svg');
             const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
             
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 svg.style.transform = 'rotate(0deg)';
+                if (peopleSection) {
+                    peopleSection.style.flex = '';
+                    peopleSection.style.minHeight = '';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
+                }
             } else {
                 content.style.display = 'none';
                 svg.style.transform = 'rotate(-90deg)';
-            }
-            
-            // Пересчитать высоту контактов
-            if (peopleSection) {
-                peopleSection.style.flex = content.style.display === 'none' ? '1' : 'initial';
+                if (peopleSection) {
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = 'calc(100vh - 150px)';
+                    peopleList.style.overflowY = 'auto';
+                }
             }
         }
 
@@ -521,7 +532,7 @@
                     tasksWrapper.style.minHeight = '';
                 }
                 if (tasksSection) {
-                    tasksSection.style.maxHeight = 'calc(100vh - 460px)';
+                    tasksSection.style.maxHeight = 'calc(100vh - 440px)';
                 }
             } else {
                 content.style.display = 'none';
@@ -531,7 +542,7 @@
                     tasksWrapper.style.minHeight = '0';
                 }
                 if (tasksSection) {
-                    tasksSection.style.maxHeight = 'calc(100vh - 200px)';
+                    tasksSection.style.maxHeight = 'calc(100vh - 180px)';
                 }
             }
             console.log('Stats toggled. Display:', content.style.display, 'Wrapper flex:', tasksWrapper?.style.flex);
