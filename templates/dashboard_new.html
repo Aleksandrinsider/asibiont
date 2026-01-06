@@ -1000,13 +1000,6 @@
                 .filter(t => t.date > now)
                 .sort((a, b) => a.date - b.date);
             
-            console.log('Все задачи:', tasks.length);
-            console.log('Задачи с напоминаниями:', tasks.filter(t => t.reminder_time).length);
-            console.log('Будущие задачи:', upcomingTasks.length);
-            if (upcomingTasks.length > 0) {
-                console.log('Следующая задача:', upcomingTasks[0].title, upcomingTasks[0].date);
-            }
-            
             const nextTaskCenterEl = document.getElementById('next-task-center');
             const nextTaskTextEl = document.getElementById('next-task-text');
             
