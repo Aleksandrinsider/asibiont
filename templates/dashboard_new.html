@@ -1089,24 +1089,24 @@
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 22px;">`;
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none;">@${partner.contact_info}</a></div>`;
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="margin-top: 2px;">';
                                 if (partner.first_name) {
-                                    html += `<span class="task-meta">${partner.first_name}</span>`;
+                                    html += `<div><span class="task-meta">${partner.first_name}</span></div>`;
                                 }
                                 if (partner.position) {
-                                    html += `<span class="task-meta">Должность: ${partner.position}</span>`;
+                                    html += `<div><span class="task-meta">Должность: ${partner.position}</span></div>`;
                                 }
                                 if (partner.interests) {
-                                    html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                    html += `<div><span class="task-meta">Интересы: ${partner.interests}</span></div>`;
                                 }
                                 if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
+                                    html += `<div><span class="task-meta">Город: ${partner.city}</span></div>`;
                                 }
                                 if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
+                                    html += `<div><span class="task-meta">Компания: ${partner.company}</span></div>`;
                                 }
                                 if (partner.common_interests) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                    html += `<div><span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span></div>`;
                                 }
                                 html += '</div>';
                                 html += '</div>';
@@ -1118,18 +1118,18 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} задач</span></div>`;
                                 }
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="margin-top: 2px;">';
                                 if (partner.position) {
-                                    html += `<span class="task-meta">Должность: ${partner.position}</span>`;
+                                    html += `<div><span class="task-meta">Должность: ${partner.position}</span></div>`;
                                 }
                                 if (partner.interests) {
-                                    html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                    html += `<div><span class="task-meta">Интересы: ${partner.interests}</span></div>`;
                                 }
                                 if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
+                                    html += `<div><span class="task-meta">Город: ${partner.city}</span></div>`;
                                 }
                                 if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
+                                    html += `<div><span class="task-meta">Компания: ${partner.company}</span></div>`;
                                 }
                                 html += '</div>';
                                 html += '</div>';
@@ -1141,18 +1141,18 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} задач</span></div>`;
                                 }
-                                html += '<div style="display: flex; gap: 12px; margin-top: 2px; flex-wrap: wrap;">';
+                                html += '<div style="margin-top: 2px;">';
                                 if (partner.position) {
-                                    html += `<span class="task-meta">Должность: ${partner.position}</span>`;
+                                    html += `<div><span class="task-meta">Должность: ${partner.position}</span></div>`;
                                 }
                                 if (partner.interests) {
-                                    html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                    html += `<div><span class="task-meta">Интересы: ${partner.interests}</span></div>`;
                                 }
                                 if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
+                                    html += `<div><span class="task-meta">Город: ${partner.city}</span></div>`;
                                 }
                                 if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
+                                    html += `<div><span class="task-meta">Компания: ${partner.company}</span></div>`;
                                 }
                                 html += '</div>';
                                 html += '</div>';
