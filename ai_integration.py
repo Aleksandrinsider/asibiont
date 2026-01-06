@@ -1619,34 +1619,49 @@ def force_tool_calls(message, content, mentions_str, user_id):
                 
                 # Извлекаем время напоминания
                 reminder_time = None
-                time_match = re.search(r'(завтра|послезавтра|сегодня|через\s+\d+\s+(?:минут|час))\s+в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
+                from datetime import datetime, timedelta
+                import pytz
+                from models import Session, User
                 
-                if time_match:
-                    day_word = time_match.group(1).lower()
-                    hour = int(time_match.group(2))
-                    minute = int(time_match.group(3))
+                # Получаем timezone пользователя
+                session = Session()
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
+                session.close()
+                now = datetime.now(user_tz)
+                
+                # Проверяем "через X минут/часов"
+                through_time_match = re.search(r'через\s+(\d+)\s+(минут|час)', message, re.IGNORECASE)
+                if through_time_match:
+                    amount = int(through_time_match.group(1))
+                    unit = through_time_match.group(2).lower()
                     
-                    from datetime import datetime, timedelta
-                    import pytz
-                    # Используем timezone пользователя или UTC
-                    from models import Session, User
-                    session = Session()
-                    user = session.query(User).filter_by(telegram_id=user_id).first()
-                    user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
-                    session.close()
-                    now = datetime.now(user_tz)
+                    if 'минут' in unit:
+                        target_dt = now + timedelta(minutes=amount)
+                    else:  # час/часов
+                        target_dt = now + timedelta(hours=amount)
                     
-                    if 'завтра' in day_word:
-                        target_date = (now + timedelta(days=1)).date()
-                    elif 'послезавтра' in day_word:
-                        target_date = (now + timedelta(days=2)).date()
-                    else:
-                        target_date = now.date()
-                    
-                    target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
-                    target_dt = user_tz.localize(target_dt)
                     reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                    logger.info(f"[FORCE] Extracted reminder_time: {reminder_time}")
+                    logger.info(f"[FORCE] Extracted reminder_time (relative): {reminder_time}")
+                else:
+                    # Проверяем "завтра/сегодня в XX:XX"
+                    time_match = re.search(r'(завтра|послезавтра|сегодня)\s+в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
+                    if time_match:
+                        day_word = time_match.group(1).lower()
+                        hour = int(time_match.group(2))
+                        minute = int(time_match.group(3))
+                        
+                        if 'завтра' in day_word:
+                            target_date = (now + timedelta(days=1)).date()
+                        elif 'послезавтра' in day_word:
+                            target_date = (now + timedelta(days=2)).date()
+                        else:
+                            target_date = now.date()
+                        
+                        target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+                        target_dt = user_tz.localize(target_dt)
+                        reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
+                        logger.info(f"[FORCE] Extracted reminder_time (absolute): {reminder_time}")
                 
                 if reminder_time:
                     logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
