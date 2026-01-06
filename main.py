@@ -1242,8 +1242,23 @@ async def api_partners_handler(request):
         def sort_key(partner):
             partner_city = partner.get('city', '').lower() if partner.get('city') else None
             same_city = 0 if (user_city and partner_city == user_city) else 1
-            rating = -(partner.get('average_rating', 0) or 0)  # Negative for descending order
-            return (same_city, rating)
+            
+            rating = partner.get('average_rating', 0) or 0
+            # Группы рейтинга:
+            # 1. Высокий рейтинг (>= 5): сортируем по убыванию
+            # 2. Нет рейтинга (0): нейтрально, выше плохих
+            # 3. Низкий рейтинг (< 5): сортируем по убыванию
+            if rating >= 5:
+                rating_group = 0  # Лучшая группа
+                rating_value = -rating  # Внутри группы по убыванию
+            elif rating == 0:
+                rating_group = 1  # Средняя группа (нет данных)
+                rating_value = 0
+            else:  # rating < 5
+                rating_group = 2  # Худшая группа
+                rating_value = -rating  # Внутри группы по убыванию
+            
+            return (same_city, rating_group, rating_value)
         
         partners_data.sort(key=sort_key)
         
