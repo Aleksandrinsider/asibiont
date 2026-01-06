@@ -230,7 +230,7 @@
         function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
             
-            // Проверка на дубликат по содержанию и времени
+            // Проверка на дубликат по содержанию и точному времени
             let date;
             if (timestamp) {
                 date = new Date(timestamp);
@@ -240,19 +240,21 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
-            // Проверяем, есть ли уже такое сообщение (по содержанию и времени)
+            // Уникальный ключ: текст + timestamp (с миллисекундами)
+            const uniqueKey = `${text}_${date.getTime()}`;
+            
+            // Проверяем, есть ли уже такое сообщение с таким же уникальным ключом
             const existingMessages = messages.querySelectorAll('.message');
             for (let msg of existingMessages) {
-                const msgText = msg.querySelector('.message-text')?.textContent;
-                const msgTime = msg.querySelector('.message-time')?.textContent;
-                const expectedTime = `${dateString} ${timeString}`;
-                if (msgText === text && msgTime === expectedTime) {
+                const msgKey = msg.getAttribute('data-msg-key');
+                if (msgKey === uniqueKey) {
                     return; // Сообщение уже существует, не добавляем
                 }
             }
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}`;
+            messageDiv.setAttribute('data-msg-key', uniqueKey);
             messageDiv.innerHTML = `
                 <div class="message-text">${text}</div>
                 <div class="message-time">${dateString} ${timeString}</div>
