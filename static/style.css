@@ -1247,7 +1247,7 @@ body {
 }
 
 .rating-slider-container {
-    margin: 24px 0;
+    margin: 16px 0;
 }
 
 .rating-slider {
@@ -1305,7 +1305,7 @@ body {
 .rating-modal-actions {
     display: flex;
     gap: 12px;
-    margin-top: 24px;
+    margin-top: 16px;
 }
 
 .rating-cancel-btn,
