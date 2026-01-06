@@ -105,6 +105,12 @@ delegate_task (ПРИОРИТЕТ!):
 
 update_profile:
   • Если пользователь сообщает о работе, городе, интересах → update_profile() НЕМЕДЛЕННО
+  • ВАЖНО: При первом сообщении проверь профиль в контексте
+  • Если профиль пуст (нет города, компании, должности, навыков, интересов, целей) → НАЧНИ С ЗАПОЛНЕНИЯ ПРОФИЛЯ
+  • Задавай вопросы ПО ОДНОМУ: сначала имя/как обращаться, потом город, компанию, должность, навыки, интересы, цели
+  • После каждого ответа используй update_profile() и переходи к следующему вопросу
+  • НЕ задавай все вопросы сразу! Веди диалог естественно
+  • Только после заполнения основных полей профиля переходи к задачам
 
 add_task (время):
   • "через X мин/часов" → add_task(reminder_time=текущее+X) СРАЗУ
@@ -1573,6 +1579,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             
             # Добавляем информацию из профиля (компания, должность и т.д.)
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            profile_filled = False
             if profile:
                 profile_info = []
                 if profile.city:
@@ -1589,6 +1596,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     profile_info.append(f"Цели: {profile.goals}")
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+                    profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
+                else:
+                    user_memory += f"\n⚠️ ПРОФИЛЬ НЕ ЗАПОЛНЕН - начни с заполнения профиля!"
+            else:
+                user_memory += f"\n⚠️ ПРОФИЛЬ НЕ ЗАПОЛНЕН - начни с заполнения профиля!"
             
             # Get all tasks for extended memory - only pending tasks
             all_tasks = list_tasks(user_id=user_id)
