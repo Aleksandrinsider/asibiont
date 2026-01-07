@@ -1358,14 +1358,26 @@ def find_partners(user_id=None, session=None):
     profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
     # Получить память для исключения заблокированных
     blocked = []
+    hidden_contacts = {}  # username -> expiration_timestamp
     if user.memory:
         try:
             decrypted = decrypt_data(user.memory)
             # Ищем паттерны вроде "не показывать @user" или "заблокировать @user"
             import re
+            from datetime import datetime, timezone as dt_timezone
+            
+            # Permanent blocks
             matches = re.findall(r'не показывать @(\w+)|заблокировать @(\w+)', decrypted, re.IGNORECASE)
             for match in matches:
                 blocked.extend([m for m in match if m])
+            
+            # Temporary hides: hide_contact:username:timestamp
+            hide_matches = re.findall(r'hide_contact:@?(\w+):(\d+)', decrypted, re.IGNORECASE)
+            current_time = int(datetime.now(dt_timezone.utc).timestamp())
+            for username, expiration_ts in hide_matches:
+                exp_ts = int(expiration_ts)
+                if exp_ts > current_time:  # Still hidden
+                    hidden_contacts[username.lower()] = exp_ts
         except Exception as e:
             pass
     partners = []
@@ -1378,7 +1390,11 @@ def find_partners(user_id=None, session=None):
                 profiles = city_profiles  # Используем только профили из того же города
         for p in profiles:
             # Исключаем заблокированных и себя
+            contact_username = p.contact_info.replace('@', '').lower()
             if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
+                continue
+            # Исключаем временно скрытых
+            if contact_username in hidden_contacts:
                 continue
             if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
                 partners.append(p)

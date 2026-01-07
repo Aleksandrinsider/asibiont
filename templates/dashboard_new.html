@@ -1269,6 +1269,29 @@
             }
         }
         
+        async function hideContact(username) {
+            if (!confirm(`Скрыть @${username} на 7 дней?`)) return;
+            
+            const response = await fetch('/api/hide_contact', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, days: 7 }),
+                credentials: 'include'
+            });
+            
+            if (!await checkAuth(response)) return;
+            
+            if (response.ok) {
+                const data = await response.json();
+                addMessage(`✅ ${data.message}`, 'ai');
+                cachedPartnersData = null;
+                await updatePeople(); // Обновить список контактов
+            } else {
+                const error = await response.json();
+                addMessage(`Ошибка: ${error.error}`, 'ai');
+            }
+        }
+        
         async function refreshTasks() {
             await updateTasks();
             await updatePeople();
@@ -1482,6 +1505,7 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action" title="Скрыть на 7 дней">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
@@ -1537,6 +1561,7 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action" title="Скрыть на 7 дней">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1592,6 +1617,7 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action" title="Скрыть на 7 дней">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             }

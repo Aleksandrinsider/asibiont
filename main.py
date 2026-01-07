@@ -1065,9 +1065,33 @@ async def api_partners_handler(request):
             logger.error(f"Error getting partners: {e}")
             partners = []
         
+        # Filter hidden contacts
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            
+            # Get hidden contacts from memory
+            hidden_contacts = set()
+            if user and user.memory:
+                try:
+                    from ai_integration import decrypt_data
+                    import re
+                    from datetime import datetime, timezone as dt_timezone
+                    
+                    decrypted = decrypt_data(user.memory)
+                    hide_matches = re.findall(r'hide_contact:@?(\w+):(\d+)', decrypted, re.IGNORECASE)
+                    current_time = int(datetime.now(dt_timezone.utc).timestamp())
+                    for username, expiration_ts in hide_matches:
+                        exp_ts = int(expiration_ts)
+                        if exp_ts > current_time:  # Still hidden
+                            hidden_contacts.add(username.lower())
+                except Exception as e:
+                    logger.error(f"Error parsing hidden contacts: {e}")
+            
+            # Filter partners
+            if hidden_contacts:
+                partners = [p for p in partners if p.contact_info.replace('@', '').lower() not in hidden_contacts]
+            
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all() if user else []
             
@@ -1410,6 +1434,66 @@ async def rate_user_handler(request):
     
     except Exception as e:
         logger.error(f"Error rating user: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def get_user_rating_handler(request):
+    """Get current user's rating for another user"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+
+
+async def hide_contact_handler(request):
+    """Hide contact for specified number of days"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+        
+        data = await request.json()
+        username = data.get('username')
+        days = data.get('days', 7)
+        
+        if not username:
+            return web.json_response({'error': 'Missing username'}, status=400)
+        
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            
+            # Calculate expiration timestamp
+            from datetime import datetime, timedelta, timezone as dt_timezone
+            expiration = datetime.now(dt_timezone.utc) + timedelta(days=days)
+            expiration_ts = int(expiration.timestamp())
+            
+            # Update user memory with hidden contact
+            current_memory = decrypt_data(user.memory) if user.memory else ""
+            hide_entry = f"hide_contact:{username}:{expiration_ts}"
+            
+            # Remove old hide entries for this username
+            import re
+            current_memory = re.sub(rf'hide_contact:{username}:\d+[\n\s]*', '', current_memory)
+            
+            # Add new hide entry
+            updated_memory = f"{current_memory.strip()}\n{hide_entry}".strip()
+            user.memory = encrypt_data(updated_memory)
+            
+            session_db.commit()
+            
+            return web.json_response({
+                'success': True,
+                'message': f'@{username} скрыт на {days} дней'
+            })
+        
+        finally:
+            session_db.close()
+    
+    except Exception as e:
+        logger.error(f"Error hiding contact: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -1992,6 +2076,7 @@ app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
+app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
