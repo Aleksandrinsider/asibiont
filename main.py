@@ -217,7 +217,7 @@ async def dashboard_handler(request):
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
-                'timestamp': int(datetime.now().timestamp())
+                'timestamp': int(datetime.now(pytz.UTC).timestamp())
             })
         
         # Получить задачи пользователя
@@ -232,7 +232,7 @@ async def dashboard_handler(request):
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
-                    'timestamp': int(datetime.now().timestamp())
+                    'timestamp': int(datetime.now(pytz.UTC).timestamp())
                 })
             
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
@@ -555,7 +555,7 @@ async def dashboard_handler(request):
             'current_time': current_time,
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': int(datetime.now().timestamp()),
+            'timestamp': int(datetime.now(pytz.UTC).timestamp()),
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
             'user_avatar_url': user_avatar_url
         })
@@ -568,7 +568,7 @@ async def dashboard_handler(request):
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
-            'timestamp': int(datetime.now().timestamp())
+            'timestamp': int(datetime.now(pytz.UTC).timestamp())
         })
 
 
@@ -1402,7 +1402,7 @@ async def rate_user_handler(request):
             if existing_rating:
                 # Update existing rating
                 existing_rating.rating = rating
-                existing_rating.updated_at = datetime.now()
+                existing_rating.updated_at = datetime.now(pytz.UTC)
             else:
                 # Create new rating
                 new_rating = UserRating(

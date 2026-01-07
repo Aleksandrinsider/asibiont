@@ -5,7 +5,10 @@ from models import Session
 from models import Task, User
 from datetime import datetime, timedelta
 import pytz
+import logging
 from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES
+
+logger = logging.getLogger(__name__)
 
 class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
@@ -103,7 +106,7 @@ class ReminderService:
                 )
             else:
                 # Для тестов - вывод в консоль
-                print(f"\n[RESULT CHECK SENT] To user {user_id}: {result_text}")
+                logger.info(f"[RESULT CHECK SENT] To user {user_id}: {result_text}")
         except Exception as e:
             import logging
             logging.error(f"Failed to send result check for task {task_id}: {e}")
@@ -126,13 +129,13 @@ class ReminderService:
                         "task_title": task_title
                     }
                     user.pending_action = json.dumps(pending_data)
-                    print(f"Устанавливаем pending_action: {user.pending_action}")
+                    logger.info(f"Устанавливаем pending_action: {user.pending_action}")
                     db.commit()
                     db.refresh(user)  # Обновляем объект из БД
-                    print(f"После commit pending_action: {user.pending_action}")
-                    print("pending_action установлен")
+                    logger.info(f"После commit pending_action: {user.pending_action}")
+                    logger.info("pending_action установлен")
                 else:
-                    print(f"Пользователь с telegram_id {user_id} не найден")
+                    logger.info(f"Пользователь с telegram_id {user_id} не найден")
         except Exception as e:
             import logging
             logging.error(f"Failed to update result_check_sent for task {task_id}: {e}")
@@ -182,7 +185,7 @@ class ReminderService:
                 logging.info(f"Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
             else:
                 # Для тестов - вывод в консоль
-                print(f"\n[REMINDER SENT] To user {user_id}: {reminder_text}")
+                logger.info(f"[REMINDER SENT] To user {user_id}: {reminder_text}")
                 import logging
                 logging.info(f"Reminder printed to console for user {user_id} for task {task_id}")
         except Exception as e:
@@ -246,7 +249,7 @@ class ReminderService:
                     text=report_text
                 )
             else:
-                print(f"[DAILY REPORT] To user {user_id}: {report_text}")
+                logger.info(f"[DAILY REPORT] To user {user_id}: {report_text}")
         except Exception as e:
             import logging
             logging.error(f"Failed to send daily report to user {user_id}: {e}")    
@@ -493,7 +496,7 @@ class ReminderService:
                         text=proactive_text
                     )
                 else:
-                    print(f"[PROACTIVE] To user {user_id}: {proactive_text}")
+                    logger.info(f"[PROACTIVE] To user {user_id}: {proactive_text}")
             except Exception as e:
                 import logging
                 logging.error(f"Failed to send proactive message to user {user_id}: {e}")
@@ -535,7 +538,7 @@ class ReminderService:
                     text=overdue_text
                 )
             else:
-                print(f"[OVERDUE] To user {user_id}: {overdue_text}")
+                logger.info(f"[OVERDUE] To user {user_id}: {overdue_text}")
         except Exception as e:
             import logging
             logging.error(f"Failed to send overdue reminder to user {user_id}: {e}")

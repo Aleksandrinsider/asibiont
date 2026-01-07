@@ -293,6 +293,20 @@
             }
         }
         
+        // Безопасная функция для fetch с обработкой ошибок
+        async function safeFetch(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response;
+            } catch (error) {
+                console.error(`Fetch error for ${url}:`, error);
+                throw error;
+            }
+        }
+        
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
             if (response.status === 401 || response.status === 403) {
@@ -336,7 +350,7 @@
         
         async function loadChatHistory() {
             try {
-                const response = await fetch('/api/interactions');
+                const response = await safeFetch('/api/interactions');
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
