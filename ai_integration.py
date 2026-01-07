@@ -11,6 +11,14 @@ import pytz
 cipher = Fernet(ENCRYPTION_KEY.encode())
 logger = logging.getLogger(__name__)
 
+# Redis client - будет импортирован из main.py
+redis_client = None
+
+def set_redis_client(client):
+    """Устанавливает глобальный Redis client из main.py"""
+    global redis_client
+    redis_client = client
+
 def encrypt_data(data):
     if data:
         return cipher.encrypt(data.encode()).decode()
@@ -1999,6 +2007,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         
         system_prompt += user_memory
         
+        # 🎯 Проверяем контекст последней созданной задачи для edit_task
+        last_task_context = ""
+        if redis_client and user_id:
+            try:
+                last_task_data = await redis_client.get(f"last_task_id:{user_id}")
+                if last_task_data:
+                    task_info = json.loads(last_task_data.decode('utf-8'))
+                    last_task_context = f"\n\n🎯 КОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={task_info['id']}, название='{task_info['title']}', время='{task_info.get('reminder_time', '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={task_info['id']}, ...)!"
+                    logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: {task_info}")
+            except Exception as e:
+                logger.error(f"Error loading last_task_id from Redis: {e}")
+        
         messages = [{"role": "system", "content": system_prompt}]
         if context:
             for item in context:
@@ -2006,7 +2026,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     messages.append({"role": "user", "content": item["user"]})
                 if "agent" in item:
                     messages.append({"role": "assistant", "content": item["agent"]})
-        messages.append({"role": "user", "content": message})
+        # Добавляем текущее сообщение с контекстом последней задачи
+        user_message_with_context = message + last_task_context
+        messages.append({"role": "user", "content": user_message_with_context})
         
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
@@ -2078,8 +2100,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     id_match = re.search(r'ID:\s*(\d+)', result)
                                     if id_match:
                                         last_task_id = id_match.group(1)
-                                        # Добавляем в system_prompt для следующего сообщения
-                                        tool_results.append(f"ПОСЛЕДНЯЯ СОЗДАННАЯ ЗАДАЧА: ID={last_task_id}, title='{args.get('title', '')}' - ИСПОЛЬЗУЙ edit_task(ЭТОТ ID) при уточнениях!")
+                                        # Сохраняем в Redis для использования в следующих сообщениях
+                                        if redis_client:
+                                            try:
+                                                await redis_client.setex(
+                                                    f"last_task_id:{user_id}", 
+                                                    300,  # 5 минут TTL
+                                                    json.dumps({
+                                                        'id': last_task_id,
+                                                        'title': args.get('title', ''),
+                                                        'reminder_time': args.get('reminder_time', '')
+                                                    }).encode('utf-8')
+                                                )
+                                            except Exception as e:
+                                                logger.error(f"Error saving last_task_id to Redis: {e}")
+                                        # Добавляем в результаты для текущего контекста
+                                        tool_results.append(f"✅ ПОСЛЕДНЯЯ СОЗДАННАЯ ЗАДАЧА: ID={last_task_id}, title='{args.get('title', '')}'. Если пользователь даёт уточнения — ОБЯЗАТЕЛЬНО используй edit_task({last_task_id})!")
                                 
                                 tool_results.append(f"{func_name}() вернул: {result[:200]}")
                                 logger.info(f"[TOOL CALLS] {func_name} result: {result[:100]}...")

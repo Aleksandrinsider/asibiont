@@ -12,7 +12,7 @@ from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET, LOCAL, CURRENT_DATE
 from datetime import datetime, timedelta
-from ai_integration import AIIntegration, chat_with_ai, get_partners_list
+from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
 import logging
@@ -620,7 +620,10 @@ async def chat_handler(request):
                 logger.error(f"Error loading context: {e}")
                 context = []
 
-        # Save user message
+        # Save user message WITH PRECISE TIMESTAMP before AI call
+        from datetime import datetime, timezone as dt_timezone
+        user_message_timestamp = datetime.now(dt_timezone.utc)
+        
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -629,11 +632,16 @@ async def chat_handler(request):
                 content = message
                 if file:
                     content += f" [Файл: {file.filename}]"
-                interaction_user = Interaction(user_id=user.id, message_type='user', content=content)
+                interaction_user = Interaction(
+                    user_id=user.id, 
+                    message_type='user', 
+                    content=content,
+                    created_at=user_message_timestamp  # Точное время ДО вызова AI
+                )
                 session_db.add(interaction_user)
                 session_db.commit()
 
-            # Get AI response
+            # Get AI response (will take time, so agent timestamp will be later)
             try:
                 logger.info(f"Calling chat_with_ai with user_id: {user_id}")
                 response = await chat_with_ai(message, context, user_id, file_content)
@@ -1504,6 +1512,10 @@ async def on_startup(app):
         except Exception as e:
             logger.error(f"Failed to initialize Redis: {e}")
             redis_client = None
+    
+    # Передаём redis_client в ai_integration
+    set_redis_client(redis_client)
+    logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
     
     # Initialize session storage
     if redis_client:
