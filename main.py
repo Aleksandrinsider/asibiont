@@ -12,7 +12,7 @@ from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET, LOCAL, CURRENT_DATE
 from datetime import datetime, timedelta
-from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client
+from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
 import logging
@@ -1074,7 +1074,6 @@ async def api_partners_handler(request):
             hidden_contacts = set()
             if user and user.memory:
                 try:
-                    from ai_integration import decrypt_data
                     import re
                     from datetime import datetime, timezone as dt_timezone
                     

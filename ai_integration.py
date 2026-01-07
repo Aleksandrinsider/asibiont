@@ -16,8 +16,6 @@ redis_client = None
 
 def set_redis_client(client):
     """Устанавливает глобальный Redis client из main.py"""
-    if client is None:
-        raise ValueError("Redis client cannot be None")
     global redis_client
     redis_client = client
 
