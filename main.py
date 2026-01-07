@@ -1072,18 +1072,19 @@ async def api_partners_handler(request):
             
             # Get hidden contacts from memory
             hidden_contacts = set()
-            if user and user.memory:
+            if user and user.memory and len(user.memory.strip()) > 0:
                 try:
                     import re
                     from datetime import datetime, timezone as dt_timezone
                     
                     decrypted = decrypt_data(user.memory)
-                    hide_matches = re.findall(r'hide_contact:@?(\w+):(\d+)', decrypted, re.IGNORECASE)
-                    current_time = int(datetime.now(dt_timezone.utc).timestamp())
-                    for username, expiration_ts in hide_matches:
-                        exp_ts = int(expiration_ts)
-                        if exp_ts > current_time:  # Still hidden
-                            hidden_contacts.add(username.lower())
+                    if decrypted:  # Check decrypted result is not empty
+                        hide_matches = re.findall(r'hide_contact:@?(\w+):(\d+)', decrypted, re.IGNORECASE)
+                        current_time = int(datetime.now(dt_timezone.utc).timestamp())
+                        for username, expiration_ts in hide_matches:
+                            exp_ts = int(expiration_ts)
+                            if exp_ts > current_time:  # Still hidden
+                                hidden_contacts.add(username.lower())
                 except Exception as e:
                     logger.error(f"Error parsing hidden contacts: {e}")
             
@@ -1463,7 +1464,14 @@ async def hide_contact_handler(request):
             expiration_ts = int(expiration.timestamp())
             
             # Update user memory with hidden contact
-            current_memory = decrypt_data(user.memory) if user.memory else ""
+            current_memory = ""
+            if user.memory and len(user.memory.strip()) > 0:
+                try:
+                    current_memory = decrypt_data(user.memory)
+                except Exception as e:
+                    logger.error(f"Error decrypting memory in hide_contact: {e}")
+                    current_memory = ""
+            
             hide_entry = f"hide_contact:{username}:{expiration_ts}"
             
             # Remove old hide entries for this username
