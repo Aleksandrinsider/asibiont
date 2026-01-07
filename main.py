@@ -1437,13 +1437,6 @@ async def rate_user_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
-async def get_user_rating_handler(request):
-    """Get current user's rating for another user"""
-    try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
-
-
 async def hide_contact_handler(request):
     """Hide contact for specified number of days"""
     try:
