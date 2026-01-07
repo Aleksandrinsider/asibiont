@@ -37,12 +37,6 @@ class Task(Base):
     delegated_to_username = Column(String(255))  # Username of the person who should do it
     delegation_status = Column(String(50), default=None)  # None, pending, accepted, rejected
     delegation_details = Column(Text)  # Additional details about delegation
-    
-    # Delegation monitoring flags
-    helper_sent = Column(Boolean, default=False)  # AI helper sent to recipient
-    approaching_notification_sent = Column(Boolean, default=False)  # Notification 2h before deadline
-    midpoint_notification_sent = Column(Boolean, default=False)  # Midpoint progress report
-    
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])
