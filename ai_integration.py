@@ -591,13 +591,18 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
             try:
                 delegator = session.query(User).filter_by(id=task.user_id).first()
                 if delegator and delegator.telegram_id != user_id:
-                    from main import bot, reminder_service
-                    if bot and reminder_service:
-                        import asyncio
-                        # Используем AI для генерации уведомления
-                        asyncio.create_task(
-                            reminder_service.send_delegation_progress_update(task.id, update_type="completed")
-                        )
+                    # Try to send notification, but don't fail if bot not available
+                    try:
+                        from main import bot, reminder_service
+                        if bot and reminder_service and hasattr(reminder_service, 'send_delegation_progress_update'):
+                            import asyncio
+                            # Используем AI для генерации уведомления
+                            asyncio.create_task(
+                                reminder_service.send_delegation_progress_update(task.id, update_type="completed")
+                            )
+                    except (ImportError, AttributeError) as ie:
+                        # Bot or reminder_service not available, skip notification
+                        pass
             except Exception as e:
                 import logging
                 logging.error(f"Failed to notify delegator about task completion: {e}")
