@@ -5,6 +5,7 @@ from models import Session
 from models import Task, User
 from datetime import datetime, timedelta
 import pytz
+from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES
 
 class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
@@ -218,7 +219,7 @@ class ReminderService:
                 self.scheduler.add_job(
                     self.send_daily_report,
                     trigger="cron",
-                    hour=22,
+                    hour=DAILY_REPORT_HOUR,
                     minute=0,
                     timezone=user_tz,
                     args=[user.telegram_id],
@@ -292,7 +293,7 @@ class ReminderService:
                 self.scheduler.add_job(
                     self.check_and_send_proactive,
                     trigger="cron",
-                    minute="*/30",
+                    minute=f"*/{PROACTIVE_CHECK_INTERVAL_MINUTES}",
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=f"proactive_check_{user.telegram_id}",
@@ -326,7 +327,7 @@ class ReminderService:
             
             if last_interaction:
                 time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
-                if time_since_last < timedelta(minutes=15):
+                if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
                     # Недавно общались, пропустить проактивное сообщение
                     return
             
@@ -339,7 +340,7 @@ class ReminderService:
             now_utc = datetime.now(pytz.UTC)
             
             # Проверить задачи на ближайшие 60 минут (в UTC)
-            next_60_min_utc = now_utc + timedelta(minutes=60)
+            next_60_min_utc = now_utc + timedelta(minutes=PROACTIVE_CHECK_AHEAD_MINUTES)
             
             # Получить все pending задачи с reminder_time
             pending_tasks = db.query(Task).filter(
@@ -398,7 +399,7 @@ class ReminderService:
                 self.scheduler.add_job(
                     self.check_and_send_overdue_reminder,
                     trigger="cron",
-                    minute="*/15",
+                    minute=f"*/{OVERDUE_CHECK_INTERVAL_MINUTES}",
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=f"overdue_{user.telegram_id}",
@@ -432,7 +433,7 @@ class ReminderService:
             
             if last_interaction:
                 time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
-                if time_since_last < timedelta(minutes=15):
+                if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
                     # Недавно общались, пропустить проактивное сообщение
                     return
             
@@ -445,7 +446,7 @@ class ReminderService:
             now_utc = datetime.now(pytz.UTC)
             
             # Проверить задачи на ближайшие 60 минут (в UTC)
-            next_60_min_utc = now_utc + timedelta(minutes=60)
+            next_60_min_utc = now_utc + timedelta(minutes=PROACTIVE_CHECK_AHEAD_MINUTES)
             
             # Получить все pending задачи с reminder_time
             pending_tasks = db.query(Task).filter(
