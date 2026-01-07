@@ -122,6 +122,8 @@
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                        <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Мои</button>
+                        <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
@@ -558,6 +560,40 @@
             }
         }
 
+        // Favorite contacts management
+        function getFavoriteContacts() {
+            const favorites = localStorage.getItem('favoriteContacts');
+            return favorites ? JSON.parse(favorites) : [];
+        }
+
+        function saveFavoriteContacts(favorites) {
+            localStorage.setItem('favoriteContacts', JSON.stringify(favorites));
+        }
+
+        function isFavoriteContact(username) {
+            const favorites = getFavoriteContacts();
+            return favorites.includes(username);
+        }
+
+        function toggleFavoriteContact(username) {
+            let favorites = getFavoriteContacts();
+            const index = favorites.indexOf(username);
+            
+            if (index > -1) {
+                // Remove from favorites
+                favorites.splice(index, 1);
+            } else {
+                // Add to favorites
+                favorites.push(username);
+            }
+            
+            saveFavoriteContacts(favorites);
+            
+            // Force reload contacts to update heart icons
+            cachedPartnersData = null;
+            updatePeople();
+        }
+
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
             const button = document.getElementById('profile-toggle-btn');
@@ -975,6 +1011,14 @@
                 const element = contact.element;
                 if (currentContactFilter === 'all') {
                     element.style.display = 'flex';
+                } else if (currentContactFilter === 'favorite') {
+                    // Показываем только избранные контакты
+                    const username = contact.username.replace('@', '');
+                    if (isFavoriteContact(username)) {
+                        element.style.display = 'flex';
+                    } else {
+                        element.style.display = 'none';
+                    }
                 } else if (contact.type === currentContactFilter) {
                     element.style.display = 'flex';
                 } else {
@@ -1419,6 +1463,10 @@
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
+                                const isFavorite = isFavoriteContact(partner.contact_info);
+                                const heartIcon = isFavorite ? '♥' : '♡';
+                                const heartColor = isFavorite ? 'color: #d73a49;' : '';
+                                html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">✦</button>`;
                                 html += '</div>';
                                 html += '</li>';
@@ -1472,6 +1520,10 @@
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
+                                const isFavorite = isFavoriteContact(partner.contact_info);
+                                const heartIcon = isFavorite ? '♥' : '♡';
+                                const heartColor = isFavorite ? 'color: #d73a49;' : '';
+                                html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">✦</button>`;
                                 html += '</div>';
                                 html += '</li>';
