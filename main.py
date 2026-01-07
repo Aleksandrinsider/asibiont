@@ -1921,16 +1921,25 @@ dp.include_router(handlers_router)
 
 # Session storage will be initialized in on_startup handler
 
-# Initialize ReminderService
+# Initialize ReminderService and DelegationMonitor
 ai_service = AIIntegration()
 reminder_service = ReminderService(bot=bot, ai_service=ai_service)
 logger.info("ReminderService initialized")
 
-# Start ReminderService on app startup
+from delegation_monitor import DelegationMonitor
+delegation_monitor = DelegationMonitor(bot=bot, ai_service=ai_service)
+logger.info("DelegationMonitor initialized")
+
+# Start ReminderService and DelegationMonitor on app startup
 async def start_reminder_service(app):
     logger.info("Starting ReminderService...")
     await reminder_service.start()
     logger.info("ReminderService started successfully")
+    
+    logger.info("Starting DelegationMonitor...")
+    await delegation_monitor.start()
+    logger.info("DelegationMonitor started successfully")
+    
     # Log existing jobs
     jobs = reminder_service.scheduler.get_jobs()
     logger.info(f"Scheduled jobs after start: {len(jobs)}")

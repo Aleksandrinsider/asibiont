@@ -2703,3 +2703,78 @@ async def generate_delegation_update(user_id, task_title, recipient_username, ta
     except Exception as e:
         print(f"Error in generate_delegation_update: {e}")
         return f"Обновление по задаче '{task_title}' для @{recipient_username}"
+
+async def generate_delegation_helper(user_id, task_title, task_description, deadline_str):
+    """Генерирует AI-помощь для получателя делегированной задачи"""
+    try:
+        # Получить память пользователя
+        user_memory = ""
+        if user_id:
+            from models import Session, User
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user and user.memory:
+                try:
+                    decrypted = decrypt_data(user.memory)
+                    user_memory = f"\nИнформация о пользователе: {decrypted}"
+                except:
+                    user_memory = ""
+            session.close()
+        
+        # Получаем текущие дату и время
+        now = datetime.now(pytz.UTC)
+        current_date = now.strftime('%d.%m.%Y')
+        current_time = now.strftime('%H:%M')
+        
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        base_prompt = get_system_prompt()
+        
+        system_prompt = f"""{base_prompt}
+
+ТЕКУЩИЙ КОНТЕКСТ:
+Дата: {current_date}
+Время: {current_time}
+{user_memory}
+
+ЗАДАЧА: Предоставь полезную помощь получателю делегированной задачи. Проанализируй задачу и предложи:
+1. Конкретные шаги для выполнения
+2. На что обратить внимание
+3. Какие ресурсы могут понадобиться
+4. Как лучше организовать работу для соблюдения дедлайна
+
+КОНТЕКСТ ЗАДАЧИ:
+Название: {task_title}
+Описание: {task_description or 'не указано'}
+Дедлайн: {deadline_str}
+
+ВАЖНО: Будь конкретным и полезным. Дай практические советы, а не общие фразы. Используй 2-4 предложения."""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Как лучше выполнить эту задачу?"}
+        ]
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": messages
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    content = clean_content(content)
+                    content = clean_technical_details(content)
+                    return content
+                else:
+                    return f"Советы по задаче '{task_title}': разбей задачу на этапы, начни с самого сложного, уточни детали если что-то непонятно."
+    except Exception as e:
+        print(f"Error in generate_delegation_helper: {e}")
+        return f"Советы по задаче '{task_title}': планируй время, уточняй детали, держи связь с делегировавшим."
+
