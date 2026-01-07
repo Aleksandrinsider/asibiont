@@ -52,6 +52,26 @@ router = Router()
 
 @router.message(Command("start"))
 async def start_handler(message: Message):
+    user_id = message.from_user.id
+    
+    # Check for duplicate message processing
+    message_key = f"processed_message:{message.message_id}"
+    if redis_client:
+        if await redis_client.exists(message_key):
+            logger.info(f"Duplicate /start message {message.message_id} ignored")
+            return
+        await redis_client.set(message_key, "1", ex=60)
+    
+    # Create user if doesn't exist
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        user = User(telegram_id=user_id, username=message.from_user.username)
+        session.add(user)
+        session.commit()
+        logger.info(f"Created new user {user_id}")
+    session.close()
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
@@ -164,17 +184,24 @@ async def subscribe_handler(message: Message):
 
 @router.message()
 async def chat_handler(message: Message):
-    logger.info(f"Received message from {message.from_user.id}: {message.text}")
+    user_id = message.from_user.id
+    message_id = message.message_id
+    logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {message.text[:50] if message.text else 'None'}")
+    
     try:
-        user_id = message.from_user.id
-        
         # Check for duplicate message processing
-        message_key = f"processed_message:{message.message_id}"
+        message_key = f"processed_message:{message_id}:{user_id}"
         if redis_client:
-            if await redis_client.exists(message_key):
-                logger.info(f"Duplicate message {message.message_id} ignored")
+            logger.debug(f"[REDIS] Checking duplicate for key: {message_key}")
+            is_duplicate = await redis_client.exists(message_key)
+            if is_duplicate:
+                logger.warning(f"[DUPLICATE] Message {message_id} from user {user_id} IGNORED (already processed)")
                 return
-            await redis_client.set(message_key, "1", ex=60)  # Expire in 60 seconds
+            # Set key with short expiration
+            await redis_client.set(message_key, "1", ex=60)
+            logger.info(f"[REDIS] Marked message {message_id} as processed")
+        else:
+            logger.warning(f"[NO REDIS] Cannot prevent duplicates for message {message_id}")
         
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
