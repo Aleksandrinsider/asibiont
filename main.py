@@ -624,6 +624,22 @@ async def chat_handler(request):
         from datetime import datetime, timezone as dt_timezone
         user_message_timestamp = datetime.now(dt_timezone.utc)
         
+        # Check for duplicate via Redis (web chat duplicate protection)
+        message_key = f"web_chat_message:{user_id}:{message[:50]}"  # Use message prefix as key
+        if redis_client:
+            try:
+                is_duplicate = await redis_client.exists(message_key)
+                if is_duplicate:
+                    logger.warning(f"[WEB DUPLICATE] Message from user {user_id} IGNORED (already processed)")
+                    # Return cached response instead
+                    cached_response = await redis_client.get(f"{message_key}:response")
+                    if cached_response:
+                        return web.json_response({'response': cached_response.decode('utf-8')})
+                    # If no cached response, allow processing but log it
+                    logger.warning(f"[WEB DUPLICATE] No cached response found, allowing reprocess")
+            except Exception as e:
+                logger.error(f"Error checking duplicate: {e}")
+        
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -682,6 +698,12 @@ async def chat_handler(request):
             if redis_client:
                 try:
                     await redis_client.setex(f"context:{user_id}", 24*3600, json.dumps(context).encode('utf-8'))  # Expire in 24 hours
+                    # Mark message as processed to prevent duplicates
+                    await redis_client.setex(message_key, 30, "1")  # 30 second window
+                    # Cache response for duplicate requests
+                    await redis_client.setex(f"{message_key}:response", 30, response.encode('utf-8'))
+                    logger.info(f"[WEB CHAT] Marked message as processed")
+
                     # НЕ удаляем timestamp - новые сообщения будут после него и будут видны
                     logger.info(f"Context saved to Redis with {len(context)} messages")
                 except Exception as e:
@@ -1792,7 +1814,7 @@ async def api_interactions_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
         
-        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all()
+        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).all()
         
         # Get history cleared timestamp from Redis
         history_cleared_timestamp = 0
