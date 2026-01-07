@@ -92,7 +92,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="profile-content" class="profile-content">
+                    <div id="profile-content" class="profile-content" style="display: none;">
                         {% if profile %}
                         <div class="context-item">
                             <p>Пользователь: @{{ user.username or 'неизвестен' }}</p>
@@ -565,7 +565,8 @@
             const peopleSection = document.querySelector('.people-section');
             const peopleList = document.querySelector('.people-list');
             
-            if (content.style.display === 'none') {
+            const isCollapsed = content.style.display === 'none';
+            if (isCollapsed) {
                 content.style.display = 'block';
                 svg.style.transform = 'rotate(0deg)';
                 if (peopleSection) {
@@ -576,6 +577,7 @@
                     peopleList.style.maxHeight = 'calc(100vh - 510px)';
                     peopleList.style.overflowY = 'auto';
                 }
+                localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
                 svg.style.transform = 'rotate(-90deg)';
@@ -587,6 +589,7 @@
                     peopleList.style.maxHeight = 'calc(100vh - 270px)';
                     peopleList.style.overflowY = 'auto';
                 }
+                localStorage.setItem('profileCollapsed', 'true');
             }
         }
 
@@ -1944,6 +1947,40 @@
                 modal.style.display = 'none';
             }
         }
+        
+        // Инициализация состояния профиля при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            const profileContent = document.getElementById('profile-content');
+            const profileButton = document.getElementById('profile-toggle-btn');
+            const svg = profileButton ? profileButton.querySelector('svg') : null;
+            const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
+            
+            const isCollapsed = localStorage.getItem('profileCollapsed') === null ? true : localStorage.getItem('profileCollapsed') === 'true';
+            if (isCollapsed) {
+                profileContent.style.display = 'none';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
+                if (peopleSection) {
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = 'calc(100vh - 270px)';
+                    peopleList.style.overflowY = 'auto';
+                }
+            } else {
+                profileContent.style.display = 'block';
+                if (svg) svg.style.transform = 'rotate(0deg)';
+                if (peopleSection) {
+                    peopleSection.style.flex = '';
+                    peopleSection.style.minHeight = '';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = 'calc(100vh - 510px)';
+                    peopleList.style.overflowY = 'auto';
+                }
+            }
+        });
     </script>
 </body>
 </html>
