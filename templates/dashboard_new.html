@@ -1339,6 +1339,8 @@
             }
         }
 
+        let cachedPartnersData = null;
+        
         async function updatePeople() {
             try {
                 const response = await fetch('/api/partners');
@@ -1347,6 +1349,13 @@
                     const data = await response.json();
                     const peopleList = document.getElementById('people-list');
                     if (!peopleList) return;
+                    
+                    // Check if data changed to avoid unnecessary redraws
+                    const newDataString = JSON.stringify(data.partners);
+                    if (cachedPartnersData === newDataString) {
+                        return; // Data hasn't changed, skip redraw
+                    }
+                    cachedPartnersData = newDataString;
                     
                     if (data.partners && data.partners.length > 0) {
                         // Sort partners by rating: highest first, then no rating, then lowest
@@ -1367,12 +1376,13 @@
                             if (partner.type === 'recommended' && partner.contact_info) {
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 22px;">`;
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
-                                const avatarSrc = partner.telegram_id ? `/api/avatar/${partner.telegram_id}` : '';
-                                if (avatarSrc) {
-                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
-                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                if (partner.telegram_id) {
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    html += `<img src="/api/avatar/${partner.telegram_id}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
+                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                                 } else {
-                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
@@ -1415,12 +1425,13 @@
                             } else if (partner.type === 'delegating_to_me') {
                                 html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 22px;">`;
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
-                                const avatarSrc = partner.telegram_id ? `/api/avatar/${partner.telegram_id}` : '';
-                                if (avatarSrc) {
-                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
-                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                if (partner.telegram_id) {
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    html += `<img src="/api/avatar/${partner.telegram_id}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
+                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                                 } else {
-                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
@@ -1467,12 +1478,13 @@
                             } else if (partner.type === 'delegating_by_me') {
                                 html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 22px;">`;
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
-                                const avatarSrc = partner.telegram_id ? `/api/avatar/${partner.telegram_id}` : '';
-                                if (avatarSrc) {
-                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
-                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                if (partner.telegram_id) {
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    html += `<img src="/api/avatar/${partner.telegram_id}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
+                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                                 } else {
-                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
