@@ -1481,7 +1481,7 @@
                                 const heartIcon = isFavorite ? '♥' : '♡';
                                 const heartColor = isFavorite ? 'color: #d73a49;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
-                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">✦</button>`;
+                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">★</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
@@ -1538,7 +1538,7 @@
                                 const heartIcon = isFavorite ? '♥' : '♡';
                                 const heartColor = isFavorite ? 'color: #d73a49;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
-                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">✦</button>`;
+                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">★</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1591,7 +1591,11 @@
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
-                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">✦</button>`;
+                                const isFavorite = isFavoriteContact(partner.contact_info);
+                                const heartIcon = isFavorite ? '♥' : '♡';
+                                const heartColor = isFavorite ? 'color: #d73a49;' : '';
+                                html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
+                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">★</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             }
