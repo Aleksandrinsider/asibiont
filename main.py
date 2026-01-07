@@ -1498,6 +1498,29 @@ async def api_profile_handler(request):
         'user_avatar_url': user_avatar_url
     })
 
+async def api_avatar_handler(request):
+    """API endpoint to get user avatar by telegram_id"""
+    telegram_id = request.match_info.get('telegram_id')
+    
+    if not telegram_id:
+        return web.Response(status=400, text='Missing telegram_id')
+    
+    try:
+        telegram_id = int(telegram_id)
+        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id)
+        
+        if avatar_url:
+            # Redirect to the avatar URL
+            return web.Response(status=302, headers={'Location': avatar_url})
+        else:
+            # Return 404 if no avatar found
+            return web.Response(status=404, text='No avatar found')
+    except ValueError:
+        return web.Response(status=400, text='Invalid telegram_id')
+    except Exception as e:
+        logger.error(f"Error in api_avatar_handler: {e}")
+        return web.Response(status=500, text='Internal server error')
+
 async def api_reminders_handler(request):
     session_req = await get_session(request)
     user_id = session_req.get('user_id')
@@ -1944,6 +1967,7 @@ app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
+app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
 app.router.add_get('/api/profile', api_profile_handler)
