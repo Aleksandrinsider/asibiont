@@ -602,14 +602,13 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
-                        // Sort interactions by timestamp AND index to preserve order
+                        // Sort interactions by timestamp AND id (DB primary key) to preserve order
                         const sortedInteractions = data.interactions
-                            .map((interaction, index) => ({...interaction, originalIndex: index}))
                             .sort((a, b) => {
                                 const timeA = new Date(a.created_at).getTime();
                                 const timeB = new Date(b.created_at).getTime();
                                 if (timeA !== timeB) return timeA - timeB;
-                                return a.originalIndex - b.originalIndex; // Preserve order for same timestamp
+                                return a.id - b.id; // Use database ID for stable sort
                             });
                         
                         sortedInteractions.forEach((interaction, index) => {
@@ -1639,12 +1638,11 @@
                             
                             // Sort by timestamp AND index
                             const sortedInteractions = data.interactions
-                                .map((interaction, index) => ({...interaction, originalIndex: index}))
                                 .sort((a, b) => {
                                     const timeA = new Date(a.created_at).getTime();
                                     const timeB = new Date(b.created_at).getTime();
                                     if (timeA !== timeB) return timeA - timeB;
-                                    return a.originalIndex - b.originalIndex;
+                                    return a.id - b.id; // Use database ID for stable sort
                                 });
                             
                             sortedInteractions.forEach((interaction, index) => {
@@ -1658,12 +1656,11 @@
                         } else if (data.interactions.length > lastMessageCount) {
                             // Добавляем только новые сообщения
                             const sortedInteractions = data.interactions
-                                .map((interaction, index) => ({...interaction, originalIndex: index}))
                                 .sort((a, b) => {
                                     const timeA = new Date(a.created_at).getTime();
                                     const timeB = new Date(b.created_at).getTime();
                                     if (timeA !== timeB) return timeA - timeB;
-                                    return a.originalIndex - b.originalIndex;
+                                    return a.id - b.id; // Use database ID for stable sort
                                 });
                             
                             sortedInteractions.forEach((interaction, index) => {
