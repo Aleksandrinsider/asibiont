@@ -1253,8 +1253,9 @@ def get_partners_list(user_id=None, session=None):
         profile_user = session.query(User).filter_by(id=profile.user_id).first()
         if not profile_user or not profile_user.username:
             continue
-        if profile_user.username.lower() in delegated_usernames:
-            continue
+        # Убрано исключение делегированных для показа всех с совпадениями
+        # if profile_user.username.lower() in delegated_usernames:
+        #     continue
         
         # Проверяем наличие совпадений по интересам, навыкам или целям
         has_match = False

@@ -1171,8 +1171,11 @@ async def api_partners_handler(request):
         
         partners_data = []
         for p in partners:
+            # Получаем telegram_id пользователя из базы
+            partner_user = session_db.query(User).filter_by(id=p.user_id).first() if hasattr(p, 'user_id') and p.user_id else None
             partners_data.append({
-                'contact_info': getattr(p, 'contact_info', ''),
+                'contact_info': partner_user.username if partner_user and partner_user.username else f"user{partner_user.telegram_id if partner_user else 'unknown'}",
+                'telegram_id': partner_user.telegram_id if partner_user else None,
                 'city': getattr(p, 'city', None),
                 'common_interests': getattr(p, 'common_interests', None),
                 'common_skills': getattr(p, 'common_skills', None),
