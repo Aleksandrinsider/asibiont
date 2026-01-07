@@ -1219,6 +1219,7 @@ async def api_partners_handler(request):
             
             partners_data.append({
                 'contact_info': contact['username'],
+                'telegram_id': delegator.telegram_id if delegator else None,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),
