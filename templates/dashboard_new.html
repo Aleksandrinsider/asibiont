@@ -1349,6 +1349,16 @@
                     if (!peopleList) return;
                     
                     if (data.partners && data.partners.length > 0) {
+                        // Sort partners by rating: highest first, then no rating, then lowest
+                        data.partners.sort((a, b) => {
+                            const ratingA = a.average_rating || 0;
+                            const ratingB = b.average_rating || 0;
+                            if (ratingA === 0 && ratingB === 0) return 0;
+                            if (ratingA === 0) return 1;
+                            if (ratingB === 0) return -1;
+                            return ratingB - ratingA;
+                        });
+                        
                         let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                         data.partners.forEach(partner => {
                             const telegramUrl = `https://t.me/${partner.contact_info}`;
@@ -1359,10 +1369,10 @@
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 const avatarSrc = partner.telegram_id ? `/api/avatar/${partner.telegram_id}` : '';
                                 if (avatarSrc) {
-                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />`;
-                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
+                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
                                 } else {
-                                    html += `<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
@@ -1407,10 +1417,10 @@
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 const avatarSrc = partner.telegram_id ? `/api/avatar/${partner.telegram_id}` : '';
                                 if (avatarSrc) {
-                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />`;
-                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
+                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
                                 } else {
-                                    html += `<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
@@ -1459,10 +1469,10 @@
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 const avatarSrc = partner.telegram_id ? `/api/avatar/${partner.telegram_id}` : '';
                                 if (avatarSrc) {
-                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;" />`;
-                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    html += `<img src="${avatarSrc}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;" />`;
+                                    html += `<div style="display: none; width: 40px; height: 40px; border-radius: 6px; background: #0969DA; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
                                 } else {
-                                    html += `<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
+                                    html += `<div style="width: 40px; height: 40px; border-radius: 6px; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@'}</div>`;
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
@@ -1666,9 +1676,12 @@
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                        const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
+                        const svgRotation = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                        html += `<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ${svgRotation};"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>`;
                         html += '</div>';
-                        html += '<div id="profile-content" class="profile-content">';
+                        const displayStyle = isCollapsed ? 'none' : 'block';
+                        html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle};">`;
                         html += '<div class="context-item">';
                         html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'неизвестен'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
@@ -1690,9 +1703,12 @@
                     } else {
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                        const svgRotation = (localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null) ? 'rotate(-90deg)' : 'rotate(0deg)';
+                        html += `<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ${svgRotation};"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>`;
                         html += '</div>';
-                        html += '<div id="profile-content" class="profile-content">';
+                        const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
+                        const displayStyle = isCollapsed ? 'none' : 'block';
+                        html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle};">`;
                         html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен. Начните диалог для заполнения профиля.</p>';
                         html += '</div>';
                         contextSection.innerHTML = html;
