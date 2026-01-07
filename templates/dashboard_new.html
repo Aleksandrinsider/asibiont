@@ -602,14 +602,9 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
-                        // Sort interactions by timestamp AND id (DB primary key) to preserve order
+                        // Sort interactions by database ID (guarantees insertion order)
                         const sortedInteractions = data.interactions
-                            .sort((a, b) => {
-                                const timeA = new Date(a.created_at).getTime();
-                                const timeB = new Date(b.created_at).getTime();
-                                if (timeA !== timeB) return timeA - timeB;
-                                return a.id - b.id; // Use database ID for stable sort
-                            });
+                            .sort((a, b) => a.id - b.id);
                         
                         sortedInteractions.forEach((interaction, index) => {
                             const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
@@ -1636,14 +1631,9 @@
                             chatMessages.innerHTML = '';
                             displayedMessageIds.clear();
                             
-                            // Sort by timestamp AND index
+                            // Sort by database ID (guarantees insertion order)
                             const sortedInteractions = data.interactions
-                                .sort((a, b) => {
-                                    const timeA = new Date(a.created_at).getTime();
-                                    const timeB = new Date(b.created_at).getTime();
-                                    if (timeA !== timeB) return timeA - timeB;
-                                    return a.id - b.id; // Use database ID for stable sort
-                                });
+                                .sort((a, b) => a.id - b.id);
                             
                             sortedInteractions.forEach((interaction, index) => {
                                 const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
@@ -1656,12 +1646,7 @@
                         } else if (data.interactions.length > lastMessageCount) {
                             // Добавляем только новые сообщения
                             const sortedInteractions = data.interactions
-                                .sort((a, b) => {
-                                    const timeA = new Date(a.created_at).getTime();
-                                    const timeB = new Date(b.created_at).getTime();
-                                    if (timeA !== timeB) return timeA - timeB;
-                                    return a.id - b.id; // Use database ID for stable sort
-                                });
+                                .sort((a, b) => a.id - b.id);
                             
                             sortedInteractions.forEach((interaction, index) => {
                                 const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;

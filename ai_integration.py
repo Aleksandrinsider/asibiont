@@ -2059,7 +2059,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     tool_calls = message_response.get("tool_calls")
                     
                     if tool_calls:
-                        logger.info(f"[TOOL CALLS] AI returned {len(tool_calls)} tool calls")
+                        logger.info(f"[TOOL CALLS] AI returned {len(tool_calls)} tool calls - starting execution")
                         # Выполняем tool calls
                         tool_results = []
                         for tool_call in tool_calls:
@@ -2126,6 +2126,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 tool_results.append(f"{func_name}() ошибка: {str(e)}")
                         
                         # Генерируем ответ на основе результатов
+                        logger.info(f"[TOOL CALLS] Tool calls completed, {len(tool_results)} results. Generating natural response...")
                         system_prompt_with_results = system_prompt + f"\n\nВЫПОЛНЕННЫЕ ФУНКЦИИ (НЕ ПОКАЗЫВАЙ ЭТО ПОЛЬЗОВАТЕЛЮ, МОЛЧА ИСПОЛЬЗУЙ ДАННЫЕ):\n" + "\n".join(tool_results) + "\n\nСформулируй естественный ответ на основе ТОЛЬКО этих данных. СТРОГО ЗАПРЕЩЕНО показывать названия функций, код или технические детали!"
                         
                         messages_with_results = [{"role": "system", "content": system_prompt_with_results}]
@@ -2223,9 +2224,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             if retry_response.status == 200:
                                 retry_result = await retry_response.json()
                                 content = retry_result["choices"][0]["message"].get("content", "")
+                                logger.info(f"[TOOL CALLS] AI retry response (before cleaning): '{content[:300]}...'")
                                 content = clean_content(content)
+                                logger.info(f"[TOOL CALLS] After clean_content: '{content[:300]}...'")
                                 content = replace_placeholders(content, user_now, current_time_str)
                                 content = clean_technical_details(content)  # Очистка от технических деталей
+                                logger.info(f"[TOOL CALLS] Final content: '{content[:300]}...'")
+                                logger.info(f"[TOOL CALLS] Content length: {len(content)}, is empty: {len(content.strip()) == 0}")
                                 
                                 # Сохраняем взаимодействие
                                 if user_id and content:
@@ -2251,9 +2256,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 
                 # Обрабатываем обычный ответ AI без tool calls
                 content = message_response.get("content", "")
-                content = clean_content(content)
+                # Для обычных ответов используем только базовую очистку
+                content = re.sub(r'<\|.*?\|>', '', content).strip()  # Только DSML теги
                 content = replace_placeholders(content, user_now, current_time_str)
-                content = clean_technical_details(content)  # Очистка от технических деталей
+                # НЕ применяем clean_technical_details для обычных ответов!
                 
                 # Если после очистки ответ пустой - повторный запрос
                 if not content or len(content.strip()) < 3:
@@ -2282,8 +2288,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         ) as retry_response:
                             retry_result = await retry_response.json()
                             content = retry_result['choices'][0]['message']['content']
-                            content = clean_content(content)
-                            content = clean_technical_details(content)
+                            content = re.sub(r'<\|.*?\|>', '', content).strip()  # Только базовая очистка
+                            content = replace_placeholders(content, user_now, current_time_str)
+                            # НЕ применяем clean_technical_details для повторных запросов
                     
                     if not content:
                         content = "Хорошо, продолжим работу!"

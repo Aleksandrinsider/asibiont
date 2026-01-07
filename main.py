@@ -1762,6 +1762,7 @@ async def api_interactions_handler(request):
             created_at_local = created_at_utc.astimezone(user_tz)
             
             interactions_data.append({
+                'id': interaction.id,
                 'content': interaction.content,
                 'message_type': interaction.message_type,
                 'created_at': created_at_local.isoformat()
