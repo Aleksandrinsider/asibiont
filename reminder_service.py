@@ -250,7 +250,7 @@ class ReminderService:
             import logging
             logging.error(f"Failed to send daily report to user {user_id}: {e}")    
     async def send_delegation_progress_update(self, task_id: int, update_type: str = "status"):
-        """Send AI-generated progress update about delegated task to delegator"""
+        """Send simple progress update about delegated task to delegator"""
         db = Session()
         try:
             task = db.query(Task).filter_by(id=task_id).first()
@@ -263,15 +263,11 @@ class ReminderService:
             if not delegator or not recipient:
                 return
             
-            # Генерируем сообщение через AI
-            message = await self.ai_service.generate_delegation_update(
-                delegator.telegram_id,
-                task.title,
-                recipient.username,
-                task.status,
-                task.reminder_time,
-                update_type
-            )
+            # Простое уведомление без AI-генерации
+            if update_type == "completed":
+                message = f"✅ Задача '{task.title}' выполнена @{recipient.username}"
+            else:
+                message = f"📊 Напоминание: задача '{task.title}' для @{recipient.username}, дедлайн: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указан'}"
             
             if self.bot:
                 await self.bot.send_message(delegator.telegram_id, message)
