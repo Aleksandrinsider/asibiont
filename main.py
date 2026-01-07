@@ -632,14 +632,30 @@ async def chat_handler(request):
                 content = message
                 if file:
                     content += f" [Файл: {file.filename}]"
-                interaction_user = Interaction(
-                    user_id=user.id, 
-                    message_type='user', 
-                    content=content,
-                    created_at=user_message_timestamp  # Точное время ДО вызова AI
-                )
-                session_db.add(interaction_user)
-                session_db.commit()
+                
+                # Проверяем, не было ли уже сохранено такое же сообщение в последние 5 секунд
+                # чтобы избежать дублирования при повторных запросах
+                recent_interaction = session_db.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'user',
+                    Interaction.content == content,
+                    Interaction.created_at >= user_message_timestamp.replace(second=user_message_timestamp.second - 5, microsecond=0)
+                ).first()
+                
+                if not recent_interaction:
+                    interaction_user = Interaction(
+                        user_id=user.id, 
+                        message_type='user', 
+                        content=content,
+                        created_at=user_message_timestamp  # Точное время ДО вызова AI
+                    )
+                    session_db.add(interaction_user)
+                    session_db.commit()
+                    logger.info(f"Saved user message to database")
+                else:
+                    logger.info(f"Skipped duplicate user message")
+                
+                user_message_saved = True
 
             # Get AI response (will take time, so agent timestamp will be later)
             try:
@@ -673,9 +689,27 @@ async def chat_handler(request):
 
             # Save agent response
             if user:
-                interaction_agent = Interaction(user_id=user.id, message_type='ai', content=response)
-                session_db.add(interaction_agent)
-                session_db.commit()
+                # Проверяем, не было ли уже сохранено такое же сообщение AI в последние 5 секунд
+                agent_response_timestamp = datetime.now(dt_timezone.utc)
+                recent_ai_interaction = session_db.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'ai',
+                    Interaction.content == response,
+                    Interaction.created_at >= agent_response_timestamp.replace(second=agent_response_timestamp.second - 5, microsecond=0)
+                ).first()
+                
+                if not recent_ai_interaction:
+                    interaction_agent = Interaction(
+                        user_id=user.id, 
+                        message_type='ai', 
+                        content=response,
+                        created_at=agent_response_timestamp
+                    )
+                    session_db.add(interaction_agent)
+                    session_db.commit()
+                    logger.info(f"Saved AI response to database")
+                else:
+                    logger.info(f"Skipped duplicate AI response")
         finally:
             session_db.close()
 

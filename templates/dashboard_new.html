@@ -319,6 +319,33 @@
             messages.scrollTop = messages.scrollHeight;
         }
         
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/api/interactions');
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    const messages = document.getElementById('chat-messages');
+                    // Clear existing messages except welcome
+                    const welcomeMessage = messages.querySelector('.message.ai');
+                    messages.innerHTML = '';
+                    if (welcomeMessage) {
+                        messages.appendChild(welcomeMessage);
+                    }
+                    
+                    // Add history messages
+                    data.interactions.forEach(interaction => {
+                        addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                    });
+                    
+                    // Update lastMessageCount
+                    lastMessageCount = data.interactions.length;
+                }
+            } catch (error) {
+                console.error('Failed to load chat history:', error);
+            }
+        }
+        
         function showTypingIndicator() {
             const messages = document.getElementById('chat-messages');
             const typingDiv = document.createElement('div');
@@ -347,12 +374,18 @@
         }
 
         async function sendChatMessage() {
+            if (window.sendingMessage) return; // Prevent multiple sends
+            window.sendingMessage = true;
+            
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
             const message = input.value.trim();
             const file = fileInput.files[0];
 
-            if (!message && !file) return;
+            if (!message && !file) {
+                window.sendingMessage = false;
+                return;
+            }
 
             // Add user message
             if (message) {
@@ -427,6 +460,8 @@
             } catch (error) {
                 hideTypingIndicator();
                 addMessage('Ошибка: ' + error.message, 'ai');
+            } finally {
+                window.sendingMessage = false;
             }
         }
 
@@ -1201,6 +1236,9 @@
                 console.log('User not logged in, skipping data load');
                 return;
             }
+            
+            // Загрузить историю чата
+            loadChatHistory();
             
             // Инициализировать задачи и контакты при загрузке страницы
             {% if tasks %}
