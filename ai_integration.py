@@ -1810,14 +1810,18 @@ def force_tool_calls(message, content, mentions_str, user_id):
     
     # Проверка на обновление интересов (добавление или удаление)
     interests_add_triggers = [
-        r'(снова|опять|теперь снова)\s+(люблю|увлекаюсь|интересуюсь)\s+(\w+)',
-        r'(люблю|увлекаюсь|интересуюсь)\s+(\w+)',
-        r'добавить?\s+(\w+)\s+в\s+интересы'
+        r'добавь\s+в\s+интересы\s+(.+)',  # "добавь в интересы спорт"
+        r'добавить?\s+в\s+интересы\s+(.+)',  # "добавить в интересы спорт"
+        r'в\s+интересы\s+(.+)',  # "в интересы спорт"
+        r'(снова|опять|теперь снова)\s+(люблю|увлекаюсь|интересуюсь)\s+(.+)',
+        r'(люблю|увлекаюсь|интересуюсь)\s+(.+)',
     ]
     interests_remove_triggers = [
-        r'(больше не|не)\s+(люблю|увлекаюсь|интересуюсь)\s+(\w+)',
-        r'бросил\s+(\w+)',
-        r'удалить?\s+(\w+)\s+из\s+интересов'
+        r'удали\s+из\s+интересов\s+(.+)',  # "удали из интересов спорт"
+        r'удалить?\s+из\s+интересов\s+(.+)',  # "удалить из интересов спорт"
+        r'убери\s+из\s+интересов\s+(.+)',  # "убери из интересов спорт"
+        r'(больше не|не)\s+(люблю|увлекаюсь|интересуюсь)\s+(.+)',
+        r'бросил\s+(.+)',
     ]
     
     # Проверяем добавление интересов
@@ -1825,7 +1829,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             # Берем последнюю группу как интерес
-            interest = match.groups()[-1]
+            interest = match.groups()[-1].strip()
             if interest and "update_profile" not in content.lower():
                 profile_updates['interests'] = f"+{interest}"
                 logger.info(f"[FORCE] Detected interest addition: {interest}")
@@ -1837,7 +1841,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 # Берем последнюю группу как интерес
-                interest = match.groups()[-1]
+                interest = match.groups()[-1].strip()
                 if interest and "update_profile" not in content.lower():
                     profile_updates['interests'] = f"-{interest}"
                     logger.info(f"[FORCE] Detected interest removal: {interest}")
@@ -2141,7 +2145,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             try:
                 partners = get_partners_list(user_id=user_id, session=session)
                 if partners:
-                    partners_usernames = [p['contact_info'] for p in partners[:5] if 'contact_info' in p]
+                    # partners - это список объектов UserProfile
+                    partners_usernames = []
+                    for p in partners[:5]:
+                        partner_user = session.query(User).filter_by(id=p.user_id).first()
+                        if partner_user and partner_user.username:
+                            partners_usernames.append(f"@{partner_user.username}")
                     if partners_usernames:
                         user_memory += f"\nДоступные контакты: {', '.join(partners_usernames)}"
             except Exception as e:
