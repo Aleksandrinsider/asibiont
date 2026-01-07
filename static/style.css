@@ -1348,3 +1348,8 @@ body {
     background-color: #057578;
     border-color: #057578;
 }
+
+/* Avatar fallback styles */
+.avatar-fallback {
+    display: none;
+}

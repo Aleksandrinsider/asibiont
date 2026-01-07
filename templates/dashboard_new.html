@@ -282,10 +282,14 @@
         
         // Функция обработки ошибки загрузки аватара
         function handleAvatarError(img, fallbackId) {
-            img.style.display = 'none';
+            // Fallback уже виден, ничего не делаем
+        }
+        
+        function handleAvatarLoad(img, fallbackId) {
+            img.style.display = 'block';
             const fallback = document.getElementById(fallbackId);
             if (fallback) {
-                fallback.style.display = 'flex';
+                fallback.style.display = 'none';
             }
         }
         
@@ -1471,8 +1475,8 @@
                                     const fallbackId = `fallback-rec-${partner.telegram_id}`;
                                     const imgId = `img-rec-${partner.telegram_id}`;
                                     html += `<div style="position: relative; display: inline-block;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onerror="handleAvatarError(this, '${fallbackId}')" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="display: none; position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">${initial}</div></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onload="handleAvatarLoad(this, '${fallbackId}')" onerror="handleAvatarError(this, '${fallbackId}')" style="display: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">${initial}</div></a>`;
                                     html += `</div>`;
                                 } else {
                                     html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">${initial}</div></a>`;
@@ -1527,8 +1531,8 @@
                                     const fallbackId = `fallback-del-to-${partner.telegram_id}`;
                                     const imgId = `img-del-to-${partner.telegram_id}`;
                                     html += `<div style="position: relative; display: inline-block;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onerror="handleAvatarError(this, '${fallbackId}')" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="display: none; position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onload="handleAvatarLoad(this, '${fallbackId}')" onerror="handleAvatarError(this, '${fallbackId}')" style="display: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
                                     html += `</div>`;
                                 } else {
                                     html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
@@ -1587,8 +1591,8 @@
                                     const fallbackId = `fallback-del-by-${partner.telegram_id}`;
                                     const imgId = `img-del-by-${partner.telegram_id}`;
                                     html += `<div style="position: relative; display: inline-block;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onerror="handleAvatarError(this, '${fallbackId}')" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="display: none; position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onload="handleAvatarLoad(this, '${fallbackId}')" onerror="handleAvatarError(this, '${fallbackId}')" style="display: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
                                     html += `</div>`;
                                 } else {
                                     html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
