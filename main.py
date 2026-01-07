@@ -1890,7 +1890,7 @@ async def api_interactions_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
         
-        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.desc()).all()
+        interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at.asc()).all()
         
         # Get history cleared timestamp from Redis
         history_cleared_timestamp = 0
