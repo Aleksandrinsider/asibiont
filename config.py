@@ -27,8 +27,8 @@ if not DEEPSEEK_API_KEY:
 
 # Redis
 REDIS_URL = os.getenv("REDIS_URL")
-if not REDIS_URL:
-    raise ValueError("REDIS_URL is required")
+if not REDIS_URL and not LOCAL:
+    raise ValueError("REDIS_URL is required in production mode")
 
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
