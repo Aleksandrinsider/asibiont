@@ -1167,6 +1167,7 @@ body {
 .send-btn:hover {
     background-color: #F6F8FA;
     border-color: #1F2328;
+    text-decoration: none;
 }
 
 .chat-action-btn {
