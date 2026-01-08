@@ -1409,8 +1409,14 @@ async def rate_user_handler(request):
         rated_username = data.get('username')
         rating = data.get('rating')
         
-        if not rated_username or not rating:
+        if not rated_username or rating is None:
             return web.json_response({'error': 'Missing username or rating'}, status=400)
+        
+        # Validate rating type and range
+        try:
+            rating = int(rating)
+        except (ValueError, TypeError):
+            return web.json_response({'error': 'Rating must be a number'}, status=400)
         
         if not (1 <= rating <= 10):
             return web.json_response({'error': 'Rating must be between 1 and 10'}, status=400)
@@ -1499,6 +1505,14 @@ async def hide_contact_handler(request):
         
         if not username:
             return web.json_response({'error': 'Missing username'}, status=400)
+        
+        # Validate days
+        try:
+            days = int(days)
+            if days < 1 or days > 365:
+                return web.json_response({'error': 'Days must be between 1 and 365'}, status=400)
+        except (ValueError, TypeError):
+            return web.json_response({'error': 'Days must be a number'}, status=400)
         
         session_db = Session()
         try:
