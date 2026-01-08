@@ -35,7 +35,6 @@ def run_migrations():
     """Run database migrations"""
     from sqlalchemy import text, inspect
     try:
-            
         session = Session()
         inspector = inspect(engine)
         
@@ -44,7 +43,7 @@ def run_migrations():
             session.close()
             return
             
-        # Check if activity_streak column exists
+        columns = [col['name'] for col in inspector.get_columns('user_profiles')]
         if 'activity_streak' not in columns:
             logger.info("Adding activity_streak column to user_profiles table")
             session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
@@ -1079,7 +1078,7 @@ async def api_partners_handler(request):
             
             # Filter partners
             if hidden_contacts:
-                partners = [p for p in partners if p.contact_info.replace('@', '').lower() not in hidden_contacts]
+                partners = [p for p in partners if p.contact_info and p.contact_info.replace('@', '').lower() not in hidden_contacts]
             
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             interactions = session_db.query(Interaction).filter_by(user_id=user.id).order_by(Interaction.created_at).all() if user else []
