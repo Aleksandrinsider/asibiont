@@ -1332,7 +1332,7 @@
             
             if (response.ok) {
                 const data = await response.json();
-                addMessage(`<span class="message-emoji">✅</span> ${data.message}`, 'ai');
+                addMessage(`✓ ${data.message}`, 'ai');
                 cachedPartnersData = null;
                 await updatePeople(); // Обновить список контактов
             } else {
