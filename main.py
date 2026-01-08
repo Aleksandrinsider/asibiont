@@ -1823,7 +1823,8 @@ async def api_tasks_handler(request):
                 local_reminder = task.reminder_time.astimezone(user_tz)
                 task_data['reminder_time'] = local_reminder.isoformat()
                 task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
-                task_data['overdue'] = local_reminder < user_now and task.status == 'pending'
+                # Просрочка для незавершенных задач (pending или in_progress)
+                task_data['overdue'] = local_reminder < user_now and task.status in ['pending', 'in_progress']
                 if task_data['overdue']:
                     delta = user_now - local_reminder
                     total_seconds = int(delta.total_seconds())
