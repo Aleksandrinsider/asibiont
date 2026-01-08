@@ -1163,9 +1163,6 @@ async def api_partners_handler(request):
                 delegating_to_me = [c for c in delegating_to_me if c.get('username') and c.get('username').replace('@', '').lower() not in hidden_contacts]
                 delegating_by_me = [c for c in delegating_by_me if c.get('username') and c.get('username').replace('@', '').lower() not in hidden_contacts]
                 
-        finally:
-            session_db.close()
-        
         # Add common interests, skills, goals and recommendation reason
         if profile and partners:
             user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
@@ -1359,10 +1356,19 @@ async def api_partners_handler(request):
         
         partners_data.sort(key=sort_key)
         
+        # Закрываем сессию перед возвратом ответа
+        session_db.close()
+        
         return web.json_response({'partners': partners_data})
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        # На случай ранних ошибок закрываем сессию, если она еще открыта
+        try:
+            session_db.close()
+        except Exception:
+            pass
 
 async def rate_user_handler(request):
     """Rate another user (1-10 scale)"""
