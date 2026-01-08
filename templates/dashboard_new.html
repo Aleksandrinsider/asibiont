@@ -1232,24 +1232,30 @@
         }
         
         async function completeTask(taskId) {
-            // Отправляем запрос на завершение задачи напрямую
-            const response = await fetch('/complete_task', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_id: taskId }),
-                credentials: 'include'
-            });
-            if (!await checkAuth(response)) return;
-            if (response.ok) {
-                const data = await response.json();
-                // Сообщение будет добавлено автоматически через updateChat() из БД
-                // Обновить задачи и чат
-                await updateTasks();
-                await updateChat();
-            } else {
-                const error = await response.json();
-                addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
-                lastMessageCount += 1; // Только для локальных сообщений об ошибках
+            try {
+                // Отправляем запрос на завершение задачи напрямую
+                const response = await fetch('/complete_task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    // Обновить задачи и чат
+                    await updateTasks();
+                    await updateChat();
+                } else {
+                    const error = await response.json();
+                    addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
+                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                }
+            } catch (error) {
+                console.error('Error completing task:', error);
+                addMessage('Ошибка при завершении задачи', 'ai');
+                lastMessageCount += 1;
             }
         }
 
@@ -1302,49 +1308,61 @@
         async function submitRating() {
             if (!currentRatingUsername) return;
             
-            const rating = parseInt(document.getElementById('rating-slider').value);
-            
-            const response = await fetch('/api/rate_user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: currentRatingUsername, rating: rating }),
-                credentials: 'include'
-            });
-            
-            if (!await checkAuth(response)) return;
-            
-            if (response.ok) {
-                const data = await response.json();
-                // Сообщение будет добавлено автоматически через updateChat() из БД
-                closeRatingModal();
-                await updatePeople(); // Обновить список контактов
-                await updateChat(); // Обновить чат для загрузки нового сообщения
-            } else {
-                const error = await response.json();
-                addMessage(`Ошибка: ${error.error}`, 'ai');
-                lastMessageCount += 1; // Только для локальных сообщений об ошибках
+            try {
+                const rating = parseInt(document.getElementById('rating-slider').value);
+                
+                const response = await fetch('/api/rate_user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentRatingUsername, rating: rating }),
+                    credentials: 'include'
+                });
+                
+                if (!await checkAuth(response)) return;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    closeRatingModal();
+                    await updatePeople(); // Обновить список контактов
+                    await updateChat(); // Обновить чат для загрузки нового сообщения
+                } else {
+                    const error = await response.json();
+                    addMessage(`Ошибка: ${error.error}`, 'ai');
+                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                }
+            } catch (error) {
+                console.error('Error submitting rating:', error);
+                addMessage('Ошибка при отправке рейтинга', 'ai');
+                lastMessageCount += 1;
             }
         }
         
         async function hideContact(username) {
-            const response = await fetch('/api/hide_contact', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, days: 7 }),
-                credentials: 'include'
-            });
-            
-            if (!await checkAuth(response)) return;
-            
-            if (response.ok) {
-                // Сообщение будет добавлено автоматически через updateChat() из БД
-                cachedPartnersData = null;
-                await updatePeople(); // Обновить список контактов
-                await updateChat(); // Обновить чат для загрузки нового сообщения
-            } else {
-                const error = await response.json();
-                addMessage(`Ошибка: ${error.error}`, 'ai');
-                lastMessageCount += 1; // Только для локальных сообщений об ошибках
+            try {
+                const response = await fetch('/api/hide_contact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, days: 7 }),
+                    credentials: 'include'
+                });
+                
+                if (!await checkAuth(response)) return;
+                
+                if (response.ok) {
+                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    cachedPartnersData = null;
+                    await updatePeople(); // Обновить список контактов
+                    await updateChat(); // Обновить чат для загрузки нового сообщения
+                } else {
+                    const error = await response.json();
+                    addMessage(`Ошибка: ${error.error}`, 'ai');
+                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                }
+            } catch (error) {
+                console.error('Error hiding contact:', error);
+                addMessage('Ошибка при скрытии контакта', 'ai');
+                lastMessageCount += 1;
             }
         }
         
