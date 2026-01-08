@@ -3,7 +3,6 @@ from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE, LOCAL, DEFAUL
 import json
 from datetime import datetime, timezone, timedelta
 import re
-# Version: 2026-01-08T01:43 - Fixed clean_content removal
 import logging
 import asyncio
 from cryptography.fernet import Fernet
@@ -2282,6 +2281,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
     return forced_calls if forced_calls else None
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
+    # Force rebuild v2.0
     import re
     logger = logging.getLogger(__name__)
     # Сохраняем оригинальное сообщение ДО очистки
