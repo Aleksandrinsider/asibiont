@@ -1339,6 +1339,10 @@ async def api_partners_handler(request):
         # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
         
+        # ФИЛЬТРАЦИЯ: показываем только контакты из своего города (если город указан)
+        if user_city:
+            partners_data = [p for p in partners_data if p.get('city', '').lower() == user_city]
+        
         def sort_key(partner):
             partner_city = partner.get('city', '').lower() if partner.get('city') else None
             same_city = 0 if (user_city and partner_city == user_city) else 1
