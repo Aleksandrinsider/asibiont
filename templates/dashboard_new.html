@@ -577,6 +577,7 @@
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
                     addMessage('История чата очищена', 'ai');
+                    lastMessageCount += 1; // Обновляем счётчик для сообщения
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
                     setTimeout(async () => {
                         try {
@@ -593,9 +594,11 @@
                 } else {
                     const data = await response.json();
                     addMessage(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    lastMessageCount += 1; // Обновляем счётчик для сообщения об ошибке
                 }
             } catch (error) {
                 addMessage('Ошибка: ' + error.message, 'ai');
+                lastMessageCount += 1; // Обновляем счётчик для сообщения об ошибке
             }
         }
 
@@ -1239,13 +1242,14 @@
             if (!await checkAuth(response)) return;
             if (response.ok) {
                 const data = await response.json();
-                // Добавляем сообщение об успешном завершении в чат
-                addMessage(`<span class="message-emoji">✅</span> ${data.message}`, 'ai');
-                // Обновить задачи сразу
+                // Сообщение будет добавлено автоматически через updateChat() из БД
+                // Обновить задачи и чат
                 await updateTasks();
+                await updateChat();
             } else {
                 const error = await response.json();
                 addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
+                lastMessageCount += 1; // Только для локальных сообщений об ошибках
             }
         }
 
@@ -1311,12 +1315,14 @@
             
             if (response.ok) {
                 const data = await response.json();
-                addMessage(`<span class="message-emoji">✅</span> ${data.message}`, 'ai');
+                // Сообщение будет добавлено автоматически через updateChat() из БД
                 closeRatingModal();
                 await updatePeople(); // Обновить список контактов
+                await updateChat(); // Обновить чат для загрузки нового сообщения
             } else {
                 const error = await response.json();
                 addMessage(`Ошибка: ${error.error}`, 'ai');
+                lastMessageCount += 1; // Только для локальных сообщений об ошибках
             }
         }
         
@@ -1331,14 +1337,16 @@
             if (!await checkAuth(response)) return;
             
             if (response.ok) {
-                const data = await response.json();
-                addMessage(`✓ ${data.message}`, 'ai');
+                // Сообщение будет добавлено автоматически через updateChat() из БД
                 cachedPartnersData = null;
                 await updatePeople(); // Обновить список контактов
+                await updateChat(); // Обновить чат для загрузки нового сообщения
             } else {
                 const error = await response.json();
                 addMessage(`Ошибка: ${error.error}`, 'ai');
+                lastMessageCount += 1; // Только для локальных сообщений об ошибках
             }
+        }
         }
         
         async function refreshTasks() {

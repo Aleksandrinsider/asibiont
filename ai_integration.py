@@ -826,6 +826,15 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
                 profile.average_completion_time = ((prev_avg * (profile.completed_tasks - 1)) + completion_time) / profile.completed_tasks
             session.commit()
         result = f"Завершена задача '{task.title}'."
+        
+        # Сохранить сообщение в историю взаимодействий
+        interaction = Interaction(
+            user_id=user.id,
+            message_type='ai',
+            content=result
+        )
+        session.add(interaction)
+        session.commit()
     else:
         result = "Задача не найдена."
     if close_session:
