@@ -1157,6 +1157,11 @@ async def api_partners_handler(request):
                 logger.error(f"Error getting delegation contacts: {e}")
                 delegating_to_me = []
                 delegating_by_me = []
+
+            # Apply hidden contacts to delegation lists as well
+            if hidden_contacts:
+                delegating_to_me = [c for c in delegating_to_me if c.get('username') and c.get('username').replace('@', '').lower() not in hidden_contacts]
+                delegating_by_me = [c for c in delegating_by_me if c.get('username') and c.get('username').replace('@', '').lower() not in hidden_contacts]
                 
         finally:
             session_db.close()

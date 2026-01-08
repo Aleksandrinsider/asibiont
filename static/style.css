@@ -1349,6 +1349,26 @@ body {
     border-color: #057578;
 }
 
+/* People list alignment: keep avatars left, text center, actions right */
+.people-list .task-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 4px;
+}
+
+.people-list .task-item > div:first-child {
+    flex-shrink: 0;
+}
+
+.people-list .task-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 /* Avatar fallback styles */
 .avatar-fallback {
     display: none;
