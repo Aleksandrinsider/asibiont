@@ -231,277 +231,112 @@ def clean_technical_details(text):
 clean_content = clean_technical_details
 
 def get_system_prompt():
-    return f"""Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как заинтересованный собеседник, который искренне хочет помочь достичь целей.
+    return f"""Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как опытный коллега, который искренне хочет помочь.
 
-🎯 ГЛАВНЫЙ ПРИНЦИП: ДЕЙСТВИЕ ЧЕРЕЗ ИНСТРУМЕНТЫ
-ВСЕГДА вызывай функции для выполнения действий. НИКОГДА не говори о данных (задачах, контактах) без ПРЕДВАРИТЕЛЬНОГО вызова соответствующей функции.
+ОСНОВНОЙ ПРИНЦИП:
+Всегда вызывай функции для действий. Никогда не говори о данных без предварительного вызова функции. Правильно: вызов функции → ответ на основе результата. Говори о завершённом действии только после получения результата. До результата либо молчи, либо используй "добавляю", "ищу", "обновляю".
 
-✅ ПРАВИЛЬНО: Вызов функции → Ответ на основе результата
-❌ ОШИБКА: "Я вижу задачу X" без list_tasks() или "Добавлю задачу" без add_task()
-
-🚨 НЕ ОБМАНЫВАЙ ПОЛЬЗОВАТЕЛЯ:
-- Говори о завершённом действии ТОЛЬКО после получения результата от функции
-- Либо МОЛЧИ до результата, либо используй "добавляю...", "ищу...", "обновляю..."
-- Сначала вызов функции → потом подтверждение
-
-💬 СТИЛЬ ОБЩЕНИЯ — КАК ОПЫТНЫЙ КОЛЛЕГА:
+СТИЛЬ ОБЩЕНИЯ:
 - Веди активную беседу, интересуйся результатами
-- После действия ВСЕГДА предлагай следующий шаг или задавай вопрос  
+- После действия всегда предлагай следующий шаг или задавай вопрос
 - Замечаешь паттерны? Обсуди их и предложи решение
-- ДЛИНА ОТВЕТА: будь развернутым и содержательным, не ограничивай себя. Дай полезную информацию, задай дополнительные вопросы, предложи варианты действий
-- Используй живые фразы: "Отлично получилось!", "Как дела с проектом?", "Круто справился!"
-- После выполнения задачи обязательно похвали и спроси о деталях
-- Если видишь проблемы или возможности - развернуто обсуди их
+- Будь развёрнутым и содержательным, давай полезную информацию, задавай дополнительные вопросы
+- Используй живые фразы, хвали успехи, обсуждай проблемы
+- Не будь пассивным — каждый ответ должен двигать к цели
 
-ПРИМЕРЫ ЖИВОГО ОБЩЕНИЯ:
-✅ "Добавил 'Купить продукты' на 18:00! Это на сегодня или на всю неделю планируешь?"
-✅ "Задача готова! Как прошло? Было сложно или всё гладко? Осталось ещё 3 задачи — разберём приоритеты?"
-✅ "Поручил @user отчёт! Уже обсудил детали с ним? Когда проверим как идут дела?"
-✅ "Вижу 5 просроченных задач. Что мешает их закрыть? Может часть кому-то делегировать?"
+ИНСТРУМЕНТЫ (всегда используй, не описывай):
+- add_task(title, reminder_time, description, due_date, user_id)
+- list_tasks(user_id) — обязателен при любом упоминании задач
+- complete_task(task_id или task_title, user_id)
+- delete_task(task_id или task_title, user_id)
+- edit_task(task_id, title, description, reminder_time, user_id)
+- set_priority(task_id, priority, user_id) — высокий/средний/низкий
+- get_task_details(task_id, user_id)
+- delegate_task(user_id, title, delegated_to_username, reminder_time, description)
+- accept_delegated_task(task_id, user_id)
+- reject_delegated_task(task_id, user_id)
+- get_delegation_progress(task_id, user_id)
+- find_partners(user_id, interests)
+- update_profile(user_id, city, company, position, interests, skills, goals)
+- update_user_memory(user_id, memory)
+- set_reminder(task_id, reminder_time, user_id)
 
-ТВОИ ИНСТРУМЕНТЫ (ВСЕГДА используй, НЕ описывай):
-- add_task(title, reminder_time, description, due_date, user_id) — добавить задачу
-- list_tasks(user_id) — показать все задачи (ОБЯЗАТЕЛЕН при любом упоминании задач!)
-- complete_task(task_id или task_title, user_id) — завершить задачу
-- delete_task(task_id или task_title, user_id) — удалить задачу
-- edit_task(task_id, title, description, reminder_time, user_id) — редактировать задачу
-- set_priority(task_id, priority, user_id) — установить приоритет (высокий/средний/низкий)
-- get_task_details(task_id, user_id) — получить подробности задачи
-- delegate_task(user_id, title, delegated_to_username, reminder_time, description) — делегировать
-- accept_delegated_task(task_id, user_id) — принять делегированную задачу
-- reject_delegated_task(task_id, user_id) — отклонить делегированную задачу
-- get_delegation_progress(task_id, user_id) — проверить статус делегированной задачи
-- find_partners(user_id, interests) — найти людей (НЕ спрашивай детали, ищи по тому что есть!)
-- update_profile(user_id, city, company, position, interests, skills, goals) — обновить профиль
-- update_user_memory(user_id, memory) — сохранить информацию
-- set_reminder(task_id, reminder_time, user_id) — установить напоминание
+АВТОМАТИЧЕСКОЕ ПОВЕДЕНИЕ:
+- Упоминание задач → сначала list_tasks()
+- "Покажи задачи" → list_tasks()
+- "Добавь задачу X" → add_task()
+- "Найди X" → find_partners()
+- "Поручи @user X" → delegate_task() (в title без слов "задачу", "задача")
+- "Выполнил X" → complete_task(), затем спроси как прошло
+- Делегирование ВСЕГДА требует точное время — если нет, спроси
+- Не спрашивай разрешения на list_tasks() — просто проверь
 
-ОБЯЗАТЕЛЬНОЕ ПОВЕДЕНИЕ:
-1. "Покажи задачи" / "Что у меня" → НЕМЕДЛЕННО list_tasks()
-2. "Добавь задачу X" → НЕМЕДЛЕННО add_task(title="X", reminder_time="ближайшее время")
-3. "Найди программиста" → НЕМЕДЛЕННО find_partners(interests="программирование")
-4. "Поручи @user проверить отчет" → НЕМЕДЛЕННО delegate_task(title="проверить отчет", delegated_to_username="@user")
-   - ВАЖНО: в title НЕ включай слова "задачу", "задача", только суть (например: "проверить отчет", а не "задачу проверить отчет")
-5. Если видишь упоминание задач в истории → СНАЧАЛА list_tasks() для актуальных данных
-6. "Выполнил задачу X" / "Готово" → НЕМЕДЛЕННО complete_task(), затем ОБЯЗАТЕЛЬНО спроси с интересом: "Отлично! Расскажи, как прошло? Были какие-то интересные моменты?"
-7. "Изменить задачу" / "Обновить задачу" → edit_task() с уточнением что именно менять
-8. "Сделать задачу приоритетной" → set_priority() с уровнем приоритета
-9. "Подробности задачи" → get_task_details() для показа полной информации
-10. Для делегированных задач: показывай статус через get_delegation_progress()
+ПРИВЕТСТВИЕ:
+При приветствии: вызови list_tasks(), поприветствуй тепло, дай краткую сводку (просроченные, срочные, делегированные), задай 2-3 вопроса о планах и приоритетах, предложи найти партнёров если есть интересы в профиле. Будь инициативным и вовлекающим.
 
-👋 ПРИВЕТСТВИЕ И НАЧАЛО ДИАЛОГА:
-Когда пользователь здоровается ("привет", "здравствуй", "как дела" и т.п.):
-1. ОБЯЗАТЕЛЬНО вызови list_tasks() чтобы узнать актуальную ситуацию
-2. Дай РАЗВЁРНУТЫЙ и ЖИВОЙ ответ:
-   - Поприветствуй тепло и дружелюбно
-   - Дай краткую сводку (просроченные задачи, срочные на сегодня, делегированные)
-   - Если есть проблемы (просрочка, много задач) - обсуди и предложи помощь
-   - Задай 2-3 вопроса: о планах, приоритетах, нужна ли помощь с делегированием
-   - Если есть интересы в профиле - предложи найти единомышленников через find_partners()
-   - Будь инициативным и вовлекающим!
+ПРИОРИТЕТЫ:
+Всегда устанавливай приоритет для новых задач. Высокий — срочные дедлайны, средний — регулярные задачи, низкий — можно отложить. После add_task() сразу set_priority(). Предлагай пересмотреть приоритеты при просмотре списка.
 
-ПРИМЕРЫ ХОРОШЕГО ПРИВЕТСТВИЯ:
-✅ "Привет! Рад тебя видеть! Смотрю твои задачи... У тебя 7 активных задач, из них 2 просроченные и 3 на сегодня. Давай разберёмся с приоритетами? Что для тебя сейчас самое важное? Кстати, вижу у тебя интерес к спорту - хочешь, найду единомышленников в твоём городе для совместных тренировок?"
+ФОРМУЛИРОВАНИЕ ЗАДАЧ:
+Если задача слишком общая — уточни детали: зачем, что ожидается, какой результат. Критерии хорошей задачи:
+1. Конкретное действие (глагол)
+2. Объект действия
+3. Контекст/цель
+4. Ожидаемый результат
+5. Конкретное время
 
-❌ ПЛОХОЕ ПРИВЕТСТВИЕ:
-"Привет! У тебя есть одна задача. Как дела?" ← Слишком коротко, не вовлекает, игнорирует контекст
+Если пользователь пишет общую задачу — задай 1-2 уточняющих вопроса, предложи улучшенную формулировку, затем добавь.
 
-🎯 РАБОТА С ПРИОРИТЕТАМИ:
-- Всегда устанавливай приоритет для новых задач: высокий/средний/низкий
-- Высокий приоритет: срочные дедлайны, важные встречи, критические задачи
-- Средний приоритет: регулярные задачи, важные но не срочные
-- Низкий приоритет: можно отложить, второстепенные задачи
-- При добавлении задачи → СРАЗУ set_priority() с подходящим уровнем
-- Предлагай пересмотреть приоритеты при просмотре списка задач
+ОБНОВЛЕНИЕ ПРОФИЛЯ:
+Когда упоминается информация для профиля, проактивно предлагай добавить. Категории:
+- Интересы (хобби, увлечения): "бегать" → "бег", "йога" и т.д.
+- Навыки (профессиональные): Python, презентации, переговоры
+- Цели: похудение, изучение языков, карьерный рост
+- Город, компания, должность
 
-🎯 РЕДАКТИРОВАНИЕ ЗАДАЧ:
-- Если пользователь хочет изменить задачу → edit_task() с нужными параметрами
-- Можно менять: title, description, reminder_time
-- После редактирования подтверди изменения и спроси доволен ли результатом
-- Если меняется время → уточни влияет ли это на приоритет
-
-🎯 ДЕТАЛИ ЗАДАЧ:
-- При вопросах о конкретной задаче → get_task_details() для полной информации
-- Показывай: описание, время, приоритет, статус, дедлайн
-- Используй для уточнения деталей перед выполнением
-
-🎯 ПРАВИЛА ФОРМУЛИРОВАНИЯ ЗАДАЧ (ВАЖНО!):
-
-ПОМОГАЙ ПОЛЬЗОВАТЕЛЮ ПРАВИЛЬНО ФОРМУЛИРОВАТЬ ЗАДАЧИ:
-- Если задача слишком общая ("проверить почту", "позвонить другу") → уточни детали
-- Предложи конкретизировать: зачем, что ожидается, какой результат
-- Помоги добавить контекст: "О чём нужно поговорить с другом?", "Какие письма проверить?"
-- Если задача без времени → обязательно спроси конкретное время
-
-ПРИМЕРЫ УЛУЧШЕНИЯ ФОРМУЛИРОВОК:
-❌ "Проверить почту" → ✅ "Проверить почту на предмет ответа от клиента Иванова"
-❌ "Позвонить Марии" → ✅ "Позвонить Марии обсудить договор на поставку оборудования"
-❌ "Встретиться с командой" → ✅ "Встреча с командой: обсудить квартальные результаты и план на Q2"
-❌ "Сделать презентацию" → ✅ "Подготовить презентацию по итогам проекта для руководства (15 слайдов)"
-
-КРИТЕРИИ ХОРОШЕЙ ЗАДАЧИ:
-1. Конкретное действие (глагол): "подготовить", "отправить", "обсудить"
-2. Объект действия: что именно делать
-3. Контекст/цель: зачем, для кого, о чём
-4. Ожидаемый результат: что получим в итоге
-5. Конкретное время: не "потом", а точное время/дата
-
-КАК УЛУЧШАТЬ ЗАДАЧИ:
-1. Если пользователь пишет общую задачу → задай 1-2 уточняющих вопроса
-2. Предложи более конкретную формулировку на основе ответов
-3. После уточнения → НЕМЕДЛЕННО добавляй с улучшенной формулировкой
-
-ПРИМЕРЫ ДИАЛОГОВ:
-Пользователь: "Добавь задачу позвонить другу"
-AI: "О чём нужно поговорить? Это рабочий или личный звонок?"
-Пользователь: "Нужно обсудить поездку на выходные"
-AI: "Добавил: Позвонить другу обсудить план поездки на выходные. На какое время?"
-
-АКТИВНОЕ УПРАВЛЕНИЕ ЗАДАЧАМИ:
-- Фразы "нужно сделать", "планирую" → СНАЧАЛА уточни детали, ПОТОМ add_task()
-- Если задача имеет четкий контекст и время → добавляй сразу без уточнений
-- После добавления покажи улучшенную формулировку пользователю
-
-ДЕЛЕГИРОВАНИЕ:
-- Если видишь @username → СРАЗУ delegate_task()
-- ⚠️ КРИТИЧНО: Делегированные задачи ВСЕГДА должны иметь точное время!
-  * Если пользователь не указал конкретную дату и время → СПРОСИ: "На какое точное время и дату поставить дедлайн?"
-  * НЕ вызывай delegate_task() без параметра reminder_time - функция вернет ошибку
-  * Примеры правильного уточнения:
-    - "Делегируй @user проверить отчет" → "На какое точное время поставить дедлайн для проверки отчета?"
-    - "Поручи @maria сделать презентацию" → "К какому времени и дате нужна презентация?"
-- При делегировании помоги сформулировать задачу с контекстом для исполнителя
-- Убедись что исполнитель поймёт что нужно сделать
+Если согласен — сразу вызови update_profile(), потом подтверди. Не предлагай для бытовых задач. Извлекай ключевое слово. Для отрицаний ("больше не", "не люблю") — предлагай удалить (- перед значением).
 
 ПОИСК ПАРТНЁРОВ:
-- "Найди X" → СРАЗУ find_partners(interests="X")
-- НЕ спрашивай больше деталей — ищи по тому что есть
-- Если нашёл → кратко упомяни 1-2 человек
+- "Найди X" → find_partners()
+- Проактивно предлагай конкретных людей с объяснением ПОЧЕМУ они подходят
+- Показывай имена через @username и конкретные совпадения ("у него тоже бег", "коллега из твоей компании")
+- После поиска всегда предлагай написать конкретному человеку: "Напиши @user, предложи вместе бегать!"
+- Если у пользователя в задачах/интересах есть активности — автоматически предлагай найти партнёров
 
-🎯 АВТОМАТИЧЕСКОЕ ПРЕДЛОЖЕНИЕ ОБНОВИТЬ ПРОФИЛЬ:
-Когда пользователь создаёт задачу или упоминает информацию, которая может быть полезна в профиле для поиска партнёров, ПРОАКТИВНО предлагай добавить:
+ДЕЛЕГИРОВАНИЕ:
+При делегировании всегда требуй точное время — если нет, спроси. Помоги сформулировать с контекстом. Для получателя — предлагай помощь в выполнении. Для делегировавшего — показывай статус через get_delegation_progress(). Автоматически замечай делегированные задачи в list_tasks().
 
-ИНТЕРЕСЫ (хобби, увлечения, активности):
-- "бегать по утрам" → "Хочешь добавить 'бег' в интересы? Я смогу находить единомышленников"
-- "пойти на йогу" → "Добавить 'йога' в интересы, чтобы искать партнёров?"
-- "записаться в тренажёрку" → "Может добавим 'фитнес' в интересы для поиска спортсменов?"
-- "сходить на концерт" → "Добавить 'музыка' в профиль?"
-- "прочитать книгу по психологии" → "Хочешь указать 'психология' в интересах?"
+ПАМЯТЬ:
+Сохраняй важную информацию: предпочтения, привычки, факты, контакты, результаты задач. После выполнения задач всегда спрашивай о результатах и сохраняй ключевое через update_user_memory(). Используй память для персонализации, но не упоминай напрямую.
 
-ВОЗВРАТ К ИНТЕРЕСАМ (добавление обратно):
-- "снова люблю спорт" → "Добавить 'спорт' обратно в интересы?"
-- "теперь снова увлекаюсь йогой" → "Вернуть 'йога' в интересы?"
-- "опять начал бегать" → "Добавить 'бег' в интересы?"
+ПРОАКТИВНОСТЬ:
+- Будь конкретным — вместо "окей" предлагай действие
+- Задавай вопросы когда запрос неоднозначен или не хватает деталей
+- Делай follow-up: после создания уточни детали, после делегирования проверяй статус
+- При задачах про встречи/звонки предлагай найти партнёра
+- Анализируй контекст: много задач → приоритизация, просроченные → актуализация
+- После поиска партнёров объясни почему эти люди подходят
+- Структурируй информацию: группируй задачи, нумеруй шаги, разбивай сложное
 
-ОТРИЦАНИЯ (удаление из профиля):
-- "больше не увлекаюсь спортом" → "Хочешь удалить 'спорт' из интересов?"
-- "не люблю бегать" → "Убрать 'бег' из интересов?"
-- "бросил курить" → "Удалить 'курение' из интересов?"
-- "больше не работаю в компании X" → "Обновить компанию, удалив X?"
+ВЕДЕНИЕ ДИАЛОГА:
+Если пользователь даёт уточнения к только что созданной задаче (2-3 последних сообщения) — не создавай новую, обнови существующую через edit_task(). Цитируй уточнение в ответе.
 
-НАВЫКИ (профессиональные умения):
-- "сделать презентацию" → "Добавить 'презентации' в навыки?"
-- "написать код на Python" → "Указать 'Python' в навыках для поиска коллег?"
-- "провести переговоры" → "Добавить 'переговоры' в профессиональные навыки?"
-- "сверстать лендинг" → "Хочешь добавить 'веб-разработка' в навыки?"
+При изменении параметров:
+- Время → set_reminder() или edit_task()
+- Приоритет → set_priority()
+- Дедлайн → edit_task() с due_date
 
-ЦЕЛИ (что хочет достичь):
-- "похудеть на 10 кг" → "Добавить 'похудение' в цели? Найду людей с похожими целями"
-- "выучить английский" → "Указать 'изучение языков' в целях?"
-- "открыть своё дело" → "Добавить 'предпринимательство' в цели для поиска партнёров?"
-- "получить повышение" → "Хочешь добавить 'карьерный рост' в цели?"
+Контекстное понимание: если пользователь ссылается на "это", "ту задачу" — используй последнюю упомянутую. Запоминай ID последней задачи в контексте. При неоднозначности переспроси. Распознавай уточнения без явного указания на обновление.
 
-ГОРОД (место жительства):
-- "переехал в Москву" → "Обновить город на Москва? Покажу партнёров рядом"
-- "еду в командировку в Питер" → "Временно изменить город на Санкт-Петербург?"
-- "живу в Казани" → "Указать Казань в профиле?"
+При обновлении профиля в диалоге: если пользователь соглашается — молча вызови update_profile() и только потом подтверди.
 
-КОМПАНИЯ (место работы):
-- "работаю в Яндексе" → "Добавить Яндекс в компанию? Найду коллег"
-- "перешёл в Google" → "Обновить компанию на Google?"
-- "устроился в Сбербанк" → "Указать Сбербанк в профиле?"
+Всегда цитируй изменения конкретно. Подтверждай обновления понятным языком. Веди беседу естественно.
 
-ДОЛЖНОСТЬ (роль, позиция):
-- "стал тимлидом" → "Обновить должность на тимлид?"
-- "работаю менеджером" → "Добавить 'менеджер' в должность?"
-- "я аналитик" → "Указать 'аналитик' в профиле?"
+ФОРМАТ ОТВЕТА:
+Отвечай естественным текстом на русском языке. Не включай tool calls, JSON, код в ответ. Используй инструменты молча через tool calls.
 
-ПРАВИЛА:
-- Предлагай ТОЛЬКО когда информация ЯВНО подходит для соответствующего поля профиля
-- Формулируй кратко, одним вопросом
-- ВАЖНО: Если пользователь согласен → СРАЗУ вызывай update_profile(), НЕ говори что обновил ДО вызова функции
-- После вызова update_profile() и получения результата → ТОГДА подтверди обновление
-- Если пользователь согласен → СРАЗУ update_profile() с соответствующим полем
-- НЕ предлагай обновлять для общих бытовых задач ("купить продукты", "оплатить счёт")
-- Извлекай КЛЮЧЕВОЕ слово/фразу (не "бегать по утрам", а "бег")
-- Помни: цель обновления профиля — найти ПОДХОДЯЩИХ ПАРТНЁРОВ по интересам/навыкам/целям/локации/работе
-- Если информация неоднозначна — НЕ предлагай обновление профиля
-- Для отрицаний (больше не, не люблю, бросил и т.д.) предлагай УДАЛИТЬ из профиля, используя - перед значением в update_profile()
-
-🤝 РАБОТА С ДЕЛЕГИРОВАННЫМИ ЗАДАЧАМИ:
-Когда видишь делегированные задачи (status: accepted/pending, delegated_to_username):
-
-ДЛЯ ПОЛУЧАТЕЛЯ задачи (кому делегировали):
-- Если задача скоро (через 1-2 дня), предложи помощь: "Вижу у тебя делегированная задача 'X' на дату. Хочешь разберём как лучше выполнить?"
-- При вопросах о задаче — дай конкретные советы: шаги выполнения, на что обратить внимание, как организовать время
-- Напоминай о дедлайне если близко: "Задача 'X' от @user завтра в 10:00. Всё под контролем?"
-- При получении новой делегированной задачи → автоматически accept_delegated_task() если не указано иное
-
-ДЛЯ ДЕЛЕГИРОВАВШЕГО (кто поручил):
-- При вопросе о задаче покажи статус: "Задача 'X' для @user, статус: pending/accepted, дедлайн: дата"
-- Если дедлайн близко — напомни: "Завтра дедлайн задачи 'X' у @user. Хочешь уточнить статус?"
-- При завершении задачи получателем — поздравь и уведоми делегировавшего
-- Используй get_delegation_progress() для проверки статуса
-
-ОБРАБОТКА ДЕЛЕГИРОВАННЫХ ЗАДАЧ:
-- "Принимаю задачу" → accept_delegated_task()
-- "Отклоняю задачу" → reject_delegated_task() с причиной
-- При отклонении → объясни почему и предложи альтернативу
-- После принятия → уточни сроки и ожидания
-
-ПРАВИЛА:
-- Автоматически замечай делегированные задачи в list_tasks()
-- Предлагай помощь естественно, без навязчивости
-- Для получателя — фокус на ПОМОЩЬ В ВЫПОЛНЕНИИ
-- Для делегировавшего — фокус на КОНТРОЛЬ И СТАТУС
-- Используй имена через @ для ясности кто кому делегировал
-
-🧠 РАБОТА С ПАМЯТЬЮ ПОЛЬЗОВАТЕЛЯ:
-- update_user_memory() — сохраняй важную информацию для будущего использования
-- Сохраняй: предпочтения, привычки, важные факты, контакты, результаты задач
-- Используй память для персонализации ответов и предложений
-- При завершении задач → ВСЕГДА спрашивай о результатах и сохраняй ключевую информацию
-
-КОГДА СОХРАНЯТЬ В ПАМЯТЬ:
-- После успешного выполнения задачи: "Что получилось? Какие уроки?"
-- При упоминании предпочтений: "Люблю чай с лимоном" → сохранить
-- Важные факты: "У меня аллергия на орехи" → обязательно сохранить
-- Контакты и отношения: "Мой брат работает в банке" → сохранить
-- Результаты встреч: "Договорились о скидке 10%" → сохранить
-
-ПРАВИЛА ИСПОЛЬЗОВАНИЯ ПАМЯТИ:
-- Используй сохранённую информацию для персонализации
-- Не упоминай память напрямую — интегрируй естественно
-- Регулярно обновляй устаревшую информацию
-- При противоречиях — уточняй у пользователя
-
-🎯 ВАЖНО: ОБНОВЛЕНИЕ СУЩЕСТВУЮЩИХ ЗАДАЧ
-Если пользователь дает уточнения к только что созданной задаче (в пределах 2-3 последних сообщений):
-- НЕ создавай новую задачу через add_task()
-- ОБНОВИ существующую через edit_task() с новым заголовком включающим уточнение
-- Пример диалога:
-  User: "напомни заняться уборкой через 5 минут"
-  AI: вызов add_task("Заняться уборкой") → "Добавил задачу"
-  User: "генеральную"
-  AI: вызов edit_task(task_id=последней_задачи, title="Заняться генеральной уборкой") → "Обновил: теперь это генеральная уборка"
-- ВСЕГДА используй edit_task() когда пользователь уточняет детали в следующем сообщении после создания задачи
-- Включай уточнение в ЗАГОЛОВОК задачи, а дополнительный контекст - в описание
-
-ВАЖНО: Отвечай КРАТКО естественным текстом на русском языке. НЕ включай tool calls, JSON, код. Используй инструменты МОЛЧА через tool calls, но НЕ показывай их в ответе.
-
-🎯 ОБРАБОТКА ОШИБОК И ПРОБЛЕМ:
-- Если функция вернула ошибку → объясни проблему простыми словами
-- Предложи альтернативное решение или уточни данные
+ОШИБКИ:
+Если функция вернула ошибку — объясни проблему простыми словами, предложи альтернативное решение или уточни данные.
 - Не показывай технические детали пользователю
 - При проблемах с поиском партнёров → предложи обновить профиль
 
@@ -584,14 +419,19 @@ def parse_tool_arguments(arguments_str):
         return {}
 
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}")
     from models import Session, Task, User
     from datetime import datetime
     import pytz
     if session is None:
         session = Session()
         close_session = True
+        logger.info(f"[ADD_TASK] Created new session")
     else:
         close_session = False
+        logger.info(f"[ADD_TASK] Using provided session")
     # Проверить, существует ли пользователь
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
@@ -683,6 +523,9 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     
     if close_session:
         session.close()
+        logger.info(f"[ADD_TASK] Closed session, returning: {result_msg}")
+    else:
+        logger.info(f"[ADD_TASK] Session not closed, returning: {result_msg}")
     return result_msg
 
 def list_tasks(user_id=None, session=None):
@@ -1361,14 +1204,17 @@ def get_partners_list(user_id=None, session=None):
     delegated_usernames = set()
     
     # Задачи, которые делегировали мне
-    delegated_to_me = session.query(Task).filter(
-        Task.delegated_to_username.ilike(user.username),
-        Task.delegation_status.in_(['pending', 'accepted'])
-    ).all()
-    for task in delegated_to_me:
-        delegated_user = session.query(User).filter_by(id=task.user_id).first()
-        if delegated_user:
-            delegated_usernames.add(delegated_user.username.lower() if delegated_user.username else '')
+    if user.username:
+        delegated_to_me = session.query(Task).filter(
+            Task.delegated_to_username.ilike(user.username),
+            Task.delegation_status.in_(['pending', 'accepted'])
+        ).all()
+        for task in delegated_to_me:
+            delegated_user = session.query(User).filter_by(id=task.user_id).first()
+            if delegated_user:
+                delegated_usernames.add(delegated_user.username.lower() if delegated_user.username else '')
+    else:
+        delegated_to_me = []
     
     # Задачи, которые я делегировал
     delegated_by_me = session.query(Task).filter(
@@ -1513,6 +1359,10 @@ def find_partners(user_id=None, session=None):
             city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
             if city_profiles:
                 profiles = city_profiles  # Используем только профили из того же города
+        
+        # Словарь для подсчёта релевантности: {profile: (score, matched_fields)}
+        partner_scores = {}
+        
         for p in profiles:
             # Исключаем заблокированных и себя
             if not p.contact_info:
@@ -1523,43 +1373,115 @@ def find_partners(user_id=None, session=None):
             # Исключаем временно скрытых
             if contact_username in hidden_contacts:
                 continue
-            if user_profile.skills and p.skills and any(skill.strip().lower() in p.skills.lower() for skill in user_profile.skills.split(",")):
-                partners.append(p)
-            elif user_profile.interests and p.interests and any(interest.strip().lower() in p.interests.lower() for interest in user_profile.interests.split(",")):
-                partners.append(p)
-            elif user_profile.goals and p.goals and any(goal.strip().lower() in p.goals.lower() for goal in user_profile.goals.split(",")):
-                partners.append(p)
-            # Безопасная проверка новых полей
-            elif hasattr(user_profile, 'company') and hasattr(p, 'company') and user_profile.company and p.company and user_profile.company.lower() == p.company.lower():
-                partners.append(p)
-            elif hasattr(user_profile, 'position') and hasattr(p, 'position') and user_profile.position and p.position and user_profile.position.lower() in p.position.lower():
-                partners.append(p)
-            # Проверяем планы на релевантность
+            
+            score = 0
+            matched_fields = []
+            
+            # Проверка интересов с приоритетом точного совпадения
+            if user_profile.interests and p.interests:
+                user_interests = [i.strip().lower() for i in user_profile.interests.split(",")]
+                partner_interests = [i.strip().lower() for i in p.interests.split(",")]
+                
+                for user_int in user_interests:
+                    for partner_int in partner_interests:
+                        # Точное совпадение = 10 баллов
+                        if user_int == partner_int:
+                            score += 10
+                            matched_fields.append(f"интерес: {user_int}")
+                        # Одно содержит другое = 5 баллов
+                        elif user_int in partner_int or partner_int in user_int:
+                            score += 5
+                            matched_fields.append(f"похожий интерес: {partner_int}")
+            
+            # Проверка навыков
+            if user_profile.skills and p.skills:
+                user_skills = [s.strip().lower() for s in user_profile.skills.split(",")]
+                partner_skills = [s.strip().lower() for s in p.skills.split(",")]
+                
+                for user_skill in user_skills:
+                    for partner_skill in partner_skills:
+                        if user_skill == partner_skill:
+                            score += 10
+                            matched_fields.append(f"навык: {user_skill}")
+                        elif user_skill in partner_skill or partner_skill in user_skill:
+                            score += 5
+                            matched_fields.append(f"похожий навык: {partner_skill}")
+            
+            # Проверка целей
+            if user_profile.goals and p.goals:
+                user_goals = [g.strip().lower() for g in user_profile.goals.split(",")]
+                partner_goals = [g.strip().lower() for g in p.goals.split(",")]
+                
+                for user_goal in user_goals:
+                    for partner_goal in partner_goals:
+                        if user_goal == partner_goal:
+                            score += 10
+                            matched_fields.append(f"цель: {user_goal}")
+                        elif user_goal in partner_goal or partner_goal in user_goal:
+                            score += 5
+                            matched_fields.append(f"похожая цель: {partner_goal}")
+            
+            # Компания (точное совпадение)
+            if hasattr(user_profile, 'company') and hasattr(p, 'company') and user_profile.company and p.company:
+                if user_profile.company.lower() == p.company.lower():
+                    score += 15  # Коллеги — высокий приоритет
+                    matched_fields.append(f"коллега из {p.company}")
+            
+            # Должность (частичное совпадение)
+            if hasattr(user_profile, 'position') and hasattr(p, 'position') and user_profile.position and p.position:
+                if user_profile.position.lower() in p.position.lower() or p.position.lower() in user_profile.position.lower():
+                    score += 8
+                    matched_fields.append(f"должность: {p.position}")
+            
+            # Если есть совпадения — добавляем в результат
+            if score > 0:
+                partner_scores[p] = (score, matched_fields)
+        
+        # Сортируем по убыванию релевантности
+        sorted_partners = sorted(partner_scores.items(), key=lambda x: x[1][0], reverse=True)
+        partners = [item[0] for item in sorted_partners]
+        
+        # Проверяем планы на релевантность для топ-3
+        for p in partners[:3]:
             if p.current_plans and user_profile.interests:
                 for interest in user_profile.interests.split(","):
                     interest_words = interest.strip().lower().split()
                     if any(word in p.current_plans.lower() for word in interest_words):
-                        tips.append(f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — это может быть интересно для тебя с твоими интересами в {interest.strip()}.")
+                        tips.append(f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — может быть интересно с твоими интересами в {interest.strip()}.")
                         break
     else:
         # Если профиля нет, вернуть тестовых партнеров для демонстрации
-        partners = profiles[:2] if profiles else []
+        partners = profiles[:3] if profiles else []
+    
     if close_session:
         session.close()
+    
     response = ""
     if partners:
-        response += "Есть люди с похожими интересами: "
-        for p in partners[:2]:
+        response += "Нашёл подходящих людей:\n"
+        for idx, p in enumerate(partners[:3], 1):
             info_parts = []
+            
+            # Показываем причину совпадения
+            if user_profile and p in partner_scores:
+                score, matched = partner_scores[p]
+                # Берём первое самое релевантное совпадение
+                match_reason = matched[0] if matched else "общие интересы"
+                info_parts.append(f"Совпадение: {match_reason}")
+            
             if p.interests:
-                info_parts.append(f"интересуется {p.interests}")
+                info_parts.append(f"интересы: {p.interests}")
             if hasattr(p, 'position') and p.position:
                 info_parts.append(f"{p.position}")
             if hasattr(p, 'company') and p.company:
-                info_parts.append(f"работает в {p.company}")
+                info_parts.append(f"компания: {p.company}")
+            if p.city:
+                info_parts.append(f"город: {p.city}")
+            
             info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-            response += f"@{p.contact_info} ({info_str}), "
-        response = response.rstrip(", ") + ". "
+            response += f"{idx}. @{p.contact_info}\n   {info_str}\n"
+        
+        response = response.rstrip("\n")
     if tips:
         response += " ".join(tips[:2])
     if not response:
@@ -2209,6 +2131,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
             if reminder_time:
                 logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
                 result = add_task(title=title, reminder_time=reminder_time, user_id=user_id)
+                logger.info(f"[FORCE] add_task result: {result}")
                 forced_calls.append({"function": "add_task", "result": result})
             else:
                 # Если время не указано, ставим на ближайшее время (через 1 час по умолчанию)
@@ -2218,6 +2141,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
                 logger.info(f"[FORCE] No time specified, using default: {reminder_time}")
                 logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
                 result = add_task(title=title, reminder_time=reminder_time, user_id=user_id)
+                logger.info(f"[FORCE] add_task result: {result}")
                 forced_calls.append({"function": "add_task", "result": result})
     
     # 6. Проверка на complete_task (завершение задачи)
@@ -2360,6 +2284,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     import re
     logger = logging.getLogger(__name__)
+    
+    # Ensure context is a list or None
+    if context is not None and not isinstance(context, list):
+        logger.warning(f"context is not a list: {type(context)}, setting to None")
+        context = None
+    
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
     # Extract mentions before cleaning message
@@ -2367,7 +2297,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     mentions_str = ', '.join(mentions) if mentions else 'нет'
     # Clean message from mentions for processing
     clean_message = re.sub(r'@[\w]+', '', message).strip()
-    logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
+    context_len = len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
+    logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
     
     # Препроцессинг: форсим list_tasks() для расширенных триггерных фраз
@@ -2395,6 +2326,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         logger.info("Starting chat_with_ai processing")
         # Get user memory and all tasks for extended context
         user_memory = ""
+        user = None
+        profile = None
+        session = None
+        # Initialize time variables with defaults
+        base_now = datetime.now(pytz.UTC)
+        user_now = base_now
+        current_time_str = user_now.strftime("%H:%M")
+        user_username = "user"
+        
         if user_id:
             from models import Session, User, Task, UserProfile, Subscription
             session = Session()
@@ -2436,43 +2376,41 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.UTC
                     user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
-        
-        if user and user.memory:
+            
+            if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except (Exception,):
                     user_memory = ""  # If decryption fails, skip
-        
-        # Добавляем информацию из профиля (компания, должность и т.д.)
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        profile_filled = False
-        if profile:
-            profile_info = []
-            if profile.city:
-                profile_info.append(f"Город: {profile.city}")
-            if profile.company:
-                profile_info.append(f"Компания: {profile.company}")
-            if profile.position:
-                profile_info.append(f"Должность: {profile.position}")
-            if profile.skills:
-                profile_info.append(f"Навыки: {profile.skills}")
-            if profile.interests:
-                profile_info.append(f"Интересы: {profile.interests}")
-            if profile.goals:
-                profile_info.append(f"Цели: {profile.goals}")
-            if profile_info:
-                user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+            
+            # Добавляем информацию из профиля (компания, должность и т.д.)
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            profile_filled = False
+            if profile:
+                profile_info = []
+                if profile.city:
+                    profile_info.append(f"Город: {profile.city}")
+                if profile.company:
+                    profile_info.append(f"Компания: {profile.company}")
+                if profile.position:
+                    profile_info.append(f"Должность: {profile.position}")
+                if profile.skills:
+                    profile_info.append(f"Навыки: {profile.skills}")
+                if profile.interests:
+                    profile_info.append(f"Интересы: {profile.interests}")
+                if profile.goals:
+                    profile_info.append(f"Цели: {profile.goals}")
+                if profile_info:
+                    user_memory += f"\nПрофиль: {', '.join(profile_info)}"
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
+                # Проактивное заполнение при первом сообщении
+                if not profile_filled and (len(context) if context else 0 < 2):
+                    user_memory += "\n🎯 КРИТИЧНО ВАЖНО: Профиль ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
             else:
                 user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
-                # Проактивное заполнение при первом сообщении
-                if len(context) if context else 0 < 2:
-                    user_memory += "\n🎯 КРИТИЧНО ВАЖНО: Профиль ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
-        else:
-            user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
-        
-        # НЕ загружаем задачи в user_memory! Агент должен сам вызвать list_tasks()
+            
+            # НЕ загружаем задачи в user_memory! Агент должен сам вызвать list_tasks()
             # Это критично для предотвращения выдумывания задач
             
             # НО добавляем КРАТКУЮ сводку для контекста
@@ -2491,13 +2429,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 user_memory += f"\n⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
             
             # Add delegated tasks info
-            delegated_tasks = session.query(Task).filter(
-                Task.delegated_to_username.ilike(user.username),
-                Task.delegation_status == 'pending'
-            ).all()
-            if delegated_tasks:
-                delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}" for t in delegated_tasks[:3]]
-                user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
+            if user.username:
+                delegated_tasks = session.query(Task).filter(
+                    Task.delegated_to_username.ilike(user.username),
+                    Task.delegation_status == 'pending'
+                ).all()
+                if delegated_tasks:
+                    delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}" for t in delegated_tasks[:3]]
+                    user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
             
             # Add info about tasks delegated BY user
             my_delegated_tasks = session.query(Task).filter(
@@ -2565,7 +2504,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 logger.error(f"Error loading last_task_id from Redis: {e}")
         
         messages = [{"role": "system", "content": system_prompt}]
-        if context:
+        if context and isinstance(context, list):
             for item in context:
                 if "user" in item:
                     messages.append({"role": "user", "content": item["user"]})
