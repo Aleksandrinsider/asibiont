@@ -1297,8 +1297,6 @@
         }
         
         async function hideContact(username) {
-            if (!confirm(`Скрыть @${username} на 7 дней?`)) return;
-            
             const response = await fetch('/api/hide_contact', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
