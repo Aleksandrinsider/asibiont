@@ -1545,7 +1545,7 @@
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 // Город на отдельной строке
                                 if (partner.city) {
@@ -1617,7 +1617,7 @@
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегирую я ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 // Город на отдельной строке
                                 if (partner.city) {

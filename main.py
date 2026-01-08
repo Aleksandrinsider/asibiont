@@ -1433,7 +1433,7 @@ async def rate_user_handler(request):
             
             return web.json_response({
                 'success': True,
-                'message': f'Оценка {rating}/10 для @{rated_username} сохранена'
+                'message': f'✓ Оценка {rating}/10 для @{rated_username} сохранена'
             })
         
         finally:
