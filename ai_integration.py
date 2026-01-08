@@ -2718,17 +2718,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 
                                 # Сохраняем взаимодействие
                                 if user_id and content:
-                            else:
-                                # Если второй запрос не удался, возвращаем базовое подтверждение
-                                logger.warning(f"[TOOL CALLS] Retry API call failed with status {retry_response.status}")
-                                error_text = await retry_response.text()
-                                logger.error(f"[TOOL CALLS] Error response: {error_text[:500]}")
-                                
-                                # Формируем базовый ответ на основе результатов
-                                if tool_results:
-                                    content = "Выполнено:\n" + "\n".join([r.split("вернул:")[-1].strip() if "вернул:" in r else r for r in tool_results])
-                                else:
-                                    content = "Действие выполнено успешно."
                                     try:
                                         from models import Session, User, Interaction
                                         save_session = Session()
@@ -2742,7 +2731,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 
                                 return content
                             else:
-                                return f"Ошибка при генерации ответа: {retry_response.status}"
+                                # Если второй запрос не удался, возвращаем базовое подтверждение
+                                logger.warning(f"[TOOL CALLS] Retry API call failed with status {retry_response.status}")
+                                error_text = await retry_response.text()
+                                logger.error(f"[TOOL CALLS] Error response: {error_text[:500]}")
+                                
+                                # Формируем базовый ответ на основе результатов
+                                if tool_results:
+                                    content = "Выполнено:\n" + "\n".join([r.split("вернул:")[-1].strip() if "вернул:" in r else r for r in tool_results])
+                                else:
+                                    content = "Действие выполнено успешно."
+                                
+                                return content
                     
                     # Проверяем триггеры принудительного вызова ТОЛЬКО если AI НЕ вызвал tool_calls
                     logger.info("[FORCE CHECK] Checking for forced tool call triggers...")
