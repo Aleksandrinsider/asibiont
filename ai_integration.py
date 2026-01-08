@@ -2559,7 +2559,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 tool_results = []
                                 for tool_call in tool_calls:
                                     try:
-                                        func_name = tool_call['function']['name']
+                                        func_name = tool_call.get('function', {}).get('name', '')
+                                        
+                                        # Проверка на пустое имя функции
+                                        if not func_name:
+                                            logger.error(f"[TOOL CALLS] Empty function name in tool_call: {tool_call}")
+                                            tool_results.append("Ошибка: AI вернул пустое имя функции")
+                                            continue
+                                        
                                         args = json.loads(tool_call['function']['arguments'])
                                         logger.info(f"[TOOL CALLS] Executing {func_name} with args: {args}")
                                         
