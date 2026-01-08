@@ -2524,7 +2524,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 message_response = result["choices"][0]["message"]
                                 content = message_response.get("content", "")
                                 # Фильтровать сырые tool calls
-                                content = clean_content(content)
                                 content = re.sub(r'<\|.*?\|>', '', content).strip()
                                 content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
                                 
@@ -2716,9 +2715,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             if retry_response.status == 200:
                                 retry_result = await retry_response.json()
                                 content = retry_result["choices"][0]["message"].get("content", "")
-                                logger.info(f"[TOOL CALLS] AI retry response (before cleaning): '{content[:300]}...'")
-                                content = clean_content(content)
-                                logger.info(f"[TOOL CALLS] After clean_content: '{content[:300]}...'")
+                                logger.info(f"[TOOL CALLS] AI retry response: '{content[:300]}...'")
                                 content = replace_placeholders(content, user_now, current_time_str)
                                 content = clean_technical_details(content)  # Очистка от технических деталей
                                 logger.info(f"[TOOL CALLS] Final content: '{content[:300]}...'")
