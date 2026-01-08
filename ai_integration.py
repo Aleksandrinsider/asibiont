@@ -845,57 +845,59 @@ def set_reminder(task_id, reminder_time, user_id=None):
     from models import Session, Task
     from datetime import datetime
     session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        session.close()
-        return "Пользователь не найден."
-    
     try:
-        task_id_int = int(task_id)
-    except (ValueError, TypeError):
-        session.close()
-        return f"Некорректный ID задачи: {task_id}"
-    
-    task = session.query(Task).filter_by(id=task_id_int, user_id=user.id).first()
-    if task:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
         try:
-            reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-            task.reminder_time = reminder_time_parsed
-            session.commit()
-            result = f"Установлено напоминание для '{task.title}' на {reminder_time_parsed}."
-        except ValueError:
-            result = "Неверный формат времени."
-    else:
-        result = "Задача не найдена."
-    session.close()
-    return result
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            return f"Некорректный ID задачи: {task_id}"
+        
+        task = session.query(Task).filter_by(id=task_id_int, user_id=user.id).first()
+        if task:
+            try:
+                reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+                task.reminder_time = reminder_time_parsed
+                session.commit()
+                result = f"Установлено напоминание для '{task.title}' на {reminder_time_parsed}."
+            except ValueError:
+                result = "Неверный формат времени."
+        else:
+            result = "Задача не найдена."
+        return result
+    finally:
+        session.close()
 
 def update_user_memory(info, user_id=None):
     from models import Session, User
     session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if user:
-        # Дешифруем существующую память
-        existing_decrypted = ""
-        if user.memory:
-            try:
-                existing_decrypted = decrypt_data(user.memory)
-            except Exception as e:
-                existing_decrypted = ""
-        # Добавляем новую информацию
-        if existing_decrypted:
-            existing_decrypted += "\n" + info
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            # Дешифруем существующую память
+            existing_decrypted = ""
+            if user.memory:
+                try:
+                    existing_decrypted = decrypt_data(user.memory)
+                except Exception as e:
+                    existing_decrypted = ""
+            # Добавляем новую информацию
+            if existing_decrypted:
+                existing_decrypted += "\n" + info
+            else:
+                existing_decrypted = info
+            # Шифруем обратно
+            encrypted = encrypt_data(existing_decrypted)
+            user.memory = encrypted
+            session.commit()
+            result = "Сохранена информация."
         else:
-            existing_decrypted = info
-        # Шифруем обратно
-        encrypted = encrypt_data(existing_decrypted)
-        user.memory = encrypted
-        session.commit()
-        result = "Сохранена информация."
-    else:
-        result = "Пользователь не найден."
-    session.close()
-    return result
+            result = "Пользователь не найден."
+        return result
+    finally:
+        session.close()
 
 def delegate_task(title, description="", reminder_time=None, delegated_to_username=None, delegation_details="", user_id=None):
     """Create a delegated task that requires acceptance by the recipient"""
