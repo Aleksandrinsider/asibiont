@@ -722,8 +722,8 @@
                         const sortedInteractions = data.interactions
                             .sort((a, b) => a.id - b.id);
                         
-                        sortedInteractions.forEach((interaction, index) => {
-                            const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
+                        sortedInteractions.forEach((interaction) => {
+                            const msgId = interaction.id; // Используем database ID для уникальности
                             if (!displayedMessageIds.has(msgId)) {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                 displayedMessageIds.add(msgId);
@@ -1937,8 +1937,8 @@
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
                             
-                            sortedInteractions.forEach((interaction, index) => {
-                                const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
+                            sortedInteractions.forEach((interaction) => {
+                                const msgId = interaction.id; // Используем database ID для уникальности
                                 if (!displayedMessageIds.has(msgId)) {
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
@@ -1950,8 +1950,8 @@
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
                             
-                            sortedInteractions.forEach((interaction, index) => {
-                                const msgId = `${interaction.created_at}-${index}-${interaction.content.substring(0, 50)}`;
+                            sortedInteractions.forEach((interaction) => {
+                                const msgId = interaction.id; // Используем database ID для уникальности
                                 if (!displayedMessageIds.has(msgId)) {
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
