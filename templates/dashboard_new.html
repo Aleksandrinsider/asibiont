@@ -1516,6 +1516,7 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
@@ -1576,7 +1577,6 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1639,7 +1639,6 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             }
