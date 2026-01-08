@@ -1,4 +1,10 @@
 import asyncio
+import logging
+import os
+import pytz
+import hashlib
+import hmac
+import json
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 import aiohttp
@@ -15,18 +21,16 @@ from datetime import datetime, timedelta
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
-import logging
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Create tables if not exist
 try:
     Base.metadata.create_all(engine)
     logger.info("Database tables created or already exist")
 except Exception as e:
     logger.error(f"Failed to create database tables: {e}")
 
-# Run migrations
 def run_migrations():
     """Run database migrations"""
     from sqlalchemy import text, inspect
@@ -35,14 +39,12 @@ def run_migrations():
         session = Session()
         inspector = inspect(engine)
         
-        # Check if user_profiles table exists first
         if 'user_profiles' not in inspector.get_table_names():
             logger.info("user_profiles table does not exist, skipping migration")
             session.close()
             return
             
         # Check if activity_streak column exists
-        columns = [col['name'] for col in inspector.get_columns('user_profiles')]
         if 'activity_streak' not in columns:
             logger.info("Adding activity_streak column to user_profiles table")
             session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
@@ -61,23 +63,7 @@ try:
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}")
 
-import os
-import pytz
-from datetime import timedelta
-import hashlib
-import hmac
-import json
-import logging
-
-# Production logging configuration
-log_level = logging.INFO
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Global Redis client
+redis_client = None
 redis_client = None
 
 async def get_timezone_from_ip(ip_address):
@@ -1041,9 +1027,6 @@ async def yookassa_webhook(request):
             await bot.send_message(int(user_id), "Подписка активирована! Теперь у вас доступ ко всем премиум-функциям.")
         session.close()
     return web.Response(text="OK")
-
-# API handlers for dynamic updates
-
 
 async def api_partners_handler(request):
     def pluralize_task(count):
