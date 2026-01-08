@@ -1458,7 +1458,7 @@
                             const displayStyle = partner.type === 'recommended' ? 'flex' : 'none';
                             
                             if (partner.type === 'recommended' && partner.contact_info) {
-                                html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 0px; align-items: center;">`;
+                                html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 8px; align-items: center;">`;
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                 if (partner.telegram_id) {
                                     const fallbackId = `fallback-rec-${partner.telegram_id}`;
@@ -1476,16 +1476,29 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
+                                // Город на отдельной строке
                                 if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
+                                    html += `<div style="margin-top: 4px;"><span class="task-meta">Город: ${partner.city}</span></div>`;
                                 }
+                                
+                                // Компания и должность на одной строке
+                                const companyParts = [];
                                 if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
+                                    companyParts.push(`Компания: ${partner.company}`);
                                 }
                                 if (partner.position) {
-                                    html += `<span class="task-meta">Должность: ${partner.position}</span>`;
+                                    companyParts.push(`Должность: ${partner.position}`);
                                 }
+                                if (companyParts.length > 0) {
+                                    html += `<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">`;
+                                    companyParts.forEach(part => {
+                                        html += `<span class="task-meta">${part}</span>`;
+                                    });
+                                    html += `</div>`;
+                                }
+                                
+                                // Остальное на отдельных строках
+                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
                                 }
@@ -1513,14 +1526,11 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                // Кнопка минус только для НЕ избранных контактов
-                                if (!isFavorite) {
-                                    html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
-                                }
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
-                                html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 0px; align-items: center;">`;
+                                html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
                                 if (partner.telegram_id) {
                                     const fallbackId = `fallback-del-to-${partner.telegram_id}`;
                                     const imgId = `img-del-to-${partner.telegram_id}`;
@@ -1537,16 +1547,29 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
+                                // Город на отдельной строке
                                 if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
+                                    html += `<div style="margin-top: 4px;"><span class="task-meta">Город: ${partner.city}</span></div>`;
                                 }
+                                
+                                // Компания и должность на одной строке
+                                const companyParts = [];
                                 if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
+                                    companyParts.push(`Компания: ${partner.company}`);
                                 }
                                 if (partner.position) {
-                                    html += `<span class="task-meta">Должность: ${partner.position}</span>`;
+                                    companyParts.push(`Должность: ${partner.position}`);
                                 }
+                                if (companyParts.length > 0) {
+                                    html += `<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">`;
+                                    companyParts.forEach(part => {
+                                        html += `<span class="task-meta">${part}</span>`;
+                                    });
+                                    html += `</div>`;
+                                }
+                                
+                                // Остальное на отдельных строках
+                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
                                 }
@@ -1577,7 +1600,7 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
-                                html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 0px; align-items: center;">`;
+                                html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 if (partner.telegram_id) {
                                     const fallbackId = `fallback-del-by-${partner.telegram_id}`;
@@ -1596,16 +1619,29 @@
                                 if (partner.task_count) {
                                     html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
-                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
+                                // Город на отдельной строке
                                 if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
+                                    html += `<div style="margin-top: 4px;"><span class="task-meta">Город: ${partner.city}</span></div>`;
                                 }
+                                
+                                // Компания и должность на одной строке
+                                const companyParts = [];
                                 if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
+                                    companyParts.push(`Компания: ${partner.company}`);
                                 }
                                 if (partner.position) {
-                                    html += `<span class="task-meta">Должность: ${partner.position}</span>`;
+                                    companyParts.push(`Должность: ${partner.position}`);
                                 }
+                                if (companyParts.length > 0) {
+                                    html += `<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">`;
+                                    companyParts.forEach(part => {
+                                        html += `<span class="task-meta">${part}</span>`;
+                                    });
+                                    html += `</div>`;
+                                }
+                                
+                                // Остальное на отдельных строках
+                                html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
                                 }
