@@ -776,8 +776,15 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     # Найти задачу по ID или по названию
     if task_id:
         # Ищем задачу: созданную мной ИЛИ делегированную мне
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+        
         task = session.query(Task).filter(
-            Task.id == int(task_id),
+            Task.id == task_id_int,
             or_(
                 Task.user_id == user.id,
                 Task.delegated_to_username.ilike(user.username)
@@ -808,7 +815,9 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
             completion_time = (datetime.now(timezone.utc) - task.created_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
             profile.completed_tasks = (profile.completed_tasks or 0) + 1
             prev_avg = profile.average_completion_time or 0
-            profile.average_completion_time = ((prev_avg * (profile.completed_tasks - 1)) + completion_time) / profile.completed_tasks
+            # Защита от деления на ноль
+            if profile.completed_tasks > 0:
+                profile.average_completion_time = ((prev_avg * (profile.completed_tasks - 1)) + completion_time) / profile.completed_tasks
             session.commit()
         result = f"Завершена задача '{task.title}'."
     else:
@@ -825,7 +834,14 @@ def set_reminder(task_id, reminder_time, user_id=None):
     if not user:
         session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+    
+    try:
+        task_id_int = int(task_id)
+    except (ValueError, TypeError):
+        session.close()
+        return f"Некорректный ID задачи: {task_id}"
+    
+    task = session.query(Task).filter_by(id=task_id_int, user_id=user.id).first()
     if task:
         try:
             reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
@@ -995,9 +1011,14 @@ def accept_delegated_task(task_id, user_id=None):
         if not user:
             return "Ошибка: Пользователь не найден."
         
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            return f"Некорректный ID задачи: {task_id}"
+        
         # Ищем задачу делегированную МНЕ (по delegated_to_username)
         task = session.query(Task).filter(
-            Task.id == int(task_id),
+            Task.id == task_id_int,
             Task.delegated_to_username.ilike(user.username),
             Task.delegation_status == 'pending'
         ).first()
@@ -1051,9 +1072,14 @@ def reject_delegated_task(task_id, user_id=None):
         if not user:
             return "Ошибка: Пользователь не найден."
         
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            return f"Некорректный ID задачи: {task_id}"
+        
         # Ищем задачу делегированную МНЕ (по delegated_to_username)
         task = session.query(Task).filter(
-            Task.id == int(task_id),
+            Task.id == task_id_int,
             Task.delegated_to_username.ilike(user.username),
             Task.delegation_status == 'pending'
         ).first()

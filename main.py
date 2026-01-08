@@ -643,11 +643,13 @@ async def chat_handler(request):
                 
                 # Проверяем, не было ли уже сохранено такое же сообщение в последние 5 секунд
                 # чтобы избежать дублирования при повторных запросах
+                from datetime import timedelta
+                five_seconds_ago = user_message_timestamp - timedelta(seconds=5)
                 recent_interaction = session_db.query(Interaction).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'user',
                     Interaction.content == content,
-                    Interaction.created_at >= user_message_timestamp.replace(second=user_message_timestamp.second - 5, microsecond=0)
+                    Interaction.created_at >= five_seconds_ago
                 ).first()
                 
                 if not recent_interaction:
