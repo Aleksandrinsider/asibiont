@@ -2560,14 +2560,51 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 for tool_call in tool_calls:
                                     try:
                                         func_name = tool_call.get('function', {}).get('name', '')
+                                        args_str = tool_call.get('function', {}).get('arguments', '{}')
                                         
-                                        # Проверка на пустое имя функции
+                                        # Проверка на пустое имя функции и попытка определить по args
                                         if not func_name:
-                                            logger.error(f"[TOOL CALLS] Empty function name in tool_call: {tool_call}")
-                                            tool_results.append("Ошибка: AI вернул пустое имя функции")
-                                            continue
+                                            logger.warning(f"[TOOL CALLS] Empty function name, trying to infer from args: {args_str}")
+                                            
+                                            # Парсим аргументы чтобы понять что хотел сделать AI
+                                            try:
+                                                args = json.loads(args_str)
+                                                
+                                                # Определяем функцию по наличию параметров
+                                                if 'title' in args and ('reminder_time' in args or 'description' in args):
+                                                    if 'delegated_to_username' in args:
+                                                        func_name = 'delegate_task'
+                                                        logger.info(f"[TOOL CALLS] Inferred function: delegate_task")
+                                                    else:
+                                                        func_name = 'add_task'
+                                                        logger.info(f"[TOOL CALLS] Inferred function: add_task")
+                                                elif 'task_id' in args or 'task_title' in args:
+                                                    if 'priority' in args:
+                                                        func_name = 'set_priority'
+                                                        logger.info(f"[TOOL CALLS] Inferred function: set_priority")
+                                                    else:
+                                                        func_name = 'complete_task'
+                                                        logger.info(f"[TOOL CALLS] Inferred function: complete_task")
+                                                elif 'user_id' in args and len(args) == 1:
+                                                    func_name = 'list_tasks'
+                                                    logger.info(f"[TOOL CALLS] Inferred function: list_tasks")
+                                                elif 'city' in args or 'company' in args or 'interests' in args:
+                                                    func_name = 'update_profile'
+                                                    logger.info(f"[TOOL CALLS] Inferred function: update_profile")
+                                                elif 'memory' in args:
+                                                    func_name = 'update_user_memory'
+                                                    logger.info(f"[TOOL CALLS] Inferred function: update_user_memory")
+                                                
+                                                if not func_name:
+                                                    logger.error(f"[TOOL CALLS] Could not infer function from args: {args}")
+                                                    tool_results.append("Ошибка: не удалось определить функцию")
+                                                    continue
+                                            except Exception as e:
+                                                logger.error(f"[TOOL CALLS] Error inferring function: {e}")
+                                                tool_results.append("Ошибка: не удалось обработать вызов функции")
+                                                continue
                                         
-                                        args = json.loads(tool_call['function']['arguments'])
+                                        args = json.loads(args_str)
                                         logger.info(f"[TOOL CALLS] Executing {func_name} with args: {args}")
                                         
                                         # Вызываем соответствующую функцию
