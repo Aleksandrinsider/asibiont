@@ -3,6 +3,7 @@ from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE, LOCAL, DEFAUL
 import json
 from datetime import datetime, timezone, timedelta
 import re
+# Version: 2026-01-08T01:43 - Fixed clean_content removal
 import logging
 import asyncio
 from cryptography.fernet import Fernet
