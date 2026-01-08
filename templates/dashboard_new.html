@@ -281,7 +281,8 @@
         }
         
         // Глобальная переменная для отслеживания доступности avatar API
-        let avatarServiceAvailable = true;
+        // По умолчанию отключаем аватары, включим после первой успешной загрузки
+        let avatarServiceAvailable = false;
         let avatarCheckDone = false;
         
         // Функция обработки ошибки загрузки аватара
@@ -1100,7 +1101,8 @@
             if (task.description && task.description.trim()) {
                 // Фильтруем устаревшие описания делегирования
                 const cleanDesc = task.description.trim();
-                const isOldDelegationText = cleanDesc.match(/^Задача (от|для|на) @?\w+$/i);
+                // Ловим паттерны: "Задача от Имя", "Задача для Имя", "Задача на @username"
+                const isOldDelegationText = cleanDesc.match(/^Задача\s+(от|для|на)\s+@?[\wА-Яа-яЁё]+$/i);
                 
                 if (!isOldDelegationText) {
                     html += '<div style="margin-top: 4px; font-size: 13px; color: #586069;">' + task.description + '</div>';
