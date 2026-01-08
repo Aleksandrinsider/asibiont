@@ -1339,9 +1339,28 @@ async def api_partners_handler(request):
         # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
         
+        # Нормализация названий городов для правильного сравнения
+        def normalize_city(city):
+            if not city:
+                return None
+            city = city.lower().strip()
+            # Маппинг русских названий на английские
+            city_map = {
+                'москва': 'moscow',
+                'санкт-петербург': 'saint petersburg',
+                'петербург': 'saint petersburg',
+                'спб': 'saint petersburg',
+                'екатеринбург': 'yekaterinburg',
+                'новосибирск': 'novosibirsk',
+                'казань': 'kazan'
+            }
+            return city_map.get(city, city)
+        
+        normalized_user_city = normalize_city(user_city)
+        
         def sort_key(partner):
-            partner_city = partner.get('city', '').lower() if partner.get('city') else None
-            same_city = 0 if (user_city and partner_city == user_city) else 1
+            partner_city = normalize_city(partner.get('city', ''))
+            same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
             
             rating = partner.get('average_rating', 0) or 0
             # Группы рейтинга:
