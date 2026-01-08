@@ -123,9 +123,11 @@
                     </div>
                     <div style="margin-bottom: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Мои</button>
+                        <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
+                        <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегирую я</button>
                     </div>
                     <div class="people-list" id="people-list">
@@ -1514,7 +1516,6 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action" title="Скрыть на 7 дней">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
@@ -1575,7 +1576,7 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action" title="Скрыть на 7 дней">−</button>`;
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1638,7 +1639,7 @@
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
                                 html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action" title="Скрыть на 7 дней">−</button>`;
+                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             }
