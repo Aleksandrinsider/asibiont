@@ -214,7 +214,15 @@ class ReminderService:
         db = Session()
         try:
             users = db.query(User).all()
+            logger.info(f"Scheduling daily reports for {len(users)} users")
             for user in users:
+                job_id = f"daily_report_{user.telegram_id}"
+                
+                # Проверяем, существует ли уже такой джоб
+                if self.scheduler.get_job(job_id):
+                    logger.debug(f"Daily report job {job_id} already exists, skipping")
+                    continue
+                
                 # Получить timezone пользователя
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
@@ -226,9 +234,10 @@ class ReminderService:
                     minute=0,
                     timezone=user_tz,
                     args=[user.telegram_id],
-                    id=f"daily_report_{user.telegram_id}",
+                    id=job_id,
                     replace_existing=True
                 )
+                logger.debug(f"Scheduled daily report for user {user.telegram_id}")
         finally:
             db.close()
 
@@ -289,7 +298,15 @@ class ReminderService:
         db = Session()
         try:
             users = db.query(User).all()
+            logger.info(f"Scheduling proactive checks for {len(users)} users")
             for user in users:
+                job_id = f"proactive_check_{user.telegram_id}"
+                
+                # Проверяем, существует ли уже такой джоб
+                if self.scheduler.get_job(job_id):
+                    logger.debug(f"Proactive check job {job_id} already exists, skipping")
+                    continue
+                
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
                 # Планируем проактивные проверки каждые 30 минут
@@ -299,9 +316,10 @@ class ReminderService:
                     minute=f"*/{PROACTIVE_CHECK_INTERVAL_MINUTES}",
                     timezone=user_tz,
                     args=[user.telegram_id],
-                    id=f"proactive_check_{user.telegram_id}",
+                    id=job_id,
                     replace_existing=True
                 )
+                logger.debug(f"Scheduled proactive check for user {user.telegram_id}")
         finally:
             db.close()
 
@@ -395,7 +413,15 @@ class ReminderService:
         db = Session()
         try:
             users = db.query(User).all()
+            logger.info(f"Scheduling overdue checks for {len(users)} users")
             for user in users:
+                job_id = f"overdue_{user.telegram_id}"
+                
+                # Проверяем, существует ли уже такой джоб
+                if self.scheduler.get_job(job_id):
+                    logger.debug(f"Overdue check job {job_id} already exists, skipping")
+                    continue
+                
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
                 # Планируем проверки просроченных задач каждые 15 минут
@@ -405,9 +431,10 @@ class ReminderService:
                     minute=f"*/{OVERDUE_CHECK_INTERVAL_MINUTES}",
                     timezone=user_tz,
                     args=[user.telegram_id],
-                    id=f"overdue_{user.telegram_id}",
+                    id=job_id,
                     replace_existing=True
                 )
+                logger.debug(f"Scheduled overdue check for user {user.telegram_id}")
         finally:
             db.close()
 

@@ -1464,6 +1464,8 @@ def find_partners(user_id=None, session=None):
                 profiles = city_profiles  # Используем только профили из того же города
         for p in profiles:
             # Исключаем заблокированных и себя
+            if not p.contact_info:
+                continue
             contact_username = p.contact_info.replace('@', '').lower()
             if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
                 continue
