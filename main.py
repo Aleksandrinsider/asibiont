@@ -1225,6 +1225,36 @@ async def api_partners_handler(request):
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
         
+        # Calculate common_tasks for regular partners
+        for p in partners:
+            if profile and p:
+                # Get user's tasks
+                user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+                user_task_keywords = set()
+                for task in user_tasks:
+                    if task.title:
+                        user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
+                    if task.description:
+                        user_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                
+                # Get partner's tasks
+                partner_user = session_db.query(User).filter_by(id=p.user_id).first()
+                if partner_user:
+                    partner_tasks = session_db.query(Task).filter_by(user_id=partner_user.id).all()
+                    partner_task_keywords = set()
+                    for task in partner_tasks:
+                        if task.title:
+                            partner_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
+                        if task.description:
+                            partner_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                    
+                    common_task_words = user_task_keywords & partner_task_keywords
+                    p.common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None
+                else:
+                    p.common_tasks = None
+            else:
+                p.common_tasks = None
+        
         partners_data = []
         for p in partners:
             # Получаем telegram_id пользователя из базы
@@ -1236,6 +1266,7 @@ async def api_partners_handler(request):
                 'common_interests': getattr(p, 'common_interests', None),
                 'common_skills': getattr(p, 'common_skills', None),
                 'common_goals': getattr(p, 'common_goals', None),
+                'common_tasks': getattr(p, 'common_tasks', None),
                 'recommendation_reason': getattr(p, 'recommendation_reason', 'подходящий контакт'),
                 'average_rating': getattr(p, 'average_rating', 0),
                 'rating_count': getattr(p, 'rating_count', 0),
@@ -1273,6 +1304,32 @@ async def api_partners_handler(request):
                     common_g = user_goals & partner_goals
                     common_goals = ', '.join(common_g) if common_g else None
             
+            # Common tasks for delegating_to_me
+            common_tasks = None
+            if profile and delegator_profile:
+                # Get user's tasks
+                user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+                user_task_keywords = set()
+                for task in user_tasks:
+                    if task.title:
+                        user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
+                    if task.description:
+                        user_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                
+                # Get delegator's tasks
+                delegator_user = session_db.query(User).filter_by(id=contact['id']).first()
+                if delegator_user:
+                    delegator_tasks = session_db.query(Task).filter_by(user_id=delegator_user.id).all()
+                    delegator_task_keywords = set()
+                    for task in delegator_tasks:
+                        if task.title:
+                            delegator_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
+                        if task.description:
+                            delegator_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                    
+                    common_task_words = user_task_keywords & delegator_task_keywords
+                    common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
+            
             partners_data.append({
                 'contact_info': contact['username'],
                 'telegram_id': delegator.telegram_id if delegator else None,
@@ -1284,6 +1341,7 @@ async def api_partners_handler(request):
                 'common_interests': common_interests,
                 'common_skills': common_skills,
                 'common_goals': common_goals,
+                'common_tasks': common_tasks,
                 'average_rating': delegator_profile.average_rating if delegator_profile else 0,
                 'rating_count': delegator_profile.rating_count if delegator_profile else 0,
                 'reason': contact['reason'],
@@ -1321,6 +1379,32 @@ async def api_partners_handler(request):
                     common_g = user_goals & partner_goals
                     common_goals = ', '.join(common_g) if common_g else None
             
+            # Common tasks for delegating_by_me
+            common_tasks = None
+            if profile and delegatee_profile:
+                # Get user's tasks
+                user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+                user_task_keywords = set()
+                for task in user_tasks:
+                    if task.title:
+                        user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
+                    if task.description:
+                        user_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                
+                # Get delegatee's tasks
+                delegatee_user = session_db.query(User).filter_by(id=contact['id']).first()
+                if delegatee_user:
+                    delegatee_tasks = session_db.query(Task).filter_by(user_id=delegatee_user.id).all()
+                    delegatee_task_keywords = set()
+                    for task in delegatee_tasks:
+                        if task.title:
+                            delegatee_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
+                        if task.description:
+                            delegatee_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                    
+                    common_task_words = user_task_keywords & delegatee_task_keywords
+                    common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
+            
             partners_data.append({
                 'contact_info': contact['username'],
                 'first_name': contact['first_name'],
@@ -1331,6 +1415,7 @@ async def api_partners_handler(request):
                 'common_interests': common_interests,
                 'common_skills': common_skills,
                 'common_goals': common_goals,
+                'common_tasks': common_tasks,
                 'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
                 'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
                 'reason': contact['reason'],

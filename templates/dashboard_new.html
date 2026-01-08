@@ -1560,6 +1560,9 @@
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
                                 }
+                                if (partner.common_tasks) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие задачи: ${partner.common_tasks}</span>`;
+                                }
                                 html += '</div>';
                                 // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
@@ -1630,6 +1633,9 @@
                                 }
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                }
+                                if (partner.common_tasks) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие задачи: ${partner.common_tasks}</span>`;
                                 }
                                 html += '</div>';
                                 // Рекомендация на отдельной строке
@@ -1702,6 +1708,9 @@
                                 }
                                 if (partner.common_goals) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                }
+                                if (partner.common_tasks) {
+                                    html += `<span class="task-meta" style="color: #068487;">Общие задачи: ${partner.common_tasks}</span>`;
                                 }
                                 html += '</div>';
                                 // Рекомендация на отдельной строке
