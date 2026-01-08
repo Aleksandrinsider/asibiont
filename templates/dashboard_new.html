@@ -1214,7 +1214,7 @@
             if (response.ok) {
                 const data = await response.json();
                 // Добавляем сообщение об успешном завершении в чат
-                addMessage(`✅ ${data.message}`, 'ai');
+                addMessage(`<span class="message-emoji">✅</span> ${data.message}`, 'ai');
                 // Обновить задачи сразу
                 await updateTasks();
             } else {
@@ -1285,7 +1285,7 @@
             
             if (response.ok) {
                 const data = await response.json();
-                addMessage(`✅ ${data.message}`, 'ai');
+                addMessage(`<span class="message-emoji">✅</span> ${data.message}`, 'ai');
                 closeRatingModal();
                 await updatePeople(); // Обновить список контактов
             } else {
@@ -1306,7 +1306,7 @@
             
             if (response.ok) {
                 const data = await response.json();
-                addMessage(`✅ ${data.message}`, 'ai');
+                addMessage(`<span class="message-emoji">✅</span> ${data.message}`, 'ai');
                 cachedPartnersData = null;
                 await updatePeople(); // Обновить список контактов
             } else {
