@@ -277,7 +277,7 @@ def get_system_prompt():
 4. "Поручи @user проверить отчет" → НЕМЕДЛЕННО delegate_task(title="проверить отчет", delegated_to_username="@user")
    - ВАЖНО: в title НЕ включай слова "задачу", "задача", только суть (например: "проверить отчет", а не "задачу проверить отчет")
 5. Если видишь упоминание задач в истории → СНАЧАЛА list_tasks() для актуальных данных
-6. "Выполнил задачу X" / "Готово" → НЕМЕДЛЕННО complete_task(), затем ОБЯЗАТЕЛЬНО спроси о результатах/достижениях
+6. "Выполнил задачу X" / "Готово" → НЕМЕДЛЕННО complete_task(), затем ОБЯЗАТЕЛЬНО спроси: "Отлично! Расскажите, как прошло выполнение? Какие были результаты?"
 7. "Изменить задачу" / "Обновить задачу" → edit_task() с уточнением что именно менять
 8. "Сделать задачу приоритетной" → set_priority() с уровнем приоритета
 9. "Подробности задачи" → get_task_details() для показа полной информации
@@ -2563,6 +2563,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             result = list_tasks(user_id=user_id)
                                         elif func_name == 'complete_task':
                                             result = complete_task(user_id=user_id, **args)
+                                            # Добавляем флаг для вопроса о результате
+                                            tool_results.append("ВАЖНО: ОБЯЗАТЕЛЬНО спроси пользователя о результатах выполнения: 'Расскажите, как прошло выполнение? Какие были результаты?'")
                                         elif func_name == 'delete_task':
                                             result = delete_task(user_id=user_id, **args)
                                         elif func_name == 'delegate_task':

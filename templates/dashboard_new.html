@@ -1410,7 +1410,6 @@
         }
 
         async function clearSingleTask(taskId) {
-            if (!confirm('Вы уверены, что хотите удалить эту задачу?')) return;
             try {
                 const response = await fetch('/clear_single_task', {
                     method: 'POST',
