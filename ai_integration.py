@@ -2644,7 +2644,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             if retry_response.status == 200:
                                 retry_result = await retry_response.json()
                                 content = retry_result["choices"][0]["message"].get("content", "")
-                                content = clean_content(content)
                                 content = replace_placeholders(content, user_now, current_time_str)
                                 content = clean_technical_details(content)
                                 
