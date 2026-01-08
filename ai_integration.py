@@ -2531,6 +2531,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             "model": "deepseek-chat",
             "messages": messages,
             "tools": TOOLS,
+            "tool_choice": "auto",
             "temperature": 0.1
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
