@@ -2248,22 +2248,6 @@ def force_tool_calls(message, content, mentions_str, user_id):
                                         forced_calls.append({"function": "edit_task", "result": result})
                                         break
                     break
-                        task_id = int(match.group(1))
-                        task_ids.append(task_id)
-                    
-                    logger.info(f"[FORCE] Parsed task IDs (in order): {task_ids}")
-                    # Берём N-ую задачу по порядку
-                    if position_num <= len(task_ids):
-                        task_id = task_ids[position_num - 1]  # -1 потому что индекс с 0
-                        logger.info(f"[FORCE] Triggering delete_task() - deleting task #{position_num} (ID={task_id})")
-                        result = delete_task(task_id=task_id, user_id=user_id)
-                        forced_calls.append({"function": "delete_task", "result": result})
-                    else:
-                        logger.info(f"[FORCE] Cannot delete task #{position_num} - only {len(task_ids)} tasks available")
-            else:
-                logger.info(f"[FORCE] No position match found in message")
-        else:
-            logger.info(f"[FORCE] Skipping delete - already in content")
     
     # 8. Проверка на find_partners (поиск партнеров)
     partners_triggers = [
@@ -2315,6 +2299,9 @@ def force_tool_calls(message, content, mentions_str, user_id):
                                 forced_calls.append({"function": "set_priority", "result": result})
                                 break
     
+    return forced_calls if forced_calls else None
+
+async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     import re
     logger = logging.getLogger(__name__)
     # Сохраняем оригинальное сообщение ДО очистки
