@@ -1808,6 +1808,7 @@ async def api_tasks_handler(request):
             task_data = {
                 'id': task.id,
                 'title': title,
+                'description': task.description if task.description else '',
                 'status': task.status,
                 'reminder_time': None,
                 'reminder_time_local': None,
