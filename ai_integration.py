@@ -33,21 +33,93 @@ def decrypt_data(data):
         return cipher.decrypt(data.encode()).decode()
     return data
 
-def clean_content(content):
-    if content is None:
-        return ""
-    if not isinstance(content, str):
-        raise ValueError("Content must be a string")
+def parse_time_from_text(time_text, user_id):
+    """Парсит время из текста пользователя"""
+    import re
+    from datetime import datetime, timedelta
+    import pytz
+    from models import Session, User
     
-    content = re.sub(r'<.*?>', '', content).strip()
-    content = re.sub(r'<\|.*?\|>', '', content).strip()
-    content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
-    content = re.sub(r'\{[^}]*\}', '', content).strip()
-    content = re.sub(r'\w+\s*\{[^}]*\}', '', content).strip()
-    # Убираем нумерацию из списков
-    content = re.sub(r'^\d+\.\s+', '', content, flags=re.MULTILINE)
-    content = re.sub(r'\n\d+\.\s+', '\n', content)
-    # Убираем остатки от tool calls
+    # Получаем timezone пользователя
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
+    session.close()
+    now = datetime.now(user_tz)
+    
+    time_text = time_text.lower().strip()
+    
+    # Проверяем "через X минут/часов"
+    through_time_match = re.search(r'через\s+(\d+)\s+(минут|час)', time_text)
+    if through_time_match:
+        amount = int(through_time_match.group(1))
+        unit = through_time_match.group(2).lower()
+        
+        if 'минут' in unit:
+            target_dt = now + timedelta(minutes=amount)
+        else:  # час/часов
+            target_dt = now + timedelta(hours=amount)
+        
+        return target_dt.strftime('%Y-%m-%d %H:%M')
+    
+    # Проверяем "завтра/сегодня в XX:XX"
+    time_match = re.search(r'(завтра|послезавтра|сегодня)\s+(?:в\s+)?(\d{1,2}):(\d{2})', time_text)
+    if time_match:
+        day_word = time_match.group(1).lower()
+        hour = int(time_match.group(2))
+        minute = int(time_match.group(3))
+        
+        if 'завтра' in day_word:
+            target_date = (now + timedelta(days=1)).date()
+        elif 'послезавтра' in day_word:
+            target_date = (now + timedelta(days=2)).date()
+        else:
+            target_date = now.date()
+        
+        target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
+        target_dt = user_tz.localize(target_dt)
+        return target_dt.strftime('%Y-%m-%d %H:%M')
+    
+    # Проверяем просто "в HH:MM"
+    simple_time_match = re.search(r'(?:в\s+)?(\d{1,2}):(\d{2})', time_text)
+    if simple_time_match:
+        hour = int(simple_time_match.group(1))
+        minute = int(simple_time_match.group(2))
+        
+        # Если время уже прошло сегодня - ставим на завтра
+        target_time = datetime.min.time().replace(hour=hour, minute=minute)
+        if target_time <= now.time():
+            target_date = (now + timedelta(days=1)).date()
+        else:
+            target_date = now.date()
+        
+        target_dt = datetime.combine(target_date, target_time)
+        target_dt = user_tz.localize(target_dt)
+        return target_dt.strftime('%Y-%m-%d %H:%M')
+    
+    # Проверяем "утром", "вечером", "днем"
+    time_word_match = re.search(r'(утром|вечером|днем)', time_text)
+    if time_word_match:
+        time_word = time_word_match.group(1).lower()
+        if 'утром' in time_word:
+            hour, minute = 8, 0
+        elif 'вечером' in time_word:
+            hour, minute = 18, 0
+        elif 'днем' in time_word:
+            hour, minute = 12, 0
+        
+        target_time = datetime.min.time().replace(hour=hour, minute=minute)
+        # Если время уже прошло сегодня - ставим на завтра
+        if target_time <= now.time():
+            target_date = (now + timedelta(days=1)).date()
+        else:
+            target_date = now.date()
+        
+        target_dt = datetime.combine(target_date, target_time)
+        target_dt = user_tz.localize(target_dt)
+        return target_dt.strftime('%Y-%m-%d %H:%M')
+    
+    return None
     content = re.sub(r'\w+\s+user_id=\d+', '', content).strip()
     content = re.sub(r'Args for \w+:', '', content).strip()
     return content
@@ -1807,11 +1879,27 @@ def force_tool_calls(message, content, mentions_str, user_id):
         elif '@' not in message:
             logger.info(f"[FORCE] No @ symbol in message")
     
-    # 3. Проверка на update_profile (упоминание работы, города, интересов)
+    # 3. Расширенная проверка на update_profile (интересы, навыки, цели, город, компания, должность)
     profile_triggers = [
-        (r'(переехал|живу|нахожусь)\s+в\s+(\w+)', 'city'),
-        (r'работаю\s+(?:в\s+)?(\w+)(?:\s+как\s+)?(.*)', 'company'),
-        (r'должность\s+(.*)', 'position')
+        # Город
+        (r'(?:я\s+)?(?:живу|нахожусь|переехал|приехал)\s+(?:в\s+)?([А-Яа-яA-Za-z\s]+)(?:\s+город)?', 'city'),
+        (r'(?:мой\s+)?город\s+([А-Яа-яA-Za-z\s]+)', 'city'),
+        (r'город\s+([А-Яа-яA-Za-z\s]+)', 'city'),
+        
+        # Компания и должность
+        (r'(?:я\s+)?работаю\s+(?:в\s+)?([А-Яа-яA-Za-z\s&]+)(?:\s+как\s+)?(?:на\s+должности\s+)?([А-Яа-яA-Za-z\s]+)?', 'company'),
+        (r'(?:моя\s+)?компания\s+([А-Яа-яA-Za-z\s&]+)', 'company'),
+        (r'(?:моя\s+)?должность\s+([А-Яа-яA-Za-z\s]+)', 'position'),
+        (r'должность\s+([А-Яа-яA-Za-z\s]+)', 'position'),
+        
+        # Навыки
+        (r'(?:я\s+)?(?:умею|знаю|владею)\s+([А-Яа-яA-Za-z\s,]+)', 'skills'),
+        (r'(?:мои\s+)?навыки\s+([А-Яа-яA-Za-z\s,]+)', 'skills'),
+        
+        # Цели
+        (r'(?:моя\s+)?цель\s+([А-Яа-яA-Za-z\s,]+)', 'goals'),
+        (r'цели\s+([А-Яа-яA-Za-z\s,]+)', 'goals'),
+        (r'хочу\s+([А-Яа-яA-Za-z\s,]+)', 'goals'),
     ]
     
     profile_updates = {}
@@ -1819,37 +1907,55 @@ def force_tool_calls(message, content, mentions_str, user_id):
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             if field == 'city':
-                profile_updates['city'] = match.group(2)
+                city_name = match.group(1).strip()
+                if len(city_name) > 2:  # Избегаем слишком коротких названий
+                    profile_updates['city'] = city_name
             elif field == 'company':
-                profile_updates['company'] = match.group(1)
-                if len(match.groups()) > 1 and match.group(2):
-                    profile_updates['position'] = match.group(2).strip()
+                company_name = match.group(1).strip()
+                if len(company_name) > 2:
+                    profile_updates['company'] = company_name
+                    if len(match.groups()) > 1 and match.group(2):
+                        position_name = match.group(2).strip()
+                        if len(position_name) > 2:
+                            profile_updates['position'] = position_name
             elif field == 'position':
-                profile_updates['position'] = match.group(1)
+                position_name = match.group(1).strip()
+                if len(position_name) > 2:
+                    profile_updates['position'] = position_name
+            elif field == 'skills':
+                skills_text = match.group(1).strip()
+                if len(skills_text) > 2:
+                    profile_updates['skills'] = skills_text
+            elif field == 'goals':
+                goals_text = match.group(1).strip()
+                if len(goals_text) > 2:
+                    profile_updates['goals'] = goals_text
     
-    # Проверка на обновление интересов (добавление или удаление)
+    # Расширенные триггеры для интересов
     interests_add_triggers = [
-        r'добавь\s+в\s+интересы\s+(.+)',  # "добавь в интересы спорт"
-        r'добавить?\s+в\s+интересы\s+(.+)',  # "добавить в интересы спорт"
-        r'в\s+интересы\s+(.+)',  # "в интересы спорт"
-        r'(снова|опять|теперь снова)\s+(люблю|увлекаюсь|интересуюсь)\s+(.+)',
-        r'(люблю|увлекаюсь|интересуюсь)\s+(.+)',
+        r'(?:добавь|добавить)\s+(?:в\s+)?интересы\s+(.+)',
+        r'(?:в\s+)?интересы\s+(?:добавь|добавить)\s+(.+)',
+        r'интересует\s+(.+)',
+        r'(?:я\s+)?(?:люблю|увлекаюсь|интересуюсь|занимаюсь)\s+(.+)',
+        r'(?:снова|опять|теперь)\s+(?:люблю|увлекаюсь|интересуюсь|занимаюсь)\s+(.+)',
+        r'хочу\s+(?:заниматься|увлекаться)\s+(.+)',
+        r'начну\s+(?:заниматься|увлекаться)\s+(.+)',
     ]
+    
     interests_remove_triggers = [
-        r'удали\s+из\s+интересов\s+(.+)',  # "удали из интересов спорт"
-        r'удалить?\s+из\s+интересов\s+(.+)',  # "удалить из интересов спорт"
-        r'убери\s+из\s+интересов\s+(.+)',  # "убери из интересов спорт"
-        r'(больше не|не)\s+(люблю|увлекаюсь|интересуюсь)\s+(.+)',
+        r'(?:удали|убери|убрать)\s+(?:из\s+)?интересов\s+(.+)',
+        r'(?:из\s+)?интересов\s+(?:удали|убери|убрать)\s+(.+)',
+        r'(?:больше\s+)?не\s+(?:люблю|увлекаюсь|интересуюсь|занимаюсь)\s+(.+)',
         r'бросил\s+(.+)',
+        r'перестал\s+(?:заниматься|увлекаться)\s+(.+)',
     ]
     
     # Проверяем добавление интересов
     for pattern in interests_add_triggers:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
-            # Берем последнюю группу как интерес
-            interest = match.groups()[-1].strip()
-            if interest and "update_profile" not in content.lower():
+            interest = match.group(1).strip()
+            if interest and len(interest) > 1 and "update_profile" not in content.lower():
                 profile_updates['interests'] = f"+{interest}"
                 logger.info(f"[FORCE] Detected interest addition: {interest}")
                 break
@@ -1859,12 +1965,48 @@ def force_tool_calls(message, content, mentions_str, user_id):
         for pattern in interests_remove_triggers:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
-                # Берем последнюю группу как интерес
-                interest = match.groups()[-1].strip()
-                if interest and "update_profile" not in content.lower():
+                interest = match.group(1).strip()
+                if interest and len(interest) > 1 and "update_profile" not in content.lower():
                     profile_updates['interests'] = f"-{interest}"
                     logger.info(f"[FORCE] Detected interest removal: {interest}")
                     break
+    
+    # Дополнительные триггеры для навыков и целей
+    skills_add_triggers = [
+        r'(?:добавь|добавить)\s+(?:в\s+)?навыки\s+(.+)',
+        r'(?:в\s+)?навыки\s+(?:добавь|добавить)\s+(.+)',
+        r'навык\s+(.+)',
+        r'умею\s+(.+)',
+        r'знаю\s+(.+)',
+    ]
+    
+    goals_add_triggers = [
+        r'(?:добавь|добавить)\s+(?:в\s+)?цели\s+(.+)',
+        r'(?:в\s+)?цели\s+(?:добавь|добавить)\s+(.+)',
+        r'цель\s+(.+)',
+        r'хочу\s+(?:достичь|сделать|стать)\s+(.+)',
+        r'планирую\s+(.+)',
+    ]
+    
+    # Проверяем добавление навыков
+    for pattern in skills_add_triggers:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            skill = match.group(1).strip()
+            if skill and len(skill) > 1 and "update_profile" not in content.lower():
+                profile_updates['skills'] = f"+{skill}"
+                logger.info(f"[FORCE] Detected skill addition: {skill}")
+                break
+    
+    # Проверяем добавление целей
+    for pattern in goals_add_triggers:
+        match = re.search(pattern, message, re.IGNORECASE)
+        if match:
+            goal = match.group(1).strip()
+            if goal and len(goal) > 1 and "update_profile" not in content.lower():
+                profile_updates['goals'] = f"+{goal}"
+                logger.info(f"[FORCE] Detected goal addition: {goal}")
+                break
     
     if profile_updates and "update_profile" not in content.lower():
         logger.info(f"[FORCE] Triggering update_profile() - detected profile info: {profile_updates}")
@@ -2023,31 +2165,89 @@ def force_tool_calls(message, content, mentions_str, user_id):
                 result = add_task(title=title, reminder_time=reminder_time, user_id=user_id)
                 forced_calls.append({"function": "add_task", "result": result})
     
-    # 5. Проверка на delete_task (удаление задачи)
-    delete_triggers = ["удали", "удалить", "убери", "убрать", "delete"]
-    if any(trigger in message_lower for trigger in delete_triggers):
-        logger.info(f"[FORCE] Delete trigger detected in message")
-        if "delete_task" not in content.lower() and "complete_task" not in content.lower():
-            logger.info(f"[FORCE] No delete_task in content, proceeding...")
-            # Пытаемся извлечь позицию (первую, вторую и т.д.)
-            task_id_match = re.search(r'(первую|первая|вторую|вторая|третью|третья|\d+)\s+(задач|task)', message_lower)
-            if task_id_match:
-                logger.info(f"[FORCE] Found position match: {task_id_match.group(0)}")
-                position = task_id_match.group(1)
-                # Преобразуем в число
-                position_map = {"первую": 1, "первая": 1, "вторую": 2, "вторая": 2, "третью": 3, "третья": 3}
-                position_num = position_map.get(position, int(position) if position.isdigit() else 1)
-                
-                # Получаем список задач пользователя
-                tasks_result = list_tasks(user_id=user_id)
-                logger.info(f"[FORCE] Got tasks ({len(tasks_result)} chars):")
-                logger.info(f"[FORCE] tasks_result preview: {tasks_result[:200]}")
-                if tasks_result:
-                    # Парсим список задач из результата
-                    # Формат: "Задачи: 2. Название..., 3. Название..."
-                    # Извлекаем все ID в порядке появления
-                    task_ids = []
-                    for match in re.finditer(r'(\d+)\.\s+([^(]+)', tasks_result):
+    # 6. Проверка на complete_task (завершение задачи)
+    complete_triggers = [
+        r'(?:выполнил|сделал|завершил|закончил|готово)\s+(.+)',
+        r'задача\s+(.+)\s+(?:выполнена|сделана|завершена|закончена|готова)',
+        r'(.+)\s+(?:выполнено|сделано|завершено|закончено|готово)',
+        r'отметь\s+(.+)\s+как\s+(?:выполненную|сделанную|завершенную)',
+        r'пометить\s+(.+)\s+как\s+(?:выполненную|сделанную|завершенную)',
+    ]
+    
+    if any(trigger in message_lower for trigger in ["выполнил", "сделал", "завершил", "закончил", "готово", "отметь", "пометить"]):
+        logger.info(f"[FORCE] Complete task trigger detected in message")
+        if "complete_task" not in content.lower():
+            # Пытаемся извлечь название задачи
+            task_title = None
+            for pattern in complete_triggers:
+                match = re.search(pattern, message, re.IGNORECASE)
+                if match:
+                    task_title = match.group(1).strip()
+                    break
+            
+            if task_title:
+                logger.info(f"[FORCE] Triggering complete_task() - title='{task_title}'")
+                result = complete_task(task_title=task_title, user_id=user_id)
+                forced_calls.append({"function": "complete_task", "result": result})
+    
+    # 7. Проверка на edit_task (изменение задачи)
+    edit_triggers = [
+        r'(?:измени|поменяй|исправь)\s+(.+)\s+(?:на|в)\s+(.+)',
+        r'(.+)\s+(?:измени|поменяй|исправь)\s+на\s+(.+)',
+        r'время\s+(.+)\s+(?:измени|поменяй)\s+на\s+(.+)',
+        r'напомнить\s+о\s+(.+)\s+(?:в|на)\s+(.+)',
+    ]
+    
+    if any(trigger in message_lower for trigger in ["измени", "поменяй", "исправь", "время", "напомнить"]):
+        logger.info(f"[FORCE] Edit task trigger detected in message")
+        if "edit_task" not in content.lower():
+            # Пытаемся извлечь изменения
+            for pattern in edit_triggers:
+                match = re.search(pattern, message, re.IGNORECASE)
+                if match:
+                    old_part = match.group(1).strip()
+                    new_part = match.group(2).strip()
+                    
+                    # Определяем, что меняем - название или время
+                    if re.search(r'\d{1,2}:\d{2}', new_part) or 'завтра' in new_part.lower() or 'сегодня' in new_part.lower():
+                        # Это изменение времени
+                        logger.info(f"[FORCE] Detected time change: '{old_part}' → '{new_part}'")
+                        # Нужно найти задачу по названию и изменить время
+                        # Получаем список задач для поиска ID
+                        tasks_result = list_tasks(user_id=user_id)
+                        if tasks_result:
+                            # Ищем задачу по названию
+                            task_lines = tasks_result.split('\n')
+                            for line in task_lines:
+                                if old_part.lower() in line.lower():
+                                    # Извлекаем ID задачи
+                                    id_match = re.search(r'(\d+)\.\s+', line)
+                                    if id_match:
+                                        task_id = int(id_match.group(1))
+                                        # Парсим новое время
+                                        reminder_time = parse_time_from_text(new_part, user_id)
+                                        if reminder_time:
+                                            logger.info(f"[FORCE] Triggering edit_task() - id={task_id}, reminder_time={reminder_time}")
+                                            result = edit_task(task_id=task_id, reminder_time=reminder_time, user_id=user_id)
+                                            forced_calls.append({"function": "edit_task", "result": result})
+                                        break
+                    else:
+                        # Это изменение названия
+                        logger.info(f"[FORCE] Detected title change: '{old_part}' → '{new_part}'")
+                        # Ищем задачу по старому названию
+                        tasks_result = list_tasks(user_id=user_id)
+                        if tasks_result:
+                            task_lines = tasks_result.split('\n')
+                            for line in task_lines:
+                                if old_part.lower() in line.lower():
+                                    id_match = re.search(r'(\d+)\.\s+', line)
+                                    if id_match:
+                                        task_id = int(id_match.group(1))
+                                        logger.info(f"[FORCE] Triggering edit_task() - id={task_id}, title='{new_part}'")
+                                        result = edit_task(task_id=task_id, title=new_part, user_id=user_id)
+                                        forced_calls.append({"function": "edit_task", "result": result})
+                                        break
+                    break
                         task_id = int(match.group(1))
                         task_ids.append(task_id)
                     
@@ -2065,11 +2265,56 @@ def force_tool_calls(message, content, mentions_str, user_id):
         else:
             logger.info(f"[FORCE] Skipping delete - already in content")
     
+    # 8. Проверка на find_partners (поиск партнеров)
+    partners_triggers = [
+        "найди партнеров", "ищи партнеров", "покажи партнеров", "нужны партнеры",
+        "хочу найти", "ищу людей", "нужны единомышленники", "поиск коллег",
+        "кто может помочь", "кто занимается", "кто знает", "рекомендуй контакты"
+    ]
     
-    return forced_calls if forced_calls else None
-
-async def chat_with_ai(message, context=None, user_id=None, file_content=None):
-    import logging
+    if any(trigger in message_lower for trigger in partners_triggers):
+        logger.info(f"[FORCE] Find partners trigger detected in message")
+        if "find_partners" not in content.lower():
+            logger.info(f"[FORCE] Triggering find_partners()")
+            result = find_partners(user_id=user_id)
+            forced_calls.append({"function": "find_partners", "result": result})
+    
+    # 9. Проверка на set_priority (установка приоритета)
+    priority_triggers = [
+        "приоритет", "важно", "срочно", "критично", "высокий приоритет",
+        "средний приоритет", "низкий приоритет", "пометить как"
+    ]
+    
+    if any(trigger in message_lower for trigger in priority_triggers):
+        logger.info(f"[FORCE] Set priority trigger detected in message")
+        if "set_priority" not in content.lower():
+            # Пытаемся извлечь задачу и приоритет
+            priority_match = re.search(r'(высокий|средний|низкий|high|medium|low)', message_lower)
+            task_match = re.search(r'задач[ау]\s+(.+?)(?:\s+(?:приоритет|важно|срочно))', message, re.IGNORECASE)
+            
+            if priority_match and task_match:
+                priority_map = {
+                    'высокий': 'high', 'high': 'high',
+                    'средний': 'medium', 'medium': 'medium',
+                    'низкий': 'low', 'low': 'low'
+                }
+                priority = priority_map.get(priority_match.group(1), 'medium')
+                task_title = task_match.group(1).strip()
+                
+                # Находим задачу по названию
+                tasks_result = list_tasks(user_id=user_id)
+                if tasks_result:
+                    task_lines = tasks_result.split('\n')
+                    for line in task_lines:
+                        if task_title.lower() in line.lower():
+                            id_match = re.search(r'(\d+)\.\s+', line)
+                            if id_match:
+                                task_id = int(id_match.group(1))
+                                logger.info(f"[FORCE] Triggering set_priority() - id={task_id}, priority={priority}")
+                                result = set_priority(task_id=task_id, priority=priority, user_id=user_id)
+                                forced_calls.append({"function": "set_priority", "result": result})
+                                break
+    
     import re
     logger = logging.getLogger(__name__)
     # Сохраняем оригинальное сообщение ДО очистки
@@ -2082,12 +2327,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {len(context) if context else 0}, user_id: {user_id}, file: {file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
     
-    # Препроцессинг: форсим list_tasks() для триггерных фраз
-    list_triggers = ["покажи", "список", "какие задач", "что у меня", "что там", "мои дела", "все задачи"]
+    # Препроцессинг: форсим list_tasks() для расширенных триггерных фраз
+    list_triggers = [
+        "покажи", "список", "какие задач", "что у меня", "что там", "мои дела", "все задачи",
+        "задачи", "список дел", "что делать", "что запланировано", "мои планы",
+        "напоминания", "что напомнить", "активные задачи", "текущие дела"
+    ]
     should_force_list = any(trigger in message.lower() for trigger in list_triggers)
     
-    # Препроцессинг: форсим add_task() для триггерных фраз создания задач
-    add_triggers = ["создай задачу", "добавь задачу", "напомни", "поставь задачу", "создать задачу", "добавить задачу"]
+    # Препроцессинг: форсим add_task() для расширенных триггерных фраз создания задач
+    add_triggers = [
+        "создай задачу", "добавь задачу", "напомни", "поставь задачу", "создать задачу", "добавить задачу",
+        "запланируй", "запомни", "не забудь", "нужно сделать", "надо сделать", "хочу сделать",
+        "купить", "почистить", "приготовить", "позвонить", "написать", "встретиться",
+        "заказать", "забронировать", "записаться", "сходить", "съездить"
+    ]
     should_force_add = any(trigger in message.lower() for trigger in add_triggers)
     
     if not DEEPSEEK_API_KEY:
