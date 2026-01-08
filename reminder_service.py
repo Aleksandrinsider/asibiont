@@ -6,6 +6,7 @@ from models import Task, User
 from datetime import datetime, timedelta
 import pytz
 import logging
+import json
 from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES
 
 logger = logging.getLogger(__name__)
@@ -122,11 +123,12 @@ class ReminderService:
                 # Установить pending_action для обработки ответа пользователя
                 user = db.query(User).filter(User.telegram_id == user_id).first()
                 if user:
-                    import json
+                    from datetime import datetime, timezone
                     pending_data = {
                         "type": "result_check_response",
                         "task_id": task_id,
-                        "task_title": task_title
+                        "task_title": task_title,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                     user.pending_action = json.dumps(pending_data)
                     logger.info(f"Устанавливаем pending_action: {user.pending_action}")
@@ -555,9 +557,19 @@ class ReminderService:
             db.close()
 
     async def send_overdue_reminder(self, user_id: int, overdue_tasks: list):
-        """Отправка напоминания о просроченных задачах"""
+        """Отправка напоминания о просроченных задачах с эскалацией"""
+        from models import Session, Task
+        
+        db = Session()
         try:
-            overdue_text = await self.ai_service.generate_overdue_reminder(user_id, overdue_tasks)
+            # Обновляем счётчики напоминаний для просроченных задач
+            for task in overdue_tasks:
+                task.overdue_reminders_sent = (task.overdue_reminders_sent or 0) + 1
+            db.commit()
+            
+            # Генерируем текст напоминания с учётом эскалации
+            max_reminders = max(task.overdue_reminders_sent for task in overdue_tasks)
+            overdue_text = await self.ai_service.generate_overdue_reminder(user_id, overdue_tasks, escalation_level=max_reminders)
             
             if self.bot:
                 await self.bot.send_message(
@@ -569,4 +581,6 @@ class ReminderService:
         except Exception as e:
             import logging
             logging.error(f"Failed to send overdue reminder to user {user_id}: {e}")
+        finally:
+            db.close()
 

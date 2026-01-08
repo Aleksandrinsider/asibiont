@@ -37,6 +37,10 @@ class Task(Base):
     delegated_to_username = Column(String(255))  # Username of the person who should do it
     delegation_status = Column(String(50), default=None)  # None, pending, accepted, rejected
     delegation_details = Column(Text)  # Additional details about delegation
+    completion_notes = Column(Text)  # Notes about task completion/result
+    actual_completion_time = Column(DateTime)  # When task was actually completed
+    skipped_reason = Column(String(255))  # Reason if task was skipped/cancelled
+    overdue_reminders_sent = Column(Integer, default=0)  # Number of overdue reminders sent
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])

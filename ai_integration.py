@@ -243,6 +243,8 @@ def get_system_prompt():
 - Будь развёрнутым и содержательным, давай полезную информацию, задавай дополнительные вопросы
 - Используй живые фразы, хвали успехи, обсуждай проблемы
 - Не будь пассивным — каждый ответ должен двигать к цели
+- ЗАДАВАЙ УТОЧНЯЮЩИЕ ВОПРОСЫ: Если запрос неясен, всегда спрашивай детали. Лучше переспросить, чем угадывать. После каждого действия спрашивай "Что дальше?" или "Нужно ли что-то ещё?"
+- БУДЬ ГИБКИМ: Адаптируйся под ситуацию, не зацикливайся на одном. Если пользователь повторяет запрос, предлагай новые идеи или переходи к другой теме. Учитывай предыдущие сообщения в контексте — не повторяй одни и те же фразы, используй разнообразные формулировки.
 
 ИНСТРУМЕНТЫ (всегда используй, не описывай):
 - add_task(title, reminder_time, description, due_date, user_id)
@@ -272,7 +274,7 @@ def get_system_prompt():
 - Не спрашивай разрешения на list_tasks() — просто проверь
 
 ПРИВЕТСТВИЕ:
-При приветствии: вызови list_tasks(), поприветствуй тепло, дай краткую сводку (просроченные, срочные, делегированные), задай 2-3 вопроса о планах и приоритетах, предложи найти партнёров если есть интересы в профиле. Будь инициативным и вовлекающим.
+При приветствии: вызови list_tasks(), поприветствуй тепло, дай краткую сводку (просроченные, срочные, делегированные), задай 2-3 вопроса о планах и приоритетах, предложи найти партнёров если есть интересы в профиле. Будь инициативным и вовлекающим. Всегда спрашивай: "Что планируешь сегодня?", "Есть ли срочные дела?", "Нужно ли обновить профиль?"
 
 ПРИОРИТЕТЫ:
 Всегда устанавливай приоритет для новых задач. Высокий — срочные дедлайны, средний — регулярные задачи, низкий — можно отложить. После add_task() сразу set_priority(). Предлагай пересмотреть приоритеты при просмотре списка.
@@ -285,7 +287,7 @@ def get_system_prompt():
 4. Ожидаемый результат
 5. Конкретное время
 
-Если пользователь пишет общую задачу — задай 1-2 уточняющих вопроса, предложи улучшенную формулировку, затем добавь.
+Если пользователь пишет общую задачу — ОБЯЗАТЕЛЬНО задай 1-2 уточняющих вопроса, предложи улучшенную формулировку, затем добавь. Никогда не добавляй задачу без уточнения, если она неполная. Спрашивай: "Что именно нужно сделать?", "Когда?", "Зачем?", "Какой результат ожидаешь?"
 
 ОБНОВЛЕНИЕ ПРОФИЛЯ:
 Когда упоминается информация для профиля, проактивно предлагай добавить. Категории:
@@ -298,6 +300,9 @@ def get_system_prompt():
 
 ПОИСК ПАРТНЁРОВ:
 - "Найди X" → find_partners()
+- Функция анализирует профили И ЗАДАЧИ других пользователей
+- Предлагает совместные идеи на основе общих тем в задачах
+- Показывает совпадения по интересам, навыкам, целям И задачам
 - Проактивно предлагай конкретных людей с объяснением ПОЧЕМУ они подходят
 - Показывай имена через @username и конкретные совпадения ("у него тоже бег", "коллега из твоей компании")
 - После поиска всегда предлагай написать конкретному человеку: "Напиши @user, предложи вместе бегать!"
@@ -608,7 +613,7 @@ def list_tasks(user_id=None, session=None):
     return "Нет задач."
 
 def complete_task(task_id=None, task_title=None, user_id=None, session=None):
-    from models import Session, Task, UserProfile
+    from models import Session, Task, UserProfile, Interaction
     from datetime import datetime
     from sqlalchemy import or_
     if session is None:
@@ -656,6 +661,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     
     if task:
         task.status = "completed"
+        task.actual_completion_time = datetime.now(timezone.utc)
         session.commit()
         
         # Обновить аналитику профиля
@@ -869,6 +875,69 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
     except Exception as e:
         session.close()
         return f"Ошибка при создании делегированной задачи: {str(e)}"
+
+def suggest_alternatives(task_id, reason="", user_id=None):
+    """Предложить альтернативы для невыполненной задачи через AI"""
+    import asyncio
+    return asyncio.run(_suggest_alternatives_async(task_id, reason, user_id))
+
+async def _suggest_alternatives_async(task_id, reason="", user_id=None):
+    from models import Session, Task
+    
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+        
+        task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+        if not task:
+            return "Задача не найдена."
+        
+        # Получить память пользователя
+        user_memory = ""
+        if user.memory:
+            try:
+                user_memory = f"\nИнформация о пользователе: {decrypt_data(user.memory)}"
+            except:
+                user_memory = ""
+        
+        # Генерируем альтернативы через AI
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        base_prompt = get_system_prompt()
+        system_prompt = f"{base_prompt}\nТы предлагаешь 3-5 конкретных альтернативных подходов к решению задачи '{task.title}'. Учитывай причину невыполнения: '{reason}'. Будь практичным и конкретным.{user_memory}"
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Предложи альтернативы для задачи: {task.title}"}
+        ]
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": messages,
+            "max_tokens": 500
+        }
+        
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    content = clean_technical_details(content)
+                    return content
+                else:
+                    return "Не удалось сгенерировать альтернативы."
+                    
+    except Exception as e:
+        return f"Ошибка при генерации альтернатив: {str(e)}"
+    finally:
+        session.close()
 
 def accept_delegated_task(task_id, user_id=None):
     """Accept a delegated task"""
@@ -1313,7 +1382,8 @@ def get_partners_list(user_id=None, session=None):
     return sorted_partners[:20]
 
 def find_partners(user_id=None, session=None):
-    from models import Session, UserProfile, User
+    import re
+    from models import Session, UserProfile, User, Task
     if session is None:
         session = Session()
         close_session = True
@@ -1324,6 +1394,16 @@ def find_partners(user_id=None, session=None):
         if close_session:
             session.close()
         return "Пользователь не найден."
+    
+    # Получаем задачи текущего пользователя для анализа совместных идей
+    user_tasks = session.query(Task).filter_by(user_id=user.id).all()
+    user_task_keywords = set()
+    for task in user_tasks:
+        # Извлекаем ключевые слова из названий и описаний задач
+        import re
+        words = re.findall(r'\b\w+\b', (task.title + " " + (task.description or "")).lower())
+        user_task_keywords.update(words)
+    
     # Остальной код...
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
@@ -1376,6 +1456,21 @@ def find_partners(user_id=None, session=None):
             
             score = 0
             matched_fields = []
+            
+            # Анализ задач для совместных идей
+            partner_user = session.query(User).filter_by(id=p.user_id).first()
+            if partner_user:
+                partner_tasks = session.query(Task).filter_by(user_id=partner_user.id).all()
+                partner_task_keywords = set()
+                for task in partner_tasks:
+                    words = re.findall(r'\b\w+\b', (task.title + " " + (task.description or "")).lower())
+                    partner_task_keywords.update(words)
+                
+                # Находим пересечения ключевых слов задач
+                common_keywords = user_task_keywords & partner_task_keywords
+                if common_keywords:
+                    score += len(common_keywords) * 8  # 8 баллов за каждое совпадение
+                    matched_fields.append(f"совместные задачи: {', '.join(list(common_keywords)[:3])}")
             
             # Проверка интересов с приоритетом точного совпадения
             if user_profile.interests and p.interests:
@@ -1481,11 +1576,29 @@ def find_partners(user_id=None, session=None):
             info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
             response += f"{idx}. @{p.contact_info}\n   {info_str}\n"
         
+        # Добавляем предложения совместных идей на основе задач
+        joint_ideas = []
+        for p in partners[:3]:
+            if p in partner_scores:
+                score, matched = partner_scores[p]
+                # Если есть совпадение по задачам, предлагаем совместную идею
+                task_matches = [m for m in matched if m.startswith("совместные задачи")]
+                if task_matches:
+                    partner_user = session.query(User).filter_by(id=p.user_id).first()
+                    if partner_user:
+                        partner_tasks = session.query(Task).filter_by(user_id=partner_user.id).all()
+                        for pt in partner_tasks[:2]:  # Проверяем первые 2 задачи
+                            for ut in user_tasks[:2]:
+                                common_words = set(re.findall(r'\b\w+\b', (pt.title + " " + (pt.description or "")).lower())) & set(re.findall(r'\b\w+\b', (ut.title + " " + (ut.description or "")).lower()))
+                                if common_words:
+                                    joint_ideas.append(f"💡 @{p.contact_info} тоже работает над '{pt.title}' — можно объединиться для совместного изучения {', '.join(list(common_words)[:2])}!")
+                                    break
+                            if joint_ideas and len(joint_ideas) >= 2:  # Максимум 2 идеи
+                                break
+        
         response = response.rstrip("\n")
-    if tips:
-        response += " ".join(tips[:2])
-    if not response:
-        response = "Люди не найдены. Попробуйте обновить профиль с более подробной информацией о интересах. Или пригласите друзей и знакомых присоединиться к сообществу ASI Biont — так у вас появится больше возможностей для общения и совместных проектов! 😊"
+        if joint_ideas:
+            response += "\n\n" + "\n".join(joint_ideas[:2])
     return response
 
 def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, timezone=None, company=None, position=None, user_id=None, session=None):
@@ -1756,6 +1869,21 @@ TOOLS = [
                     "company": {"type": "string", "description": "Компания, в которой работает пользователь, опционально"},
                     "position": {"type": "string", "description": "Должность пользователя, опционально"}
                 }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_alternatives",
+            "description": "Предложить альтернативы для невыполненной задачи: перенести, разбить на части, делегировать, найти партнёра",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи"},
+                    "reason": {"type": "string", "description": "Причина невыполнения (опционально)"}
+                },
+                "required": ["task_id"]
             }
         }
     }
@@ -2283,6 +2411,8 @@ def force_tool_calls(message, content, mentions_str, user_id):
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     import re
+    from datetime import datetime, timezone, timedelta
+    import pytz
     logger = logging.getLogger(__name__)
     
     # Ensure context is a list or None
@@ -2467,6 +2597,64 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
             
+            # Обработка pending_action
+            if user and user.pending_action:
+                try:
+                    pending_data = json.loads(user.pending_action)
+                    action_type = pending_data.get('type')
+                    
+                    # Проверка на таймаут (24 часа)
+                    timestamp = pending_data.get('timestamp')
+                    if timestamp:
+                        created_at = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        if datetime.now(timezone.utc) - created_at > timedelta(hours=24):
+                            logger.info(f"Pending action timed out for user {user_id}, clearing")
+                            user.pending_action = None
+                            session.commit()
+                            # Продолжить с обычной обработкой
+                            pass
+                        else:
+                            # Продолжить обработку pending_action
+                            pass
+                    
+                    if action_type == 'result_check_response':
+                        task_id = pending_data.get('task_id')
+                        task_title = pending_data.get('task_title')
+                        # Сохранить ответ пользователя как completion_notes
+                        task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+                        if task:
+                            task.completion_notes = original_message  # Сохраняем полный ответ пользователя
+                            session.commit()
+                        # Очистить pending_action
+                        user.pending_action = None
+                        session.commit()
+                        # Вернуть специальный ответ для обработки результата
+                        return f"Спасибо за информацию о задаче '{task_title}'! Результат сохранён для анализа."
+                    
+                    elif action_type == 'task_skip_confirmation':
+                        task_id = pending_data.get('task_id')
+                        task_title = pending_data.get('task_title')
+                        # Обработать ответ пользователя о пропуске задачи
+                        task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+                        if task:
+                            if 'да' in original_message.lower() or 'пропустить' in original_message.lower():
+                                task.status = 'cancelled'
+                                task.skipped_reason = original_message
+                                session.commit()
+                                user.pending_action = None
+                                session.commit()
+                                return f"Задача '{task_title}' отмечена как пропущенная. Могу предложить альтернативы или создать новую задачу."
+                            else:
+                                user.pending_action = None
+                                session.commit()
+                                return f"Хорошо, оставляем задачу '{task_title}' активной. Чем могу помочь?"
+                        user.pending_action = None
+                        session.commit()
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.error(f"Error processing pending_action: {e}")
+                    user.pending_action = None
+                    session.commit()
+            
             session.close()
         
         # Construct system prompt with replaced placeholders
@@ -2490,6 +2678,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             system_prompt += "\n\n🚨 ПОЛЬЗОВАТЕЛЬ ПРОСИТ СОЗДАТЬ ЗАДАЧУ - ОБЯЗАТЕЛЬНО ВЫЗОВИ add_task() С ПАРАМЕТРАМИ! НЕ ПРОСТО ГОВОРИ ОБ ЭТОМ - ВЫПОЛНИ!"
         
         system_prompt += user_memory
+        
+        # Добавляем информацию о повторяющихся запросах
+        if context and len(context) > 0:
+            system_prompt += "\n\n⚠️ ПОЛЬЗОВАТЕЛЬ ПОВТОРЯЕТ ЗАПРОС - НЕ ПОВТОРЯЙ ПРЕДЫДУЩИЕ ОТВЕТЫ! Предлагай что-то новое: анализ задач, поиск партнеров, обновление профиля, или задай другие вопросы."
         
         # 🎯 Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -2642,6 +2834,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             result = set_priority(user_id=user_id, **args)
                                         elif func_name == 'get_task_details':
                                             result = get_task_details(user_id=user_id, **args)
+                                        elif func_name == 'suggest_alternatives':
+                                            result = suggest_alternatives(user_id=user_id, **args)
                                         else:
                                             result = f"Неизвестная функция: {func_name}"
                                 
@@ -3144,7 +3338,7 @@ async def generate_daily_report(user_id):
         print(f"Error in generate_daily_report: {e}")
         return "Отчет о задачах."
 
-async def generate_overdue_reminder(user_id, overdue_tasks):
+async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
     """Генерирует напоминание о просроченных задачах"""
     try:
         task_titles = [t.title for t in overdue_tasks]
@@ -3168,7 +3362,16 @@ async def generate_overdue_reminder(user_id, overdue_tasks):
             "Content-Type": "application/json"
         }
         base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы генерируешь строгое, мотивирующее напоминание о просроченных задачах: {', '.join(task_titles)}. Будь краток, напомни о последствиях.{user_memory}"
+        
+        # Адаптируем тон в зависимости от уровня эскалации
+        if escalation_level == 1:
+            tone_instruction = "Будь дружелюбным, но настойчивым. Напомни о важности выполнения задач."
+        elif escalation_level == 2:
+            tone_instruction = "Будь более строгим. Подчеркни негативные последствия невыполнения."
+        else:  # 3+
+            tone_instruction = "Будь очень строгим и мотивирующим. Предложи конкретные альтернативы и помощь."
+        
+        system_prompt = f"{base_prompt}\nТы генерируешь напоминание о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.{user_memory}"
         
         messages = [
             {"role": "system", "content": system_prompt},
