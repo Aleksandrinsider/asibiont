@@ -1448,29 +1448,8 @@
                     cachedPartnersData = newDataString;
                     
                     if (data.partners && data.partners.length > 0) {
-                        // Sort partners by rating: highest (>=5) first, then no rating (0), then lowest (<5)
-                        data.partners.sort((a, b) => {
-                            const ratingA = a.average_rating || 0;
-                            const ratingB = b.average_rating || 0;
-                            
-                            // Define groups: high (>=5), none (0), low (<5 but >0)
-                            const getGroup = (rating) => {
-                                if (rating === 0) return 1; // No rating - middle
-                                if (rating >= 5) return 0; // High rating - first
-                                return 2; // Low rating (<5) - last
-                            };
-                            
-                            const groupA = getGroup(ratingA);
-                            const groupB = getGroup(ratingB);
-                            
-                            // Sort by group first
-                            if (groupA !== groupB) {
-                                return groupA - groupB;
-                            }
-                            
-                            // Within same group, sort by rating (descending)
-                            return ratingB - ratingA;
-                        });
+                        // Partners are already sorted by server: first by city (same city first), then by rating
+                        // No need to re-sort here
                         
                         let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                         data.partners.forEach(partner => {
