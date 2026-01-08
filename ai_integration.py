@@ -2360,9 +2360,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
                     logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
                 except Exception as e:
+                    logger.error(f"Error setting user timezone: {e}")
                     user_tz = pytz.UTC
-                user_now = base_now
-                current_time_str = user_now.strftime("%H:%M")
+                    user_now = base_now
+                    current_time_str = user_now.strftime("%H:%M")
         
         if user and user.memory:
                 try:
