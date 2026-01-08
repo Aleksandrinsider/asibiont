@@ -1456,7 +1456,7 @@
                             const displayStyle = partner.type === 'recommended' ? 'flex' : 'none';
                             
                             if (partner.type === 'recommended' && partner.contact_info) {
-                                html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 0px;">`;
+                                html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 0px; align-items: center;">`;
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                 if (partner.telegram_id) {
                                     const fallbackId = `fallback-rec-${partner.telegram_id}`;
@@ -1478,11 +1478,11 @@
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
+                                if (partner.city) {
+                                    html += `<span class="task-meta">Город: ${partner.city}</span><br>`;
+                                }
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
-                                }
-                                if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
                                 }
                                 if (partner.company) {
                                     html += `<span class="task-meta">Компания: ${partner.company}</span>`;
@@ -1515,7 +1515,7 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
-                                html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 0px;">`;
+                                html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 0px; align-items: center;">`;
                                 if (partner.telegram_id) {
                                     const fallbackId = `fallback-del-to-${partner.telegram_id}`;
                                     const imgId = `img-del-to-${partner.telegram_id}`;
@@ -1536,11 +1536,11 @@
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
+                                if (partner.city) {
+                                    html += `<span class="task-meta">Город: ${partner.city}</span><br>`;
+                                }
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
-                                }
-                                if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
                                 }
                                 if (partner.company) {
                                     html += `<span class="task-meta">Компания: ${partner.company}</span>`;
@@ -1573,7 +1573,7 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
-                                html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 0px;">`;
+                                html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 0px; align-items: center;">`;
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 if (partner.telegram_id) {
                                     const fallbackId = `fallback-del-by-${partner.telegram_id}`;
@@ -1596,11 +1596,11 @@
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
+                                if (partner.city) {
+                                    html += `<span class="task-meta">Город: ${partner.city}</span><br>`;
+                                }
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
-                                }
-                                if (partner.city) {
-                                    html += `<span class="task-meta">Город: ${partner.city}</span>`;
                                 }
                                 if (partner.company) {
                                     html += `<span class="task-meta">Компания: ${partner.company}</span>`;
