@@ -127,7 +127,6 @@
                         <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
-                        <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегирую я</button>
                     </div>
                     <div class="people-list" id="people-list">
@@ -1496,6 +1495,10 @@
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
+                                // Количество делегированных задач сразу под ником
+                                if (partner.task_count) {
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                }
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
@@ -1554,7 +1557,7 @@
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегировал мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
@@ -1614,7 +1617,7 @@
                                 html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">я делегировал ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
                                 }
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px; flex-wrap: wrap;">';
                                 if (partner.position) {
