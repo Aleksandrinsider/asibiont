@@ -280,12 +280,23 @@
             return 'задач';
         }
         
+        // Глобальная переменная для отслеживания доступности avatar API
+        let avatarServiceAvailable = true;
+        let avatarCheckDone = false;
+        
         // Функция обработки ошибки загрузки аватара
         function handleAvatarError(img, fallbackId) {
+            // Отключаем сервис аватаров после первой ошибки
+            if (!avatarCheckDone) {
+                avatarServiceAvailable = false;
+                avatarCheckDone = true;
+            }
             // Fallback уже виден, ничего не делаем
         }
         
         function handleAvatarLoad(img, fallbackId) {
+            avatarServiceAvailable = true;
+            avatarCheckDone = true;
             img.style.display = 'block';
             const fallback = document.getElementById(fallbackId);
             if (fallback) {
@@ -1465,7 +1476,7 @@
                             if (partner.type === 'recommended' && partner.contact_info) {
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 8px; align-items: center;">`;
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                                if (partner.telegram_id) {
+                                if (partner.telegram_id && avatarServiceAvailable) {
                                     const fallbackId = `fallback-rec-${partner.telegram_id}`;
                                     const imgId = `img-rec-${partner.telegram_id}`;
                                     html += `<div style="margin-right: 12px; flex-shrink: 0;">`;
@@ -1536,7 +1547,7 @@
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
                                 html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
-                                if (partner.telegram_id) {
+                                if (partner.telegram_id && avatarServiceAvailable) {
                                     const fallbackId = `fallback-del-to-${partner.telegram_id}`;
                                     const imgId = `img-del-to-${partner.telegram_id}`;
                                     html += `<div style="margin-right: 12px; flex-shrink: 0;">`;
