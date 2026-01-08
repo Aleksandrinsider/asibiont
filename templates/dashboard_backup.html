@@ -1480,14 +1480,17 @@
                                 if (partner.city) {
                                     html += `<span class="task-meta">Город: ${partner.city}</span>`;
                                 }
-                                if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
-                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
+                                if (partner.city || partner.position) {
+                                    html += '<br>';
+                                }
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                }
+                                if (partner.company) {
+                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
                                 }
                                 if (partner.common_interests) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
@@ -1541,14 +1544,17 @@
                                 if (partner.city) {
                                     html += `<span class="task-meta">Город: ${partner.city}</span>`;
                                 }
-                                if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
-                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
+                                if (partner.city || partner.position) {
+                                    html += '<br>';
+                                }
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                }
+                                if (partner.company) {
+                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
                                 }
                                 if (partner.common_interests) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
@@ -1600,14 +1606,17 @@
                                 if (partner.city) {
                                     html += `<span class="task-meta">Город: ${partner.city}</span>`;
                                 }
-                                if (partner.company) {
-                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
-                                }
                                 if (partner.position) {
                                     html += `<span class="task-meta">Должность: ${partner.position}</span>`;
                                 }
+                                if (partner.city || partner.position) {
+                                    html += '<br>';
+                                }
                                 if (partner.interests) {
                                     html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                }
+                                if (partner.company) {
+                                    html += `<span class="task-meta">Компания: ${partner.company}</span>`;
                                 }
                                 if (partner.common_interests) {
                                     html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
