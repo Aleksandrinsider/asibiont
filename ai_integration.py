@@ -227,6 +227,9 @@ def clean_technical_details(text):
 
     return text.strip()
 
+# Alias for backward compatibility
+clean_content = clean_technical_details
+
 def get_system_prompt():
     return f"""Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как заинтересованный собеседник, который искренне хочет помочь достичь целей.
 

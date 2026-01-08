@@ -9,6 +9,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 import aiohttp
 from aiohttp import web
+import aiohttp_cors
 import aiohttp_jinja2
 import jinja2
 from redis.asyncio import Redis
@@ -966,6 +967,15 @@ except Exception as e:
 
 # Global app for Railway
 app = web.Application()
+
+# Setup CORS
+cors = aiohttp_cors.setup(app, defaults={
+    "*": aiohttp_cors.ResourceOptions(
+        allow_credentials=True,
+        expose_headers="*",
+        allow_headers="*",
+    )
+})
 
 # Add bot to app
 if bot:
