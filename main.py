@@ -366,6 +366,12 @@ async def dashboard_handler(request):
             logger.error(f"Error getting partners: {e}")
             partners = []
         
+        except Exception as e:
+            logger.error(f"Error building partners/delegations: {e}", exc_info=True)
+            partners = []
+            delegating_to_me = []
+            delegating_by_me = []
+        
         # Add common interests, skills, goals and recommendation reason
         if profile and partners:
             user_interests = set(i.strip().lower() for i in profile.interests.split(',')) if profile.interests else set()
