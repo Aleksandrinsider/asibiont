@@ -1168,6 +1168,14 @@ async def api_partners_handler(request):
             if hidden_contacts:
                 delegating_to_me = [c for c in delegating_to_me if c.get('username') and c.get('username').replace('@', '').lower() not in hidden_contacts]
                 delegating_by_me = [c for c in delegating_by_me if c.get('username') and c.get('username').replace('@', '').lower() not in hidden_contacts]
+        
+        except Exception as e:
+            logger.error(f"Error processing partners data: {e}", exc_info=True)
+            partners = []
+            delegating_to_me = []
+            delegating_by_me = []
+            profile = None
+            interactions = []
                 
         # Add common interests, skills, goals and recommendation reason
         if profile and partners:
