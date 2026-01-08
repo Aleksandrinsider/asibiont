@@ -1630,6 +1630,12 @@ async def api_avatar_handler(request):
     
     try:
         telegram_id = int(telegram_id)
+        
+        # Check if bot is available
+        if 'bot' not in request.app or not request.app['bot']:
+            logger.warning(f"Bot not available for avatar request: {telegram_id}")
+            return web.Response(status=404, text='Avatar service unavailable')
+        
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id)
         
         if avatar_url:
