@@ -548,13 +548,13 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             except ValueError:
                 pass
         if description:
-            existing_task.description = description
+            existing_task.description = encrypt_data(description)
         session.commit()
         task_id = existing_task.id
         task = existing_task  # Для дальнейшего использования
     else:
         # Создать новую задачу
-        task = Task(user_id=user.id, title=title, description=description)
+        task = Task(user_id=user.id, title=title, description=encrypt_data(description))
         if reminder_time:
             try:
                 # Получить timezone пользователя
@@ -877,7 +877,7 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
             task = Task(
                 user_id=delegator.id,
                 title=title,
-                description=description,
+                description=encrypt_data(description),
                 status='pending'
             )
             if reminder_time:
@@ -920,7 +920,7 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
         task = Task(
             user_id=delegator.id,
             title=title,
-            description=description,
+            description=encrypt_data(description),
             delegated_by=None,
             delegated_to_username=recipient_username,
             delegation_status='pending',
@@ -1244,7 +1244,7 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
         if title:
             task.title = title
         if description:
-            task.description = description
+            task.description = encrypt_data(description)
         if reminder_time:
             try:
                 reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)

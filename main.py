@@ -5,6 +5,11 @@ import pytz
 import hashlib
 import hmac
 import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 import aiohttp
@@ -511,7 +516,7 @@ async def dashboard_handler(request):
             task_dict = {
                 'id': task.id,
                 'title': task.title,
-                'description': task.description or '',
+                'description': decrypt_data(task.description) if task.description else '',
                 'status': task.status,
                 'reminder_time': reminder_time_iso,  # Для группировки в JS
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
@@ -779,11 +784,22 @@ async def clear_user_tasks_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
         
         # Count tasks before deletion
-        task_count = session_db.query(Task).filter_by(user_id=user.id).count()
+        from sqlalchemy import or_
+        task_count = session_db.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        ).count()
         logger.info(f"User {user_id} has {task_count} tasks to clear")
         
-        # Clear user's tasks
-        session_db.query(Task).filter_by(user_id=user.id).delete()
+        # Clear user's tasks (both created by user and delegated to user)
+        session_db.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        ).delete()
         session_db.commit()
         logger.info(f"User {user_id} tasks cleared successfully")
         return web.json_response({'message': 'Tasks cleared'})
@@ -1249,7 +1265,8 @@ async def api_partners_handler(request):
                     if task.title:
                         user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
                     if task.description:
-                        user_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                        decrypted_desc = decrypt_data(task.description)
+                        user_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
                 
                 # Get partner's tasks
                 partner_user = session_db.query(User).filter_by(id=p.user_id).first()
@@ -1260,7 +1277,8 @@ async def api_partners_handler(request):
                         if task.title:
                             partner_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
                         if task.description:
-                            partner_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                            decrypted_desc = decrypt_data(task.description)
+                            partner_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
                     
                     common_task_words = user_task_keywords & partner_task_keywords
                     p.common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None
@@ -1328,7 +1346,8 @@ async def api_partners_handler(request):
                     if task.title:
                         user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
                     if task.description:
-                        user_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                        decrypted_desc = decrypt_data(task.description)
+                        user_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
                 
                 # Get delegator's tasks
                 delegator_user = session_db.query(User).filter_by(id=contact['id']).first()
@@ -1339,7 +1358,8 @@ async def api_partners_handler(request):
                         if task.title:
                             delegator_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
                         if task.description:
-                            delegator_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                            decrypted_desc = decrypt_data(task.description)
+                            delegator_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
                     
                     common_task_words = user_task_keywords & delegator_task_keywords
                     common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
@@ -1403,7 +1423,8 @@ async def api_partners_handler(request):
                     if task.title:
                         user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
                     if task.description:
-                        user_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                        decrypted_desc = decrypt_data(task.description)
+                        user_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
                 
                 # Get delegatee's tasks
                 delegatee_user = session_db.query(User).filter_by(id=contact['id']).first()
@@ -1414,7 +1435,8 @@ async def api_partners_handler(request):
                         if task.title:
                             delegatee_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
                         if task.description:
-                            delegatee_task_keywords.update(word.strip().lower() for word in task.description.split() if len(word.strip()) > 2)
+                            decrypted_desc = decrypt_data(task.description)
+                            delegatee_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
                     
                     common_task_words = user_task_keywords & delegatee_task_keywords
                     common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
