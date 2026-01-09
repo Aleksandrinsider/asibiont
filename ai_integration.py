@@ -208,6 +208,18 @@ def clean_technical_details(text):
     # Удаляем пустые блоки кода
     text = re.sub(r'```\s*```', '', text)
 
+    # КРИТИЧЕСКИ ВАЖНО: Удаляем JSON блоки с tool_calls - они не должны попадать в ответ пользователю
+    # Удаляем полные JSON блоки с tool_calls
+    text = re.sub(r'```json\s*\{[^}]*"tool_calls"[^}]*\}```', '', text, flags=re.DOTALL)
+    text = re.sub(r'```json.*?tool_calls.*?(```|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Удаляем любые оставшиеся JSON блоки с tool_calls
+    text = re.sub(r'\{[^}]*"tool_calls"[^}]*\}', '', text, flags=re.DOTALL)
+    text = re.sub(r'"tool_calls"\s*:\s*\[.*?\]', '', text, flags=re.DOTALL)
+    # Удаляем любые JSON блоки в кодовых блоках, если они содержат tool_calls
+    text = re.sub(r'```json[\s\S]*?tool_calls[\s\S]*?```', '', text, flags=re.IGNORECASE)
+    # Удаляем любые оставшиеся ```json блоки
+    text = re.sub(r'```json[\s\S]*?```', '', text, flags=re.IGNORECASE)
+
     # Убираем множественные пробелы и пустые строки
     text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
     text = re.sub(r'\s+', ' ', text)  # Убираем лишние пробелы
