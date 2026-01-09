@@ -194,7 +194,7 @@ async def dashboard_handler(request):
     session = await get_session(request)
     try:
         user_id = session.get('user_id')
-        logger.info(f"User ID from session: {user_id}")
+        logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
         
         logged_in = bool(user_id)
         
