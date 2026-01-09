@@ -328,6 +328,7 @@ def get_system_prompt():
 - list_tasks(user_id) — обязателен при любом упоминании задач
 - complete_task(task_id или task_title, user_id)
 - delete_task(task_id или task_title, user_id)
+- delete_all_tasks(user_id) — удаляет все задачи пользователя
 - edit_task(task_id, title, description, reminder_time, user_id)
 - set_priority(task_id, priority, user_id) — высокий/средний/низкий
 - get_task_details(task_id, user_id)
@@ -347,6 +348,7 @@ def get_system_prompt():
 - Упоминание задач → сначала list_tasks()
 - "Покажи задачи" → list_tasks()
 - "Добавь задачу X" → add_task()
+- "Удали все задачи", "Очисти список задач" → delete_all_tasks()
 - "Найди X" → find_partners()
 - "Поручи @user X" → delegate_task() (в title без слов "задачу", "задача")
 - "Выполнил X" → complete_task(), затем спроси как прошло
@@ -1317,6 +1319,29 @@ def delete_task(task_id=None, task_title=None, user_id=None):
         result = "Задача не найдена."
     session.close()
     return result
+
+def delete_all_tasks(user_id=None):
+    from models import Session, Task
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        session.close()
+        return "Пользователь не найден."
+    
+    # Удаляем все задачи пользователя
+    tasks_to_delete = session.query(Task).filter_by(user_id=user.id).all()
+    deleted_count = len(tasks_to_delete)
+    
+    for task in tasks_to_delete:
+        session.delete(task)
+    
+    session.commit()
+    session.close()
+    
+    if deleted_count > 0:
+        return f"Удалено {deleted_count} задач."
+    else:
+        return "У вас нет задач для удаления."
 
 def set_priority(task_id, priority, user_id=None):
     from models import Session, Task
@@ -2660,6 +2685,14 @@ def force_tool_calls(message, content, mentions_str, user_id):
             result = cancel_subscription(user_id=user_id)
             forced_calls.append({"function": "cancel_subscription", "result": result})
     
+    # Триггеры для удаления всех задач
+    delete_all_triggers = ["удали все задачи", "удалить все задачи", "очисти список задач", "очистить все задачи", "delete all tasks"]
+    if any(trigger in message_lower for trigger in delete_all_triggers):
+        if "delete_all_tasks" not in content.lower() and "Args for delete_all_tasks" not in content:
+            logger.info("[FORCE] Triggering delete_all_tasks() - delete all request detected")
+            result = delete_all_tasks(user_id=user_id)
+            forced_calls.append({"function": "delete_all_tasks", "result": result})
+    
     return forced_calls if forced_calls else None
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
@@ -3089,6 +3122,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             tool_results.append("ВАЖНО: ОБЯЗАТЕЛЬНО спроси пользователя о результатах выполнения: 'Расскажите, как прошло выполнение? Какие были результаты?'")
                                         elif func_name == 'delete_task':
                                             result = delete_task(user_id=user_id, **args)
+                                        elif func_name == 'delete_all_tasks':
+                                            result = delete_all_tasks(user_id=user_id)
                                         elif func_name == 'delegate_task':
                                             result = delegate_task(user_id=user_id, **args)
                                         elif func_name == 'find_partners':
