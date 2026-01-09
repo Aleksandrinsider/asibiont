@@ -15,10 +15,10 @@ def check_subscription(user_id):
     finally:
         session.close()
 
-def create_subscription_payment(user_id, plan='monthly'):
-    """Создает платеж для подписки"""
-    amount = "3000.00" if plan == 'monthly' else "30000.00"  # Цена за месяц/год
-    description = f"Подписка ASI Biont на {'месяц' if plan == 'monthly' else 'год'}"
+def create_subscription_payment(user_id):
+    """Создает платеж для месячной подписки"""
+    amount = "3000.00"  # Цена за месяц
+    description = f"Подписка ASI Biont на месяц"
     return create_payment(amount, description, user_id)
 
 def cancel_subscription(user_id):

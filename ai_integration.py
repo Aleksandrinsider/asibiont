@@ -335,7 +335,7 @@ def get_system_prompt():
 - update_profile(user_id, city, company, position, interests, skills, goals)
 - update_user_memory(user_id, memory)
 - set_reminder(task_id, reminder_time, user_id)
-- create_subscription_payment(plan, user_id) — для оформления подписки
+- create_subscription_payment(user_id) — для оформления месячной подписки
 - check_subscription_status(user_id) — проверка статуса подписки
 - cancel_subscription(user_id) — отмена подписки
 
@@ -1030,12 +1030,12 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
     finally:
         session.close()
 
-def create_subscription_payment(plan='monthly', user_id=None):
-    """Создает платеж для подписки"""
+def create_subscription_payment(user_id=None):
+    """Создает платеж для месячной подписки"""
     from subscription_service import create_subscription_payment as create_sub_payment
     try:
-        payment_url = create_sub_payment(user_id, plan)
-        return f"Ссылка на оплату создана: {payment_url}"
+        payment_url = create_sub_payment(user_id)
+        return f"Ссылка на оплату месячной подписки создана: {payment_url}"
     except Exception as e:
         return f"Ошибка создания платежа: {str(e)}"
 
@@ -2027,14 +2027,8 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_subscription_payment",
-            "description": "Создать платеж для оформления или продления подписки",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "plan": {"type": "string", "description": "План подписки: monthly (месячная) или yearly (годовая)", "enum": ["monthly", "yearly"], "default": "monthly"}
-                },
-                "required": []
-            }
+            "description": "Создать платеж для оформления или продления месячной подписки",
+            "parameters": {"type": "object", "properties": {}}
         }
     },
     {
@@ -2651,7 +2645,7 @@ def force_tool_calls(message, content, mentions_str, user_id):
     if any(trigger in message_lower for trigger in payment_triggers):
         if "create_subscription_payment" not in content.lower() and "Args for create_subscription_payment" not in content:
             logger.info("[FORCE] Triggering create_subscription_payment() - payment request detected")
-            result = create_subscription_payment(plan='monthly', user_id=user_id)
+            result = create_subscription_payment(user_id=user_id)
             forced_calls.append({"function": "create_subscription_payment", "result": result})
     
     # Триггеры для отмены подписки
