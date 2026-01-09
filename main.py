@@ -196,7 +196,14 @@ async def dashboard_handler(request):
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
         
-        logged_in = bool(user_id)
+        # Преобразуем в int если нужно
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid user_id in session: {user_id}")
+            logged_in = False
+        else:
+            logged_in = bool(user_id)
         
         if not logged_in:
             # Show login page in dashboard
