@@ -11,7 +11,7 @@ from redis.asyncio import Redis
 from config import REDIS_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
 
-PREMIUM_DESCRIPTION = """🎯 ASI Biont — эксклюзивное сообщество для жизни
+PREMIUM_DESCRIPTION = """🎯 ASI Biont — эксклюзивное сообщество для продуктивной жизни
 
 Закрытое пространство для тех, кто ценит своё время и окружение. Здесь нет случайных людей — только те, с кем хочется строить проекты, дружить и проводить время.
 
