@@ -1346,8 +1346,13 @@ def delete_all_tasks(user_id=None):
         
         logger.info(f"[DELETE_ALL] Found user: {user.id}, telegram_id: {user.telegram_id}")
         
-        # Удаляем все задачи пользователя
-        tasks_to_delete = session.query(Task).filter_by(user_id=user.id).all()
+        # Удаляем все задачи пользователя (созданные им и делегированные ему)
+        from sqlalchemy import or_
+        conditions = [Task.user_id == user.id]
+        if user.username:
+            conditions.append(Task.delegated_to_username.ilike(user.username))
+        
+        tasks_to_delete = session.query(Task).filter(or_(*conditions)).all()
         deleted_count = len(tasks_to_delete)
         logger.info(f"[DELETE_ALL] Found {deleted_count} tasks to delete")
         

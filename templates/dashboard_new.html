@@ -768,7 +768,13 @@
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
             try {
-                const response = await fetch('/api/interactions');
+                const response = await fetch('/api/interactions', {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
@@ -1504,7 +1510,13 @@
         
         async function updateTasks() {
             try {
-                const response = await fetch('/api/tasks');
+                const response = await fetch('/api/tasks', {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
@@ -1538,7 +1550,13 @@
         
         async function updatePeople() {
             try {
-                const response = await fetch('/api/partners');
+                const response = await fetch('/api/partners', {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
@@ -1866,7 +1884,13 @@
 
         async function updateProfile() {
             try {
-                const response = await fetch('/api/profile');
+                const response = await fetch('/api/profile', {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
@@ -2004,7 +2028,13 @@
 
         async function updateChat() {
             try {
-                const response = await fetch('/api/interactions');
+                const response = await fetch('/api/interactions', {
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
