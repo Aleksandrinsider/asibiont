@@ -269,7 +269,7 @@
             <div class="rating-modal-body">
                 <p style="font-size: 14px; color: #59636E; margin-bottom: 16px;">Введите ваше текущее местное время</p>
                 <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-size: 13px; color: #59636E; margin-bottom: 6px;">Время (например, 20:30 или 8:30 PM)</label>
+                    <label style="display: block; font-size: 13px; color: #59636E; margin-bottom: 6px;">(например, 20:30 или 8:30 PM)</label>
                     <input type="text" id="time-input" placeholder="20:30" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px;" />
                 </div>
                 <div class="rating-modal-actions">
@@ -576,6 +576,10 @@
                     addMessage(data.response, 'ai');
                     // Обновить профиль и время сразу
                     await updateProfile();
+                    // Принудительно обновляем время в шапке через небольшую задержку
+                    setTimeout(async () => {
+                        await updateProfile();
+                    }, 1000);
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
                         try {
