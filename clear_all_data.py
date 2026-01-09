@@ -27,16 +27,58 @@ def clear_database():
     session = Session()
 
     try:
-        # Удаляем данные в правильном порядке (сначала дочерние таблицы)
+        # Сначала пробуем удалить через ORM
+        print("  Удаляем рейтинги...")
         session.query(UserRating).delete()
+
+        print("  Удаляем взаимодействия...")
         session.query(Interaction).delete()
+
+        print("  Удаляем задачи...")
         session.query(Task).delete()
+
+        print("  Удаляем профили...")
         session.query(UserProfile).delete()
+
+        print("  Удаляем подписки...")
         session.query(Subscription).delete()
+
+        print("  Удаляем пользователей...")
         session.query(User).delete()
 
         session.commit()
-        print("✅ База данных очищена")
+        print("✅ База данных очищена через ORM")
+
+        # Дополнительная проверка
+        users_count = session.query(User).count()
+        subscriptions_count = session.query(Subscription).count()
+        print(f"  Проверка после ORM: пользователей - {users_count}, подписок - {subscriptions_count}")
+
+        # Если остались данные, используем raw SQL
+        if users_count > 0 or subscriptions_count > 0:
+            print("  ⚠️ Остались данные, используем raw SQL...")
+
+            # Отключаем foreign key checks для SQLite
+            session.execute("PRAGMA foreign_keys = OFF")
+
+            # Удаляем все данные через raw SQL
+            session.execute("DELETE FROM user_ratings")
+            session.execute("DELETE FROM interactions")
+            session.execute("DELETE FROM tasks")
+            session.execute("DELETE FROM user_profiles")
+            session.execute("DELETE FROM subscriptions")
+            session.execute("DELETE FROM users")
+
+            # Включаем foreign key checks обратно
+            session.execute("PRAGMA foreign_keys = ON")
+
+            session.commit()
+            print("✅ База данных очищена через raw SQL")
+
+            # Финальная проверка
+            users_count = session.query(User).count()
+            subscriptions_count = session.query(Subscription).count()
+            print(f"  Финальная проверка: пользователей - {users_count}, подписок - {subscriptions_count}")
 
     except Exception as e:
         session.rollback()
