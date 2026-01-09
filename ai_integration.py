@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 import re
 import logging
 import asyncio
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from models import User, UserProfile
 import pytz
 
@@ -31,7 +31,11 @@ def decrypt_data(data):
     if not isinstance(data, str):
         raise ValueError("Data must be a string")
     if data:
-        return cipher.decrypt(data.encode()).decode()
+        try:
+            return cipher.decrypt(data.encode()).decode()
+        except InvalidToken:
+            # If decryption fails, assume it's plain text (for backward compatibility)
+            return data
     return data
 
 def determine_timezone_from_time(user_time_str, user_id):
