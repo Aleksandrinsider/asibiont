@@ -297,6 +297,8 @@ def get_system_prompt():
 - Город (ВСЕГДА на русском): "Moscow" → "Москва", "Saint Petersburg" → "Санкт-Петербург", "Kazan" → "Казань"
 - Компания, должность
 
+ВАЖНО ПРО ИНТЕРЕСЫ: Когда пользователь упоминает любую активность (кино, театр, спорт, концерты, игры, хобби) - ОБЯЗАТЕЛЬНО предложи добавить её в интересы, чтобы найти людей с похожими интересами. Например: "хочу сходить в кино" → сразу предложи добавить "кино" в интересы. После добавления - предложи найти людей с такими же интересами.
+
 Если согласен — сразу вызови update_profile(), потом подтверди. Не предлагай для бытовых задач. Извлекай ключевое слово. Для отрицаний ("больше не", "не люблю") — предлагай удалить (- перед значением).
 
 ПОИСК ЛЮДЕЙ:
@@ -340,6 +342,13 @@ def get_system_prompt():
 
 ФОРМАТ ОТВЕТА:
 Отвечай естественным текстом на русском языке. Не включай tool calls, JSON, код в ответ. Используй инструменты молча через tool calls.
+
+КРИТИЧЕСКИ ВАЖНО: НИКОГДА не выводи в тексте ответа:
+- ```json { "tool_calls": ... } ```
+- { "name": "...", "arguments": ... }
+- Любой JSON или код
+- Технические детали вызова функций
+Инструменты вызываются АВТОМАТИЧЕСКИ - просто отвечай пользователю обычным текстом.
 
 ОШИБКИ:
 Если функция вернула ошибку — объясни проблему простыми словами, предложи альтернативное решение или уточни данные.
@@ -1987,6 +1996,10 @@ def force_tool_calls(message, content, mentions_str, user_id):
     
     # 3. Расширенная проверка на update_profile (интересы, навыки, цели, город, компания, должность)
     profile_triggers = [
+        # Время (для синхронизации часового пояса)
+        (r'(?:моё|мое)\s+(?:местное\s+)?время[:：\s]+(\d{1,2}[:：]\d{2})', 'timezone'),
+        (r'(?:у\s+меня\s+)?сейчас\s+(\d{1,2}[:：]\d{2})', 'timezone'),
+        
         # Город
         (r'(?:я\s+)?(?:живу|нахожусь|переехал|приехал)\s+(?:в\s+)?([А-Яа-яA-Za-z\s]+)(?:\s+город)?', 'city'),
         (r'(?:мой\s+)?город\s+([А-Яа-яA-Za-z\s]+)', 'city'),
@@ -2009,10 +2022,16 @@ def force_tool_calls(message, content, mentions_str, user_id):
     ]
     
     profile_updates = {}
+    user_time = None  # Для хранения времени пользователя
     for pattern, field in profile_triggers:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
-            if field == 'city':
+            if field == 'timezone':
+                # Извлекаем время пользователя
+                time_str = match.group(1).strip()
+                user_time = time_str
+                logger.info(f"[FORCE] Detected user time: {user_time}")
+            elif field == 'city':
                 city_name = match.group(1).strip()
                 if len(city_name) > 2:  # Избегаем слишком коротких названий
                     profile_updates['city'] = city_name
@@ -2113,6 +2132,62 @@ def force_tool_calls(message, content, mentions_str, user_id):
                 profile_updates['goals'] = f"+{goal}"
                 logger.info(f"[FORCE] Detected goal addition: {goal}")
                 break
+    
+    # Обработка времени пользователя для определения timezone
+    if user_time and "update_profile" not in content.lower():
+        from datetime import datetime
+        import pytz
+        
+        try:
+            # Парсим время пользователя
+            user_hour, user_minute = map(int, user_time.replace('：', ':').split(':'))
+            
+            # Получаем текущее UTC время
+            utc_now = datetime.now(pytz.UTC)
+            
+            # Вычисляем разницу часов
+            utc_hour = utc_now.hour
+            offset_hours = user_hour - utc_hour
+            
+            # Нормализуем offset (учитываем переход через полночь)
+            if offset_hours > 12:
+                offset_hours -= 24
+            elif offset_hours < -12:
+                offset_hours += 24
+            
+            # Определяем timezone на основе offset
+            timezone_map = {
+                0: 'UTC',
+                1: 'Europe/Paris',
+                2: 'Europe/Athens',
+                3: 'Europe/Moscow',
+                4: 'Asia/Dubai',
+                5: 'Asia/Karachi',
+                6: 'Asia/Dhaka',
+                7: 'Asia/Bangkok',
+                8: 'Asia/Shanghai',
+                9: 'Asia/Tokyo',
+                10: 'Australia/Sydney',
+                11: 'Pacific/Noumea',
+                12: 'Pacific/Auckland',
+                -1: 'Atlantic/Azores',
+                -2: 'Atlantic/South_Georgia',
+                -3: 'America/Sao_Paulo',
+                -4: 'America/New_York',
+                -5: 'America/Chicago',
+                -6: 'America/Denver',
+                -7: 'America/Los_Angeles',
+                -8: 'America/Anchorage',
+                -9: 'Pacific/Gambier',
+                -10: 'Pacific/Honolulu',
+                -11: 'Pacific/Midway',
+            }
+            
+            timezone = timezone_map.get(offset_hours, 'UTC')
+            profile_updates['timezone'] = timezone
+            logger.info(f"[FORCE] Determined timezone: {timezone} (offset: {offset_hours}h, user_time: {user_time}, utc: {utc_hour})")
+        except Exception as e:
+            logger.error(f"[FORCE] Error determining timezone from time {user_time}: {e}")
     
     if profile_updates and "update_profile" not in content.lower():
         logger.info(f"[FORCE] Triggering update_profile() - detected profile info: {profile_updates}")
@@ -2737,6 +2812,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 # Фильтровать сырые tool calls
                                 content = re.sub(r'<\|.*?\|>', '', content).strip()
                                 content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
+                                # Удаляем JSON блоки с tool_calls если они попали в текст
+                                content = re.sub(r'```json\s*\{.*?"tool_calls".*?\}\s*```', '', content, flags=re.DOTALL).strip()
+                                content = re.sub(r'\{.*?"tool_calls".*?\}', '', content, flags=re.DOTALL).strip()
+                                content = re.sub(r'\{.*?"name":\s*"".*?"arguments".*?\}', '', content, flags=re.DOTALL).strip()
                                 
                                 # Проверяем tool_calls в API response
                                 tool_calls = message_response.get("tool_calls")
