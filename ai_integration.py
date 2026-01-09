@@ -3253,7 +3253,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 content = retry_result["choices"][0]["message"].get("content", "")
                                 logger.info(f"[TOOL CALLS] AI retry response: '{content[:300]}...'")
                                 content = replace_placeholders(content, user_now, current_time_str)
-                                content = clean_technical_details(content)  # Очистка от технических деталей
+                                # content = clean_technical_details(content)  # Убираем очистку - ответ уже должен быть чистым
                                 logger.info(f"[TOOL CALLS] Final content: '{content[:300]}...'")
                                 logger.info(f"[TOOL CALLS] Content length: {len(content)}, is empty: {len(content.strip()) == 0}")
                                 
