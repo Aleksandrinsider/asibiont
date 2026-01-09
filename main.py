@@ -238,6 +238,9 @@ async def dashboard_handler(request):
                 return aiohttp_jinja2.render_template('no_subscription.html', request, {'bot_username': bot_user})
             
             tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+            logger.info(f"Found {len(tasks)} tasks for user {user.id} (telegram_id: {user.telegram_id})")
+            for task in tasks:
+                logger.info(f"Task {task.id}: {task.title} (user_id: {task.user_id})")
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             
             # Проверяем timestamp очистки истории

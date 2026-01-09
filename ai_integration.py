@@ -1321,27 +1321,56 @@ def delete_task(task_id=None, task_title=None, user_id=None):
     return result
 
 def delete_all_tasks(user_id=None):
-    from models import Session, Task
-    session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[DELETE_ALL] Starting delete_all_tasks for user_id: {user_id} (type: {type(user_id)})")
+    
+    try:
+        from models import Session, Task
+        session = Session()
+        logger.info(f"[DELETE_ALL] Session created")
+        
+        # Преобразуем user_id в int, если нужно
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"[DELETE_ALL] Invalid user_id: {user_id}")
+            session.close()
+            return "Некорректный ID пользователя."
+        
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            logger.warning(f"[DELETE_ALL] User not found for telegram_id: {user_id}")
+            session.close()
+            return "Пользователь не найден."
+        
+        logger.info(f"[DELETE_ALL] Found user: {user.id}, telegram_id: {user.telegram_id}")
+        
+        # Удаляем все задачи пользователя
+        tasks_to_delete = session.query(Task).filter_by(user_id=user.id).all()
+        deleted_count = len(tasks_to_delete)
+        logger.info(f"[DELETE_ALL] Found {deleted_count} tasks to delete")
+        
+        for task in tasks_to_delete:
+            logger.info(f"[DELETE_ALL] Deleting task: {task.id} - {task.title}")
+            session.delete(task)
+        
+        session.commit()
+        logger.info(f"[DELETE_ALL] Commit successful, deleted {deleted_count} tasks")
         session.close()
-        return "Пользователь не найден."
+        
+        if deleted_count > 0:
+            return f"Удалено {deleted_count} задач."
+        else:
+            return "У вас нет задач для удаления."
     
-    # Удаляем все задачи пользователя
-    tasks_to_delete = session.query(Task).filter_by(user_id=user.id).all()
-    deleted_count = len(tasks_to_delete)
-    
-    for task in tasks_to_delete:
-        session.delete(task)
-    
-    session.commit()
-    session.close()
-    
-    if deleted_count > 0:
-        return f"Удалено {deleted_count} задач."
-    else:
-        return "У вас нет задач для удаления."
+    except Exception as e:
+        logger.error(f"[DELETE_ALL] Error in delete_all_tasks: {e}", exc_info=True)
+        try:
+            session.close()
+        except:
+            pass
+        return "Произошла ошибка при удалении задач."
 
 def set_priority(task_id, priority, user_id=None):
     from models import Session, Task
