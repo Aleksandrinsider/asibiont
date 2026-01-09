@@ -4,23 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASI Biont - Доступ ограничен</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="app-header">
         <div class="header-content">
-            <a href="https://t.me/asibiont_bot" target="_blank" class="logo">ASI Biont</a>
+            <div class="header-left">
+                <a href="https://t.me/{{bot_username}}" target="_blank" class="logo">ASI Biont</a>
+            </div>
         </div>
     </div>
-    <div class="no-subscription-section">
-        <div class="no-subscription-content">
-            <h1 style="margin-bottom: 20px; font-weight: normal;">Доступ ограничен</h1>
-            <p style="margin-bottom: 20px;">Для использования ASI Biont необходима активная подписка.</p>
-            <p style="margin-bottom: 20px;">Оформите подписку через Telegram-бот, чтобы получить доступ к управлению задачами, интеллектуальному ассистенту и поиску единомышленников!</p>
-            <div class="button-group">
-                <a href="https://t.me/{{bot_username}}" target="_blank" class="send-btn">Оформить подписку</a>
+    <div class="container">
+        <div class="welcome-section">
+            <div class="welcome-content">
+                <h1 style="margin-bottom: 20px; font-size: 24px; color: #1F2328;">Доступ ограничен</h1>
+                <p style="margin-bottom: 20px; color: #1F2328; line-height: 1.4;">Для использования ASI Biont необходима активная подписка.</p>
+                <p style="margin-bottom: 30px; color: #1F2328; line-height: 1.4;">Оформите подписку через Telegram-бот, чтобы получить доступ к управлению задачами, интеллектуальному ассистенту и поиску единомышленников!</p>
+                <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
+                    <a href="https://t.me/{{bot_username}}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #068487; color: #FFFFFF; text-decoration: none; border-radius: 6px; font-weight: 500; transition: background-color 0.2s;">Оформить подписку</a>
+                    <a href="/logout" style="color: #656D76; font-size: 13px; text-decoration: none;">Выход</a>
+                </div>
             </div>
-            <p style="margin-top: 20px;"><a href="/logout" class="back-link">Выход</a></p>
         </div>
     </div>
 </body>
