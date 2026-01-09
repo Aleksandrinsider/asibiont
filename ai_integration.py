@@ -335,6 +335,9 @@ def get_system_prompt():
 - update_profile(user_id, city, company, position, interests, skills, goals)
 - update_user_memory(user_id, memory)
 - set_reminder(task_id, reminder_time, user_id)
+- create_subscription_payment(plan, user_id) — для оформления подписки
+- check_subscription_status(user_id) — проверка статуса подписки
+- cancel_subscription(user_id) — отмена подписки
 
 АВТОМАТИЧЕСКОЕ ПОВЕДЕНИЕ:
 - Упоминание задач → сначала list_tasks()
@@ -345,6 +348,9 @@ def get_system_prompt():
 - "Выполнил X" → complete_task(), затем спроси как прошло
 - Делегирование ВСЕГДА требует точное время — если нет, спроси
 - Не спрашивай разрешения на list_tasks() — просто проверь
+- ЛЮБОЕ упоминание подписки, статуса, оплаты → ОБЯЗАТЕЛЬНО check_subscription_status()
+- "Оплати", "купить подписку" → create_subscription_payment()
+- "Отменить подписку" → cancel_subscription()
 
 ПРИВЕТСТВИЕ:
 При приветствии: вызови list_tasks(), поприветствуй тепло, дай краткую сводку (просроченные, срочные, делегированные), задай 2-3 вопроса о планах и приоритетах, предложи найти людей с похожими интересами если есть интересы в профиле. Будь инициативным и вовлекающим. Всегда спрашивай: "Что планируешь сегодня?", "Есть ли срочные дела?", "Нужно ли обновить профиль?"
@@ -1023,6 +1029,51 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
         return f"Ошибка при генерации альтернатив: {str(e)}"
     finally:
         session.close()
+
+def create_subscription_payment(plan='monthly', user_id=None):
+    """Создает платеж для подписки"""
+    from subscription_service import create_subscription_payment as create_sub_payment
+    try:
+        payment_url = create_sub_payment(user_id, plan)
+        return f"Ссылка на оплату создана: {payment_url}"
+    except Exception as e:
+        return f"Ошибка создания платежа: {str(e)}"
+
+def check_subscription_status(user_id=None):
+    """Проверяет статус подписки пользователя"""
+    from subscription_service import get_subscription_status
+    from config import FREE_ACCESS_MODE
+    
+    try:
+        if FREE_ACCESS_MODE:
+            return "Режим бесплатного доступа активен. Подписка не требуется."
+        
+        status = get_subscription_status(user_id)
+        if status:
+            status_text = f"Статус подписки: {status['status']}\n"
+            status_text += f"План: {status['plan']}\n"
+            if status['start_date']:
+                status_text += f"Дата начала: {status['start_date'][:10]}\n"
+            if status['end_date']:
+                status_text += f"Дата окончания: {status['end_date'][:10]}\n"
+            status_text += f"Количество входов: {status['login_count']}"
+            return status_text
+        else:
+            return "Подписка не найдена. Для использования сервиса требуется активная подписка."
+    except Exception as e:
+        return f"Ошибка проверки подписки: {str(e)}"
+
+def cancel_subscription(user_id=None):
+    """Отменяет подписку пользователя"""
+    from subscription_service import cancel_subscription as cancel_sub
+    try:
+        success = cancel_sub(user_id)
+        if success:
+            return "Подписка успешно отменена."
+        else:
+            return "Подписка не найдена или уже отменена."
+    except Exception as e:
+        return f"Ошибка отмены подписки: {str(e)}"
 
 def accept_delegated_task(task_id, user_id=None):
     """Accept a delegated task"""
@@ -1971,6 +2022,36 @@ TOOLS = [
                 "required": ["task_id"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_subscription_payment",
+            "description": "Создать платеж для оформления или продления подписки",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "plan": {"type": "string", "description": "План подписки: monthly (месячная) или yearly (годовая)", "enum": ["monthly", "yearly"], "default": "monthly"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_subscription_status",
+            "description": "Проверить статус текущей подписки пользователя",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_subscription",
+            "description": "Отменить текущую подписку пользователя",
+            "parameters": {"type": "object", "properties": {}}
+        }
     }
 ]
 
@@ -2556,6 +2637,30 @@ def force_tool_calls(message, content, mentions_str, user_id):
                                 result = set_priority(task_id=task_id, priority=priority, user_id=user_id)
                                 forced_calls.append({"function": "set_priority", "result": result})
                                 break
+    
+    # Триггеры для функций подписки
+    subscription_triggers = ["подписка", "subscription", "оплата", "платеж", "payment", "статус подписки", "subscription status", "статус", "status"]
+    if any(trigger in message_lower for trigger in subscription_triggers):
+        if "check_subscription_status" not in content.lower() and "Args for check_subscription_status" not in content:
+            logger.info("[FORCE] Triggering check_subscription_status() - subscription status request detected")
+            result = check_subscription_status(user_id=user_id)
+            forced_calls.append({"function": "check_subscription_status", "result": result})
+    
+    # Триггеры для создания платежа
+    payment_triggers = ["оплати", "купить подписку", "оформить подписку", "create payment", "buy subscription"]
+    if any(trigger in message_lower for trigger in payment_triggers):
+        if "create_subscription_payment" not in content.lower() and "Args for create_subscription_payment" not in content:
+            logger.info("[FORCE] Triggering create_subscription_payment() - payment request detected")
+            result = create_subscription_payment(plan='monthly', user_id=user_id)
+            forced_calls.append({"function": "create_subscription_payment", "result": result})
+    
+    # Триггеры для отмены подписки
+    cancel_triggers = ["отменить подписку", "cancel subscription", "прекратить подписку"]
+    if any(trigger in message_lower for trigger in cancel_triggers):
+        if "cancel_subscription" not in content.lower() and "Args for cancel_subscription" not in content:
+            logger.info("[FORCE] Triggering cancel_subscription() - cancel request detected")
+            result = cancel_subscription(user_id=user_id)
+            forced_calls.append({"function": "cancel_subscription", "result": result})
     
     return forced_calls if forced_calls else None
 
