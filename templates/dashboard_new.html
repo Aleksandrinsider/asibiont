@@ -259,6 +259,27 @@
         </div>
     </div>
 
+    <!-- Time Change Modal -->
+    <div id="time-modal" class="rating-modal">
+        <div class="rating-modal-content">
+            <div class="rating-modal-header">
+                <h3>Изменить местное время</h3>
+                <button onclick="closeTimeModal()" class="rating-close-btn">×</button>
+            </div>
+            <div class="rating-modal-body">
+                <p style="font-size: 14px; color: #59636E; margin-bottom: 16px;">Введите ваше текущее местное время</p>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #59636E; margin-bottom: 6px;">Время (например, 20:30 или 8:30 PM)</label>
+                    <input type="text" id="time-input" placeholder="20:30" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px;" />
+                </div>
+                <div class="rating-modal-actions">
+                    <button onclick="closeTimeModal()" class="rating-cancel-btn">Отмена</button>
+                    <button onclick="submitTimeChange()" class="rating-submit-btn">Сохранить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
@@ -506,15 +527,37 @@
             }
         }
 
-        async function changeTime() {
-            if (window.changingTime) return; // Prevent multiple clicks
-            window.changingTime = true;
+        function changeTime() {
+            const modal = document.getElementById('time-modal');
+            const input = document.getElementById('time-input');
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            input.value = `${hours}:${minutes}`;
+            modal.style.display = 'flex';
+        }
+
+        function closeTimeModal() {
+            document.getElementById('time-modal').style.display = 'none';
+        }
+
+        async function submitTimeChange() {
+            const input = document.getElementById('time-input');
+            const timeValue = input.value.trim();
             
-            const message = "измени время";
+            if (!timeValue) {
+                alert('Пожалуйста, введите время');
+                return;
+            }
+            
+            closeTimeModal();
+            
+            // Отправляем сообщение в чат с введенным временем
+            const message = `мое местное время: ${timeValue}`;
             
             // Add user message
             addMessage(message, 'user');
-            lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
+            lastMessageCount += 1;
             showTypingIndicator();
             
             try {
@@ -545,17 +588,14 @@
                             lastMessageCount += 2;
                         }
                     }, 500);
-                    window.changingTime = false; // Reset flag after update
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
-                    lastMessageCount += 1; // Увеличиваем счетчик для сообщения ошибки
-                    window.changingTime = false; // Reset flag on error
+                    lastMessageCount += 1;
                 }
             } catch (error) {
                 hideTypingIndicator();
                 addMessage('Ошибка: ' + error.message, 'ai');
-                lastMessageCount += 1; // Увеличиваем счетчик для сообщения ошибки
-                window.changingTime = false; // Reset flag on error
+                lastMessageCount += 1;
             }
         }
 
