@@ -762,44 +762,57 @@ async def clear_history_handler(request):
     return web.json_response({'success': True, 'message': 'History cleared'})
 
 async def clear_user_tasks_handler(request):
+    logger.info("clear_user_tasks_handler called")
     session = await get_session(request)
     user_id = session.get('user_id')
+    logger.info(f"User ID from session: {user_id}")
     if not user_id:
+        logger.warning("No user_id in session")
         return web.json_response({'error': 'Not authenticated'}, status=401)
     
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        logger.info(f"User found: {user is not None}")
         if not user:
+            logger.warning(f"User not found for telegram_id: {user_id}")
             return web.json_response({'error': 'User not found'}, status=404)
+        
+        # Count tasks before deletion
+        task_count = session_db.query(Task).filter_by(user_id=user.id).count()
+        logger.info(f"User {user_id} has {task_count} tasks to clear")
         
         # Clear user's tasks
         session_db.query(Task).filter_by(user_id=user.id).delete()
         session_db.commit()
-        logger.info(f"User {user_id} tasks cleared")
+        logger.info(f"User {user_id} tasks cleared successfully")
         return web.json_response({'message': 'Tasks cleared'})
     except Exception as e:
         session_db.rollback()
-        logger.error(f"Error clearing user tasks: {e}")
+        logger.error(f"Error clearing user tasks: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
     finally:
         session_db.close()
 
 
 async def clear_single_task_handler(request):
+    logger.info("clear_single_task_handler called")
     session = await get_session(request)
     user_id = session.get('user_id')
+    logger.info(f"User ID from session: {user_id}")
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
     
     data = await request.json()
     task_id = data.get('task_id')
+    logger.info(f"Task ID to delete: {task_id}")
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
     
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        logger.info(f"User found: {user is not None}")
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
         
@@ -812,6 +825,7 @@ async def clear_single_task_handler(request):
                 Task.delegated_to_username.ilike(user.username)
             )
         ).first()
+        logger.info(f"Task found: {task is not None}")
         if not task:
             return web.json_response({'error': 'Task not found'}, status=404)
         
@@ -821,7 +835,7 @@ async def clear_single_task_handler(request):
         return web.json_response({'message': 'Task deleted'})
     except Exception as e:
         session_db.rollback()
-        logger.error(f"Error deleting task: {e}")
+        logger.error(f"Error deleting task: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
     finally:
         session_db.close()
