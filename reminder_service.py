@@ -64,8 +64,14 @@ class ReminderService:
         # Конвертируем naive datetime в aware с UTC
         if reminder_time.tzinfo is None:
             reminder_time = pytz.UTC.localize(reminder_time)
-        
+
         logger.info(f"Scheduling reminder for task {task_id}, user {user_id}, time: {reminder_time}")
+
+        # Проверяем, запущен ли scheduler
+        if not self.scheduler.running:
+            logger.warning(f"Scheduler not running, cannot schedule reminder for task {task_id}")
+            return
+
         trigger = DateTrigger(run_date=reminder_time, timezone=pytz.UTC)
         self.scheduler.add_job(
             self.send_reminder,

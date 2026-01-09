@@ -532,7 +532,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 )
         except Exception as e:
             import logging
-            logging.error(f"Failed to schedule reminder for task {task_id}: {e}")
+            logging.warning(f"Could not schedule reminder for task {task_id} (scheduler may not be running yet): {e}")
     
     # Обновить аналитику профиля
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
