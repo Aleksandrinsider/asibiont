@@ -1450,6 +1450,10 @@ def get_task_details(task_id, user_id=None):
 
 def get_partners_list(user_id=None, session=None):
     """Возвращает список всех пользователей с профилями (кроме самого пользователя и тех, с кем уже есть делегирование)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[PARTNERS] get_partners_list called for user_id: {user_id}")
+    
     from models import Session, UserProfile, User, Task
     if session is None:
         session = Session()
@@ -1459,9 +1463,12 @@ def get_partners_list(user_id=None, session=None):
     
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
+        logger.warning(f"[PARTNERS] User not found for telegram_id: {user_id}")
         if close_session:
             session.close()
         return []
+    
+    logger.info(f"[PARTNERS] Found user: {user.id}, username: {user.username}")
     
     # Получаем список пользователей, с которыми уже есть делегирование
     delegated_usernames = set()
@@ -1499,12 +1506,17 @@ def get_partners_list(user_id=None, session=None):
         (UserProfile.city.isnot(None))
     ).all()
     
+    logger.info(f"[PARTNERS] Found {len(all_profiles)} profiles with data")
+    
     # Получаем профиль текущего пользователя для сравнения
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if not user_profile:
+        logger.warning(f"[PARTNERS] User profile not found for user {user.id}")
         if close_session:
             session.close()
         return []
+    
+    logger.info(f"[PARTNERS] User profile: interests='{user_profile.interests}', skills='{user_profile.skills}', goals='{user_profile.goals}'")
     
     # Фильтруем только тех, у кого есть совпадения
     partners = []
@@ -1512,9 +1524,8 @@ def get_partners_list(user_id=None, session=None):
         profile_user = session.query(User).filter_by(id=profile.user_id).first()
         if not profile_user or not profile_user.username:
             continue
-        # Убрано исключение делегированных для показа всех с совпадениями
-        # if profile_user.username.lower() in delegated_usernames:
-        #     continue
+        
+        logger.info(f"[PARTNERS] Checking profile for {profile_user.username}: interests='{profile.interests}', skills='{profile.skills}'")
         
         # Проверяем наличие совпадений по интересам, навыкам или целям
         has_match = False
@@ -1525,6 +1536,7 @@ def get_partners_list(user_id=None, session=None):
             profile_skills = set(s.strip().lower() for s in profile.skills.split(','))
             if user_skills & profile_skills:
                 has_match = True
+                logger.info(f"[PARTNERS] Skills match: {user_skills & profile_skills}")
         
         # Проверка по интересам
         if user_profile.interests and profile.interests:
@@ -1532,6 +1544,7 @@ def get_partners_list(user_id=None, session=None):
             profile_interests = set(i.strip().lower() for i in profile.interests.split(','))
             if user_interests & profile_interests:
                 has_match = True
+                logger.info(f"[PARTNERS] Interests match: {user_interests & profile_interests}")
         
         # Проверка по целям
         if user_profile.goals and profile.goals:
@@ -1539,16 +1552,21 @@ def get_partners_list(user_id=None, session=None):
             profile_goals = set(g.strip().lower() for g in profile.goals.split(','))
             if user_goals & profile_goals:
                 has_match = True
+                logger.info(f"[PARTNERS] Goals match: {user_goals & profile_goals}")
         
         # Проверка по компании
         if hasattr(user_profile, 'company') and hasattr(profile, 'company'):
             if user_profile.company and profile.company:
                 if user_profile.company.lower() == profile.company.lower():
                     has_match = True
+                    logger.info(f"[PARTNERS] Company match: {user_profile.company}")
         
         # Добавляем только если есть совпадение
         if has_match:
             partners.append(profile)
+            logger.info(f"[PARTNERS] Added {profile_user.username} to partners")
+    
+    logger.info(f"[PARTNERS] Total partners found: {len(partners)}")
     
     # Сортируем: сначала пользователи из одного города, потом остальные
     user_city = user_profile.city.lower() if user_profile.city else None
