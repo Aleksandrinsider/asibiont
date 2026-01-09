@@ -34,7 +34,68 @@ def decrypt_data(data):
         return cipher.decrypt(data.encode()).decode()
     return data
 
-def parse_time_from_text(time_text, user_id):
+def determine_timezone_from_time(user_time_str, user_id):
+    """Определяет timezone пользователя на основе введенного времени"""
+    import re
+    from datetime import datetime
+    import pytz
+    from models import Session, User
+    
+    # Парсим время из строки (HH:MM)
+    time_match = re.search(r'(\d{1,2}):(\d{2})', user_time_str)
+    if not time_match:
+        return None
+    
+    user_hour = int(time_match.group(1))
+    user_minute = int(time_match.group(2))
+    
+    # Текущее UTC время
+    now_utc = datetime.now(pytz.UTC)
+    
+    # Создаем datetime объект для пользователя
+    user_now = now_utc.replace(hour=user_hour, minute=user_minute)
+    
+    # Вычисляем разницу в часах
+    hour_diff = user_hour - now_utc.hour
+    
+    # Обрабатываем переход через сутки
+    if hour_diff > 12:
+        hour_diff -= 24
+    elif hour_diff < -12:
+        hour_diff += 24
+    
+    # Определяем timezone на основе разницы
+    timezone_map = {
+        -12: 'Pacific/Kwajalein',  # UTC-12
+        -11: 'Pacific/Midway',     # UTC-11
+        -10: 'Pacific/Honolulu',   # UTC-10
+        -9: 'America/Anchorage',   # UTC-9
+        -8: 'America/Los_Angeles', # UTC-8
+        -7: 'America/Denver',      # UTC-7
+        -6: 'America/Chicago',     # UTC-6
+        -5: 'America/New_York',    # UTC-5
+        -4: 'America/Halifax',     # UTC-4
+        -3: 'America/Sao_Paulo',   # UTC-3
+        -2: 'Atlantic/South_Georgia', # UTC-2
+        -1: 'Atlantic/Azores',     # UTC-1
+        0: 'Europe/London',        # UTC+0
+        1: 'Europe/Paris',         # UTC+1
+        2: 'Europe/Kiev',          # UTC+2
+        3: 'Europe/Moscow',        # UTC+3
+        4: 'Asia/Dubai',           # UTC+4
+        5: 'Asia/Karachi',         # UTC+5
+        6: 'Asia/Dhaka',           # UTC+6
+        7: 'Asia/Bangkok',         # UTC+7
+        8: 'Asia/Shanghai',        # UTC+8
+        9: 'Asia/Tokyo',           # UTC+9
+        10: 'Australia/Sydney',    # UTC+10
+        11: 'Pacific/Noumea',      # UTC+11
+        12: 'Pacific/Auckland'     # UTC+12
+    }
+    
+    # Находим ближайший timezone
+    closest_diff = min(timezone_map.keys(), key=lambda x: abs(x - hour_diff))
+    return timezone_map[closest_diff]
     """Парсит время из текста пользователя"""
     import re
     from datetime import datetime, timedelta
@@ -310,6 +371,8 @@ def get_system_prompt():
 - Компания, должность
 
 ВАЖНО ПРО ИНТЕРЕСЫ: Когда пользователь упоминает любую активность (кино, театр, спорт, концерты, игры, хобби) - ОБЯЗАТЕЛЬНО предложи добавить её в интересы, чтобы найти людей с похожими интересами. Например: "хочу сходить в кино" → сразу предложи добавить "кино" в интересы. После добавления - предложи найти людей с такими же интересами.
+
+ОБНОВЛЕНИЕ ВРЕМЕНИ: Когда пользователь пишет "мое местное время: HH:MM" - ОБЯЗАТЕЛЬНО вызови update_profile() с timezone, определив его на основе текущего UTC времени и введенного времени. Например, если сейчас 18:00 UTC, а пользователь пишет 21:53, то timezone = "Europe/Moscow" (UTC+3). Подтверди обновление и покажи новое время.
 
 Если согласен — сразу вызови update_profile(), потом подтверди. Не предлагай для бытовых задач. Извлекай ключевое слово. Для отрицаний ("больше не", "не люблю") — предлагай удалить (- перед значением).
 
@@ -2507,6 +2570,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     if context is not None and not isinstance(context, list):
         logger.warning(f"context is not a list: {type(context)}, setting to None")
         context = None
+    
+    # Проверяем сообщение о времени и обновляем timezone
+    time_message_match = re.search(r'мое\s+местное\s+время:\s*(\d{1,2}:\d{2})', message.lower())
+    if time_message_match:
+        user_time_str = time_message_match.group(1)
+        detected_timezone = determine_timezone_from_time(user_time_str, user_id)
+        if detected_timezone:
+            logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
+            update_profile(timezone=detected_timezone, user_id=user_id)
     
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message

@@ -579,6 +579,17 @@
                     // Принудительно обновляем время в шапке через небольшую задержку
                     setTimeout(async () => {
                         await updateProfile();
+                        // Дополнительно обновляем время в шапке напрямую
+                        const now = new Date();
+                        const headerTimeDisplay = document.getElementById('header-time-display');
+                        if (headerTimeDisplay) {
+                            const hours = now.getHours().toString().padStart(2, '0');
+                            const minutes = now.getMinutes().toString().padStart(2, '0');
+                            const timeStr = `${hours}:${minutes}`;
+                            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+                            const dateStr = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+                            headerTimeDisplay.textContent = `${timeStr} · ${dateStr}`;
+                        }
                     }, 1000);
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
