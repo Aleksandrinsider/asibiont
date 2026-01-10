@@ -768,6 +768,107 @@ class AIIntegration:
         return generate_overdue_reminder(user_id, overdue_tasks)
 
 
+def validate_response_compliance(response_text, intent_type=None):
+    """
+    Проверяет соответствие ответа правилам главного промпта
+    Возвращает (is_compliant, issues_list)
+    """
+    issues = []
+
+    # Проверка на запрещенные элементы
+    if any(emoji in response_text for emoji in ["🚀", "✅", "📝", "🎯", "⚠️", "💡", "📋", "⏳", "🟡"]):
+        issues.append("Присутствуют эмодзи")
+
+    if "**" in response_text:
+        issues.append("Присутствует жирный текст")
+
+    if re.search(r"^\s*[-•*]\s+", response_text, re.MULTILINE):
+        issues.append("Присутствуют маркированные списки")
+
+    if re.search(r"^\s*\d+\.\s+", response_text, re.MULTILINE):
+        issues.append("Присутствует нумерация")
+
+    # Проверка на минимальную длину для значимых ответов
+    sentences = [s.strip() for s in re.split(r"[.!?]+", response_text) if s.strip()]
+    if len(sentences) < 3 and len(response_text) > 50:
+        issues.append("Слишком короткий ответ (менее 3 предложений)")
+
+    # Проверка на наличие вопросов для вовлечения
+    if not any(char in response_text for char in ["?", "Что", "Как", "Когда", "Зачем", "Почему"]):
+        issues.append("Отсутствуют вопросы для вовлечения пользователя")
+
+    # Специфические проверки для разных типов intent
+    if intent_type == "list_tasks":
+        if len(response_text) < 300:
+            issues.append("Ответ на list_tasks слишком короткий (менее 300 символов)")
+        if "Ваши задачи:" in response_text or "Список задач:" in response_text:
+            issues.append("Шаблонный ответ вместо анализа")
+
+    return len(issues) == 0, issues
+
+
+async def enforce_prompt_compliance(response_text, intent_type, user_id, context, system_prompt, messages, url, headers):
+    """
+    Принуждает AI соблюдать правила главного промпта через повторные запросы
+    """
+    max_attempts = 2
+    original_response = response_text
+
+    for attempt in range(max_attempts):
+        is_compliant, issues = validate_response_compliance(response_text, intent_type)
+
+        if is_compliant:
+            return response_text
+
+        logger.warning(f"[COMPLIANCE] Response not compliant (attempt {attempt + 1}): {issues}")
+
+        # Создаем корректирующий промпт
+        correction_prompt = f"""Твой предыдущий ответ не соответствует правилам главного промпта:
+
+ПРОБЛЕМЫ:
+{chr(10).join(f"- {issue}" for issue in issues)}
+
+СТРОГО ИСПРАВИТЬ:
+- Убрать все эмодзи, жирный текст, списки, нумерацию
+- Сделать ответ подробным (минимум 300 слов для анализа задач)
+- Добавить вопросы для вовлечения пользователя
+- Использовать естественный разговорный стиль
+- Закончить вопросом или предложением для продолжения диалога
+
+ПЕРЕПИШИ ОТВЕТ ПРАВИЛЬНО:"""
+
+        # Добавляем корректирующий промпт к сообщениям
+        correction_messages = messages.copy()
+        correction_messages.append({"role": "assistant", "content": original_response})
+        correction_messages.append({"role": "user", "content": correction_prompt})
+
+        try:
+            correction_data = {
+                "model": "deepseek-chat",
+                "messages": correction_messages,
+                "temperature": 0.1,  # Более детерминированный для исправления
+            }
+
+            async with aiohttp.ClientSession() as correction_session:
+                async with correction_session.post(
+                    url, headers=headers, json=correction_data, timeout=aiohttp.ClientTimeout(total=30)
+                ) as correction_response:
+                    if correction_response.status == 200:
+                        correction_result = await correction_response.json()
+                        corrected_response = correction_result["choices"][0]["message"]["content"]
+                        response_text = corrected_response
+                        logger.info(f"[COMPLIANCE] Corrected response (attempt {attempt + 1})")
+                    else:
+                        logger.error(f"[COMPLIANCE] Correction API error: {correction_response.status}")
+                        break
+
+        except Exception as e:
+            logger.error(f"[COMPLIANCE] Error during correction: {e}")
+            break
+
+    return response_text
+
+
 def clean_technical_details(text):
     """Удаляет технические детали из ответа AI"""
     if text is None:
@@ -896,6 +997,15 @@ def enrich_response_with_engagement(content, user_id=None, original_message=""):
 
 def get_system_prompt():
     return """Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как опытный коллега, который искренне хочет помочь.
+
+🚨 СТРОГИЕ ПРАВИЛА ФОРМАТА ОТВЕТОВ (ОБЯЗАТЕЛЬНО СОБЛЮДАТЬ):
+- НИКОГДА не используй эмодзи, смайлики, иконки (🚀, ✅, 📝, 🎯, ⚠️, 💡, 📋, ⏳, 🟡)
+- НИКОГДА не используй жирный текст (**), курсив, заголовки
+- НИКОГДА не используй маркированные списки (-, •, *) или нумерацию (1., 2., 3.)
+- Всегда пиши обычным текстом без форматирования
+- Минимум 3-4 предложения в каждом ответе
+- Каждый ответ должен заканчиваться вопросом или предложением для продолжения диалога
+- Для анализа задач: минимум 300 слов, детальный разбор каждой задачи
 
 ОСНОВНЫЕ ПРИНЦИПЫ РАБОТЫ:
 - Всегда исходи из текущей ситуации пользователя, учитывай все доступные данные (профиль, память, задачи, подписка, делегирование) и свои возможности как агента.
@@ -3483,78 +3593,23 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         else:
                                             natural_responses.append(result_text)
 
-                                    # 🎯 СПЕЦИАЛЬНАЯ ОБРАБОТКА list_tasks для развёрнутых ответов
+                                    # 🎯 Для list_tasks просто добавляем результат - главный промпт уже содержит все правила
                                     if has_list_tasks and list_tasks_result:
-                                        # Генерируем развёрнутый анализ задач через AI
-                                        analysis_system = f"""Ты — ИИ-помощник. Пользователь запросил список задач.
-
-ПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов, 4-6 предложений. Предоставь детальный анализ ситуации. Дай конкретные рекомендации с нумерацией. Задай вопросы для вовлечения пользователя.
-
-КРИТИЧЕСКИЕ ТРЕБОВАНИЯ (ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ ВСЕ):
-1. Анализируй КАЖДУЮ задачу индивидуально: опиши что это, почему важно, возможные сложности
-2. Обрати внимание на дедлайны, приоритеты, просрочки - объясни последствия
-3. Предложи КОНКРЕТНЫЙ план действий с шагами и сроками (используй нумерацию)
-4. Задай 3-4 РЕЛЕВАНТНЫХ вопроса о выполнении и планах
-5. Учитывай контекст пользователя и предлагай персональные решения
-6. Будь естественным - адаптируйся к ситуации пользователя
-7. ОБЯЗАТЕЛЬНО закончи вопросом или предложением для продолжения диалога
-
-СТРОГО ЗАПРЕЩЕНО:
-- "Ваши задачи: [список]" и подобные односложные ответы
-- Просто перечислять задачи без анализа
-- Шаблонные фразы типа "у вас есть задачи"
-- Короткие ответы менее 300 слов
-- Повторяющиеся формулировки
-- Отсутствие вопросов в конце
-
-ПРИМЕР СТРУКТУРЫ ОТВЕТА:
-- Введение: Общий анализ ситуации с задачами
-- Детальный разбор каждой задачи
-- Рекомендации по приоритетам и плану (с нумерацией)
-- Предложения по оптимизации
-- Вопросы для уточнения планов
-
-Данные о задачах:
-{list_tasks_result}
-
-Дай естественный развёрнутый анализ с вопросами и конкретными рекомендациями:"""
-
-                                        try:
-                                            async with aiohttp.ClientSession() as analysis_session:
-                                                async with analysis_session.post(
-                                                    url,
-                                                    headers=headers,
-                                                    json={
-                                                        "model": "deepseek-chat",
-                                                        "messages": [
-                                                            {"role": "system", "content": analysis_system},
-                                                            {
-                                                                "role": "user",
-                                                                "content": "Проанализируй мои задачи подробно",
-                                                            },
-                                                        ],
-                                                        "temperature": 0.7,
-                                                    },
-                                                    timeout=aiohttp.ClientTimeout(total=60),
-                                                ) as analysis_response:
-                                                    analysis_result = await analysis_response.json()
-                                                    detailed_analysis = analysis_result["choices"][0]["message"][
-                                                        "content"
-                                                    ]
-                                                    natural_responses.append(detailed_analysis)
-                                                    logger.info(
-                                                        f"[LIST_TASKS_ANALYSIS] Generated detailed analysis: {detailed_analysis[:100]}..."
-                                                    )
-                                        except Exception as e:
-                                            logger.error(f"[LIST_TASKS_ANALYSIS] Error generating analysis: {e}")
-                                            # Фоллбэк - добавляем обычный результат
-                                            natural_responses.append(list_tasks_result)
+                                        natural_responses.append(list_tasks_result)
 
                                     final_content = "\n".join(natural_responses)
                                     # 🎯 Обогащаем ответ вовлекающими элементами
                                     final_content = enrich_response_with_engagement(
                                         final_content, user_id, original_message
                                     )
+
+                                    # 🎯 ПРИНУЖДАЕМ СОБЛЮДЕНИЕ ГЛАВНОГО ПРОМПТА
+                                    intent_type = "list_tasks" if has_list_tasks else None
+                                    final_content = await enforce_prompt_compliance(
+                                        final_content, intent_type, user_id, context,
+                                        system_prompt, messages, url, headers
+                                    )
+
                                     logger.info(
                                         f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response"
                                     )
@@ -3632,72 +3687,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         list_tasks_result = action["result"]
                                         break
 
-                            # 🎯 СПЕЦИАЛЬНАЯ ОБРАБОТКА list_tasks для развёрнутых ответов
+                            # 🎯 Для list_tasks просто добавляем результат - главный промпт уже содержит все правила
                             if has_list_tasks and list_tasks_result:
-                                # Генерируем развёрнутый анализ задач через AI
-                                analysis_system = f"""Ты — ИИ-помощник. Пользователь запросил список задач.
-
-ПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов, 4-6 предложений. Предоставь детальный анализ ситуации. Дай конкретные рекомендации с нумерацией. Задай вопросы для вовлечения пользователя.
-
-КРИТИЧЕСКИЕ ТРЕБОВАНИЯ (ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ ВСЕ):
-1. Анализируй КАЖДУЮ задачу индивидуально: опиши что это, почему важно, возможные сложности
-2. Обрати внимание на дедлайны, приоритеты, просрочки - объясни последствия
-3. Предложи КОНКРЕТНЫЙ план действий с шагами и сроками (используй нумерацию)
-4. Задай 3-4 РЕЛЕВАНТНЫХ вопроса о выполнении и планах
-5. Учитывай контекст пользователя и предлагай персональные решения
-6. Будь естественным - адаптируйся к ситуации пользователя
-7. ОБЯЗАТЕЛЬНО закончи вопросом или предложением для продолжения диалога
-
-СТРОГО ЗАПРЕЩЕНО:
-- "Ваши задачи: [список]" и подобные односложные ответы
-- Просто перечислять задачи без анализа
-- Шаблонные фразы типа "у вас есть задачи"
-- Короткие ответы менее 300 слов
-- Повторяющиеся формулировки
-- Отсутствие вопросов в конце
-
-ПРИМЕР СТРУКТУРЫ ОТВЕТА:
-- Введение: Общий анализ ситуации с задачами
-- Детальный разбор каждой задачи
-- Рекомендации по приоритетам и плану (с нумерацией)
-- Предложения по оптимизации
-- Вопросы для уточнения планов
-
-Данные о задачах:
-{list_tasks_result}
-
-Дай естественный развёрнутый анализ с вопросами и конкретными рекомендациями:"""
-
-                                try:
-                                    async with aiohttp.ClientSession() as analysis_session:
-                                        async with analysis_session.post(
-                                            url,
-                                            headers=headers,
-                                            json={
-                                                "model": "deepseek-chat",
-                                                "messages": [
-                                                    {"role": "system", "content": analysis_system},
-                                                    {
-                                                        "role": "user",
-                                                        "content": "Проанализируй мои задачи подробно",
-                                                    },
-                                                ],
-                                                "temperature": 0.7,
-                                            },
-                                            timeout=aiohttp.ClientTimeout(total=60),
-                                        ) as analysis_response:
-                                            analysis_result = await analysis_response.json()
-                                            detailed_analysis = analysis_result["choices"][0]["message"][
-                                                "content"
-                                            ]
-                                            natural_responses.append(detailed_analysis)
-                                            logger.info(
-                                                f"[LIST_TASKS_ANALYSIS] Generated detailed analysis: {detailed_analysis[:100]}..."
-                                            )
-                                except Exception as e:
-                                    logger.error(f"[LIST_TASKS_ANALYSIS] Error generating analysis: {e}")
-                                    # Фоллбэк - добавляем обычный результат
-                                    natural_responses.append(list_tasks_result)
+                                natural_responses.append(list_tasks_result)
+                            
+                            # Формируем финальный контент
+                            final_content = "\n".join(natural_responses)
+                            
+                            # 🎯 ПРИНУЖДАЕМ СОБЛЮДЕНИЕ ГЛАВНОГО ПРОМПТА
+                            intent_type = "list_tasks" if has_list_tasks else None
+                            final_content = await enforce_prompt_compliance(
+                                final_content, intent_type, user_id, context,
+                                system_prompt, messages, url, headers
+                            )
+                            
                             print(f"[DEBUG FALLBACK] Returning final_content: '{final_content[:200]}...'")  # DEBUG
                             return final_content
                     except Exception as e:
@@ -3771,6 +3774,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                     # 🎯 Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, original_message)
+
+                    # 🎯 ПРИНУЖДАЕМ СОБЛЮДЕНИЕ ГЛАВНОГО ПРОМПТА ДЛЯ ОБЫЧНЫХ ОТВЕТОВ
+                    intent = classify_user_intent(clean_message, mentions_str)
+                    intent_type = intent["type"] if intent["confidence"] >= 0.7 else None
+                    content = await enforce_prompt_compliance(
+                        content, intent_type, user_id, context,
+                        system_prompt, messages, url, headers
+                    )
 
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
