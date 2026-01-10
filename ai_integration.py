@@ -1243,7 +1243,77 @@ def get_system_prompt():
 """
 
 
-def parse_relative_time(message, current_time):
+def get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory, context=None):
+    """
+    Создает расширенный system prompt на основе базового + дополнительные правила для текущего контекста
+    """
+    # Базовый system prompt
+    system_prompt = (
+        get_system_prompt()
+        .replace("{{current_date}}", user_now.strftime("%Y-%m-%d"))
+        .replace("{{current_time}}", current_time_str)
+        .replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d"))
+        .replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
+        .replace("{{current_username}}", user_username)
+    )
+
+    # 🎯 ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ДЛЯ ТЕКУЩЕГО КОНТЕКСТА
+    system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
+
+    # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
+    system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
+    system_prompt += "- МИНИМУМ 3-5 ПРЕДЛОЖЕНИЙ в каждом ответе\n"
+    system_prompt += "- При показе задач ОБЯЗАТЕЛЬНО:\n"
+    system_prompt += "  * Прокомментируй каждую задачу отдельно\n"
+    system_prompt += "  * Укажи дедлайны и время напоминаний\n"
+    system_prompt += "  * Отметь приоритетные, срочные, просроченные\n"
+    system_prompt += "  * Предложи конкретный план действий\n"
+    system_prompt += "  * Задай 2-3 вопроса о планах выполнения\n"
+    system_prompt += "- При добавлении задач ОБЯЗАТЕЛЬНО:\n"
+    system_prompt += "  * Дай практические рекомендации по выполнению\n"
+    system_prompt += "  * Предложи связанные действия или оптимизации\n"
+    system_prompt += "  * Уточни детали если нужно\n"
+    system_prompt += "- ЗАПРЕЩЕНО давать односложные ответы вроде 'Ваши задачи: [список]'\n"
+    system_prompt += "- Каждый ответ должен содержать: анализ + рекомендации + вопросы\n"
+    system_prompt += "- Будь активным собеседником, а не пассивным ботом!\n"
+    system_prompt += "\n🔥 КРИТИЧЕСКИ ВАЖНО - ВОВЛЕЧЕНИЕ В ДИАЛОГ:\n"
+    system_prompt += "- КАЖДЫЙ ответ ОБЯЗАТЕЛЬНО заканчивай вопросом или предложением\n"
+    system_prompt += "- Анализируй текущий контекст и предлагай релевантные действия\n"
+    system_prompt += "- Используй данные профиля и задач для персональных рекомендаций\n"
+    system_prompt += "- Будь естественным - адаптируй стиль под ситуацию\n"
+    system_prompt += "- Замечай паттерны и предлагай оптимизации\n"
+
+    system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
+
+    system_prompt += f"\n\n@MENTIONS: {mentions_str}\n🚨 ЕСЛИ ВИДИШЬ @username - ЭТО ДЕЛЕГИРОВАНИЕ! ВЫЗЫВАЙ delegate_task()!\n\nСПЕЦИАЛЬНЫЕ КОМАНДЫ:\n- Сообщение начинается с '@' → delegate_task()\n- 'Найди людей' → find_partners()\n- 'Удали все' → delete_all_tasks()"
+
+    system_prompt += user_memory
+
+    # 🎯 СПЕЦИФИКА СЕРВИСА ASI Biont:
+    system_prompt += "\n\n🎯 СПЕЦИФИКА СЕРВИСА ASI Biont:"
+    system_prompt += "\n- Анализируй задачи пользователя для поиска партнеров с похожими активностями в реальном времени"
+    system_prompt += "\n- Предлагай оптимизацию рабочих процессов и следующие шаги для достижения целей"
+    system_prompt += "\n- Связывай задачи между собой для комплексного планирования проектов"
+    system_prompt += "\n- Мотивируй на участие в сообществе единомышленников для совместного роста"
+    system_prompt += "\n- Подчеркивай преимущества премиум-подписки (3000₽/месяц) при демонстрации возможностей"
+    system_prompt += "\n- ОБНАРУЖИВАЙ ЗАЦИКЛИВАНИЕ: Если пользователь повторяет запросы, предлагай альтернативы и новые темы"
+    system_prompt += "\n- БУДЬ ПРОАКТИВНЫМ: Предлагай неожиданные идеи, связи, возможности развития"
+    system_prompt += "\n- АНАЛИЗИРУЙ ПАТТЕРНЫ: Замечай привычки, предпочтения, зоны роста пользователя"
+
+    # Добавляем информацию о повторяющихся запросах с анализом
+    if context and len(context) > 0:
+        # Анализируем последние сообщения на повторения
+        recent_messages = [item.get('user', '') for item in context[-3:] if 'user' in item]  # Последние 3 пользовательских сообщения
+        if len(set(recent_messages)) <= 1 and len(recent_messages) > 1:  # Пользователь повторяет одно и то же
+            system_prompt += "\n\n🚨 ПОЛЬЗОВАТЕЛЬ ЗАЦИКЛИЛСЯ НА ОДНОМ ЗАПРОСЕ! ОБЯЗАТЕЛЬНО ПРЕДЛОЖИ АЛЬТЕРНАТИВЫ:"
+            system_prompt += "\n- Перейди к другой теме (профиль, партнеры, подписка)"
+            system_prompt += "\n- Предложи новые идеи или варианты"
+            system_prompt += "\n- Задай вопросы о других аспектах жизни/работы"
+            system_prompt += "\n- Мотивируй на действие в другом направлении"
+        else:
+            system_prompt += "\n\n⚠️ УЧИТЫВАЙ КОНТЕКСТ ПРЕДЫДУЩИХ СООБЩЕНИЙ - НЕ ПОВТОРЯЙСЯ! Предлагай развитие темы или новые идеи."
+
+    return system_prompt
     """Parse relative time expressions like 'через 5 минут', 'через 2 часа' and return datetime"""
     from datetime import datetime
 
@@ -3304,52 +3374,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
-        system_prompt = (
-            get_system_prompt()
-            .replace("{{current_date}}", user_now.strftime("%Y-%m-%d"))
-            .replace("{{current_time}}", current_time_str)
-            .replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d"))
-            .replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
-            .replace("{{current_username}}", user_username)
+        system_prompt = get_extended_system_prompt(
+            user_now=user_now,
+            current_time_str=current_time_str,
+            user_username=user_username,
+            mentions_str=mentions_str,
+            user_memory=user_memory,
+            context=context
         )
 
-        # 🎯 КОМПЛЕКСНЫЙ ПОДХОД: задачи, контакты, напоминания, связи
-        system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
-
-        # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
-        system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
-        system_prompt += "- МИНИМУМ 3-5 ПРЕДЛОЖЕНИЙ в каждом ответе\n"
-        system_prompt += "- При показе задач ОБЯЗАТЕЛЬНО:\n"
-        system_prompt += "  * Прокомментируй каждую задачу отдельно\n"
-        system_prompt += "  * Укажи дедлайны и время напоминаний\n"
-        system_prompt += "  * Отметь приоритетные, срочные, просроченные\n"
-        system_prompt += "  * Предложи конкретный план действий\n"
-        system_prompt += "  * Задай 2-3 вопроса о планах выполнения\n"
-        system_prompt += "- При добавлении задач ОБЯЗАТЕЛЬНО:\n"
-        system_prompt += "  * Дай практические рекомендации по выполнению\n"
-        system_prompt += "  * Предложи связанные действия или оптимизации\n"
-        system_prompt += "  * Уточни детали если нужно\n"
-        system_prompt += "- ЗАПРЕЩЕНО давать односложные ответы вроде 'Ваши задачи: [список]'\n"
-        system_prompt += "- Каждый ответ должен содержать: анализ + рекомендации + вопросы\n"
-        system_prompt += "- Будь активным собеседником, а не пассивным ботом!\n"
-        system_prompt += "\n🔥 КРИТИЧЕСКИ ВАЖНО - ВОВЛЕЧЕНИЕ В ДИАЛОГ:\n"
-        system_prompt += "- КАЖДЫЙ ответ ОБЯЗАТЕЛЬНО заканчивай вопросом или предложением\n"
-        system_prompt += "- Анализируй текущий контекст и предлагай релевантные действия\n"
-        system_prompt += "- Используй данные профиля и задач для персональных рекомендаций\n"
-        system_prompt += "- Будь естественным - адаптируй стиль под ситуацию\n"
-        system_prompt += "- Замечай паттерны и предлагай оптимизации\n"
-
-        system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
-
-        system_prompt += f"\n\n@MENTIONS: {mentions_str}\n🚨 ЕСЛИ ВИДИШЬ @username - ЭТО ДЕЛЕГИРОВАНИЕ! ВЫЗЫВАЙ delegate_task()!\n\nСПЕЦИАЛЬНЫЕ КОМАНДЫ:\n- Сообщение начинается с '@' → delegate_task()\n- 'Найди людей' → find_partners()\n- 'Удали все' → delete_all_tasks()"
-
-        system_prompt += user_memory
-
-        # Добавляем информацию о повторяющихся запросах
-        if context and len(context) > 0:
-            system_prompt += "\n\n⚠️ ПОЛЬЗОВАТЕЛЬ ПОВТОРЯЕТ ЗАПРОС - НЕ ПОВТОРЯЙ ПРЕДЫДУЩИЕ ОТВЕТЫ! Предлагай что-то новое: анализ задач, поиск партнеров, обновление профиля, или задай другие вопросы."
-
-        # 🎯 Проверяем контекст последней созданной задачи для edit_task
+        # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
         if redis_client and user_id:
             try:
