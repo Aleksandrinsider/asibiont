@@ -1495,7 +1495,7 @@ def parse_tool_arguments(arguments_str):
         return {}
 
 
-async def generate_task_recommendations(title, description, user_id):
+def generate_task_recommendations(title, description, user_id):
     """Generate AI recommendations for a task"""
     try:
         import requests
@@ -1646,10 +1646,15 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         
         # Генерируем рекомендации для задачи
         try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[ADD_TASK] Generating recommendations for task '{title}'")
             recommendations = generate_task_recommendations(title, description, user.telegram_id)
+            logger.info(f"[ADD_TASK] Generated {len(recommendations) if recommendations else 0} recommendations")
             if recommendations:
                 import json
                 task.recommendations = json.dumps(recommendations, ensure_ascii=False)
+                logger.info(f"[ADD_TASK] Saved recommendations to task: {task.recommendations}")
         except Exception as e:
             import logging
             logging.warning(f"Could not generate recommendations for task {title}: {e}")
@@ -3811,20 +3816,42 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             list_tasks_result = result_text
 
                                         if "Добавлена задача" in result_text:
-                                            match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\)", result_text)
+                                            match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                # Вариативные ответы для добавления задач
-                                                responses = [
-                                                    f'Отлично, добавил задачу "{title}". Теперь она запланирована и я буду напоминать о ней в нужное время. Рекомендую сразу подумать о необходимых ресурсах для выполнения этой задачи. Есть ли какие-то детали, которые стоит уточнить или добавить к задаче?',
-                                                    f'Задача "{title}" успешно создана! Я настрою напоминание в указанное время. Что еще нужно подготовить для выполнения этой задачи? Может быть, добавить описание или связанные действия?',
-                                                    f'Готово! Задача "{title}" добавлена в ваш список. Напоминание установлено. Давайте подумаем, что потребуется для ее выполнения - ресурсы, инструменты или дополнительные шаги?',
-                                                    f'Задача "{title}" запланирована! Я буду следить за временем и напомню. Какие материалы или информация понадобятся для выполнения? Стоит ли разбить задачу на подзадачи?',
-                                                    f'Отлично! "{title}" добавлена и ждет своего часа. Напоминание активировано. Что нужно подготовить заранее? Есть ли связанные задачи, которые стоит тоже запланировать?'
-                                                ]
-                                                import random
-                                                natural = random.choice(responses)
-                                                natural_responses.append(natural)
+                                                task_id = int(match.group(2))
+                                                
+                                                # Получаем рекомендации из базы данных
+                                                from models import Session, Task
+                                                session_db = Session()
+                                                try:
+                                                    task = session_db.query(Task).filter_by(id=task_id).first()
+                                                    recommendations = []
+                                                    if task and task.recommendations:
+                                                        import json
+                                                        try:
+                                                            recommendations = json.loads(task.recommendations)
+                                                        except:
+                                                            pass
+                                                    
+                                                    # Формируем умный ответ с конкретными рекомендациями
+                                                    if recommendations:
+                                                        rec_text = "\n\n💡 Рекомендации для выполнения:\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])
+                                                        natural = f'Отлично! Задача "{title}" добавлена и запланирована. Я буду напоминать о ней в нужное время.{rec_text}\n\nЧто думаете о этих рекомендациях? Стоит ли что-то добавить или изменить?'
+                                                    else:
+                                                        # Fallback на вариативные ответы, если рекомендаций нет
+                                                        responses = [
+                                                            f'Задача "{title}" успешно создана! Я настрою напоминание в указанное время. Что еще нужно подготовить для выполнения этой задачи?',
+                                                            f'Готово! Задача "{title}" добавлена в ваш список. Напоминание установлено. Давайте подумаем, что потребуется для ее выполнения.',
+                                                            f'Задача "{title}" запланирована! Я буду следить за временем и напомню. Какие материалы или информация понадобятся?',
+                                                            f'Отлично! "{title}" добавлена и ждет своего часа. Напоминание активировано. Что нужно подготовить заранее?'
+                                                        ]
+                                                        import random
+                                                        natural = random.choice(responses)
+                                                    
+                                                    natural_responses.append(natural)
+                                                finally:
+                                                    session_db.close()
                                             else:
                                                 natural_responses.append(result_text)
 
