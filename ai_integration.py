@@ -3483,22 +3483,30 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         # Генерируем развёрнутый анализ задач через AI
                                         analysis_system = f"""Ты — ИИ-помощник. Пользователь запросил список задач.
 
-КРИТИЧЕСКИЕ ТРЕБОВАНИЯ:
-1. МИНИМУМ 4-6 ПРЕДЛОЖЕНИЙ с подробным анализом
-2. Анализируй КАЖДУЮ задачу индивидуально
-3. Обрати внимание на дедлайны, приоритеты, просрочки
-4. Предложи КОНКРЕТНЫЙ план действий
-5. Задай 2-3 РЕЛЕВАНТНЫХ вопроса о выполнении
-6. Учитывай контекст и особенности задач
+КРИТИЧЕСКИЕ ТРЕБОВАНИЯ (ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ ВСЕ):
+1. МИНИМУМ 6-8 ПРЕДЛОЖЕНИЙ с подробным анализом (не менее 300 слов)
+2. Анализируй КАЖДУЮ задачу индивидуально: опиши что это, почему важно, возможные сложности
+3. Обрати внимание на дедлайны, приоритеты, просрочки - объясни последствия
+4. Предложи КОНКРЕТНЫЙ план действий с шагами и сроками
+5. Задай 3-4 РЕЛЕВАНТНЫХ вопроса о выполнении и планах
+6. Учитывай контекст пользователя и предлагай персональные решения
 7. Будь естественным - адаптируйся к ситуации пользователя
+8. ОБЯЗАТЕЛЬНО закончи вопросом или предложением для продолжения диалога
 
 СТРОГО ЗАПРЕЩЕНО:
 - "Ваши задачи: [список]" и подобные односложные ответы
-- Просто перечислять задачи
-- Шаблонные фразы
+- Просто перечислять задачи без анализа
+- Шаблонные фразы типа "у вас есть задачи"
+- Короткие ответы менее 300 слов
 - Повторяющиеся формулировки
+- Отсутствие вопросов в конце
 
-Анализируй ситуацию пользователя и давай персональные рекомендации на основе его задач.
+ПРИМЕР СТРУКТУРЫ ОТВЕТА:
+- Введение: Общий анализ ситуации с задачами
+- Детальный разбор каждой задачи
+- Рекомендации по приоритетам и плану
+- Предложения по оптимизации
+- Вопросы для уточнения планов
 
 Данные о задачах:
 {list_tasks_result}
@@ -3593,7 +3601,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         natural_responses.append(result_text)
 
                                 elif "Задачи:" in result_text:
-                                    natural_responses.append(result_text)
+                                    # Не добавляем сразу, анализ будет добавлен отдельно
+                                    pass
 
                                 elif "Удалены все задачи" in result_text:
                                     natural = (
@@ -3608,9 +3617,80 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 else:
                                     natural_responses.append(result_text)
 
-                            final_content = "\n".join(natural_responses)
-                            # 🎯 Обогащаем ответ вовлекающими элементами
-                            final_content = enrich_response_with_engagement(final_content, user_id, original_message)
+                            # Проверяем, есть ли list_tasks в результатах fallback
+                            has_list_tasks = any(action["function"] == "list_tasks" for action in fallback_result)
+                            list_tasks_result = None
+                            if has_list_tasks:
+                                for action in fallback_result:
+                                    if action["function"] == "list_tasks":
+                                        list_tasks_result = action["result"]
+                                        break
+
+                            # 🎯 СПЕЦИАЛЬНАЯ ОБРАБОТКА list_tasks для развёрнутых ответов
+                            if has_list_tasks and list_tasks_result:
+                                # Генерируем развёрнутый анализ задач через AI
+                                analysis_system = f"""Ты — ИИ-помощник. Пользователь запросил список задач.
+
+КРИТИЧЕСКИЕ ТРЕБОВАНИЯ (ОБЯЗАТЕЛЬНО ВЫПОЛНИТЬ ВСЕ):
+1. МИНИМУМ 6-8 ПРЕДЛОЖЕНИЙ с подробным анализом (не менее 300 слов)
+2. Анализируй КАЖДУЮ задачу индивидуально: опиши что это, почему важно, возможные сложности
+3. Обрати внимание на дедлайны, приоритеты, просрочки - объясни последствия
+4. Предложи КОНКРЕТНЫЙ план действий с шагами и сроками
+5. Задай 3-4 РЕЛЕВАНТНЫХ вопроса о выполнении и планах
+6. Учитывай контекст пользователя и предлагай персональные решения
+7. Будь естественным - адаптируйся к ситуации пользователя
+8. ОБЯЗАТЕЛЬНО закончи вопросом или предложением для продолжения диалога
+
+СТРОГО ЗАПРЕЩЕНО:
+- "Ваши задачи: [список]" и подобные односложные ответы
+- Просто перечислять задачи без анализа
+- Шаблонные фразы типа "у вас есть задачи"
+- Короткие ответы менее 300 слов
+- Повторяющиеся формулировки
+- Отсутствие вопросов в конце
+
+ПРИМЕР СТРУКТУРЫ ОТВЕТА:
+- Введение: Общий анализ ситуации с задачами
+- Детальный разбор каждой задачи
+- Рекомендации по приоритетам и плану
+- Предложения по оптимизации
+- Вопросы для уточнения планов
+
+Данные о задачах:
+{list_tasks_result}
+
+Дай естественный развёрнутый анализ с вопросами и конкретными рекомендациями:"""
+
+                                try:
+                                    async with aiohttp.ClientSession() as analysis_session:
+                                        async with analysis_session.post(
+                                            url,
+                                            headers=headers,
+                                            json={
+                                                "model": "deepseek-chat",
+                                                "messages": [
+                                                    {"role": "system", "content": analysis_system},
+                                                    {
+                                                        "role": "user",
+                                                        "content": "Проанализируй мои задачи подробно",
+                                                    },
+                                                ],
+                                                "temperature": 0.7,
+                                            },
+                                            timeout=aiohttp.ClientTimeout(total=60),
+                                        ) as analysis_response:
+                                            analysis_result = await analysis_response.json()
+                                            detailed_analysis = analysis_result["choices"][0]["message"][
+                                                "content"
+                                            ]
+                                            natural_responses.append(detailed_analysis)
+                                            logger.info(
+                                                f"[LIST_TASKS_ANALYSIS] Generated detailed analysis: {detailed_analysis[:100]}..."
+                                            )
+                                except Exception as e:
+                                    logger.error(f"[LIST_TASKS_ANALYSIS] Error generating analysis: {e}")
+                                    # Фоллбэк - добавляем обычный результат
+                                    natural_responses.append(list_tasks_result)
                             print(f"[DEBUG FALLBACK] Returning final_content: '{final_content[:200]}...'")  # DEBUG
                             return final_content
                     except Exception as e:
