@@ -1,5 +1,5 @@
 import aiohttp
-from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY, CURRENT_DATE, LOCAL, DEFAULT_TASK_REMINDER_HOURS
+from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
 import json
 from datetime import datetime, timezone, timedelta
 import re
@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 # Redis client - будет импортирован из main.py
 redis_client = None
 
+
 def set_redis_client(client):
     """Устанавливает глобальный Redis client из main.py"""
     global redis_client
     redis_client = client
+
 
 def classify_user_intent(message, mentions_str):
     """
@@ -29,18 +31,18 @@ def classify_user_intent(message, mentions_str):
     intent = {"type": "unknown", "confidence": 0.0, "params": {}}
 
     # 1. Делегирование задач (@mentions) - улучшенные паттерны
-    if '@' in message:
-        mention_match = re.search(r'@(\w+)', message)
+    if "@" in message:
+        mention_match = re.search(r"@(\w+)", message)
         if mention_match and intent["confidence"] < 0.9:
             intent["type"] = "delegate_task"
             intent["confidence"] = 0.9
             intent["params"]["delegated_to"] = f"@{mention_match.group(1)}"
             # Извлекаем текст задачи - улучшенная логика
-            task_text = re.sub(r'@\w+', '', message).strip()
-            task_text = re.sub(r'^(поручи|делегируй|передай|сделай)\s+', '', task_text, flags=re.IGNORECASE)
+            task_text = re.sub(r"@\w+", "", message).strip()
+            task_text = re.sub(r"^(поручи|делегируй|передай|сделай)\s+", "", task_text, flags=re.IGNORECASE)
             intent["params"]["task_title"] = task_text or "Задача"
             # Парсим время
-            time_match = re.search(r'(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})', task_text)
+            time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", task_text)
             if time_match:
                 intent["params"]["reminder_time"] = time_match.group(1)
             elif "завтра" in task_text.lower():
@@ -49,20 +51,28 @@ def classify_user_intent(message, mentions_str):
 
     # 1.1. Управление делегированными задачами
     accept_keywords = ["принял", "принимаю", "согласен", "возьму", "беру"]
-    if any(keyword in message_lower for keyword in accept_keywords) and "задачу" in message_lower and intent["confidence"] < 0.8:
+    if (
+        any(keyword in message_lower for keyword in accept_keywords)
+        and "задачу" in message_lower
+        and intent["confidence"] < 0.8
+    ):
         intent["type"] = "accept_delegated_task"
         intent["confidence"] = 0.8
         # Извлекаем название задачи
-        task_match = re.search(r'задачу\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        task_match = re.search(r"задачу\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
         if task_match:
             intent["params"]["task_title"] = task_match.group(1).strip()
 
     reject_keywords = ["отклонил", "отказываюсь", "не могу", "занят"]
-    if any(keyword in message_lower for keyword in reject_keywords) and "задачу" in message_lower and intent["confidence"] < 0.8:
+    if (
+        any(keyword in message_lower for keyword in reject_keywords)
+        and "задачу" in message_lower
+        and intent["confidence"] < 0.8
+    ):
         intent["type"] = "reject_delegated_task"
         intent["confidence"] = 0.8
         # Извлекаем название задачи
-        task_match = re.search(r'задачу\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        task_match = re.search(r"задачу\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
         if task_match:
             intent["params"]["task_title"] = task_match.group(1).strip()
 
@@ -71,7 +81,7 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "get_delegation_progress"
         intent["confidence"] = 0.95  # максимальная уверенность
         # Извлекаем название задачи
-        task_match = re.search(r'задачи\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        task_match = re.search(r"задачи\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
         if task_match:
             intent["params"]["task_title"] = task_match.group(1).strip()
         else:
@@ -94,9 +104,9 @@ def classify_user_intent(message, mentions_str):
             if keyword in message_lower:
                 task_text = message_lower.split(keyword, 1)[1].strip()
                 # Убираем время если есть
-                time_patterns = [r'завтра в \d{1,2}:\d{2}', r'сегодня в \d{1,2}:\d{2}', r'через \d+ (минут|час)']
+                time_patterns = [r"завтра в \d{1,2}:\d{2}", r"сегодня в \d{1,2}:\d{2}", r"через \d+ (минут|час)"]
                 for pattern in time_patterns:
-                    task_text = re.sub(pattern, '', task_text, flags=re.IGNORECASE).strip()
+                    task_text = re.sub(pattern, "", task_text, flags=re.IGNORECASE).strip()
                 intent["params"]["task_title"] = task_text
                 break
 
@@ -106,12 +116,14 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "edit_task"
         intent["confidence"] = 0.7
         # Парсим относительное время
-        time_match = re.search(r'через\s+(\d+)\s*(минут|час|часа|часов)', message_lower, re.IGNORECASE)
+        time_match = re.search(r"через\s+(\d+)\s*(минут|час|часа|часов)", message_lower, re.IGNORECASE)
         if time_match:
             amount = int(time_match.group(1))
             unit = time_match.group(2).lower()
             if unit in ["час", "часа", "часов"]:
-                intent["params"]["reminder_time"] = f"через {amount} час{'ов' if amount > 1 else '' if amount == 1 else 'а'}"
+                intent["params"][
+                    "reminder_time"
+                ] = f"через {amount} час{'ов' if amount > 1 else '' if amount == 1 else 'а'}"
             else:
                 intent["params"]["reminder_time"] = f"через {amount} минут"
 
@@ -123,7 +135,7 @@ def classify_user_intent(message, mentions_str):
         # Извлекаем название задачи
         for keyword in complete_keywords:
             if keyword in message_lower:
-                task_text = message_lower.replace(keyword, '').strip()
+                task_text = message_lower.replace(keyword, "").strip()
                 intent["params"]["task_title"] = task_text
                 break
 
@@ -135,19 +147,29 @@ def classify_user_intent(message, mentions_str):
 
     # Удаление конкретной задачи - улучшенные паттерны
     delete_specific_keywords = [
-        "удали эту задачу", "удалить задачу", "удали задачу", "удали эту", "удали задачу",
-        "убери задачу", "убери эту задачу", "вычеркни задачу", "вычеркни эту задачу",
-        "удали её", "удали эту", "убери её", "вычеркни её"
+        "удали эту задачу",
+        "удалить задачу",
+        "удали задачу",
+        "удали эту",
+        "удали задачу",
+        "убери задачу",
+        "убери эту задачу",
+        "вычеркни задачу",
+        "вычеркни эту задачу",
+        "удали её",
+        "удали эту",
+        "убери её",
+        "вычеркни её",
     ]
     if any(keyword in message_lower for keyword in delete_specific_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "delete_task"
         intent["confidence"] = 0.8
         # Извлекаем ID задачи из контекста или сообщения
-        task_id_match = re.search(r'(\d+)', message_lower)
+        task_id_match = re.search(r"(\d+)", message_lower)
         if task_id_match:
             intent["params"]["task_id"] = int(task_id_match.group(1))
         # Также пытаемся извлечь название задачи
-        task_name_match = re.search(r'(?:задачу|эту)\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        task_name_match = re.search(r"(?:задачу|эту)\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
         if task_name_match:
             intent["params"]["task_title"] = task_name_match.group(1).strip()
 
@@ -157,12 +179,18 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "edit_task"
         intent["confidence"] = 0.8
         # Извлекаем ID и новые параметры
-        task_id_match = re.search(r'(\d+)', message_lower)
+        task_id_match = re.search(r"(\d+)", message_lower)
         if task_id_match:
             intent["params"]["task_id"] = int(task_id_match.group(1))
 
     # 6.1. Установка приоритета
-    priority_keywords = ["приоритет", "высокий приоритет", "средний приоритет", "низкий приоритет", "установи приоритет"]
+    priority_keywords = [
+        "приоритет",
+        "высокий приоритет",
+        "средний приоритет",
+        "низкий приоритет",
+        "установи приоритет",
+    ]
     if any(keyword in message_lower for keyword in priority_keywords) and intent["confidence"] < 0.85:
         intent["type"] = "set_priority"
         intent["confidence"] = 0.85
@@ -174,7 +202,7 @@ def classify_user_intent(message, mentions_str):
         elif "низкий" in message_lower:
             intent["params"]["priority"] = "low"
         # Извлекаем ID задачи
-        task_id_match = re.search(r'(\d+)', message_lower)
+        task_id_match = re.search(r"(\d+)", message_lower)
         if task_id_match:
             intent["params"]["task_id"] = int(task_id_match.group(1))
 
@@ -184,7 +212,7 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "get_task_details"
         intent["confidence"] = 0.85
         # Извлекаем ID или название задачи
-        task_id_match = re.search(r'(\d+)', message_lower)
+        task_id_match = re.search(r"(\d+)", message_lower)
         if task_id_match:
             intent["params"]["task_id"] = int(task_id_match.group(1))
 
@@ -194,14 +222,20 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "suggest_alternatives"
         intent["confidence"] = 0.85
         # Извлекаем ID задачи
-        task_id_match = re.search(r'(\d+)', message_lower)
+        task_id_match = re.search(r"(\d+)", message_lower)
         if task_id_match:
             intent["params"]["task_id"] = int(task_id_match.group(1))
 
     # 7. Поиск людей - расширенные паттерны
     find_keywords = [
-        "найди людей", "похожие интересы", "с кем пообщаться", "рекомендуй контакты",
-        "найди партнёров", "кто может помочь", "с кем связаться", "похожие увлечения"
+        "найди людей",
+        "похожие интересы",
+        "с кем пообщаться",
+        "рекомендуй контакты",
+        "найди партнёров",
+        "кто может помочь",
+        "с кем связаться",
+        "похожие увлечения",
     ]
     if any(keyword in message_lower for keyword in find_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "find_partners"
@@ -227,34 +261,44 @@ def classify_user_intent(message, mentions_str):
 
     # 10. Обновление профиля - расширенные паттерны
     profile_keywords = [
-        "живу в", "работаю в", "интересуюсь", "мои навыки", "мои цели",
-        "я из", "работаю", "увлекаюсь", "мои интересы", "мои навыки"
+        "живу в",
+        "работаю в",
+        "интересуюсь",
+        "мои навыки",
+        "мои цели",
+        "я из",
+        "работаю",
+        "увлекаюсь",
+        "мои интересы",
+        "мои навыки",
     ]
     if any(keyword in message_lower for keyword in profile_keywords) and intent["confidence"] < 0.7:
         intent["type"] = "update_profile"
         intent["confidence"] = 0.7
         # Парсим информацию о профиле
         if "живу в" in message_lower or "я из" in message_lower:
-            city_match = re.search(r'(?:живу в|я из)\s+(.+?)(?:\s|$|,)', message_lower, re.IGNORECASE)
+            city_match = re.search(r"(?:живу в|я из)\s+(.+?)(?:\s|$|,)", message_lower, re.IGNORECASE)
             if city_match:
                 intent["params"]["city"] = city_match.group(1).strip().title()
         if "интересуюсь" in message_lower or "увлекаюсь" in message_lower or "мои интересы" in message_lower:
-            interests_match = re.search(r'(?:интересуюсь|увлекаюсь|мои интересы)\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            interests_match = re.search(
+                r"(?:интересуюсь|увлекаюсь|мои интересы)\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE
+            )
             if interests_match:
                 interests = interests_match.group(1).strip()
                 # Replace " и " with ", "
-                interests = re.sub(r'\s+и\s+', ', ', interests)
+                interests = re.sub(r"\s+и\s+", ", ", interests)
                 intent["params"]["interests"] = interests
         if "работаю" in message_lower or "работаю в" in message_lower:
-            company_match = re.search(r'работаю\s+(?:в\s+)?(\w+)', message_lower, re.IGNORECASE)
+            company_match = re.search(r"работаю\s+(?:в\s+)?(\w+)", message_lower, re.IGNORECASE)
             if company_match:
                 intent["params"]["company"] = company_match.group(1)
         if "мои навыки" in message_lower:
-            skills_match = re.search(r'мои навыки\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            skills_match = re.search(r"мои навыки\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
             if skills_match:
                 intent["params"]["skills"] = skills_match.group(1).strip()
         if "мои цели" in message_lower:
-            goals_match = re.search(r'мои цели\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            goals_match = re.search(r"мои цели\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
             if goals_match:
                 intent["params"]["goals"] = goals_match.group(1).strip()
 
@@ -262,7 +306,7 @@ def classify_user_intent(message, mentions_str):
     time_keywords = ["мое время", "текущее время", "сейчас время", "время"]
     if any(keyword in message_lower for keyword in time_keywords):
         # Проверяем, что это именно установка времени, а не вопрос
-        time_match = re.search(r'(\d{1,2}:\d{2})', message_lower)
+        time_match = re.search(r"(\d{1,2}:\d{2})", message_lower)
         if time_match and intent["confidence"] < 0.7:
             intent["type"] = "update_profile"
             intent["confidence"] = 0.7
@@ -270,39 +314,42 @@ def classify_user_intent(message, mentions_str):
 
     timezone_keywords = ["часовой пояс", "timezone", "временная зона"]
     if any(keyword in message_lower for keyword in timezone_keywords) and intent["confidence"] < 0.7:
-        timezone_match = re.search(r'(europe/\w+|utc[+-]\d+|gmt[+-]\d+)', message_lower, re.IGNORECASE)
+        timezone_match = re.search(r"(europe/\w+|utc[+-]\d+|gmt[+-]\d+)", message_lower, re.IGNORECASE)
         if timezone_match:
             intent["type"] = "update_profile"
             intent["confidence"] = 0.7
             intent["params"]["timezone"] = timezone_match.group(1)
         # Также проверяем случай, когда timezone указан без ключевых слов
         elif "europe" in message_lower or "utc" in message_lower or "gmt" in message_lower:
-            tz_match = re.search(r'(europe/\w+|utc[+-]\d+|gmt[+-]\d+)', message_lower, re.IGNORECASE)
+            tz_match = re.search(r"(europe/\w+|utc[+-]\d+|gmt[+-]\d+)", message_lower, re.IGNORECASE)
             if tz_match:
                 intent["type"] = "update_profile"
                 intent["confidence"] = 0.7
                 intent["params"]["timezone"] = tz_match.group(1)
         # Парсим информацию о профиле
         if "живу в" in message_lower:
-            city_match = re.search(r'живу в\s+(.+?)(?:\s|$|,)', message_lower, re.IGNORECASE)
+            city_match = re.search(r"живу в\s+(.+?)(?:\s|$|,)", message_lower, re.IGNORECASE)
             if city_match:
                 intent["params"]["city"] = city_match.group(1).strip().title()
         if "интересуюсь" in message_lower or "увлекаюсь" in message_lower:
-            interests_match = re.search(r'(?:интересуюсь|увлекаюсь)\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            interests_match = re.search(r"(?:интересуюсь|увлекаюсь)\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
             if interests_match:
                 interests = interests_match.group(1).strip()
                 # Replace " и " with ", "
-                interests = re.sub(r'\s+и\s+', ', ', interests)
+                interests = re.sub(r"\s+и\s+", ", ", interests)
                 intent["params"]["interests"] = interests
         if "работаю" in message_lower:
-            company_match = re.search(r'работаю\s+(?:в\s+)?(\w+)', message_lower, re.IGNORECASE)
+            company_match = re.search(r"работаю\s+(?:в\s+)?(\w+)", message_lower, re.IGNORECASE)
             if company_match:
                 intent["params"]["company"] = company_match.group(1)
 
     return intent
 
+
 def smart_fallback_handler(message, mentions_str, user_id, ai_response_content=""):
-    print(f"[DEBUG FALLBACK] Called with message='{message[:30]}...', ai_response='{ai_response_content[:30]}...'")  # DEBUG
+    print(
+        f"[DEBUG FALLBACK] Called with message='{message[:30]}...', ai_response='{ai_response_content[:30]}...'"
+    )  # DEBUG
     print(f"[DEBUG FALLBACK] ai_response_content length: {len(ai_response_content)}")  # DEBUG
     """
     Умная система fallback'ов - используется только когда AI явно не справляется.
@@ -312,31 +359,33 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
 
     # СПЕЦИАЛЬНАЯ ОБРАБОТКА ПРИВЕТСТВИЙ
     greeting_words = ["привет", "здравствуй", "хай", "hello", "hi", "добрый", "здравствуйте"]
-    is_greeting = (
-        len(message.strip()) <= 20 and  # Короткое сообщение
-        any(word in message.lower() for word in greeting_words)  # Содержит слово приветствия
-    )
-    
+    is_greeting = len(message.strip()) <= 20 and any(  # Короткое сообщение
+        word in message.lower() for word in greeting_words
+    )  # Содержит слово приветствия
+
     if is_greeting and len(ai_response_content.strip()) < 50:  # Ответ AI слишком короткий
-        logger.info(f"[SMART FALLBACK] Greeting detected, enhancing response")
+        logger.info("[SMART FALLBACK] Greeting detected, enhancing response")
         # Получаем список задач для подробного ответа
         from models import Session
+
         db_session = Session()
         try:
             tasks_result = list_tasks(user_id=user_id, session=db_session)
-            
+
             # Создаем подробное приветствие
             enhanced_greeting = f"Привет! Рад тебя видеть! {tasks_result}\n\n"
-            
+
             # Добавляем вопросы и предложения
             enhanced_greeting += "Что планируешь сегодня? Есть ли новые задачи, которые нужно добавить? "
             enhanced_greeting += "Или хочешь обновить профиль, чтобы я мог лучше подбирать партнёров?"
-            
-            fallback_actions.append({
-                "function": "enhanced_greeting",
-                "result": enhanced_greeting,
-                "reason": "Приветствие слишком короткое, делаем подробным"
-            })
+
+            fallback_actions.append(
+                {
+                    "function": "enhanced_greeting",
+                    "result": enhanced_greeting,
+                    "reason": "Приветствие слишком короткое, делаем подробным",
+                }
+            )
         finally:
             db_session.close()
         return fallback_actions  # Возвращаем сразу, без дальнейшей обработки
@@ -355,24 +404,36 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
     # 🔍 ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ: проверяем, должен ли был AI вызвать tool calls
     intent = classify_user_intent(message, mentions_str)
     should_have_tool_calls = intent["type"] in [
-        "add_task", "complete_task", "delegate_task", "list_tasks", "find_partners", 
-        "update_profile", "delete_all_tasks", "delete_task", "edit_task",
-        "check_subscription", "create_payment"
+        "add_task",
+        "complete_task",
+        "delegate_task",
+        "list_tasks",
+        "find_partners",
+        "update_profile",
+        "delete_all_tasks",
+        "delete_task",
+        "edit_task",
+        "check_subscription",
+        "create_payment",
     ]
-    
+
     # ЕСЛИ запрос требует действия И AI не вызвал tool calls - применяем fallback
     if should_have_tool_calls and intent["confidence"] >= 0.7:
         ai_confidence = 0.2  # Принудительно низкая уверенность для fallback
         print(f"[DEBUG FALLBACK] Forcing fallback for {intent['type']} (confidence: {intent['confidence']})")  # DEBUG
-    
+
     # Если запрос требует действия, но AI не дал содержательный ответ - низкая уверенность
     if should_have_tool_calls and ai_confidence < 0.6:
         ai_confidence = 0.3
-        logger.info(f"[SMART FALLBACK] Request requires action ({intent['type']}) but AI confidence low ({ai_confidence})")
+        logger.info(
+            f"[SMART FALLBACK] Request requires action ({intent['type']}) but AI confidence low ({ai_confidence})"
+        )
 
     # Если уверенность низкая - применяем паттерн-анализ
     if ai_confidence < 0.4:
-        logger.info(f"[SMART FALLBACK] Applying fallback: message='{message[:50]}...', mentions='{mentions_str}', ai_response='{ai_response_content[:50]}...', intent_type='{intent['type']}', confidence={intent['confidence']}")
+        logger.info(
+            f"[SMART FALLBACK] Applying fallback: message='{message[:50]}...', mentions='{mentions_str}', ai_response='{ai_response_content[:50]}...', intent_type='{intent['type']}', confidence={intent['confidence']}"
+        )
         print(f"[DEBUG FALLBACK] Applying fallback for {intent['type']}, ai_confidence={ai_confidence}")  # DEBUG
 
         if intent["confidence"] >= 0.7:  # Высокая уверенность в классификации
@@ -384,75 +445,59 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
                     title=intent["params"].get("title", "Задача"),
                     description=intent["params"].get("description", ""),
                     reminder_time=intent["params"].get("reminder_time"),
-                    user_id=user_id
+                    user_id=user_id,
                 )
-                fallback_actions.append({
-                    "function": "add_task",
-                    "result": result,
-                    "reason": "AI не создал задачу"
-                })
+                fallback_actions.append({"function": "add_task", "result": result, "reason": "AI не создал задачу"})
 
             elif intent["type"] == "complete_task":
                 result = complete_task(
                     task_id=intent["params"].get("task_id"),
                     task_title=intent["params"].get("task_title"),
-                    user_id=user_id
+                    user_id=user_id,
                 )
-                fallback_actions.append({
-                    "function": "complete_task",
-                    "result": result,
-                    "reason": "AI не отметил задачу выполненной"
-                })
+                fallback_actions.append(
+                    {"function": "complete_task", "result": result, "reason": "AI не отметил задачу выполненной"}
+                )
 
             elif intent["type"] == "update_profile":
-                print(f"[DEBUG FALLBACK] Executing update_profile with city={intent['params'].get('city')}, interests={intent['params'].get('interests')}")  # DEBUG
+                print(
+                    f"[DEBUG FALLBACK] Executing update_profile with city={intent['params'].get('city')}, interests={intent['params'].get('interests')}"
+                )  # DEBUG
                 result = update_profile(
-                    city=intent["params"].get("city"),
-                    interests=intent["params"].get("interests"),
-                    user_id=user_id
+                    city=intent["params"].get("city"), interests=intent["params"].get("interests"), user_id=user_id
                 )
                 print(f"[DEBUG FALLBACK] update_profile result: {result}")  # DEBUG
 
             elif intent["type"] == "list_tasks":
                 result = list_tasks(user_id=user_id)
-                fallback_actions.append({
-                    "function": "list_tasks",
-                    "result": result,
-                    "reason": "AI не показал список задач"
-                })
+                fallback_actions.append(
+                    {"function": "list_tasks", "result": result, "reason": "AI не показал список задач"}
+                )
 
             elif intent["type"] == "delegate_task":
                 result = delegate_task(
                     title=intent["params"].get("task_title", "Задача"),
                     delegated_to_username=intent["params"].get("delegated_to"),
                     reminder_time=intent["params"].get("reminder_time"),
-                    user_id=user_id
+                    user_id=user_id,
                 )
-                fallback_actions.append({
-                    "function": "delegate_task",
-                    "result": result,
-                    "reason": "AI не распознал делегирование"
-                })
+                fallback_actions.append(
+                    {"function": "delegate_task", "result": result, "reason": "AI не распознал делегирование"}
+                )
 
             elif intent["type"] == "find_partners":
                 result = find_partners(user_id=user_id)
-                fallback_actions.append({
-                    "function": "find_partners",
-                    "result": result,
-                    "reason": "AI не выполнил поиск партнеров"
-                })
+                fallback_actions.append(
+                    {"function": "find_partners", "result": result, "reason": "AI не выполнил поиск партнеров"}
+                )
 
             elif intent["type"] == "delete_task":
                 result = delete_task(
                     task_id=intent["params"].get("task_id"),
                     task_title=intent["params"].get("task_title"),
-                    user_id=user_id
+                    user_id=user_id,
                 )
-                fallback_actions.append({
-                    "function": "delete_task",
-                    "result": result,
-                    "reason": "AI не удалил задачу"
-                })
+                fallback_actions.append({"function": "delete_task", "result": result, "reason": "AI не удалил задачу"})
 
             elif intent["type"] == "edit_task":
                 result = edit_task(
@@ -460,56 +505,48 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
                     title=intent["params"].get("title"),
                     description=intent["params"].get("description"),
                     reminder_time=intent["params"].get("reminder_time"),
-                    user_id=user_id
+                    user_id=user_id,
                 )
-                fallback_actions.append({
-                    "function": "edit_task",
-                    "result": result,
-                    "reason": "AI не изменил задачу"
-                })
+                fallback_actions.append({"function": "edit_task", "result": result, "reason": "AI не изменил задачу"})
 
             elif intent["type"] == "check_subscription":
                 result = check_subscription_status(user_id=user_id)
-                fallback_actions.append({
-                    "function": "check_subscription_status",
-                    "result": result,
-                    "reason": "AI не проверил статус подписки"
-                })
+                fallback_actions.append(
+                    {
+                        "function": "check_subscription_status",
+                        "result": result,
+                        "reason": "AI не проверил статус подписки",
+                    }
+                )
 
             elif intent["type"] == "create_payment":
                 result = create_subscription_payment(user_id=user_id)
-                fallback_actions.append({
-                    "function": "create_subscription_payment",
-                    "result": result,
-                    "reason": "AI не создал платеж"
-                })
+                fallback_actions.append(
+                    {"function": "create_subscription_payment", "result": result, "reason": "AI не создал платеж"}
+                )
 
             elif intent["type"] == "delete_all_tasks":
                 result = delete_task(
                     task_id=intent["params"].get("task_id"),
                     task_title=intent["params"].get("task_title"),
-                    user_id=user_id
+                    user_id=user_id,
                 )
-                fallback_actions.append({
-                    "function": "delete_task",
-                    "result": result,
-                    "reason": "AI не удалил задачу"
-                })
+                fallback_actions.append({"function": "delete_task", "result": result, "reason": "AI не удалил задачу"})
 
             elif intent["type"] == "delete_all_tasks":
                 result = delete_all_tasks(user_id=user_id)
-                fallback_actions.append({
-                    "function": "delete_all_tasks",
-                    "result": result,
-                    "reason": "AI не выполнил удаление задач"
-                })
+                fallback_actions.append(
+                    {"function": "delete_all_tasks", "result": result, "reason": "AI не выполнил удаление задач"}
+                )
 
     return fallback_actions
+
 
 def encrypt_data(data):
     if data:
         return cipher.encrypt(data.encode()).decode()
     return data
+
 
 def decrypt_data(data):
     if data is None:
@@ -524,68 +561,69 @@ def decrypt_data(data):
             return data
     return data
 
+
 def determine_timezone_from_time(user_time_str, user_id):
     """Определяет timezone пользователя на основе введенного времени"""
     import re
     from datetime import datetime
     import pytz
-    from models import Session, User
-    
+
     # Парсим время из строки (HH:MM)
-    time_match = re.search(r'(\d{1,2}):(\d{2})', user_time_str)
+    time_match = re.search(r"(\d{1,2}):(\d{2})", user_time_str)
     if not time_match:
         return None
-    
+
     user_hour = int(time_match.group(1))
-    user_minute = int(time_match.group(2))
-    
+    # user_minute = int(time_match.group(2))
+
     # Текущее UTC время
     now_utc = datetime.now(pytz.UTC)
-    
+
     # Создаем datetime объект для пользователя
-    user_now = now_utc.replace(hour=user_hour, minute=user_minute)
-    
+    # user_now = now_utc.replace(hour=user_hour, minute=user_minute)
+
     # Вычисляем разницу в часах
     hour_diff = user_hour - now_utc.hour
-    
+
     # Обрабатываем переход через сутки
     if hour_diff > 12:
         hour_diff -= 24
     elif hour_diff < -12:
         hour_diff += 24
-    
+
     # Определяем timezone на основе разницы
     timezone_map = {
-        -12: 'Pacific/Kwajalein',  # UTC-12
-        -11: 'Pacific/Midway',     # UTC-11
-        -10: 'Pacific/Honolulu',   # UTC-10
-        -9: 'America/Anchorage',   # UTC-9
-        -8: 'America/Los_Angeles', # UTC-8
-        -7: 'America/Denver',      # UTC-7
-        -6: 'America/Chicago',     # UTC-6
-        -5: 'America/New_York',    # UTC-5
-        -4: 'America/Halifax',     # UTC-4
-        -3: 'America/Sao_Paulo',   # UTC-3
-        -2: 'Atlantic/South_Georgia', # UTC-2
-        -1: 'Atlantic/Azores',     # UTC-1
-        0: 'Europe/London',        # UTC+0
-        1: 'Europe/Paris',         # UTC+1
-        2: 'Europe/Kiev',          # UTC+2
-        3: 'Europe/Moscow',        # UTC+3
-        4: 'Asia/Dubai',           # UTC+4
-        5: 'Asia/Karachi',         # UTC+5
-        6: 'Asia/Dhaka',           # UTC+6
-        7: 'Asia/Bangkok',         # UTC+7
-        8: 'Asia/Shanghai',        # UTC+8
-        9: 'Asia/Tokyo',           # UTC+9
-        10: 'Australia/Sydney',    # UTC+10
-        11: 'Pacific/Noumea',      # UTC+11
-        12: 'Pacific/Auckland'     # UTC+12
+        -12: "Pacific/Kwajalein",  # UTC-12
+        -11: "Pacific/Midway",  # UTC-11
+        -10: "Pacific/Honolulu",  # UTC-10
+        -9: "America/Anchorage",  # UTC-9
+        -8: "America/Los_Angeles",  # UTC-8
+        -7: "America/Denver",  # UTC-7
+        -6: "America/Chicago",  # UTC-6
+        -5: "America/New_York",  # UTC-5
+        -4: "America/Halifax",  # UTC-4
+        -3: "America/Sao_Paulo",  # UTC-3
+        -2: "Atlantic/South_Georgia",  # UTC-2
+        -1: "Atlantic/Azores",  # UTC-1
+        0: "Europe/London",  # UTC+0
+        1: "Europe/Paris",  # UTC+1
+        2: "Europe/Kiev",  # UTC+2
+        3: "Europe/Moscow",  # UTC+3
+        4: "Asia/Dubai",  # UTC+4
+        5: "Asia/Karachi",  # UTC+5
+        6: "Asia/Dhaka",  # UTC+6
+        7: "Asia/Bangkok",  # UTC+7
+        8: "Asia/Shanghai",  # UTC+8
+        9: "Asia/Tokyo",  # UTC+9
+        10: "Australia/Sydney",  # UTC+10
+        11: "Pacific/Noumea",  # UTC+11
+        12: "Pacific/Auckland",  # UTC+12
     }
-    
+
     # Находим ближайший timezone
     closest_diff = min(timezone_map.keys(), key=lambda x: abs(x - hour_diff))
     return timezone_map[closest_diff]
+
 
 def parse_time_to_datetime(time_text, user_id):
     """Парсит время из текста пользователя"""
@@ -593,90 +631,88 @@ def parse_time_to_datetime(time_text, user_id):
     from datetime import datetime, timedelta
     import pytz
     from models import Session, User
-    
+
     # Получаем timezone пользователя
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
     session.close()
     now = datetime.now(user_tz)
-    
+
     time_text = time_text.lower().strip()
-    
+
     # Проверяем "через X минут/часов"
-    through_time_match = re.search(r'через\s+(\d+)\s+(минут|час)', time_text)
+    through_time_match = re.search(r"через\s+(\d+)\s+(минут|час)", time_text)
     if through_time_match:
         amount = int(through_time_match.group(1))
         unit = through_time_match.group(2).lower()
-        
-        if 'минут' in unit:
+
+        if "минут" in unit:
             target_dt = now + timedelta(minutes=amount)
         else:  # час/часов
             target_dt = now + timedelta(hours=amount)
-        
-        return target_dt.strftime('%Y-%m-%d %H:%M')
-    
+
+        return target_dt.strftime("%Y-%m-%d %H:%M")
+
     # Проверяем "завтра/сегодня в XX:XX"
-    time_match = re.search(r'(завтра|послезавтра|сегодня)\s+(?:в\s+)?(\d{1,2}):(\d{2})', time_text)
+    time_match = re.search(r"(завтра|послезавтра|сегодня)\s+(?:в\s+)?(\d{1,2}):(\d{2})", time_text)
     if time_match:
         day_word = time_match.group(1).lower()
         hour = int(time_match.group(2))
         minute = int(time_match.group(3))
-        
-        if 'завтра' in day_word:
+
+        if "завтра" in day_word:
             target_date = (now + timedelta(days=1)).date()
-        elif 'послезавтра' in day_word:
+        elif "послезавтра" in day_word:
             target_date = (now + timedelta(days=2)).date()
         else:
             target_date = now.date()
-        
+
         target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
         target_dt = user_tz.localize(target_dt)
-        return target_dt.strftime('%Y-%m-%d %H:%M')
-    
+        return target_dt.strftime("%Y-%m-%d %H:%M")
+
     # Проверяем просто "в HH:MM"
-    simple_time_match = re.search(r'(?:в\s+)?(\d{1,2}):(\d{2})', time_text)
+    simple_time_match = re.search(r"(?:в\s+)?(\d{1,2}):(\d{2})", time_text)
     if simple_time_match:
         hour = int(simple_time_match.group(1))
         minute = int(simple_time_match.group(2))
-        
+
         # Если время уже прошло сегодня - ставим на завтра
         target_time = datetime.min.time().replace(hour=hour, minute=minute)
         if target_time <= now.time():
             target_date = (now + timedelta(days=1)).date()
         else:
             target_date = now.date()
-        
+
         target_dt = datetime.combine(target_date, target_time)
         target_dt = user_tz.localize(target_dt)
-        return target_dt.strftime('%Y-%m-%d %H:%M')
-    
+        return target_dt.strftime("%Y-%m-%d %H:%M")
+
     # Проверяем "утром", "вечером", "днем"
-    time_word_match = re.search(r'(утром|вечером|днем)', time_text)
+    time_word_match = re.search(r"(утром|вечером|днем)", time_text)
     if time_word_match:
         time_word = time_word_match.group(1).lower()
-        if 'утром' in time_word:
+        if "утром" in time_word:
             hour, minute = 8, 0
-        elif 'вечером' in time_word:
+        elif "вечером" in time_word:
             hour, minute = 18, 0
-        elif 'днем' in time_word:
+        elif "днем" in time_word:
             hour, minute = 12, 0
-        
+
         target_time = datetime.min.time().replace(hour=hour, minute=minute)
         # Если время уже прошло сегодня - ставим на завтра
         if target_time <= now.time():
             target_date = (now + timedelta(days=1)).date()
         else:
             target_date = now.date()
-        
+
         target_dt = datetime.combine(target_date, target_time)
         target_dt = user_tz.localize(target_dt)
-        return target_dt.strftime('%Y-%m-%d %H:%M')
-    
+        return target_dt.strftime("%Y-%m-%d %H:%M")
+
     return None
-    content = re.sub(r'\w+\s+user_id=\d+', '', content).strip()
-    content = re.sub(r'Args for \w+:', '', content).strip()
-    return content
+
 
 def replace_placeholders(content, user_now=None, current_time_str=None):
     """Заменяет плейсхолдеры типа {{current_time}} на реальные значения"""
@@ -684,39 +720,53 @@ def replace_placeholders(content, user_now=None, current_time_str=None):
         return ""
     if not isinstance(content, str):
         raise ValueError("Content must be a string")
-    
+
     if not user_now:
         user_now = datetime.now(pytz.UTC)
     if not current_time_str:
-        current_time_str = user_now.strftime('%H:%M')
-    
+        current_time_str = user_now.strftime("%H:%M")
+
     # Форматируем дату по-русски
-    months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+    months = [
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря",
+    ]
     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-    
+
     content = content.replace("{{current_time}}", current_time_str)
     content = content.replace("{{current_date}}", current_date_str)
-    content = content.replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime('%Y-%m-%d'))
-    content = content.replace("{{day_after}}", (user_now + timedelta(days=2)).strftime('%Y-%m-%d'))
-    
+    content = content.replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d"))
+    content = content.replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
+
     return content
 
 
 class AIIntegration:
     async def generate_reminder(self, user_id, task_title):
         return await generate_reminder(user_id, task_title)
-    
+
     async def generate_result_check(self, user_id, task_title):
         return await generate_result_check(user_id, task_title)
-    
+
     async def generate_proactive_message(self, user_id):
         return generate_proactive_message(user_id)
-    
+
     async def generate_daily_report(self, user_id):
         return generate_daily_report(user_id)
-    
+
     async def generate_overdue_reminder(self, user_id, overdue_tasks):
         return generate_overdue_reminder(user_id, overdue_tasks)
+
 
 def clean_technical_details(text):
     """Удаляет технические детали из ответа AI"""
@@ -724,8 +774,9 @@ def clean_technical_details(text):
         return ""
     if not isinstance(text, str):
         raise ValueError("Text must be a string")
-    
+
     import logging
+
     logger = logging.getLogger(__name__)
     original_text = text
     print(f"[DEBUG CLEAN] Original text: '{text}'")  # DEBUG
@@ -733,63 +784,68 @@ def clean_technical_details(text):
 
     # Удаляем вызовы функций в квадратных скобках: [add_task(...)]
     before = text
-    text = re.sub(r'\[[\w_]+\([^]]*\)\]', '', text)
+    text = re.sub(r"\[[\w_]+\([^]]*\)\]", "", text)
     if before != text:
         print(f"[DEBUG CLEAN] After removing function calls: '{text}'")  # DEBUG
 
     # Удаляем пустые квадратные скобки
     before = text
-    text = re.sub(r'\[\s*\]', '', text)
+    text = re.sub(r"\[\s*\]", "", text)
     if before != text:
         print(f"[DEBUG CLEAN] After removing empty brackets: '{text}'")  # DEBUG
 
     # Удаляем названия функций (с скобками и без)
     before = text
-    text = re.sub(r'\b(list_tasks|add_task|delete_task|complete_task|delegate_task|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)(\s*\(\s*\))?', '', text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)(\s*\(\s*\))?",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
     if before != text:
         print(f"[DEBUG CLEAN] After removing function names: '{text}'")  # DEBUG
 
     # Удаляем фразы о вызове функций
     patterns_to_remove = [
-        r'вызываю\s+\w+(\(\))?',
-        r'вызову\s+\w+(\(\))?',
-        r'сейчас\s+вызову',
-        r'буду\s+вызывать',
-        r'Args for.*?(?=\n|$)',
-        r'🔧\s*ВЫПОЛНЕННЫЕ ФУНКЦИИ:.*?(?=\n\n|\Z)',
-        r'🔧\s*\*\*Выполняю:\*\*.*?(?=\n|$)',
-        r'📋\s*\*\*Результат:\*\*.*?(?=\n\n|\Z)',
-        r'ВЫПОЛНЕННЫЕ ФУНКЦИИ.*?(?=\n\n|\Z)',
+        r"вызываю\s+\w+(\(\))?",
+        r"вызову\s+\w+(\(\))?",
+        r"сейчас\s+вызову",
+        r"буду\s+вызывать",
+        r"Args for.*?(?=\n|$)",
+        r"🔧\s*ВЫПОЛНЕННЫЕ ФУНКЦИИ:.*?(?=\n\n|\Z)",
+        r"🔧\s*\*\*Выполняю:\*\*.*?(?=\n|$)",
+        r"📋\s*\*\*Результат:\*\*.*?(?=\n\n|\Z)",
+        r"ВЫПОЛНЕННЫЕ ФУНКЦИИ.*?(?=\n\n|\Z)",
     ]
 
     for pattern in patterns_to_remove:
-        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
 
     # Удаляем блоки кода Python - ТОЛЬКО если они содержат техническую информацию
     # Не удаляем json блоки, которые могут содержать полезные данные
-    text = re.sub(r'```python.*?```', '', text, flags=re.DOTALL)
+    text = re.sub(r"```python.*?```", "", text, flags=re.DOTALL)
     # Удаляем пустые блоки кода
-    text = re.sub(r'```\s*```', '', text)
+    text = re.sub(r"```\s*```", "", text)
 
     # КРИТИЧЕСКИ ВАЖНО: Удаляем JSON блоки с tool_calls - они не должны попадать в ответ пользователю
     # Удаляем полные JSON блоки с tool_calls
-    text = re.sub(r'```json\s*\{[^}]*"tool_calls"[^}]*\}```', '', text, flags=re.DOTALL)
-    text = re.sub(r'```json.*?tool_calls.*?(```|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'```json\s*\{[^}]*"tool_calls"[^}]*\}```', "", text, flags=re.DOTALL)
+    text = re.sub(r"```json.*?tool_calls.*?(```|$)", "", text, flags=re.DOTALL | re.IGNORECASE)
     # Удаляем любые оставшиеся JSON блоки с tool_calls
-    text = re.sub(r'\{[^}]*"tool_calls"[^}]*\}', '', text, flags=re.DOTALL)
-    text = re.sub(r'"tool_calls"\s*:\s*\[.*?\]', '', text, flags=re.DOTALL)
+    text = re.sub(r'\{[^}]*"tool_calls"[^}]*\}', "", text, flags=re.DOTALL)
+    text = re.sub(r'"tool_calls"\s*:\s*\[.*?\]', "", text, flags=re.DOTALL)
     # Удаляем любые JSON блоки в кодовых блоках, если они содержат tool_calls
-    text = re.sub(r'```json[\s\S]*?tool_calls[\s\S]*?```', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"```json[\s\S]*?tool_calls[\s\S]*?```", "", text, flags=re.IGNORECASE)
     # Удаляем любые оставшиеся ```json блоки
-    text = re.sub(r'```json[\s\S]*?```', '', text, flags=re.IGNORECASE)
+    text = re.sub(r"```json[\s\S]*?```", "", text, flags=re.IGNORECASE)
 
     # Убираем множественные пробелы и пустые строки
-    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
-    text = re.sub(r'\s+', ' ', text)  # Убираем лишние пробелы
+    text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
+    text = re.sub(r"\s+", " ", text)  # Убираем лишние пробелы
 
     # Убираем пробелы в начале и конце
     text = text.strip()
-    text = re.sub(r' +', ' ', text)
+    text = re.sub(r" +", " ", text)
 
     # КРИТИЧЕСКАЯ ПРОВЕРКА: если после очистки ничего не осталось,
     # значит AI вернул только технические детали, вернуть оригинал
@@ -803,8 +859,10 @@ def clean_technical_details(text):
 
     return text.strip()
 
+
 # Alias for backward compatibility
 clean_content = clean_technical_details
+
 
 def enrich_response_with_engagement(content, user_id=None, original_message=""):
     """
@@ -815,32 +873,29 @@ def enrich_response_with_engagement(content, user_id=None, original_message=""):
     Работает естественно, без шаблонных фраз - просто добавляет общий призыв к действию
     """
     # Проверяем длину ответа (в предложениях)
-    sentences = [s.strip() for s in re.split(r'[.!?]+', content) if s.strip()]
-    
+    sentences = [s.strip() for s in re.split(r"[.!?]+", content) if s.strip()]
+
     # Если ответ достаточно развёрнутый (3+ предложения) или уже содержит вопрос - не трогаем
-    if len(sentences) >= 3 or '?' in content:
+    if len(sentences) >= 3 or "?" in content:
         return content
-    
+
     # Добавляем лёгкое вовлечение только для очень коротких ответов (1-2 предложения)
     # AI сам должен генерировать контекстные вопросы, мы только подстраховываемся
     import random
-    
+
     # Минималистичные варианты, которые не повторяются
-    minimal_engagement = [
-        " Что дальше?",
-        " Чем ещё помочь?",
-        " Какие планы?"
-    ]
-    
+    minimal_engagement = [" Что дальше?", " Чем ещё помочь?", " Какие планы?"]
+
     # Только для самых коротких ответов (1 предложение)
     if len(sentences) <= 1:
         enrichment = random.choice(minimal_engagement)
         return content + enrichment
-    
+
     return content
 
+
 def get_system_prompt():
-    return f"""Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как опытный коллега, который искренне хочет помочь.
+    return """Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как опытный коллега, который искренне хочет помочь.
 
 🚨 КРИТИЧНО ВАЖНЫЕ ПРАВИЛА:
 1. НИКОГДА не отвечай на запросы без вызова соответствующих функций!
@@ -1068,46 +1123,47 @@ def get_system_prompt():
 def parse_relative_time(message, current_time):
     """Parse relative time expressions like 'через 5 минут', 'через 2 часа' and return datetime"""
     from datetime import datetime
-    
+
     if not message or not isinstance(message, str):
         raise ValueError("Message must be a non-empty string")
     if not current_time or not isinstance(current_time, datetime):
         raise ValueError("Current time must be a datetime object")
-    
+
     import re
     from datetime import datetime, timedelta
-    
+
     # Patterns for Russian time expressions
     patterns = [
-        (r'через\s+(\d+)\s*мин', lambda m: timedelta(minutes=int(m.group(1)))),
-        (r'через\s+(\d+)\s*минут', lambda m: timedelta(minutes=int(m.group(1)))),
-        (r'через\s+(\d+)\s*час', lambda m: timedelta(hours=int(m.group(1)))),
-        (r'через\s+(\d+)\s*часа', lambda m: timedelta(hours=int(m.group(1)))),
-        (r'через\s+(\d+)\s*часов', lambda m: timedelta(hours=int(m.group(1)))),
+        (r"через\s+(\d+)\s*мин", lambda m: timedelta(minutes=int(m.group(1)))),
+        (r"через\s+(\d+)\s*минут", lambda m: timedelta(minutes=int(m.group(1)))),
+        (r"через\s+(\d+)\s*час", lambda m: timedelta(hours=int(m.group(1)))),
+        (r"через\s+(\d+)\s*часа", lambda m: timedelta(hours=int(m.group(1)))),
+        (r"через\s+(\d+)\s*часов", lambda m: timedelta(hours=int(m.group(1)))),
     ]
-    
+
     for pattern, delta_func in patterns:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             delta = delta_func(match)
             return current_time + delta
-    
+
     return None
+
 
 def parse_absolute_time(message):
     """Parse absolute time expressions like 'сейчас 12:18', 'время 15:30' and return HH:MM"""
     if not message or not isinstance(message, str):
         raise ValueError("Message must be a non-empty string")
-    
+
     import re
-    
+
     # Patterns for absolute time
     patterns = [
-        r'сейчас\s+(\d{1,2}):(\d{2})',
-        r'время\s+(\d{1,2}):(\d{2})',
-        r'(\d{1,2}):(\d{2})',  # Just HH:MM
+        r"сейчас\s+(\d{1,2}):(\d{2})",
+        r"время\s+(\d{1,2}):(\d{2})",
+        r"(\d{1,2}):(\d{2})",  # Just HH:MM
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
@@ -1115,8 +1171,9 @@ def parse_absolute_time(message):
             minutes = int(match.group(2))
             if 0 <= hours <= 23 and 0 <= minutes <= 59:
                 return f"{hours:02d}:{minutes:02d}"
-    
+
     return None
+
 
 def parse_tool_arguments(arguments_str):
     """Parse tool arguments from string, fallback to empty dict if parsing fails"""
@@ -1124,33 +1181,36 @@ def parse_tool_arguments(arguments_str):
         return {}
     if not isinstance(arguments_str, str):
         raise ValueError("Arguments must be a string")
-    
+
     try:
         return json.loads(arguments_str)
     except (json.JSONDecodeError, ValueError):
         return {}
 
+
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}")
     from models import Session, Task, User
     from datetime import datetime
     import pytz
+
     if session is None:
         session = Session()
         close_session = True
-        logger.info(f"[ADD_TASK] Created new session")
+        logger.info("[ADD_TASK] Created new session")
     else:
         close_session = False
-        logger.info(f"[ADD_TASK] Using provided session")
+        logger.info("[ADD_TASK] Using provided session")
     # Проверить, существует ли пользователь
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         user = User(telegram_id=user_id)
         session.add(user)
         session.commit()
-    
+
     # Проверить, существует ли задача с таким же названием
     existing_task = session.query(Task).filter_by(user_id=user.id, title=title).first()
     if existing_task:
@@ -1180,6 +1240,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         user_tz = pytz.timezone(user.timezone)
                     except pytz.exceptions.UnknownTimeZoneError:
                         import logging
+
                         logging.warning(f"Unknown timezone {user.timezone}, using UTC")
                         user_tz = pytz.UTC
                 # Парсить как локальное время пользователя
@@ -1189,7 +1250,10 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 # Конвертировать в UTC для хранения
                 task.reminder_time = local_dt.astimezone(pytz.UTC)
                 import logging
-                logging.info(f"Task {title} reminder_time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+
+                logging.info(
+                    f"Task {title} reminder_time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}"
+                )
             except ValueError:
                 pass  # Игнорировать неверный формат
         if due_date:
@@ -1203,28 +1267,27 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.add(task)
         session.commit()
         task_id = task.id
-    
+
     # Планировать напоминание если указано reminder_time
     if task.reminder_time:
         try:
             from main import reminder_service
+
             if reminder_service:
                 reminder_service.schedule_reminder(
-                    task_id=task.id,
-                    reminder_time=task.reminder_time,
-                    user_id=user.telegram_id,
-                    task_title=task.title
+                    task_id=task.id, reminder_time=task.reminder_time, user_id=user.telegram_id, task_title=task.title
                 )
         except Exception as e:
             import logging
+
             logging.warning(f"Could not schedule reminder for task {task_id} (scheduler may not be running yet): {e}")
-    
+
     # Обновить аналитику профиля
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if profile:
         profile.total_tasks_created = (profile.total_tasks_created or 0) + 1
         session.commit()
-    
+
     # Формируем подробный ответ с ID для edit_task
     result_msg = f"Добавлена задача '{title}' (ID: {task_id})"
     if task.reminder_time:
@@ -1232,7 +1295,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         local_time = task.reminder_time.astimezone(user_tz)
         result_msg += f" с напоминанием на {local_time.strftime('%d.%m.%Y %H:%M')}"
-    
+
     if close_session:
         session.close()
         logger.info(f"[ADD_TASK] Closed session, returning: {result_msg}")
@@ -1240,87 +1303,85 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         logger.info(f"[ADD_TASK] Session not closed, returning: {result_msg}")
     return result_msg
 
+
 def delete_task(task_id=None, task_title=None, user_id=None, session=None):
     """Delete a specific task by ID or title"""
     from models import Session, Task, User
+
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
-    
+
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             if close_session:
                 session.close()
             return "Пользователь не найден."
-        
+
         task = None
         if task_id:
             try:
                 task_id_int = int(task_id)
-                task = session.query(Task).filter(
-                    Task.id == task_id_int,
-                    Task.user_id == user.id
-                ).first()
+                task = session.query(Task).filter(Task.id == task_id_int, Task.user_id == user.id).first()
             except (ValueError, TypeError):
                 pass
-        
+
         if not task and task_title:
             # Try to find by title (case-insensitive partial match)
-            task = session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.title.ilike(f'%{task_title}%')
-            ).first()
-        
+            task = session.query(Task).filter(Task.user_id == user.id, Task.title.ilike(f"%{task_title}%")).first()
+
         if not task:
             if close_session:
                 session.close()
             return "Задача не найдена."
-        
+
         # Delete the task
         session.delete(task)
         session.commit()
-        
+
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile and profile.total_tasks_created:
             profile.total_tasks_created = max(0, (profile.total_tasks_created or 0) - 1)
             session.commit()
-        
+
         if close_session:
             session.close()
         return f"Задача '{task.title}' удалена."
-    
+
     except Exception as e:
         if close_session:
             session.close()
         return f"Ошибка удаления задачи: {str(e)}"
 
+
 def delete_all_tasks(user_id=None, session=None):
     """Delete all tasks for a user"""
     from models import Session, Task, User, UserProfile
+
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
-    
+
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             if close_session:
                 session.close()
             return "Пользователь не найден."
-        
+
         # Count tasks before deletion
         task_count = session.query(Task).filter_by(user_id=user.id).count()
-        
+
         # Delete all tasks
         session.query(Task).filter_by(user_id=user.id).delete()
         session.commit()
-        
+
         # Reset profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
@@ -1328,97 +1389,22 @@ def delete_all_tasks(user_id=None, session=None):
             profile.completed_tasks = 0
             profile.skipped_tasks = 0
             session.commit()
-        
+
         if close_session:
             session.close()
         return f"Удалено {task_count} задач."
-    
+
     except Exception as e:
         if close_session:
             session.close()
         return f"Ошибка удаления задач: {str(e)}"
-    
-    # Get user timezone
-    user_tz = pytz.UTC
-    if user and user.timezone:
-        try:
-            user_tz = pytz.timezone(user.timezone)
-        except Exception:
-            user_tz = pytz.UTC
-    
-    base_now = datetime.now(pytz.UTC)
-    user_now = base_now.astimezone(user_tz)
-    
-    if tasks:
-        # Filter out tasks overdue by more than 30 days
-        active_tasks = []
-        for t in tasks:
-            if t.status == 'pending' and t.reminder_time:
-                if t.reminder_time.tzinfo is None:
-                    reminder_utc = pytz.UTC.localize(t.reminder_time)
-                else:
-                    reminder_utc = t.reminder_time
-                if reminder_utc < base_now - timedelta(days=30):
-                    continue  # Skip very old overdue tasks
-            active_tasks.append(t)
-        
-        task_list = []
-        for t in active_tasks:
-            title = t.title
-            # Add delegation context to title
-            if t.delegated_to_username:
-                # Check if task is delegated TO me or BY me
-                if t.delegated_to_username.lower() == user.username.lower():
-                    # Task delegated TO me
-                    creator = session.query(User).filter_by(id=t.user_id).first()
-                    if creator:
-                        title = f"{t.title} от @{creator.username}"
-                elif t.user_id == user.id:
-                    # Task delegated BY me to someone else
-                    title = f"{t.title} для @{t.delegated_to_username}"
-            
-            # Add time info and overdue status
-            task_info = f"{t.id}. {title} ({t.status}"
-            if t.reminder_time:
-                if t.reminder_time.tzinfo is None:
-                    reminder_utc = pytz.UTC.localize(t.reminder_time)
-                else:
-                    reminder_utc = t.reminder_time
-                reminder_local = reminder_utc.astimezone(user_tz)
-                task_info += f", напоминание {reminder_local.strftime('%d.%m %H:%M')}"
-                
-                # Check if overdue
-                if reminder_local < user_now and t.status == 'pending':
-                    delta = user_now - reminder_local
-                    minutes = int(delta.total_seconds() / 60)
-                    hours = minutes // 60
-                    if hours > 0:
-                        task_info += f", просрочена на {hours}ч {minutes % 60}мин"
-                    else:
-                        task_info += f", просрочена на {minutes}мин"
-                elif reminder_local > user_now and t.status == 'pending':
-                    delta = reminder_local - user_now
-                    minutes = int(delta.total_seconds() / 60)
-                    hours = minutes // 60
-                    if hours > 0:
-                        task_info += f", через {hours}ч {minutes % 60}мин"
-                    else:
-                        task_info += f", через {minutes}мин"
-            task_info += ")"
-            task_list.append(task_info)
-        
-        if close_session:
-            session.close()
-        return f"Задачи: {', '.join(task_list)}."
-    
-    if close_session:
-        session.close()
-    return "Нет задач."
+
 
 def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     from models import Session, Task, UserProfile, Interaction
     from datetime import datetime
     from sqlalchemy import or_
+
     print(f"[DEBUG COMPLETE_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")  # DEBUG
     if session is None:
         session = Session()
@@ -1431,7 +1417,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         if close_session:
             session.close()
         return "Пользователь не найден."
-    
+
     # Найти задачу по ID или по названию
     if task_id:
         # Ищем задачу: созданную мной ИЛИ делегированную мне
@@ -1441,55 +1427,51 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
             if close_session:
                 session.close()
             return f"Некорректный ID задачи: {task_id}"
-        
-        task = session.query(Task).filter(
-            Task.id == task_id_int,
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
+
+        task = (
+            session.query(Task)
+            .filter(
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username))
             )
-        ).first()
+            .first()
+        )
     elif task_title:
         # Ищем по словам в названии для более гибкого поиска
         words = task_title.lower().split()
         print(f"[DEBUG COMPLETE_TASK] Searching by title, words: {words}")  # DEBUG
         # OR вместо AND - ищем задачу содержащую хотя бы одно из слов
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
-        task = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status != 'completed',
-            or_(*conditions)
-        ).first()
+        task = session.query(Task).filter(Task.user_id == user.id, Task.status != "completed", or_(*conditions)).first()
         print(f"[DEBUG COMPLETE_TASK] Found task by title: {task.title if task else None}")  # DEBUG
     else:
         if close_session:
             session.close()
         return "Не указан ни task_id, ни task_title."
-    
+
     if task:
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
         session.commit()
         print(f"[DEBUG COMPLETE_TASK] Task completed: {task.title}, status: {task.status}")  # DEBUG
-        
+
         # Обновить аналитику профиля
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
-            completion_time = (datetime.now(timezone.utc) - task.created_at.replace(tzinfo=timezone.utc)).total_seconds() / 60
+            completion_time = (
+                datetime.now(timezone.utc) - task.created_at.replace(tzinfo=timezone.utc)
+            ).total_seconds() / 60
             profile.completed_tasks = (profile.completed_tasks or 0) + 1
             prev_avg = profile.average_completion_time or 0
             # Защита от деления на ноль
             if profile.completed_tasks > 0:
-                profile.average_completion_time = ((prev_avg * (profile.completed_tasks - 1)) + completion_time) / profile.completed_tasks
+                profile.average_completion_time = (
+                    (prev_avg * (profile.completed_tasks - 1)) + completion_time
+                ) / profile.completed_tasks
             session.commit()
         result = f"Завершена задача '{task.title}'."
-        
+
         # Сохранить сообщение в историю взаимодействий
-        interaction = Interaction(
-            user_id=user.id,
-            message_type='ai',
-            content=result
-        )
+        interaction = Interaction(user_id=user.id, message_type="ai", content=result)
         session.add(interaction)
         session.commit()
     else:
@@ -1498,20 +1480,22 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         session.close()
     return result
 
+
 def set_reminder(task_id, reminder_time, user_id=None):
     from models import Session, Task
     from datetime import datetime
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден."
-        
+
         try:
             task_id_int = int(task_id)
         except (ValueError, TypeError):
             return f"Некорректный ID задачи: {task_id}"
-        
+
         task = session.query(Task).filter_by(id=task_id_int, user_id=user.id).first()
         if task:
             try:
@@ -1527,8 +1511,10 @@ def set_reminder(task_id, reminder_time, user_id=None):
     finally:
         session.close()
 
+
 def update_user_memory(info, user_id=None):
     from models import Session, User
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -1538,7 +1524,7 @@ def update_user_memory(info, user_id=None):
             if user.memory:
                 try:
                     existing_decrypted = decrypt_data(user.memory)
-                except Exception as e:
+                except Exception:
                     existing_decrypted = ""
             # Добавляем новую информацию
             if existing_decrypted:
@@ -1556,18 +1542,21 @@ def update_user_memory(info, user_id=None):
     finally:
         session.close()
 
-def delegate_task(title, description="", reminder_time=None, delegated_to_username=None, delegation_details="", user_id=None):
+
+def delegate_task(
+    title, description="", reminder_time=None, delegated_to_username=None, delegation_details="", user_id=None
+):
     """Create a delegated task that requires acceptance by the recipient"""
     from models import Session, Task, User
     from datetime import datetime
     import pytz
-    
+
     session = Session()
     try:
         # Validate reminder_time is provided
         if not reminder_time:
             return "⚠️ Для делегирования задачи требуется точная дата и время дедлайна. Пожалуйста, уточните: на какое точное время и дату поставить дедлайн? (Например: '2026-01-10 15:00' или 'завтра в 14:30')"
-        
+
         # Validate reminder_time format
         if reminder_time:
             # Try parsing the format first
@@ -1582,32 +1571,27 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
                     logger.info(f"[DELEGATE] Parsed to: {reminder_time}")
                 else:
                     return f"⚠️ Некорректный формат времени '{reminder_time}'. Укажите точное время в формате YYYY-MM-DD HH:MM (например: 2026-01-10 15:00)"
-        
+
         # Find delegator (creator)
         delegator = session.query(User).filter_by(telegram_id=user_id).first()
         if not delegator:
             return "Ошибка: Пользователь не найден."
-        
+
         # Find recipient by username
-        recipient_username = delegated_to_username.replace('@', '').lower()
+        recipient_username = delegated_to_username.replace("@", "").lower()
         print(f"[DEBUG DELEGATE] Looking for recipient: '{recipient_username}'")  # DEBUG
         recipient = session.query(User).filter(User.username.ilike(recipient_username)).first()
         print(f"[DEBUG DELEGATE] Found recipient: {recipient.username if recipient else None}")  # DEBUG
-        
+
         if not recipient:
             return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
-        
+
         # If delegating to self, create regular task instead
         print(f"[DEBUG DELEGATE] Checking if self: recipient.id={recipient.id}, delegator.id={delegator.id}")  # DEBUG
         if recipient.id == delegator.id:
             print(f"[DEBUG DELEGATE] Delegating to self")  # DEBUG
             # Create regular task for self
-            task = Task(
-                user_id=delegator.id,
-                title=title,
-                description=encrypt_data(description),
-                status='pending'
-            )
+            task = Task(user_id=delegator.id, title=title, description=encrypt_data(description), status="pending")
             if reminder_time:
                 try:
                     user_tz = pytz.timezone(delegator.timezone) if delegator.timezone else pytz.UTC
@@ -1619,31 +1603,33 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
             session.add(task)
             session.commit()
             task_id = task.id
-            
+
             # Schedule reminder if set
             if task.reminder_time:
                 try:
                     from main import reminder_service
+
                     if reminder_service:
                         reminder_service.schedule_reminder(
                             task_id=task.id,
                             reminder_time=task.reminder_time,
                             user_id=delegator.telegram_id,
-                            task_title=task.title
+                            task_title=task.title,
                         )
                 except Exception as e:
                     import logging
+
                     logging.error(f"Failed to schedule reminder for self-delegated task {task_id}: {e}")
-            
+
             # Update profile analytics
             profile = session.query(UserProfile).filter_by(user_id=delegator.id).first()
             if profile:
                 profile.total_tasks_created = (profile.total_tasks_created or 0) + 1
                 session.commit()
-            
+
             session.close()
             return f"Задача '{title}' добавлена для вас с напоминанием на {reminder_time}."
-        
+
         # Create task with pending delegation status
         task = Task(
             user_id=delegator.id,
@@ -1651,11 +1637,11 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
             description=encrypt_data(description),
             delegated_by=None,
             delegated_to_username=recipient_username,
-            delegation_status='pending',
+            delegation_status="pending",
             delegation_details=delegation_details,
-            status='pending'
+            status="pending",
         )
-        
+
         if reminder_time:
             try:
                 user_tz = pytz.timezone(recipient.timezone) if recipient.timezone else pytz.UTC
@@ -1664,14 +1650,15 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
                 task.reminder_time = local_dt.astimezone(pytz.UTC)
             except ValueError:
                 pass
-        
+
         session.add(task)
         session.commit()
         task_id = task.id
-        
+
         # Send notification to recipient via Telegram
         try:
             from main import bot
+
             if bot:
                 message = f"🔔 Новое предложение задачи от @{delegator.username}:\n\n"
                 message += f"📋 Задача: {title}\n"
@@ -1682,37 +1669,42 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
                 if delegation_details:
                     message += f"ℹ️ Детали: {delegation_details}\n"
                 message += f"\n💬 Напишите боту 'принять задачу {task_id}' для подтверждения или 'отклонить задачу {task_id}' для отказа."
-                
+
                 import asyncio
+
                 asyncio.create_task(bot.send_message(recipient.telegram_id, message))
         except Exception as e:
             import logging
+
             logging.error(f"Failed to send delegation notification: {e}")
-        
+
         session.close()
         return f"Предложение задачи отправлено @{recipient_username}. Ожидается подтверждение."
     except Exception as e:
         session.close()
         return f"Ошибка при создании делегированной задачи: {str(e)}"
 
+
 def suggest_alternatives(task_id, reason="", user_id=None):
     """Предложить альтернативы для невыполненной задачи через AI"""
     import asyncio
+
     return asyncio.run(_suggest_alternatives_async(task_id, reason, user_id))
+
 
 async def _suggest_alternatives_async(task_id, reason="", user_id=None):
     from models import Session, Task
-    
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден."
-        
+
         task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
         if not task:
             return "Задача не найдена."
-        
+
         # Получить память пользователя
         user_memory = ""
         if user.memory:
@@ -1720,30 +1712,29 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
                 user_memory = f"\nИнформация о пользователе: {decrypt_data(user.memory)}"
             except:
                 user_memory = ""
-        
+
         # Генерируем альтернативы через AI
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+
         system_prompt = get_system_prompt()
-        
+
         messages = [
             {"role": "system", "content": system_prompt + user_memory},
-            {"role": "user", "content": f"Предложи 3-5 альтернативных подходов к задаче '{task.title}'. Причина невыполнения: '{reason}'. Будь практичным и конкретным."}
+            {
+                "role": "user",
+                "content": f"Предложи 3-5 альтернативных подходов к задаче '{task.title}'. Причина невыполнения: '{reason}'. Будь практичным и конкретным.",
+            },
         ]
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages,
-            "max_tokens": 500
-        }
-        
+
+        data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 500}
+
         import aiohttp
+
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
@@ -1753,37 +1744,40 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
                     return content
                 else:
                     return "Не удалось сгенерировать альтернативы."
-                    
+
     except Exception as e:
         return f"Ошибка при генерации альтернатив: {str(e)}"
     finally:
         session.close()
 
+
 def create_subscription_payment(user_id=None):
     """Создает платеж для месячной подписки"""
     from subscription_service import create_subscription_payment as create_sub_payment
+
     try:
         payment_url = create_sub_payment(user_id)
         return f"Ссылка на оплату месячной подписки создана: {payment_url}"
     except Exception as e:
         return f"Ошибка создания платежа: {str(e)}"
 
+
 def check_subscription_status(user_id=None):
     """Проверяет статус подписки пользователя"""
     from subscription_service import get_subscription_status
     from config import FREE_ACCESS_MODE
-    
+
     try:
         if FREE_ACCESS_MODE:
             return "Режим бесплатного доступа активен. Подписка не требуется."
-        
+
         status = get_subscription_status(user_id)
         if status:
             status_text = f"Статус подписки: {status['status']}\n"
             status_text += f"План: {status['plan']}\n"
-            if status['start_date']:
+            if status["start_date"]:
                 status_text += f"Дата начала: {status['start_date'][:10]}\n"
-            if status['end_date']:
+            if status["end_date"]:
                 status_text += f"Дата окончания: {status['end_date'][:10]}\n"
             status_text += f"Количество входов: {status['login_count']}"
             return status_text
@@ -1792,9 +1786,11 @@ def check_subscription_status(user_id=None):
     except Exception as e:
         return f"Ошибка проверки подписки: {str(e)}"
 
+
 def cancel_subscription(user_id=None):
     """Отменяет подписку пользователя"""
     from subscription_service import cancel_subscription as cancel_sub
+
     try:
         success = cancel_sub(user_id)
         if success:
@@ -1804,151 +1800,176 @@ def cancel_subscription(user_id=None):
     except Exception as e:
         return f"Ошибка отмены подписки: {str(e)}"
 
+
 def accept_delegated_task(task_id, user_id=None):
     """Accept a delegated task"""
     from models import Session, Task, User
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Ошибка: Пользователь не найден."
-        
+
         try:
             task_id_int = int(task_id)
         except (ValueError, TypeError):
             return f"Некорректный ID задачи: {task_id}"
-        
+
         # Ищем задачу делегированную МНЕ (по delegated_to_username)
-        task = session.query(Task).filter(
-            Task.id == task_id_int,
-            Task.delegated_to_username.ilike(user.username),
-            Task.delegation_status == 'pending'
-        ).first()
+        task = (
+            session.query(Task)
+            .filter(
+                Task.id == task_id_int,
+                Task.delegated_to_username.ilike(user.username),
+                Task.delegation_status == "pending",
+            )
+            .first()
+        )
         if not task:
             return "Задача не найдена или уже обработана."
-        
+
         # Update delegation status
-        task.delegation_status = 'accepted'
+        task.delegation_status = "accepted"
         session.commit()
-        
+
         # Schedule reminder if set
         if task.reminder_time:
             try:
                 from main import reminder_service
+
                 if reminder_service:
                     reminder_service.schedule_reminder(
                         task_id=task.id,
                         reminder_time=task.reminder_time,
                         user_id=user.telegram_id,
-                        task_title=task.title
+                        task_title=task.title,
                     )
             except Exception as e:
                 import logging
+
                 logging.error(f"Failed to schedule reminder: {e}")
-        
+
         # Notify delegator (creator)
         try:
             delegator = session.query(User).filter_by(id=task.user_id).first()
             if delegator and delegator.telegram_id != user_id:
                 from main import bot
+
                 if bot:
                     message = f"✅ @{user.username} принял задачу: {task.title}"
                     import asyncio
+
                     asyncio.create_task(bot.send_message(delegator.telegram_id, message))
         except Exception as e:
             import logging
+
             logging.error(f"Failed to notify delegator: {e}")
-        
+
         session.close()
         return f"Вы приняли задачу '{task.title}'. Она добавлена в ваш список задач."
     except Exception as e:
         session.close()
         return f"Ошибка: {str(e)}"
 
+
 def reject_delegated_task(task_id, user_id=None):
     """Reject a delegated task"""
     from models import Session, Task, User
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Ошибка: Пользователь не найден."
-        
+
         try:
             task_id_int = int(task_id)
         except (ValueError, TypeError):
             return f"Некорректный ID задачи: {task_id}"
-        
+
         # Ищем задачу делегированную МНЕ (по delegated_to_username)
-        task = session.query(Task).filter(
-            Task.id == task_id_int,
-            Task.delegated_to_username.ilike(user.username),
-            Task.delegation_status == 'pending'
-        ).first()
+        task = (
+            session.query(Task)
+            .filter(
+                Task.id == task_id_int,
+                Task.delegated_to_username.ilike(user.username),
+                Task.delegation_status == "pending",
+            )
+            .first()
+        )
         if not task:
             return "Задача не найдена или уже обработана."
-        
+
         # Update delegation status
-        task.delegation_status = 'rejected'
-        task.status = 'rejected'
+        task.delegation_status = "rejected"
+        task.status = "rejected"
         session.commit()
-        
+
         # Notify delegator (creator)
         try:
             delegator = session.query(User).filter_by(id=task.user_id).first()
             if delegator and delegator.telegram_id != user_id:
                 from main import bot
+
                 if bot:
                     message = f"❌ @{user.username} отклонил задачу: {task.title}"
                     import asyncio
+
                     asyncio.create_task(bot.send_message(delegator.telegram_id, message))
         except Exception as e:
             import logging
+
             logging.error(f"Failed to notify delegator: {e}")
-        
+
         session.close()
         return f"Вы отклонили задачу '{task.title}'."
     except Exception as e:
         session.close()
         return f"Ошибка: {str(e)}"
 
+
 def get_delegation_progress(task_id, user_id=None):
     """Get progress report for a delegated task"""
     from models import Session, Task, User
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Ошибка: Пользователь не найден."
-        
+
         task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
         if not task or not task.delegated_to_username:
             return "Делегированная задача не найдена."
-        
+
         recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
-        
-        if task.delegation_status == 'pending':
+
+        if task.delegation_status == "pending":
             status_msg = f"⏳ @{task.delegated_to_username} еще не ответил на предложение."
-        elif task.delegation_status == 'accepted':
-            if task.status == 'completed':
+        elif task.delegation_status == "accepted":
+            if task.status == "completed":
                 status_msg = f"✅ Задача выполнена @{task.delegated_to_username}!"
             else:
-                status_msg = f"📌 @{task.delegated_to_username} принял задачу и работает над ней (статус: {task.status})."
-        elif task.delegation_status == 'rejected':
+                status_msg = (
+                    f"📌 @{task.delegated_to_username} принял задачу и работает над ней (статус: {task.status})."
+                )
+        elif task.delegation_status == "rejected":
             status_msg = f"❌ @{task.delegated_to_username} отклонил эту задачу."
         else:
             status_msg = "Статус неизвестен."
-        
+
         session.close()
         return f"Задача: {task.title}\n{status_msg}"
     except Exception as e:
         session.close()
         return f"Ошибка: {str(e)}"
 
+
 def edit_task(task_id, title=None, description=None, reminder_time=None, user_id=None):
     from models import Session, Task
     from datetime import datetime
-    from reminder_service import ReminderService
+
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
@@ -1962,14 +1983,14 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
             has_access = True  # Обычная задача пользователя или делегированная им
         elif task.delegated_to_username:
             # Проверить, является ли пользователь получателем делегированной задачи
-            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            recipient_username = task.delegated_to_username.replace("@", "").lower()
             if user.username and user.username.lower() == recipient_username:
                 has_access = True
-        
+
         if not has_access:
             session.close()
             return "У вас нет прав на редактирование этой задачи."
-        
+
         if title:
             task.title = title
         if description:
@@ -1991,68 +2012,19 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
     session.close()
     return result
 
-def delete_task(task_id=None, task_title=None, user_id=None):
-    from models import Session, Task
-    from sqlalchemy import or_
-    session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        session.close()
-        return "Пользователь не найден."
-    
-    task = None
-    # Найти задачу по ID или по названию
-    if task_id:
-        try:
-            task = session.query(Task).filter_by(id=int(task_id)).first()
-        except (ValueError, TypeError):
-            session.close()
-            return f"Некорректный ID задачи: {task_id}"
-    elif task_title:
-        # Ищем по словам в названии для более гибкого поиска (OR вместо AND)
-        words = task_title.lower().split()
-        conditions = [Task.title.ilike(f"%{word}%") for word in words]
-        task = session.query(Task).filter(
-            Task.user_id == user.id,
-            or_(*conditions)
-        ).first()
-    else:
-        session.close()
-        return "Не указан ни task_id, ни task_title."
-    
-    # Проверяем права доступа для ЛЮБОГО способа поиска
-    if task:
-        has_access = False
-        if task.user_id == user.id:
-            has_access = True
-        elif task.delegated_to_username:
-            recipient_username = task.delegated_to_username.replace('@', '').lower()
-            if user.username and user.username.lower() == recipient_username:
-                has_access = True
-        
-        if not has_access:
-            session.close()
-            return "У вас нет прав на удаление этой задачи."
-        
-        title = task.title
-        session.delete(task)
-        session.commit()
-        result = f"Удалена задача '{title}'."
-    else:
-        result = "Задача не найдена."
-    session.close()
-    return result
 
 def delete_all_tasks(user_id=None):
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info(f"[DELETE_ALL] Starting delete_all_tasks for user_id: {user_id} (type: {type(user_id)})")
-    
+
     try:
         from models import Session, Task
+
         session = Session()
         logger.info(f"[DELETE_ALL] Session created")
-        
+
         # Преобразуем user_id в int, если нужно
         try:
             user_id = int(user_id)
@@ -2060,38 +2032,39 @@ def delete_all_tasks(user_id=None):
             logger.error(f"[DELETE_ALL] Invalid user_id: {user_id}")
             session.close()
             return "Некорректный ID пользователя."
-        
+
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             logger.warning(f"[DELETE_ALL] User not found for telegram_id: {user_id}")
             session.close()
             return "Пользователь не найден."
-        
+
         logger.info(f"[DELETE_ALL] Found user: {user.id}, telegram_id: {user.telegram_id}")
-        
+
         # Удаляем все задачи пользователя (созданные им и делегированные ему)
         from sqlalchemy import or_
+
         conditions = [Task.user_id == user.id]
         if user.username:
             conditions.append(Task.delegated_to_username.ilike(user.username))
-        
+
         tasks_to_delete = session.query(Task).filter(or_(*conditions)).all()
         deleted_count = len(tasks_to_delete)
         logger.info(f"[DELETE_ALL] Found {deleted_count} tasks to delete")
-        
+
         for task in tasks_to_delete:
             logger.info(f"[DELETE_ALL] Deleting task: {task.id} - {task.title}")
             session.delete(task)
-        
+
         session.commit()
         logger.info(f"[DELETE_ALL] Commit successful, deleted {deleted_count} tasks")
         session.close()
-        
+
         if deleted_count > 0:
             return f"Удалено {deleted_count} задач."
         else:
             return "У вас нет задач для удаления."
-    
+
     except Exception as e:
         logger.error(f"[DELETE_ALL] Error in delete_all_tasks: {e}", exc_info=True)
         try:
@@ -2100,15 +2073,17 @@ def delete_all_tasks(user_id=None):
             pass
         return "Произошла ошибка при удалении задач."
 
+
 def set_priority(task_id, priority, user_id=None):
     from models import Session, Task
+
     session = Session()
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session.close()
         return "Пользователь не найден."
-    
+
     # Поддержка частичного совпадения названия задачи
     try:
         task_id_int = int(task_id)
@@ -2122,22 +2097,22 @@ def set_priority(task_id, priority, user_id=None):
             if task_id_lower in t.title.lower():
                 task = t
                 break
-    
+
     if task:
         # Проверить права доступа
         has_access = False
         if task.user_id == user.id:
             has_access = True
         elif task.delegated_to_username:
-            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            recipient_username = task.delegated_to_username.replace("@", "").lower()
             if user.username and user.username.lower() == recipient_username:
                 has_access = True
-        
+
         if not has_access:
             session.close()
             return "У вас нет прав на изменение приоритета этой задачи."
-        
-        if priority in ['high', 'medium', 'low']:
+
+        if priority in ["high", "medium", "low"]:
             task.priority = priority
             session.commit()
             result = f"Установлен приоритет '{priority}' для '{task.title}'."
@@ -2148,8 +2123,10 @@ def set_priority(task_id, priority, user_id=None):
     session.close()
     return result
 
+
 def get_task_details(task_id, user_id=None):
     from models import Session, Task
+
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
@@ -2163,79 +2140,94 @@ def get_task_details(task_id, user_id=None):
             has_access = True  # Обычная задача пользователя
         elif task.delegated_to_username:
             # Проверить, является ли пользователь получателем делегированной задачи
-            recipient_username = task.delegated_to_username.replace('@', '').lower()
+            recipient_username = task.delegated_to_username.replace("@", "").lower()
             if user.username and user.username.lower() == recipient_username:
                 has_access = True
-        
+
         if not has_access:
             session.close()
             return "У вас нет прав на просмотр этой задачи."
-        
+
         session.close()
         return f"Задача: {task.title}, статус {task.status}, приоритет {task.priority}."
     session.close()
     return "Задача не найдена."
 
+
 def get_partners_list(user_id=None, session=None):
     """Возвращает список всех пользователей с профилями (кроме самого пользователя и тех, с кем уже есть делегирование)"""
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info(f"[PARTNERS] get_partners_list called for user_id: {user_id}")
-    
+
     from models import Session, UserProfile, User, Task
+
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         logger.warning(f"[PARTNERS] User not found for telegram_id: {user_id}")
         if close_session:
             session.close()
         return []
-    
+
     logger.info(f"[PARTNERS] Found user: {user.id}, username: {user.username}")
-    
+
     # Получаем список пользователей, с которыми уже есть делегирование
     delegated_usernames = set()
-    
+
     # Задачи, которые делегировали мне
     if user.username:
-        delegated_to_me = session.query(Task).filter(
-            Task.delegated_to_username.ilike(user.username),
-            Task.delegation_status.in_(['pending', 'accepted'])
-        ).all()
+        delegated_to_me = (
+            session.query(Task)
+            .filter(
+                Task.delegated_to_username.ilike(user.username), Task.delegation_status.in_(["pending", "accepted"])
+            )
+            .all()
+        )
         for task in delegated_to_me:
             delegated_user = session.query(User).filter_by(id=task.user_id).first()
             if delegated_user:
-                delegated_usernames.add(delegated_user.username.lower() if delegated_user.username else '')
+                delegated_usernames.add(delegated_user.username.lower() if delegated_user.username else "")
     else:
         delegated_to_me = []
-    
+
     # Задачи, которые я делегировал
-    delegated_by_me = session.query(Task).filter(
-        Task.user_id == user.id,
-        Task.delegated_to_username.isnot(None),
-        Task.delegation_status.in_(['pending', 'accepted'])
-    ).all()
+    delegated_by_me = (
+        session.query(Task)
+        .filter(
+            Task.user_id == user.id,
+            Task.delegated_to_username.isnot(None),
+            Task.delegation_status.in_(["pending", "accepted"]),
+        )
+        .all()
+    )
     for task in delegated_by_me:
         if task.delegated_to_username:
-            delegated_usernames.add(task.delegated_to_username.replace('@', '').lower())
-    
+            delegated_usernames.add(task.delegated_to_username.replace("@", "").lower())
+
     # Получаем все профили с заполненными данными, кроме своего и тех, с кем уже есть делегирование
-    all_profiles = session.query(UserProfile).join(User, UserProfile.user_id == User.id).filter(
-        UserProfile.user_id != user.id,
-        # Хотя бы одно поле должно быть заполнено
-        (UserProfile.interests.isnot(None)) | 
-        (UserProfile.skills.isnot(None)) | 
-        (UserProfile.position.isnot(None)) |
-        (UserProfile.city.isnot(None))
-    ).all()
-    
+    all_profiles = (
+        session.query(UserProfile)
+        .join(User, UserProfile.user_id == User.id)
+        .filter(
+            UserProfile.user_id != user.id,
+            # Хотя бы одно поле должно быть заполнено
+            (UserProfile.interests.isnot(None))
+            | (UserProfile.skills.isnot(None))
+            | (UserProfile.position.isnot(None))
+            | (UserProfile.city.isnot(None)),
+        )
+        .all()
+    )
+
     logger.info(f"[PARTNERS] Found {len(all_profiles)} profiles with data")
-    
+
     # Получаем профиль текущего пользователя для сравнения
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if not user_profile:
@@ -2243,87 +2235,93 @@ def get_partners_list(user_id=None, session=None):
         if close_session:
             session.close()
         return []
-    
-    logger.info(f"[PARTNERS] User profile: interests='{user_profile.interests}', skills='{user_profile.skills}', goals='{user_profile.goals}'")
-    
+
+    logger.info(
+        f"[PARTNERS] User profile: interests='{user_profile.interests}', skills='{user_profile.skills}', goals='{user_profile.goals}'"
+    )
+
     # Фильтруем только тех, у кого есть совпадения
     partners = []
     for profile in all_profiles:
         profile_user = session.query(User).filter_by(id=profile.user_id).first()
         if not profile_user or not profile_user.username:
             continue
-        
-        logger.info(f"[PARTNERS] Checking profile for {profile_user.username}: interests='{profile.interests}', skills='{profile.skills}'")
-        
+
+        logger.info(
+            f"[PARTNERS] Checking profile for {profile_user.username}: interests='{profile.interests}', skills='{profile.skills}'"
+        )
+
         # Проверяем наличие совпадений по интересам, навыкам или целям
         has_match = False
-        
+
         # Проверка по навыкам
         if user_profile.skills and profile.skills:
-            user_skills = set(s.strip().lower() for s in user_profile.skills.split(','))
-            profile_skills = set(s.strip().lower() for s in profile.skills.split(','))
+            user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
+            profile_skills = set(s.strip().lower() for s in profile.skills.split(","))
             if user_skills & profile_skills:
                 has_match = True
                 logger.info(f"[PARTNERS] Skills match: {user_skills & profile_skills}")
-        
+
         # Проверка по интересам
         if user_profile.interests and profile.interests:
-            user_interests = set(i.strip().lower() for i in user_profile.interests.split(','))
-            profile_interests = set(i.strip().lower() for i in profile.interests.split(','))
+            user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
+            profile_interests = set(i.strip().lower() for i in profile.interests.split(","))
             if user_interests & profile_interests:
                 has_match = True
                 logger.info(f"[PARTNERS] Interests match: {user_interests & profile_interests}")
-        
+
         # Проверка по целям
         if user_profile.goals and profile.goals:
-            user_goals = set(g.strip().lower() for g in user_profile.goals.split(','))
-            profile_goals = set(g.strip().lower() for g in profile.goals.split(','))
+            user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
+            profile_goals = set(g.strip().lower() for g in profile.goals.split(","))
             if user_goals & profile_goals:
                 has_match = True
                 logger.info(f"[PARTNERS] Goals match: {user_goals & profile_goals}")
-        
+
         # Проверка по компании
-        if hasattr(user_profile, 'company') and hasattr(profile, 'company'):
+        if hasattr(user_profile, "company") and hasattr(profile, "company"):
             if user_profile.company and profile.company:
                 if user_profile.company.lower() == profile.company.lower():
                     has_match = True
                     logger.info(f"[PARTNERS] Company match: {user_profile.company}")
-        
+
         # Добавляем только если есть совпадение
         if has_match:
             partners.append(profile)
             logger.info(f"[PARTNERS] Added {profile_user.username} to partners")
-    
+
     logger.info(f"[PARTNERS] Total partners found: {len(partners)}")
-    
+
     # Сортируем: сначала пользователи из одного города, потом остальные
     user_city = user_profile.city.lower() if user_profile.city else None
     partners_same_city = []
     partners_other_city = []
-    
+
     for partner in partners:
         partner_city = partner.city.lower() if partner.city else None
         if user_city and partner_city == user_city:
             partners_same_city.append(partner)
         else:
             partners_other_city.append(partner)
-    
+
     # Сортируем каждую группу по среднему рейтингу (от большего к меньшему)
     partners_same_city.sort(key=lambda p: (p.average_rating or 0), reverse=True)
     partners_other_city.sort(key=lambda p: (p.average_rating or 0), reverse=True)
-    
+
     # Объединяем: сначала из того же города, потом остальные
     sorted_partners = partners_same_city + partners_other_city
-    
+
     if close_session:
         session.close()
-    
+
     # Возвращаем до 20 пользователей (можно увеличить при необходимости)
     return sorted_partners[:20]
+
 
 def find_partners(user_id=None, session=None):
     import re
     from models import Session, UserProfile, User, Task
+
     if session is None:
         session = Session()
         close_session = True
@@ -2334,16 +2332,17 @@ def find_partners(user_id=None, session=None):
         if close_session:
             session.close()
         return "Пользователь не найден."
-    
+
     # Получаем задачи текущего пользователя для анализа совместных идей
     user_tasks = session.query(Task).filter_by(user_id=user.id).all()
     user_task_keywords = set()
     for task in user_tasks:
         # Извлекаем ключевые слова из названий и описаний задач
         import re
-        words = re.findall(r'\b\w+\b', (task.title + " " + (task.description or "")).lower())
+
+        words = re.findall(r"\b\w+\b", (task.title + " " + (task.description or "")).lower())
         user_task_keywords.update(words)
-    
+
     # Остальной код...
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
@@ -2354,16 +2353,15 @@ def find_partners(user_id=None, session=None):
         try:
             decrypted = decrypt_data(user.memory)
             # Ищем паттерны вроде "не показывать @user" или "заблокировать @user"
-            import re
             from datetime import datetime, timezone as dt_timezone
-            
+
             # Permanent blocks
-            matches = re.findall(r'не показывать @(\w+)|заблокировать @(\w+)', decrypted, re.IGNORECASE)
+            matches = re.findall(r"не показывать @(\w+)|заблокировать @(\w+)", decrypted, re.IGNORECASE)
             for match in matches:
                 blocked.extend([m for m in match if m])
-            
+
             # Temporary hides: hide_contact:username:timestamp
-            hide_matches = re.findall(r'hide_contact:@?(\w+):(\d+)', decrypted, re.IGNORECASE)
+            hide_matches = re.findall(r"hide_contact:@?(\w+):(\d+)", decrypted, re.IGNORECASE)
             current_time = int(datetime.now(dt_timezone.utc).timestamp())
             for username, expiration_ts in hide_matches:
                 exp_ts = int(expiration_ts)
@@ -2379,44 +2377,48 @@ def find_partners(user_id=None, session=None):
             city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
             if city_profiles:
                 profiles = city_profiles  # Используем только профили из того же города
-        
+
         # Словарь для подсчёта релевантности: {profile: (score, matched_fields)}
         partner_scores = {}
-        
+
         for p in profiles:
             # Исключаем заблокированных и себя
             if not p.contact_info:
                 continue
-            contact_username = p.contact_info.replace('@', '').lower()
-            if p.contact_info in blocked or any('@' + b in p.contact_info for b in blocked) or p.contact_info == f"user{user_id}":
+            contact_username = p.contact_info.replace("@", "").lower()
+            if (
+                p.contact_info in blocked
+                or any("@" + b in p.contact_info for b in blocked)
+                or p.contact_info == f"user{user_id}"
+            ):
                 continue
             # Исключаем временно скрытых
             if contact_username in hidden_contacts:
                 continue
-            
+
             score = 0
             matched_fields = []
-            
+
             # Анализ задач для совместных идей
             partner_user = session.query(User).filter_by(id=p.user_id).first()
             if partner_user:
                 partner_tasks = session.query(Task).filter_by(user_id=partner_user.id).all()
                 partner_task_keywords = set()
                 for task in partner_tasks:
-                    words = re.findall(r'\b\w+\b', (task.title + " " + (task.description or "")).lower())
+                    words = re.findall(r"\b\w+\b", (task.title + " " + (task.description or "")).lower())
                     partner_task_keywords.update(words)
-                
+
                 # Находим пересечения ключевых слов задач
                 common_keywords = user_task_keywords & partner_task_keywords
                 if common_keywords:
                     score += len(common_keywords) * 8  # 8 баллов за каждое совпадение
                     matched_fields.append(f"совместные задачи: {', '.join(list(common_keywords)[:3])}")
-            
+
             # Проверка интересов с приоритетом точного совпадения
             if user_profile.interests and p.interests:
                 user_interests = [i.strip().lower() for i in user_profile.interests.split(",")]
                 partner_interests = [i.strip().lower() for i in p.interests.split(",")]
-                
+
                 for user_int in user_interests:
                     for partner_int in partner_interests:
                         # Точное совпадение = 10 баллов
@@ -2427,12 +2429,12 @@ def find_partners(user_id=None, session=None):
                         elif user_int in partner_int or partner_int in user_int:
                             score += 5
                             matched_fields.append(f"похожий интерес: {partner_int}")
-            
+
             # Проверка навыков
             if user_profile.skills and p.skills:
                 user_skills = [s.strip().lower() for s in user_profile.skills.split(",")]
                 partner_skills = [s.strip().lower() for s in p.skills.split(",")]
-                
+
                 for user_skill in user_skills:
                     for partner_skill in partner_skills:
                         if user_skill == partner_skill:
@@ -2441,12 +2443,12 @@ def find_partners(user_id=None, session=None):
                         elif user_skill in partner_skill or partner_skill in user_skill:
                             score += 5
                             matched_fields.append(f"похожий навык: {partner_skill}")
-            
+
             # Проверка целей
             if user_profile.goals and p.goals:
                 user_goals = [g.strip().lower() for g in user_profile.goals.split(",")]
                 partner_goals = [g.strip().lower() for g in p.goals.split(",")]
-                
+
                 for user_goal in user_goals:
                     for partner_goal in partner_goals:
                         if user_goal == partner_goal:
@@ -2455,67 +2457,72 @@ def find_partners(user_id=None, session=None):
                         elif user_goal in partner_goal or partner_goal in user_goal:
                             score += 5
                             matched_fields.append(f"похожая цель: {partner_goal}")
-            
+
             # Компания (точное совпадение)
-            if hasattr(user_profile, 'company') and hasattr(p, 'company') and user_profile.company and p.company:
+            if hasattr(user_profile, "company") and hasattr(p, "company") and user_profile.company and p.company:
                 if user_profile.company.lower() == p.company.lower():
                     score += 15  # Коллеги — высокий приоритет
                     matched_fields.append(f"коллега из {p.company}")
-            
+
             # Должность (частичное совпадение)
-            if hasattr(user_profile, 'position') and hasattr(p, 'position') and user_profile.position and p.position:
-                if user_profile.position.lower() in p.position.lower() or p.position.lower() in user_profile.position.lower():
+            if hasattr(user_profile, "position") and hasattr(p, "position") and user_profile.position and p.position:
+                if (
+                    user_profile.position.lower() in p.position.lower()
+                    or p.position.lower() in user_profile.position.lower()
+                ):
                     score += 8
                     matched_fields.append(f"должность: {p.position}")
-            
+
             # Если есть совпадения — добавляем в результат
             if score > 0:
                 partner_scores[p] = (score, matched_fields)
-        
+
         # Сортируем по убыванию релевантности
         sorted_partners = sorted(partner_scores.items(), key=lambda x: x[1][0], reverse=True)
         partners = [item[0] for item in sorted_partners]
-        
+
         # Проверяем планы на релевантность для топ-3
         for p in partners[:3]:
             if p.current_plans and user_profile.interests:
                 for interest in user_profile.interests.split(","):
                     interest_words = interest.strip().lower().split()
                     if any(word in p.current_plans.lower() for word in interest_words):
-                        tips.append(f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — может быть интересно с твоими интересами в {interest.strip()}.")
+                        tips.append(
+                            f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — может быть интересно с твоими интересами в {interest.strip()}."
+                        )
                         break
     else:
         # Если профиля нет, вернуть тестовых партнеров для демонстрации
         partners = profiles[:3] if profiles else []
-    
+
     if close_session:
         session.close()
-    
+
     response = ""
     if partners:
         response += "Нашёл подходящих людей:\n"
         for idx, p in enumerate(partners[:3], 1):
             info_parts = []
-            
+
             # Показываем причину совпадения
             if user_profile and p in partner_scores:
                 score, matched = partner_scores[p]
                 # Берём первое самое релевантное совпадение
                 match_reason = matched[0] if matched else "общие интересы"
                 info_parts.append(f"Совпадение: {match_reason}")
-            
+
             if p.interests:
                 info_parts.append(f"интересы: {p.interests}")
-            if hasattr(p, 'position') and p.position:
+            if hasattr(p, "position") and p.position:
                 info_parts.append(f"{p.position}")
-            if hasattr(p, 'company') and p.company:
+            if hasattr(p, "company") and p.company:
                 info_parts.append(f"компания: {p.company}")
             if p.city:
                 info_parts.append(f"город: {p.city}")
-            
+
             info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
             response += f"{idx}. @{p.contact_info}\n   {info_str}\n"
-        
+
         # Добавляем предложения совместных идей на основе задач
         joint_ideas = []
         for p in partners[:3]:
@@ -2529,23 +2536,40 @@ def find_partners(user_id=None, session=None):
                         partner_tasks = session.query(Task).filter_by(user_id=partner_user.id).all()
                         for pt in partner_tasks[:2]:  # Проверяем первые 2 задачи
                             for ut in user_tasks[:2]:
-                                common_words = set(re.findall(r'\b\w+\b', (pt.title + " " + (pt.description or "")).lower())) & set(re.findall(r'\b\w+\b', (ut.title + " " + (ut.description or "")).lower()))
+                                common_words = set(
+                                    re.findall(r"\b\w+\b", (pt.title + " " + (pt.description or "")).lower())
+                                ) & set(re.findall(r"\b\w+\b", (ut.title + " " + (ut.description or "")).lower()))
                                 if common_words:
-                                    joint_ideas.append(f"💡 @{p.contact_info} тоже работает над '{pt.title}' — можно объединиться для совместного изучения {', '.join(list(common_words)[:2])}!")
+                                    joint_ideas.append(
+                                        f"💡 @{p.contact_info} тоже работает над '{pt.title}' — можно объединиться для совместного изучения {', '.join(list(common_words)[:2])}!"
+                                    )
                                     break
                             if joint_ideas and len(joint_ideas) >= 2:  # Максимум 2 идеи
                                 break
-        
+
         response = response.rstrip("\n")
         if joint_ideas:
             response += "\n\n" + "\n".join(joint_ideas[:2])
     else:
         response = "К сожалению, пока не нашёл подходящих партнёров с похожими интересами. Попробуй обновить свой профиль с интересами, навыками или целями — тогда я смогу найти более релевантных людей!"
-    
+
     return response
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, timezone=None, company=None, position=None, user_id=None, session=None):
+
+def update_profile(
+    skills=None,
+    interests=None,
+    goals=None,
+    city=None,
+    current_plans=None,
+    timezone=None,
+    company=None,
+    position=None,
+    user_id=None,
+    session=None,
+):
     from models import Session, User, UserProfile
+
     if session is None:
         session = Session()
         close_session = True
@@ -2560,7 +2584,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     if not profile:
         profile = UserProfile(user_id=user.id)
         session.add(profile)
-    
+
     def update_list_field(field, value):
         if not value:
             return field
@@ -2576,7 +2600,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
             # Замена целиком
             current = set(value.split(", ")) - {""}
         return ", ".join(sorted(current))
-    
+
     profile.skills = update_list_field(profile.skills, skills)
     profile.interests = update_list_field(profile.interests, interests)
     profile.goals = update_list_field(profile.goals, goals)
@@ -2584,9 +2608,9 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
     profile.current_plans = current_plans if current_plans else profile.current_plans
     # current_time removed - should not persist in DB
     # Безопасно добавляем новые поля (могут отсутствовать в старой БД)
-    if hasattr(profile, 'company'):
+    if hasattr(profile, "company"):
         profile.company = company if company else profile.company
-    if hasattr(profile, 'position'):
+    if hasattr(profile, "position"):
         profile.position = position if position else profile.position
     if timezone:
         user.timezone = timezone
@@ -2597,6 +2621,7 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
         session.close()
     return "Профиль обновлен."
 
+
 TOOLS = [
     {
         "type": "function",
@@ -2606,22 +2631,28 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "title": {"type": "string", "description": "Название задачи - должно быть конкретным и содержать: действие, объект, контекст. Хорошо: 'Позвонить Марии обсудить договор поставки'. Плохо: 'Позвонить другу'"},
-                    "description": {"type": "string", "description": "Дополнительное описание задачи с деталями выполнения, ожидаемым результатом"},
+                    "title": {
+                        "type": "string",
+                        "description": "Название задачи - должно быть конкретным и содержать: действие, объект, контекст. Хорошо: 'Позвонить Марии обсудить договор поставки'. Плохо: 'Позвонить другу'",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Дополнительное описание задачи с деталями выполнения, ожидаемым результатом",
+                    },
                     "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"},
-                    "due_date": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM, опционально"}
+                    "due_date": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM, опционально"},
                 },
-                "required": ["title", "reminder_time"]
-            }
-        }
+                "required": ["title", "reminder_time"],
+            },
+        },
     },
     {
         "type": "function",
         "function": {
             "name": "list_tasks",
             "description": "Показать список задач",
-            "parameters": {"type": "object", "properties": {}}
-        }
+            "parameters": {"type": "object", "properties": {}},
+        },
     },
     {
         "type": "function",
@@ -2632,11 +2663,14 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи (опционально если указан task_title)"},
-                    "task_title": {"type": "string", "description": "Название задачи или его часть (опционально если указан task_id)"}
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название задачи или его часть (опционально если указан task_id)",
+                    },
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     },
     {
         "type": "function",
@@ -2647,11 +2681,11 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи"},
-                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"}
+                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"},
                 },
-                "required": ["task_id", "reminder_time"]
-            }
-        }
+                "required": ["task_id", "reminder_time"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2661,11 +2695,14 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "info": {"type": "string", "description": "Информация для сохранения, например предпочтения, привычки, цели"}
+                    "info": {
+                        "type": "string",
+                        "description": "Информация для сохранения, например предпочтения, привычки, цели",
+                    }
                 },
-                "required": ["info"]
-            }
-        }
+                "required": ["info"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2677,13 +2714,22 @@ TOOLS = [
                 "properties": {
                     "title": {"type": "string", "description": "Название задачи"},
                     "description": {"type": "string", "description": "Подробное описание задачи (опционально)"},
-                    "reminder_time": {"type": "string", "description": "Время дедлайна в любом удобном формате: 'завтра в 10:00', 'до послезавтра 15:00', 'сегодня в 18:00' и т.д."},
-                    "delegated_to_username": {"type": "string", "description": "Username получателя с @ (например @username)"},
-                    "delegation_details": {"type": "string", "description": "Детали: желаемый результат, критерии выполнения, важность"}
+                    "reminder_time": {
+                        "type": "string",
+                        "description": "Время дедлайна в любом удобном формате: 'завтра в 10:00', 'до послезавтра 15:00', 'сегодня в 18:00' и т.д.",
+                    },
+                    "delegated_to_username": {
+                        "type": "string",
+                        "description": "Username получателя с @ (например @username)",
+                    },
+                    "delegation_details": {
+                        "type": "string",
+                        "description": "Детали: желаемый результат, критерии выполнения, важность",
+                    },
                 },
-                "required": ["title", "reminder_time", "delegated_to_username"]
-            }
-        }
+                "required": ["title", "reminder_time", "delegated_to_username"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2692,12 +2738,10 @@ TOOLS = [
             "description": "Принять делегированную задачу",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer", "description": "ID задачи"}
-                },
-                "required": ["task_id"]
-            }
-        }
+                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
+                "required": ["task_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2706,12 +2750,10 @@ TOOLS = [
             "description": "Отклонить делегированную задачу",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer", "description": "ID задачи"}
-                },
-                "required": ["task_id"]
-            }
-        }
+                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
+                "required": ["task_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2720,12 +2762,10 @@ TOOLS = [
             "description": "Получить статус выполнения делегированной задачи для инициатора",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer", "description": "ID задачи"}
-                },
-                "required": ["task_id"]
-            }
-        }
+                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
+                "required": ["task_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2738,11 +2778,14 @@ TOOLS = [
                     "task_id": {"type": "integer", "description": "ID задачи"},
                     "title": {"type": "string", "description": "Новое название, опционально"},
                     "description": {"type": "string", "description": "Новое описание, опционально"},
-                    "reminder_time": {"type": "string", "description": "Новое время напоминания в формате YYYY-MM-DD HH:MM, опционально"}
+                    "reminder_time": {
+                        "type": "string",
+                        "description": "Новое время напоминания в формате YYYY-MM-DD HH:MM, опционально",
+                    },
                 },
-                "required": ["task_id"]
-            }
-        }
+                "required": ["task_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2753,11 +2796,14 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи (опционально если указан task_title)"},
-                    "task_title": {"type": "string", "description": "Название задачи или его часть (опционально если указан task_id)"}
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название задачи или его часть (опционально если указан task_id)",
+                    },
                 },
-                "required": []
-            }
-        }
+                "required": [],
+            },
+        },
     },
     {
         "type": "function",
@@ -2768,11 +2814,11 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи"},
-                    "priority": {"type": "string", "description": "Приоритет: high, medium, low"}
+                    "priority": {"type": "string", "description": "Приоритет: high, medium, low"},
                 },
-                "required": ["task_id", "priority"]
-            }
-        }
+                "required": ["task_id", "priority"],
+            },
+        },
     },
     {
         "type": "function",
@@ -2782,17 +2828,17 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
-                "required": ["task_id"]
-            }
-        }
+                "required": ["task_id"],
+            },
+        },
     },
     {
         "type": "function",
         "function": {
             "name": "find_partners",
             "description": "Найти потенциальных людей на основе профиля пользователя",
-            "parameters": {"type": "object", "properties": {}}
-        }
+            "parameters": {"type": "object", "properties": {}},
+        },
     },
     {
         "type": "function",
@@ -2806,14 +2852,26 @@ TOOLS = [
                     "interests": {"type": "string", "description": "Интересы пользователя, разделенные запятыми"},
                     "goals": {"type": "string", "description": "Цели пользователя"},
                     "city": {"type": "string", "description": "Город пользователя, опционально"},
-                    "current_plans": {"type": "string", "description": "Текущие планы или события пользователя, опционально"},
-                    "current_time": {"type": "string", "description": "Текущее время пользователя в формате HH:MM, опционально"},
-                    "timezone": {"type": "string", "description": "Часовой пояс пользователя, например 'Europe/Moscow', опционально"},
-                    "company": {"type": "string", "description": "Компания, в которой работает пользователь, опционально"},
-                    "position": {"type": "string", "description": "Должность пользователя, опционально"}
-                }
-            }
-        }
+                    "current_plans": {
+                        "type": "string",
+                        "description": "Текущие планы или события пользователя, опционально",
+                    },
+                    "current_time": {
+                        "type": "string",
+                        "description": "Текущее время пользователя в формате HH:MM, опционально",
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "description": "Часовой пояс пользователя, например 'Europe/Moscow', опционально",
+                    },
+                    "company": {
+                        "type": "string",
+                        "description": "Компания, в которой работает пользователь, опционально",
+                    },
+                    "position": {"type": "string", "description": "Должность пользователя, опционально"},
+                },
+            },
+        },
     },
     {
         "type": "function",
@@ -2824,86 +2882,88 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "integer", "description": "ID задачи"},
-                    "reason": {"type": "string", "description": "Причина невыполнения (опционально)"}
+                    "reason": {"type": "string", "description": "Причина невыполнения (опционально)"},
                 },
-                "required": ["task_id"]
-            }
-        }
+                "required": ["task_id"],
+            },
+        },
     },
     {
         "type": "function",
         "function": {
             "name": "delete_all_tasks",
             "description": "Удалить все задачи пользователя. ⚠️ КРИТИЧНО: Это необратимая операция! Перед вызовом ОБЯЗАТЕЛЬНО подтверди у пользователя: 'Ты точно хочешь удалить ВСЕ задачи? Это действие нельзя отменить.' и дождись явного подтверждения.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
     },
     {
         "type": "function",
         "function": {
             "name": "create_subscription_payment",
             "description": "Создать платеж для оформления или продления месячной подписки",
-            "parameters": {"type": "object", "properties": {}}
-        }
+            "parameters": {"type": "object", "properties": {}},
+        },
     },
     {
         "type": "function",
         "function": {
             "name": "check_subscription_status",
             "description": "Проверить статус текущей подписки пользователя",
-            "parameters": {"type": "object", "properties": {}}
-        }
+            "parameters": {"type": "object", "properties": {}},
+        },
     },
     {
         "type": "function",
         "function": {
             "name": "cancel_subscription",
             "description": "Отменить текущую подписку пользователя",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    }
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
+
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     import re
     from datetime import datetime, timezone, timedelta
     import pytz
+
     logger = logging.getLogger(__name__)
-    
+
     # Ensure context is a list or None
     if context is not None and not isinstance(context, list):
         logger.warning(f"context is not a list: {type(context)}, setting to None")
         context = None
-    
+
     # Проверяем сообщение о времени и обновляем timezone
-    time_message_match = re.search(r'мое\s+местное\s+время:\s*(\d{1,2}:\d{2})', message.lower())
+    time_message_match = re.search(r"мое\s+местное\s+время:\s*(\d{1,2}:\d{2})", message.lower())
     if time_message_match:
         user_time_str = time_message_match.group(1)
         detected_timezone = determine_timezone_from_time(user_time_str, user_id)
         if detected_timezone:
             logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
             update_profile(timezone=detected_timezone, user_id=user_id)
-    
+
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
     # Extract mentions before cleaning message
-    mentions = re.findall(r'@[\w]+', message)
-    mentions_str = ', '.join(mentions) if mentions else 'нет'
+    mentions = re.findall(r"@[\w]+", message)
+    mentions_str = ", ".join(mentions) if mentions else "нет"
     # Clean message from mentions for processing
-    clean_message = re.sub(r'@[\w]+', '', message).strip()
-    context_len = len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
-    logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}")
+    clean_message = re.sub(r"@[\w]+", "", message).strip()
+    context_len = (
+        len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
+    )
+    logger.info(
+        f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}"
+    )
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
-    
+
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
-    
+
     try:
         logger.info("Starting chat_with_ai processing")
         # Get user memory and all tasks for extended context
@@ -2916,26 +2976,28 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         user_now = base_now
         current_time_str = user_now.strftime("%H:%M")
         user_username = "user"
-        
+
         if user_id:
             from models import Session, User, Task, UserProfile, Subscription
+
             db_session = Session()
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            
+
             # Создать пользователя если не существует
             if not user:
                 user = User(telegram_id=user_id)
                 db_session.add(user)
                 db_session.commit()
-            
+
             # Check subscription
             from config import FREE_ACCESS_MODE
+
             if not FREE_ACCESS_MODE:
-                    subscription = db_session.query(Subscription).filter_by(user_id=user.id, status='active').first()
-                    if not subscription:
-                        db_session.close()
-                        return "У вас нет активной подписки. Для использования AI-ассистента активируйте подписку в Telegram боте @asibiont_bot. После активации подписки я смогу помогать вам с управлением задачами!"
-            
+                subscription = db_session.query(Subscription).filter_by(user_id=user.id, status="active").first()
+                if not subscription:
+                    db_session.close()
+                    return "У вас нет активной подписки. Для использования AI-ассистента активируйте подписку в Telegram боте @asibiont_bot. После активации подписки я смогу помогать вам с управлением задачами!"
+
             # Get user current time FIRST before using it
             base_now = datetime.now(pytz.UTC)
             logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
@@ -2944,7 +3006,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             current_time_str = user_now.strftime("%H:%M")
             user_tz = pytz.UTC  # Default
             if user:
-                tz_str = user.timezone if user.timezone else 'UTC'
+                tz_str = user.timezone if user.timezone else "UTC"
                 logger.info(f"User timezone: {tz_str}")
                 try:
                     user_tz = pytz.timezone(tz_str)
@@ -2958,14 +3020,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.UTC
                     user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
-            
+
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except (Exception,):
                     user_memory = ""  # If decryption fails, skip
-            
+
             # Добавляем информацию из профиля (компания, должность и т.д.)
             profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
             profile_filled = False
@@ -2991,45 +3053,57 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_memory += "\n🎯 КРИТИЧНО ВАЖНО: Профиль ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
             else:
                 user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
-            
+
             # НЕ загружаем задачи в user_memory! Агент должен сам вызвать list_tasks()
             # Это критично для предотвращения выдумывания задач
-            
+
             # НО добавляем КРАТКУЮ сводку для контекста
-            tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status='pending').count()
-            overdue_tasks = db_session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.reminder_time < user_now,
-                Task.status == 'pending'
-            ).limit(5).all()
-            
+            tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
+            overdue_tasks = (
+                db_session.query(Task)
+                .filter(Task.user_id == user.id, Task.reminder_time < user_now, Task.status == "pending")
+                .limit(5)
+                .all()
+            )
+
             if tasks_summary > 0:
                 user_memory += f"\nСводка: всего активных задач {tasks_summary}"
-            
+
             if overdue_tasks:
                 overdue_titles = [f"{t.title}" for t in overdue_tasks]
                 user_memory += f"\n⚠️ ПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
-            
+
             # Add delegated tasks info
             if user.username:
-                delegated_tasks = db_session.query(Task).filter(
-                    Task.delegated_to_username.ilike(user.username),
-                    Task.delegation_status == 'pending'
-                ).all()
+                delegated_tasks = (
+                    db_session.query(Task)
+                    .filter(Task.delegated_to_username.ilike(user.username), Task.delegation_status == "pending")
+                    .all()
+                )
                 if delegated_tasks:
-                    delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := db_session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}" for t in delegated_tasks[:3]]
+                    delegated_info = [
+                        f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := db_session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}"
+                        for t in delegated_tasks[:3]
+                    ]
                     user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
-            
+
             # Add info about tasks delegated BY user
-            my_delegated_tasks = db_session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.delegated_to_username.isnot(None),
-                Task.delegation_status.in_(['pending', 'accepted'])
-            ).all()
+            my_delegated_tasks = (
+                db_session.query(Task)
+                .filter(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
+                    Task.delegation_status.in_(["pending", "accepted"]),
+                )
+                .all()
+            )
             if my_delegated_tasks:
-                my_delegated_info = [f"Задача '{t.title}' поручена @{t.delegated_to_username} (статус: {t.delegation_status})" for t in my_delegated_tasks[:3]]
+                my_delegated_info = [
+                    f"Задача '{t.title}' поручена @{t.delegated_to_username} (статус: {t.delegation_status})"
+                    for t in my_delegated_tasks[:3]
+                ]
                 user_memory += f"\nЗадачи поручённые другим: {', '.join(my_delegated_info)}"
-            
+
             # Add partners/contacts info
             try:
                 partners = get_partners_list(user_id=user_id, session=db_session)
@@ -3044,21 +3118,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         user_memory += f"\nДоступные контакты: {', '.join(partners_usernames)}"
             except Exception as e:
                 logger.error(f"Error getting partners: {e}")
-            
+
             # Add file content if provided
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
-            
+
             # Обработка pending_action
             if user and user.pending_action:
                 try:
                     pending_data = json.loads(user.pending_action)
-                    action_type = pending_data.get('type')
-                    
+                    action_type = pending_data.get("type")
+
                     # Проверка на таймаут (24 часа)
-                    timestamp = pending_data.get('timestamp')
+                    timestamp = pending_data.get("timestamp")
                     if timestamp:
-                        created_at = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        created_at = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
                         if datetime.now(timezone.utc) - created_at > timedelta(hours=24):
                             logger.info(f"Pending action timed out for user {user_id}, clearing")
                             user.pending_action = None
@@ -3068,10 +3142,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         else:
                             # Продолжить обработку pending_action
                             pass
-                    
-                    if action_type == 'result_check_response':
-                        task_id = pending_data.get('task_id')
-                        task_title = pending_data.get('task_title')
+
+                    if action_type == "result_check_response":
+                        task_id = pending_data.get("task_id")
+                        task_title = pending_data.get("task_title")
                         # Сохранить ответ пользователя как completion_notes
                         task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
                         if task:
@@ -3082,15 +3156,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         db_session.commit()
                         # Вернуть специальный ответ для обработки результата
                         return f"Спасибо за информацию о задаче '{task_title}'! Результат сохранён для анализа."
-                    
-                    elif action_type == 'task_skip_confirmation':
-                        task_id = pending_data.get('task_id')
-                        task_title = pending_data.get('task_title')
+
+                    elif action_type == "task_skip_confirmation":
+                        task_id = pending_data.get("task_id")
+                        task_title = pending_data.get("task_title")
                         # Обработать ответ пользователя о пропуске задачи
                         task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
                         if task:
-                            if 'да' in original_message.lower() or 'пропустить' in original_message.lower():
-                                task.status = 'cancelled'
+                            if "да" in original_message.lower() or "пропустить" in original_message.lower():
+                                task.status = "cancelled"
                                 task.skipped_reason = original_message
                                 db_session.commit()
                                 user.pending_action = None
@@ -3106,17 +3180,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     logger.error(f"Error processing pending_action: {e}")
                     user.pending_action = None
                     db_session.commit()
-            
+
             db_session.close()
-        
+
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
-        system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")).replace("{{current_username}}", user_username)
-        
+        system_prompt = (
+            get_system_prompt()
+            .replace("{{current_date}}", user_now.strftime("%Y-%m-%d"))
+            .replace("{{current_time}}", current_time_str)
+            .replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d"))
+            .replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
+            .replace("{{current_username}}", user_username)
+        )
+
         # 🎯 КОМПЛЕКСНЫЙ ПОДХОД: задачи, контакты, напоминания, связи
         system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
-        
+
         # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
         system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
         system_prompt += "- МИНИМУМ 3-5 ПРЕДЛОЖЕНИЙ в каждом ответе\n"
@@ -3135,29 +3216,29 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         system_prompt += "- Используй данные профиля и задач для персональных рекомендаций\n"
         system_prompt += "- Будь естественным - адаптируй стиль под ситуацию\n"
         system_prompt += "- Замечай паттерны и предлагай оптимизации\n"
-        
+
         system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
-        
+
         system_prompt += f"\n\n@MENTIONS: {mentions_str}\n🚨 ЕСЛИ ВИДИШЬ @username - ЭТО ДЕЛЕГИРОВАНИЕ! ВЫЗЫВАЙ delegate_task()!\n\nСПЕЦИАЛЬНЫЕ КОМАНДЫ:\n- Сообщение начинается с '@' → delegate_task()\n- 'Найди людей' → find_partners()\n- 'Удали все' → delete_all_tasks()"
-        
+
         system_prompt += user_memory
-        
+
         # Добавляем информацию о повторяющихся запросах
         if context and len(context) > 0:
             system_prompt += "\n\n⚠️ ПОЛЬЗОВАТЕЛЬ ПОВТОРЯЕТ ЗАПРОС - НЕ ПОВТОРЯЙ ПРЕДЫДУЩИЕ ОТВЕТЫ! Предлагай что-то новое: анализ задач, поиск партнеров, обновление профиля, или задай другие вопросы."
-        
+
         # 🎯 Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
         if redis_client and user_id:
             try:
                 last_task_data = await redis_client.get(f"last_task_id:{user_id}")
                 if last_task_data:
-                    task_info = json.loads(last_task_data.decode('utf-8'))
+                    task_info = json.loads(last_task_data.decode("utf-8"))
                     last_task_context = f"\n\n🎯 КОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={task_info['id']}, название='{task_info['title']}', время='{task_info.get('reminder_time', '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={task_info['id']}, ...)!"
                     logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: {task_info}")
             except Exception as e:
                 logger.error(f"Error loading last_task_id from Redis: {e}")
-        
+
         messages = [{"role": "system", "content": system_prompt}]
         if context and isinstance(context, list):
             for item in context:
@@ -3168,18 +3249,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Добавляем текущее сообщение с контекстом последней задачи
         user_message_with_context = message + last_task_context
         messages.append({"role": "user", "content": user_message_with_context})
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
             "model": "deepseek-chat",
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": "auto",
-            "temperature": 0.3
+            "temperature": 0.3,
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         # Retry loop for API call
@@ -3187,7 +3265,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         for attempt in range(max_retries + 1):
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                    async with session.post(
+                        url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+                    ) as response:
                         logger.info(f"DeepSeek API response status: {response.status} (attempt {attempt + 1})")
                         if response.status == 200:
                             # Успешный ответ - обрабатываем
@@ -3198,13 +3278,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 content = message_response.get("content", "")
                                 print(f"[DEBUG API] Raw content: '{content}'")  # DEBUG
                                 # Фильтровать сырые tool calls
-                                content = re.sub(r'<\|.*?\|>', '', content).strip()
-                                content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
+                                content = re.sub(r"<\|.*?\|>", "", content).strip()
+                                content = re.sub(
+                                    r"<｜DSML｜function_calls>.*?</｜DSML｜function_calls>",
+                                    "",
+                                    content,
+                                    flags=re.DOTALL,
+                                ).strip()
                                 # Удаляем JSON блоки с tool_calls если они попали в текст
-                                content = re.sub(r'```json\s*\{.*?"tool_calls".*?\}\s*```', '', content, flags=re.DOTALL).strip()
-                                content = re.sub(r'\{.*?"tool_calls".*?\}', '', content, flags=re.DOTALL).strip()
-                                content = re.sub(r'\{.*?"name":\s*"".*?"arguments".*?\}', '', content, flags=re.DOTALL).strip()
-                                
+                                content = re.sub(
+                                    r'```json\s*\{.*?"tool_calls".*?\}\s*```', "", content, flags=re.DOTALL
+                                ).strip()
+                                content = re.sub(r'\{.*?"tool_calls".*?\}', "", content, flags=re.DOTALL).strip()
+                                content = re.sub(
+                                    r'\{.*?"name":\s*"".*?"arguments".*?\}', "", content, flags=re.DOTALL
+                                ).strip()
+
                                 # Проверяем tool_calls в API response
                                 tool_calls = message_response.get("tool_calls")
                                 print(f"[DEBUG API] tool_calls: {tool_calls}")  # DEBUG
@@ -3215,11 +3304,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     await asyncio.sleep(1)
                                     continue
                                 content = "Извините, произошла ошибка при обработке ответа от ИИ. Попробуйте еще раз."
-                            
+
                             # Обработка tool calls и т.д.
                             tool_results = []  # Инициализируем заранее
                             print(f"[DEBUG] tool_calls value: {tool_calls}, bool: {bool(tool_calls)}")  # DEBUG
-                            
+
                             if tool_calls:
                                 print(f"[DEBUG] Tool calls found, processing...")  # DEBUG
                                 # Обработка tool calls
@@ -3229,34 +3318,34 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         func_name = tool_call["function"]["name"]
                                         args = json.loads(tool_call["function"]["arguments"])
                                         logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
-                                        
+
                                         if func_name == "add_task":
                                             result = add_task(
                                                 title=args.get("title", args.get("task_title", "Задача")),
                                                 description=args.get("description", ""),
                                                 reminder_time=args.get("reminder_time"),
                                                 user_id=user_id,
-                                                session=None
+                                                session=None,
                                             )
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "complete_task":
                                             result = complete_task(
                                                 task_id=args.get("task_id"),
                                                 task_title=args.get("task_title"),
                                                 user_id=user_id,
-                                                session=None
+                                                session=None,
                                             )
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "list_tasks":
                                             result = list_tasks(user_id=user_id, session=None)
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "find_partners":
                                             result = find_partners(user_id=user_id, session=None)
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "update_profile":
                                             result = update_profile(
                                                 city=args.get("city"),
@@ -3264,32 +3353,32 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 position=args.get("position"),
                                                 interests=args.get("interests"),
                                                 user_id=user_id,
-                                                session=None
+                                                session=None,
                                             )
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "delegate_task":
                                             result = delegate_task(
                                                 title=args.get("title"),
                                                 delegated_to_username=args.get("delegated_to_username"),
                                                 user_id=user_id,
-                                                session=None
+                                                session=None,
                                             )
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "delete_all_tasks":
                                             result = delete_all_tasks(user_id=user_id, session=None)
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "delete_task":
                                             result = delete_task(
                                                 task_id=args.get("task_id"),
                                                 task_title=args.get("task_title"),
                                                 user_id=user_id,
-                                                session=None
+                                                session=None,
                                             )
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "edit_task":
                                             result = edit_task(
                                                 task_id=args.get("task_id"),
@@ -3297,89 +3386,98 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 description=args.get("description"),
                                                 reminder_time=args.get("reminder_time"),
                                                 user_id=user_id,
-                                                session=None
+                                                session=None,
                                             )
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "check_subscription_status":
                                             result = check_subscription_status(user_id=user_id)
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         elif func_name == "create_subscription_payment":
                                             result = create_subscription_payment(user_id=user_id)
                                             tool_results.append({"function": func_name, "result": result})
-                                        
+
                                         else:
                                             logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
-                                            tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})
-                                    
+                                            tool_results.append(
+                                                {"function": func_name, "result": f"Неизвестная функция: {func_name}"}
+                                            )
+
                                     except Exception as e:
                                         logger.error(f"[TOOL CALL] Error executing {func_name}: {e}")
-                                        tool_results.append({"function": func_name, "result": f"Ошибка выполнения: {str(e)}"})
-                                
+                                        tool_results.append(
+                                            {"function": func_name, "result": f"Ошибка выполнения: {str(e)}"}
+                                        )
+
                                 # Генерируем естественный ответ на основе результатов tool calls
                                 if tool_results:
                                     natural_responses = []
                                     has_list_tasks = False
                                     list_tasks_result = None
-                                    
+
                                     for action in tool_results:
                                         result_text = action["result"]
                                         func_name = action["function"]
-                                        
+
                                         # Проверяем, есть ли list_tasks в результатах
                                         if func_name == "list_tasks":
                                             has_list_tasks = True
                                             list_tasks_result = result_text
-                                        
+
                                         if "Добавлена задача" in result_text:
                                             match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\)", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f"Отлично, добавил задачу \"{title}\"."
+                                                natural = f'Отлично, добавил задачу "{title}".'
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)
-                                        
+
                                         elif "Завершена задача" in result_text:
                                             match = re.search(r"Завершена задача '([^']+)'", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f"Отлично, отметил задачу \"{title}\" как выполненную! 👍"
+                                                natural = f'Отлично, отметил задачу "{title}" как выполненную! 👍'
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)
-                                        
+
                                         elif "Задачи:" in result_text:
                                             # Не добавляем сразу, обработаем отдельно
                                             pass
-                                        
-                                        elif "Найдены партнеры:" in result_text or "партнеры найдены" in result_text.lower():
+
+                                        elif (
+                                            "Найдены партнеры:" in result_text
+                                            or "партнеры найдены" in result_text.lower()
+                                        ):
                                             natural_responses.append(result_text)
-                                        
+
                                         elif "Профиль обновлен" in result_text:
-                                            natural_responses.append("Профиль обновлен! Теперь я лучше знаю твои интересы.")
-                                        
+                                            natural_responses.append(
+                                                "Профиль обновлен! Теперь я лучше знаю твои интересы."
+                                            )
+
                                         elif "Задача" in result_text and "делегирована" in result_text:
                                             natural = "Отлично, задача делегирована! Я уведомлю получателя."
                                             natural_responses.append(natural)
-                                        
+
                                         elif "Удалены все задачи" in result_text:
                                             natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
                                             natural_responses.append(natural)
-                                        
+
                                         elif "Задача" in result_text and "удалена" in result_text:
                                             match = re.search(r"Задача '([^']+)' удалена", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f"Удалил задачу \"{title}\". Что дальше?"
+                                                natural = f'Удалил задачу "{title}". Что дальше?'
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)
-                                        
+
                                         else:
                                             natural_responses.append(result_text)
-                                    
+
                                     # 🎯 СПЕЦИАЛЬНАЯ ОБРАБОТКА list_tasks для развёрнутых ответов
                                     if has_list_tasks and list_tasks_result:
                                         # Генерируем развёрнутый анализ задач через AI
@@ -3406,7 +3504,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 {list_tasks_result}
 
 Дай естественный развёрнутый анализ с вопросами и конкретными рекомендациями:"""
-                                        
+
                                         try:
                                             async with aiohttp.ClientSession() as analysis_session:
                                                 async with analysis_session.post(
@@ -3416,81 +3514,100 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                         "model": "deepseek-chat",
                                                         "messages": [
                                                             {"role": "system", "content": analysis_system},
-                                                            {"role": "user", "content": "Проанализируй мои задачи подробно"}
+                                                            {
+                                                                "role": "user",
+                                                                "content": "Проанализируй мои задачи подробно",
+                                                            },
                                                         ],
                                                         "temperature": 0.7,
                                                     },
-                                                    timeout=aiohttp.ClientTimeout(total=60)
+                                                    timeout=aiohttp.ClientTimeout(total=60),
                                                 ) as analysis_response:
                                                     analysis_result = await analysis_response.json()
-                                                    detailed_analysis = analysis_result['choices'][0]['message']['content']
+                                                    detailed_analysis = analysis_result["choices"][0]["message"][
+                                                        "content"
+                                                    ]
                                                     natural_responses.append(detailed_analysis)
-                                                    logger.info(f"[LIST_TASKS_ANALYSIS] Generated detailed analysis: {detailed_analysis[:100]}...")
+                                                    logger.info(
+                                                        f"[LIST_TASKS_ANALYSIS] Generated detailed analysis: {detailed_analysis[:100]}..."
+                                                    )
                                         except Exception as e:
                                             logger.error(f"[LIST_TASKS_ANALYSIS] Error generating analysis: {e}")
                                             # Фоллбэк - добавляем обычный результат
                                             natural_responses.append(list_tasks_result)
-                                    
+
                                     final_content = "\n".join(natural_responses)
                                     # 🎯 Обогащаем ответ вовлекающими элементами
-                                    final_content = enrich_response_with_engagement(final_content, user_id, original_message)
-                                    logger.info(f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response")
+                                    final_content = enrich_response_with_engagement(
+                                        final_content, user_id, original_message
+                                    )
+                                    logger.info(
+                                        f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response"
+                                    )
                                     return final_content
-                    
+
                     print(f"[DEBUG] Exited tool_calls if block")  # DEBUG
                     print(f"[DEBUG] After tool_calls block, about to check fallback")  # DEBUG
                     # Все запросы обрабатывает AI, без принудительных триггеров
                     logger.info("[AI ONLY] All requests handled by AI without forced triggers")
                     print(f"[DEBUG] About to check fallback, content='{content[:50]}...'")  # DEBUG
-                    
+
                     # 🔄 SMART FALLBACK: Проверяем, нужно ли применить умный fallback
                     print(f"[DEBUG] Calling smart_fallback_handler...")  # DEBUG
                     print(f"[DEBUG] About to call smart_fallback_handler, content='{content[:50]}...'")  # DEBUG
                     try:
                         fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
-                        print(f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions")  # DEBUG
+                        print(
+                            f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
+                        )  # DEBUG
                         if fallback_result:
-                            logger.info(f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}")
-                            
+                            logger.info(
+                                f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}"
+                            )
+
                             # Обрабатываем результаты fallback аналогично tool calls
                             natural_responses = []
                             for action in fallback_result:
                                 result_text = action["result"]
                                 func_name = action["function"]
-                                
+
                                 if "Добавлена задача" in result_text:
-                                    match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text)
+                                    match = re.search(
+                                        r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text
+                                    )
                                     if match:
                                         title = match.group(1)
                                         time_str = match.group(2)
-                                        natural = f"Отлично, добавил задачу \"{title}\" с напоминанием на {time_str}."
+                                        natural = f'Отлично, добавил задачу "{title}" с напоминанием на {time_str}.'
                                         natural_responses.append(natural)
                                     else:
                                         natural_responses.append(result_text)
-                                
+
                                 elif "Завершена задача" in result_text:
                                     match = re.search(r"Завершена задача '([^']+)'", result_text)
                                     if match:
                                         title = match.group(1)
-                                        natural = f"Отлично, отметил задачу \"{title}\" как выполненную! 👍"
+                                        natural = f'Отлично, отметил задачу "{title}" как выполненную! 👍'
                                         natural_responses.append(natural)
                                     else:
                                         natural_responses.append(result_text)
-                                
+
                                 elif "Задачи:" in result_text:
                                     natural_responses.append(result_text)
-                                
+
                                 elif "Удалены все задачи" in result_text:
-                                    natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
+                                    natural = (
+                                        "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
+                                    )
                                     natural_responses.append(natural)
-                                
+
                                 elif "Задача" in result_text and "делегирована" in result_text:
                                     natural = "Отлично, задача делегирована! Я уведомлю получателя."
                                     natural_responses.append(natural)
-                                
+
                                 else:
                                     natural_responses.append(result_text)
-                            
+
                             final_content = "\n".join(natural_responses)
                             # 🎯 Обогащаем ответ вовлекающими элементами
                             final_content = enrich_response_with_engagement(final_content, user_id, original_message)
@@ -3499,7 +3616,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     except Exception as e:
                         logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
                         print(f"[DEBUG] Fallback error: {e}")  # DEBUG
-                    
+
                     # Если forced calls не сработали, обрабатываем обычный ответ AI
                     print(f"[DEBUG] After fallback, going to regular response processing")  # DEBUG
                     # Обрабатываем обычный ответ AI без tool calls
@@ -3509,20 +3626,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     original_content = message_response.get("content", "")
                     content = original_content
                     print(f"[DEBUG] Original content: '{original_content[:100]}...'")  # DEBUG
-                    
+
                     # Для обычных ответов ТОЛЬКО заменяем плейсхолдеры, без дополнительной очистки
                     content = replace_placeholders(content, user_now, current_time_str)
                     print(f"[DEBUG] After replace_placeholders: '{content[:100]}...'")  # DEBUG
-                    
+
                     # 🚨 КРИТИЧЕСКАЯ ПРОВЕРКА: если content пустой или слишком короткий
                     if not content or len(content.strip()) < 3:
-                        print(f"[DEBUG] Content is empty or too short: '{content}', len={len(content.strip())}")  # DEBUG
+                        print(
+                            f"[DEBUG] Content is empty or too short: '{content}', len={len(content.strip())}"
+                        )  # DEBUG
                         logger.warning(f"[EMPTY RESPONSE] Original: '{original_content[:100]}...', returning original")
                         content = original_content.strip()
                         if not content:
                             logger.warning("[RETRY] Response empty, retrying with explicit instruction")
-                            retry_system = system_prompt + "\n\n🚨 КРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!"
-                            
+                            retry_system = (
+                                system_prompt
+                                + "\n\n🚨 КРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!"
+                            )
+
                             retry_messages = [{"role": "system", "content": retry_system}]
                             if context:
                                 for item in context:
@@ -3531,7 +3653,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     if "assistant" in item:
                                         retry_messages.append({"role": "assistant", "content": item["assistant"]})
                             retry_messages.append({"role": "user", "content": original_message})
-                            
+
                             async with aiohttp.ClientSession() as retry_session:
                                 async with retry_session.post(
                                     url,
@@ -3541,10 +3663,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         "messages": retry_messages,
                                         "temperature": 0.3,
                                     },
-                                    timeout=aiohttp.ClientTimeout(total=120)
+                                    timeout=aiohttp.ClientTimeout(total=120),
                                 ) as retry_response:
                                     retry_result = await retry_response.json()
-                                    retry_content = retry_result['choices'][0]['message']['content']
+                                    retry_content = retry_result["choices"][0]["message"]["content"]
                                     retry_content = replace_placeholders(retry_content, user_now, current_time_str)
                                     content = retry_content.strip()
                                     logger.info(f"[RETRY] Got retry content: '{content[:100]}...'")
@@ -3555,21 +3677,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         content = "Хорошо, продолжим работу!"
                         else:
                             logger.info(f"[RECOVERED] Using original content: '{content[:100]}...'")
-                    
+
                     # Если все еще пустой после retry
                     if not content:
                         content = "Хорошо, продолжим работу!"
-                    
+
                     # 🎯 Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, original_message)
-                    
+
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
                     print(f"[DEBUG] About to return content: '{content}'")  # DEBUG
                     return content
-    
+
             except Exception as e:
                 import traceback
+
                 logger.error(f"Error in chat_with_ai: {e}")
                 logger.error(f"Error type: {type(e).__name__}")
                 logger.error(f"Traceback:\n{traceback.format_exc()}")
@@ -3582,6 +3705,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
     except Exception as e:
         import traceback
+
         logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
@@ -3592,6 +3716,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
         return f"Ошибка: {str(e)} [v2]"
 
+
 async def generate_reminder(user_id, task_title):
     """Генерирует текст напоминания о задаче"""
     try:
@@ -3599,6 +3724,7 @@ async def generate_reminder(user_id, task_title):
         user_memory = ""
         if user_id:
             from models import Session, User
+
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -3608,31 +3734,29 @@ async def generate_reminder(user_id, task_title):
                 except (Exception,):
                     user_memory = ""
             session.close()
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         base_prompt = get_system_prompt()
         system_prompt = f"{base_prompt}\nТы генерируешь краткое напоминание о задаче '{task_title}'. Будь мотивирующим и полезным. Если есть релевантная информация из памяти пользователя, используй её для более персонализированного напоминания. Задавай конкретные вопросы, которые помогут пользователю лучше подготовиться ИЛИ собрать дополнительную информацию, необходимую для принятия лучших решений по выполнению задачи. Анализируй задачу и предлагай аспекты, которые пользователь мог упустить. НЕ предлагай создавать новые задачи в напоминаниях - это только для напоминания о существующей задаче.{user_memory}"
-        
+
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Напомни о задаче: {task_title}"}
+            {"role": "user", "content": f"Напомни о задаче: {task_title}"},
         ]
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages
-        }
+
+        data = {"model": "deepseek-chat", "messages": messages}
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    content = replace_placeholders(
+                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
+                    )
                     content = clean_technical_details(content)
                     # 🎯 Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, task_title)
@@ -3643,6 +3767,7 @@ async def generate_reminder(user_id, task_title):
         print(f"Error in generate_reminder: {e}")
         return f"Напоминание о '{task_title}'."
 
+
 async def generate_result_check(user_id, task_title):
     """Генерирует вопрос о результате выполнения задачи"""
     try:
@@ -3650,6 +3775,7 @@ async def generate_result_check(user_id, task_title):
         user_memory = ""
         if user_id:
             from models import Session, User
+
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -3659,30 +3785,31 @@ async def generate_result_check(user_id, task_title):
                 except (Exception,):
                     user_memory = ""
             session.close()
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         system_prompt = get_system_prompt()
-        
+
         messages = [
             {"role": "system", "content": system_prompt + user_memory},
-            {"role": "user", "content": f"Спроси о результате выполнения задачи '{task_title}'. Узнай о времени, сложностях, улучшениях."}
+            {
+                "role": "user",
+                "content": f"Спроси о результате выполнения задачи '{task_title}'. Узнай о времени, сложностях, улучшениях.",
+            },
         ]
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages
-        }
+
+        data = {"model": "deepseek-chat", "messages": messages}
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    content = replace_placeholders(
+                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
+                    )
                     content = clean_technical_details(content)
                     # 🎯 Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, task_title)
@@ -3693,6 +3820,7 @@ async def generate_result_check(user_id, task_title):
         print(f"Error in generate_result_check: {e}")
         return f"Результат задачи '{task_title}'?"
 
+
 async def generate_proactive_message(user_id):
     """Генерирует проактивное сообщение, если нет задач на ближайший час"""
     try:
@@ -3702,6 +3830,7 @@ async def generate_proactive_message(user_id):
         tasks_info = ""
         if user_id:
             from models import Session, User, UserProfile, Task
+
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -3721,40 +3850,43 @@ async def generate_proactive_message(user_id):
                         for interest in user_profile.interests.split(","):
                             interest_words = interest.strip().lower().split()
                             if any(word in p.current_plans.lower() for word in interest_words):
-                                tips.append(f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — может быть интересно с твоими интересами в {interest.strip()}.")
+                                tips.append(
+                                    f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} — может быть интересно с твоими интересами в {interest.strip()}."
+                                )
                                 break
                 if tips:
                     plans_info = "\nПланы людей: " + " ".join(tips[:2])
             # Получить текущие задачи
             tasks = session.query(Task).filter_by(user_id=user.id).all()
-            pending_tasks = [t.title for t in tasks if t.status in ['pending', 'in_progress']]
+            pending_tasks = [t.title for t in tasks if t.status in ["pending", "in_progress"]]
             if pending_tasks:
                 tasks_info = f"\nТекущие невыполненные задачи: {', '.join(pending_tasks[:3])}"
             session.close()
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         system_prompt = get_system_prompt()
-        
+
         messages = [
             {"role": "system", "content": system_prompt + user_memory + plans_info + tasks_info},
-            {"role": "user", "content": "У пользователя нет задач на ближайший час. Создай позитивное проактивное сообщение."}
+            {
+                "role": "user",
+                "content": "У пользователя нет задач на ближайший час. Создай позитивное проактивное сообщение.",
+            },
         ]
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages
-        }
+
+        data = {"model": "deepseek-chat", "messages": messages}
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    content = replace_placeholders(
+                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
+                    )
                     content = clean_technical_details(content)
                     # 🎯 Проактивные сообщения уже вовлекающие, но можно усилить
                     content = enrich_response_with_engagement(content, user_id, "")
@@ -3765,22 +3897,25 @@ async def generate_proactive_message(user_id):
         print(f"Error in generate_proactive_message: {e}")
         return "Добавьте задачу."
 
+
 async def generate_daily_report(user_id):
     """Генерирует ежедневный отчет о задачах"""
     try:
         # Получить задачи пользователя
         from models import Session, Task
+
         session = Session()
         tasks = session.query(Task).filter_by(user_id=user_id).all()
         session.close()
-        
-        completed = [t for t in tasks if t.status == 'completed']
-        pending = [t for t in tasks if t.status in ['pending', 'in_progress']]
-        
+
+        completed = [t for t in tasks if t.status == "completed"]
+        pending = [t for t in tasks if t.status in ["pending", "in_progress"]]
+
         # Получить память пользователя
         user_memory = ""
         if user_id:
             from models import Session, User
+
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -3790,30 +3925,28 @@ async def generate_daily_report(user_id):
                 except (Exception,):
                     user_memory = ""
             session.close()
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         system_prompt = get_system_prompt()
-        
+
         messages = [
             {"role": "system", "content": system_prompt + user_memory},
-            {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"}
+            {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"},
         ]
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages
-        }
+
+        data = {"model": "deepseek-chat", "messages": messages}
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    content = replace_placeholders(
+                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
+                    )
                     content = clean_technical_details(content)
                     return content
                 else:
@@ -3821,6 +3954,7 @@ async def generate_daily_report(user_id):
     except Exception as e:
         print(f"Error in generate_daily_report: {e}")
         return "Отчет о задачах."
+
 
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
     """Генерирует напоминание о просроченных задачах"""
@@ -3830,6 +3964,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         user_memory = ""
         if user_id:
             from models import Session, User
+
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
@@ -3839,14 +3974,11 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                 except (Exception,):
                     user_memory = ""
             session.close()
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         system_prompt = get_system_prompt()
-        
+
         # Адаптируем тон в зависимости от уровня эскалации
         if escalation_level == 1:
             tone_instruction = "Будь дружелюбным, но настойчивым. Напомни о важности выполнения задач."
@@ -3854,23 +3986,27 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
             tone_instruction = "Будь более строгим. Подчеркни негативные последствия невыполнения."
         else:  # 3+
             tone_instruction = "Будь очень строгим и мотивирующим. Предложи конкретные альтернативы и помощь."
-        
+
         messages = [
             {"role": "system", "content": system_prompt + user_memory},
-            {"role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения."}
+            {
+                "role": "user",
+                "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.",
+            },
         ]
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": messages
-        }
+
+        data = {"model": "deepseek-chat", "messages": messages}
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+            ) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
+                    content = replace_placeholders(
+                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
+                    )
                     content = clean_technical_details(content)
                     return content
                 else:
@@ -3879,114 +4015,60 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         print(f"Error in generate_overdue_reminder: {e}")
         return "Просроченные задачи."
 
+
 # Функции для работы с задачами
-def add_task(title, description=None, reminder_time=None, user_id=None):
-    """Добавляет новую задачу"""
-    from models import Session, Task, User
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-        
-        task = Task(
-            user_id=user.id,
-            title=title,
-            description=encrypt_data(description) if description else None,
-            reminder_time=reminder_time,
-            status='pending'
-        )
-        session.add(task)
-        session.commit()
-        return f"Задача '{title}' добавлена"
-    except Exception as e:
-        session.rollback()
-        print(f"Error adding task: {e}")
-        return "Ошибка добавления задачи"
-    finally:
-        session.close()
-
-def complete_task(task_id=None, task_title=None, user_id=None):
-    """Завершает задачу"""
-    from models import Session, Task, User
-    from sqlalchemy import or_
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-        
-        # Найти задачу по ID или названию
-        query = session.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
-        )
-        
-        if task_id:
-            query = query.filter(Task.id == task_id)
-        elif task_title:
-            query = query.filter(Task.title.ilike(f"%{task_title}%"))
-        
-        task = query.first()
-        if not task:
-            return "Задача не найдена"
-        
-        task.status = 'completed'
-        session.commit()
-        return f"Задача '{task.title}' завершена"
-    except Exception as e:
-        session.rollback()
-        print(f"Error completing task: {e}")
-        return "Ошибка завершения задачи"
-    finally:
-        session.close()
-
 def list_tasks(user_id=None, session=None):
     """Возвращает список задач пользователя"""
     from models import Task, User
     from sqlalchemy import or_
-    
+
     if session is None:
         from models import Session
+
         session = Session()
         close_session = True
     else:
         close_session = False
-    
+
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         # Получить задачи пользователя или делегированные ему
-        tasks = session.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
-        ).all()
-        
+        tasks = (
+            session.query(Task)
+            .filter(or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username)))
+            .all()
+        )
+
         if not tasks:
             return "У вас нет задач. Добавьте первую задачу - просто напишите что нужно сделать и когда!"
-        
+
         # Формируем детальный список с анализом
-        active_tasks = [t for t in tasks if t.status != 'completed']
-        completed_tasks = [t for t in tasks if t.status == 'completed']
-        delegated_to_me = [t for t in active_tasks if t.delegated_to_username and t.delegated_to_username.lower() == user.username.lower()]
-        delegated_by_me = [t for t in active_tasks if t.delegated_to_username and t.delegated_to_username.lower() != user.username.lower()]
+        active_tasks = [t for t in tasks if t.status != "completed"]
+        completed_tasks = [t for t in tasks if t.status == "completed"]
+        delegated_to_me = [
+            t
+            for t in active_tasks
+            if t.delegated_to_username and t.delegated_to_username.lower() == user.username.lower()
+        ]
+        delegated_by_me = [
+            t
+            for t in active_tasks
+            if t.delegated_to_username and t.delegated_to_username.lower() != user.username.lower()
+        ]
         my_tasks = [t for t in active_tasks if not t.delegated_to_username]
-        
-        from datetime import datetime, timezone
+
+        from datetime import datetime
         import pytz
-        
+
         # Определяем timezone пользователя
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         now = datetime.now(user_tz)
-        
+
         result = f"📋 **У вас {len(active_tasks)} активных задач**\n\n"
-        
+
         # Мои задачи
         if my_tasks:
             result += "**Ваши задачи:**\n"
@@ -4001,11 +4083,11 @@ def list_tasks(user_id=None, session=None):
                             reminder_info = f" 🔔 {reminder_dt.strftime('%d.%m %H:%M')}"
                     except:
                         pass
-                
+
                 priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(task.priority, "")
                 result += f"⏳ {priority_icon} {task.title}{reminder_info}\n"
             result += "\n"
-        
+
         # Делегированные мне
         if delegated_to_me:
             result += "**Делегировано вам:**\n"
@@ -4014,19 +4096,19 @@ def list_tasks(user_id=None, session=None):
                 creator_name = f"@{creator.username}" if creator else "кто-то"
                 result += f"⏳ {task.title} (от {creator_name})\n"
             result += "\n"
-        
+
         # Делегированные мной
         if delegated_by_me:
             result += "**Вы делегировали:**\n"
             for task in delegated_by_me:
                 result += f"👤 {task.title} (на @{task.delegated_to_username})\n"
             result += "\n"
-        
+
         # Завершённые (последние 3)
         if completed_tasks:
             recent_completed = completed_tasks[-3:]
             result += f"✅ **Завершено:** {len(completed_tasks)} задач\n"
-        
+
         return result.strip()
     except Exception as e:
         print(f"Error listing tasks: {e}")
@@ -4035,33 +4117,32 @@ def list_tasks(user_id=None, session=None):
         if close_session:
             session.close()
 
+
 def delete_task(task_id=None, task_title=None, user_id=None):
     """Удаляет задачу"""
     from models import Session, Task, User
     from sqlalchemy import or_
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         # Найти задачу по ID или названию
         query = session.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
+            or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username))
         )
-        
+
         if task_id:
             query = query.filter(Task.id == task_id)
         elif task_title:
             query = query.filter(Task.title.ilike(f"%{task_title}%"))
-        
+
         task = query.first()
         if not task:
             return "Задача не найдена"
-        
+
         session.delete(task)
         session.commit()
         return f"Задача '{task.title}' удалена"
@@ -4072,15 +4153,17 @@ def delete_task(task_id=None, task_title=None, user_id=None):
     finally:
         session.close()
 
+
 def delete_all_tasks(user_id=None):
     """Удаляет все задачи пользователя"""
     from models import Session, Task, User
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         # Удалить все задачи пользователя
         deleted_count = session.query(Task).filter_by(user_id=user.id).delete()
         session.commit()
@@ -4092,26 +4175,28 @@ def delete_all_tasks(user_id=None):
     finally:
         session.close()
 
+
 def edit_task(task_id=None, title=None, description=None, reminder_time=None, user_id=None):
     """Редактирует задачу"""
     from models import Session, Task, User
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
         if not task:
             return "Задача не найдена"
-        
+
         if title:
             task.title = title
         if description:
             task.description = encrypt_data(description)
         if reminder_time:
             task.reminder_time = reminder_time
-        
+
         session.commit()
         return f"Задача '{task.title}' обновлена"
     except Exception as e:
@@ -4121,19 +4206,21 @@ def edit_task(task_id=None, title=None, description=None, reminder_time=None, us
     finally:
         session.close()
 
+
 def check_subscription_status(user_id=None):
     """Проверяет статус подписки"""
     from models import Session, User, Subscription
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if not subscription or subscription.status != 'active':
+        if not subscription or subscription.status != "active":
             return "У вас нет активной подписки. Используйте /subscribe для оформления."
-        
+
         return f"Подписка активна до {subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else 'неизвестно'}"
     except Exception as e:
         print(f"Error checking subscription: {e}")
@@ -4141,33 +4228,34 @@ def check_subscription_status(user_id=None):
     finally:
         session.close()
 
+
 def create_subscription_payment(user_id=None):
     """Создает платеж для подписки"""
     from models import Session, User, Subscription
     from datetime import datetime, timedelta
     import pytz
-    
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         # Проверить существующую подписку
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if subscription and subscription.status == 'active':
+        if subscription and subscription.status == "active":
             return "У вас уже есть активная подписка"
-        
+
         # Создать или обновить подписку
         if not subscription:
             subscription = Subscription(user_id=user.id)
             session.add(subscription)
-        
-        subscription.status = 'pending_payment'
+
+        subscription.status = "pending_payment"
         subscription.start_date = datetime.now(pytz.UTC)
         subscription.end_date = subscription.start_date + timedelta(days=30)
         session.commit()
-        
+
         return "Платеж создан. Используйте ссылку для оплаты: https://yookassa.ru/..."
     except Exception as e:
         session.rollback()
@@ -4176,20 +4264,22 @@ def create_subscription_payment(user_id=None):
     finally:
         session.close()
 
+
 def cancel_subscription(user_id=None):
     """Отменяет подписку"""
     from models import Session, User, Subscription
+
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
-        
+
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
         if not subscription:
             return "У вас нет подписки"
-        
-        subscription.status = 'cancelled'
+
+        subscription.status = "cancelled"
         session.commit()
         return "Подписка отменена"
     except Exception as e:

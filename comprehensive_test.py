@@ -161,8 +161,8 @@ def test_all_possible_queries():
     else:
         print(f"  📝 Найдено {len(failed_tests)} проблем. Рекомендуется улучшить паттерны распознавания.")
 
-    return passed_tests == total_tests
+    # Проверяем, что все тесты пройдены
+    assert passed_tests == total_tests, f"Не все тесты пройдены: {passed_tests}/{total_tests}"
 
 if __name__ == "__main__":
-    success = test_all_possible_queries()
-    sys.exit(0 if success else 1)
+    test_all_possible_queries()
