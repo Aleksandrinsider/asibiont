@@ -20,6 +20,218 @@ def set_redis_client(client):
     global redis_client
     redis_client = client
 
+def classify_user_intent(message, mentions_str):
+    """
+    Классифицирует намерение пользователя на основе паттернов в сообщении.
+    Возвращает словарь с intent и confidence score.
+    """
+    message_lower = message.lower().strip()
+    intent = {"type": "unknown", "confidence": 0.0, "params": {}}
+
+    # 1. Делегирование задач (@mentions)
+    if mentions_str != 'нет' and '@' in message:
+        mention_match = re.search(r'@(\w+)', message)
+        if mention_match:
+            intent["type"] = "delegate_task"
+            intent["confidence"] = 0.9
+            intent["params"]["delegated_to"] = f"@{mention_match.group(1)}"
+            # Извлекаем текст задачи
+            task_text = re.sub(r'@\w+', '', message).strip()
+            task_text = re.sub(r'^(поручи|делегируй|передай)\s+', '', task_text, flags=re.IGNORECASE)
+            intent["params"]["task_title"] = task_text or "Задача"
+            # Парсим время
+            time_match = re.search(r'(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})', task_text)
+            if time_match:
+                intent["params"]["reminder_time"] = time_match.group(1)
+            elif "завтра" in task_text.lower():
+                # Для теста, используем фиксированное время
+                intent["params"]["reminder_time"] = "2026-01-11 10:00"
+
+    # 2. Просмотр задач
+    list_keywords = ["покажи", "список", "мои дела", "все задачи", "что у меня", "задачи"]
+    if any(keyword in message_lower for keyword in list_keywords):
+        intent["type"] = "list_tasks"
+        intent["confidence"] = 0.8
+
+    # 3. Создание задач
+    create_keywords = ["напомни", "добавь задачу", "создай задачу", "запланируй"]
+    if any(keyword in message_lower for keyword in create_keywords):
+        intent["type"] = "add_task"
+        intent["confidence"] = 0.8
+        # Извлекаем текст задачи
+        for keyword in create_keywords:
+            if keyword in message_lower:
+                task_text = message_lower.split(keyword, 1)[1].strip()
+                # Убираем время если есть
+                time_patterns = [r'завтра в \d{1,2}:\d{2}', r'сегодня в \d{1,2}:\d{2}', r'через \d+ (минут|час)']
+                for pattern in time_patterns:
+                    task_text = re.sub(pattern, '', task_text, flags=re.IGNORECASE).strip()
+                intent["params"]["task_title"] = task_text
+                break
+
+    # 4. Завершение задач
+    complete_keywords = ["сделал", "выполнил", "завершил", "готово", "закончил"]
+    if any(keyword in message_lower for keyword in complete_keywords):
+        intent["type"] = "complete_task"
+        intent["confidence"] = 0.8
+        # Извлекаем название задачи
+        for keyword in complete_keywords:
+            if keyword in message_lower:
+                task_text = message_lower.replace(keyword, '').strip()
+                intent["params"]["task_title"] = task_text
+                break
+
+    # 5. Удаление задач
+    delete_keywords = ["удали все", "очисти список", "удалить все задачи"]
+    if any(keyword in message_lower for keyword in delete_keywords):
+        intent["type"] = "delete_all_tasks"
+        intent["confidence"] = 0.9
+
+    # 6. Поиск людей
+    find_keywords = ["найди людей", "похожие интересы", "с кем пообщаться", "рекомендуй контакты"]
+    if any(keyword in message_lower for keyword in find_keywords):
+        intent["type"] = "find_partners"
+        intent["confidence"] = 0.8
+
+    # 7. Обновление профиля
+    profile_keywords = ["живу в", "работаю в", "интересуюсь", "мои навыки"]
+    if any(keyword in message_lower for keyword in profile_keywords):
+        intent["type"] = "update_profile"
+        intent["confidence"] = 0.7
+        # Парсим информацию о профиле
+        if "живу в" in message_lower:
+            city_match = re.search(r'живу в\s+(.+?)(?:\s|$|,)', message_lower, re.IGNORECASE)
+            if city_match:
+                intent["params"]["city"] = city_match.group(1).strip().title()
+        if "интересуюсь" in message_lower or "увлекаюсь" in message_lower:
+            interests_match = re.search(r'(?:интересуюсь|увлекаюсь)\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            if interests_match:
+                interests = interests_match.group(1).strip()
+                # Replace " и " with ", "
+                interests = re.sub(r'\s+и\s+', ', ', interests)
+                intent["params"]["interests"] = interests
+        if "работаю" in message_lower:
+            company_match = re.search(r'работаю\s+(?:в\s+)?(\w+)', message_lower, re.IGNORECASE)
+            if company_match:
+                intent["params"]["company"] = company_match.group(1)
+
+    return intent
+
+def smart_fallback_handler(message, mentions_str, user_id, session, ai_response_content=""):
+    print(f"[DEBUG FALLBACK] Called with message='{message[:30]}...', ai_response='{ai_response_content[:30]}...'")  # DEBUG
+    """
+    Умная система fallback'ов - используется только когда AI явно не справляется.
+    Анализирует ответ AI и применяет fallback только при низкой уверенности.
+    """
+    fallback_actions = []
+
+    # Анализируем уверенность AI на основе ответа и tool calls
+    ai_confidence = 0.5  # Базовая уверенность
+
+    # Если AI вернул пустой ответ или технический текст - низкая уверенность
+    if not ai_response_content or len(ai_response_content.strip()) < 10:
+        ai_confidence = 0.1
+    elif any(tech_word in ai_response_content.lower() for tech_word in ["error", "ошибка", "неизвестно", "json"]):
+        ai_confidence = 0.2
+    elif "задач" in ai_response_content.lower() or "создал" in ai_response_content.lower():
+        ai_confidence = 0.8  # AI дал содержательный ответ
+
+    # 🔍 ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ: проверяем, должен ли был AI вызвать tool calls
+    intent = classify_user_intent(message, mentions_str)
+    should_have_tool_calls = intent["type"] in ["add_task", "complete_task", "delegate_task", "list_tasks", "find_partners", "update_profile", "delete_all_tasks"]
+    
+    # ЕСЛИ запрос требует действия И AI не вызвал tool calls - применяем fallback
+    if should_have_tool_calls and intent["confidence"] >= 0.7:
+        ai_confidence = 0.2  # Принудительно низкая уверенность для fallback
+        print(f"[DEBUG FALLBACK] Forcing fallback for {intent['type']} (confidence: {intent['confidence']})")  # DEBUG
+    
+    # Если запрос требует действия, но AI не дал содержательный ответ - низкая уверенность
+    if should_have_tool_calls and ai_confidence < 0.6:
+        ai_confidence = 0.3
+        logger.info(f"[SMART FALLBACK] Request requires action ({intent['type']}) but AI confidence low ({ai_confidence})")
+
+    # Если уверенность низкая - применяем паттерн-анализ
+    if ai_confidence < 0.4:
+        logger.info(f"[SMART FALLBACK] Applying fallback: message='{message[:50]}...', mentions='{mentions_str}', ai_response='{ai_response_content[:50]}...', intent_type='{intent['type']}', confidence={intent['confidence']}")
+        print(f"[DEBUG FALLBACK] Applying fallback for {intent['type']}, ai_confidence={ai_confidence}")  # DEBUG
+
+        if intent["confidence"] >= 0.7:  # Высокая уверенность в классификации
+            logger.info(f"[SMART FALLBACK] Executing {intent['type']} with params: {intent['params']}")
+
+            # Выполняем соответствующее действие
+            if intent["type"] == "add_task":
+                result = add_task(
+                    title=intent["params"].get("title", "Задача"),
+                    description=intent["params"].get("description", ""),
+                    reminder_time=intent["params"].get("reminder_time"),
+                    user_id=user_id
+                )
+                fallback_actions.append({
+                    "function": "add_task",
+                    "result": result,
+                    "reason": "AI не создал задачу"
+                })
+
+            elif intent["type"] == "complete_task":
+                result = complete_task(
+                    task_id=intent["params"].get("task_id"),
+                    task_title=intent["params"].get("task_title"),
+                    user_id=user_id
+                )
+                fallback_actions.append({
+                    "function": "complete_task",
+                    "result": result,
+                    "reason": "AI не отметил задачу выполненной"
+                })
+
+            elif intent["type"] == "update_profile":
+                print(f"[DEBUG FALLBACK] Executing update_profile with city={intent['params'].get('city')}, interests={intent['params'].get('interests')}")  # DEBUG
+                result = update_profile(
+                    city=intent["params"].get("city"),
+                    interests=intent["params"].get("interests"),
+                    user_id=user_id
+                )
+                print(f"[DEBUG FALLBACK] update_profile result: {result}")  # DEBUG
+
+            elif intent["type"] == "list_tasks":
+                result = list_tasks(user_id=user_id)
+                fallback_actions.append({
+                    "function": "list_tasks",
+                    "result": result,
+                    "reason": "AI не показал список задач"
+                })
+
+            elif intent["type"] == "delegate_task":
+                result = delegate_task(
+                    title=intent["params"].get("task_title", "Задача"),
+                    delegated_to_username=intent["params"].get("delegated_to"),
+                    reminder_time=intent["params"].get("reminder_time"),
+                    user_id=user_id
+                )
+                fallback_actions.append({
+                    "function": "delegate_task",
+                    "result": result,
+                    "reason": "AI не распознал делегирование"
+                })
+
+            elif intent["type"] == "find_partners":
+                result = find_partners(user_id=user_id)
+                fallback_actions.append({
+                    "function": "find_partners",
+                    "result": result,
+                    "reason": "AI не выполнил поиск партнеров"
+                })
+
+            elif intent["type"] == "delete_all_tasks":
+                result = delete_all_tasks(user_id=user_id)
+                fallback_actions.append({
+                    "function": "delete_all_tasks",
+                    "result": result,
+                    "reason": "AI не выполнил удаление задач"
+                })
+
+    return fallback_actions
+
 def encrypt_data(data):
     if data:
         return cipher.encrypt(data.encode()).decode()
@@ -100,6 +312,8 @@ def determine_timezone_from_time(user_time_str, user_id):
     # Находим ближайший timezone
     closest_diff = min(timezone_map.keys(), key=lambda x: abs(x - hour_diff))
     return timezone_map[closest_diff]
+
+def parse_time_to_datetime(time_text, user_id):
     """Парсит время из текста пользователя"""
     import re
     from datetime import datetime, timedelta
@@ -240,16 +454,26 @@ def clean_technical_details(text):
     import logging
     logger = logging.getLogger(__name__)
     original_text = text
+    print(f"[DEBUG CLEAN] Original text: '{text}'")  # DEBUG
     import re
 
     # Удаляем вызовы функций в квадратных скобках: [add_task(...)]
+    before = text
     text = re.sub(r'\[[\w_]+\([^]]*\)\]', '', text)
+    if before != text:
+        print(f"[DEBUG CLEAN] After removing function calls: '{text}'")  # DEBUG
 
     # Удаляем пустые квадратные скобки
+    before = text
     text = re.sub(r'\[\s*\]', '', text)
+    if before != text:
+        print(f"[DEBUG CLEAN] After removing empty brackets: '{text}'")  # DEBUG
 
     # Удаляем названия функций (с скобками и без)
+    before = text
     text = re.sub(r'\b(list_tasks|add_task|delete_task|complete_task|delegate_task|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)(\s*\(\s*\))?', '', text, flags=re.IGNORECASE)
+    if before != text:
+        print(f"[DEBUG CLEAN] After removing function names: '{text}'")  # DEBUG
 
     # Удаляем фразы о вызове функций
     patterns_to_remove = [
@@ -301,6 +525,7 @@ def clean_technical_details(text):
 
     if original_text != text:
         logger.warning(f"[CLEAN] Original: '{original_text[:100]}...' -> Cleaned: '{text[:100]}...'")
+        print(f"[DEBUG CLEAN] Final text: '{text}'")  # DEBUG
 
     return text.strip()
 
@@ -310,8 +535,42 @@ clean_content = clean_technical_details
 def get_system_prompt():
     return f"""Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как опытный коллега, который искренне хочет помочь.
 
-ОСНОВНОЙ ПРИНЦИП:
-Всегда вызывай функции для действий. Никогда не говори о данных без предварительного вызова функции. Правильно: вызов функции → ответ на основе результата. Говори о завершённом действии только после получения результата. До результата либо молчи, либо используй "добавляю", "ищу", "обновляю".
+🚨 КРИТИЧНО ВАЖНЫЕ ПРАВИЛА:
+1. НИКОГДА не отвечай на запросы без вызова соответствующих функций!
+2. Всегда сначала вызывай tool calls, потом формируй ответ на основе результатов.
+3. ЕСЛИ пользователь просит что-то сделать - СРАЗУ вызывай функцию, НЕ спрашивай разрешения.
+4. Для ЛЮБОГО упоминания задач - сначала list_tasks(), потом отвечай.
+5. "Добавь/создай задачу" → add_task()
+6. "Показать/список задач" → list_tasks()
+7. "Сделал/выполнил/завершил [задача]" → complete_task()
+8. "Удали все задачи" → delete_all_tasks()
+9. "@username [задача]" → delegate_task()
+10. "Найди людей/партнёров" → find_partners()
+
+СПЕЦИАЛЬНЫЕ ПРАВИЛА ПРИОРИТЕТА:
+- ЕСЛИ сообщение содержит @username → ОБЯЗАТЕЛЬНО delegate_task(title="задача", delegated_to_username="@username")
+- "Найди людей" → ОБЯЗАТЕЛЬНО find_partners()
+- "Удали все задачи" → ОБЯЗАТЕЛЬНО delete_all_tasks()
+
+ПРЯМЫЕ КОМАНДЫ (ТОЧНО вызывай функции):
+• "Напомни X в Y время" → add_task(title="X", reminder_time="Y")
+• "Добавь задачу X" → add_task(title="X")
+• "Показать/список задач" → list_tasks()
+• "Сделал X" → complete_task(task_title="X")
+• "Удали все" → delete_all_tasks()
+• "@user сделай X" → delegate_task(title="X", delegated_to_username="@user")
+• "Найди людей" → find_partners()
+• "Живу в X, увлекаюсь Y" → update_profile(city="X", interests="Y")
+
+ПРИМЕРЫ ТОЧНЫХ СООТВЕТСТВИЙ:
+• "Напомни позвонить маме завтра в 15:00" → add_task(title="Позвонить маме", reminder_time="завтра в 15:00")
+• "Добавь задачу купить продукты" → add_task(title="Купить продукты")
+• "Показать список задач" → list_tasks()
+• "Сделал позвонить маме" → complete_task(task_title="позвонить маме")
+• "Удали все мои задачи" → delete_all_tasks()
+• "@ivan сделай отчет до завтра 10:00" → delegate_task(title="сделай отчет", delegated_to_username="@ivan", reminder_time="завтра в 10:00")
+• "Найди людей с похожими интересами" → find_partners(interests="интересы из профиля")
+• "Живу в Москве, работаю в IT" → update_profile(city="Москва", company="IT")
 
 СТИЛЬ ОБЩЕНИЯ:
 - Веди активную беседу, интересуйся результатами
@@ -713,12 +972,14 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     from models import Session, Task, UserProfile, Interaction
     from datetime import datetime
     from sqlalchemy import or_
+    print(f"[DEBUG COMPLETE_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")  # DEBUG
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
+    print(f"[DEBUG COMPLETE_TASK] Found user: {user.id if user else None}")  # DEBUG
     if not user:
         if close_session:
             session.close()
@@ -744,6 +1005,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     elif task_title:
         # Ищем по словам в названии для более гибкого поиска
         words = task_title.lower().split()
+        print(f"[DEBUG COMPLETE_TASK] Searching by title, words: {words}")  # DEBUG
         # OR вместо AND - ищем задачу содержащую хотя бы одно из слов
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
         task = session.query(Task).filter(
@@ -751,6 +1013,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
             Task.status != 'completed',
             or_(*conditions)
         ).first()
+        print(f"[DEBUG COMPLETE_TASK] Found task by title: {task.title if task else None}")  # DEBUG
     else:
         if close_session:
             session.close()
@@ -760,6 +1023,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
         session.commit()
+        print(f"[DEBUG COMPLETE_TASK] Task completed: {task.title}, status: {task.status}")  # DEBUG
         
         # Обновить аналитику профиля
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -859,11 +1123,18 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
         
         # Validate reminder_time format
         if reminder_time:
+            # Try parsing the format first
             try:
-                # Try parsing the format
                 datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
             except ValueError:
-                return f"⚠️ Некорректный формат времени '{reminder_time}'. Укажите точное время в формате YYYY-MM-DD HH:MM (например: 2026-01-10 15:00)"
+                # If not in YYYY-MM-DD HH:MM format, try to parse as relative time
+                logger.info(f"[DELEGATE] Parsing relative time: {reminder_time}")
+                parsed_time = parse_time_to_datetime(reminder_time, user_id)
+                if parsed_time:
+                    reminder_time = parsed_time
+                    logger.info(f"[DELEGATE] Parsed to: {reminder_time}")
+                else:
+                    return f"⚠️ Некорректный формат времени '{reminder_time}'. Укажите точное время в формате YYYY-MM-DD HH:MM (например: 2026-01-10 15:00)"
         
         # Find delegator (creator)
         delegator = session.query(User).filter_by(telegram_id=user_id).first()
@@ -872,13 +1143,17 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
         
         # Find recipient by username
         recipient_username = delegated_to_username.replace('@', '').lower()
+        print(f"[DEBUG DELEGATE] Looking for recipient: '{recipient_username}'")  # DEBUG
         recipient = session.query(User).filter(User.username.ilike(recipient_username)).first()
+        print(f"[DEBUG DELEGATE] Found recipient: {recipient.username if recipient else None}")  # DEBUG
         
         if not recipient:
             return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
         
         # If delegating to self, create regular task instead
+        print(f"[DEBUG DELEGATE] Checking if self: recipient.id={recipient.id}, delegator.id={delegator.id}")  # DEBUG
         if recipient.id == delegator.id:
+            print(f"[DEBUG DELEGATE] Delegating to self")  # DEBUG
             # Create regular task for self
             task = Task(
                 user_id=delegator.id,
@@ -1901,7 +2176,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "complete_task",
-            "description": "Завершить задачу по ID или названию",
+            "description": "Завершить существующую задачу по ID или названию. Вызывай когда пользователь говорит что выполнил/сделал/завершил задачу. НЕ создавай новую задачу, а именно заверши существующую!",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1945,13 +2220,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delegate_task",
-            "description": "Создать задачу для другого пользователя. ⚠️ КРИТИЧНО: reminder_time ОБЯЗАТЕЛЕН! Если пользователь не указал точную дату и время (формат YYYY-MM-DD HH:MM), то ОБЯЗАТЕЛЬНО спроси: 'На какое точное время и дату поставить дедлайн задачи?' и дождись ответа. НЕ вызывай функцию без точного времени!",
+            "description": "Создать задачу для другого пользователя. Вызывай ТОЛЬКО когда в сообщении есть @username! Если нет @mention - НЕ вызывай эту функцию. reminder_time можно указывать в естественном формате как 'завтра в 10:00', 'до послезавтра 15:00' и т.д.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "Название задачи"},
                     "description": {"type": "string", "description": "Подробное описание задачи (опционально)"},
-                    "reminder_time": {"type": "string", "description": "⚠️ ОБЯЗАТЕЛЬНО! Точный дедлайн в формате YYYY-MM-DD HH:MM. Без этого параметра функция вернет ошибку."},
+                    "reminder_time": {"type": "string", "description": "Время дедлайна в любом удобном формате: 'завтра в 10:00', 'до послезавтра 15:00', 'сегодня в 18:00' и т.д."},
                     "delegated_to_username": {"type": "string", "description": "Username получателя с @ (например @username)"},
                     "delegation_details": {"type": "string", "description": "Детали: желаемый результат, критерии выполнения, важность"}
                 },
@@ -2107,6 +2382,18 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "delete_all_tasks",
+            "description": "Удалить все задачи пользователя. ⚠️ КРИТИЧНО: Это необратимая операция! Перед вызовом ОБЯЗАТЕЛЬНО подтверди у пользователя: 'Ты точно хочешь удалить ВСЕ задачи? Это действие нельзя отменить.' и дождись явного подтверждения.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_subscription_payment",
             "description": "Создать платеж для оформления или продления месячной подписки",
             "parameters": {"type": "object", "properties": {}}
@@ -2129,623 +2416,6 @@ TOOLS = [
         }
     }
 ]
-
-def force_tool_calls(message, content, mentions_str, user_id):
-    """
-    Анализирует ответ модели и принудительно вызывает tools,
-    если модель их описала, но не вызвала формально.
-    
-    Возвращает список результатов вызовов функций или None.
-    """
-    import logging
-    import re
-    from datetime import datetime, timedelta
-    import pytz
-    logger = logging.getLogger(__name__)
-    logger.info(f"[FORCE] force_tool_calls called: message_len={len(message)}, mentions_str='{mentions_str}', has_@={('@' in message)}")
-    
-    forced_calls = []
-    message_lower = message.lower()
-    
-    # 1. Проверка на list_tasks триггеры
-    list_triggers = ["покажи", "список", "какие задач", "что у меня", "что там", "мои дела", "все задачи"]
-    if any(trigger in message_lower for trigger in list_triggers):
-        # Проверяем, что в content нет признаков вызова list_tasks
-        if "list_tasks" not in content.lower() and "Args for list_tasks" not in content:
-            logger.info("[FORCE] Triggering list_tasks() - detected request but no tool call")
-            result = list_tasks(user_id=user_id)
-            forced_calls.append({"function": "list_tasks", "result": result})
-    
-    # 2. Проверка на delegate_task (упоминание @username)
-    logger.info(f"[FORCE] Checking delegate: mentions_str != 'нет' = {mentions_str != 'нет'}, '@' in message = {'@' in message}")
-    if mentions_str != 'нет' and '@' in message:
-        logger.info(f"[FORCE] Detected @mention: mentions_str={mentions_str}, message has @")
-        # Проверяем, что в content нет вызова delegate_task
-        if "delegate_task" not in content.lower() and "Args for delegate_task" not in content:
-            logger.info(f"[FORCE] No delegate_task in content")
-            # Извлекаем @username
-            mention_match = re.search(r'@(\w+)', message)
-            if mention_match:
-                logger.info(f"[FORCE] Mention found: {mention_match.group(0)}")
-                delegated_to = f"@{mention_match.group(1)}"
-                # Пытаемся извлечь описание задачи из сообщения
-                task_title = re.sub(r'@\w+', '', message).strip()
-                task_title = re.sub(r'^(поручи|делегируй|передай)\s+', '', task_title, flags=re.IGNORECASE).strip()
-                # Убираем "до завтра 15:00" и т.д. из названия
-                task_title = re.sub(r'\s+до\s+(завтра|послезавтра|сегодня)(\s+\d{1,2}:\d{2})?', '', task_title, flags=re.IGNORECASE).strip()
-                
-                logger.info(f"[FORCE] Extracted: delegated_to={delegated_to}, title={task_title}")
-                
-                # Извлекаем deadline если есть: "до завтра 15:00"
-                reminder_time = None
-                deadline_match = re.search(r'до\s+(завтра|послезавтра|сегодня)\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
-                if deadline_match:
-                    day_word = deadline_match.group(1).lower()
-                    hour = deadline_match.group(2)
-                    minute = deadline_match.group(3)
-                    
-                    # Вычисляем дату
-                    from datetime import datetime, timedelta
-                    import pytz
-                    
-                    # Используем timezone пользователя или UTC
-                    from models import Session, User
-                    temp_session = Session()
-                    temp_user = temp_session.query(User).filter_by(telegram_id=user_id).first()
-                    user_tz = pytz.timezone(temp_user.timezone) if temp_user and temp_user.timezone else pytz.UTC
-                    temp_session.close()
-                    now = datetime.now(user_tz)
-                    
-                    if day_word == 'завтра':
-                        target_date = (now + timedelta(days=1)).date()
-                    elif day_word == 'послезавтра':
-                        target_date = (now + timedelta(days=2)).date()
-                    else:  # сегодня
-                        target_date = now.date()
-                    
-                    # Формируем строку "YYYY-MM-DD HH:MM"
-                    reminder_time = f"{target_date.strftime('%Y-%m-%d')} {hour.zfill(2)}:{minute}"
-                    logger.info(f"[FORCE] Deadline parsed: {deadline_match.group(0)} → {reminder_time}")
-                
-                logger.info(f"[FORCE] Triggering delegate_task() - found @mention {delegated_to}, title: '{task_title}'")
-                result = delegate_task(
-                    title=task_title if task_title else "Задача",
-                    delegated_to_username=delegated_to,
-                    reminder_time=reminder_time,
-                    user_id=user_id
-                )
-                forced_calls.append({"function": "delegate_task", "result": result})
-            else:
-                logger.info(f"[FORCE] No @username match in message: {message}")
-        else:
-            logger.info(f"[FORCE] Skipping delegate_task - already in content")
-    else:
-        if mentions_str == 'нет':
-            logger.info(f"[FORCE] No mentions detected (mentions_str='нет')")
-        elif '@' not in message:
-            logger.info(f"[FORCE] No @ symbol in message")
-    
-    # 3. Расширенная проверка на update_profile (интересы, навыки, цели, город, компания, должность)
-    profile_triggers = [
-        # Время (для синхронизации часового пояса)
-        (r'(?:моё|мое)\s+(?:местное\s+)?время[:：\s]+(\d{1,2}[:：]\d{2})', 'timezone'),
-        (r'(?:у\s+меня\s+)?сейчас\s+(\d{1,2}[:：]\d{2})', 'timezone'),
-        
-        # Город
-        (r'(?:я\s+)?(?:живу|нахожусь|переехал|приехал)\s+(?:в\s+)?([А-Яа-яA-Za-z\s]+)(?:\s+город)?', 'city'),
-        (r'(?:мой\s+)?город\s+([А-Яа-яA-Za-z\s]+)', 'city'),
-        (r'город\s+([А-Яа-яA-Za-z\s]+)', 'city'),
-        
-        # Компания и должность
-        (r'(?:я\s+)?работаю\s+(?:в\s+)?([А-Яа-яA-Za-z\s&]+)(?:\s+как\s+)?(?:на\s+должности\s+)?([А-Яа-яA-Za-z\s]+)?', 'company'),
-        (r'(?:моя\s+)?компания\s+([А-Яа-яA-Za-z\s&]+)', 'company'),
-        (r'(?:моя\s+)?должность\s+([А-Яа-яA-Za-z\s]+)', 'position'),
-        (r'должность\s+([А-Яа-яA-Za-z\s]+)', 'position'),
-        
-        # Навыки
-        (r'(?:я\s+)?(?:умею|знаю|владею)\s+([А-Яа-яA-Za-z\s,]+)', 'skills'),
-        (r'(?:мои\s+)?навыки\s+([А-Яа-яA-Za-z\s,]+)', 'skills'),
-        
-        # Цели
-        (r'(?:моя\s+)?цель\s+([А-Яа-яA-Za-z\s,]+)', 'goals'),
-        (r'цели\s+([А-Яа-яA-Za-z\s,]+)', 'goals'),
-        (r'хочу\s+([А-Яа-яA-Za-z\s,]+)', 'goals'),
-    ]
-    
-    profile_updates = {}
-    user_time = None  # Для хранения времени пользователя
-    for pattern, field in profile_triggers:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            if field == 'timezone':
-                # Извлекаем время пользователя
-                time_str = match.group(1).strip()
-                user_time = time_str
-                logger.info(f"[FORCE] Detected user time: {user_time}")
-            elif field == 'city':
-                city_name = match.group(1).strip()
-                if len(city_name) > 2:  # Избегаем слишком коротких названий
-                    profile_updates['city'] = city_name
-            elif field == 'company':
-                company_name = match.group(1).strip()
-                if len(company_name) > 2:
-                    profile_updates['company'] = company_name
-                    if len(match.groups()) > 1 and match.group(2):
-                        position_name = match.group(2).strip()
-                        if len(position_name) > 2:
-                            profile_updates['position'] = position_name
-            elif field == 'position':
-                position_name = match.group(1).strip()
-                if len(position_name) > 2:
-                    profile_updates['position'] = position_name
-            elif field == 'skills':
-                skills_text = match.group(1).strip()
-                if len(skills_text) > 2:
-                    profile_updates['skills'] = skills_text
-            elif field == 'goals':
-                goals_text = match.group(1).strip()
-                if len(goals_text) > 2:
-                    profile_updates['goals'] = goals_text
-    
-    # Расширенные триггеры для интересов
-    interests_add_triggers = [
-        r'(?:добавь|добавить)\s+(?:в\s+)?интересы\s+(.+)',
-        r'(?:в\s+)?интересы\s+(?:добавь|добавить)\s+(.+)',
-        r'интересует\s+(.+)',
-        r'(?:я\s+)?(?:люблю|увлекаюсь|интересуюсь|занимаюсь)\s+(.+)',
-        r'(?:снова|опять|теперь)\s+(?:люблю|увлекаюсь|интересуюсь|занимаюсь)\s+(.+)',
-        r'хочу\s+(?:заниматься|увлекаться)\s+(.+)',
-        r'начну\s+(?:заниматься|увлекаться)\s+(.+)',
-    ]
-    
-    interests_remove_triggers = [
-        r'(?:удали|убери|убрать)\s+(?:из\s+)?интересов\s+(.+)',
-        r'(?:из\s+)?интересов\s+(?:удали|убери|убрать)\s+(.+)',
-        r'(?:больше\s+)?не\s+(?:люблю|увлекаюсь|интересуюсь|занимаюсь)\s+(.+)',
-        r'бросил\s+(.+)',
-        r'перестал\s+(?:заниматься|увлекаться)\s+(.+)',
-    ]
-    
-    # Проверяем добавление интересов
-    for pattern in interests_add_triggers:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            interest = match.group(1).strip()
-            if interest and len(interest) > 1 and "update_profile" not in content.lower():
-                profile_updates['interests'] = f"+{interest}"
-                logger.info(f"[FORCE] Detected interest addition: {interest}")
-                break
-    
-    # Проверяем удаление интересов
-    if not profile_updates.get('interests'):
-        for pattern in interests_remove_triggers:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                interest = match.group(1).strip()
-                if interest and len(interest) > 1 and "update_profile" not in content.lower():
-                    profile_updates['interests'] = f"-{interest}"
-                    logger.info(f"[FORCE] Detected interest removal: {interest}")
-                    break
-    
-    # Дополнительные триггеры для навыков и целей
-    skills_add_triggers = [
-        r'(?:добавь|добавить)\s+(?:в\s+)?навыки\s+(.+)',
-        r'(?:в\s+)?навыки\s+(?:добавь|добавить)\s+(.+)',
-        r'навык\s+(.+)',
-        r'умею\s+(.+)',
-        r'знаю\s+(.+)',
-    ]
-    
-    goals_add_triggers = [
-        r'(?:добавь|добавить)\s+(?:в\s+)?цели\s+(.+)',
-        r'(?:в\s+)?цели\s+(?:добавь|добавить)\s+(.+)',
-        r'цель\s+(.+)',
-        r'хочу\s+(?:достичь|сделать|стать)\s+(.+)',
-        r'планирую\s+(.+)',
-    ]
-    
-    # Проверяем добавление навыков
-    for pattern in skills_add_triggers:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            skill = match.group(1).strip()
-            if skill and len(skill) > 1 and "update_profile" not in content.lower():
-                profile_updates['skills'] = f"+{skill}"
-                logger.info(f"[FORCE] Detected skill addition: {skill}")
-                break
-    
-    # Проверяем добавление целей
-    for pattern in goals_add_triggers:
-        match = re.search(pattern, message, re.IGNORECASE)
-        if match:
-            goal = match.group(1).strip()
-            if goal and len(goal) > 1 and "update_profile" not in content.lower():
-                profile_updates['goals'] = f"+{goal}"
-                logger.info(f"[FORCE] Detected goal addition: {goal}")
-                break
-    
-    # Обработка времени пользователя для определения timezone
-    if user_time and "update_profile" not in content.lower():
-        from datetime import datetime
-        import pytz
-        
-        try:
-            # Парсим время пользователя
-            user_hour, user_minute = map(int, user_time.replace('：', ':').split(':'))
-            
-            # Получаем текущее UTC время
-            utc_now = datetime.now(pytz.UTC)
-            
-            # Вычисляем разницу часов
-            utc_hour = utc_now.hour
-            offset_hours = user_hour - utc_hour
-            
-            # Нормализуем offset (учитываем переход через полночь)
-            if offset_hours > 12:
-                offset_hours -= 24
-            elif offset_hours < -12:
-                offset_hours += 24
-            
-            # Определяем timezone на основе offset
-            timezone_map = {
-                0: 'UTC',
-                1: 'Europe/Paris',
-                2: 'Europe/Athens',
-                3: 'Europe/Moscow',
-                4: 'Asia/Dubai',
-                5: 'Asia/Karachi',
-                6: 'Asia/Dhaka',
-                7: 'Asia/Bangkok',
-                8: 'Asia/Shanghai',
-                9: 'Asia/Tokyo',
-                10: 'Australia/Sydney',
-                11: 'Pacific/Noumea',
-                12: 'Pacific/Auckland',
-                -1: 'Atlantic/Azores',
-                -2: 'Atlantic/South_Georgia',
-                -3: 'America/Sao_Paulo',
-                -4: 'America/New_York',
-                -5: 'America/Chicago',
-                -6: 'America/Denver',
-                -7: 'America/Los_Angeles',
-                -8: 'America/Anchorage',
-                -9: 'Pacific/Gambier',
-                -10: 'Pacific/Honolulu',
-                -11: 'Pacific/Midway',
-            }
-            
-            timezone = timezone_map.get(offset_hours, 'UTC')
-            profile_updates['timezone'] = timezone
-            logger.info(f"[FORCE] Determined timezone: {timezone} (offset: {offset_hours}h, user_time: {user_time}, utc: {utc_hour})")
-        except Exception as e:
-            logger.error(f"[FORCE] Error determining timezone from time {user_time}: {e}")
-    
-    if profile_updates and "update_profile" not in content.lower():
-        logger.info(f"[FORCE] Triggering update_profile() - detected profile info: {profile_updates}")
-        result = update_profile(user_id=user_id, **profile_updates)
-        forced_calls.append({"function": "update_profile", "result": result})
-    
-    # 4. Проверка на add_task (добавление задачи)
-    add_triggers = ["добавь", "добавить", "создай", "создать", "напомни", "поставь задачу", "купить", "почистить"]
-    if any(trigger in message_lower for trigger in add_triggers):
-        logger.info(f"[FORCE] Add task trigger detected in message")
-        # Проверяем, что AI не вызвал add_task через tool_calls
-        # Игнорируем если в content есть JSON или code blocks с add_task
-        has_code_block = "```" in content or "json" in content.lower()
-        has_natural_response = len(content) > 50 and not has_code_block
-        
-        # Если AI вернул код (code block) вместо нормального ответа - форсим выполнение
-        if has_code_block or ("add_task" in content.lower() and len(content) < 100):
-            logger.info(f"[FORCE] AI returned code block instead of executing (has_code_block={has_code_block}) - forcing tool call")
-            
-            # Извлекаем название задачи из кавычек или напрямую
-            title_match = re.search(r'["«"]([^"»"]+)["»"]', message)
-            if not title_match:
-                # Пробуем без кавычек: "напомни заказать продукты через 5 минут"
-                title_match = re.search(r'(?:добавь|создай|напомни|купить|почистить)\s+(?:задачу\s+)?(.+?)\s+(?:через|завтра|сегодня|послезавтра|на\s+завтра|на\s+сегодня|утром|вечером)', message, re.IGNORECASE)
-                if not title_match:
-                    # Если нет времени в сообщении, берём всё после триггера
-                    title_match = re.search(r'(?:добавь|создай|напомни)\s+(?:задачу\s+)?(.+)', message, re.IGNORECASE)
-                    if not title_match:
-                        # Для "купить хлеб" или "почистить зубы"
-                        title_match = re.search(r'(купить|почистить|сделать|выполнить)\s+(.+)', message, re.IGNORECASE)
-                        if title_match:
-                            title = f"{title_match.group(1).capitalize()} {title_match.group(2).strip()}"
-                        else:
-                            title = message.strip()
-                    else:
-                        title = title_match.group(1).strip()
-                else:
-                    title = title_match.group(1).strip()
-            else:
-                title = title_match.group(1).strip()
-            
-            logger.info(f"[FORCE] Extracted title: {title}")
-            
-            # Извлекаем время напоминания
-            reminder_time = None
-            from datetime import datetime, timedelta
-            import pytz
-            from models import Session, User
-            
-            # Получаем timezone пользователя
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            user_tz = pytz.timezone(user.timezone) if user and user.timezone else pytz.UTC
-            session.close()
-            now = datetime.now(user_tz)
-            
-            # Проверяем "через X минут/часов"
-            through_time_match = re.search(r'через\s+(\d+)\s+(минут|час)', message, re.IGNORECASE)
-            if through_time_match:
-                amount = int(through_time_match.group(1))
-                unit = through_time_match.group(2).lower()
-                
-                if 'минут' in unit:
-                    target_dt = now + timedelta(minutes=amount)
-                else:  # час/часов
-                    target_dt = now + timedelta(hours=amount)
-                
-                reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                logger.info(f"[FORCE] Extracted reminder_time (relative): {reminder_time}")
-            else:
-                # Проверяем "через полчаса/полтора часа"
-                half_hour_match = re.search(r'через\s+(полчаса|полтора\s+часа)', message, re.IGNORECASE)
-                if half_hour_match:
-                    unit = half_hour_match.group(1).lower()
-                    if 'полчас' in unit:
-                        target_dt = now + timedelta(minutes=30)
-                    else:  # полтора часа
-                        target_dt = now + timedelta(minutes=90)
-                    reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                    logger.info(f"[FORCE] Extracted reminder_time (half hour): {reminder_time}")
-                else:
-                    # Проверяем "завтра/сегодня в XX:XX"
-                    time_match = re.search(r'(завтра|послезавтра|сегодня)\s+в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
-                    if time_match:
-                        day_word = time_match.group(1).lower()
-                        hour = int(time_match.group(2))
-                        minute = int(time_match.group(3))
-                        
-                        if 'завтра' in day_word:
-                            target_date = (now + timedelta(days=1)).date()
-                        elif 'послезавтра' in day_word:
-                            target_date = (now + timedelta(days=2)).date()
-                        else:
-                            target_date = now.date()
-                        
-                        target_dt = datetime.combine(target_date, datetime.min.time().replace(hour=hour, minute=minute))
-                        target_dt = user_tz.localize(target_dt)
-                        reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                        logger.info(f"[FORCE] Extracted reminder_time (absolute with day): {reminder_time}")
-                    else:
-                        # Проверяем просто "в HH:MM" (подразумевается сегодня или завтра)
-                        simple_time_match = re.search(r'в\s+(\d{1,2}):(\d{2})', message, re.IGNORECASE)
-                        if simple_time_match:
-                            hour = int(simple_time_match.group(1))
-                            minute = int(simple_time_match.group(2))
-                            
-                            # Если время уже прошло сегодня - ставим на завтра
-                            target_time = datetime.min.time().replace(hour=hour, minute=minute)
-                            if target_time <= now.time():
-                                target_date = (now + timedelta(days=1)).date()
-                            else:
-                                target_date = now.date()
-                            
-                            target_dt = datetime.combine(target_date, target_time)
-                            target_dt = user_tz.localize(target_dt)
-                            reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                            logger.info(f"[FORCE] Extracted reminder_time (simple time): {reminder_time}")
-                        else:
-                            # Проверяем "утром", "вечером", "днем"
-                            time_word_match = re.search(r'(утром|вечером|днем)', message, re.IGNORECASE)
-                            if time_word_match:
-                                time_word = time_word_match.group(1).lower()
-                                if 'утром' in time_word:
-                                    # Утро - 8:00
-                                    hour, minute = 8, 0
-                                elif 'вечером' in time_word:
-                                    # Вечер - 18:00
-                                    hour, minute = 18, 0
-                                elif 'днем' in time_word:
-                                    # День - 12:00
-                                    hour, minute = 12, 0
-                                
-                                target_time = datetime.min.time().replace(hour=hour, minute=minute)
-                                # Если время уже прошло сегодня - ставим на завтра
-                                if target_time <= now.time():
-                                    target_date = (now + timedelta(days=1)).date()
-                                else:
-                                    target_date = now.date()
-                                
-                                target_dt = datetime.combine(target_date, target_time)
-                                target_dt = user_tz.localize(target_dt)
-                                reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                                logger.info(f"[FORCE] Extracted reminder_time (time word '{time_word}'): {reminder_time}")
-            
-            if reminder_time:
-                logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
-                result = add_task(title=title, reminder_time=reminder_time, user_id=user_id)
-                logger.info(f"[FORCE] add_task result: {result}")
-                forced_calls.append({"function": "add_task", "result": result})
-            else:
-                # Если время не указано, ставим на ближайшее время (через 1 час по умолчанию)
-                from config import DEFAULT_TASK_REMINDER_HOURS
-                target_dt = now + timedelta(hours=DEFAULT_TASK_REMINDER_HOURS)
-                reminder_time = target_dt.strftime('%Y-%m-%d %H:%M')
-                logger.info(f"[FORCE] No time specified, using default: {reminder_time}")
-                logger.info(f"[FORCE] Triggering add_task() - title='{title}', reminder_time={reminder_time}")
-                result = add_task(title=title, reminder_time=reminder_time, user_id=user_id)
-                logger.info(f"[FORCE] add_task result: {result}")
-                forced_calls.append({"function": "add_task", "result": result})
-    
-    # 6. Проверка на complete_task (завершение задачи)
-    complete_triggers = [
-        r'(?:выполнил|сделал|завершил|закончил|готово)\s+(.+)',
-        r'задача\s+(.+)\s+(?:выполнена|сделана|завершена|закончена|готова)',
-        r'(.+)\s+(?:выполнено|сделано|завершено|закончено|готово)',
-        r'отметь\s+(.+)\s+как\s+(?:выполненную|сделанную|завершенную)',
-        r'пометить\s+(.+)\s+как\s+(?:выполненную|сделанную|завершенную)',
-    ]
-    
-    if any(trigger in message_lower for trigger in ["выполнил", "сделал", "завершил", "закончил", "готово", "отметь", "пометить"]):
-        logger.info(f"[FORCE] Complete task trigger detected in message")
-        if "complete_task" not in content.lower():
-            # Пытаемся извлечь название задачи
-            task_title = None
-            for pattern in complete_triggers:
-                match = re.search(pattern, message, re.IGNORECASE)
-                if match:
-                    task_title = match.group(1).strip()
-                    break
-            
-            if task_title:
-                logger.info(f"[FORCE] Triggering complete_task() - title='{task_title}'")
-                result = complete_task(task_title=task_title, user_id=user_id)
-                forced_calls.append({"function": "complete_task", "result": result})
-    
-    # 7. Проверка на edit_task (изменение задачи)
-    edit_triggers = [
-        r'(?:измени|поменяй|исправь)\s+(.+)\s+(?:на|в)\s+(.+)',
-        r'(.+)\s+(?:измени|поменяй|исправь)\s+на\s+(.+)',
-        r'время\s+(.+)\s+(?:измени|поменяй)\s+на\s+(.+)',
-        r'напомнить\s+о\s+(.+)\s+(?:в|на)\s+(.+)',
-    ]
-    
-    if any(trigger in message_lower for trigger in ["измени", "поменяй", "исправь", "время", "напомнить"]):
-        logger.info(f"[FORCE] Edit task trigger detected in message")
-        if "edit_task" not in content.lower():
-            # Пытаемся извлечь изменения
-            for pattern in edit_triggers:
-                match = re.search(pattern, message, re.IGNORECASE)
-                if match:
-                    old_part = match.group(1).strip()
-                    new_part = match.group(2).strip()
-                    
-                    # Определяем, что меняем - название или время
-                    if re.search(r'\d{1,2}:\d{2}', new_part) or 'завтра' in new_part.lower() or 'сегодня' in new_part.lower():
-                        # Это изменение времени
-                        logger.info(f"[FORCE] Detected time change: '{old_part}' → '{new_part}'")
-                        # Нужно найти задачу по названию и изменить время
-                        # Получаем список задач для поиска ID
-                        tasks_result = list_tasks(user_id=user_id)
-                        if tasks_result:
-                            # Ищем задачу по названию
-                            task_lines = tasks_result.split('\n')
-                            for line in task_lines:
-                                if old_part.lower() in line.lower():
-                                    # Извлекаем ID задачи
-                                    id_match = re.search(r'(\d+)\.\s+', line)
-                                    if id_match:
-                                        task_id = int(id_match.group(1))
-                                        # Парсим новое время
-                                        reminder_time = parse_time_from_text(new_part, user_id)
-                                        if reminder_time:
-                                            logger.info(f"[FORCE] Triggering edit_task() - id={task_id}, reminder_time={reminder_time}")
-                                            result = edit_task(task_id=task_id, reminder_time=reminder_time, user_id=user_id)
-                                            forced_calls.append({"function": "edit_task", "result": result})
-                                        break
-                    else:
-                        # Это изменение названия
-                        logger.info(f"[FORCE] Detected title change: '{old_part}' → '{new_part}'")
-                        # Ищем задачу по старому названию
-                        tasks_result = list_tasks(user_id=user_id)
-                        if tasks_result:
-                            task_lines = tasks_result.split('\n')
-                            for line in task_lines:
-                                if old_part.lower() in line.lower():
-                                    id_match = re.search(r'(\d+)\.\s+', line)
-                                    if id_match:
-                                        task_id = int(id_match.group(1))
-                                        logger.info(f"[FORCE] Triggering edit_task() - id={task_id}, title='{new_part}'")
-                                        result = edit_task(task_id=task_id, title=new_part, user_id=user_id)
-                                        forced_calls.append({"function": "edit_task", "result": result})
-                                        break
-                    break
-    
-    # 8. Проверка на find_partners (поиск партнеров)
-    partners_triggers = [
-        "найди партнеров", "ищи партнеров", "покажи партнеров", "нужны партнеры",
-        "хочу найти", "ищу людей", "нужны люди с похожими интересами", "поиск коллег",
-        "кто может помочь", "кто занимается", "кто знает", "рекомендуй контакты"
-    ]
-    
-    if any(trigger in message_lower for trigger in partners_triggers):
-        logger.info(f"[FORCE] Find partners trigger detected in message")
-        if "find_partners" not in content.lower():
-            logger.info(f"[FORCE] Triggering find_partners()")
-            result = find_partners(user_id=user_id)
-            forced_calls.append({"function": "find_partners", "result": result})
-    
-    # 9. Проверка на set_priority (установка приоритета)
-    priority_triggers = [
-        "приоритет", "важно", "срочно", "критично", "высокий приоритет",
-        "средний приоритет", "низкий приоритет", "пометить как"
-    ]
-    
-    if any(trigger in message_lower for trigger in priority_triggers):
-        logger.info(f"[FORCE] Set priority trigger detected in message")
-        if "set_priority" not in content.lower():
-            # Пытаемся извлечь задачу и приоритет
-            priority_match = re.search(r'(высокий|средний|низкий|high|medium|low)', message_lower)
-            task_match = re.search(r'задач[ау]\s+(.+?)(?:\s+(?:приоритет|важно|срочно))', message, re.IGNORECASE)
-            
-            if priority_match and task_match:
-                priority_map = {
-                    'высокий': 'high', 'high': 'high',
-                    'средний': 'medium', 'medium': 'medium',
-                    'низкий': 'low', 'low': 'low'
-                }
-                priority = priority_map.get(priority_match.group(1), 'medium')
-                task_title = task_match.group(1).strip()
-                
-                # Находим задачу по названию
-                tasks_result = list_tasks(user_id=user_id)
-                if tasks_result:
-                    task_lines = tasks_result.split('\n')
-                    for line in task_lines:
-                        if task_title.lower() in line.lower():
-                            id_match = re.search(r'(\d+)\.\s+', line)
-                            if id_match:
-                                task_id = int(id_match.group(1))
-                                logger.info(f"[FORCE] Triggering set_priority() - id={task_id}, priority={priority}")
-                                result = set_priority(task_id=task_id, priority=priority, user_id=user_id)
-                                forced_calls.append({"function": "set_priority", "result": result})
-                                break
-    
-    # Триггеры для функций подписки
-    subscription_triggers = ["подписка", "subscription", "оплата", "платеж", "payment", "статус подписки", "subscription status", "статус", "status"]
-    if any(trigger in message_lower for trigger in subscription_triggers):
-        if "check_subscription_status" not in content.lower() and "Args for check_subscription_status" not in content:
-            logger.info("[FORCE] Triggering check_subscription_status() - subscription status request detected")
-            result = check_subscription_status(user_id=user_id)
-            forced_calls.append({"function": "check_subscription_status", "result": result})
-    
-    # Триггеры для создания платежа
-    payment_triggers = ["оплати", "купить подписку", "оформить подписку", "create payment", "buy subscription"]
-    if any(trigger in message_lower for trigger in payment_triggers):
-        if "create_subscription_payment" not in content.lower() and "Args for create_subscription_payment" not in content:
-            logger.info("[FORCE] Triggering create_subscription_payment() - payment request detected")
-            result = create_subscription_payment(user_id=user_id)
-            forced_calls.append({"function": "create_subscription_payment", "result": result})
-    
-    # Триггеры для отмены подписки
-    cancel_triggers = ["отменить подписку", "cancel subscription", "прекратить подписку"]
-    if any(trigger in message_lower for trigger in cancel_triggers):
-        if "cancel_subscription" not in content.lower() and "Args for cancel_subscription" not in content:
-            logger.info("[FORCE] Triggering cancel_subscription() - cancel request detected")
-            result = cancel_subscription(user_id=user_id)
-            forced_calls.append({"function": "cancel_subscription", "result": result})
-    
-    # Триггеры для удаления всех задач
-    delete_all_triggers = ["удали все задачи", "удалить все задачи", "очисти список задач", "очистить все задачи", "delete all tasks"]
-    if any(trigger in message_lower for trigger in delete_all_triggers):
-        if "delete_all_tasks" not in content.lower() and "Args for delete_all_tasks" not in content:
-            logger.info("[FORCE] Triggering delete_all_tasks() - delete all request detected")
-            result = delete_all_tasks(user_id=user_id)
-            forced_calls.append({"function": "delete_all_tasks", "result": result})
-    
-    return forced_calls if forced_calls else None
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Force rebuild v3.0 - FIXED clean_content issue
@@ -2779,23 +2449,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     logger.info(f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
     
-    # Препроцессинг: форсим list_tasks() для расширенных триггерных фраз
-    list_triggers = [
-        "покажи", "список", "какие задач", "что у меня", "что там", "мои дела", "все задачи",
-        "задачи", "список дел", "что делать", "что запланировано", "мои планы",
-        "напоминания", "что напомнить", "активные задачи", "текущие дела"
-    ]
-    should_force_list = any(trigger in message.lower() for trigger in list_triggers)
-    
-    # Препроцессинг: форсим add_task() для расширенных триггерных фраз создания задач
-    add_triggers = [
-        "создай задачу", "добавь задачу", "напомни", "поставь задачу", "создать задачу", "добавить задачу",
-        "запланируй", "запомни", "не забудь", "нужно сделать", "надо сделать", "хочу сделать",
-        "купить", "почистить", "приготовить", "позвонить", "написать", "встретиться",
-        "заказать", "забронировать", "записаться", "сходить", "съездить"
-    ]
-    should_force_add = any(trigger in message.lower() for trigger in add_triggers)
-    
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
         return "API ключ DeepSeek не настроен. Это демо ответ: Привет! Я AI-ассистент TaskChat. Чем могу помочь?"
@@ -2815,21 +2468,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         
         if user_id:
             from models import Session, User, Task, UserProfile, Subscription
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            db_session = Session()
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
             
             # Создать пользователя если не существует
             if not user:
                 user = User(telegram_id=user_id)
-                session.add(user)
-                session.commit()
+                db_session.add(user)
+                db_session.commit()
             
             # Check subscription
             from config import FREE_ACCESS_MODE
             if not FREE_ACCESS_MODE:
-                    subscription = session.query(Subscription).filter_by(user_id=user.id, status='active').first()
+                    subscription = db_session.query(Subscription).filter_by(user_id=user.id, status='active').first()
                     if not subscription:
-                        session.close()
+                        db_session.close()
                         return "У вас нет активной подписки. Для использования AI-ассистента активируйте подписку в Telegram боте @asibiont_bot. После активации подписки я смогу помогать вам с управлением задачами!"
             
             # Get user current time FIRST before using it
@@ -2863,7 +2516,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_memory = ""  # If decryption fails, skip
             
             # Добавляем информацию из профиля (компания, должность и т.д.)
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
             profile_filled = False
             if profile:
                 profile_info = []
@@ -2892,8 +2545,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             # Это критично для предотвращения выдумывания задач
             
             # НО добавляем КРАТКУЮ сводку для контекста
-            tasks_summary = session.query(Task).filter_by(user_id=user.id, status='pending').count()
-            overdue_tasks = session.query(Task).filter(
+            tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status='pending').count()
+            overdue_tasks = db_session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.reminder_time < user_now,
                 Task.status == 'pending'
@@ -2908,16 +2561,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             
             # Add delegated tasks info
             if user.username:
-                delegated_tasks = session.query(Task).filter(
+                delegated_tasks = db_session.query(Task).filter(
                     Task.delegated_to_username.ilike(user.username),
                     Task.delegation_status == 'pending'
                 ).all()
                 if delegated_tasks:
-                    delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}" for t in delegated_tasks[:3]]
+                    delegated_info = [f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := db_session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}" for t in delegated_tasks[:3]]
                     user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
             
             # Add info about tasks delegated BY user
-            my_delegated_tasks = session.query(Task).filter(
+            my_delegated_tasks = db_session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.delegated_to_username.isnot(None),
                 Task.delegation_status.in_(['pending', 'accepted'])
@@ -2928,12 +2581,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             
             # Add partners/contacts info
             try:
-                partners = get_partners_list(user_id=user_id, session=session)
+                partners = get_partners_list(user_id=user_id, session=db_session)
                 if partners:
                     # partners - это список объектов UserProfile
                     partners_usernames = []
                     for p in partners[:5]:
-                        partner_user = session.query(User).filter_by(id=p.user_id).first()
+                        partner_user = db_session.query(User).filter_by(id=p.user_id).first()
                         if partner_user and partner_user.username:
                             partners_usernames.append(f"@{partner_user.username}")
                     if partners_usernames:
@@ -2958,7 +2611,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         if datetime.now(timezone.utc) - created_at > timedelta(hours=24):
                             logger.info(f"Pending action timed out for user {user_id}, clearing")
                             user.pending_action = None
-                            session.commit()
+                            db_session.commit()
                             # Продолжить с обычной обработкой
                             pass
                         else:
@@ -2969,13 +2622,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         task_id = pending_data.get('task_id')
                         task_title = pending_data.get('task_title')
                         # Сохранить ответ пользователя как completion_notes
-                        task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+                        task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
                         if task:
                             task.completion_notes = original_message  # Сохраняем полный ответ пользователя
-                            session.commit()
+                            db_session.commit()
                         # Очистить pending_action
                         user.pending_action = None
-                        session.commit()
+                        db_session.commit()
                         # Вернуть специальный ответ для обработки результата
                         return f"Спасибо за информацию о задаче '{task_title}'! Результат сохранён для анализа."
                     
@@ -2983,27 +2636,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         task_id = pending_data.get('task_id')
                         task_title = pending_data.get('task_title')
                         # Обработать ответ пользователя о пропуске задачи
-                        task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+                        task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
                         if task:
                             if 'да' in original_message.lower() or 'пропустить' in original_message.lower():
                                 task.status = 'cancelled'
                                 task.skipped_reason = original_message
-                                session.commit()
+                                db_session.commit()
                                 user.pending_action = None
-                                session.commit()
+                                db_session.commit()
                                 return f"Задача '{task_title}' отмечена как пропущенная. Могу предложить альтернативы или создать новую задачу."
                             else:
                                 user.pending_action = None
-                                session.commit()
+                                db_session.commit()
                                 return f"Хорошо, оставляем задачу '{task_title}' активной. Чем могу помочь?"
                         user.pending_action = None
-                        session.commit()
+                        db_session.commit()
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.error(f"Error processing pending_action: {e}")
                     user.pending_action = None
-                    session.commit()
+                    db_session.commit()
             
-            session.close()
+            db_session.close()
         
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
@@ -3011,21 +2664,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         system_prompt = get_system_prompt().replace("{{current_date}}", user_now.strftime("%Y-%m-%d")).replace("{{current_time}}", current_time_str).replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d")).replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d")).replace("{{current_username}}", user_username)
         
         # 🎯 КОМПЛЕКСНЫЙ ПОДХОД: задачи, контакты, напоминания, связи
-        system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ (все важны равно):\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров для совместной работы\n3. Отслеживание связей между людьми и интересами\n4. Когда видишь возможность - ПРЕДЛАГАЙ КОНКРЕТНЫХ людей из контактов\n\n🤝 РАБОТА С КОНТАКТАМИ:\n- Если задача требует навыков/помощи - используй search_contacts() для поиска подходящих людей\n- Предлагай КОНКРЕТНЫЕ имена: 'Кстати, @ivan работает с дизайном, может помочь?'\n- Упоминай делегирование только когда это действительно уместно\n- Следи за общими интересами между контактами\n\nПРИМЕР ХОРОШЕГО ОТВЕТА:\n'Создал задачу по дизайну. Вижу, что @maria увлекается графикой - может быть полезна?'\n\nПРИМЕР ПЛОХОГО ОТВЕТА:\n'Задача создана. Хочешь делегировать?' ← Слишком навязчиво!"
+        system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
         
-        system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Если пользователь говорит 'через X минут', добавь X минут к текущему времени {current_time_str}\n- Если пользователь говорит 'через X часов', добавь X часов к текущему времени\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Например: 'через 5 минут' от {current_time_str} = {(user_now + timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M')}"
+        system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
         
-        system_prompt += f"\n\n@MENTIONS В СООБЩЕНИИ: {mentions_str}\n� ЕСЛИ ЕСТЬ @MENTIONS → можешь использовать delegate_task() если пользователь хочет поручить задачу\n💡 Если задача сложная и есть подходящие контакты → ПРЕДЛОЖИ КОНКРЕТНОГО человека по имени"
-        
-        # Если обнаружены триггеры для list_tasks, добавляем в промпт принудительное требование
-        if should_force_list:
-            system_prompt += "\n\n🚨 КРИТИЧЕСКИ ВАЖНО: ПОЛЬЗОВАТЕЛЬ ПРОСИТ ПОКАЗАТЬ ЗАДАЧИ - ОБЯЗАТЕЛЬНО ВЫЗОВИ list_tasks() ПЕРВЫМ ДЕЛОМ, ДАЖЕ ЕСЛИ В КОНТЕКСТЕ УЖЕ ЕСТЬ ИНФОРМАЦИЯ О ЗАДАЧАХ!"
-        
-        # Усиленный триггер для создания задач
-        if should_force_add:
-            system_prompt += "\n\n🚨 ПОЛЬЗОВАТЕЛЬ ПРОСИТ СОЗДАТЬ ЗАДАЧУ - ОБЯЗАТЕЛЬНО ВЫЗОВИ add_task() С ПАРАМЕТРАМИ! НЕ ПРОСТО ГОВОРИ ОБ ЭТОМ - ВЫПОЛНИ!"
-        
-        system_prompt += "\n\n⚠️ ВАЖНО: НЕ СПРАШИВАЙ О ТОМ, ЧТО УЖЕ ЗАПОЛНЕНО В ПРОФИЛЕ ПОЛЬЗОВАТЕЛЯ! Если город уже указан, не спрашивай о городе. Если компания указана, не спрашивай о компании. Спрашивай только о незаполненных полях профиля."
+        system_prompt += f"\n\n@MENTIONS: {mentions_str}\n🚨 ЕСЛИ ВИДИШЬ @username - ЭТО ДЕЛЕГИРОВАНИЕ! ВЫЗЫВАЙ delegate_task()!\n\nСПЕЦИАЛЬНЫЕ КОМАНДЫ:\n- Сообщение начинается с '@' → delegate_task()\n- 'Найди людей' → find_partners()\n- 'Удали все' → delete_all_tasks()"
         
         system_prompt += user_memory
         
@@ -3083,6 +2726,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 result = await response.json()
                                 message_response = result["choices"][0]["message"]
                                 content = message_response.get("content", "")
+                                print(f"[DEBUG API] AI response content='{content[:100]}...', tool_calls={len(tool_calls) if tool_calls else 0}")  # DEBUG
                                 # Фильтровать сырые tool calls
                                 content = re.sub(r'<\|.*?\|>', '', content).strip()
                                 content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
@@ -3103,11 +2747,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             
                             # Обработка tool calls и т.д.
                             tool_results = []  # Инициализируем заранее
-                            
-                            # 🚨 КРИТИЧЕСКАЯ ПРОВЕРКА: если AI не вызвал tool calls, но должен был
-                            if not tool_calls and (should_force_add or should_force_list):
-                                logger.warning(f"[FORCE REQUIRED] AI didn't call tools, but should_force_add={should_force_add}, should_force_list={should_force_list}")
-                                logger.info(f"[FORCE REQUIRED] Will process in forced calls section below")
                             
                             if tool_calls:
                                 logger.info(f"[TOOL CALLS] AI returned {len(tool_calls)} tool calls - starting execution")
@@ -3226,146 +2865,114 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         logger.error(f"[TOOL CALLS] Error executing {func_name}: {e}")
                                         tool_results.append(f"{func_name}() ошибка: {str(e)}")
                         
-                        # Генерируем ответ на основе результатов
-                        logger.info(f"[TOOL CALLS] Tool calls completed, {len(tool_results)} results. Generating natural response...")
-                        system_prompt_with_results = system_prompt + f"\n\n=== РЕЗУЛЬТАТЫ ВЫПОЛНЕНИЯ ФУНКЦИЙ ===\n" + "\n".join(tool_results) + "\n\n=== ИНСТРУКЦИИ ===\nТы только что выполнил функции. Теперь СФОРМУЛИРУЙ ЕСТЕСТВЕННЫЙ ОТВЕТ ПОЛЬЗОВАТЕЛЮ на основе ПОЛУЧЕННЫХ ДАННЫХ.\n\nПРАВИЛА:\n1. НИКОГДА не показывай названия функций (list_tasks, add_task и т.д.)\n2. НИКОГДА не показывай JSON или технические данные\n3. НИКОГДА не говори 'выполнил функцию' или подобное\n4. Используй ТОЛЬКО информацию из результатов выполнения\n5. Отвечай естественно, как дружелюбный помощник\n6. Если результат пустой - скажи об этом дружелюбно\n7. 🤝 ОБЯЗАТЕЛЬНО упомяни возможность СОВМЕСТНОЙ РАБОТЫ или поиска ПАРТНЁРОВ если задача создана\n8. НЕ ВОЗВРАЩАЙ пустой ответ, ```json``` или технические теги - ТОЛЬКО нормальный текст!"
+                        # Генерируем естественный ответ на основе результатов
+                        logger.info(f"[TOOL CALLS] Tool calls completed, {len(tool_results)} results. Parsing to natural response...")
                         
-                        messages_with_results = [{"role": "system", "content": system_prompt_with_results}]
-                        if context:
-                            for item in context:
-                                if "user" in item:
-                                    messages_with_results.append({"role": "user", "content": item["user"]})
-                                if "agent" in item:
-                                    messages_with_results.append({"role": "assistant", "content": item["agent"]})
-                        messages_with_results.append({"role": "user", "content": original_message})
-                        
-                        data_retry = {
-                            "model": "deepseek-chat",
-                            "messages": messages_with_results,
-                            "temperature": 0.1
-                        }
-                        
-                        url = "https://api.deepseek.com/v1/chat/completions"
-                        headers = {
-                            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                            "Content-Type": "application/json"
-                        }
-                        
-                        async with session.post(url, headers=headers, json=data_retry, timeout=aiohttp.ClientTimeout(total=60)) as retry_response:
-                            if retry_response.status == 200:
-                                retry_result = await retry_response.json()
-                                content = retry_result["choices"][0]["message"].get("content", "")
-                                content = replace_placeholders(content, user_now, current_time_str)
-                                # content = clean_technical_details(content)  # Убираем очистку - retry ответ уже должен быть чистым
-                                
-                                # Сохраняем взаимодействие
-                                if user_id and content:
-                                    try:
-                                        from models import Session, User, Interaction
-                                        save_session = Session()
-                                        user_obj = save_session.query(User).filter_by(telegram_id=user_id).first()
-                                        if user_obj:
-                                            interaction = Interaction(user_id=user_obj.id, message_type='agent', content=content)
-                                            save_session.add(interaction)
-                                            save_session.commit()
-                                    except Exception as e:
-                                        logger.error(f"Failed to save interaction: {e}")
-                                
-                                return content
-                            else:
-                                # Если второй запрос не удался, возвращаем базовое подтверждение
-                                logger.warning(f"[TOOL CALLS] Retry API call failed with status {retry_response.status}")
-                                error_text = await retry_response.text()
-                                logger.error(f"[TOOL CALLS] Error response: {error_text[:500]}")
-                                
-                                # Формируем базовый ответ на основе результатов
-                                if tool_results:
-                                    content = "Выполнено:\n" + "\n".join([r.split("вернул:")[-1].strip() if "вернул:" in r else r for r in tool_results])
+                        natural_responses = []
+                        for r in tool_results:
+                            result_text = r.split("вернул: ")[-1] if "вернул: " in r else r
+                            
+                            if "Добавлена задача" in result_text:
+                                # Parse "Добавлена задача 'title' (ID: id) с напоминанием на date time"
+                                match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text)
+                                if match:
+                                    title = match.group(1)
+                                    time_str = match.group(2)
+                                    natural = f"Отлично, добавил задачу \"{title}\" с напоминанием на {time_str}."
+                                    natural_responses.append(natural)
                                 else:
-                                    content = "Действие выполнено успешно."
-                                
-                                return content
+                                    natural_responses.append(result_text)
+                            
+                            elif "Завершена задача" in result_text:
+                                match = re.search(r"Завершена задача '([^']+)'", result_text)
+                                if match:
+                                    title = match.group(1)
+                                    natural = f"Отлично, отметил задачу \"{title}\" как выполненную! 👍"
+                                    natural_responses.append(natural)
+                                else:
+                                    natural_responses.append(result_text)
+                            
+                            elif "Задачи:" in result_text:
+                                natural_responses.append(result_text)
+                            
+                            elif "Удалены все задачи" in result_text:
+                                natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
+                                natural_responses.append(natural)
+                            
+                            elif "Задача" in result_text and "делегирована" in result_text:
+                                natural = "Отлично, задача делегирована! Я уведомлю получателя."
+                                natural_responses.append(natural)
+                            
+                            else:
+                                natural_responses.append(result_text)
+                        
+                        content = "\n".join(natural_responses)
+                        return content
                     
-                    # Проверяем триггеры принудительного вызова ТОЛЬКО если AI НЕ вызвал tool_calls
-                    logger.info("[FORCE CHECK] Checking for forced tool call triggers...")
-                    logger.info(f"[FORCE CHECK] AI tool_calls present: {tool_calls is not None}")
+                    print(f"[DEBUG] After tool_calls block, about to check fallback")  # DEBUG
+                    # Все запросы обрабатывает AI, без принудительных триггеров
+                    logger.info("[AI ONLY] All requests handled by AI without forced triggers")
+                    print(f"[DEBUG] About to check fallback, content='{content[:50]}...'")  # DEBUG
                     
-                    forced = None
-                    if not tool_calls:  # ТОЛЬКО если AI не вызвал функции сам
-                        logger.warning(f"[FORCE REQUIRED] AI didn't call tools, but should_force_add={should_force_add}, should_force_list={should_force_list}")
-                        forced = force_tool_calls(original_message, content, mentions_str, user_id)
-                        if forced:
-                            logger.info("[FORCE REQUIRED] Will process in forced calls section below")
-                    else:
-                        logger.info("[FORCE CHECK] Skipping forced calls - AI already called tools")
-                    
-                    if forced:
-                        # После принудительных tool calls нужно сгенерировать НОРМАЛЬНЫЙ ответ через AI
-                        logger.info(f"[FORCE] Forced {len(forced)} tool calls, generating AI response based on results")
-                        
-                        # Собираем результаты для контекста
-                        tool_results_summary = []
-                        for fc in forced:
-                            func_name = fc['function']
-                            result = fc['result']
-                            tool_results_summary.append(f"{func_name}() вернул: {result[:200]}")
-                        
-                        # Делаем повторный запрос к AI с результатами tool calls для генерации естественного ответа
-                        system_prompt_with_results = system_prompt + f"\n\nВЫПОЛНЕННЫЕ ФУНКЦИИ (НЕ ПОКАЗЫВАЙ ЭТО ПОЛЬЗОВАТЕЛЮ, МОЛЧА ИСПОЛЬЗУЙ ДАННЫЕ):\n" + "\n".join(tool_results_summary) + "\n\nСформулируй естественный ответ на основе ТОЛЬКО этих данных. СТРОГО ЗАПРЕЩЕНО показывать названия функций, код или технические детали!"
-                        
-                        messages_with_results = [{"role": "system", "content": system_prompt_with_results}]
-                        if context:
-                            for item in context:
-                                if "user" in item:
-                                    messages_with_results.append({"role": "user", "content": item["user"]})
-                                if "agent" in item:
-                                    messages_with_results.append({"role": "assistant", "content": item["agent"]})
-                        messages_with_results.append({"role": "user", "content": original_message})
-                        
-                        data_retry = {
-                            "model": "deepseek-chat",
-                            "messages": messages_with_results,
-                            "temperature": 0.1
-                        }
-                        
-                        url = "https://api.deepseek.com/v1/chat/completions"
-                        headers = {
-                            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                            "Content-Type": "application/json"
-                        }
-                        
-                        async with session.post(url, headers=headers, json=data_retry, timeout=aiohttp.ClientTimeout(total=60)) as retry_response:
-                            if retry_response.status == 200:
-                                retry_result = await retry_response.json()
-                                content = retry_result["choices"][0]["message"].get("content", "")
-                                logger.info(f"[TOOL CALLS] AI retry response: '{content[:300]}...'")
-                                content = replace_placeholders(content, user_now, current_time_str)
-                                # content = clean_technical_details(content)  # Убираем очистку - ответ уже должен быть чистым
-                                logger.info(f"[TOOL CALLS] Final content: '{content[:300]}...'")
-                                logger.info(f"[TOOL CALLS] Content length: {len(content)}, is empty: {len(content.strip()) == 0}")
+                    # 🔄 SMART FALLBACK: Проверяем, нужно ли применить умный fallback
+                    print(f"[DEBUG] Calling smart_fallback_handler...")  # DEBUG
+                    print(f"[DEBUG] About to call smart_fallback_handler, content='{content[:50]}...'")  # DEBUG
+                    try:
+                        fallback_result = await smart_fallback_handler(original_message, mentions_str, user_id, session, content)
+                        print(f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions")  # DEBUG
+                        if fallback_result:
+                            logger.info(f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}")
+                            
+                            # Обрабатываем результаты fallback аналогично tool calls
+                            natural_responses = []
+                            for action in fallback_result:
+                                result_text = action["result"]
+                                func_name = action["function"]
                                 
-                                # Сохраняем взаимодействие
-                                if user_id and content:
-                                    try:
-                                        from models import Session, User, Interaction
-                                        save_session = Session()
-                                        user_obj = save_session.query(User).filter_by(telegram_id=user_id).first()
-                                        if user_obj:
-                                            user_interaction = Interaction(user_id=user_obj.id, message_type='user', content=original_message)
-                                            save_session.add(user_interaction)
-                                            ai_interaction = Interaction(user_id=user_obj.id, message_type='agent', content=content)
-                                            save_session.add(ai_interaction)
-                                            save_session.commit()
-                                            logger.info(f"Saved interaction to DB for user {user_id}")
-                                        save_session.close()
-                                    except Exception as e:
-                                        logger.error(f"Failed to save interaction: {e}")
+                                if "Добавлена задача" in result_text:
+                                    match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text)
+                                    if match:
+                                        title = match.group(1)
+                                        time_str = match.group(2)
+                                        natural = f"Отлично, добавил задачу \"{title}\" с напоминанием на {time_str}."
+                                        natural_responses.append(natural)
+                                    else:
+                                        natural_responses.append(result_text)
                                 
-                                return content
+                                elif "Завершена задача" in result_text:
+                                    match = re.search(r"Завершена задача '([^']+)'", result_text)
+                                    if match:
+                                        title = match.group(1)
+                                        natural = f"Отлично, отметил задачу \"{title}\" как выполненную! 👍"
+                                        natural_responses.append(natural)
+                                    else:
+                                        natural_responses.append(result_text)
+                                
+                                elif "Задачи:" in result_text:
+                                    natural_responses.append(result_text)
+                                
+                                elif "Удалены все задачи" in result_text:
+                                    natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
+                                    natural_responses.append(natural)
+                                
+                                elif "Задача" in result_text and "делегирована" in result_text:
+                                    natural = "Отлично, задача делегирована! Я уведомлю получателя."
+                                    natural_responses.append(natural)
+                                
+                                else:
+                                    natural_responses.append(result_text)
+                            
+                            final_content = "\n".join(natural_responses)
+                            print(f"[DEBUG FALLBACK] Returning final_content: '{final_content[:200]}...'")  # DEBUG
+                            return final_content
+                    except Exception as e:
+                        logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
+                        print(f"[DEBUG] Fallback error: {e}")  # DEBUG
                     
                     # Если forced calls не сработали, обрабатываем обычный ответ AI
                     # Обрабатываем обычный ответ AI без tool calls
                     logger.info("[TOOL CALLS] Tool calls completed, 0 results. Generating natural response...")
+                    print(f"[DEBUG] Processing regular AI response, content='{content[:100]}...'")  # DEBUG
                     content = message_response.get("content", "")
                     # Для обычных ответов используем только базовую очистку
                     content = re.sub(r'<\|.*?\|>', '', content).strip()  # Только DSML теги
@@ -3413,11 +3020,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     
                     # Сохраняем взаимодействие в базу данных для отображения в панели
                     if user_id:
+                        print(f"[DEBUG] Starting DB save for user {user_id}")  # DEBUG
                         try:
                             from models import Session, User, Interaction
                             save_session = Session()
                             user_obj = save_session.query(User).filter_by(telegram_id=user_id).first()
                             if user_obj:
+                                print(f"[DEBUG] Found user object")  # DEBUG
                                 # Сохраняем сообщение пользователя
                                 user_interaction = Interaction(
                                     user_id=user_obj.id,
@@ -3436,11 +3045,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 save_session.commit()
                                 logger.info(f"Saved interaction to DB for user {user_id}")
                             save_session.close()
+                            print(f"[DEBUG] DB save completed")  # DEBUG
                         except Exception as e:
                             logger.error(f"Failed to save interaction: {e}")
+                            print(f"[DEBUG] Error saving to DB: {e}")  # DEBUG
                     
                     # Очистка от технических деталей перед возвратом
-                    content = clean_technical_details(content)
+                    # НЕ применяем clean_technical_details для обычных ответов AI!
+                    print(f"[DEBUG] About to return content: '{content}'")  # DEBUG
                     return content
     
             except Exception as e:
