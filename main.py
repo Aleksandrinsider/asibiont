@@ -1978,7 +1978,7 @@ async def api_tasks_handler(request):
             task_data = {
                 'id': task.id,
                 'title': title,
-                'description': task.description if task.description else '',
+                'description': decrypt_data(task.description) if task.description else '',
                 'ai_recommendation': task.ai_recommendation if hasattr(task, 'ai_recommendation') else None,
                 'status': task.status,
                 'reminder_time': None,
