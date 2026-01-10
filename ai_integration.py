@@ -126,6 +126,32 @@ def smart_fallback_handler(message, mentions_str, user_id, session, ai_response_
     """
     fallback_actions = []
 
+    # СПЕЦИАЛЬНАЯ ОБРАБОТКА ПРИВЕТСТВИЙ
+    greeting_words = ["привет", "здравствуй", "хай", "hello", "hi", "добрый", "здравствуйте"]
+    is_greeting = (
+        len(message.strip()) <= 20 and  # Короткое сообщение
+        any(word in message.lower() for word in greeting_words)  # Содержит слово приветствия
+    )
+    
+    if is_greeting and len(ai_response_content.strip()) < 50:  # Ответ AI слишком короткий
+        logger.info(f"[SMART FALLBACK] Greeting detected, enhancing response")
+        # Получаем список задач для подробного ответа
+        tasks_result = list_tasks(user_id=user_id, session=session)
+        
+        # Создаем подробное приветствие
+        enhanced_greeting = f"Привет! Рад тебя видеть! {tasks_result}\n\n"
+        
+        # Добавляем вопросы и предложения
+        enhanced_greeting += "Что планируешь сегодня? Есть ли новые задачи, которые нужно добавить? "
+        enhanced_greeting += "Или хочешь обновить профиль, чтобы я мог лучше подбирать партнёров?"
+        
+        fallback_actions.append({
+            "function": "enhanced_greeting",
+            "result": enhanced_greeting,
+            "reason": "Приветствие слишком короткое, делаем подробным"
+        })
+        return fallback_actions  # Возвращаем сразу, без дальнейшей обработки
+
     # Анализируем уверенность AI на основе ответа и tool calls
     ai_confidence = 0.5  # Базовая уверенность
 
