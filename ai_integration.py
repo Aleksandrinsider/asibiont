@@ -3286,16 +3286,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
                         if task:
                             if "да" in original_message.lower() or "пропустить" in original_message.lower():
-                                task.status = "cancelled"
-                                task.skipped_reason = original_message
-                                db_session.commit()
-                                user.pending_action = None
-                                db_session.commit()
-                                return f"Задача '{task_title}' отмечена как пропущенная. Могу предложить альтернативы или создать новую задачу."
+                                skip_response = f"Задача '{task_title}' отмечена как пропущенная. Могу предложить альтернативы или создать новую задачу."
+                                return skip_response
                             else:
-                                user.pending_action = None
-                                db_session.commit()
-                                return f"Хорошо, оставляем задачу '{task_title}' активной. Чем могу помочь?"
+                                keep_response = f"Хорошо, оставляем задачу '{task_title}' активной. Чем могу помочь?"
+                                return keep_response
                         user.pending_action = None
                         db_session.commit()
                 except (json.JSONDecodeError, KeyError) as e:
