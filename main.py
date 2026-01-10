@@ -722,11 +722,12 @@ async def chat_handler(request):
             if user:
                 # Проверяем, не было ли уже сохранено такое же сообщение AI в последние 5 секунд
                 agent_response_timestamp = datetime.now(dt_timezone.utc)
+                five_seconds_ago_agent = agent_response_timestamp - timedelta(seconds=5)
                 recent_ai_interaction = session_db.query(Interaction).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'ai',
                     Interaction.content == response,
-                    Interaction.created_at >= agent_response_timestamp.replace(second=agent_response_timestamp.second - 5, microsecond=0)
+                    Interaction.created_at >= five_seconds_ago_agent
                 ).first()
                 
                 if not recent_ai_interaction:
