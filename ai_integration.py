@@ -2967,6 +2967,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             result = delete_all_tasks(user_id=user_id, session=None)
                                             tool_results.append({"function": func_name, "result": result})
                                         
+                                        elif func_name == "delete_task":
+                                            result = delete_task(
+                                                task_id=args.get("task_id"),
+                                                task_title=args.get("task_title"),
+                                                user_id=user_id,
+                                                session=None
+                                            )
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
                                         else:
                                             logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
                                             tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})
@@ -3016,6 +3025,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         elif "Удалены все задачи" in result_text:
                                             natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
                                             natural_responses.append(natural)
+                                        
+                                        elif "Задача" in result_text and "удалена" in result_text:
+                                            match = re.search(r"Задача '([^']+)' удалена", result_text)
+                                            if match:
+                                                title = match.group(1)
+                                                natural = f"Удалил задачу \"{title}\". Что дальше?"
+                                                natural_responses.append(natural)
+                                            else:
+                                                natural_responses.append(result_text)
                                         
                                         else:
                                             natural_responses.append(result_text)
