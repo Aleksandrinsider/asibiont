@@ -551,7 +551,7 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
                     {"function": "create_subscription_payment", "result": result, "reason": "AI не создал платеж"}
                 )
 
-            elif intent["type"] == "delete_all_tasks":
+            elif intent["type"] == "delete_task":
                 result = delete_task(
                     task_id=intent["params"].get("task_id"),
                     task_title=intent["params"].get("task_title"),
@@ -1495,6 +1495,67 @@ def parse_tool_arguments(arguments_str):
         return {}
 
 
+async def generate_task_recommendations(title, description, user_id):
+    """Generate AI recommendations for a task"""
+    try:
+        import requests
+        from config import DEEPSEEK_API_KEY
+        
+        prompt = f"""Проанализируй задачу и дай 2-3 конкретные, практические рекомендации по ее выполнению.
+
+Задача: {title}
+Описание: {description or 'Не указано'}
+
+Дай рекомендации в формате списка, каждая не длиннее 100 символов. Фокус на:
+- Подготовке необходимых ресурсов
+- Оптимальном времени выполнения  
+- Связанных действиях
+- Возможных сложностях
+
+Пример формата:
+- Подготовьте все необходимые материалы заранее
+- Выполните задачу в спокойное время дня
+- Проверьте результат перед завершением"""
+
+        response = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.7
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            
+            # Парсим рекомендации из ответа
+            recommendations = []
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('-') or line.startswith('•'):
+                    rec = line.lstrip('-•').strip()
+                    if rec and len(rec) <= 100:
+                        recommendations.append(rec)
+            
+            return recommendations[:3]  # Максимум 3 рекомендации
+        else:
+            import logging
+            logging.warning(f"Failed to generate recommendations: {response.status_code}")
+            return []
+    except Exception as e:
+        import logging
+        logging.warning(f"Error generating task recommendations: {e}")
+        return []
+
+
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     import logging
 
@@ -1582,6 +1643,17 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             except ValueError:
                 pass
         session.add(task)
+        
+        # Генерируем рекомендации для задачи
+        try:
+            recommendations = generate_task_recommendations(title, description, user.telegram_id)
+            if recommendations:
+                import json
+                task.recommendations = json.dumps(recommendations, ensure_ascii=False)
+        except Exception as e:
+            import logging
+            logging.warning(f"Could not generate recommendations for task {title}: {e}")
+        
         session.commit()
         task_id = task.id
 
@@ -2283,15 +2355,20 @@ def get_delegation_progress(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
-def edit_task(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None):
+def edit_task(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None, session=None):
     from models import Session, Task
     from datetime import datetime, timezone
     import pytz
 
-    session = Session()
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
-        session.close()
+        if close_session:
+            session.close()
         return "Пользователь не найден."
     
     # Найти задачу по ID или по названию
@@ -2345,13 +2422,15 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
                 # Обновляем напоминание через прямое добавление задачи в планировщик
                 # ReminderService требует bot, поэтому используем прямое обновление
             except ValueError:
-                session.close()
+                if close_session:
+                    session.close()
                 return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM или 'через X минут'."
         session.commit()
         result = f"Обновлена задача '{task.title}'."
     else:
         result = "Задача не найдена."
-    session.close()
+    if close_session:
+        session.close()
     return result
 
 
@@ -3735,7 +3814,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\)", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f'Отлично, добавил задачу "{title}". Теперь она запланирована и я буду напоминать о ней в нужное время. Рекомендую сразу подумать о необходимых ресурсах для выполнения этой задачи. Есть ли какие-то детали, которые стоит уточнить или добавить к задаче? Может быть, стоит также запланировать связанные действия?'
+                                                # Вариативные ответы для добавления задач
+                                                responses = [
+                                                    f'Отлично, добавил задачу "{title}". Теперь она запланирована и я буду напоминать о ней в нужное время. Рекомендую сразу подумать о необходимых ресурсах для выполнения этой задачи. Есть ли какие-то детали, которые стоит уточнить или добавить к задаче?',
+                                                    f'Задача "{title}" успешно создана! Я настрою напоминание в указанное время. Что еще нужно подготовить для выполнения этой задачи? Может быть, добавить описание или связанные действия?',
+                                                    f'Готово! Задача "{title}" добавлена в ваш список. Напоминание установлено. Давайте подумаем, что потребуется для ее выполнения - ресурсы, инструменты или дополнительные шаги?',
+                                                    f'Задача "{title}" запланирована! Я буду следить за временем и напомню. Какие материалы или информация понадобятся для выполнения? Стоит ли разбить задачу на подзадачи?',
+                                                    f'Отлично! "{title}" добавлена и ждет своего часа. Напоминание активировано. Что нужно подготовить заранее? Есть ли связанные задачи, которые стоит тоже запланировать?'
+                                                ]
+                                                import random
+                                                natural = random.choice(responses)
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)

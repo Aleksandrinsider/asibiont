@@ -40,6 +40,7 @@ class Task(Base):
     actual_completion_time = Column(DateTime)  # When task was actually completed
     skipped_reason = Column(String(255))  # Reason if task was skipped/cancelled
     overdue_reminders_sent = Column(Integer, default=0)  # Number of overdue reminders sent
+    recommendations = Column(Text)  # JSON array of AI-generated recommendations
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])

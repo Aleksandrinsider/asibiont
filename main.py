@@ -514,7 +514,8 @@ async def dashboard_handler(request):
                 'reminder_time': reminder_time_iso,  # Для группировки в JS
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
                 'overdue': getattr(task, 'overdue', False),
-                'overdue_text': getattr(task, 'overdue_text', None)
+                'overdue_text': getattr(task, 'overdue_text', None),
+                'recommendations': task.recommendations
             }
             tasks_dict.append(task_dict)
         
