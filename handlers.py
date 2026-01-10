@@ -253,12 +253,7 @@ async def chat_handler(message: Message):
                             tmp_file_path = tmp_file.name
                         
                         try:
-                            # Транскрибируем аудио через Deepseek API (или другой сервис)
-                            # Пока используем заглушку - в будущем можно добавить Whisper API или подобное
-                            await message.bot.send_message(message.chat.id, "🎤 Обрабатываю голосовое сообщение...")
-                            
-                            # Здесь должна быть транскрибация
-                            # Для демонстрации отправим сообщение о необходимости настройки
+                            # Транскрибируем аудио в текст
                             text = await transcribe_audio(tmp_file_path)
                             
                             if text:

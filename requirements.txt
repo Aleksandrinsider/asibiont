@@ -16,4 +16,6 @@ pytz==2025.2
 aiohttp-cors==0.7.0
 SpeechRecognition==3.10.0
 pydub==0.25.1
-# Force rebuild
+standard-aifc==3.13.0
+audioop-lts==0.2.2
+# Force rebuild 2
