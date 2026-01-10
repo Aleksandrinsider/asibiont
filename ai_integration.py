@@ -118,15 +118,21 @@ def classify_user_intent(message, mentions_str):
     if any(keyword in message_lower for keyword in create_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "add_task"
         intent["confidence"] = 0.8
-        # Извлекаем текст задачи
+        # Извлекаем текст задачи и время
         for keyword in create_keywords:
             if keyword in message_lower:
-                task_text = message_lower.split(keyword, 1)[1].strip()
-                # Убираем время если есть
-                time_patterns = [r"завтра в \d{1,2}:\d{2}", r"сегодня в \d{1,2}:\d{2}", r"через \d+ (минут|час)"]
-                for pattern in time_patterns:
-                    task_text = re.sub(pattern, "", task_text, flags=re.IGNORECASE).strip()
-                intent["params"]["task_title"] = task_text
+                after_keyword = message_lower.split(keyword, 1)[1].strip()
+                # Ищем время в оставшейся части
+                time_match = re.search(r"(через\s+\d+\s*(минут|час|часа|часов)|завтра\s+в\s+\d{1,2}:\d{2}|сегодня\s+в\s+\d{1,2}:\d{2})", after_keyword, re.IGNORECASE)
+                if time_match:
+                    intent["params"]["reminder_time"] = time_match.group(1)
+                    # Всё до времени - название задачи
+                    task_part = after_keyword.split(time_match.group(1))[0].strip()
+                    if task_part:
+                        intent["params"]["task_title"] = task_part
+                else:
+                    # Если времени нет, весь текст - задача
+                    intent["params"]["task_title"] = after_keyword
                 break
 
     # 3.1. Относительное время (контекстное обновление задач)
@@ -521,6 +527,7 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
             elif intent["type"] == "edit_task":
                 result = edit_task(
                     task_id=intent["params"].get("task_id"),
+                    task_title=intent["params"].get("task_title"),
                     title=intent["params"].get("title"),
                     description=intent["params"].get("description"),
                     reminder_time=intent["params"].get("reminder_time"),
@@ -1329,7 +1336,8 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += "2. 2-3 конкретные практические рекомендации\n"
     system_prompt += "3. Вопросы для уточнения контекста\n"
     system_prompt += "4. Предложение связанных действий\n"
-    system_prompt += "5. Если релевантно - предложи найти партнёров\n\n"
+    system_prompt += "5. Если релевантно - предложи найти партнёров\n"
+    system_prompt += "6. ОБЯЗАТЕЛЬНО предложи обновить профиль (интересы, город, работа) если это улучшит поиск контактов\n\n"
     system_prompt += "✅ ПРИ ПОКАЗЕ ЗАДАЧ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
     system_prompt += "1. Комментарий к каждой задаче отдельно\n"
     system_prompt += "2. Анализ дедлайнов и приоритетов\n"
@@ -1372,7 +1380,16 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += "- Анализируй текущий контекст и предлагай релевантные действия\n"
     system_prompt += "- Используй данные профиля и задач для персональных рекомендаций\n"
     system_prompt += "- Будь естественным - адаптируй стиль под ситуацию\n"
-    system_prompt += "- Замечай паттерны и предлагай оптимизации\n"
+    system_prompt += "- Замечай паттерны и предлагай оптимизации\n\n"
+    system_prompt += "🎯 ПРОАКТИВНЫЙ СБОР ИНФОРМАЦИИ О ПРОФИЛЕ:\n"
+    system_prompt += "- В ЛЮБОМ общении ОБЯЗАТЕЛЬНО предлагай обновить профиль если это улучшит работу\n"
+    system_prompt += "- При добавлении задач спрашивай о связанных интересах, городе, работе\n"
+    system_prompt += "- Если пользователь упоминает хобби/работу/город - СРАЗУ предлагай update_profile()\n"
+    system_prompt += "- Анализируй задачи для выявления интересов: спорт, еда, технологии, бизнес и т.д.\n"
+    system_prompt += "- При поиске контактов используй профиль для точных рекомендаций\n"
+    system_prompt += "- Спрашивай о приоритетах, мотивации, целях для лучшего понимания\n"
+    system_prompt += "- Предлагай дополнить профиль новыми категориями если это релевантно\n"
+    system_prompt += "- Будь настойчивым в сборе информации - это ключ к качественному сервису\n\n"
 
     system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
 
@@ -1525,20 +1542,30 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         user_tz = pytz.timezone(user.timezone)
                     except pytz.exceptions.UnknownTimeZoneError:
                         import logging
-
                         logging.warning(f"Unknown timezone {user.timezone}, using UTC")
                         user_tz = pytz.UTC
-                # Парсить как локальное время пользователя
-                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                # Локализовать в timezone пользователя
-                local_dt = user_tz.localize(local_dt)
-                # Конвертировать в UTC для хранения
-                task.reminder_time = local_dt.astimezone(pytz.UTC)
-                import logging
-
-                logging.info(
-                    f"Task {title} reminder_time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}"
-                )
+                
+                # Проверить, является ли время относительным
+                if "через" in reminder_time.lower():
+                    # Использовать parse_relative_time для относительного времени
+                    current_time = datetime.now(pytz.UTC)
+                    parsed_time = parse_relative_time(reminder_time, current_time)
+                    if parsed_time:
+                        task.reminder_time = parsed_time
+                        import logging
+                        logging.info(f"Task {title} relative time parsed: '{reminder_time}' -> {parsed_time}")
+                    else:
+                        # Если не удалось распарсить, игнорировать
+                        pass
+                else:
+                    # Парсить как абсолютное время
+                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                    # Локализовать в timezone пользователя
+                    local_dt = user_tz.localize(local_dt)
+                    # Конвертировать в UTC для хранения
+                    task.reminder_time = local_dt.astimezone(pytz.UTC)
+                    import logging
+                    logging.info(f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
             except ValueError:
                 pass  # Игнорировать неверный формат
         if due_date:
@@ -2251,16 +2278,28 @@ def get_delegation_progress(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
-def edit_task(task_id, title=None, description=None, reminder_time=None, user_id=None):
+def edit_task(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None):
     from models import Session, Task
-    from datetime import datetime
+    from datetime import datetime, timezone
+    import pytz
 
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         session.close()
         return "Пользователь не найден."
-    task = session.query(Task).filter_by(id=int(task_id)).first()
+    
+    # Найти задачу по ID или по названию
+    task = None
+    if task_id:
+        task = session.query(Task).filter_by(id=int(task_id)).first()
+    elif task_title:
+        # Ищем задачу по названию (точное совпадение или содержит)
+        task = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.title.ilike(f"%{task_title}%")
+        ).first()
+    
     if task:
         # Проверить права доступа: задача должна принадлежать пользователю ИЛИ быть делегирована ему
         has_access = False
@@ -2282,14 +2321,27 @@ def edit_task(task_id, title=None, description=None, reminder_time=None, user_id
             task.description = encrypt_data(description)
         if reminder_time:
             try:
-                reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-                task.reminder_time = reminder_time_parsed
+                # Проверить, является ли время относительным
+                if "через" in reminder_time.lower():
+                    # Использовать parse_relative_time для относительного времени
+                    current_time = datetime.now(pytz.UTC)
+                    parsed_time = parse_relative_time(reminder_time, current_time)
+                    if parsed_time:
+                        task.reminder_time = parsed_time
+                        logger.info(f"Task {task.id} relative time updated: '{reminder_time}' -> {parsed_time}")
+                    else:
+                        session.close()
+                        return "Не удалось распарсить относительное время."
+                else:
+                    # Парсить как абсолютное время
+                    reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+                    task.reminder_time = reminder_time_parsed
+                    logger.info(f"Task {task.id} absolute time updated: {reminder_time_parsed}")
                 # Обновляем напоминание через прямое добавление задачи в планировщик
                 # ReminderService требует bot, поэтому используем прямое обновление
-                logger.info(f"Обновлено время напоминания для задачи {task.id} на {reminder_time_parsed}")
             except ValueError:
                 session.close()
-                return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM."
+                return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM или 'через X минут'."
         session.commit()
         result = f"Обновлена задача '{task.title}'."
     else:
