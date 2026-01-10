@@ -816,8 +816,10 @@ def validate_response_compliance(response_text, intent_type=None):
 
     # Проверка на минимальную длину для значимых ответов
     sentences = [s.strip() for s in re.split(r"[.!?]+", response_text) if s.strip()]
-    if len(sentences) < 1 and len(response_text) > 20:
-        issues.append("Слишком короткий ответ (менее 1 предложения)")
+    if len(sentences) < 3 and len(response_text) > 20:
+        issues.append("Слишком короткий ответ (менее 3 предложений)")
+    if len(response_text) < 100 and len(response_text) > 20:
+        issues.append("Ответ слишком короткий (менее 100 символов)")
 
     # Проверка на наличие вопросов для вовлечения
     if not any(char in response_text for char in ["?", "Что", "Как", "Когда", "Зачем", "Почему"]):
@@ -1323,7 +1325,10 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
     system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
     system_prompt += "⚠️ СТРОГО ЗАПРЕЩЕНО ДАВАТЬ КОРОТКИЕ ОТВЕТЫ! ⚠️\n"
-    system_prompt += "МИНИМУМ 5-7 ПРЕДЛОЖЕНИЙ в КАЖДОМ ответе!\n\n"
+    system_prompt += "МИНИМУМ 5-7 ПРЕДЛОЖЕНИЙ в КАЖДОМ ответе!\n"
+    system_prompt += "КАЖДЫЙ ОТВЕТ ДОЛЖЕН БЫТЬ ПОДРОБНЫМ И ИНФОРМАТИВНЫМ!\n"
+    system_prompt += "НИКОГДА НЕ ДАВАЙ ОТВЕТЫ КОРОЧЕ 3 ПРЕДЛОЖЕНИЙ!\n"
+    system_prompt += "ЕСЛИ ОТВЕТ КОРОТКИЙ - ДОБАВЬ АНАЛИЗ, РЕКОМЕНДАЦИИ И ВОПРОСЫ!\n\n"
     system_prompt += "❌ ЗАПРЕЩЕННЫЕ ФРАЗЫ (НИКОГДА не используй):\n"
     system_prompt += "- 'Отлично, добавил задачу X. Что дальше?'\n"
     system_prompt += "- 'Готово! Что ещё?'\n"
@@ -3730,7 +3735,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\)", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f'Отлично, добавил задачу "{title}".'
+                                                natural = f'Отлично, добавил задачу "{title}". Теперь она запланирована и я буду напоминать о ней в нужное время. Рекомендую сразу подумать о необходимых ресурсах для выполнения этой задачи. Есть ли какие-то детали, которые стоит уточнить или добавить к задаче? Может быть, стоит также запланировать связанные действия?'
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)
@@ -3739,7 +3744,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             match = re.search(r"Завершена задача '([^']+)'", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f'Отлично, отметил задачу "{title}" как выполненную! 👍'
+                                                natural = f'Отлично, отметил задачу "{title}" как выполненную! Это важный шаг вперед. Теперь стоит проанализировать, что было сделано правильно, и подумать о следующих задачах. Есть ли уроки, которые можно извлечь из выполнения этой задачи? Может быть, стоит отметить достижения или запланировать что-то новое?'
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)
