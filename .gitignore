@@ -11,6 +11,7 @@ venv/
 .DS_Store
 local.db
 test.db
+production_test.db
 *.log
 test_dialogue.log
 *.swp
