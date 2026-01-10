@@ -94,6 +94,25 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "list_tasks"
         intent["confidence"] = 0.8
 
+    # 2.5. Перенос задач
+    transfer_keywords = ["перенеси", "перенести", "измени время", "поменяй время", "обнови время"]
+    if any(keyword in message_lower for keyword in transfer_keywords) and intent["confidence"] < 0.8:
+        intent["type"] = "edit_task"
+        intent["confidence"] = 0.8
+        # Извлекаем текст задачи и новое время
+        for keyword in transfer_keywords:
+            if keyword in message_lower:
+                after_keyword = message_lower.split(keyword, 1)[1].strip()
+                # Ищем время в оставшейся части
+                time_match = re.search(r"(через\s+\d+\s*(минут|час|часа|часов)|завтра\s+в\s+\d{1,2}:\d{2}|сегодня\s+в\s+\d{1,2}:\d{2})", after_keyword, re.IGNORECASE)
+                if time_match:
+                    intent["params"]["reminder_time"] = time_match.group(1)
+                    # Всё до времени - название задачи
+                    task_part = after_keyword.split(time_match.group(1))[0].strip()
+                    if task_part:
+                        intent["params"]["task_title"] = task_part
+                break
+
     # 3. Создание задач
     create_keywords = ["напомни", "добавь задачу", "создай задачу", "запланируй"]
     if any(keyword in message_lower for keyword in create_keywords) and intent["confidence"] < 0.8:
@@ -1118,6 +1137,8 @@ def get_system_prompt():
 - "Покажи задачи" → list_tasks()
 - "Добавь задачу X" → add_task()
 - "Удали все задачи", "Очисти список задач" → delete_all_tasks()
+- "Перенеси X через Y минут" → edit_task(task_title="X", reminder_time="через Y минут")
+- "Измени время X на Y" → edit_task(task_title="X", reminder_time="Y")
 - "Найди X" → find_partners()
 - "Поручи @user X" → delegate_task() (в title без слов "задачу", "задача")
 - "Выполнил X" → complete_task(), затем спроси как прошло
@@ -1268,7 +1289,7 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += f"- Завтра: {(user_now + timedelta(days=1)).strftime('%Y-%m-%d')}\n"
     system_prompt += f"⚠️ КРИТИЧНО: При создании задач с относительным временем ('через 5 минут', 'завтра в 10:00') ОБЯЗАТЕЛЬНО используй СЕГОДНЯШНЮЮ дату {user_now.strftime('%Y-%m-%d')}, а НЕ даты из своих знаний (cutoff date December 2024)!\n\n"
     
-    system_prompt += "🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
+    system_prompt += "🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'перенеси/измени время [задача]' → edit_task(task_title="[задача]", reminder_time="[новое время]")\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'перенеси проверить почту через 10 минут' → edit_task(task_title='проверить почту', reminder_time='через 10 минут')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
 
     # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
     system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
@@ -1311,6 +1332,12 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += "3. Предложения по дополнению профиля\n"
     system_prompt += "4. Вопросы о дополнительных интересах\n"
     system_prompt += "5. Предложения по поиску партнёров\n\n"
+    system_prompt += "✅ ПРИ ПЕРЕНОСЕ ЗАДАЧ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
+    system_prompt += "1. Подтверждение изменения времени\n"
+    system_prompt += "2. Причину переноса и анализ ситуации\n"
+    system_prompt += "3. Предложения по подготовке к новому времени\n"
+    system_prompt += "4. Вопросы о приоритетах и дедлайнах\n"
+    system_prompt += "5. Альтернативные варианты планирования\n\n"
     system_prompt += "ПРИМЕР ПРАВИЛЬНОГО ОТВЕТА (минимум):\n"
     system_prompt += "'Добавил задачу \"Проверить почту\" с напоминанием на 11.01.2026 в 00:25. Рекомендую сначала настроить фильтры для срочных писем, чтобы не пропустить важное. Возможно, стоит также настроить автоответчик, если ожидаешь много входящих сообщений. Есть ли конкретные отправители, письма от которых особенно важны? Если работа с почтой отнимает много времени, могу помочь найти людей, которые используют эффективные системы организации email.'\n\n"
     system_prompt += "  * Задай 2-3 вопроса о планах выполнения\n"
@@ -3918,10 +3945,35 @@ async def generate_reminder(user_id, task_title):
                     user_memory = ""
             session.close()
 
+        # Используем расширенный system prompt с правилами verbose ответов
+        from datetime import datetime
+        import pytz
+        user_now = datetime.now(pytz.UTC)
+        current_time_str = user_now.strftime("%H:%M")
+        user_username = "пользователь"  # Можно получить из базы если нужно
+        mentions_str = ""
+        
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+        
+        # Добавляем специфические правила для напоминаний
+        system_prompt = f"{base_prompt}\n\n🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
+        system_prompt += "Ты генерируешь развернутое напоминание о задаче. Будь мотивирующим и полезным.\n"
+        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её для более персонализированного напоминания.\n"
+        system_prompt += "Задавай конкретные вопросы, которые помогут пользователю лучше подготовиться ИЛИ собрать дополнительную информацию, необходимую для принятия лучших решений по выполнению задачи.\n"
+        system_prompt += "Анализируй задачу и предлагай аспекты, которые пользователь мог упустить.\n"
+        system_prompt += "НЕ предлагай создавать новые задачи в напоминаниях - это только для напоминания о существующей задаче.\n\n"
+        system_prompt += "✅ ПРИ НАПОМИНАНИЯХ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
+        system_prompt += "1. Мотивацию к выполнению задачи\n"
+        system_prompt += "2. Конкретные практические советы\n"
+        system_prompt += "3. Анализ возможных препятствий\n"
+        system_prompt += "4. Вопросы для подготовки\n"
+        system_prompt += "5. Предложения по оптимизации процесса\n"
+        system_prompt += "6. Связь с другими задачами или целями\n"
+        system_prompt += "7. Предложения по поиску помощи если нужно\n\n"
+        system_prompt += "⚠️ МИНИМУМ 5-7 ПРЕДЛОЖЕНИЙ! НЕ ДАВАЙ КОРОТКИЕ ОТВЕТЫ!"
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы генерируешь развернутое напоминание о задаче '{task_title}'. Будь мотивирующим и полезным. Если есть релевантная информация из памяти пользователя, используй её для более персонализированного напоминания. Задавай конкретные вопросы, которые помогут пользователю лучше подготовиться ИЛИ собрать дополнительную информацию, необходимую для принятия лучших решений по выполнению задачи. Анализируй задачу и предлагай аспекты, которые пользователь мог упустить. НЕ предлагай создавать новые задачи в напоминаниях - это только для напоминания о существующей задаче.\n\nПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов, 4-6 предложений. Предоставь детальный анализ ситуации. Дай конкретные рекомендации с нумерацией. Задай вопросы для вовлечения пользователя.{user_memory}"
 
         messages = [
             {"role": "system", "content": system_prompt},
