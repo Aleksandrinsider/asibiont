@@ -806,6 +806,39 @@ def clean_technical_details(text):
 # Alias for backward compatibility
 clean_content = clean_technical_details
 
+def enrich_response_with_engagement(content, user_id=None, original_message=""):
+    """
+    Автоматически обогащает короткие ответы вовлекающими элементами:
+    - Вопросы
+    - Рекомендации
+    - Предложения действий
+    Работает естественно, без шаблонных фраз - просто добавляет общий призыв к действию
+    """
+    # Проверяем длину ответа (в предложениях)
+    sentences = [s.strip() for s in re.split(r'[.!?]+', content) if s.strip()]
+    
+    # Если ответ достаточно развёрнутый (3+ предложения) или уже содержит вопрос - не трогаем
+    if len(sentences) >= 3 or '?' in content:
+        return content
+    
+    # Добавляем лёгкое вовлечение только для очень коротких ответов (1-2 предложения)
+    # AI сам должен генерировать контекстные вопросы, мы только подстраховываемся
+    import random
+    
+    # Минималистичные варианты, которые не повторяются
+    minimal_engagement = [
+        " Что дальше?",
+        " Чем ещё помочь?",
+        " Какие планы?"
+    ]
+    
+    # Только для самых коротких ответов (1 предложение)
+    if len(sentences) <= 1:
+        enrichment = random.choice(minimal_engagement)
+        return content + enrichment
+    
+    return content
+
 def get_system_prompt():
     return f"""Ты — ИИ-помощник для управления задачами в Telegram. Веди живой диалог как опытный коллега, который искренне хочет помочь.
 
@@ -848,6 +881,26 @@ def get_system_prompt():
 • "Найди людей с похожими интересами" → find_partners(interests="интересы из профиля")
 • "Живу в Москве, работаю в IT" → update_profile(city="Москва", company="IT")
 
+📝 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ОТВЕТОВ:
+- МИНИМУМ 3-4 ПРЕДЛОЖЕНИЯ в каждом ответе
+- ВСЕГДА анализируй результаты функций и давай развёрнутый комментарий
+- При показе задач ОБЯЗАТЕЛЬНО:
+  * Опиши каждую задачу подробно
+  * Укажи дедлайны и напоминания
+  * Отметь приоритетные и просроченные
+  * Предложи конкретные действия
+  * Задай вопросы о планах выполнения
+- НИКОГДА не давай односложных ответов типа "Ваши задачи: [список]"
+- После КАЖДОГО действия задавай 1-2 уточняющих вопроса
+- Предлагай следующие шаги и варианты развития
+
+🎯 ПРАВИЛО ПОСТОЯННОГО ВОВЛЕЧЕНИЯ:
+- КАЖДЫЙ ответ должен заканчиваться вопросом или предложением
+- Проактивно предлагай релевантные действия на основе контекста
+- Анализируй профиль, задачи и ситуацию пользователя
+- Адаптируй предложения под текущий контекст
+- Используй данные пользователя для персональных рекомендаций
+
 СТИЛЬ ОБЩЕНИЯ:
 - Веди активную беседу, интересуйся результатами
 - После действия всегда предлагай следующий шаг или задавай вопрос
@@ -857,6 +910,7 @@ def get_system_prompt():
 - Не будь пассивным — каждый ответ должен двигать к цели
 - ЗАДАВАЙ УТОЧНЯЮЩИЕ ВОПРОСЫ: Если запрос неясен, всегда спрашивай детали. Лучше переспросить, чем угадывать. После каждого действия спрашивай "Что дальше?" или "Нужно ли что-то ещё?"
 - БУДЬ ГИБКИМ: Адаптируйся под ситуацию, не зацикливайся на одном. Если пользователь повторяет запрос, предлагай новые идеи или переходи к другой теме. Учитывай предыдущие сообщения в контексте — не повторяй одни и те же фразы, используй разнообразные формулировки.
+- ОБЯЗАТЕЛЬНО РАЗВЁРНУТО: Каждый ответ должен содержать анализ, рекомендации и вопросы. Не ограничивайся голыми фактами!
 
 ИНСТРУМЕНТЫ (всегда используй, не описывай):
 - add_task(title, reminder_time, description, due_date, user_id)
@@ -1695,6 +1749,8 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     content = clean_technical_details(content)
+                    # 🎯 Обогащаем ответ вовлекающими элементами
+                    content = enrich_response_with_engagement(content, user_id, task_title)
                     return content
                 else:
                     return "Не удалось сгенерировать альтернативы."
@@ -3062,6 +3118,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # 🎯 КОМПЛЕКСНЫЙ ПОДХОД: задачи, контакты, напоминания, связи
         system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
         
+        # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
+        system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
+        system_prompt += "- МИНИМУМ 3-5 ПРЕДЛОЖЕНИЙ в каждом ответе\n"
+        system_prompt += "- При показе задач ОБЯЗАТЕЛЬНО:\n"
+        system_prompt += "  * Прокомментируй каждую задачу отдельно\n"
+        system_prompt += "  * Укажи дедлайны и время напоминаний\n"
+        system_prompt += "  * Отметь приоритетные, срочные, просроченные\n"
+        system_prompt += "  * Предложи конкретный план действий\n"
+        system_prompt += "  * Задай 2-3 вопроса о планах выполнения\n"
+        system_prompt += "- ЗАПРЕЩЕНО давать односложные ответы вроде 'Ваши задачи: [список]'\n"
+        system_prompt += "- Каждый ответ должен содержать: анализ + рекомендации + вопросы\n"
+        system_prompt += "- Будь активным собеседником, а не пассивным ботом!\n"
+        system_prompt += "\n🔥 КРИТИЧЕСКИ ВАЖНО - ВОВЛЕЧЕНИЕ В ДИАЛОГ:\n"
+        system_prompt += "- КАЖДЫЙ ответ ОБЯЗАТЕЛЬНО заканчивай вопросом или предложением\n"
+        system_prompt += "- Анализируй текущий контекст и предлагай релевантные действия\n"
+        system_prompt += "- Используй данные профиля и задач для персональных рекомендаций\n"
+        system_prompt += "- Будь естественным - адаптируй стиль под ситуацию\n"
+        system_prompt += "- Замечай паттерны и предлагай оптимизации\n"
+        
         system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
         
         system_prompt += f"\n\n@MENTIONS: {mentions_str}\n🚨 ЕСЛИ ВИДИШЬ @username - ЭТО ДЕЛЕГИРОВАНИЕ! ВЫЗЫВАЙ delegate_task()!\n\nСПЕЦИАЛЬНЫЕ КОМАНДЫ:\n- Сообщение начинается с '@' → delegate_task()\n- 'Найди людей' → find_partners()\n- 'Удали все' → delete_all_tasks()"
@@ -3246,9 +3321,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 # Генерируем естественный ответ на основе результатов tool calls
                                 if tool_results:
                                     natural_responses = []
+                                    has_list_tasks = False
+                                    list_tasks_result = None
+                                    
                                     for action in tool_results:
                                         result_text = action["result"]
                                         func_name = action["function"]
+                                        
+                                        # Проверяем, есть ли list_tasks в результатах
+                                        if func_name == "list_tasks":
+                                            has_list_tasks = True
+                                            list_tasks_result = result_text
                                         
                                         if "Добавлена задача" in result_text:
                                             match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\)", result_text)
@@ -3269,7 +3352,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 natural_responses.append(result_text)
                                         
                                         elif "Задачи:" in result_text:
-                                            natural_responses.append(result_text)
+                                            # Не добавляем сразу, обработаем отдельно
+                                            pass
                                         
                                         elif "Найдены партнеры:" in result_text or "партнеры найдены" in result_text.lower():
                                             natural_responses.append(result_text)
@@ -3297,7 +3381,58 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         else:
                                             natural_responses.append(result_text)
                                     
+                                    # 🎯 СПЕЦИАЛЬНАЯ ОБРАБОТКА list_tasks для развёрнутых ответов
+                                    if has_list_tasks and list_tasks_result:
+                                        # Генерируем развёрнутый анализ задач через AI
+                                        analysis_system = f"""Ты — ИИ-помощник. Пользователь запросил список задач.
+ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ К ОТВЕТУ:
+1. МИНИМУМ 4-6 ПРЕДЛОЖЕНИЙ
+2. Подробно прокомментируй каждую задачу
+3. Укажи дедлайны и напоминания
+4. Отметь приоритетные, срочные или просроченные
+5. Предложи конкретный план действий
+6. Задай 2-3 вопроса о планах выполнения
+7. Будь активным собеседником, а не пассивным ботом
+
+ЗАПРЕЩЕНО:
+- Односложные ответы типа "Ваши задачи: [список]"
+- Просто перечислять задачи без анализа
+
+ПРИМЕР ХОРОШЕГО ОТВЕТА:
+"Давай посмотрим твои задачи! У тебя есть важная задача 'Проверить почту' ⏳. Когда планируешь её выполнить? Может, стоит установить конкретное время напоминания? Также рекомендую подумать о приоритетности — это срочная задача или можно отложить? Хочешь добавить ещё какие-то задачи или нужна помощь с организацией?"
+
+Вот данные о задачах:
+{list_tasks_result}
+
+Теперь дай развёрнутый анализ с вопросами и рекомендациями:"""
+                                        
+                                        try:
+                                            async with aiohttp.ClientSession() as analysis_session:
+                                                async with analysis_session.post(
+                                                    url,
+                                                    headers=headers,
+                                                    json={
+                                                        "model": "deepseek-chat",
+                                                        "messages": [
+                                                            {"role": "system", "content": analysis_system},
+                                                            {"role": "user", "content": "Проанализируй мои задачи подробно"}
+                                                        ],
+                                                        "temperature": 0.7,
+                                                    },
+                                                    timeout=aiohttp.ClientTimeout(total=60)
+                                                ) as analysis_response:
+                                                    analysis_result = await analysis_response.json()
+                                                    detailed_analysis = analysis_result['choices'][0]['message']['content']
+                                                    natural_responses.append(detailed_analysis)
+                                                    logger.info(f"[LIST_TASKS_ANALYSIS] Generated detailed analysis: {detailed_analysis[:100]}...")
+                                        except Exception as e:
+                                            logger.error(f"[LIST_TASKS_ANALYSIS] Error generating analysis: {e}")
+                                            # Фоллбэк - добавляем обычный результат
+                                            natural_responses.append(list_tasks_result)
+                                    
                                     final_content = "\n".join(natural_responses)
+                                    # 🎯 Обогащаем ответ вовлекающими элементами
+                                    final_content = enrich_response_with_engagement(final_content, user_id, original_message)
                                     logger.info(f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response")
                                     return final_content
                     
@@ -3356,6 +3491,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     natural_responses.append(result_text)
                             
                             final_content = "\n".join(natural_responses)
+                            # 🎯 Обогащаем ответ вовлекающими элементами
+                            final_content = enrich_response_with_engagement(final_content, user_id, original_message)
                             print(f"[DEBUG FALLBACK] Returning final_content: '{final_content[:200]}...'")  # DEBUG
                             return final_content
                     except Exception as e:
@@ -3421,6 +3558,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     # Если все еще пустой после retry
                     if not content:
                         content = "Хорошо, продолжим работу!"
+                    
+                    # 🎯 Обогащаем ответ вовлекающими элементами
+                    content = enrich_response_with_engagement(content, user_id, original_message)
                     
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
@@ -3493,6 +3633,8 @@ async def generate_reminder(user_id, task_title):
                     # Заменяем плейсхолдеры на реальные значения
                     content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
                     content = clean_technical_details(content)
+                    # 🎯 Обогащаем ответ вовлекающими элементами
+                    content = enrich_response_with_engagement(content, user_id, task_title)
                     return content
                 else:
                     return "Ошибка генерации напоминания."
@@ -3542,6 +3684,8 @@ async def generate_result_check(user_id, task_title):
                     # Заменяем плейсхолдеры на реальные значения
                     content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
                     content = clean_technical_details(content)
+                    # 🎯 Обогащаем ответ вовлекающими элементами
+                    content = enrich_response_with_engagement(content, user_id, task_title)
                     return content
                 else:
                     return "Ошибка генерации вопроса."
@@ -3613,6 +3757,8 @@ async def generate_proactive_message(user_id):
                     # Заменяем плейсхолдеры на реальные значения
                     content = replace_placeholders(content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime('%H:%M'))
                     content = clean_technical_details(content)
+                    # 🎯 Проактивные сообщения уже вовлекающие, но можно усилить
+                    content = enrich_response_with_engagement(content, user_id, "")
                     return content
                 else:
                     return "Ошибка генерации сообщения."
