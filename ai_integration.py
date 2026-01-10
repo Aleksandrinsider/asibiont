@@ -4109,6 +4109,45 @@ def list_tasks(user_id=None, session=None):
             recent_completed = completed_tasks[-3:]
             result += f"✅ **Завершено:** {len(completed_tasks)} задач\n"
 
+        # Анализ и рекомендации
+        recommendations = []
+        
+        # Проверяем просроченные задачи
+        overdue_tasks = []
+        for task in active_tasks:
+            if task.reminder_time:
+                try:
+                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    if reminder_dt < now:
+                        overdue_tasks.append(task)
+                except:
+                    pass
+        
+        if overdue_tasks:
+            recommendations.append(f"⚠️ У вас {len(overdue_tasks)} просроченных задач. Рекомендую выполнить их или перенести сроки.")
+        
+        # Проверяем задачи без сроков
+        tasks_without_deadline = [t for t in active_tasks if not t.reminder_time]
+        if tasks_without_deadline:
+            recommendations.append(f"📅 {len(tasks_without_deadline)} задач без сроков. Установите конкретные даты для лучшего планирования.")
+        
+        # Проверяем делегированные задачи
+        if delegated_by_me:
+            recommendations.append(f"👥 Вы делегировали {len(delegated_by_me)} задач. Проверьте их статус у получателей.")
+        
+        # Общие рекомендации
+        if len(active_tasks) > 5:
+            recommendations.append("📊 Много задач! Попробуйте приоритизировать - отметьте самые важные как 'high'.")
+        
+        if not active_tasks:
+            recommendations.append("🎯 Отлично! Все задачи выполнены. Что планируете добавить?")
+        elif len(active_tasks) == 1:
+            recommendations.append("💪 Отличная фокус! Одна задача - легче сосредоточиться.")
+        
+        # Добавляем рекомендации к результату
+        if recommendations:
+            result += "\n\n💡 **Рекомендации:**\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])  # Максимум 3 рекомендации
+        
         return result.strip()
     except Exception as e:
         print(f"Error listing tasks: {e}")
@@ -4116,95 +4155,6 @@ def list_tasks(user_id=None, session=None):
     finally:
         if close_session:
             session.close()
-
-
-def delete_task(task_id=None, task_title=None, user_id=None):
-    """Удаляет задачу"""
-    from models import Session, Task, User
-    from sqlalchemy import or_
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        # Найти задачу по ID или названию
-        query = session.query(Task).filter(
-            or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username))
-        )
-
-        if task_id:
-            query = query.filter(Task.id == task_id)
-        elif task_title:
-            query = query.filter(Task.title.ilike(f"%{task_title}%"))
-
-        task = query.first()
-        if not task:
-            return "Задача не найдена"
-
-        session.delete(task)
-        session.commit()
-        return f"Задача '{task.title}' удалена"
-    except Exception as e:
-        session.rollback()
-        print(f"Error deleting task: {e}")
-        return "Ошибка удаления задачи"
-    finally:
-        session.close()
-
-
-def delete_all_tasks(user_id=None):
-    """Удаляет все задачи пользователя"""
-    from models import Session, Task, User
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        # Удалить все задачи пользователя
-        deleted_count = session.query(Task).filter_by(user_id=user.id).delete()
-        session.commit()
-        return f"Удалено {deleted_count} задач"
-    except Exception as e:
-        session.rollback()
-        print(f"Error deleting all tasks: {e}")
-        return "Ошибка удаления задач"
-    finally:
-        session.close()
-
-
-def edit_task(task_id=None, title=None, description=None, reminder_time=None, user_id=None):
-    """Редактирует задачу"""
-    from models import Session, Task, User
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
-        if not task:
-            return "Задача не найдена"
-
-        if title:
-            task.title = title
-        if description:
-            task.description = encrypt_data(description)
-        if reminder_time:
-            task.reminder_time = reminder_time
-
-        session.commit()
-        return f"Задача '{task.title}' обновлена"
-    except Exception as e:
-        session.rollback()
-        print(f"Error editing task: {e}")
-        return "Ошибка редактирования задачи"
-    finally:
-        session.close()
 
 
 def check_subscription_status(user_id=None):
