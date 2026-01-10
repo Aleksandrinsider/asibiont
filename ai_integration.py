@@ -119,6 +119,7 @@ def classify_user_intent(message, mentions_str):
 
 def smart_fallback_handler(message, mentions_str, user_id, session, ai_response_content=""):
     print(f"[DEBUG FALLBACK] Called with message='{message[:30]}...', ai_response='{ai_response_content[:30]}...'")  # DEBUG
+    print(f"[DEBUG FALLBACK] ai_response_content length: {len(ai_response_content)}")  # DEBUG
     """
     Умная система fallback'ов - используется только когда AI явно не справляется.
     Анализирует ответ AI и применяет fallback только при низкой уверенности.
@@ -2091,6 +2092,9 @@ def find_partners(user_id=None, session=None):
         response = response.rstrip("\n")
         if joint_ideas:
             response += "\n\n" + "\n".join(joint_ideas[:2])
+    else:
+        response = "К сожалению, пока не нашёл подходящих партнёров с похожими интересами. Попробуй обновить свой профиль с интересами, навыками или целями — тогда я смогу найти более релевантных людей!"
+    
     return response
 
 def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, timezone=None, company=None, position=None, user_id=None, session=None):
@@ -2726,7 +2730,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 result = await response.json()
                                 message_response = result["choices"][0]["message"]
                                 content = message_response.get("content", "")
-                                print(f"[DEBUG API] AI response content='{content[:100]}...', tool_calls={len(tool_calls) if tool_calls else 0}")  # DEBUG
+                                print(f"[DEBUG API] Raw content: '{content}'")  # DEBUG
                                 # Фильтровать сырые tool calls
                                 content = re.sub(r'<\|.*?\|>', '', content).strip()
                                 content = re.sub(r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>', '', content, flags=re.DOTALL).strip()
@@ -2737,6 +2741,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 
                                 # Проверяем tool_calls в API response
                                 tool_calls = message_response.get("tool_calls")
+                                print(f"[DEBUG API] tool_calls: {tool_calls}")  # DEBUG
                             except Exception as e:
                                 logger.error(f"Error parsing API response: {e}")
                                 if attempt < max_retries:
@@ -2747,168 +2752,127 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             
                             # Обработка tool calls и т.д.
                             tool_results = []  # Инициализируем заранее
+                            print(f"[DEBUG] tool_calls value: {tool_calls}, bool: {bool(tool_calls)}")  # DEBUG
                             
                             if tool_calls:
-                                logger.info(f"[TOOL CALLS] AI returned {len(tool_calls)} tool calls - starting execution")
-                                # Выполняем tool calls
+                                print(f"[DEBUG] Tool calls found, processing...")  # DEBUG
+                                # Обработка tool calls
                                 tool_results = []
                                 for tool_call in tool_calls:
                                     try:
-                                        func_name = tool_call.get('function', {}).get('name', '')
-                                        args_str = tool_call.get('function', {}).get('arguments', '{}')
+                                        func_name = tool_call["function"]["name"]
+                                        args = json.loads(tool_call["function"]["arguments"])
+                                        logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
                                         
-                                        # Проверка на пустое имя функции и попытка определить по args
-                                        if not func_name:
-                                            logger.warning(f"[TOOL CALLS] Empty function name, trying to infer from args: {args_str}")
-                                            
-                                            # Парсим аргументы чтобы понять что хотел сделать AI
-                                            try:
-                                                args = json.loads(args_str)
-                                                
-                                                # Определяем функцию по наличию параметров
-                                                if 'title' in args and ('reminder_time' in args or 'description' in args):
-                                                    if 'delegated_to_username' in args:
-                                                        func_name = 'delegate_task'
-                                                        logger.info(f"[TOOL CALLS] Inferred function: delegate_task")
-                                                    else:
-                                                        func_name = 'add_task'
-                                                        logger.info(f"[TOOL CALLS] Inferred function: add_task")
-                                                elif 'task_id' in args or 'task_title' in args:
-                                                    if 'priority' in args:
-                                                        func_name = 'set_priority'
-                                                        logger.info(f"[TOOL CALLS] Inferred function: set_priority")
-                                                    else:
-                                                        func_name = 'complete_task'
-                                                        logger.info(f"[TOOL CALLS] Inferred function: complete_task")
-                                                elif 'user_id' in args and len(args) == 1:
-                                                    func_name = 'list_tasks'
-                                                    logger.info(f"[TOOL CALLS] Inferred function: list_tasks")
-                                                elif 'city' in args or 'company' in args or 'interests' in args:
-                                                    func_name = 'update_profile'
-                                                    logger.info(f"[TOOL CALLS] Inferred function: update_profile")
-                                                elif 'memory' in args:
-                                                    func_name = 'update_user_memory'
-                                                    logger.info(f"[TOOL CALLS] Inferred function: update_user_memory")
-                                                
-                                                if not func_name:
-                                                    logger.error(f"[TOOL CALLS] Could not infer function from args: {args}")
-                                                    tool_results.append("Ошибка: не удалось определить функцию")
-                                                    continue
-                                            except Exception as e:
-                                                logger.error(f"[TOOL CALLS] Error inferring function: {e}")
-                                                tool_results.append("Ошибка: не удалось обработать вызов функции")
-                                                continue
+                                        if func_name == "add_task":
+                                            result = add_task(
+                                                title=args.get("title", args.get("task_title", "Задача")),
+                                                description=args.get("description", ""),
+                                                reminder_time=args.get("reminder_time"),
+                                                user_id=user_id,
+                                                session=None
+                                            )
+                                            tool_results.append({"function": func_name, "result": result})
                                         
-                                        args = json.loads(args_str)
-                                        logger.info(f"[TOOL CALLS] Executing {func_name} with args: {args}")
+                                        elif func_name == "complete_task":
+                                            result = complete_task(
+                                                task_id=args.get("task_id"),
+                                                task_title=args.get("task_title"),
+                                                user_id=user_id,
+                                                session=None
+                                            )
+                                            tool_results.append({"function": func_name, "result": result})
                                         
-                                        # Вызываем соответствующую функцию
-                                        if func_name == 'add_task':
-                                            result = add_task(user_id=user_id, **args)
-                                        elif func_name == 'list_tasks':
-                                            result = list_tasks(user_id=user_id)
-                                        elif func_name == 'complete_task':
-                                            result = complete_task(user_id=user_id, **args)
-                                            # Добавляем флаг для вопроса о результате
-                                            tool_results.append("ВАЖНО: ОБЯЗАТЕЛЬНО спроси пользователя о результатах выполнения: 'Расскажите, как прошло выполнение? Какие были результаты?'")
-                                        elif func_name == 'delete_task':
-                                            result = delete_task(user_id=user_id, **args)
-                                        elif func_name == 'delete_all_tasks':
-                                            result = delete_all_tasks(user_id=user_id)
-                                        elif func_name == 'delegate_task':
-                                            result = delegate_task(user_id=user_id, **args)
-                                        elif func_name == 'find_partners':
-                                            result = find_partners(user_id=user_id, **args)
-                                        elif func_name == 'update_profile':
-                                            result = update_profile(user_id=user_id, **args)
-                                        elif func_name == 'update_user_memory':
-                                            result = update_user_memory(user_id=user_id, **args)
-                                        elif func_name == 'edit_task':
-                                            result = edit_task(user_id=user_id, **args)
-                                        elif func_name == 'set_priority':
-                                            result = set_priority(user_id=user_id, **args)
-                                        elif func_name == 'get_task_details':
-                                            result = get_task_details(user_id=user_id, **args)
-                                        elif func_name == 'suggest_alternatives':
-                                            result = suggest_alternatives(user_id=user_id, **args)
+                                        elif func_name == "list_tasks":
+                                            result = list_tasks(user_id=user_id, session=None)
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "find_partners":
+                                            result = find_partners(user_id=user_id, session=None)
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "update_profile":
+                                            result = update_profile(
+                                                city=args.get("city"),
+                                                company=args.get("company"),
+                                                position=args.get("position"),
+                                                interests=args.get("interests"),
+                                                user_id=user_id,
+                                                session=None
+                                            )
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "delegate_task":
+                                            result = delegate_task(
+                                                title=args.get("title"),
+                                                delegated_to_username=args.get("delegated_to_username"),
+                                                user_id=user_id,
+                                                session=None
+                                            )
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "delete_all_tasks":
+                                            result = delete_all_tasks(user_id=user_id, session=None)
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
                                         else:
-                                            result = f"Неизвестная функция: {func_name}"
-                                
-                                        # Сохраняем ID последней созданной задачи для возможного edit_task
-                                        if func_name == 'add_task' and 'ID:' in result:
-                                            # Извлекаем ID из результата
-                                            import re
-                                            id_match = re.search(r'ID:\s*(\d+)', result)
-                                            if id_match:
-                                                last_task_id = id_match.group(1)
-                                                # Сохраняем в Redis для использования в следующих сообщениях
-                                                if redis_client:
-                                                    try:
-                                                        await redis_client.setex(
-                                                            f"last_task_id:{user_id}", 
-                                                            300,  # 5 минут TTL
-                                                            json.dumps({
-                                                                'id': last_task_id,
-                                                                'title': args.get('title', ''),
-                                                                'reminder_time': args.get('reminder_time', '')
-                                                            }).encode('utf-8')
-                                                        )
-                                                    except Exception as e:
-                                                        logger.error(f"Error saving last_task_id to Redis: {e}")
-                                                # Добавляем в результаты для текущего контекста
-                                                tool_results.append(f"✅ ПОСЛЕДНЯЯ СОЗДАННАЯ ЗАДАЧА: ID={last_task_id}, title='{args.get('title', '')}'. Если пользователь даёт уточнения — ОБЯЗАТЕЛЬНО используй edit_task({last_task_id})!")
-                                        
-                                        tool_results.append(f"{func_name}() вернул: {result[:200]}")
-                                        logger.info(f"[TOOL CALLS] {func_name} result: {result[:100]}...")
-                                        
+                                            logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
+                                            tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})
+                                    
                                     except Exception as e:
-                                        logger.error(f"[TOOL CALLS] Error executing {func_name}: {e}")
-                                        tool_results.append(f"{func_name}() ошибка: {str(e)}")
-                        
-                        # Генерируем естественный ответ на основе результатов
-                        logger.info(f"[TOOL CALLS] Tool calls completed, {len(tool_results)} results. Parsing to natural response...")
-                        
-                        natural_responses = []
-                        for r in tool_results:
-                            result_text = r.split("вернул: ")[-1] if "вернул: " in r else r
-                            
-                            if "Добавлена задача" in result_text:
-                                # Parse "Добавлена задача 'title' (ID: id) с напоминанием на date time"
-                                match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text)
-                                if match:
-                                    title = match.group(1)
-                                    time_str = match.group(2)
-                                    natural = f"Отлично, добавил задачу \"{title}\" с напоминанием на {time_str}."
-                                    natural_responses.append(natural)
-                                else:
-                                    natural_responses.append(result_text)
-                            
-                            elif "Завершена задача" in result_text:
-                                match = re.search(r"Завершена задача '([^']+)'", result_text)
-                                if match:
-                                    title = match.group(1)
-                                    natural = f"Отлично, отметил задачу \"{title}\" как выполненную! 👍"
-                                    natural_responses.append(natural)
-                                else:
-                                    natural_responses.append(result_text)
-                            
-                            elif "Задачи:" in result_text:
-                                natural_responses.append(result_text)
-                            
-                            elif "Удалены все задачи" in result_text:
-                                natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
-                                natural_responses.append(natural)
-                            
-                            elif "Задача" in result_text and "делегирована" in result_text:
-                                natural = "Отлично, задача делегирована! Я уведомлю получателя."
-                                natural_responses.append(natural)
-                            
-                            else:
-                                natural_responses.append(result_text)
-                        
-                        content = "\n".join(natural_responses)
-                        return content
+                                        logger.error(f"[TOOL CALL] Error executing {func_name}: {e}")
+                                        tool_results.append({"function": func_name, "result": f"Ошибка выполнения: {str(e)}"})
+                                
+                                # Генерируем естественный ответ на основе результатов tool calls
+                                if tool_results:
+                                    natural_responses = []
+                                    for action in tool_results:
+                                        result_text = action["result"]
+                                        func_name = action["function"]
+                                        
+                                        if "Добавлена задача" in result_text:
+                                            match = re.search(r"Добавлена задача '([^']+)' \(ID: \d+\)", result_text)
+                                            if match:
+                                                title = match.group(1)
+                                                natural = f"Отлично, добавил задачу \"{title}\"."
+                                                natural_responses.append(natural)
+                                            else:
+                                                natural_responses.append(result_text)
+                                        
+                                        elif "Завершена задача" in result_text:
+                                            match = re.search(r"Завершена задача '([^']+)'", result_text)
+                                            if match:
+                                                title = match.group(1)
+                                                natural = f"Отлично, отметил задачу \"{title}\" как выполненную! 👍"
+                                                natural_responses.append(natural)
+                                            else:
+                                                natural_responses.append(result_text)
+                                        
+                                        elif "Задачи:" in result_text:
+                                            natural_responses.append(result_text)
+                                        
+                                        elif "Найдены партнеры:" in result_text or "партнеры найдены" in result_text.lower():
+                                            natural_responses.append(result_text)
+                                        
+                                        elif "Профиль обновлен" in result_text:
+                                            natural_responses.append("Профиль обновлен! Теперь я лучше знаю твои интересы.")
+                                        
+                                        elif "Задача" in result_text and "делегирована" in result_text:
+                                            natural = "Отлично, задача делегирована! Я уведомлю получателя."
+                                            natural_responses.append(natural)
+                                        
+                                        elif "Удалены все задачи" in result_text:
+                                            natural = "Удалил все твои задачи. Теперь список пуст — можно начинать с чистого листа!"
+                                            natural_responses.append(natural)
+                                        
+                                        else:
+                                            natural_responses.append(result_text)
+                                    
+                                    final_content = "\n".join(natural_responses)
+                                    logger.info(f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response")
+                                    return final_content
                     
+                    print(f"[DEBUG] Exited tool_calls if block")  # DEBUG
                     print(f"[DEBUG] After tool_calls block, about to check fallback")  # DEBUG
                     # Все запросы обрабатывает AI, без принудительных триггеров
                     logger.info("[AI ONLY] All requests handled by AI without forced triggers")
@@ -2918,7 +2882,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     print(f"[DEBUG] Calling smart_fallback_handler...")  # DEBUG
                     print(f"[DEBUG] About to call smart_fallback_handler, content='{content[:50]}...'")  # DEBUG
                     try:
-                        fallback_result = await smart_fallback_handler(original_message, mentions_str, user_id, session, content)
+                        fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, session, content)
                         print(f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions")  # DEBUG
                         if fallback_result:
                             logger.info(f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}")
@@ -2970,27 +2934,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         print(f"[DEBUG] Fallback error: {e}")  # DEBUG
                     
                     # Если forced calls не сработали, обрабатываем обычный ответ AI
+                    print(f"[DEBUG] After fallback, going to regular response processing")  # DEBUG
                     # Обрабатываем обычный ответ AI без tool calls
                     logger.info("[TOOL CALLS] Tool calls completed, 0 results. Generating natural response...")
                     print(f"[DEBUG] Processing regular AI response, content='{content[:100]}...'")  # DEBUG
+                    print(f"[DEBUG] About to enter regular response processing")  # DEBUG
                     original_content = message_response.get("content", "")
                     content = original_content
-                    # Для обычных ответов используем только базовую очистку
-                    content = re.sub(r'<\|.*?\|>', '', content).strip()  # Только DSML теги
+                    print(f"[DEBUG] Original content: '{original_content[:100]}...'")  # DEBUG
+                    
+                    # Для обычных ответов ТОЛЬКО заменяем плейсхолдеры, без дополнительной очистки
                     content = replace_placeholders(content, user_now, current_time_str)
+                    print(f"[DEBUG] After replace_placeholders: '{content[:100]}...'")  # DEBUG
                     
-                    # 🚨 КРИТИЧЕСКАЯ ПРОВЕРКА: если content содержит только JSON/теги - это ошибка
-                    if content and (content.startswith('```') or content.startswith('{') or content == '{}' or len(content.strip()) < 5):
-                        logger.warning(f"[BAD CONTENT] AI returned technical output: {content[:100]}")
-                        content = ""  # Сбрасываем, чтобы сработал retry
-                    # НЕ применяем clean_technical_details для обычных ответов!
-                    
-                    # Если после очистки ответ пустой - вернуть оригинальный content
+                    # 🚨 КРИТИЧЕСКАЯ ПРОВЕРКА: если content пустой или слишком короткий
                     if not content or len(content.strip()) < 3:
-                        logger.warning(f"[EMPTY AFTER CLEAN] Original: '{original_content[:100]}...', Cleaned: '{content}', returning original")
+                        print(f"[DEBUG] Content is empty or too short: '{content}', len={len(content.strip())}")  # DEBUG
+                        logger.warning(f"[EMPTY RESPONSE] Original: '{original_content[:100]}...', returning original")
                         content = original_content.strip()
                         if not content:
-                            logger.warning("[RETRY] Response empty after cleaning, retrying with explicit instruction")
+                            logger.warning("[RETRY] Response empty, retrying with explicit instruction")
                             retry_system = system_prompt + "\n\n🚨 КРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!"
                             
                             retry_messages = [{"role": "system", "content": retry_system}]
@@ -3015,9 +2978,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 ) as retry_response:
                                     retry_result = await retry_response.json()
                                     retry_content = retry_result['choices'][0]['message']['content']
-                                    retry_content = re.sub(r'<\|.*?\|>', '', retry_content).strip()  # Только базовая очистка
                                     retry_content = replace_placeholders(retry_content, user_now, current_time_str)
-                                    # НЕ применяем clean_technical_details для повторных запросов
+                                    content = retry_content.strip()
+                                    logger.info(f"[RETRY] Got retry content: '{content[:100]}...'")
+                                    print(f"[DEBUG RETRY] Retry content: '{content[:100]}...'")  # DEBUG
                                     if retry_content and len(retry_content.strip()) >= 3:
                                         content = retry_content
                                     else:
