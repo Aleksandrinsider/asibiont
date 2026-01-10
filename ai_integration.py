@@ -1247,6 +1247,8 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     """
     Создает расширенный system prompt на основе базового + дополнительные правила для текущего контекста
     """
+    from datetime import timedelta
+    
     # Базовый system prompt
     system_prompt = (
         get_system_prompt()
