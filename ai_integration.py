@@ -712,6 +712,7 @@ def get_system_prompt():
 - БЕЗ ЖИРНОГО ШРИФТА: НИКОГДА не используй ** для выделения текста
 - БЕЗ ФОРМАТИРОВАНИЯ: пиши обычным текстом без звездочек, подчеркиваний, курсива
 - Адаптируйся под стиль пользователя: если он формальный — будь формальным, если casual — casual
+- Будь максимально подробным и полезным в каждом ответе
 """
 
 
@@ -2713,7 +2714,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": "auto",
-            "temperature": 0.1
+            "temperature": 0.3
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         # Retry loop for API call
