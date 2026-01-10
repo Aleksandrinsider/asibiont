@@ -3736,3 +3736,283 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
     except Exception as e:
         print(f"Error in generate_overdue_reminder: {e}")
         return "Просроченные задачи."
+
+# Функции для работы с задачами
+def add_task(title, description=None, reminder_time=None, user_id=None):
+    """Добавляет новую задачу"""
+    from models import Session, Task, User
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        task = Task(
+            user_id=user.id,
+            title=title,
+            description=encrypt_data(description) if description else None,
+            reminder_time=reminder_time,
+            status='pending'
+        )
+        session.add(task)
+        session.commit()
+        return f"Задача '{title}' добавлена"
+    except Exception as e:
+        session.rollback()
+        print(f"Error adding task: {e}")
+        return "Ошибка добавления задачи"
+    finally:
+        session.close()
+
+def complete_task(task_id=None, task_title=None, user_id=None):
+    """Завершает задачу"""
+    from models import Session, Task, User
+    from sqlalchemy import or_
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Найти задачу по ID или названию
+        query = session.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        )
+        
+        if task_id:
+            query = query.filter(Task.id == task_id)
+        elif task_title:
+            query = query.filter(Task.title.ilike(f"%{task_title}%"))
+        
+        task = query.first()
+        if not task:
+            return "Задача не найдена"
+        
+        task.status = 'completed'
+        session.commit()
+        return f"Задача '{task.title}' завершена"
+    except Exception as e:
+        session.rollback()
+        print(f"Error completing task: {e}")
+        return "Ошибка завершения задачи"
+    finally:
+        session.close()
+
+def list_tasks(user_id=None, session=None):
+    """Возвращает список задач пользователя"""
+    from models import Task, User
+    from sqlalchemy import or_
+    
+    if session is None:
+        from models import Session
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Получить задачи пользователя или делегированные ему
+        tasks = session.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        ).all()
+        
+        if not tasks:
+            return "У вас нет задач"
+        
+        result = "Ваши задачи:\n"
+        for task in tasks:
+            status_icon = "✅" if task.status == 'completed' else "⏳"
+            delegation_info = ""
+            if task.delegated_to_username:
+                if task.delegated_to_username.lower() == user.username.lower():
+                    # Задача делегирована пользователю
+                    creator = session.query(User).filter_by(id=task.user_id).first()
+                    if creator:
+                        delegation_info = f" (от @{creator.username})"
+                else:
+                    # Задача делегирована от пользователя
+                    delegation_info = f" (на @{task.delegated_to_username})"
+            
+            result += f"{status_icon} {task.title}{delegation_info}\n"
+        
+        return result.strip()
+    except Exception as e:
+        print(f"Error listing tasks: {e}")
+        return "Ошибка получения списка задач"
+    finally:
+        if close_session:
+            session.close()
+
+def delete_task(task_id=None, task_title=None, user_id=None):
+    """Удаляет задачу"""
+    from models import Session, Task, User
+    from sqlalchemy import or_
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Найти задачу по ID или названию
+        query = session.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                Task.delegated_to_username.ilike(user.username)
+            )
+        )
+        
+        if task_id:
+            query = query.filter(Task.id == task_id)
+        elif task_title:
+            query = query.filter(Task.title.ilike(f"%{task_title}%"))
+        
+        task = query.first()
+        if not task:
+            return "Задача не найдена"
+        
+        session.delete(task)
+        session.commit()
+        return f"Задача '{task.title}' удалена"
+    except Exception as e:
+        session.rollback()
+        print(f"Error deleting task: {e}")
+        return "Ошибка удаления задачи"
+    finally:
+        session.close()
+
+def delete_all_tasks(user_id=None):
+    """Удаляет все задачи пользователя"""
+    from models import Session, Task, User
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Удалить все задачи пользователя
+        deleted_count = session.query(Task).filter_by(user_id=user.id).delete()
+        session.commit()
+        return f"Удалено {deleted_count} задач"
+    except Exception as e:
+        session.rollback()
+        print(f"Error deleting all tasks: {e}")
+        return "Ошибка удаления задач"
+    finally:
+        session.close()
+
+def edit_task(task_id=None, title=None, description=None, reminder_time=None, user_id=None):
+    """Редактирует задачу"""
+    from models import Session, Task, User
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
+        if not task:
+            return "Задача не найдена"
+        
+        if title:
+            task.title = title
+        if description:
+            task.description = encrypt_data(description)
+        if reminder_time:
+            task.reminder_time = reminder_time
+        
+        session.commit()
+        return f"Задача '{task.title}' обновлена"
+    except Exception as e:
+        session.rollback()
+        print(f"Error editing task: {e}")
+        return "Ошибка редактирования задачи"
+    finally:
+        session.close()
+
+def check_subscription_status(user_id=None):
+    """Проверяет статус подписки"""
+    from models import Session, User, Subscription
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        if not subscription or subscription.status != 'active':
+            return "У вас нет активной подписки. Используйте /subscribe для оформления."
+        
+        return f"Подписка активна до {subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else 'неизвестно'}"
+    except Exception as e:
+        print(f"Error checking subscription: {e}")
+        return "Ошибка проверки подписки"
+    finally:
+        session.close()
+
+def create_subscription_payment(user_id=None):
+    """Создает платеж для подписки"""
+    from models import Session, User, Subscription
+    from datetime import datetime, timedelta
+    import pytz
+    
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Проверить существующую подписку
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        if subscription and subscription.status == 'active':
+            return "У вас уже есть активная подписка"
+        
+        # Создать или обновить подписку
+        if not subscription:
+            subscription = Subscription(user_id=user.id)
+            session.add(subscription)
+        
+        subscription.status = 'pending_payment'
+        subscription.start_date = datetime.now(pytz.UTC)
+        subscription.end_date = subscription.start_date + timedelta(days=30)
+        session.commit()
+        
+        return "Платеж создан. Используйте ссылку для оплаты: https://yookassa.ru/..."
+    except Exception as e:
+        session.rollback()
+        print(f"Error creating subscription payment: {e}")
+        return "Ошибка создания платежа"
+    finally:
+        session.close()
+
+def cancel_subscription(user_id=None):
+    """Отменяет подписку"""
+    from models import Session, User, Subscription
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        if not subscription:
+            return "У вас нет подписки"
+        
+        subscription.status = 'cancelled'
+        session.commit()
+        return "Подписка отменена"
+    except Exception as e:
+        session.rollback()
+        print(f"Error cancelling subscription: {e}")
+        return "Ошибка отмены подписки"
+    finally:
+        session.close()
