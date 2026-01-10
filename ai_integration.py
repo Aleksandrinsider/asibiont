@@ -1728,12 +1728,11 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
             "Content-Type": "application/json"
         }
         
-        base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы предлагаешь 3-5 конкретных альтернативных подходов к решению задачи '{task.title}'. Учитывай причину невыполнения: '{reason}'. Будь практичным и конкретным.{user_memory}"
+        system_prompt = get_system_prompt()
         
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Предложи альтернативы для задачи: {task.title}"}
+            {"role": "system", "content": system_prompt + user_memory},
+            {"role": "user", "content": f"Предложи 3-5 альтернативных подходов к задаче '{task.title}'. Причина невыполнения: '{reason}'. Будь практичным и конкретным."}
         ]
         
         data = {
@@ -3666,12 +3665,11 @@ async def generate_result_check(user_id, task_title):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы задаешь вопрос о результате выполнения задачи '{task_title}'. Спроси о времени, сложностях, улучшениях. Будь строгим при просрочке, краток.{user_memory}"
+        system_prompt = get_system_prompt()
         
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Спроси о результате задачи: {task_title}"}
+            {"role": "system", "content": system_prompt + user_memory},
+            {"role": "user", "content": f"Спроси о результате выполнения задачи '{task_title}'. Узнай о времени, сложностях, улучшениях."}
         ]
         
         data = {
@@ -3739,12 +3737,11 @@ async def generate_proactive_message(user_id):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы генерируешь разнообразное проактивное сообщение для пользователя без задач на ближайший час. Будь позитивным, вовлекающим, краток (1-2 предложения). Включи персонализацию на основе задач, памяти, планов людей.{user_memory}{plans_info}{tasks_info}"
+        system_prompt = get_system_prompt()
         
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "Создай проактивное сообщение"}
+            {"role": "system", "content": system_prompt + user_memory + plans_info + tasks_info},
+            {"role": "user", "content": "У пользователя нет задач на ближайший час. Создай позитивное проактивное сообщение."}
         ]
         
         data = {
@@ -3799,11 +3796,10 @@ async def generate_daily_report(user_id):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        base_prompt = get_system_prompt()
-        system_prompt = f"{base_prompt}\nТы генерируешь краткий ежедневный отчет: выполнено {len(completed)} задач, ожидают {len(pending)}. Будь позитивным, мотивирующим.{user_memory}"
+        system_prompt = get_system_prompt()
         
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": system_prompt + user_memory},
             {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"}
         ]
         
@@ -3849,7 +3845,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        base_prompt = get_system_prompt()
+        system_prompt = get_system_prompt()
         
         # Адаптируем тон в зависимости от уровня эскалации
         if escalation_level == 1:
@@ -3859,11 +3855,9 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         else:  # 3+
             tone_instruction = "Будь очень строгим и мотивирующим. Предложи конкретные альтернативы и помощь."
         
-        system_prompt = f"{base_prompt}\nТы генерируешь напоминание о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.{user_memory}"
-        
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}"}
+            {"role": "system", "content": system_prompt + user_memory},
+            {"role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения."}
         ]
         
         data = {
