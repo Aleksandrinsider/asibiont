@@ -1,5 +1,8 @@
 import json
 import logging
+import asyncio
+import os
+import tempfile
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -11,37 +14,53 @@ from redis.asyncio import Redis
 from config import REDIS_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
 
-async def transcribe_audio(audio_file_path):
+try:
+    import speech_recognition as sr
+    from pydub import AudioSegment
+    VOICE_RECOGNITION_AVAILABLE = True
+except Exception as e:
+    logging.warning(f"Voice recognition not available: {e}")
+    VOICE_RECOGNITION_AVAILABLE = False
+
+def transcribe_audio_sync(audio_file_path):
     """
-    Транскрибация аудио файла в текст.
+    Синхронная транскрибация аудио файла в текст.
     Использует speech_recognition с Google Speech Recognition.
     """
-    try:
-        import speech_recognition as sr
-        from pydub import AudioSegment
-        import os
+    if not VOICE_RECOGNITION_AVAILABLE:
+        logging.error("Voice recognition libraries not available")
+        return None
         
+    wav_path = None
+    try:
         # Конвертируем OGG в WAV для SpeechRecognition
         audio = AudioSegment.from_ogg(audio_file_path)
         wav_path = audio_file_path.replace('.ogg', '.wav')
         audio.export(wav_path, format='wav')
         
-        try:
-            # Используем Google Speech Recognition (бесплатный, без API ключа)
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(wav_path) as source:
-                audio_data = recognizer.record(source)
-                text = recognizer.recognize_google(audio_data, language='ru-RU')
-                return text
-        finally:
-            # Удаляем временный WAV файл
-            if os.path.exists(wav_path):
-                os.unlink(wav_path)
-        
+        # Используем Google Speech Recognition (бесплатный, без API ключа)
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(wav_path) as source:
+            audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data, language='ru-RU')
+            logging.info(f"Successfully transcribed: {text[:50]}...")
+            return text
+            
     except Exception as e:
-        import logging
         logging.error(f"Error transcribing audio: {e}", exc_info=True)
         return None
+    finally:
+        # Удаляем временный WAV файл
+        if wav_path and os.path.exists(wav_path):
+            try:
+                os.unlink(wav_path)
+            except:
+                pass
+
+async def transcribe_audio(audio_file_path):
+    """Асинхронная обёртка для транскрибации."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, transcribe_audio_sync, audio_file_path)
 
 PREMIUM_DESCRIPTION = """🎯 Лаборатория искусственного интеллекта ASI Biont — закрытое сообщество для тех, кто создаёт будущее
 
@@ -238,8 +257,6 @@ async def chat_handler(message: Message):
             
             # Скачиваем файл
             import aiohttp
-            import tempfile
-            import os
             
             bot_token = message.bot.token
             file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
@@ -253,6 +270,9 @@ async def chat_handler(message: Message):
                             tmp_file_path = tmp_file.name
                         
                         try:
+                            # Показываем индикатор "печатает..."
+                            await message.bot.send_chat_action(message.chat.id, "typing")
+                            
                             # Транскрибируем аудио в текст
                             text = await transcribe_audio(tmp_file_path)
                             
