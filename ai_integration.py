@@ -117,7 +117,7 @@ def classify_user_intent(message, mentions_str):
 
     return intent
 
-def smart_fallback_handler(message, mentions_str, user_id, session, ai_response_content=""):
+def smart_fallback_handler(message, mentions_str, user_id, ai_response_content=""):
     print(f"[DEBUG FALLBACK] Called with message='{message[:30]}...', ai_response='{ai_response_content[:30]}...'")  # DEBUG
     print(f"[DEBUG FALLBACK] ai_response_content length: {len(ai_response_content)}")  # DEBUG
     """
@@ -136,20 +136,25 @@ def smart_fallback_handler(message, mentions_str, user_id, session, ai_response_
     if is_greeting and len(ai_response_content.strip()) < 50:  # Ответ AI слишком короткий
         logger.info(f"[SMART FALLBACK] Greeting detected, enhancing response")
         # Получаем список задач для подробного ответа
-        tasks_result = list_tasks(user_id=user_id, session=session)
-        
-        # Создаем подробное приветствие
-        enhanced_greeting = f"Привет! Рад тебя видеть! {tasks_result}\n\n"
-        
-        # Добавляем вопросы и предложения
-        enhanced_greeting += "Что планируешь сегодня? Есть ли новые задачи, которые нужно добавить? "
-        enhanced_greeting += "Или хочешь обновить профиль, чтобы я мог лучше подбирать партнёров?"
-        
-        fallback_actions.append({
-            "function": "enhanced_greeting",
-            "result": enhanced_greeting,
-            "reason": "Приветствие слишком короткое, делаем подробным"
-        })
+        from models import Session
+        db_session = Session()
+        try:
+            tasks_result = list_tasks(user_id=user_id, session=db_session)
+            
+            # Создаем подробное приветствие
+            enhanced_greeting = f"Привет! Рад тебя видеть! {tasks_result}\n\n"
+            
+            # Добавляем вопросы и предложения
+            enhanced_greeting += "Что планируешь сегодня? Есть ли новые задачи, которые нужно добавить? "
+            enhanced_greeting += "Или хочешь обновить профиль, чтобы я мог лучше подбирать партнёров?"
+            
+            fallback_actions.append({
+                "function": "enhanced_greeting",
+                "result": enhanced_greeting,
+                "reason": "Приветствие слишком короткое, делаем подробным"
+            })
+        finally:
+            db_session.close()
         return fallback_actions  # Возвращаем сразу, без дальнейшей обработки
 
     # Анализируем уверенность AI на основе ответа и tool calls
@@ -2909,7 +2914,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     print(f"[DEBUG] Calling smart_fallback_handler...")  # DEBUG
                     print(f"[DEBUG] About to call smart_fallback_handler, content='{content[:50]}...'")  # DEBUG
                     try:
-                        fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, session, content)
+                        fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
                         print(f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions")  # DEBUG
                         if fallback_result:
                             logger.info(f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}")
