@@ -3385,26 +3385,28 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     if has_list_tasks and list_tasks_result:
                                         # Генерируем развёрнутый анализ задач через AI
                                         analysis_system = f"""Ты — ИИ-помощник. Пользователь запросил список задач.
-ОБЯЗАТЕЛЬНЫЕ ТРЕБОВАНИЯ К ОТВЕТУ:
-1. МИНИМУМ 4-6 ПРЕДЛОЖЕНИЙ
-2. Подробно прокомментируй каждую задачу
-3. Укажи дедлайны и напоминания
-4. Отметь приоритетные, срочные или просроченные
-5. Предложи конкретный план действий
-6. Задай 2-3 вопроса о планах выполнения
-7. Будь активным собеседником, а не пассивным ботом
 
-ЗАПРЕЩЕНО:
-- Односложные ответы типа "Ваши задачи: [список]"
-- Просто перечислять задачи без анализа
+КРИТИЧЕСКИЕ ТРЕБОВАНИЯ:
+1. МИНИМУМ 4-6 ПРЕДЛОЖЕНИЙ с подробным анализом
+2. Анализируй КАЖДУЮ задачу индивидуально
+3. Обрати внимание на дедлайны, приоритеты, просрочки
+4. Предложи КОНКРЕТНЫЙ план действий
+5. Задай 2-3 РЕЛЕВАНТНЫХ вопроса о выполнении
+6. Учитывай контекст и особенности задач
+7. Будь естественным - адаптируйся к ситуации пользователя
 
-ПРИМЕР ХОРОШЕГО ОТВЕТА:
-"Давай посмотрим твои задачи! У тебя есть важная задача 'Проверить почту' ⏳. Когда планируешь её выполнить? Может, стоит установить конкретное время напоминания? Также рекомендую подумать о приоритетности — это срочная задача или можно отложить? Хочешь добавить ещё какие-то задачи или нужна помощь с организацией?"
+СТРОГО ЗАПРЕЩЕНО:
+- "Ваши задачи: [список]" и подобные односложные ответы
+- Просто перечислять задачи
+- Шаблонные фразы
+- Повторяющиеся формулировки
 
-Вот данные о задачах:
+Анализируй ситуацию пользователя и давай персональные рекомендации на основе его задач.
+
+Данные о задачах:
 {list_tasks_result}
 
-Теперь дай развёрнутый анализ с вопросами и рекомендациями:"""
+Дай естественный развёрнутый анализ с вопросами и конкретными рекомендациями:"""
                                         
                                         try:
                                             async with aiohttp.ClientSession() as analysis_session:
@@ -3973,23 +3975,63 @@ def list_tasks(user_id=None, session=None):
         ).all()
         
         if not tasks:
-            return "У вас нет задач"
+            return "У вас нет задач. Добавьте первую задачу - просто напишите что нужно сделать и когда!"
         
-        result = "Ваши задачи:\n"
-        for task in tasks:
-            status_icon = "✅" if task.status == 'completed' else "⏳"
-            delegation_info = ""
-            if task.delegated_to_username:
-                if task.delegated_to_username.lower() == user.username.lower():
-                    # Задача делегирована пользователю
-                    creator = session.query(User).filter_by(id=task.user_id).first()
-                    if creator:
-                        delegation_info = f" (от @{creator.username})"
-                else:
-                    # Задача делегирована от пользователя
-                    delegation_info = f" (на @{task.delegated_to_username})"
-            
-            result += f"{status_icon} {task.title}{delegation_info}\n"
+        # Формируем детальный список с анализом
+        active_tasks = [t for t in tasks if t.status != 'completed']
+        completed_tasks = [t for t in tasks if t.status == 'completed']
+        delegated_to_me = [t for t in active_tasks if t.delegated_to_username and t.delegated_to_username.lower() == user.username.lower()]
+        delegated_by_me = [t for t in active_tasks if t.delegated_to_username and t.delegated_to_username.lower() != user.username.lower()]
+        my_tasks = [t for t in active_tasks if not t.delegated_to_username]
+        
+        from datetime import datetime, timezone
+        import pytz
+        
+        # Определяем timezone пользователя
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        now = datetime.now(user_tz)
+        
+        result = f"📋 **У вас {len(active_tasks)} активных задач**\n\n"
+        
+        # Мои задачи
+        if my_tasks:
+            result += "**Ваши задачи:**\n"
+            for task in my_tasks:
+                reminder_info = ""
+                if task.reminder_time:
+                    try:
+                        reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                        if reminder_dt < now:
+                            reminder_info = f" ⚠️ Просрочено на {(now - reminder_dt).days} дн."
+                        else:
+                            reminder_info = f" 🔔 {reminder_dt.strftime('%d.%m %H:%M')}"
+                    except:
+                        pass
+                
+                priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(task.priority, "")
+                result += f"⏳ {priority_icon} {task.title}{reminder_info}\n"
+            result += "\n"
+        
+        # Делегированные мне
+        if delegated_to_me:
+            result += "**Делегировано вам:**\n"
+            for task in delegated_to_me:
+                creator = session.query(User).filter_by(id=task.user_id).first()
+                creator_name = f"@{creator.username}" if creator else "кто-то"
+                result += f"⏳ {task.title} (от {creator_name})\n"
+            result += "\n"
+        
+        # Делегированные мной
+        if delegated_by_me:
+            result += "**Вы делегировали:**\n"
+            for task in delegated_by_me:
+                result += f"👤 {task.title} (на @{task.delegated_to_username})\n"
+            result += "\n"
+        
+        # Завершённые (последние 3)
+        if completed_tasks:
+            recent_completed = completed_tasks[-3:]
+            result += f"✅ **Завершено:** {len(completed_tasks)} задач\n"
         
         return result.strip()
     except Exception as e:
