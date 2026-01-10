@@ -2973,7 +2973,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     # Обрабатываем обычный ответ AI без tool calls
                     logger.info("[TOOL CALLS] Tool calls completed, 0 results. Generating natural response...")
                     print(f"[DEBUG] Processing regular AI response, content='{content[:100]}...'")  # DEBUG
-                    content = message_response.get("content", "")
+                    original_content = message_response.get("content", "")
+                    content = original_content
                     # Для обычных ответов используем только базовую очистку
                     content = re.sub(r'<\|.*?\|>', '', content).strip()  # Только DSML теги
                     content = replace_placeholders(content, user_now, current_time_str)
@@ -2984,39 +2985,49 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         content = ""  # Сбрасываем, чтобы сработал retry
                     # НЕ применяем clean_technical_details для обычных ответов!
                     
-                    # Если после очистки ответ пустой - повторный запрос
+                    # Если после очистки ответ пустой - вернуть оригинальный content
                     if not content or len(content.strip()) < 3:
-                        logger.warning("[RETRY] Response empty after cleaning, retrying with explicit instruction")
-                        retry_system = system_prompt + "\n\n🚨 КРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!"
-                        
-                        retry_messages = [{"role": "system", "content": retry_system}]
-                        if context:
-                            for item in context:
-                                if "user" in item:
-                                    retry_messages.append({"role": "user", "content": item["user"]})
-                                if "assistant" in item:
-                                    retry_messages.append({"role": "assistant", "content": item["assistant"]})
-                        retry_messages.append({"role": "user", "content": original_message})
-                        
-                        async with aiohttp.ClientSession() as retry_session:
-                            async with retry_session.post(
-                                url,
-                                headers=headers,
-                                json={
-                                    "model": "deepseek-chat",
-                                    "messages": retry_messages,
-                                    "temperature": 0.3,
-                                },
-                                timeout=aiohttp.ClientTimeout(total=120)
-                            ) as retry_response:
-                                retry_result = await retry_response.json()
-                                content = retry_result['choices'][0]['message']['content']
-                                content = re.sub(r'<\|.*?\|>', '', content).strip()  # Только базовая очистка
-                                content = replace_placeholders(content, user_now, current_time_str)
-                                # НЕ применяем clean_technical_details для повторных запросов
-                        
+                        logger.warning(f"[EMPTY AFTER CLEAN] Original: '{original_content[:100]}...', Cleaned: '{content}', returning original")
+                        content = original_content.strip()
                         if not content:
-                            content = "Хорошо, продолжим работу!"
+                            logger.warning("[RETRY] Response empty after cleaning, retrying with explicit instruction")
+                            retry_system = system_prompt + "\n\n🚨 КРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!"
+                            
+                            retry_messages = [{"role": "system", "content": retry_system}]
+                            if context:
+                                for item in context:
+                                    if "user" in item:
+                                        retry_messages.append({"role": "user", "content": item["user"]})
+                                    if "assistant" in item:
+                                        retry_messages.append({"role": "assistant", "content": item["assistant"]})
+                            retry_messages.append({"role": "user", "content": original_message})
+                            
+                            async with aiohttp.ClientSession() as retry_session:
+                                async with retry_session.post(
+                                    url,
+                                    headers=headers,
+                                    json={
+                                        "model": "deepseek-chat",
+                                        "messages": retry_messages,
+                                        "temperature": 0.3,
+                                    },
+                                    timeout=aiohttp.ClientTimeout(total=120)
+                                ) as retry_response:
+                                    retry_result = await retry_response.json()
+                                    retry_content = retry_result['choices'][0]['message']['content']
+                                    retry_content = re.sub(r'<\|.*?\|>', '', retry_content).strip()  # Только базовая очистка
+                                    retry_content = replace_placeholders(retry_content, user_now, current_time_str)
+                                    # НЕ применяем clean_technical_details для повторных запросов
+                                    if retry_content and len(retry_content.strip()) >= 3:
+                                        content = retry_content
+                                    else:
+                                        content = "Хорошо, продолжим работу!"
+                        else:
+                            logger.info(f"[RECOVERED] Using original content: '{content[:100]}...'")
+                    
+                    # Если все еще пустой после retry
+                    if not content:
+                        content = "Хорошо, продолжим работу!"
                     
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!

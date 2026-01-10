@@ -276,6 +276,7 @@ async def chat_handler(message: Message):
             logger.warning("Redis client not initialized, context will not persist")
         response = await chat_with_ai(message.text, context, user_id)
         logger.debug(f"AI response generated for user {user_id}: '{response[:100]}...'")
+        print(f"[DEBUG HANDLER] Response from chat_with_ai: '{response}'")  # DEBUG
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
         if len(context) > 10:
