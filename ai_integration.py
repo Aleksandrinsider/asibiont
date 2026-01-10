@@ -1264,20 +1264,24 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
 
     # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
     system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
-    system_prompt += "- МИНИМУМ 3-5 ПРЕДЛОЖЕНИЙ в каждом ответе\n"
+    system_prompt += "- СТРОГО МИНИМУМ 5-7 ПРЕДЛОЖЕНИЙ в каждом ответе (не считая перечисление задач)\n"
+    system_prompt += "- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНЫ короткие ответы типа 'Отлично, добавил задачу X. Что дальше?'\n"
+    system_prompt += "- При добавлении задач ОБЯЗАТЕЛЬНО:\n"
+    system_prompt += "  * Подтверди создание с деталями (время, дата)\n"
+    system_prompt += "  * Дай 2-3 практические рекомендации по выполнению\n"
+    system_prompt += "  * Предложи связанные действия или оптимизации\n"
+    system_prompt += "  * Спроси про контекст задачи\n"
+    system_prompt += "  * Предложи найти партнеров если задача связана с интересами\n"
     system_prompt += "- При показе задач ОБЯЗАТЕЛЬНО:\n"
     system_prompt += "  * Прокомментируй каждую задачу отдельно\n"
     system_prompt += "  * Укажи дедлайны и время напоминаний\n"
     system_prompt += "  * Отметь приоритетные, срочные, просроченные\n"
     system_prompt += "  * Предложи конкретный план действий\n"
     system_prompt += "  * Задай 2-3 вопроса о планах выполнения\n"
-    system_prompt += "- При добавлении задач ОБЯЗАТЕЛЬНО:\n"
-    system_prompt += "  * Дай практические рекомендации по выполнению\n"
-    system_prompt += "  * Предложи связанные действия или оптимизации\n"
-    system_prompt += "  * Уточни детали если нужно\n"
-    system_prompt += "- ЗАПРЕЩЕНО давать односложные ответы вроде 'Ваши задачи: [список]'\n"
     system_prompt += "- Каждый ответ должен содержать: анализ + рекомендации + вопросы\n"
     system_prompt += "- Будь активным собеседником, а не пассивным ботом!\n"
+    system_prompt += "\n⚠️ ПРИМЕРЫ ПРАВИЛЬНЫХ ОТВЕТОВ:\n"
+    system_prompt += "Добавление задачи: 'Добавил задачу Заказать продукты с напоминанием через 5 минут на 11.01.2026 в 00:16. Это срочная покупка или планируешь закупку на неделю? Могу помочь составить список продуктов или найти выгодные предложения. Кстати, если интересуешься готовкой, могу найти людей с похожими интересами для обмена рецептами. Что именно нужно купить?'\n"
     system_prompt += "\n🔥 КРИТИЧЕСКИ ВАЖНО - ВОВЛЕЧЕНИЕ В ДИАЛОГ:\n"
     system_prompt += "- КАЖДЫЙ ответ ОБЯЗАТЕЛЬНО заканчивай вопросом или предложением\n"
     system_prompt += "- Анализируй текущий контекст и предлагай релевантные действия\n"
@@ -1316,16 +1320,17 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
             system_prompt += "\n\n⚠️ УЧИТЫВАЙ КОНТЕКСТ ПРЕДЫДУЩИХ СООБЩЕНИЙ - НЕ ПОВТОРЯЙСЯ! Предлагай развитие темы или новые идеи."
 
     return system_prompt
+
+
+def parse_relative_time(message, current_time):
     """Parse relative time expressions like 'через 5 минут', 'через 2 часа' and return datetime"""
-    from datetime import datetime
+    from datetime import datetime, timedelta
+    import re
 
     if not message or not isinstance(message, str):
         raise ValueError("Message must be a non-empty string")
     if not current_time or not isinstance(current_time, datetime):
         raise ValueError("Current time must be a datetime object")
-
-    import re
-    from datetime import datetime, timedelta
 
     # Patterns for Russian time expressions
     patterns = [
