@@ -1979,6 +1979,7 @@ async def api_tasks_handler(request):
                 'id': task.id,
                 'title': title,
                 'description': task.description if task.description else '',
+                'ai_recommendation': task.ai_recommendation if hasattr(task, 'ai_recommendation') else None,
                 'status': task.status,
                 'reminder_time': None,
                 'reminder_time_local': None,

@@ -1381,6 +1381,42 @@ def parse_absolute_time(message):
     return None
 
 
+def generate_task_recommendation(task_title, description=""):
+    """Generate AI recommendation for a task (synchronous wrapper)"""
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+        
+        prompt = f"""Дай краткую рекомендацию (1-2 предложения) по выполнению задачи.
+Задача: {task_title}
+{f"Описание: {description}" if description else ""}
+
+Рекомендация должна быть:
+- Конкретной и практичной
+- Мотивирующей
+- Не более 150 символов
+- Без вводных слов типа "Я рекомендую"
+"""
+        
+        messages = [
+            {"role": "system", "content": "Ты даешь краткие практические рекомендации по задачам. Отвечай кратко и по делу."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 100}
+        
+        import requests
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"].strip()
+        return None
+    except Exception as e:
+        import logging
+        logging.error(f"Error generating task recommendation: {e}")
+        return None
+
+
 def parse_tool_arguments(arguments_str):
     """Parse tool arguments from string, fallback to empty dict if parsing fails"""
     if arguments_str is None:
@@ -1473,6 +1509,16 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.add(task)
         session.commit()
         task_id = task.id
+        
+        # Генерируем рекомендацию AI для новой задачи
+        try:
+            recommendation = generate_task_recommendation(title, description)
+            if recommendation:
+                task.ai_recommendation = recommendation
+                session.commit()
+                logger.info(f"Generated AI recommendation for task {task_id}: {recommendation}")
+        except Exception as e:
+            logger.warning(f"Could not generate recommendation for task {task_id}: {e}")
 
     # Планировать напоминание если указано reminder_time
     if task.reminder_time:
