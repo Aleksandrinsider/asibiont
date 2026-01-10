@@ -1260,7 +1260,13 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     )
 
     # 🎯 ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА ДЛЯ ТЕКУЩЕГО КОНТЕКСТА
-    system_prompt += "\n\n🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
+    system_prompt += f"\n\n⏰ ТЕКУЩАЯ ДАТА И ВРЕМЯ:\n"
+    system_prompt += f"- Сегодня: {user_now.strftime('%Y-%m-%d')} (это ТОЧНАЯ текущая дата, используй её для вычислений!)\n"
+    system_prompt += f"- Время: {current_time_str}\n"
+    system_prompt += f"- Завтра: {(user_now + timedelta(days=1)).strftime('%Y-%m-%d')}\n"
+    system_prompt += f"⚠️ КРИТИЧНО: При создании задач с относительным временем ('через 5 минут', 'завтра в 10:00') ОБЯЗАТЕЛЬНО используй СЕГОДНЯШНЮЮ дату {user_now.strftime('%Y-%m-%d')}, а НЕ даты из своих знаний (cutoff date December 2024)!\n\n"
+    
+    system_prompt += "🎯 ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n1. Управление задачами и напоминаниями\n2. Помощь в поиске контактов и партнёров\n3. Обновление профиля пользователя\n\n📋 ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n- 'сделал/выполнил [задача]' → complete_task()\n- 'удали все задачи' → delete_all_tasks()\n- 'напомни/добавь [задача]' → add_task()\n- 'покажи задачи' → list_tasks()\n- 'найди людей/партнёров' → find_partners()\n- 'живу в/работаю/интересы' → update_profile()\n\n🚨 КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\nПРИМЕРЫ:\n• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n• 'удали все' → delete_all_tasks()\n• 'напомни купить продукты' → add_task(title='купить продукты')\n• 'покажи задачи' → list_tasks()\n• 'найди людей' → find_partners()\n• 'живу в Москве' → update_profile(city='Москва')"
 
     # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ РАЗВЁРНУТЫХ ОТВЕТОВ
     system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО РАЗВЁРНУТЫХ ОТВЕТОВ:\n"
@@ -2827,7 +2833,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "add_task",
-            "description": "Добавить новую задачу с обязательным временем напоминания. ВАЖНО: Если задача сформулирована слишком общо (например 'проверить почту', 'позвонить другу'), СНАЧАЛА задай уточняющие вопросы для получения деталей: контекста, цели, ожидаемого результата. Только после уточнения добавляй задачу с детальной формулировкой.",
+            "description": "Добавить новую задачу с обязательным временем напоминания. ВАЖНО: Если задача сформулирована слишком общо (например 'проверить почту', 'позвонить другу'), СНАЧАЛА задай уточняющие вопросы для получения деталей: контекста, цели, ожидаемого результата. Только после уточнения добавляй задачу с детальной формулировкой. КРИТИЧНО: используй ТОЧНУЮ ТЕКУЩУЮ ДАТУ из system prompt ({{current_date}}), НЕ используй даты из твоих знаний!",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -2839,7 +2845,7 @@ TOOLS = [
                         "type": "string",
                         "description": "Дополнительное описание задачи с деталями выполнения, ожидаемым результатом",
                     },
-                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"},
+                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM. ОБЯЗАТЕЛЬНО используй current_date из system prompt для вычисления даты! Например, если current_date=2026-01-11 и пользователь просит 'через 5 минут в 12:30', используй '2026-01-11 12:30', а НЕ дату из прошлого!"},
                     "due_date": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM, опционально"},
                 },
                 "required": ["title", "reminder_time"],
@@ -3483,6 +3489,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
 
                                         if func_name == "add_task":
+                                            logger.info(f"[AI TOOL CALL] add_task called with reminder_time: {args.get('reminder_time')}, current user_now: {user_now}")
                                             result = add_task(
                                                 title=args.get("title", args.get("task_title", "Задача")),
                                                 description=args.get("description", ""),
