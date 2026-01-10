@@ -1175,14 +1175,6 @@
                 }
             }
             
-            // Показываем рекомендацию AI, если она есть
-            if (task.ai_recommendation && task.ai_recommendation.trim()) {
-                html += '<div style="margin-top: 6px; padding: 6px 8px; background: #F6F8FA; border-radius: 6px; font-size: 12px; color: #24292F; line-height: 1.4; display: flex; align-items: start; gap: 6px;">';
-                html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink: 0; margin-top: 2px;" xmlns="http://www.w3.org/2000/svg"><path d="M8 1.5C6.89543 1.5 6 2.39543 6 3.5V4H5.5C4.67157 4 4 4.67157 4 5.5V6.5C4 7.32843 4.67157 8 5.5 8H10.5C11.3284 8 12 7.32843 12 6.5V5.5C12 4.67157 11.3284 4 10.5 4H10V3.5C10 2.39543 9.10457 1.5 8 1.5ZM9 4V3.5C9 2.94772 8.55228 2.5 8 2.5C7.44772 2.5 7 2.94772 7 3.5V4H9ZM7 9V14H9V9H7Z" fill="#656D76"/></svg>';
-                html += '<span>' + task.ai_recommendation + '</span>';
-                html += '</div>';
-            }
-            
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
