@@ -11,6 +11,38 @@ from redis.asyncio import Redis
 from config import REDIS_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
 
+async def transcribe_audio(audio_file_path):
+    """
+    Транскрибация аудио файла в текст.
+    Использует speech_recognition с Google Speech Recognition.
+    """
+    try:
+        import speech_recognition as sr
+        from pydub import AudioSegment
+        import os
+        
+        # Конвертируем OGG в WAV для SpeechRecognition
+        audio = AudioSegment.from_ogg(audio_file_path)
+        wav_path = audio_file_path.replace('.ogg', '.wav')
+        audio.export(wav_path, format='wav')
+        
+        try:
+            # Используем Google Speech Recognition (бесплатный, без API ключа)
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(wav_path) as source:
+                audio_data = recognizer.record(source)
+                text = recognizer.recognize_google(audio_data, language='ru-RU')
+                return text
+        finally:
+            # Удаляем временный WAV файл
+            if os.path.exists(wav_path):
+                os.unlink(wav_path)
+        
+    except Exception as e:
+        import logging
+        logging.error(f"Error transcribing audio: {e}", exc_info=True)
+        return None
+
 PREMIUM_DESCRIPTION = """🎯 Лаборатория искусственного интеллекта ASI Biont — закрытое сообщество для тех, кто создаёт будущее
 
 Забудьте про мёртвые контакты и бесполезные знакомства. Здесь вас окружают только те, кто движется в том же направлении прямо сейчас. AI видит ваши активные дела и подбирает людей, с которыми можно запустить проект, достичь цели или просто классно провести время.
@@ -180,6 +212,78 @@ async def subscribe_handler(message: Message):
 async def chat_handler(message: Message):
     user_id = message.from_user.id
     message_id = message.message_id
+    
+    # Обработка голосовых сообщений
+    if message.voice:
+        logger.info(f"[VOICE] Received voice message from user {user_id}")
+        
+        try:
+            # Проверка подписки
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                user = User(telegram_id=user_id, username=message.from_user.username)
+                session.add(user)
+                session.commit()
+            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+            session.close()
+            
+            if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
+                await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
+                return
+            
+            # Скачиваем голосовое сообщение
+            file = await message.bot.get_file(message.voice.file_id)
+            file_path = file.file_path
+            
+            # Скачиваем файл
+            import aiohttp
+            import tempfile
+            import os
+            
+            bot_token = message.bot.token
+            file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
+            
+            async with aiohttp.ClientSession() as session_http:
+                async with session_http.get(file_url) as resp:
+                    if resp.status == 200:
+                        # Сохраняем во временный файл
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp_file:
+                            tmp_file.write(await resp.read())
+                            tmp_file_path = tmp_file.name
+                        
+                        try:
+                            # Транскрибируем аудио через Deepseek API (или другой сервис)
+                            # Пока используем заглушку - в будущем можно добавить Whisper API или подобное
+                            await message.bot.send_message(message.chat.id, "🎤 Обрабатываю голосовое сообщение...")
+                            
+                            # Здесь должна быть транскрибация
+                            # Для демонстрации отправим сообщение о необходимости настройки
+                            text = await transcribe_audio(tmp_file_path)
+                            
+                            if text:
+                                logger.info(f"[VOICE] Transcribed text: {text}")
+                                # Создаем текстовое сообщение и обрабатываем его как обычное
+                                message.text = text
+                                # Продолжаем обработку как текстовое сообщение
+                            else:
+                                await message.bot.send_message(
+                                    message.chat.id, 
+                                    "Не удалось распознать голосовое сообщение. Попробуйте отправить текст."
+                                )
+                                return
+                        finally:
+                            # Удаляем временный файл
+                            os.unlink(tmp_file_path)
+                    else:
+                        logger.error(f"[VOICE] Failed to download voice file: {resp.status}")
+                        await message.bot.send_message(message.chat.id, "Ошибка при скачивании голосового сообщения.")
+                        return
+        except Exception as e:
+            logger.error(f"[VOICE] Error processing voice message: {e}", exc_info=True)
+            await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке голосового сообщения.")
+            return
+    
     logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {message.text[:50] if message.text else 'None'}")
     
     try:
