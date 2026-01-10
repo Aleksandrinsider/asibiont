@@ -775,14 +775,14 @@ def validate_response_compliance(response_text, intent_type=None):
     """
     issues = []
 
-    # Проверка на запрещенные элементы
-    if any(emoji in response_text for emoji in ["🚀", "✅", "📝", "🎯", "⚠️", "💡", "📋", "⏳", "🟡"]):
-        issues.append("Присутствуют эмодзи")
+    # Проверка на запрещенные элементы (кроме list_tasks)
+    if intent_type != "list_tasks":
+        if any(emoji in response_text for emoji in ["🚀", "✅", "📝", "🎯", "⚠️", "💡", "📋", "⏳", "🟡"]):
+            issues.append("Присутствуют эмодзи")
+        if "**" in response_text:
+            issues.append("Присутствует жирный текст")
 
-    if "**" in response_text:
-        issues.append("Присутствует жирный текст")
-
-    if re.search(r"^\s*[-•*]\s+", response_text, re.MULTILINE):
+    if re.search(r"^\s*[-•*]\s+", response_text, re.MULTILINE) and intent_type != "list_tasks":
         issues.append("Присутствуют маркированные списки")
 
     if re.search(r"^\s*\d+\.\s+", response_text, re.MULTILINE):
@@ -807,9 +807,9 @@ def validate_response_compliance(response_text, intent_type=None):
         if "Ваши задачи:" in response_text or "Список задач:" in response_text:
             issues.append("Шаблонный ответ вместо анализа")
     elif intent_type in ["complete_task", "delete_task", "add_task"]:
-        # Для простых действий - короткие ответы
-        if len(response_text) > 300:
-            issues.append("Ответ на простое действие слишком длинный")
+        # Для простых действий - информативные ответы с практическими советами
+        if len(response_text) < 100:
+            issues.append("Ответ на простое действие слишком короткий - добавьте практические рекомендации")
 
     return len(issues) == 0, issues
 
@@ -836,8 +836,9 @@ async def enforce_prompt_compliance(response_text, intent_type, user_id, context
 {chr(10).join(f"- {issue}" for issue in issues)}
 
 СТРОГО ИСПРАВИТЬ:
-- Убрать все эмодзи, жирный текст, списки, нумерацию
+- Убрать все эмодзи, жирный текст, списки, нумерацию (кроме list_tasks)
 - Адаптировать длину ответа под ситуацию: короткие для простых действий, подробные для анализа
+- Для add_task ОБЯЗАТЕЛЬНО добавить практические рекомендации по выполнению
 - Всегда добавлять вопросы для вовлечения пользователя
 - Использовать естественный разговорный стиль
 - Закончить вопросом для продолжения диалога
@@ -3324,6 +3325,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         system_prompt += "  * Отметь приоритетные, срочные, просроченные\n"
         system_prompt += "  * Предложи конкретный план действий\n"
         system_prompt += "  * Задай 2-3 вопроса о планах выполнения\n"
+        system_prompt += "- При добавлении задач ОБЯЗАТЕЛЬНО:\n"
+        system_prompt += "  * Дай практические рекомендации по выполнению\n"
+        system_prompt += "  * Предложи связанные действия или оптимизации\n"
+        system_prompt += "  * Уточни детали если нужно\n"
         system_prompt += "- ЗАПРЕЩЕНО давать односложные ответы вроде 'Ваши задачи: [список]'\n"
         system_prompt += "- Каждый ответ должен содержать: анализ + рекомендации + вопросы\n"
         system_prompt += "- Будь активным собеседником, а не пассивным ботом!\n"
@@ -4248,6 +4253,9 @@ def list_tasks(user_id=None, session=None):
         # Добавляем рекомендации к результату
         if recommendations:
             result += "\n\n💡 **Рекомендации:**\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])  # Максимум 3 рекомендации
+        
+        # Добавляем вопрос для вовлечения
+        result += "\n\nЧто планируете делать с этими задачами?"
         
         return result.strip()
     except Exception as e:
