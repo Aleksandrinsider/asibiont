@@ -28,16 +28,16 @@ def classify_user_intent(message, mentions_str):
     message_lower = message.lower().strip()
     intent = {"type": "unknown", "confidence": 0.0, "params": {}}
 
-    # 1. Делегирование задач (@mentions)
-    if mentions_str != 'нет' and '@' in message:
+    # 1. Делегирование задач (@mentions) - улучшенные паттерны
+    if '@' in message:
         mention_match = re.search(r'@(\w+)', message)
-        if mention_match:
+        if mention_match and intent["confidence"] < 0.9:
             intent["type"] = "delegate_task"
             intent["confidence"] = 0.9
             intent["params"]["delegated_to"] = f"@{mention_match.group(1)}"
-            # Извлекаем текст задачи
+            # Извлекаем текст задачи - улучшенная логика
             task_text = re.sub(r'@\w+', '', message).strip()
-            task_text = re.sub(r'^(поручи|делегируй|передай)\s+', '', task_text, flags=re.IGNORECASE)
+            task_text = re.sub(r'^(поручи|делегируй|передай|сделай)\s+', '', task_text, flags=re.IGNORECASE)
             intent["params"]["task_title"] = task_text or "Задача"
             # Парсим время
             time_match = re.search(r'(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})', task_text)
@@ -47,15 +47,46 @@ def classify_user_intent(message, mentions_str):
                 # Для теста, используем фиксированное время
                 intent["params"]["reminder_time"] = "2026-01-11 10:00"
 
+    # 1.1. Управление делегированными задачами
+    accept_keywords = ["принял", "принимаю", "согласен", "возьму", "беру"]
+    if any(keyword in message_lower for keyword in accept_keywords) and "задачу" in message_lower and intent["confidence"] < 0.8:
+        intent["type"] = "accept_delegated_task"
+        intent["confidence"] = 0.8
+        # Извлекаем название задачи
+        task_match = re.search(r'задачу\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+
+    reject_keywords = ["отклонил", "отказываюсь", "не могу", "занят"]
+    if any(keyword in message_lower for keyword in reject_keywords) and "задачу" in message_lower and intent["confidence"] < 0.8:
+        intent["type"] = "reject_delegated_task"
+        intent["confidence"] = 0.8
+        # Извлекаем название задачи
+        task_match = re.search(r'задачу\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+
+    delegation_status_keywords = ["статус задачи", "как задача", "прогресс задачи", "что с задачей"]
+    if any(keyword in message_lower for keyword in delegation_status_keywords) and intent["confidence"] < 0.95:
+        intent["type"] = "get_delegation_progress"
+        intent["confidence"] = 0.95  # максимальная уверенность
+        # Извлекаем название задачи
+        task_match = re.search(r'задачи\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+        else:
+            # Если не нашли конкретную задачу, это может быть общий запрос статуса
+            intent["confidence"] = 0.6  # понижаем уверенность
+
     # 2. Просмотр задач
     list_keywords = ["покажи", "список", "мои дела", "все задачи", "что у меня", "задачи"]
-    if any(keyword in message_lower for keyword in list_keywords):
+    if any(keyword in message_lower for keyword in list_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "list_tasks"
         intent["confidence"] = 0.8
 
     # 3. Создание задач
     create_keywords = ["напомни", "добавь задачу", "создай задачу", "запланируй"]
-    if any(keyword in message_lower for keyword in create_keywords):
+    if any(keyword in message_lower for keyword in create_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "add_task"
         intent["confidence"] = 0.8
         # Извлекаем текст задачи
@@ -69,9 +100,24 @@ def classify_user_intent(message, mentions_str):
                 intent["params"]["task_title"] = task_text
                 break
 
+    # 3.1. Относительное время (контекстное обновление задач)
+    relative_time_keywords = ["через", "напомни через"]
+    if any(keyword in message_lower for keyword in relative_time_keywords) and intent["confidence"] < 0.7:
+        intent["type"] = "edit_task"
+        intent["confidence"] = 0.7
+        # Парсим относительное время
+        time_match = re.search(r'через\s+(\d+)\s*(минут|час|часа|часов)', message_lower, re.IGNORECASE)
+        if time_match:
+            amount = int(time_match.group(1))
+            unit = time_match.group(2).lower()
+            if unit in ["час", "часа", "часов"]:
+                intent["params"]["reminder_time"] = f"через {amount} час{'ов' if amount > 1 else '' if amount == 1 else 'а'}"
+            else:
+                intent["params"]["reminder_time"] = f"через {amount} минут"
+
     # 4. Завершение задач
     complete_keywords = ["сделал", "выполнил", "завершил", "готово", "закончил"]
-    if any(keyword in message_lower for keyword in complete_keywords):
+    if any(keyword in message_lower for keyword in complete_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "complete_task"
         intent["confidence"] = 0.8
         # Извлекаем название задачи
@@ -83,31 +129,159 @@ def classify_user_intent(message, mentions_str):
 
     # 5. Удаление задач
     delete_keywords = ["удали все", "очисти список", "удалить все задачи"]
-    if any(keyword in message_lower for keyword in delete_keywords):
+    if any(keyword in message_lower for keyword in delete_keywords) and intent["confidence"] < 0.9:
         intent["type"] = "delete_all_tasks"
         intent["confidence"] = 0.9
 
-    # Удаление конкретной задачи
-    delete_specific_keywords = ["удали эту задачу", "удалить задачу", "удали задачу"]
-    if any(keyword in message_lower for keyword in delete_specific_keywords):
+    # Удаление конкретной задачи - улучшенные паттерны
+    delete_specific_keywords = [
+        "удали эту задачу", "удалить задачу", "удали задачу", "удали эту", "удали задачу",
+        "убери задачу", "убери эту задачу", "вычеркни задачу", "вычеркни эту задачу",
+        "удали её", "удали эту", "убери её", "вычеркни её"
+    ]
+    if any(keyword in message_lower for keyword in delete_specific_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "delete_task"
         intent["confidence"] = 0.8
         # Извлекаем ID задачи из контекста или сообщения
         task_id_match = re.search(r'(\d+)', message_lower)
         if task_id_match:
             intent["params"]["task_id"] = int(task_id_match.group(1))
+        # Также пытаемся извлечь название задачи
+        task_name_match = re.search(r'(?:задачу|эту)\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+        if task_name_match:
+            intent["params"]["task_title"] = task_name_match.group(1).strip()
 
-    # 6. Поиск людей
-    find_keywords = ["найди людей", "похожие интересы", "с кем пообщаться", "рекомендуй контакты"]
-    if any(keyword in message_lower for keyword in find_keywords):
+    # 6. Редактирование задач
+    edit_keywords = ["измени задачу", "обнови задачу", "поменяй задачу", "исправь задачу"]
+    if any(keyword in message_lower for keyword in edit_keywords) and intent["confidence"] < 0.8:
+        intent["type"] = "edit_task"
+        intent["confidence"] = 0.8
+        # Извлекаем ID и новые параметры
+        task_id_match = re.search(r'(\d+)', message_lower)
+        if task_id_match:
+            intent["params"]["task_id"] = int(task_id_match.group(1))
+
+    # 6.1. Установка приоритета
+    priority_keywords = ["приоритет", "высокий приоритет", "средний приоритет", "низкий приоритет", "установи приоритет"]
+    if any(keyword in message_lower for keyword in priority_keywords) and intent["confidence"] < 0.85:
+        intent["type"] = "set_priority"
+        intent["confidence"] = 0.85
+        # Определяем уровень приоритета
+        if "высокий" in message_lower:
+            intent["params"]["priority"] = "high"
+        elif "средний" in message_lower:
+            intent["params"]["priority"] = "medium"
+        elif "низкий" in message_lower:
+            intent["params"]["priority"] = "low"
+        # Извлекаем ID задачи
+        task_id_match = re.search(r'(\d+)', message_lower)
+        if task_id_match:
+            intent["params"]["task_id"] = int(task_id_match.group(1))
+
+    # 6.2. Детали задачи
+    details_keywords = ["детали задачи", "подробности задачи", "информация о задаче", "покажи задачу"]
+    if any(keyword in message_lower for keyword in details_keywords) and intent["confidence"] < 0.85:
+        intent["type"] = "get_task_details"
+        intent["confidence"] = 0.85
+        # Извлекаем ID или название задачи
+        task_id_match = re.search(r'(\d+)', message_lower)
+        if task_id_match:
+            intent["params"]["task_id"] = int(task_id_match.group(1))
+
+    # 6.3. Альтернативы для задач
+    alternatives_keywords = ["альтернативы", "предложи альтернативы", "другие варианты", "как иначе"]
+    if any(keyword in message_lower for keyword in alternatives_keywords) and intent["confidence"] < 0.85:
+        intent["type"] = "suggest_alternatives"
+        intent["confidence"] = 0.85
+        # Извлекаем ID задачи
+        task_id_match = re.search(r'(\d+)', message_lower)
+        if task_id_match:
+            intent["params"]["task_id"] = int(task_id_match.group(1))
+
+    # 7. Поиск людей - расширенные паттерны
+    find_keywords = [
+        "найди людей", "похожие интересы", "с кем пообщаться", "рекомендуй контакты",
+        "найди партнёров", "кто может помочь", "с кем связаться", "похожие увлечения"
+    ]
+    if any(keyword in message_lower for keyword in find_keywords) and intent["confidence"] < 0.8:
         intent["type"] = "find_partners"
         intent["confidence"] = 0.8
 
-    # 7. Обновление профиля
-    profile_keywords = ["живу в", "работаю в", "интересуюсь", "мои навыки"]
-    if any(keyword in message_lower for keyword in profile_keywords):
+    # 8. Проверка статуса подписки
+    subscription_keywords = ["статус подписки", "подписка активна", "у меня подписка", "проверь подписку"]
+    if any(keyword in message_lower for keyword in subscription_keywords) and intent["confidence"] < 0.8:
+        intent["type"] = "check_subscription_status"
+        intent["confidence"] = 0.8
+
+    # 9. Оплата подписки
+    payment_keywords = ["оплати подписку", "купить подписку", "оформить подписку", "заплатить за подписку"]
+    if any(keyword in message_lower for keyword in payment_keywords) and intent["confidence"] < 0.8:
+        intent["type"] = "create_subscription_payment"
+        intent["confidence"] = 0.8
+
+    # 9.1. Отмена подписки
+    cancel_keywords = ["отменить подписку", "отмена подписки", "прекратить подписку"]
+    if any(keyword in message_lower for keyword in cancel_keywords) and intent["confidence"] < 0.8:
+        intent["type"] = "cancel_subscription"
+        intent["confidence"] = 0.8
+
+    # 10. Обновление профиля - расширенные паттерны
+    profile_keywords = [
+        "живу в", "работаю в", "интересуюсь", "мои навыки", "мои цели",
+        "я из", "работаю", "увлекаюсь", "мои интересы", "мои навыки"
+    ]
+    if any(keyword in message_lower for keyword in profile_keywords) and intent["confidence"] < 0.7:
         intent["type"] = "update_profile"
         intent["confidence"] = 0.7
+        # Парсим информацию о профиле
+        if "живу в" in message_lower or "я из" in message_lower:
+            city_match = re.search(r'(?:живу в|я из)\s+(.+?)(?:\s|$|,)', message_lower, re.IGNORECASE)
+            if city_match:
+                intent["params"]["city"] = city_match.group(1).strip().title()
+        if "интересуюсь" in message_lower or "увлекаюсь" in message_lower or "мои интересы" in message_lower:
+            interests_match = re.search(r'(?:интересуюсь|увлекаюсь|мои интересы)\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            if interests_match:
+                interests = interests_match.group(1).strip()
+                # Replace " и " with ", "
+                interests = re.sub(r'\s+и\s+', ', ', interests)
+                intent["params"]["interests"] = interests
+        if "работаю" in message_lower or "работаю в" in message_lower:
+            company_match = re.search(r'работаю\s+(?:в\s+)?(\w+)', message_lower, re.IGNORECASE)
+            if company_match:
+                intent["params"]["company"] = company_match.group(1)
+        if "мои навыки" in message_lower:
+            skills_match = re.search(r'мои навыки\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            if skills_match:
+                intent["params"]["skills"] = skills_match.group(1).strip()
+        if "мои цели" in message_lower:
+            goals_match = re.search(r'мои цели\s+(.+?)(?:\s|$)', message_lower, re.IGNORECASE)
+            if goals_match:
+                intent["params"]["goals"] = goals_match.group(1).strip()
+
+    # 10.1. Обновление времени и timezone
+    time_keywords = ["мое время", "текущее время", "сейчас время", "время"]
+    if any(keyword in message_lower for keyword in time_keywords):
+        # Проверяем, что это именно установка времени, а не вопрос
+        time_match = re.search(r'(\d{1,2}:\d{2})', message_lower)
+        if time_match and intent["confidence"] < 0.7:
+            intent["type"] = "update_profile"
+            intent["confidence"] = 0.7
+            intent["params"]["current_time"] = time_match.group(1)
+
+    timezone_keywords = ["часовой пояс", "timezone", "временная зона"]
+    if any(keyword in message_lower for keyword in timezone_keywords) and intent["confidence"] < 0.7:
+        timezone_match = re.search(r'(europe/\w+|utc[+-]\d+|gmt[+-]\d+)', message_lower, re.IGNORECASE)
+        if timezone_match:
+            intent["type"] = "update_profile"
+            intent["confidence"] = 0.7
+            intent["params"]["timezone"] = timezone_match.group(1)
+        # Также проверяем случай, когда timezone указан без ключевых слов
+        elif "europe" in message_lower or "utc" in message_lower or "gmt" in message_lower:
+            tz_match = re.search(r'(europe/\w+|utc[+-]\d+|gmt[+-]\d+)', message_lower, re.IGNORECASE)
+            if tz_match:
+                intent["type"] = "update_profile"
+                intent["confidence"] = 0.7
+                intent["params"]["timezone"] = tz_match.group(1)
         # Парсим информацию о профиле
         if "живу в" in message_lower:
             city_match = re.search(r'живу в\s+(.+?)(?:\s|$|,)', message_lower, re.IGNORECASE)
@@ -180,7 +354,11 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
 
     # 🔍 ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ: проверяем, должен ли был AI вызвать tool calls
     intent = classify_user_intent(message, mentions_str)
-    should_have_tool_calls = intent["type"] in ["add_task", "complete_task", "delegate_task", "list_tasks", "find_partners", "update_profile", "delete_all_tasks"]
+    should_have_tool_calls = intent["type"] in [
+        "add_task", "complete_task", "delegate_task", "list_tasks", "find_partners", 
+        "update_profile", "delete_all_tasks", "delete_task", "edit_task",
+        "check_subscription", "create_payment"
+    ]
     
     # ЕСЛИ запрос требует действия И AI не вызвал tool calls - применяем fallback
     if should_have_tool_calls and intent["confidence"] >= 0.7:
@@ -265,6 +443,48 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
                 })
 
             elif intent["type"] == "delete_task":
+                result = delete_task(
+                    task_id=intent["params"].get("task_id"),
+                    task_title=intent["params"].get("task_title"),
+                    user_id=user_id
+                )
+                fallback_actions.append({
+                    "function": "delete_task",
+                    "result": result,
+                    "reason": "AI не удалил задачу"
+                })
+
+            elif intent["type"] == "edit_task":
+                result = edit_task(
+                    task_id=intent["params"].get("task_id"),
+                    title=intent["params"].get("title"),
+                    description=intent["params"].get("description"),
+                    reminder_time=intent["params"].get("reminder_time"),
+                    user_id=user_id
+                )
+                fallback_actions.append({
+                    "function": "edit_task",
+                    "result": result,
+                    "reason": "AI не изменил задачу"
+                })
+
+            elif intent["type"] == "check_subscription":
+                result = check_subscription_status(user_id=user_id)
+                fallback_actions.append({
+                    "function": "check_subscription_status",
+                    "result": result,
+                    "reason": "AI не проверил статус подписки"
+                })
+
+            elif intent["type"] == "create_payment":
+                result = create_subscription_payment(user_id=user_id)
+                fallback_actions.append({
+                    "function": "create_subscription_payment",
+                    "result": result,
+                    "reason": "AI не создал платеж"
+                })
+
+            elif intent["type"] == "delete_all_tasks":
                 result = delete_task(
                     task_id=intent["params"].get("task_id"),
                     task_title=intent["params"].get("task_title"),
@@ -768,6 +988,26 @@ def get_system_prompt():
 - БЕЗ ФОРМАТИРОВАНИЯ: пиши обычным текстом без звездочек, подчеркиваний, курсива
 - Адаптируйся под стиль пользователя: если он формальный — будь формальным, если casual — casual
 - Будь максимально подробным и полезным в каждом ответе
+
+ПРИНЦИПЫ ПОНИМАНИЯ КОНТЕКСТА:
+1. УЧИТЫВАЙ ПРЕДЫДУЩИЕ СООБЩЕНИЯ: Если пользователь ссылается на "эту задачу", "последнюю", "ту" - используй контекст разговора
+2. ПОМНИ ПОСЛЕДНИЕ ДЕЙСТВИЯ: Если только что создали задачу, следующие сообщения могут относиться к ней
+3. АНАЛИЗИРУЙ ЦЕПОЧКИ: "Добавь задачу" -> "Через час" -> "Напомни" - это одна задача с временем
+4. КОНТЕКСТУАЛЬНЫЕ ССЫЛКИ: "Удали её" после показа задач означает удалить последнюю упомянутую
+5. ВРЕМЕННЫЕ ССЫЛКИ: "Завтра" относится к следующему дню от текущего времени пользователя
+
+ПРАВИЛА ОБРАБОТКИ ЗАПРОСОВ:
+- ЕСЛИ запрос неоднозначен → ЗАДАЙ УТОЧНЯЮЩИЙ ВОПРОС вместо угадывания
+- ЕСЛИ пользователь повторяет запрос → попробуй другой подход или уточни
+- ЕСЛИ запрос касается времени → учитывай timezone пользователя
+- ЕСЛИ запрос о задачах → сначала list_tasks() для актуальной информации
+- ЕСЛИ запрос о профиле → учитывай уже известную информацию
+
+КОНТЕКСТНЫЕ ПРИМЕРЫ:
+• После "Покажи задачи": "Удали 1" → delete_task(task_id=1)
+• После "Добавь задачу": "Через 2 часа" → edit_task(reminder_time="через 2 часа")
+• "Живу в Москве" + "Работаю в IT" → update_profile(city="Москва", company="IT")
+• "Найди людей" + "Интересуюсь бегом" → find_partners() с учетом интересов
 """
 
 
@@ -2974,6 +3214,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 user_id=user_id,
                                                 session=None
                                             )
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "edit_task":
+                                            result = edit_task(
+                                                task_id=args.get("task_id"),
+                                                title=args.get("title"),
+                                                description=args.get("description"),
+                                                reminder_time=args.get("reminder_time"),
+                                                user_id=user_id,
+                                                session=None
+                                            )
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "check_subscription_status":
+                                            result = check_subscription_status(user_id=user_id)
+                                            tool_results.append({"function": func_name, "result": result})
+                                        
+                                        elif func_name == "create_subscription_payment":
+                                            result = create_subscription_payment(user_id=user_id)
                                             tool_results.append({"function": func_name, "result": result})
                                         
                                         else:
