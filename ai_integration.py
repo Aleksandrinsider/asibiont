@@ -3018,38 +3018,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         if not content:
                             content = "Хорошо, продолжим работу!"
                     
-                    # Сохраняем взаимодействие в базу данных для отображения в панели
-                    if user_id:
-                        print(f"[DEBUG] Starting DB save for user {user_id}")  # DEBUG
-                        try:
-                            from models import Session, User, Interaction
-                            save_session = Session()
-                            user_obj = save_session.query(User).filter_by(telegram_id=user_id).first()
-                            if user_obj:
-                                print(f"[DEBUG] Found user object")  # DEBUG
-                                # Сохраняем сообщение пользователя
-                                user_interaction = Interaction(
-                                    user_id=user_obj.id,
-                                    message_type='user',
-                                    content=original_message  # Используем оригинальное сообщение с @mentions
-                                )
-                                save_session.add(user_interaction)
-                                
-                                # Сохраняем ответ AI
-                                ai_interaction = Interaction(
-                                    user_id=user_obj.id,
-                                    message_type='agent',
-                                    content=content
-                                )
-                                save_session.add(ai_interaction)
-                                save_session.commit()
-                                logger.info(f"Saved interaction to DB for user {user_id}")
-                            save_session.close()
-                            print(f"[DEBUG] DB save completed")  # DEBUG
-                        except Exception as e:
-                            logger.error(f"Failed to save interaction: {e}")
-                            print(f"[DEBUG] Error saving to DB: {e}")  # DEBUG
-                    
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
                     print(f"[DEBUG] About to return content: '{content}'")  # DEBUG

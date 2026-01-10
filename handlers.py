@@ -275,7 +275,7 @@ async def chat_handler(message: Message):
         else:
             logger.warning("Redis client not initialized, context will not persist")
         response = await chat_with_ai(message.text, context, user_id)
-        logger.debug(f"AI response generated for user {user_id}")
+        logger.debug(f"AI response generated for user {user_id}: '{response[:100]}...'")
         # Сохранить контекст для продолжения
         context.append({"user": message.text, "agent": response})
         if len(context) > 10:
@@ -290,12 +290,16 @@ async def chat_handler(message: Message):
         else:
             logger.warning("Redis client not initialized, context not saved")
         
-        try:
-            await message.bot.send_message(message.chat.id, response)
-            logger.info(f"Response sent successfully to user {user_id}")
-        except Exception as e:
-            logger.error(f"Error sending message to {message.chat.id}: {e}")
-            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при отправке ответа.")
+        if response and response.strip():
+            try:
+                await message.bot.send_message(message.chat.id, response.strip())
+                logger.info(f"Response sent successfully to user {user_id}")
+            except Exception as e:
+                logger.error(f"Error sending message to {message.chat.id}: {e}")
+                await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при отправке ответа.")
+        else:
+            logger.warning(f"Empty response from AI for user {user_id}, sending error message")
+            await message.bot.send_message(message.chat.id, "Извините, не удалось сгенерировать ответ. Попробуйте переформулировать вопрос.")
         # Записать взаимодействие для проактивных проверок
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -303,7 +307,10 @@ async def chat_handler(message: Message):
             from models import Interaction
             interaction = Interaction(user_id=user.id, message_type='user', content=message.text)
             session.add(interaction)
-            interaction = Interaction(user_id=user.id, message_type='ai', content=response)
+            if response and response.strip():
+                interaction = Interaction(user_id=user.id, message_type='ai', content=response.strip())
+            else:
+                interaction = Interaction(user_id=user.id, message_type='ai', content="Извините, не удалось сгенерировать ответ.")
             session.add(interaction)
             session.commit()
         session.close()
