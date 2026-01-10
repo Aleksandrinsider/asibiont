@@ -87,6 +87,16 @@ def classify_user_intent(message, mentions_str):
         intent["type"] = "delete_all_tasks"
         intent["confidence"] = 0.9
 
+    # Удаление конкретной задачи
+    delete_specific_keywords = ["удали эту задачу", "удалить задачу", "удали задачу"]
+    if any(keyword in message_lower for keyword in delete_specific_keywords):
+        intent["type"] = "delete_task"
+        intent["confidence"] = 0.8
+        # Извлекаем ID задачи из контекста или сообщения
+        task_id_match = re.search(r'(\d+)', message_lower)
+        if task_id_match:
+            intent["params"]["task_id"] = int(task_id_match.group(1))
+
     # 6. Поиск людей
     find_keywords = ["найди людей", "похожие интересы", "с кем пообщаться", "рекомендуй контакты"]
     if any(keyword in message_lower for keyword in find_keywords):
@@ -252,6 +262,18 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
                     "function": "find_partners",
                     "result": result,
                     "reason": "AI не выполнил поиск партнеров"
+                })
+
+            elif intent["type"] == "delete_task":
+                result = delete_task(
+                    task_id=intent["params"].get("task_id"),
+                    task_title=intent["params"].get("task_title"),
+                    user_id=user_id
+                )
+                fallback_actions.append({
+                    "function": "delete_task",
+                    "result": result,
+                    "reason": "AI не удалил задачу"
                 })
 
             elif intent["type"] == "delete_all_tasks":
@@ -590,6 +612,7 @@ def get_system_prompt():
 • "Показать/список задач" → list_tasks()
 • "Сделал X" → complete_task(task_title="X")
 • "Удали все" → delete_all_tasks()
+• "Удали задачу X" → delete_task(task_title="X")
 • "@user сделай X" → delegate_task(title="X", delegated_to_username="@user")
 • "Найди людей" → find_partners()
 • "Живу в X, увлекаюсь Y" → update_profile(city="X", interests="Y")
@@ -600,6 +623,7 @@ def get_system_prompt():
 • "Показать список задач" → list_tasks()
 • "Сделал позвонить маме" → complete_task(task_title="позвонить маме")
 • "Удали все мои задачи" → delete_all_tasks()
+• "Удали задачу позвонить маме" → delete_task(task_title="позвонить маме")
 • "@ivan сделай отчет до завтра 10:00" → delegate_task(title="сделай отчет", delegated_to_username="@ivan", reminder_time="завтра в 10:00")
 • "Найди людей с похожими интересами" → find_partners(interests="интересы из профиля")
 • "Живу в Москве, работаю в IT" → update_profile(city="Москва", company="IT")
@@ -922,19 +946,103 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         logger.info(f"[ADD_TASK] Session not closed, returning: {result_msg}")
     return result_msg
 
-def list_tasks(user_id=None, session=None):
-    from models import Session, Task
+def delete_task(task_id=None, task_title=None, user_id=None, session=None):
+    """Delete a specific task by ID or title"""
+    from models import Session, Task, User
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+        
+        task = None
+        if task_id:
+            try:
+                task_id_int = int(task_id)
+                task = session.query(Task).filter(
+                    Task.id == task_id_int,
+                    Task.user_id == user.id
+                ).first()
+            except (ValueError, TypeError):
+                pass
+        
+        if not task and task_title:
+            # Try to find by title (case-insensitive partial match)
+            task = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.title.ilike(f'%{task_title}%')
+            ).first()
+        
+        if not task:
+            if close_session:
+                session.close()
+            return "Задача не найдена."
+        
+        # Delete the task
+        session.delete(task)
+        session.commit()
+        
+        # Update profile analytics
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile and profile.total_tasks_created:
+            profile.total_tasks_created = max(0, (profile.total_tasks_created or 0) - 1)
+            session.commit()
+        
         if close_session:
             session.close()
-        return "Пользователь не найден."
-    tasks = session.query(Task).filter_by(user_id=user.id).all()
+        return f"Задача '{task.title}' удалена."
+    
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка удаления задачи: {str(e)}"
+
+def delete_all_tasks(user_id=None, session=None):
+    """Delete all tasks for a user"""
+    from models import Session, Task, User, UserProfile
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+        
+        # Count tasks before deletion
+        task_count = session.query(Task).filter_by(user_id=user.id).count()
+        
+        # Delete all tasks
+        session.query(Task).filter_by(user_id=user.id).delete()
+        session.commit()
+        
+        # Reset profile analytics
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile:
+            profile.total_tasks_created = 0
+            profile.completed_tasks = 0
+            profile.skipped_tasks = 0
+            session.commit()
+        
+        if close_session:
+            session.close()
+        return f"Удалено {task_count} задач."
+    
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка удаления задач: {str(e)}"
     
     # Get user timezone
     user_tz = pytz.UTC
@@ -948,8 +1056,20 @@ def list_tasks(user_id=None, session=None):
     user_now = base_now.astimezone(user_tz)
     
     if tasks:
-        task_list = []
+        # Filter out tasks overdue by more than 30 days
+        active_tasks = []
         for t in tasks:
+            if t.status == 'pending' and t.reminder_time:
+                if t.reminder_time.tzinfo is None:
+                    reminder_utc = pytz.UTC.localize(t.reminder_time)
+                else:
+                    reminder_utc = t.reminder_time
+                if reminder_utc < base_now - timedelta(days=30):
+                    continue  # Skip very old overdue tasks
+            active_tasks.append(t)
+        
+        task_list = []
+        for t in active_tasks:
             title = t.title
             # Add delegation context to title
             if t.delegated_to_username:
