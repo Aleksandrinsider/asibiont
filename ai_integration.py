@@ -2526,7 +2526,7 @@ def find_partners(user_id=None, session=None):
         # Добавляем предложения совместных идей на основе задач
         joint_ideas = []
         for p in partners[:3]:
-            if p in partner_scores:
+            if user_profile and p in partner_scores:
                 score, matched = partner_scores[p]
                 # Если есть совпадение по задачам, предлагаем совместную идею
                 task_matches = [m for m in matched if m.startswith("совместные задачи")]
@@ -4036,11 +4036,12 @@ def list_tasks(user_id=None, session=None):
             return "Пользователь не найден"
 
         # Получить задачи пользователя или делегированные ему
-        tasks = (
-            session.query(Task)
-            .filter(or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username)))
-            .all()
-        )
+        query = session.query(Task).filter(Task.user_id == user.id)
+        if user.username:
+            query = query.union(
+                session.query(Task).filter(Task.delegated_to_username.ilike(user.username))
+            )
+        tasks = query.all()
 
         if not tasks:
             return "У вас нет задач. Добавьте первую задачу - просто напишите что нужно сделать и когда!"
