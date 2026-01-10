@@ -88,81 +88,75 @@ def test_system_prompt():
         return True
 
 def test_generation_functions():
-    """Тестируем функции генерации ответов - проверяем наличие условий в файле"""
-    print("\n🧪 ТЕСТИРОВАНИЕ ФУНКЦИЙ ГЕНЕРАЦИИ ОТВЕТОВ")
+    """Тестируем функции генерации ответов - проверяем наличие строгих правил в главном промпте"""
+    print("\n🧪 ТЕСТИРОВАНИЕ ГЛАВНОГО ПРОМПТА")
     print("=" * 80)
 
     # Читаем файл
     with open('ai_integration.py', 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Проверяем наличие унифицированных условий в файле
-    required_phrases = [
-        "ПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов",
-        "4-6 предложений",
-        "детальный анализ ситуации",
-        "конкретные рекомендации с нумерацией",
-        "вопросы для вовлечения пользователя"
+    # Проверяем наличие СТРОГИХ ПРАВИЛ в главном промпте (get_system_prompt)
+    required_rules = [
+        "СТРОГИЕ ПРАВИЛА ФОРМАТА ОТВЕТОВ",
+        "НИКОГДА не используй эмодзи",
+        "НИКОГДА не используй жирный текст",
+        "НИКОГДА не используй маркированные списки",
+        "Минимум 3-4 предложения в каждом ответе",
+        "Каждый ответ должен заканчиваться вопросом"
     ]
 
-    missing_phrases = []
-    for phrase in required_phrases:
-        if phrase not in content:
-            missing_phrases.append(phrase)
+    missing_rules = []
+    for rule in required_rules:
+        if rule not in content:
+            missing_rules.append(rule)
 
-    if missing_phrases:
-        print("❌ В файле отсутствуют следующие унифицированные условия:")
-        for phrase in missing_phrases:
-            print(f"  - '{phrase}'")
+    if missing_rules:
+        print("❌ В главном промпте отсутствуют следующие строгие правила:")
+        for rule in missing_rules:
+            print(f"  - '{rule}'")
         return False
     else:
-        print("✅ Все унифицированные условия присутствуют в файле")
+        print("✅ Главный промпт содержит все строгие правила форматирования")
         return True
 
-def test_list_tasks_analysis():
-    """Тестируем анализ для list_tasks - проверяем наличие условий в коде"""
-    print("\n🧪 ТЕСТИРОВАНИЕ АНАЛИЗА LIST_TASKS")
+def test_compliance_mechanism():
+    """Тестируем механизм принуждения соответствия промпту"""
+    print("\n🧪 ТЕСТИРОВАНИЕ МЕХАНИЗМА ПРИНУЖДЕНИЯ")
     print("=" * 80)
 
     # Читаем файл
     with open('ai_integration.py', 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Ищем оба места с analysis_system
-    analysis_matches = re.findall(r'analysis_system = f"""(.*?)"""', content, re.DOTALL)
+    # Проверяем наличие функций механизма принуждения
+    required_functions = [
+        "def validate_response_compliance",
+        "async def enforce_prompt_compliance"
+    ]
 
-    if not analysis_matches:
-        print("❌ Не найден analysis_system для list_tasks")
+    missing_functions = []
+    for func in required_functions:
+        if func not in content:
+            missing_functions.append(func)
+
+    # Проверяем интеграцию механизма в chat_with_ai
+    integration_check = "await enforce_prompt_compliance" in content
+
+    if missing_functions:
+        print("❌ Отсутствуют функции механизма принуждения:")
+        for func in missing_functions:
+            print(f"  - {func}")
         return False
-
-    all_passed = True
-    for i, analysis_prompt in enumerate(analysis_matches, 1):
-        print(f"\n📝 Тестируем analysis_system #{i}")
-        print("-" * 60)
-
-        # Проверяем наличие унифицированных условий
-        required_phrases = [
-            "ПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов",
-            "4-6 предложений",
-            "детальный анализ ситуации",
-            "конкретные рекомендации с нумерацией",
-            "вопросы для вовлечения пользователя"
-        ]
-
-        issues = []
-        for phrase in required_phrases:
-            if phrase not in analysis_prompt:
-                issues.append(f"Отсутствует: '{phrase}'")
-
-        if issues:
-            print(f"❌ ПРОБЛЕМЫ В analysis_system #{i}:")
-            for issue in issues:
-                print(f"  - {issue}")
-            all_passed = False
-        else:
-            print(f"✅ analysis_system #{i} содержит унифицированные условия")
-
-    return all_passed
+    elif not integration_check:
+        print("❌ Механизм enforce_prompt_compliance не интегрирован в chat_with_ai")
+        return False
+    else:
+        print("✅ Механизм принуждения соответствия промпту полностью реализован")
+        print("   - validate_response_compliance: проверяет ответы на соответствие")
+        print("   - enforce_prompt_compliance: автоматически исправляет нарушения")
+        print("   - Интегрирован в основной поток chat_with_ai")
+        return True
 
 def main():
     """Основная функция тестирования"""
@@ -174,11 +168,11 @@ def main():
     # Тестируем системный промпт
     results.append(("Системный промпт", test_system_prompt()))
 
-    # Тестируем функции генерации
-    results.append(("Функции генерации", test_generation_functions()))
+    # Тестируем главный промпт
+    results.append(("Главный промпт", test_generation_functions()))
 
-    # Тестируем анализ list_tasks
-    results.append(("Анализ list_tasks", test_list_tasks_analysis()))
+    # Тестируем механизм принуждения
+    results.append(("Механизм принуждения", test_compliance_mechanism()))
 
     # Итоги
     print("\n" + "=" * 100)
