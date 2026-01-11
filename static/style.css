@@ -589,6 +589,10 @@ body {
     line-height: 1.4;
 }
 
+.context-item p.support-link {
+    margin: 0 0 8px 0;
+}
+
 .people-section {
     padding: 12px;
     border: none;
@@ -1398,12 +1402,6 @@ body {
     align-items: center;
     gap: 6px;
 }
-
-.support-link {
-    margin: 0;
-    padding: 0;
-}
-
 /* Avatar fallback styles */
 .avatar-fallback {
     display: none;

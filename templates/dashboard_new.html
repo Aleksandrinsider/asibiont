@@ -726,10 +726,13 @@
                 
                 // Добавляем ссылку на поддержку, если её нет
                 if (!content.querySelector('.support-link')) {
-                    const supportP = document.createElement('p');
-                    supportP.innerHTML = 'Поддержка: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #068487; text-decoration: none;">@aleksandrinsider</a>';
-                    supportP.className = 'support-link';
-                    content.appendChild(supportP);
+                    const contextItem = content.querySelector('.context-item');
+                    if (contextItem) {
+                        const supportP = document.createElement('p');
+                        supportP.innerHTML = 'Поддержка: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #068487; text-decoration: none;">@aleksandrinsider</a>';
+                        supportP.className = 'support-link';
+                        contextItem.appendChild(supportP);
+                    }
                 }
             } else {
                 content.style.display = 'none';
@@ -1586,10 +1589,13 @@
                 // Добавляем ссылку на поддержку при загрузке, если профиль раскрыт
                 setTimeout(() => {
                     if (!profileContent.querySelector('.support-link')) {
-                        const supportP = document.createElement('p');
-                        supportP.innerHTML = 'Поддержка: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #068487; text-decoration: none;">@aleksandrinsider</a>';
-                        supportP.className = 'support-link';
-                        profileContent.appendChild(supportP);
+                        const contextItem = profileContent.querySelector('.context-item');
+                        if (contextItem) {
+                            const supportP = document.createElement('p');
+                            supportP.innerHTML = 'Поддержка: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #068487; text-decoration: none;">@aleksandrinsider</a>';
+                            supportP.className = 'support-link';
+                            contextItem.appendChild(supportP);
+                        }
                     }
                 }, 100);
             }
