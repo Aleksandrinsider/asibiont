@@ -98,6 +98,7 @@ class Subscription(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    telegram_username = Column(String(100))  # Telegram username for identification
     status = Column(String(50), default='inactive')  # active, inactive, expired
     plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
     start_date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))

@@ -58,6 +58,17 @@ def run_migrations():
         else:
             logger.info("Migration: activity_streak column already exists")
             
+        # Migration for subscriptions table
+        if 'subscriptions' in inspector.get_table_names():
+            sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+            if 'telegram_username' not in sub_columns:
+                logger.info("Adding telegram_username column to subscriptions table")
+                session.execute(text('ALTER TABLE subscriptions ADD COLUMN telegram_username VARCHAR(100)'))
+                session.commit()
+                logger.info("Migration: telegram_username column added successfully")
+            else:
+                logger.info("Migration: telegram_username column already exists")
+        
         session.close()
     except Exception as e:
         logger.error(f"Migration failed: {e}")
@@ -1048,8 +1059,12 @@ async def yookassa_webhook(request):
         if user:
             subscription = session.query(Subscription).filter_by(user_id=user.id).first()
             if not subscription:
-                subscription = Subscription(user_id=user.id)
+                subscription = Subscription(user_id=user.id, telegram_username=user.username)
                 session.add(subscription)
+            else:
+                # Update telegram_username if not set
+                if not subscription.telegram_username:
+                    subscription.telegram_username = user.username
             
             subscription.status = 'active'
             subscription.start_date = datetime.now(pytz.UTC)
@@ -2312,8 +2327,12 @@ async def test_payment_handler(request):
         if user:
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
             if not subscription:
-                subscription = Subscription(user_id=user.id)
+                subscription = Subscription(user_id=user.id, telegram_username=user.username)
                 session_db.add(subscription)
+            else:
+                # Update telegram_username if not set
+                if not subscription.telegram_username:
+                    subscription.telegram_username = user.username
             
             subscription.status = 'active'
             subscription.start_date = datetime.now(pytz.UTC)

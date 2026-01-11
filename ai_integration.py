@@ -4998,8 +4998,12 @@ def create_subscription_payment(user_id=None):
 
         # Создать или обновить подписку
         if not subscription:
-            subscription = Subscription(user_id=user.id)
+            subscription = Subscription(user_id=user.id, telegram_username=user.username)
             session.add(subscription)
+        else:
+            # Update telegram_username if not set
+            if not subscription.telegram_username:
+                subscription.telegram_username = user.username
 
         subscription.status = "pending_payment"
         subscription.start_date = datetime.now(pytz.UTC)

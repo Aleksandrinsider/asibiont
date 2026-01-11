@@ -83,6 +83,7 @@ def activate_subscription(user_id, plan='monthly'):
             
             new_sub = Subscription(
                 user_id=user.id,
+                telegram_username=user.username,
                 status='active',
                 plan=plan,
                 start_date=datetime.datetime.now(datetime.timezone.utc),
