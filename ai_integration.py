@@ -363,10 +363,46 @@ def classify_user_intent(message, mentions_str):
                 # Replace " и " with ", "
                 interests = re.sub(r"\s+и\s+", ", ", interests)
                 intent["params"]["interests"] = interests
-        if "работаю" in message_lower:
-            company_match = re.search(r"работаю\s+(?:в\s+)?(\w+)", message_lower, re.IGNORECASE)
             if company_match:
                 intent["params"]["company"] = company_match.group(1)
+
+    # 🎯 АНАЛИЗ ЭМОЦИЙ И СКРЫТЫХ ПОТРЕБНОСТЕЙ
+    emotion_keywords = {
+        "stress": ["не успеваю", "давит", "стресс", "паника", "давление", "много дел", "загружен"],
+        "tired": ["устал", "вымотан", "нет сил", "переутомился", "измотан"],
+        "frustrated": ["не получается", "сложно", "проблема", "затруднение", "не выходит"],
+        "overwhelmed": ["слишком много", "не справляюсь", "перегружен", "много всего"],
+        "motivated": ["загорелся", "вдохновлен", "мотивирован", "готов", "энтузиазм"],
+        "confused": ["не понимаю", "запутался", "неясно", "сомневаюсь"]
+    }
+    
+    detected_emotions = []
+    for emotion, keywords in emotion_keywords.items():
+        if any(keyword in message_lower for keyword in keywords):
+            detected_emotions.append(emotion)
+    
+    if detected_emotions:
+        intent["emotions"] = detected_emotions
+        # Повышаем уверенность если эмоции ясны
+        if intent["confidence"] < 0.6:
+            intent["confidence"] = 0.6
+    
+    # Анализ скрытых потребностей
+    need_keywords = {
+        "delegation": ["помоги", "сделай за меня", "поручи кому-то", "нужна помощь"],
+        "prioritization": ["что важнее", "приоритеты", "с чего начать", "главное"],
+        "organization": ["организовать", "структурировать", "систематизировать", "упорядочить"],
+        "motivation": ["мотивация", "вдохновение", "стимул", "заинтересовать"],
+        "time_management": ["время", "распределить время", "планирование времени"]
+    }
+    
+    detected_needs = []
+    for need, keywords in need_keywords.items():
+        if any(keyword in message_lower for keyword in keywords):
+            detected_needs.append(need)
+    
+    if detected_needs:
+        intent["needs"] = detected_needs
 
     return intent
 
@@ -905,8 +941,118 @@ async def enforce_prompt_compliance(response_text, intent_type, user_id, context
     return response_text
 
 
+def analyze_user_context_for_advice(user_id, message, context=None):
+    """
+    Глубокий анализ контекста пользователя для генерации персонализированных советов.
+    Возвращает структурированный анализ для использования в промпте.
+    """
+    from models import Session, User, UserProfile, Task
+    from datetime import datetime, timedelta
+    import pytz
+
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return {"error": "Пользователь не найден"}
+
+        analysis = {
+            "profile": {},
+            "tasks": {},
+            "patterns": {},
+            "context_insights": {},
+            "recommendations": {}
+        }
+
+        # 1. АНАЛИЗ ПРОФИЛЯ
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile:
+            analysis["profile"] = {
+                "city": profile.city or "не указан",
+                "company": profile.company or "не указана",
+                "position": profile.position or "не указана",
+                "skills": profile.skills or "не указаны",
+                "interests": profile.interests or "не указаны",
+                "goals": profile.goals or "не указаны",
+                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.skills, profile.interests, profile.goals] if field])
+            }
+
+        # 2. АНАЛИЗ ЗАДАЧ
+        all_tasks = session.query(Task).filter_by(user_id=user.id).all()
+        pending_tasks = [t for t in all_tasks if t.status == "pending"]
+        completed_tasks = [t for t in all_tasks if t.status == "completed"]
+
+        analysis["tasks"] = {
+            "total": len(all_tasks),
+            "pending": len(pending_tasks),
+            "completed": len(completed_tasks),
+            "completion_rate": len(completed_tasks) / max(len(all_tasks), 1),
+            "overdue": len([t for t in pending_tasks if t.reminder_time and (t.reminder_time.replace(tzinfo=pytz.UTC) if t.reminder_time.tzinfo is None else t.reminder_time) < datetime.now(pytz.UTC)]),
+            "delegated": len([t for t in all_tasks if t.delegated_to_username])
+        }
+
+        # 3. АНАЛИЗ ПАТТЕРНОВ
+        # Анализ тем задач
+        task_titles = [t.title.lower() for t in all_tasks]
+        themes = {
+            "development": sum(1 for title in task_titles if any(word in title for word in ["разработка", "код", "программирование", "dev", "backend", "frontend"])),
+            "meetings": sum(1 for title in task_titles if any(word in title for word in ["встреча", "совещание", "митинг", "meeting"])),
+            "documents": sum(1 for title in task_titles if any(word in title for word in ["документ", "отчет", "презентация", "документация"])),
+            "communication": sum(1 for title in task_titles if any(word in title for word in ["звонок", "позвонить", "написать", "ответить"])),
+            "learning": sum(1 for title in task_titles if any(word in title for word in ["изучить", "обучить", "курс", "тренинг"])),
+            "business": sum(1 for title in task_titles if any(word in title for word in ["инвестор", "стартап", "бизнес", "продажа", "клиент"]))
+        }
+
+        analysis["patterns"] = {
+            "main_themes": sorted(themes.items(), key=lambda x: x[1], reverse=True)[:3],
+            "task_frequency": len(all_tasks) / max((datetime.now() - user.created_at.replace(tzinfo=None)).days, 1),
+            "delegation_ratio": len([t for t in all_tasks if t.delegated_to_username]) / max(len(all_tasks), 1),
+            "overdue_ratio": analysis["tasks"]["overdue"] / max(analysis["tasks"]["pending"], 1)
+        }
+
+        # 4. АНАЛИЗ КОНТЕКСТА СООБЩЕНИЯ
+        message_lower = message.lower()
+        analysis["context_insights"] = {
+            "urgency_level": "high" if any(word in message_lower for word in ["срочно", "дедлайн", "завтра", "сегодня", "немедленно"]) else "normal",
+            "emotional_state": "stressed" if any(word in message_lower for word in ["стресс", "давление", "проблема", "застрял", "сложно"]) else
+                            "motivated" if any(word in message_lower for word in ["хочу", "заинтересован", "готов", "вдохновлен"]) else "neutral",
+            "request_type": "advice" if any(word in message_lower for word in ["как", "что делать", "совет", "помоги"]) else
+                          "action" if any(word in message_lower for word in ["сделай", "добавь", "удали", "обнови"]) else "info"
+        }
+
+        # 5. ПЕРСОНАЛИЗИРОВАННЫЕ РЕКОМЕНДАЦИИ
+        recommendations = []
+
+        # На основе профиля
+        if analysis["profile"].get("skills") and "python" in analysis["profile"]["skills"].lower():
+            recommendations.append("Использовать Python-библиотеки для автоматизации рутинных задач")
+
+        if analysis["profile"].get("company") and "tech" in analysis["profile"]["company"].lower():
+            recommendations.append("Внедрить agile-методологии в командную работу")
+
+        # На основе паттернов задач
+        if analysis["patterns"]["overdue_ratio"] > 0.3:
+            recommendations.append("Внедрить систему приоритизации задач (Eisenhower matrix)")
+
+        if analysis["patterns"]["delegation_ratio"] < 0.1:
+            recommendations.append("Начать делегировать рутинные задачи для фокуса на стратегических")
+
+        # На основе тем
+        main_theme = analysis["patterns"]["main_themes"][0][0] if analysis["patterns"]["main_themes"] else None
+        if main_theme == "development":
+            recommendations.append("Внедрить code review процесс и автоматизированное тестирование")
+        elif main_theme == "business":
+            recommendations.append("Создать систему отслеживания метрик бизнеса и регулярные отчеты")
+
+        analysis["recommendations"] = recommendations[:5]  # Ограничить до 5 рекомендаций
+
+        return analysis
+
+    finally:
+        session.close()
+
+
 def clean_technical_details(text):
-    """Удаляет технические детали из ответа AI"""
     if text is None:
         return ""
     if not isinstance(text, str):
@@ -1158,9 +1304,6 @@ def get_system_prompt():
 ПРИВЕТСТВИЕ:
 При приветствии: вызови list_tasks(), поприветствуй тепло, дай краткую сводку (просроченные, срочные, делегированные), задай 2-3 вопроса о планах и приоритетах, предложи найти людей с похожими интересами если есть интересы в профиле. Будь инициативным и вовлекающим. Всегда спрашивай: "Что планируешь сегодня?", "Есть ли срочные дела?", "Нужно ли обновить профиль?"
 
-ПРИОРИТЕТЫ:
-Всегда устанавливай приоритет для новых задач. Высокий — срочные дедлайны, средний — регулярные задачи, низкий — можно отложить. После add_task() сразу set_priority(). Предлагай пересмотреть приоритеты при просмотре списка.
-
 ФОРМУЛИРОВАНИЕ ЗАДАЧ:
 Если задача слишком общая — уточни детали: зачем, что ожидается, какой результат. Критерии хорошей задачи:
 1. Конкретное действие (глагол)
@@ -1271,7 +1414,7 @@ def get_system_prompt():
 """
 
 
-def get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory, context=None):
+def get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory, context=None, intent=None):
     """
     Создает расширенный system prompt на основе базового + дополнительные правила для текущего контекста
     """
@@ -1294,10 +1437,6 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += f"- Завтра: {(user_now + timedelta(days=1)).strftime('%Y-%m-%d')}\n"
     system_prompt += f"⚠️ КРИТИЧНО: При создании задач с относительным временем ('через 5 минут', 'завтра в 10:00') ОБЯЗАТЕЛЬНО используй СЕГОДНЯШНЮЮ дату {user_now.strftime('%Y-%m-%d')}, а НЕ даты из своих знаний (cutoff date December 2024)!\n\n"
     
-    system_prompt += "ТВОИ ОСНОВНЫЕ ФУНКЦИИ:\n"
-    system_prompt += "1. Управление задачами и напоминаниями\n"
-    system_prompt += "2. Помощь в поиске контактов и партнёров\n"
-    system_prompt += "3. Обновление профиля пользователя\n\n"
     system_prompt += "ПРАВИЛА ВЫЗОВА ФУНКЦИЙ:\n"
     system_prompt += "- '@username в сообщении' → ОБЯЗАТЕЛЬНО delegate_task()\n"
     system_prompt += "- 'сделал/выполнил [задача]' → complete_task()\n"
@@ -1307,7 +1446,11 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += "- 'покажи задачи' → list_tasks()\n"
     system_prompt += "- 'найди людей/партнёров' → find_partners()\n"
     system_prompt += "- 'живу в/работаю/интересы' → update_profile()\n\n"
-    system_prompt += "КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n\n"
+    system_prompt += "🚨 ВАЖНО: ДЛЯ ВОПРОСОВ О СОВЕТАХ НЕ ВЫЗЫВАЙ ФУНКЦИИ!\n"
+    system_prompt += "Если пользователь спрашивает 'что делать?', 'как?', 'совет', 'помоги', 'что посоветуешь' - ДАВАЙ ПРЯМЫЕ СОВЕТЫ, НЕ ВЫЗЫВАЙ TOOL CALLS!\n"
+    system_prompt += "Только для явных команд управления задачами вызывай функции.\n\n"
+    system_prompt += "КРИТИЧНО: НЕ ПРОСТО ОТВЕЧАЙ ТЕКСТОМ! ОБЯЗАТЕЛЬНО ВЫЗЫВАЙ СООТВЕТСТВУЮЩУЮ ФУНКЦИЮ!\n"
+    system_prompt += "(КРОМЕ СЛУЧАЕВ, КОГДА ПОЛЬЗОВАТЕЛЬ ПРОСИТ СОВЕТЫ ИЛИ РЕКОМЕНДАЦИИ)\n\n"
     system_prompt += "ПРИМЕРЫ:\n"
     system_prompt += "• '@ivan сделай отчет' → delegate_task(title='сделай отчет', delegated_to_username='@ivan')\n"
     system_prompt += "• 'сделал позвонить маме' → complete_task(task_title='позвонить маме')\n"
@@ -1318,79 +1461,141 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
     system_prompt += "• 'найди людей' → find_partners()\n"
     system_prompt += "• 'живу в Москве' → update_profile(city='Москва')\n\n"
 
-    # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ КРАТКИХ И ПРАКТИЧНЫХ ОТВЕТОВ
-    system_prompt += "\n\n📝 ОБЯЗАТЕЛЬНОЕ ПРАВИЛО КРАТКИХ ОТВЕТОВ:\n"
-    system_prompt += "⚠️ СТРОГО ЗАПРЕЩЕНО ДАВАТЬ ДЛИННЫЕ ОТВЕТЫ! ⚠️\n"
-    system_prompt += "МАКСИМУМ 1-3 АБЗАЦА в КАЖДОМ ответе!\n"
-    system_prompt += "КАЖДЫЙ ОТВЕТ ДОЛЖЕН БЫТЬ ПРАКТИЧНЫМ И УНИКАЛЬНЫМ!\n"
-    system_prompt += "НИКОГДА НЕ ДАВАЙ ВОДУ ИЛИ БАНАЛЬНОСТИ!\n"
-    system_prompt += "ЕСЛИ ОТВЕТ ДЛИННЫЙ - СОКРАТИ ДО СУТИ!\n\n"
-    system_prompt += "❌ ЗАПРЕЩЕННЫЕ ФРАЗЫ (НИКОГДА не используй):\n"
+    # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ ЕСТЕСТВЕННЫХ И ПОЛЕЗНЫХ ОТВЕТОВ
+    system_prompt += "\n\n📝 ПРАВИЛА ЕСТЕСТВЕННОГО ДИАЛОГА:\n"
+    system_prompt += "⚠️ БУДЬ ЧЕЛОВЕКОМ, А НЕ БОТОМ! ⚠️\n"
+    system_prompt += "Отвечай естественно, как опытный помощник, а не как машина со скриптом!\n"
+    system_prompt += "Адаптируй стиль под пользователя: будь энергичным с активными, спокойным с задумчивыми!\n"
+    system_prompt += "Используй эмпатию: замечай усталость, стресс, радость в сообщениях!\n"
+    system_prompt += "Будь кратким, но содержательным - максимум 2-3 предложения на ответ!\n\n"
+    system_prompt += "❌ ИЗБЕГАЙ ШАБЛОНОВ (НИКОГДА не используй):\n"
     system_prompt += "- 'Отлично, добавил задачу X. Что дальше?'\n"
     system_prompt += "- 'Готово! Что ещё?'\n"
     system_prompt += "- 'Задача создана. Чем ещё помочь?'\n"
     system_prompt += "- 'Ваши задачи: [список]'\n"
-    system_prompt += "- 'Найдено X человек'\n"
-    system_prompt += "- Любые банальные или водянистые ответы\n\n"
-    system_prompt += "✅ ПРИ ДОБАВЛЕНИИ ЗАДАЧИ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
-    system_prompt += "1. Подтверждение с точным временем\n"
-    system_prompt += "2. 1-2 конкретные практические совета\n"
-    system_prompt += "3. Один вопрос для уточнения\n\n"
-    system_prompt += "✅ ПРИ ПОКАЗЕ ЗАДАЧ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
-    system_prompt += "1. Краткий анализ каждой задачи\n"
-    system_prompt += "2. Приоритеты и дедлайны\n"
-    system_prompt += "3. Один вопрос о планах\n"
-    system_prompt += "5. Предложения по оптимизации\n\n"
-    system_prompt += "✅ ПРИ ЗАВЕРШЕНИИ ЗАДАЧ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
-    system_prompt += "1. Подтверждение выполнения\n"
-    system_prompt += "2. Анализ результатов\n"
-    system_prompt += "3. Предложения по следующим шагам\n"
-    system_prompt += "4. Вопросы о достигнутых целях\n"
-    system_prompt += "5. Предложения по новым задачам\n\n"
-    system_prompt += "✅ ПРИ ПОИСКЕ ПАРТНЁРОВ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
-    system_prompt += "1. Описание найденных людей\n"
-    system_prompt += "2. Общие интересы и цели\n"
-    system_prompt += "3. Предложения по взаимодействию\n"
-    system_prompt += "4. Вопросы о желаемом сотрудничестве\n"
-    system_prompt += "5. Альтернативные варианты поиска\n\n"
-    system_prompt += "✅ ПРИ ОБНОВЛЕНИИ ПРОФИЛЯ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
-    system_prompt += "1. Подтверждение изменений\n"
-    system_prompt += "2. Как это поможет в работе\n"
-    system_prompt += "3. Предложения по дополнению профиля\n"
-    system_prompt += "4. Вопросы о дополнительных интересах\n"
-    system_prompt += "5. Предложения по поиску партнёров\n\n"
-    system_prompt += "✅ ПРИ ПЕРЕНОСЕ ЗАДАЧ ОБЯЗАТЕЛЬНО ВКЛЮЧИ:\n"
-    system_prompt += "1. Подтверждение изменения времени\n"
-    system_prompt += "2. Причину переноса и анализ ситуации\n"
-    system_prompt += "3. Предложения по подготовке к новому времени\n"
-    system_prompt += "4. Вопросы о приоритетах и дедлайнах\n"
-    system_prompt += "5. Альтернативные варианты планирования\n\n"
-    system_prompt += "ПРИМЕР ПРАВИЛЬНОГО ОТВЕТА (максимум 1-3 абзаца):\n"
-    system_prompt += "'Добавил задачу \"Проверить почту\" с напоминанием на 11.01.2026 в 00:25. Настрой фильтры для срочных писем. Есть ли конкретные отправители, письма от которых важны?'\n\n"
-    system_prompt += "  * Задай 1 вопрос о планах\n"
-    system_prompt += "- Каждый ответ должен содержать: суть + 1-2 совета + 1 вопрос\n"
-    system_prompt += "- Будь активным собеседником, а не пассивным ботом!\n"
-    system_prompt += "\n⚠️ ПРИМЕРЫ ПРАВИЛЬНЫХ ОТВЕТОВ:\n"
-    system_prompt += "Добавление задачи: 'Добавил задачу Заказать продукты с напоминанием через 5 минут. Срочная покупка или на неделю? Что именно нужно купить?'\n"
-    system_prompt += "\n🔥 КРИТИЧЕСКИ ВАЖНО - ВОВЛЕЧЕНИЕ В ДИАЛОГ:\n"
-    system_prompt += "- КАЖДЫЙ ответ ОБЯЗАТЕЛЬНО заканчивай вопросом\n"
-    system_prompt += "- Анализируй текущий контекст и предлагай релевантные действия\n"
-    system_prompt += "- Используй данные профиля и задач для персональных рекомендаций\n"
-    system_prompt += "- Будь естественным - адаптируй стиль под ситуацию\n"
-    system_prompt += "- Замечай паттерны и предлагай оптимизации\n\n"
-    system_prompt += "🎯 ПРОАКТИВНЫЙ СБОР ИНФОРМАЦИИ О ПРОФИЛЕ:\n"
-    system_prompt += "- В ЛЮБОМ общении ОБЯЗАТЕЛЬНО предлагай обновить профиль если это улучшит работу\n"
-    system_prompt += "- При добавлении задач спрашивай о связанных интересах, городе, работе\n"
-    system_prompt += "- Если пользователь упоминает хобби/работу/город - СРАЗУ предлагай update_profile()\n"
-    system_prompt += "- Анализируй задачи для выявления интересов: спорт, еда, технологии, бизнес и т.д.\n"
-    system_prompt += "- При поиске контактов используй профиль для точных рекомендаций\n"
-    system_prompt += "- Спрашивай о приоритетах, мотивации, целях для лучшего понимания\n"
-    system_prompt += "- Предлагай дополнить профиль новыми категориями если это релевантно\n"
-    system_prompt += "- Будь настойчивым в сборе информации - это ключ к качественному сервису\n\n"
+    system_prompt += "- Любые банальные фразы\n\n"
+    system_prompt += "✅ ПРАВИЛЬНЫЕ ОТВЕТЫ ДОЛЖНЫ:\n"
+    system_prompt += "1. Подтверждать действие с конкретной пользой\n"
+    system_prompt += "2. Давать 1-2 персонализированных совета\n"
+    system_prompt += "3. Задавать открытый вопрос, ведущий к действию\n\n"
+    system_prompt += "✅ АНАЛИЗИРУЙ ЭМОЦИИ И КОНТЕКСТ:\n"
+    system_prompt += "- Если пользователь устал: предложи отдых или приоритезацию\n"
+    system_prompt += "- Если в стрессе: успокой и предложи разбить на шаги\n"
+    system_prompt += "- Если рад: поддержи энтузиазм и предложи развитие\n"
+    system_prompt += "- Анализируй паттерны задач для выявления скрытых потребностей\n\n"
+    system_prompt += "✅ ВЫЯВЛЕНИЕ ПОТРЕБНОСТЕЙ:\n"
+    system_prompt += "- Замечай упоминания проблем: 'не успеваю', 'забыл', 'сложно'\n"
+    system_prompt += "- Предлагай решения: делегирование, автоматизация, планирование\n"
+    system_prompt += "- Связывай с профилем: если в IT - предлагай тех-решения\n"
+    system_prompt += "- Задавай вопросы о мотивах: 'Почему это важно?', 'Что мешает?'\n\n"
+    system_prompt += "✅ ПЕРСОНАЛИЗАЦИЯ ПО ПРОФИЛЮ:\n"
+    system_prompt += "- Используй город для локальных советов\n"
+    system_prompt += "- Учитывай компанию/должность для релевантных идей\n"
+    system_prompt += "- Адаптируй под навыки и интересы\n"
+    system_prompt += "- Предлагай партнёров с похожими целями\n\n"
+
+    # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ИСПОЛЬЗОВАНИЯ АНАЛИЗА КОНТЕКСТА
+    system_prompt += "🧠 ИСПОЛЬЗОВАНИЕ АНАЛИЗА КОНТЕКСТА:\n"
+    system_prompt += "В user_memory есть раздел '📊 АНАЛИЗ КОНТЕКСТА' с детальной информацией о пользователе.\n"
+    system_prompt += "ОБЯЗАТЕЛЬНО используй эту информацию для персонализации советов:\n"
+    system_prompt += "- Если пользователь stressed - предлагай конкретные шаги по снижению стресса\n"
+    system_prompt += "- Если много просроченных задач - фокусируйся на приоритизации и дедлайнах\n"
+    system_prompt += "- Используй навыки пользователя для конкретных технических решений\n"
+    system_prompt += "- Адаптируй советы под основные темы задач пользователя\n"
+    system_prompt += "- Учитывай уровень заполнения профиля для рекомендаций по улучшению\n\n"
+
+    system_prompt += "💡 КОНКРЕТНЫЕ ПРАВИЛА ПО ТЕМАМ:\n"
+    system_prompt += "- Development: Предлагай конкретные инструменты (GitHub Actions, Docker, тестирование)\n"
+    system_prompt += "- Business: Фокус на метриках, презентациях, переговорах с конкретными шагами\n"
+    system_prompt += "- Meetings: Советы по подготовке agenda, follow-up, делегированию\n"
+    system_prompt += "- Learning: Конкретные курсы, ресурсы, план обучения с дедлайнами\n\n"
+
+    system_prompt += "🔥 ПРИМЕРЫ ХОРОШИХ ОТВЕТОВ:\n"
+    system_prompt += "Добавление: 'Добавил напоминание о встрече на завтра 10:00. В Москве пробки - учти время на дорогу. Кого ещё пригласить?'\n"
+    system_prompt += "Завершение: 'Отлично справился с отчётом! Теперь можно сосредоточиться на презентации. Что в приоритете на этой неделе?'\n"
+    system_prompt += "Совет: 'Вижу много задач по маркетингу. Попробуй делегировать аналитику - у тебя есть контакты в этой сфере.'\n\n"
+    system_prompt += "🎯 ПРОАКТИВНОЕ ВОВЛЕЧЕНИЕ:\n"
+    system_prompt += "- Всегда заканчивай вопросом, ведущим к развитию\n"
+    system_prompt += "- Предлагай неожиданные связи и возможности\n"
+    system_prompt += "- Мотивируй на новые шаги и цели\n"
+    system_prompt += "- Замечай возможности для оптимизации\n\n"
+
+    # 🎯 СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ СОВЕТОВ И РЕШЕНИЯ ПРОБЛЕМ
+    system_prompt += "🧠 ПРАВИЛА ДЛЯ СОВЕТОВ (ОБЯЗАТЕЛЬНО СОБЛЮДАТЬ):\n"
+    system_prompt += "1. КОНКРЕТНОСТЬ: Давай 3-5 конкретных actionable шагов, а не общие фразы\n"
+    system_prompt += "2. ПЕРСОНАЛИЗАЦИЯ: Учитывай навыки, город, компанию из профиля\n"
+    system_prompt += "3. ПРАКТИЧНОСТЬ: Предлагай реальные инструменты и методы\n"
+    system_prompt += "4. ВРЕМЕННЫЕ РАМКИ: Указывай сроки для каждого шага\n"
+    system_prompt += "5. РЕСУРСЫ: Предлагай конкретные контакты, инструменты, курсы\n"
+    system_prompt += "6. АЛЬТЕРНАТИВЫ: Давай 2-3 варианта решения проблемы\n"
+    system_prompt += "7. МЕТРИКИ: Предлагай способы измерения прогресса\n\n"
+
+    system_prompt += "❌ ИЗБЕГАЙ ШАБЛОННЫХ СОВЕТОВ:\n"
+    system_prompt += "- 'Разбей на шаги' - вместо этого: 'Создай чек-лист: 1) Собрать данные (30 мин), 2) Написать структуру (1 час)...'\n"
+    system_prompt += "- 'Делегируй' - вместо этого: 'Поручи @ivan аналитику - он специализируется на данных'\n"
+    system_prompt += "- 'Планируй лучше' - вместо этого: 'Используй метод Pomodoro: 25 мин работы + 5 мин отдыха'\n\n"
+
+    system_prompt += "✅ ПРИМЕРЫ КОНКРЕТНЫХ СОВЕТОВ:\n"
+    system_prompt += "• Вместо 'Найди инвесторов': '1) Подготовь питч-дек за 3 дня, 2) Посети TechCrunch Disrupt в Москве 15 февраля, 3) Свяжитесь с @startup_mentor из твоих контактов'\n"
+    system_prompt += "• Вместо 'Управляй командой': 'Введи ежедневные стендапы по 15 мин в 10:00, используй Trello для отслеживания прогресса, делегируй рутинные задачи junior-разработчикам'\n"
+    system_prompt += "• Вместо 'Мотивация команды': 'Организуй хакатон на выходных с призами, введи систему peer recognition в Slack, предложи гибкий график для лучших'\n\n"
+
+    # 🎯 ДОПОЛНИТЕЛЬНЫЕ СТРОГИЕ ПРАВИЛА ДЛЯ КАЧЕСТВА СОВЕТОВ
+    system_prompt += "🚫 СТРОГО ЗАПРЕЩЕНО:\n"
+    system_prompt += "- Давать общие советы типа 'попробуй', 'можешь', 'стоит'\n"
+    system_prompt += "- Игнорировать профиль пользователя\n"
+    system_prompt += "- Предлагать нереалистичные сроки или ресурсы\n"
+    system_prompt += "- Использовать шаблонные фразы\n\n"
+
+    system_prompt += "💡 ОБЯЗАТЕЛЬНО ВКЛЮЧИТЬ В КАЖДЫЙ СОВЕТ:\n"
+    system_prompt += "- Минимум 3 конкретных шага с временными рамками\n"
+    system_prompt += "- Ссылки на навыки/опыт пользователя\n"
+    system_prompt += "- Конкретные инструменты или ресурсы\n"
+    system_prompt += "- Способы измерения результатов\n"
+    system_prompt += "- Альтернативные варианты\n\n"
+
+    # 🎯 НОВЫЕ СТРОГИЕ ПРАВИЛА ПРОТИВ ШАБЛОНОВ
+    system_prompt += "🚨 АНТИ-ШАБЛОННЫЕ ПРАВИЛА (КРИТИЧНО ДЛЯ КАЧЕСТВА):\n"
+    system_prompt += "НИКОГДА НЕ ГОВОРИ:\n"
+    system_prompt += "- 'Давайте расставим приоритеты'\n"
+    system_prompt += "- 'Разбейте задачу на шаги'\n"
+    system_prompt += "- 'Попробуйте делегировать'\n"
+    system_prompt += "- 'Используйте инструменты'\n"
+    system_prompt += "- 'Планируйте лучше'\n"
+    system_prompt += "- 'Фокусируйтесь на'\n"
+    system_prompt += "- 'Рекомендую начать с'\n\n"
+
+    system_prompt += "🎯 СТРУКТУРА КАЧЕСТВЕННОГО СОВЕТА:\n"
+    system_prompt += "1. КОНКРЕТНЫЙ ПРОБЛЕМНЫЙ АНАЛИЗ (что именно не так)\n"
+    system_prompt += "2. 3-5 АКЦИОННЫХ ШАГОВ с инструментами и сроками\n"
+    system_prompt += "3. ПЕРСОНАЛИЗАЦИЯ под навыки/профиль пользователя\n"
+    system_prompt += "4. МЕТРИКИ ИЗМЕРЕНИЯ ПРОГРЕССА\n"
+    system_prompt += "5. АЛЬТЕРНАТИВНЫЕ ВАРИАНТЫ\n"
+    system_prompt += "6. ВОПРОС ДЛЯ ПРОДОЛЖЕНИЯ ДИАЛОГА\n\n"
+    system_prompt += "⚠️ КРИТИЧНО: КАЖДЫЙ СОВЕТ ДОЛЖЕН СОДЕРЖАТЬ:\n"
+    system_prompt += "- Минимум 3 конкретных шага с дедлайнами (завтра, через 3 дня, на этой неделе)\n"
+    system_prompt += "- Конкретные инструменты/ресурсы (GitHub, Slack, конкретные сайты)\n"
+    system_prompt += "- Ссылки на опыт пользователя из профиля\n"
+    system_prompt += "- Как измерить результат (метрики, показатели)\n"
+    system_prompt += "- 2-3 альтернативных подхода\n\n"
 
     system_prompt += f"\n\nВАЖНО ПРИ РАБОТЕ С ВРЕМЕНЕМ:\n- Текущее время: {current_time_str}\n- Всегда используй формат времени reminder_time в виде 'YYYY-MM-DD HH:MM' в параметрах tool call\n- Относительное время: 'завтра в 10:00', 'послезавтра в 15:00' и т.д."
 
     system_prompt += f"\n\n@MENTIONS: {mentions_str}\n🚨 ЕСЛИ ВИДИШЬ @username - ЭТО ДЕЛЕГИРОВАНИЕ! ВЫЗЫВАЙ delegate_task()!\n\nСПЕЦИАЛЬНЫЕ КОМАНДЫ:\n- Сообщение начинается с '@' → delegate_task()\n- 'Найди людей' → find_partners()\n- 'Удали все' → delete_all_tasks()"
+
+    # 🎯 ИНФОРМАЦИЯ ОБ ЭМОЦИЯХ И ПОТРЕБНОСТЯХ ПОЛЬЗОВАТЕЛЯ
+    if intent:
+        if "emotions" in intent and intent["emotions"]:
+            emotions_str = ", ".join(intent["emotions"])
+            system_prompt += f"\n\n🎭 ОБНАРУЖЕННЫЕ ЭМОЦИИ: {emotions_str.upper()}"
+            system_prompt += "\n- Адаптируй тон ответа под эмоции: успокой при стрессе, поддержи при усталости, мотивируй при мотивации"
+            system_prompt += "\n- Предлагай решения соответствующие эмоциям: отдых, помощь, поддержка"
+        
+        if "needs" in intent and intent["needs"]:
+            needs_str = ", ".join(intent["needs"])
+            system_prompt += f"\n\n🎯 ОБНАРУЖЕННЫЕ ПОТРЕБНОСТИ: {needs_str.upper()}"
+            system_prompt += "\n- Фокусируйся на этих потребностях в ответе"
+            system_prompt += "\n- Предлагай конкретные решения для выявленных нужд"
 
     system_prompt += user_memory
 
@@ -2505,56 +2710,6 @@ def delete_all_tasks(user_id=None):
         return "Произошла ошибка при удалении задач."
 
 
-def set_priority(task_id, priority, user_id=None):
-    from models import Session, Task
-
-    session = Session()
-
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        session.close()
-        return "Пользователь не найден."
-
-    # Поддержка частичного совпадения названия задачи
-    try:
-        task_id_int = int(task_id)
-        task = session.query(Task).filter_by(id=task_id_int).first()
-    except (ValueError, TypeError):
-        # Если task_id не число, ищем по названию с частичным совпадением
-        tasks = session.query(Task).filter(Task.user_id == user.id).all()
-        task = None
-        task_id_lower = str(task_id).lower()
-        for t in tasks:
-            if task_id_lower in t.title.lower():
-                task = t
-                break
-
-    if task:
-        # Проверить права доступа
-        has_access = False
-        if task.user_id == user.id:
-            has_access = True
-        elif task.delegated_to_username:
-            recipient_username = task.delegated_to_username.replace("@", "").lower()
-            if user.username and user.username.lower() == recipient_username:
-                has_access = True
-
-        if not has_access:
-            session.close()
-            return "У вас нет прав на изменение приоритета этой задачи."
-
-        if priority in ["high", "medium", "low"]:
-            task.priority = priority
-            session.commit()
-            result = f"Установлен приоритет '{priority}' для '{task.title}'."
-        else:
-            result = "Неверный приоритет. Используйте high, medium или low."
-    else:
-        result = "Задача не найдена."
-    session.close()
-    return result
-
-
 def get_task_details(task_id, user_id=None):
     from models import Session, Task
 
@@ -3357,6 +3512,7 @@ TOOLS = [
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     import re
+    import json
     from datetime import datetime, timezone, timedelta
     import pytz
 
@@ -3609,6 +3765,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
             db_session.close()
 
+        # Classify user intent
+        intent = classify_user_intent(clean_message, mentions_str)
+
+        # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
+        context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
+        if "error" not in context_analysis:
+            # Добавляем анализ в user_memory для использования в промпте
+            user_memory += f"\n\n📊 АНАЛИЗ КОНТЕКСТА:\n"
+            user_memory += f"Профиль заполнен на {context_analysis['profile'].get('filled_fields', 0)}/6 полей\n"
+            user_memory += f"Задачи: {context_analysis['tasks']['pending']} активных, {context_analysis['tasks']['completed']} выполнено\n"
+            user_memory += f"Основные темы: {', '.join([f'{theme}: {count}' for theme, count in context_analysis['patterns']['main_themes']])}\n"
+            user_memory += f"Эмоциональное состояние: {context_analysis['context_insights']['emotional_state']}\n"
+            user_memory += f"Уровень срочности: {context_analysis['context_insights']['urgency_level']}\n"
+            if context_analysis['recommendations']:
+                user_memory += f"Персональные рекомендации: {', '.join(context_analysis['recommendations'])}\n"
+
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
@@ -3618,7 +3790,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             user_username=user_username,
             mentions_str=mentions_str,
             user_memory=user_memory,
-            context=context
+            context=context,
+            intent=intent
         )
 
         # Проверяем контекст последней созданной задачи для edit_task
@@ -3644,13 +3817,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         user_message_with_context = message + last_task_context
         messages.append({"role": "user", "content": user_message_with_context})
 
+        # Определяем, является ли сообщение вопросом о совете
+        is_advice_question = any(word in clean_message.lower() for word in [
+            "что делать", "как", "совет", "помоги", "что посоветуешь", "как быть", 
+            "что предпринять", "какие шаги", "что делать с", "как решить",
+            "не знаю с чего начать", "с чего начать", "как начать", "что делать дальше",
+            "что делать если", "как лучше", "что посоветуешь", "какой совет",
+            "нужен совет", "посоветуй", "как поступить", "что делать в ситуации",
+            "как оптимизировать", "как улучшить", "как подготовиться", "как начать",
+            "с чего начать", "как эффективно", "что можно сделать", "как решить проблему"
+        ])
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
             "model": "deepseek-chat",
             "messages": messages,
             "tools": TOOLS,
-            "tool_choice": "auto",
+            "tool_choice": "none" if is_advice_question else "auto",
             "temperature": 0.3,
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
@@ -3705,105 +3889,110 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                             if tool_calls:
                                 print(f"[DEBUG] Tool calls found, processing...")  # DEBUG
-                                # Обработка tool calls
-                                tool_results = []
-                                for tool_call in tool_calls:
-                                    try:
-                                        func_name = tool_call["function"]["name"]
-                                        args = json.loads(tool_call["function"]["arguments"])
-                                        logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
+                                # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
+                                if is_advice_question:
+                                    print(f"[DEBUG] Ignoring tool_calls for advice question")  # DEBUG
+                                    tool_calls = None
+                                else:
+                                    # Обработка tool calls
+                                    tool_results = []
+                                    for tool_call in tool_calls:
+                                        try:
+                                            func_name = tool_call["function"]["name"]
+                                            args = json.loads(tool_call["function"]["arguments"])
+                                            logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
 
-                                        if func_name == "add_task":
-                                            logger.info(f"[AI TOOL CALL] add_task called with reminder_time: {args.get('reminder_time')}, current user_now: {user_now}")
-                                            result = add_task(
-                                                title=args.get("title", args.get("task_title", "Задача")),
-                                                description=args.get("description", ""),
-                                                reminder_time=args.get("reminder_time"),
-                                                user_id=user_id,
-                                                session=None,
-                                            )
-                                            tool_results.append({"function": func_name, "result": result})
+                                            if func_name == "add_task":
+                                                logger.info(f"[AI TOOL CALL] add_task called with reminder_time: {args.get('reminder_time')}, current user_now: {user_now}")
+                                                result = add_task(
+                                                    title=args.get("title", args.get("task_title", "Задача")),
+                                                    description=args.get("description", ""),
+                                                    reminder_time=args.get("reminder_time"),
+                                                    user_id=user_id,
+                                                    session=None,
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "complete_task":
-                                            result = complete_task(
-                                                task_id=args.get("task_id"),
-                                                task_title=args.get("task_title"),
-                                                user_id=user_id,
-                                                session=None,
-                                            )
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "complete_task":
+                                                result = complete_task(
+                                                    task_id=args.get("task_id"),
+                                                    task_title=args.get("task_title"),
+                                                    user_id=user_id,
+                                                    session=None,
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "list_tasks":
-                                            result = list_tasks(user_id=user_id, session=None)
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "list_tasks":
+                                                result = list_tasks(user_id=user_id, session=None)
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "find_partners":
-                                            result = find_partners(user_id=user_id, session=None)
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "find_partners":
+                                                result = find_partners(user_id=user_id, session=None)
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "update_profile":
-                                            result = update_profile(
-                                                city=args.get("city"),
-                                                company=args.get("company"),
-                                                position=args.get("position"),
-                                                interests=args.get("interests"),
-                                                user_id=user_id,
-                                                session=None,
-                                            )
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "update_profile":
+                                                result = update_profile(
+                                                    city=args.get("city"),
+                                                    company=args.get("company"),
+                                                    position=args.get("position"),
+                                                    interests=args.get("interests"),
+                                                    user_id=user_id,
+                                                    session=None,
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "delegate_task":
-                                            result = delegate_task(
-                                                title=args.get("title"),
-                                                delegated_to_username=args.get("delegated_to_username"),
-                                                user_id=user_id,
-                                                session=None,
-                                            )
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "delegate_task":
+                                                result = delegate_task(
+                                                    title=args.get("title"),
+                                                    delegated_to_username=args.get("delegated_to_username"),
+                                                    user_id=user_id,
+                                                    session=None,
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "delete_all_tasks":
-                                            result = delete_all_tasks(user_id=user_id, session=None)
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "delete_all_tasks":
+                                                result = delete_all_tasks(user_id=user_id, session=None)
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "delete_task":
-                                            result = delete_task(
-                                                task_id=args.get("task_id"),
-                                                task_title=args.get("task_title"),
-                                                user_id=user_id,
-                                                session=None,
-                                            )
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "delete_task":
+                                                result = delete_task(
+                                                    task_id=args.get("task_id"),
+                                                    task_title=args.get("task_title"),
+                                                    user_id=user_id,
+                                                    session=None,
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "edit_task":
-                                            result = edit_task(
-                                                task_id=args.get("task_id"),
-                                                title=args.get("title"),
-                                                description=args.get("description"),
-                                                reminder_time=args.get("reminder_time"),
-                                                user_id=user_id,
-                                                session=None,
-                                            )
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "edit_task":
+                                                result = edit_task(
+                                                    task_id=args.get("task_id"),
+                                                    title=args.get("title"),
+                                                    description=args.get("description"),
+                                                    reminder_time=args.get("reminder_time"),
+                                                    user_id=user_id,
+                                                    session=None,
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "check_subscription_status":
-                                            result = check_subscription_status(user_id=user_id)
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "check_subscription_status":
+                                                result = check_subscription_status(user_id=user_id)
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        elif func_name == "create_subscription_payment":
-                                            result = create_subscription_payment(user_id=user_id)
-                                            tool_results.append({"function": func_name, "result": result})
+                                            elif func_name == "create_subscription_payment":
+                                                result = create_subscription_payment(user_id=user_id)
+                                                tool_results.append({"function": func_name, "result": result})
 
-                                        else:
-                                            logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
+                                            else:
+                                                logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
+                                                tool_results.append(
+                                                    {"function": func_name, "result": f"Неизвестная функция: {func_name}"}
+                                                )
+
+                                        except Exception as e:
+                                            logger.error(f"[TOOL CALL] Error executing {func_name}: {e}")
                                             tool_results.append(
-                                                {"function": func_name, "result": f"Неизвестная функция: {func_name}"}
+                                                {"function": func_name, "result": f"Ошибка выполнения: {str(e)}"}
                                             )
-
-                                    except Exception as e:
-                                        logger.error(f"[TOOL CALL] Error executing {func_name}: {e}")
-                                        tool_results.append(
-                                            {"function": func_name, "result": f"Ошибка выполнения: {str(e)}"}
-                                        )
 
                                 # Генерируем естественный ответ на основе результатов tool calls
                                 if tool_results:
@@ -3925,6 +4114,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response"
                                     )
                                     return final_content
+                            else:
+                                # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
+                                pass
 
                     print(f"[DEBUG] Exited tool_calls if block")  # DEBUG
                     print(f"[DEBUG] After tool_calls block, about to check fallback")  # DEBUG
@@ -4519,7 +4711,7 @@ def list_tasks(user_id=None, session=None):
                     except:
                         pass
 
-                priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(task.priority, "")
+                priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(getattr(task, 'priority', None), "")
                 result += f"⏳ {priority_icon} {task.title}{reminder_info}\n"
             result += "\n"
 

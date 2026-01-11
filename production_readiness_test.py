@@ -112,7 +112,6 @@ class ProductionTester:
                     user_id=user.id,
                     title='Production Test Task',
                     description='Testing task creation in production environment',
-                    priority='high',
                     status='pending',
                     due_date=datetime.now() + timedelta(days=3)
                 )
@@ -192,7 +191,6 @@ class ProductionTester:
                     user_id=user.id,
                     title='Test Management Task',
                     description='Testing task management',
-                    priority='medium',
                     status='pending'
                 )
                 session.add(task)

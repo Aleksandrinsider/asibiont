@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import pytz
 import logging
 import json
-from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES
+from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_NO_SEND_END_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +298,7 @@ class ReminderService:
         finally:
             db.close()
     def schedule_proactive_checks(self):
-        """Планирование проактивных проверок каждые 30 минут"""
+        """Планирование проактивных проверок с динамическим интервалом"""
         from models import Session
         from models import User
         from apscheduler.triggers.interval import IntervalTrigger
@@ -317,17 +317,17 @@ class ReminderService:
                 
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
-                # Планируем проактивные проверки каждые 30 минут
+                # Планируем проактивные проверки с интервалом без задач (по умолчанию)
                 self.scheduler.add_job(
                     self.check_and_send_proactive,
                     trigger="cron",
-                    minute=f"*/{PROACTIVE_CHECK_INTERVAL_MINUTES}",
+                    minute=f"*/{PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES}",
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=job_id,
                     replace_existing=True
                 )
-                logger.debug(f"Scheduled proactive check for user {user.telegram_id}")
+                logger.debug(f"Scheduled proactive check for user {user.telegram_id} with {PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES}min interval")
         finally:
             db.close()
 
@@ -347,6 +347,17 @@ class ReminderService:
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             if not user:
+                return
+            
+            # Проверить время - не отправлять с 22:00 до 10:00 по времени пользователя
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            now_user_time = datetime.now(user_tz)
+            current_hour = now_user_time.hour
+            
+            # Проверить, находится ли текущее время в периоде запрета (22:00 - 10:00)
+            if PROACTIVE_NO_SEND_START_HOUR <= current_hour or current_hour < PROACTIVE_NO_SEND_END_HOUR:
+                # Время запрета, перепланировать следующий чек с правильным интервалом
+                await self._reschedule_proactive_check(user_id, has_tasks=False)  # Без задач, так как не проверяли
                 return
             
             # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
@@ -389,26 +400,46 @@ class ReminderService:
                 if now_utc <= reminder_time < next_60_min_utc:
                     tasks_in_60_min += 1
             
-            # Также проверить активные задачи с estimated_duration (пользователь может быть занят)
-            active_tasks = db.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status.in_(['pending', 'in_progress']),
-                Task.estimated_duration.isnot(None)
-            ).all()
-            
-            busy_time = 0
-            for task in active_tasks:
-                # Если задача создана недавно (последние 30 минут), учитывать её время
-                if task.created_at and (now_utc - task.created_at.replace(tzinfo=pytz.UTC)).total_seconds() < 1800:  # 30 мин
-                    busy_time += task.estimated_duration or 0
-            
-            # Если пользователь занят (больше 10 минут в ближайшие 60 мин), не отправлять
-            if tasks_in_60_min > 0 or busy_time > 10:
+            # Если есть задачи с reminder_time в ближайшие 60 минут, не отправлять проактивное сообщение
+            if tasks_in_60_min > 0:
+                await self._reschedule_proactive_check(user_id, has_tasks=True)
                 return
             
             if tasks_in_60_min == 0:
-                # Нет задач - отправить проактивное сообщение
+                # Нет задач на ближайший час - отправить проактивное сообщение, чтобы вернуть пользователя к активности
                 await self.send_proactive_message(user_id)
+                await self._reschedule_proactive_check(user_id, has_tasks=False)
+        finally:
+            db.close()
+
+    async def _reschedule_proactive_check(self, user_id: int, has_tasks: bool):
+        """Перепланирование следующей проактивной проверки с правильным интервалом"""
+        from models import Session
+        from models import User
+        
+        db = Session()
+        try:
+            user = db.query(User).filter(User.telegram_id == user_id).first()
+            if not user:
+                return
+            
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            job_id = f"proactive_{user.telegram_id}"
+            
+            # Выбрать интервал в зависимости от наличия задач
+            interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES if has_tasks else PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
+            
+            # Перепланировать джоб с новым интервалом
+            self.scheduler.add_job(
+                self.check_and_send_proactive,
+                trigger="cron",
+                minute=f"*/{interval_minutes}",
+                timezone=user_tz,
+                args=[user.telegram_id],
+                id=job_id,
+                replace_existing=True
+            )
+            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} with {interval_minutes}min interval (has_tasks={has_tasks})")
         finally:
             db.close()
 

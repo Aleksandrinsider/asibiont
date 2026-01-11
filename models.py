@@ -31,7 +31,6 @@ class Task(Base):
     reminder_sent = Column(Boolean, default=False)
     result_check_sent = Column(Boolean, default=False)
     estimated_duration = Column(Integer)  # in minutes
-    priority = Column(String(20), default='medium')  # high, medium, low
     delegated_by = Column(Integer, ForeignKey('users.id'))  # User who delegated the task
     delegated_to_username = Column(String(255))  # Username of the person who should do it
     delegation_status = Column(String(50), default=None)  # None, pending, accepted, rejected
