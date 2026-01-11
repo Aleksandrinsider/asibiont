@@ -48,6 +48,13 @@
                     <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px;">изменить</a>
                     <span id="header-time-display" style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
                 </span>
+                <div class="header-avatar-small" style="margin-left: 10px;">
+                    {% if user_avatar_url %}
+                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                    {% else %}
+                    <div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                    {% endif %}
+                </div>
                 <button onclick="logout()" class="logout-button">Выход</button>
                 {% endif %}
             </div>
@@ -114,17 +121,7 @@
                     </script>
                         {% if profile %}
                         <div class="context-item">
-                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                                {% if user_avatar_url %}
-                                <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0;">
-                                {% else %}
-                                <div style="width: 48px; height: 48px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
-                                {% endif %}
-                                <div>
-                                    <p style="margin: 0; font-weight: 600; color: #1F2328;">{{ user.first_name or 'Пользователь' }}</p>
-                                    <p style="margin: 0; color: #656D76; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
-                                </div>
-                            </div>
+                            <p style="margin: 0; font-weight: 600; color: #1F2328; margin-bottom: 8px;">{{ user.first_name or 'Пользователь' }} (@{{ user.username or 'неизвестен' }})</p>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -2097,15 +2094,7 @@
                         const displayStyle = isCollapsed ? 'none' : 'block';
                         html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 15px;">';
                         html += '<div class="context-item">';
-                        html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">';
-                        if (data.user_avatar_url) {
-                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0;">';
-                        } else {
-                            const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
-                            html += '<div style="width: 48px; height: 48px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0;">' + initial + '</div>';
-                        }
-                        html += '</div>';
-                        html += '<p style="margin-bottom: 8px;">Пользователь: @' + (data.profile.username || 'неизвестен') + '</p>';
+                        html += '<p style="margin: 0; font-weight: 600; color: #1F2328; margin-bottom: 8px;">' + (data.profile.first_name || 'Пользователь') + ' (@' + (data.profile.username || 'неизвестен') + ')</p>';
                         html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';
                         html += '<p>Компания: ' + (data.profile.company || 'Не указана') + '</p>';
                         html += '<p>Должность: ' + (data.profile.position || 'Не указана') + '</p>';
