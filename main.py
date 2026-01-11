@@ -1895,8 +1895,8 @@ async def on_startup(app):
         session_options = {
             'secure': True,
             'httponly': True,
-            'samesite': 'Lax',  # Use Lax for same-site requests
-            'domain': None,  # Use None to default to the request's host
+            'samesite': 'None',  # Use None to allow cookie in all contexts
+            'domain': '.railway.app',  # Set domain for Railway subdomains
             'max_age': 86400,  # 24 hours
             'path': '/'
         }
