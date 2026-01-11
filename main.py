@@ -1929,9 +1929,9 @@ async def on_startup(app):
             try:
                 data = self._decoder(cookie)
                 logger.info(f"Decoded session data: {data}, type: {type(data)}")
-                # Create session with proper data
-                if data is None:
-                    logger.warning("Decoded data is None, creating new session")
+                # Validate data is a dict
+                if not isinstance(data, dict):
+                    logger.warning(f"Decoded data is not a dict: {type(data)}, creating new session")
                     return AiohttpSession(None, data=None, new=True, max_age=self.max_age)
                 # Create empty session first, then populate _mapping manually
                 session = AiohttpSession(None, data=None, new=False, max_age=self.max_age)
@@ -1940,8 +1940,8 @@ async def on_startup(app):
                 logger.info(f"Session created with _mapping: {session._mapping}")
                 logger.info(f"Session dict: {dict(session)}")
                 return session
-            except json.JSONDecodeError as e:
-                logger.error(f"Invalid cookie JSON: {e}, raw cookie: {cookie}, creating new session")
+            except (json.JSONDecodeError, TypeError, AttributeError) as e:
+                logger.error(f"Error loading session: {e}, raw cookie: {cookie}, creating new session")
                 return AiohttpSession(None, data=None, new=True, max_age=self.max_age)
         
         async def save_session(self, request, response, session):
