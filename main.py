@@ -2207,6 +2207,42 @@ async def update_timezone_handler(request):
         logger.error(f"Error updating timezone: {e}")
         return web.json_response({'status': 'error', 'message': str(e)}, status=500)
 
+async def api_profile_handler(request):
+    """API для получения профиля пользователя"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    logger.info(f"API profile handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
+    if not user_id:
+        logger.error("No user_id in session for profile API")
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
+        
+        profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        profile_data = {
+            'username': user.username,
+            'city': profile.city if profile else None,
+            'company': profile.company if profile else None,
+            'position': profile.position if profile else None,
+            'goals': profile.goals if profile else None,
+            'skills': profile.skills if profile else None,
+            'interests': profile.interests if profile else None,
+            'average_rating': profile.average_rating if profile else 0,
+            'rating_count': profile.rating_count if profile else 0
+        }
+        
+        return web.json_response({'profile': profile_data})
+    except Exception as e:
+        logger.error(f"Error fetching profile: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
 async def extend_subscription_handler(request):
     """Создает платеж для продления подписки"""
     session_obj = await get_session(request)
