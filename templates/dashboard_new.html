@@ -1772,9 +1772,10 @@
                                 const isFavorite = isFavoriteContact(partner.contact_info);
                                 const heartIcon = isFavorite ? '♥' : '♡';
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
-                                html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
-                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
-                                html += `<button onclick="hideContact('${partner.contact_info}')" class="quick-action">−</button>`;
+                                const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'");
+                                html += `<button onclick="toggleFavoriteContact('${contactInfoEscaped}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
+                                html += `<button onclick="openRatingModal('${contactInfoEscaped}')" class="quick-action">↑↓</button>`;
+                                html += `<button onclick="hideContact('${contactInfoEscaped}')" class="quick-action">−</button>`;
                                 
                                 html += '</div>';
                                 html += '</li>';
@@ -1845,8 +1846,9 @@
                                 const isFavorite = isFavoriteContact(partner.contact_info);
                                 const heartIcon = isFavorite ? '♥' : '♡';
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
-                                html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
-                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
+                                const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'");
+                                html += `<button onclick="toggleFavoriteContact('${contactInfoEscaped}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
+                                html += `<button onclick="openRatingModal('${contactInfoEscaped}')" class="quick-action">↑↓</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
@@ -1922,8 +1924,9 @@
                                 const isFavorite = isFavoriteContact(partner.contact_info);
                                 const heartIcon = isFavorite ? '♥' : '♡';
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
-                                html += `<button onclick="toggleFavoriteContact('${partner.contact_info}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
-                                html += `<button onclick="openRatingModal('${partner.contact_info}')" class="quick-action">↑↓</button>`;
+                                const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'");
+                                html += `<button onclick="toggleFavoriteContact('${contactInfoEscaped}')" class="quick-action" style="${heartColor}">${heartIcon}</button>`;
+                                html += `<button onclick="openRatingModal('${contactInfoEscaped}')" class="quick-action">↑↓</button>`;
                                 html += '</div>';
                                 html += '</li>';
                             }
@@ -2095,11 +2098,21 @@
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const svgRotation = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-                        html += `<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ${svgRotation};"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>`;
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">';
+                        html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ' + svgRotation + ';"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
+                        html += '</button>';
                         html += '</div>';
                         const displayStyle = isCollapsed ? 'none' : 'block';
                         html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle}; margin-bottom: 15px;">`;
                         html += '<div class="context-item">';
+                        html += '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">';
+                        if (data.user_avatar_url) {
+                            html += `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0;">`;
+                        } else {
+                            const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
+                            html += `<div style="width: 48px; height: 48px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0;">${initial}</div>`;
+                        }
+                        html += '</div>';
                         html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'неизвестен'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
                         html += `<p>Компания: ${data.profile.company || 'Не указана'}</p>`;
@@ -2121,7 +2134,9 @@
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
                         const svgRotation = (localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null) ? 'rotate(-90deg)' : 'rotate(0deg)';
-                        html += `<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ${svgRotation};"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>`;
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">';
+                        html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ' + svgRotation + ';"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
+                        html += '</button>';
                         html += '</div>';
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const displayStyle = isCollapsed ? 'none' : 'block';
