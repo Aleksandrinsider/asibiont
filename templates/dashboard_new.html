@@ -2042,11 +2042,9 @@
                         lastProfileData = currentProfileKey;
                     }
                     
-                    // Обновляем аватар только если данные профиля изменились
-                    if (profileDataChanged) {
-                        // Update header avatar
-                        const headerInfoContainer = document.querySelector('.header-info');
-                        if (headerInfoContainer) {
+                    // Всегда обновляем аватар в шапке
+                    const headerInfoContainer = document.querySelector('.header-info');
+                    if (headerInfoContainer) {
                         let headerAvatarSmall = headerInfoContainer.querySelector('.header-avatar-small');
                         if (!headerAvatarSmall) {
                             // Create header avatar if it doesn't exist
@@ -2069,7 +2067,6 @@
                                 headerAvatarSmall.innerHTML = `<div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                             }
                         }
-                        }
                     }
                     
                     // Обновляем секцию профиля только если данные изменились
@@ -2081,7 +2078,13 @@
                         // Check if profile has meaningful data (not just username)
                         const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests || data.profile.username);
                         
-                        if (hasProfileData) {
+                        // Не перезаписываем профиль, если данные подписки еще не загружены
+                        if (!data.formatted_end_date && hasProfileData) {
+                            console.log('Skipping profile update: subscription data not loaded yet');
+                            return;
+                        }
+                        
+                        if (hasProfileData && data.formatted_end_date) {
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
