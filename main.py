@@ -1827,91 +1827,6 @@ async def get_user_rating_handler(request):
         logger.error(f"Error getting rating: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
-async def api_profile_handler(request):
-    logger.info(f"API profile handler called")
-    session_req = await get_session(request)
-    logger.info(f"Session in API profile: {dict(session_req) if session_req else 'None'}")
-    user_id = session_req.get('user_id')
-    logger.info(f"User ID from session in API: {user_id}")
-    if not user_id:
-        logger.error("No user_id in session, returning 401")
-        return web.json_response({'error': 'Not logged in'}, status=401)
-    
-    session_db = Session()
-    try:
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
-    finally:
-        session_db.close()
-    
-    # Calculate current time and date - always use real time
-    base_now = datetime.now(pytz.UTC)
-    user_now = base_now
-    if user and user.timezone:
-        try:
-            user_tz = pytz.timezone(user.timezone)
-            user_now = base_now.astimezone(user_tz)
-        except pytz.exceptions.UnknownTimeZoneError:
-            user_now = base_now
-    months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
-    current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-    current_time = user_now.strftime('%H:%M')
-    
-    # Always use real current time - removed profile.current_time override
-    
-    # Format subscription end date
-    formatted_end_date = None
-    if subscription and subscription.end_date:
-        end_dt = subscription.end_date
-        if end_dt.tzinfo is None:
-            end_dt = end_dt.replace(tzinfo=pytz.UTC)
-        end_local = end_dt.astimezone(user_tz if user and user.timezone else pytz.UTC)
-        formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
-    
-    profile_data = {}
-    if profile:
-        profile_data = {
-            'username': user.username or 'unknown',
-            'first_name': user.first_name or '',
-            'goals': profile.goals or 'Не указаны',
-            'skills': profile.skills or 'Не указаны',
-            'interests': profile.interests or 'Не указаны',
-            'city': profile.city or 'Не указан',
-            'company': profile.company or 'Не указана',
-            'position': profile.position or 'Не указана',
-            'average_rating': profile.average_rating or 0,
-            'rating_count': profile.rating_count or 0
-        }
-    
-    # Get user avatar URL from database and update if needed
-    user_avatar_url = user.photo_url if user and user.photo_url else None
-    
-    # Try to update avatar from Telegram API if bot is available
-    if 'bot' in request.app and user:
-        try:
-            updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-            if updated_avatar_url and updated_avatar_url != user.photo_url:
-                user.photo_url = updated_avatar_url
-                session_db.commit()
-                logger.info(f"Updated avatar URL for user {user_id}")
-                user_avatar_url = updated_avatar_url
-        except Exception as e:
-            logger.error(f"Error updating avatar for user {user_id}: {e}")
-    
-    # Add random parameter to prevent caching if URL exists
-    if user_avatar_url:
-        import random
-        user_avatar_url += f"?r={random.randint(100000, 999999)}"
-    
-    return web.json_response({
-        'profile': profile_data,
-        'current_time': current_time,
-        'current_date': current_date,
-        'formatted_end_date': formatted_end_date,
-        'user_avatar_url': user_avatar_url
-    })
-
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id"""
     telegram_id = request.match_info.get('telegram_id')
@@ -2023,52 +1938,9 @@ async def on_startup(app):
         }
     
     # Initialize session storage
-    # Use SimpleCookieStorage with enhanced logging
-    class SafeSimpleCookieStorage(SimpleCookieStorage):
-        def __init__(self, cookie_name='AIOHTTP_SESSION', **kwargs):
-            super().__init__(cookie_name=cookie_name, **kwargs)
-            self._options = kwargs
-        
-        async def load_session(self, request):
-            from aiohttp_session import Session as AiohttpSession
-            cookie = self.load_cookie(request)
-            logger.info(f"Loading session from cookie: {cookie is not None}")
-            if cookie is not None:
-                logger.info(f"Raw cookie value: {cookie}")
-            if cookie is None:
-                logger.info("No cookie found, creating new session")
-                return AiohttpSession(None, data=None, new=True, max_age=self.max_age)
-            try:
-                data = self._decoder(cookie)
-                logger.info(f"Decoded session data: {data}, type: {type(data)}")
-                # Validate data is a dict
-                if not isinstance(data, dict):
-                    logger.warning(f"Decoded data is not a dict: {type(data)}, creating new session")
-                    return AiohttpSession(None, data=None, new=True, max_age=self.max_age)
-                # Create empty session first, then populate _mapping manually
-                session = AiohttpSession(None, data=None, new=False, max_age=self.max_age)
-                # Manually populate session data
-                session._mapping.update(data)
-                logger.info(f"Session created with _mapping: {session._mapping}")
-                logger.info(f"Session dict: {dict(session)}")
-                return session
-            except (json.JSONDecodeError, TypeError, AttributeError) as e:
-                logger.error(f"Error loading session: {e}, raw cookie: {cookie}, creating new session")
-                return AiohttpSession(None, data=None, new=True, max_age=self.max_age)
-        
-        async def save_session(self, request, response, session):
-            logger.info(f"Saving session: {dict(session)}")
-            if session._mapping:  # If session has data
-                encoded = self._encoder(session._mapping)
-                logger.info(f"Encoded session data: {encoded}")
-                response.set_cookie(self._cookie_name, encoded, **self._options)
-                logger.info(f"Cookie '{self._cookie_name}' set in response")
-            else:
-                logger.info("Session empty, deleting cookie")
-                response.del_cookie(self._cookie_name)
-    
-    storage = SafeSimpleCookieStorage(cookie_name='session', **session_options)
-    logger.info(f"Session storage initialized with SafeSimpleCookieStorage, options: {session_options}")
+    # Use SimpleCookieStorage
+    storage = SimpleCookieStorage(cookie_name='session', **session_options)
+    logger.info(f"Session storage initialized with SimpleCookieStorage, options: {session_options}")
     
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware configured successfully")
@@ -2357,6 +2229,22 @@ async def api_profile_handler(request):
         logger.error("No user_id in session for profile API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
     
+    # Try to get cached profile data first
+    cache_key = f"profile:{user_id}"
+    cached_profile = None
+    if redis_client:
+        try:
+            cached_data = await redis_client.get(cache_key)
+            if cached_data:
+                cached_profile = json.loads(cached_data.decode('utf-8'))
+                logger.info(f"Using cached profile data for user {user_id}")
+        except Exception as e:
+            logger.error(f"Error getting cached profile: {e}")
+    
+    if cached_profile:
+        return web.json_response({'profile': cached_profile})
+    
+    # Get fresh data from database
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -2378,6 +2266,14 @@ async def api_profile_handler(request):
             'average_rating': profile.average_rating if profile else 0,
             'rating_count': profile.rating_count if profile else 0
         }
+        
+        # Cache the profile data for 1 hour
+        if redis_client:
+            try:
+                await redis_client.setex(cache_key, 3600, json.dumps(profile_data).encode('utf-8'))
+                logger.info(f"Cached profile data for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error caching profile: {e}")
         
         return web.json_response({'profile': profile_data})
     except Exception as e:
