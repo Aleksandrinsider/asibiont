@@ -100,10 +100,15 @@
                         (function() {
                             var isCollapsed = localStorage.getItem('profileCollapsed');
                             var profileEl = document.getElementById('profile-content');
+                            var profileBtn = document.getElementById('profile-toggle-btn');
+                            var svg = profileBtn ? profileBtn.querySelector('svg') : null;
+                            
                             if (isCollapsed === 'false') {
                                 profileEl.style.display = 'block';
+                                if (svg) svg.style.transform = 'rotate(0deg)';
                             } else {
                                 profileEl.style.display = 'none';
+                                if (svg) svg.style.transform = 'rotate(-90deg)';
                             }
                         })();
                     </script>
@@ -1577,37 +1582,7 @@
                 return;
             }
             
-            // Инициализация состояния профиля ДО загрузки данных
-            const profileContent = document.getElementById('profile-content');
-            const profileButton = document.getElementById('profile-toggle-btn');
-            const svg = profileButton ? profileButton.querySelector('svg') : null;
-            const peopleSection = document.querySelector('.people-section');
-            const peopleList = document.querySelector('.people-list');
-            
-            const isCollapsed = localStorage.getItem('profileCollapsed') === null ? true : localStorage.getItem('profileCollapsed') === 'true';
-            if (isCollapsed) {
-                profileContent.style.display = 'none';
-                if (svg) svg.style.transform = 'rotate(-90deg)';
-                if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto';
-                    peopleSection.style.minHeight = '0';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = 'calc(100vh - 270px)';
-                    peopleList.style.overflowY = 'auto';
-                }
-            } else {
-                profileContent.style.display = 'block';
-                if (svg) svg.style.transform = 'rotate(0deg)';
-                if (peopleSection) {
-                    peopleSection.style.flex = '';
-                    peopleSection.style.minHeight = '';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = 'calc(100vh - 510px)';
-                    peopleList.style.overflowY = 'auto';
-                }
-            }
+            // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
             
             // Загрузить историю чата
             loadChatHistory();
