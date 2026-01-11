@@ -66,8 +66,9 @@ AI: "✅ Добавил: Позвонить другу обсудить план
    - YOOKASSA_SHOP_ID: ID магазина Yookassa
    - YOOKASSA_SECRET_KEY: Секретный ключ Yookassa
    - WEBHOOK_URL: URL вебхука для Railway
+   - FREE_ACCESS_MODE: "False" для боевого режима (требуется подписка), "True" для бесплатного доступа
 3. Для локального тестирования: `LOCAL=1 python main.py` (веб-сервер на http://localhost:8080)
-4. Для продакшена на Railway: разверните с переменными окружения
+4. Для продакшена на Railway: разверните с переменными окружения (FREE_ACCESS_MODE=False)
 
 ## Развертывание на Railway
 
