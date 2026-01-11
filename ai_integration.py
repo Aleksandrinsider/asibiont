@@ -850,17 +850,9 @@ def validate_response_compliance(response_text, intent_type=None):
     if re.search(r"^\s*\d+\.\s+", response_text, re.MULTILINE):
         issues.append("Присутствует нумерация")
 
-    # Проверка на минимальную длину для значимых ответов
-    sentences = [s.strip() for s in re.split(r"[.!?]+", response_text) if s.strip()]
-    if len(sentences) < 3 and len(response_text) > 20:
-        issues.append("Слишком короткий ответ (менее 3 предложений)")
-    if len(response_text) < 100 and len(response_text) > 20:
-        issues.append("Ответ слишком короткий (менее 100 символов)")
-
-    # Проверка на наличие вопросов для вовлечения
-    if not any(char in response_text for char in ["?", "Что", "Как", "Когда", "Зачем", "Почему"]):
-        issues.append("Отсутствуют вопросы для вовлечения пользователя")
-
+    # Проверка на минимальную длину только для конкретных действий с задачами
+    # Убрали общую проверку на короткие ответы - AI должен адаптировать длину под контекст
+    
     # Специфические проверки для разных типов intent - адаптивные правила
     if intent_type == "list_tasks":
         # Для просмотра задач - подробный анализ, но не слишком длинный
@@ -870,10 +862,6 @@ def validate_response_compliance(response_text, intent_type=None):
             issues.append("Ответ на list_tasks слишком короткий для анализа")
         if "Ваши задачи:" in response_text or "Список задач:" in response_text:
             issues.append("Шаблонный ответ вместо анализа")
-    elif intent_type in ["complete_task", "delete_task", "add_task"]:
-        # Для простых действий - информативные ответы с практическими советами
-        if len(response_text) < 100:
-            issues.append("Ответ на простое действие слишком короткий - добавьте практические рекомендации")
 
     return len(issues) == 0, issues
 
