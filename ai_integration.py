@@ -1430,7 +1430,15 @@ def get_extended_system_prompt(user_now, current_time_str, user_username, mentio
 
 
 def parse_relative_time(message, current_time):
-    """Parse relative time expressions like 'через 5 минут', 'через 2 часа' and return datetime"""
+    """Parse relative time expressions like 'через 5 минут', 'через 2 часа' and return datetime.
+    
+    Args:
+        message: String containing relative time expression
+        current_time: Current datetime in user's local timezone (not UTC!)
+    
+    Returns:
+        Datetime object in the same timezone as current_time, or None if parsing failed
+    """
     from datetime import datetime, timedelta
     import re
 
@@ -1452,6 +1460,7 @@ def parse_relative_time(message, current_time):
         match = re.search(pattern, message, re.IGNORECASE)
         if match:
             delta = delta_func(match)
+            # Возвращаем время в той же timezone что и current_time
             return current_time + delta
 
     return None
@@ -1614,12 +1623,16 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 # Проверить, является ли время относительным
                 if "через" in reminder_time.lower():
                     # Использовать parse_relative_time для относительного времени
-                    current_time = datetime.now(pytz.UTC)
+                    # ВАЖНО: используем локальное время пользователя, не UTC!
+                    current_time = datetime.now(user_tz)
                     parsed_time = parse_relative_time(reminder_time, current_time)
                     if parsed_time:
-                        task.reminder_time = parsed_time
+                        # parsed_time уже в локальном времени, конвертируем в UTC для хранения
+                        if parsed_time.tzinfo is None:
+                            parsed_time = user_tz.localize(parsed_time)
+                        task.reminder_time = parsed_time.astimezone(pytz.UTC)
                         import logging
-                        logging.info(f"Task {title} relative time parsed: '{reminder_time}' -> {parsed_time}")
+                        logging.info(f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
                     else:
                         # Если не удалось распарсить, игнорировать
                         pass
