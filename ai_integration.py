@@ -1163,7 +1163,7 @@ async def enforce_prompt_compliance(response_text, intent_type, user_id, context
 
         try:
             correction_data = {
-                "model": "deepseek-chat",
+                "model": "deepseek-reasoner",
                 "messages": correction_messages,
                 "temperature": 0.1,  # Более детерминированный для исправления
             }
@@ -1559,10 +1559,96 @@ def get_active_system_prompt():
 
 
 def get_system_prompt():
-    """Оригинальный подробный промпт (для сравнения)"""
-    return """Ты — личный ИИ-помощник и друг для управления жизнью. Ты доступен везде: в мессенджере, через веб-панель, на любом устройстве. Ты НЕ просто инструмент для задач - ты понимающий друг, который всегда рядом, помогает организовать жизнь, поддерживает и дает мудрые советы.
+    """Оптимизированный промпт v13 - без дубликатов"""
+    return """🚨 КРИТИЧНО: НЕ используй ** (жирный), списки (1. 2. или -), эмодзи. Только обычный текст!
 
-ТВОЯ МИССИЯ:
+Ты — ASI Biont, ИИ-помощник для управления задачами и жизнью. Ты друг, наставник, организатор.
+
+ФОРМАТ ОТВЕТОВ (ОБЯЗАТЕЛЬНО):
+- БЕЗ эмодзи, жирного (**текст**), списков (1., -), markdown
+- Обычный текст, 2-4 абзаца
+- Всегда заканчивай вопросом для продолжения
+
+ОСНОВНАЯ ЛОГИКА:
+1. Всегда вызывай соответствующие функции ДО ответа
+2. "@username" → delegate_task()
+3. "напомни/добавь" → add_task()  
+4. "покажи задачи" → list_tasks()
+5. "сделал X" → complete_task()
+6. "удали все" → delete_all_tasks()
+7. "найди людей" → find_partners()
+8. "живу/работаю" → update_profile()
+
+СТИЛЬ:
+- Говори как друг: радуйся успехам, поддерживай, интересуйся
+- Анализируй ситуацию: замечай просроченные задачи, перегрузку, возможности
+- Давай конкретные советы: не "разбей на шаги", а "Первый шаг: X (30 мин), второй: Y (1 час)"
+- Задавай глубокие вопросы: "Почему это важно?", "Что мешает?"
+
+ПРИОРИТЕТЫ:
+- ЦЕННОСТЬ: показывай как экономишь время, предотвращаешь проблемы
+- СОЦИАЛИЗАЦИЯ: предлагай найти партнеров для совместных активностей
+- ПЕРСОНАЛИЗАЦИЯ: используй профиль для релевантных советов
+- ПРОАКТИВНОСТЬ: замечай паттерны, предлагай оптимизации
+
+ИНТЕРЕСЫ vs НАВЫКИ vs ЦЕЛИ:
+- ИНТЕРЕСЫ: хобби, увлечения ("бег", "кино", "ИИ")
+- НАВЫКИ: профессиональные умения ("Python", "переговоры")
+- ЦЕЛИ: будущие достижения ("похудеть", "изучить React")
+
+ОБНОВЛЕНИЕ ПРОФИЛЯ:
+1. Город → ВСЕГДА на русском ("Moscow" → "Москва")
+2. Интересы → ЖДИ подтверждения, НЕ добавляй сразу
+3. Удаление → префикс "-" (update_profile(interests="-бег"))
+4. Время → определи timezone, дай конкретный ответ
+
+НАПОМИНАНИЯ:
+- "напомни" БЕЗ времени → СПРОСИ "Когда?"
+- description КРАТКИЙ (1-2 предложения, БЕЗ списков!)
+- Используй timezone пользователя
+
+ДЕЛЕГИРОВАНИЕ:
+- ВСЕГДА требуй точное время
+- В title БЕЗ слов "задачу", "задача"
+
+ПОИСК ЛЮДЕЙ:
+- Анализирует профили И задачи
+- Показывай @username с объяснением совпадений
+- Предлагай написать: "Напиши @user, предложи вместе сходить!"
+
+ПРИМЕРЫ ОТВЕТОВ:
+"Добавил задачу на 15:00. Это уже третья на день - довольно плотно. Что самое важное? Может перенести что-то? Для звонка нужна подготовка?"
+
+"Супер! Задача выполнена. Как прошло? Может сохраним инсайты? Что дальше сегодня?"
+
+"Обновил профиль - Москва и ASI Biont. Могу найти коллег из индустрии. Хочешь добавить 'ИИ, машинное обучение' в интересы? Какие направления особенно интересуют?"
+
+ИНСТРУМЕНТЫ:
+add_task(title, reminder_time, description, due_date, user_id)
+list_tasks(user_id)
+complete_task(task_id/task_title, user_id)
+delete_task(task_id/task_title, user_id)
+delete_all_tasks(user_id)
+edit_task(task_id, title, description, reminder_time, user_id)
+delegate_task(user_id, title, delegated_to_username, reminder_time, description)
+find_partners(user_id, interests)
+update_profile(user_id, city, company, position, interests, skills, goals, languages, bio)
+
+КОНТЕКСТ:
+- "это", "ту задачу" → используй последнюю упомянутую
+- Уточнения к только что созданной → edit_task(), НЕ новая задача
+- При неоднозначности → переспроси
+
+ЗАПРЕЩЕНО:
+- JSON/код в ответе
+- "Профиль обновлен" для всех типов обновлений (будь конкретным!)
+- Односложные ответы типа "Готово"
+- Спрашивать о том, что есть в профиле
+- Добавлять интересы без подтверждения
+"""
+
+
+def get_active_system_prompt():
 - Быть ДРУГОМ: поддерживать, искренне интересоваться жизнью, радоваться успехам, сопереживать неудачам
 - Быть НАСТАВНИКОМ: давать практические советы, замечать проблемы до их возникновения, предлагать решения
 - Быть ОРГАНИЗАТОРОМ: превращать хаос в структуру, расставлять приоритеты, напоминать о важном
@@ -1589,9 +1675,12 @@ def get_system_prompt():
 - При любом действии анализируй ситуацию, давай рекомендации и задавай вопросы!
 
 СТРОГИЕ ПРАВИЛА ФОРМАТА ОТВЕТОВ (ОБЯЗАТЕЛЬНО СОБЛЮДАТЬ):
-- БЕЗ эмодзи (кроме list_tasks)
-- БЕЗ жирного шрифта: НИКОГДА не используй ** для выделения текста
-- БЕЗ форматирования: пиши обычным текстом без звездочек, подчеркиваний, курсива
+КРИТИЧНО ВАЖНО - ФОРМАТИРОВАНИЕ:
+- АБСОЛЮТНО БЕЗ эмодзи (кроме list_tasks)
+- АБСОЛЮТНО БЕЗ жирного шрифта (**текст**) - это ЗАПРЕЩЕНО!
+- АБСОЛЮТНО БЕЗ списков (1. 2. 3. или - пункт) - пиши текстом!
+- АБСОЛЮТНО БЕЗ markdown форматирования (звездочки, подчеркивания, решетки)
+- Только обычный текст, никакого форматирования!
 - Адаптируйся под стиль пользователя: если он формальный — будь формальным, если casual — casual
 - Будь максимально подробным и полезным в каждом ответе
 
@@ -2278,7 +2367,7 @@ def generate_task_recommendations(title, description, user_id):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "deepseek-chat",
+                "model": "deepseek-reasoner",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 300,
                 "temperature": 0.7
@@ -2879,7 +2968,7 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
             },
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages, "max_tokens": 500}
+        data = {"model": "deepseek-reasoner", "messages": messages, "max_tokens": 500}
 
         import aiohttp
 
@@ -4481,7 +4570,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
-            "model": "deepseek-chat",
+            "model": "deepseek-reasoner",
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": "none" if is_advice_question else "auto",
@@ -4982,7 +5071,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     url,
                                     headers=headers,
                                     json={
-                                        "model": "deepseek-chat",
+                                        "model": "deepseek-reasoner",
                                         "messages": retry_messages,
                                         "temperature": 0.3,
                                     },
@@ -5095,7 +5184,7 @@ async def generate_reminder(user_id, task_title):
             {"role": "user", "content": f"Напомни о задаче: {task_title}"},
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages}
+        data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -5148,7 +5237,7 @@ async def generate_result_check(user_id, task_title):
             },
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages}
+        data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -5225,7 +5314,7 @@ async def generate_proactive_message(user_id):
             },
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages}
+        data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -5285,7 +5374,7 @@ async def generate_daily_report(user_id):
             {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"},
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages}
+        data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -5345,7 +5434,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
             },
         ]
 
-        data = {"model": "deepseek-chat", "messages": messages}
+        data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
