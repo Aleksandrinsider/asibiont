@@ -121,7 +121,15 @@
                     </script>
                         {% if profile %}
                         <div class="context-item">
-                            <p style="margin: 0; font-weight: 600; color: #1F2328; margin-bottom: 8px;">{{ user.first_name or 'Пользователь' }} (@{{ user.username or 'неизвестен' }})</p>
+                            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
+                                {% if user_avatar_url %}
+                                <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">
+                                {% else %}
+                                <div style="width: 64px; height: 64px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                {% endif %}
+                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">{{ user.first_name or 'Пользователь' }}</p>
+                                <p style="margin: 0; color: #656D76; font-size: 14px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
+                            </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -2020,7 +2028,8 @@
                         goals: data.profile?.goals,
                         skills: data.profile?.skills,
                         interests: data.profile?.interests,
-                        formatted_end_date: data.formatted_end_date
+                        formatted_end_date: data.formatted_end_date,
+                        user_avatar_url: data.user_avatar_url ? data.user_avatar_url.split('?')[0] : null
                     });
                     
                     // Всегда обновляем если данные изменились
@@ -2094,7 +2103,16 @@
                         const displayStyle = isCollapsed ? 'none' : 'block';
                         html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 15px;">';
                         html += '<div class="context-item">';
-                        html += '<p style="margin: 0; font-weight: 600; color: #1F2328; margin-bottom: 8px;">' + (data.profile.first_name || 'Пользователь') + ' (@' + (data.profile.username || 'неизвестен') + ')</p>';
+                        html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">';
+                        if (data.user_avatar_url) {
+                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
+                        } else {
+                            const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
+                            html += '<div style="width: 64px; height: 64px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
+                        }
+                        html += '<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">' + (data.profile.first_name || 'Пользователь') + '</p>';
+                        html += '<p style="margin: 0; color: #656D76; font-size: 14px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
+                        html += '</div>';
                         html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';
                         html += '<p>Компания: ' + (data.profile.company || 'Не указана') + '</p>';
                         html += '<p>Должность: ' + (data.profile.position || 'Не указана') + '</p>';
