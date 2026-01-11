@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -1088,16 +1088,16 @@
                 const isToday = i === 0;
                 const hasTasks = tasksForDay > 0;
                 
-                html += `
-                    <div style="flex: 1; text-align: center; font-size: 11px;">
-                        <div style="color: ${isToday ? '#068487' : '#59636E'}; font-weight: ${isToday ? '600' : '400'}; margin-bottom: 4px;">${dayOfWeek}</div>
-                        <div style="color: ${isToday ? '#068487' : '#8B949E'}; font-size: 10px; margin-bottom: 6px;">${dayOfMonth} ${month}</div>
-                        <div style="width: 100%; height: 6px; background: #D1D9E0; border-radius: 3px; position: relative; overflow: hidden;">
-                            ${hasTasks ? `<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: ${isToday ? '#068487' : '#59636E'}; border-radius: 3px;"></div>` : ''}
-                        </div>
-                        <div style="color: ${hasTasks ? (isToday ? '#068487' : '#24292F') : '#8B949E'}; font-weight: ${hasTasks ? '500' : '400'}; margin-top: 4px; font-size: 11px;">${tasksForDay}</div>
-                    </div>
-                `;
+                html += '<div style="flex: 1; text-align: center; font-size: 11px;">';
+                html += '<div style="color: ' + (isToday ? '#068487' : '#59636E') + '; font-weight: ' + (isToday ? '600' : '400') + '; margin-bottom: 4px;">' + dayOfWeek + '</div>';
+                html += '<div style="color: ' + (isToday ? '#068487' : '#8B949E') + '; font-size: 10px; margin-bottom: 6px;">' + dayOfMonth + ' ' + month + '</div>';
+                html += '<div style="width: 100%; height: 6px; background: #D1D9E0; border-radius: 3px; position: relative; overflow: hidden;">';
+                if (hasTasks) {
+                    html += '<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: ' + (isToday ? '#068487' : '#59636E') + '; border-radius: 3px;"></div>';
+                }
+                html += '</div>';
+                html += '<div style="color: ' + (hasTasks ? (isToday ? '#068487' : '#24292F') : '#8B949E') + '; font-weight: ' + (hasTasks ? '500' : '400') + '; margin-top: 4px; font-size: 11px;">' + tasksForDay + '</div>';
+                html += '</div>';
             }
             
             weekDaysEl.innerHTML = html;
@@ -1701,71 +1701,71 @@
                         
                         let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                         data.partners.forEach(partner => {
-                            const telegramUrl = `https://t.me/${partner.contact_info}`;
+                            const telegramUrl = 'https://t.me/' + partner.contact_info;
                             const displayStyle = partner.type === 'recommended' ? 'flex' : 'none';
                             
                             if (partner.type === 'recommended' && partner.contact_info) {
-                                html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 8px; align-items: center;">`;
+                                html += '<li class="task-item contact-recommended" style="display: ' + displayStyle + '; margin-bottom: 8px; align-items: center;">';
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                 if (partner.photo_url) {
-                                    const imgId = `img-rec-${partner.telegram_id || partner.contact_info}`;
-                                    html += `<div style="margin-right: 12px; flex-shrink: 0;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="${partner.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `</div>`;
+                                    const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;">';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
+                                    html += '</div>';
                                 } else {
-                                    html += `<div style="margin-right: 12px; flex-shrink: 0;"><a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">${initial}</div></a></div>`;
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">' + initial + '</div></a></div>';
                                 }
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
+                                html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
                                 // Город на отдельной строке
                                 if (partner.city) {
-                                    html += `<div style="margin-top: 4px;"><span class="task-meta">Город: ${partner.city}</span></div>`;
+                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                                 }
                                 
                                 // Компания и должность на одной строке
                                 const companyParts = [];
                                 if (partner.company) {
-                                    companyParts.push(`Компания: ${partner.company}`);
+                                    companyParts.push('Компания: ' + partner.company);
                                 }
                                 if (partner.position) {
-                                    companyParts.push(`Должность: ${partner.position}`);
+                                    companyParts.push('Должность: ' + partner.position);
                                 }
                                 if (companyParts.length > 0) {
-                                    html += `<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">`;
+                                    html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
                                     companyParts.forEach(part => {
-                                        html += `<span class="task-meta">${part}</span>`;
+                                        html += '<span class="task-meta">' + part + '</span>';
                                     });
-                                    html += `</div>`;
+                                    html += '</div>';
                                 }
                                 
                                 // Остальное на отдельных строках
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
-                                    html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                    html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                 }
                                 if (partner.common_interests) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
                                 }
                                 if (partner.common_skills) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие навыки: ${partner.common_skills}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
                                 }
                                 if (partner.common_goals) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
                                 }
                                 if (partner.common_tasks) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие задачи: ${partner.common_tasks}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
                                 }
                                 html += '</div>';
                                 // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
                                     const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: ${ratingColor};">Рекомендация: ${partner.average_rating}/10</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                 } else {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>';
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1780,66 +1780,66 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
-                                html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
+                                html += '<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 8px; align-items: center;">';
                                 if (partner.photo_url) {
-                                    const imgId = `img-del-to-${partner.telegram_id || partner.contact_info}`;
-                                    html += `<div style="margin-right: 12px; flex-shrink: 0;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="${partner.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `</div>`;
+                                    const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;">';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
+                                    html += '</div>';
                                 } else {
-                                    html += `<div style="margin-right: 12px; flex-shrink: 0;"><a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a></div>`;
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a></div>';
                                 }
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
+                                html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
                                 // Город на отдельной строке
                                 if (partner.city) {
-                                    html += `<div style="margin-top: 4px;"><span class="task-meta">Город: ${partner.city}</span></div>`;
+                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                                 }
                                 
                                 // Компания и должность на одной строке
                                 const companyParts = [];
                                 if (partner.company) {
-                                    companyParts.push(`Компания: ${partner.company}`);
+                                    companyParts.push('Компания: ' + partner.company);
                                 }
                                 if (partner.position) {
-                                    companyParts.push(`Должность: ${partner.position}`);
+                                    companyParts.push('Должность: ' + partner.position);
                                 }
                                 if (companyParts.length > 0) {
-                                    html += `<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">`;
+                                    html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
                                     companyParts.forEach(part => {
-                                        html += `<span class="task-meta">${part}</span>`;
+                                        html += '<span class="task-meta">' + part + '</span>';
                                     });
-                                    html += `</div>`;
+                                    html += '</div>';
                                 }
                                 
                                 // Остальное на отдельных строках
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
-                                    html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                    html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                 }
                                 if (partner.common_interests) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
                                 }
                                 if (partner.common_skills) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие навыки: ${partner.common_skills}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
                                 }
                                 if (partner.common_goals) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
                                 }
                                 if (partner.common_tasks) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие задачи: ${partner.common_tasks}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
                                 }
                                 html += '</div>';
                                 // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
                                     const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: ${ratingColor};">Рекомендация: ${partner.average_rating}/10</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                 } else {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>';
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1852,72 +1852,70 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
-                                html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
+                                html += '<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 8px; align-items: center;">';
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 if (partner.photo_url) {
-                                    const imgId = `img-del-by-${partner.telegram_id || partner.contact_info}`;
-                                    html += `<div style="position: relative; display: inline-block;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="${partner.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `</div>`;
+                                    const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
+                                    html += '<div style="position: relative; display: inline-block;">';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
+                                    html += '</div>';
                                 } else {
-                                    html += `<div style="position: relative; display: inline-block;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
-                                    html += `</div>`;
-                                }
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
+                                    html += '<div style="position: relative; display: inline-block;">';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>';
+                                    html += '</div>';
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
-                                html += `<div class="task-title"><a href="${telegramUrl}" target="_blank" style="color: #1F2328; text-decoration: none !important;">@${partner.contact_info}</a></div>`;
+                                html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегирую я ${partner.task_count} ${pluralizeTask(partner.task_count)}</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегирую я ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
                                 // Город на отдельной строке
                                 if (partner.city) {
-                                    html += `<div style="margin-top: 4px;"><span class="task-meta">Город: ${partner.city}</span></div>`;
+                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                                 }
                                 
                                 // Компания и должность на одной строке
                                 const companyParts = [];
                                 if (partner.company) {
-                                    companyParts.push(`Компания: ${partner.company}`);
+                                    companyParts.push('Компания: ' + partner.company);
                                 }
                                 if (partner.position) {
-                                    companyParts.push(`Должность: ${partner.position}`);
+                                    companyParts.push('Должность: ' + partner.position);
                                 }
                                 if (companyParts.length > 0) {
-                                    html += `<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">`;
+                                    html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
                                     companyParts.forEach(part => {
-                                        html += `<span class="task-meta">${part}</span>`;
+                                        html += '<span class="task-meta">' + part + '</span>';
                                     });
-                                    html += `</div>`;
+                                    html += '</div>';
                                 }
                                 
                                 // Остальное на отдельных строках
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
-                                    html += `<span class="task-meta">Интересы: ${partner.interests}</span>`;
+                                    html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                 }
                                 if (partner.common_interests) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие интересы: ${partner.common_interests}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
                                 }
                                 if (partner.common_skills) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие навыки: ${partner.common_skills}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
                                 }
                                 if (partner.common_goals) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие цели: ${partner.common_goals}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
                                 }
                                 if (partner.common_tasks) {
-                                    html += `<span class="task-meta" style="color: #068487;">Общие задачи: ${partner.common_tasks}</span>`;
+                                    html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
                                 }
                                 html += '</div>';
                                 // Рекомендация на отдельной строке
                                 if (partner.average_rating > 0) {
                                     const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: ${ratingColor};">Рекомендация: ${partner.average_rating}/10</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                 } else {
-                                    html += `<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>`;
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>';
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
@@ -1959,14 +1957,14 @@
                             data.incoming.forEach(task => {
                                 const statusText = task.status === 'accepted' ? 'Принято' : 
                                                   task.status === 'rejected' ? 'Отклонено' : 'Ожидание';
-                                html += `<div class="delegation-card">`;
-                                html += `<p><strong>${task.title}</strong></p>`;
-                                html += `<p>От: ${task.from_user}</p>`;
-                                html += `<p>Статус: ${statusText}</p>`;
+                                html += '<div class="delegation-card">';
+                                html += '<p><strong>' + task.title + '</strong></p>';
+                                html += '<p>От: ' + task.from_user + '</p>';
+                                html += '<p>Статус: ' + statusText + '</p>';
                                 if (task.reminder_time) {
-                                    html += `<p>${task.reminder_time}</p>`;
+                                    html += '<p>' + task.reminder_time + '</p>';
                                 }
-                                html += `</div>`;
+                                html += '</div>';
                             });
                         } else {
                             html += '<p style="color: #656D76;">Нет входящих делегирований</p>';
@@ -1982,14 +1980,14 @@
                             data.outgoing.forEach(task => {
                                 const statusText = task.status === 'accepted' ? 'Принято' : 
                                                   task.status === 'rejected' ? 'Отклонено' : 'Ожидание';
-                                html += `<div class="delegation-card">`;
-                                html += `<p><strong>${task.title}</strong></p>`;
-                                html += `<p>Кому: ${task.to_user}</p>`;
-                                html += `<p>Статус: ${statusText}</p>`;
+                                html += '<div class="delegation-card">';
+                                html += '<p><strong>' + task.title + '</strong></p>';
+                                html += '<p>Кому: ' + task.to_user + '</p>';
+                                html += '<p>Статус: ' + statusText + '</p>';
                                 if (task.reminder_time) {
-                                    html += `<p>${task.reminder_time}</p>`;
+                                    html += '<p>' + task.reminder_time + '</p>';
                                 }
-                                html += `</div>`;
+                                html += '</div>';
                             });
                         } else {
                             html += '<p style="color: #656D76;">Нет исходящих делегирований</p>';
@@ -2124,9 +2122,9 @@
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
                         } else {
-                            html += `<p>Рекомендация: нет рекомендаций</p>`;
+                            html += '<p>Рекомендация: нет рекомендаций</p>';
                         }
-                        html += `<p style="margin-bottom: 20px;">Подписка: активна до ${data.formatted_end_date} <a href="${extendUrl}" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>`;
+                        html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
