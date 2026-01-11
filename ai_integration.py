@@ -3338,22 +3338,27 @@ def update_profile(
         action = None
         
         if value.startswith("+"):
+            # Явное добавление
             new_item = value[1:].strip()
             if new_item:
                 current.add(new_item)
                 action = f"added_{field_name}:{new_item}"
         elif value.startswith("-"):
+            # Явное удаление
             remove_item = value[1:].strip()
             if remove_item in current:
                 current.discard(remove_item)
                 action = f"removed_{field_name}:{remove_item}"
         else:
-            # Замена целиком
-            old_items = current.copy()
-            current = set(value.split(", ")) - {""}
-            new_items = current - old_items
-            if new_items:
-                action = f"added_{field_name}:{', '.join(new_items)}"
+            # По умолчанию ДОБАВЛЯЕМ к существующим, а не заменяем
+            new_items_list = [item.strip() for item in value.split(",") if item.strip()]
+            added = []
+            for item in new_items_list:
+                if item not in current:
+                    current.add(item)
+                    added.append(item)
+            if added:
+                action = f"added_{field_name}:{', '.join(added)}"
         
         return ", ".join(sorted(current)), action
 
@@ -3631,14 +3636,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль пользователя с навыками, интересами, целями, городом, текущими планами, текущим временем, часовым поясом, компанией и должностью",
+            "description": "Обновить профиль пользователя. ВАЖНО: По умолчанию все значения ДОБАВЛЯЮТСЯ к существующим (не заменяют). Используй префикс '-' для удаления. Например: interests='бег' - добавит к существующим, interests='-криптовалюты' - удалит из списка",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "skills": {"type": "string", "description": "Навыки пользователя, разделенные запятыми"},
-                    "interests": {"type": "string", "description": "Интересы пользователя, разделенные запятыми"},
-                    "goals": {"type": "string", "description": "Цели пользователя"},
-                    "city": {"type": "string", "description": "Город пользователя, опционально"},
+                    "skills": {"type": "string", "description": "Навыки (добавляются к существующим, через запятую). Для удаления используй '-навык'"},
+                    "interests": {"type": "string", "description": "Интересы (добавляются к существующим, через запятую). Для удаления используй '-интерес'"},
+                    "goals": {"type": "string", "description": "Цели (добавляются к существующим)"},
+                    "city": {"type": "string", "description": "Город пользователя (заменяет старое значение), опционально"},
                     "current_plans": {
                         "type": "string",
                         "description": "Текущие планы или события пользователя, опционально",
@@ -3653,9 +3658,9 @@ TOOLS = [
                     },
                     "company": {
                         "type": "string",
-                        "description": "Компания, в которой работает пользователь, опционально",
+                        "description": "Компания, в которой работает пользователь (заменяет старое значение), опционально",
                     },
-                    "position": {"type": "string", "description": "Должность пользователя, опционально"},
+                    "position": {"type": "string", "description": "Должность пользователя (заменяет старое значение), опционально"},
                 },
             },
         },
