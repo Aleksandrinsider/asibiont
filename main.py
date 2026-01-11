@@ -173,9 +173,10 @@ async def auth_handler(request):
         
         session = await get_session(request)
         session['user_id'] = user_id
-        logger.info(f"Session set with user_id: {user_id}, redirecting to /dashboard")
+        logger.info(f"Session set with user_id: {user_id}, session data: {dict(session)}")
         
         response = web.HTTPFound('/dashboard')
+        logger.info(f"Redirecting to /dashboard after auth")
         return response
     else:
         logger.error(f"Authentication failed for data: {data}")
@@ -192,6 +193,7 @@ async def logout_handler(request):
 async def dashboard_handler(request):
     logger.info(f"Dashboard handler called for path: {request.path}")
     session = await get_session(request)
+    logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
     try:
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
@@ -1723,9 +1725,13 @@ async def get_user_rating_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 async def api_profile_handler(request):
+    logger.info(f"API profile handler called")
     session_req = await get_session(request)
+    logger.info(f"Session in API profile: {dict(session_req) if session_req else 'None'}")
     user_id = session_req.get('user_id')
+    logger.info(f"User ID from session in API: {user_id}")
     if not user_id:
+        logger.error("No user_id in session, returning 401")
         return web.json_response({'error': 'Not logged in'}, status=401)
     
     session_db = Session()
@@ -1901,7 +1907,24 @@ async def on_startup(app):
         storage = SafeSimpleCookieStorage()
         logger.info("Session storage initialized with SafeSimpleCookieStorage")
     
-    aiohttp_session.setup(app, storage)
+    # Configure session cookie options
+    session_options = {}
+    if not LOCAL:
+        # For Railway HTTPS deployment
+        session_options = {
+            'secure': True,
+            'httponly': True,
+            'samesite': 'Lax'
+        }
+    else:
+        # For local development
+        session_options = {
+            'secure': False,
+            'httponly': True,
+            'samesite': 'Lax'
+        }
+    
+    aiohttp_session.setup(app, storage, **session_options)
     logger.info("Session middleware configured successfully")
     
     # Set webhook
