@@ -184,8 +184,8 @@ async def auth_handler(request):
                     session_db.commit()
             else:
                 logger.info(f"Found existing user: {user.id}")
-                # Update photo_url if provided and different
-                if data.get('photo_url') and user.photo_url != data.get('photo_url'):
+                # Always update photo_url to keep it fresh from Telegram
+                if data.get('photo_url'):
                     user.photo_url = data.get('photo_url')
                     session_db.commit()
             
@@ -1321,6 +1321,7 @@ async def api_partners_handler(request):
             partners_data.append({
                 'contact_info': partner_user.username if partner_user and partner_user.username else f"user{partner_user.telegram_id if partner_user else 'unknown'}",
                 'telegram_id': partner_user.telegram_id if partner_user else None,
+                'photo_url': partner_user.photo_url if partner_user and partner_user.photo_url else None,
                 'city': getattr(p, 'city', None),
                 'common_interests': getattr(p, 'common_interests', None),
                 'common_skills': getattr(p, 'common_skills', None),
@@ -1394,6 +1395,7 @@ async def api_partners_handler(request):
             partners_data.append({
                 'contact_info': contact['username'],
                 'telegram_id': delegator.telegram_id if delegator else None,
+                'photo_url': delegator.photo_url if delegator and delegator.photo_url else None,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),
@@ -1413,6 +1415,7 @@ async def api_partners_handler(request):
         for contact in delegating_by_me:
             # Получить профиль делегата для расчета общих интересов/навыков/целей
             delegatee_profile = session_db.query(UserProfile).filter_by(user_id=contact['id']).first() if 'id' in contact else None
+            delegatee = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
             
             common_interests = None
             common_skills = None
@@ -1470,6 +1473,8 @@ async def api_partners_handler(request):
             
             partners_data.append({
                 'contact_info': contact['username'],
+                'telegram_id': delegatee.telegram_id if delegatee else None,
+                'photo_url': delegatee.photo_url if delegatee and delegatee.photo_url else None,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),

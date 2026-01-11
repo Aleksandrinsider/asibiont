@@ -1707,12 +1707,10 @@
                             if (partner.type === 'recommended' && partner.contact_info) {
                                 html += `<li class="task-item contact-recommended" style="display: ${displayStyle}; margin-bottom: 8px; align-items: center;">`;
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                                if (partner.telegram_id && avatarServiceAvailable) {
-                                    const fallbackId = `fallback-rec-${partner.telegram_id}`;
-                                    const imgId = `img-rec-${partner.telegram_id}`;
+                                if (partner.photo_url) {
+                                    const imgId = `img-rec-${partner.telegram_id || partner.contact_info}`;
                                     html += `<div style="margin-right: 12px; flex-shrink: 0;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onload="handleAvatarLoad(this, '${fallbackId}')" onerror="handleAvatarError(this, '${fallbackId}')" style="display: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">${initial}</div></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="${partner.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
                                     html += `</div>`;
                                 } else {
                                     html += `<div style="margin-right: 12px; flex-shrink: 0;"><a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">${initial}</div></a></div>`;
@@ -1781,12 +1779,10 @@
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
                                 html += `<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
-                                if (partner.telegram_id && avatarServiceAvailable) {
-                                    const fallbackId = `fallback-del-to-${partner.telegram_id}`;
-                                    const imgId = `img-del-to-${partner.telegram_id}`;
+                                if (partner.photo_url) {
+                                    const imgId = `img-del-to-${partner.telegram_id || partner.contact_info}`;
                                     html += `<div style="margin-right: 12px; flex-shrink: 0;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onload="handleAvatarLoad(this, '${fallbackId}')" onerror="handleAvatarError(this, '${fallbackId}')" style="display: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="${partner.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
                                     html += `</div>`;
                                 } else {
                                     html += `<div style="margin-right: 12px; flex-shrink: 0;"><a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a></div>`;
@@ -1855,14 +1851,16 @@
                             } else if (partner.type === 'delegating_by_me') {
                                 html += `<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 8px; align-items: center;">`;
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
-                                if (partner.telegram_id) {
-                                    const fallbackId = `fallback-del-by-${partner.telegram_id}`;
-                                    const imgId = `img-del-by-${partner.telegram_id}`;
+                                if (partner.photo_url) {
+                                    const imgId = `img-del-by-${partner.telegram_id || partner.contact_info}`;
                                     html += `<div style="position: relative; display: inline-block;">`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="/api/avatar/${partner.telegram_id}" onload="handleAvatarLoad(this, '${fallbackId}')" onerror="handleAvatarError(this, '${fallbackId}')" style="display: none; width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
-                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div id="${fallbackId}" style="position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><img id="${imgId}" src="${partner.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>`;
                                     html += `</div>`;
                                 } else {
+                                    html += `<div style="position: relative; display: inline-block;">`;
+                                    html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
+                                    html += `</div>`;
+                                }
                                     html += `<a href="${telegramUrl}" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>`;
                                 }
                                 html += '</div>';
