@@ -1911,7 +1911,7 @@ async def on_startup(app):
             'secure': True,
             'httponly': True,
             'samesite': 'Lax',  # Use Lax for same-site requests
-            'domain': '.up.railway.app',  # Allow cookies for all Railway subdomains
+            'domain': None,  # Use None to default to the request's host
             'max_age': 86400,  # 24 hours
             'path': '/'
         }
