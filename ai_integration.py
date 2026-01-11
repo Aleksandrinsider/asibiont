@@ -29,6 +29,18 @@ def classify_user_intent(message, mentions_str):
     """
     message_lower = message.lower().strip()
     intent = {"type": "unknown", "confidence": 0.0, "params": {}}
+    
+    # КРИТИЧНО: Если это короткий ответ (1-3 слова, без команд) - НЕ пытайся распознать команду
+    # Это продолжение диалога, а не новый запрос действия
+    words = message_lower.split()
+    command_keywords = ["покажи", "список", "добавь", "удали", "напомни", "создай", "поручи", "перенеси", 
+                       "выполнил", "выполнена", "измени", "найди", "подписка", "оплати", "отмени"]
+    
+    if len(words) <= 3 and not any(keyword in message_lower for keyword in command_keywords) and "@" not in message:
+        # Короткий ответ без команд - это продолжение диалога
+        intent["type"] = "conversation"
+        intent["confidence"] = 0.9
+        return intent
 
     # 1. Делегирование задач (@mentions) - улучшенные паттерны
     if "@" in message:
@@ -464,6 +476,12 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
 
     # 🔍 ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ: проверяем, должен ли был AI вызвать tool calls
     intent = classify_user_intent(message, mentions_str)
+    
+    # Если это просто продолжение диалога - fallback не нужен
+    if intent["type"] == "conversation":
+        logger.info("[SMART FALLBACK] Conversation detected, no fallback needed")
+        return []
+    
     should_have_tool_calls = intent["type"] in [
         "add_task",
         "complete_task",
