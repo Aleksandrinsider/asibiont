@@ -95,6 +95,15 @@
                         </button>
                     </div>
                     <div id="profile-content" class="profile-content" style="display: none; margin-bottom: 15px;">
+                    <script>
+                        // Немедленно скрываем профиль если он должен быть свернут (до полной загрузки страницы)
+                        (function() {
+                            var isCollapsed = localStorage.getItem('profileCollapsed');
+                            if (isCollapsed === null || isCollapsed === 'true') {
+                                document.getElementById('profile-content').style.display = 'none';
+                            }
+                        })();
+                    </script>
                         {% if profile %}
                         <div class="context-item">
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
