@@ -1896,7 +1896,7 @@ async def on_startup(app):
             'secure': True,
             'httponly': True,
             'samesite': 'Lax',  # Use Lax for same-site requests
-            'domain': None,  # Current domain only
+            'domain': '.up.railway.app',  # Allow subdomains
             'max_age': 86400,  # 24 hours
             'path': '/'
         }
@@ -1917,21 +1917,31 @@ async def on_startup(app):
             from aiohttp_session import Session as AiohttpSession
             cookie = self.load_cookie(request)
             logger.info(f"Loading session from cookie: {cookie is not None}")
+            if cookie is not None:
+                logger.info(f"Raw cookie value: {cookie}")
             if cookie is None:
                 logger.info("No cookie found, creating new session")
                 return await self.new_session()
             try:
                 data = self._decoder(cookie)
-                logger.info(f"Session loaded successfully: {data}")
-                return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
-            except json.JSONDecodeError:
-                logger.error("Invalid cookie JSON, creating new session")
-                # Invalid cookie, create new session
+                logger.info(f"Decoded session data: {data}")
+                session = AiohttpSession(None, data=data, new=False, max_age=self.max_age)
+                logger.info(f"Session object created: {dict(session)}")
+                return session
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid cookie JSON: {e}, raw cookie: {cookie}, creating new session")
                 return await self.new_session()
         
         async def save_session(self, request, response, session):
             logger.info(f"Saving session: {dict(session)}")
-            return await super().save_session(request, response, session)
+            if session._mapping:  # If session has data
+                encoded = self._encoder(session._mapping)
+                logger.info(f"Encoded session data: {encoded}")
+                response.set_cookie(self._cookie_name, encoded, **self._options)
+                logger.info(f"Cookie '{self._cookie_name}' set in response")
+            else:
+                logger.info("Session empty, deleting cookie")
+                response.del_cookie(self._cookie_name)
     
     storage = SafeSimpleCookieStorage(**session_options)
     logger.info(f"Session storage initialized with SafeSimpleCookieStorage, options: {session_options}")
