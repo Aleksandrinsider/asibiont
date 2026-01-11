@@ -1891,8 +1891,8 @@ async def on_startup(app):
         session_options = {
             'secure': True,
             'httponly': True,
-            'samesite': 'None',  # Allow cross-site requests for API calls
-            'domain': '.up.railway.app'  # Allow cookies for railway.app domain
+            'samesite': 'Lax',  # Changed from 'None' to 'Lax' for Railway
+            'domain': None  # Changed from '.up.railway.app' to None for current domain only
         }
     else:
         # For local development
