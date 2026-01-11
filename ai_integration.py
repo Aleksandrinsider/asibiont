@@ -1218,10 +1218,11 @@ def analyze_user_context_for_advice(user_id, message, context=None):
                 "city": profile.city or "не указан",
                 "company": profile.company or "не указана",
                 "position": profile.position or "не указана",
+                "languages": profile.languages or "не указаны",
                 "skills": profile.skills or "не указаны",
                 "interests": profile.interests or "не указаны",
                 "goals": profile.goals or "не указаны",
-                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.skills, profile.interests, profile.goals] if field])
+                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.languages, profile.skills, profile.interests, profile.goals] if field])
             }
 
         # 2. АНАЛИЗ ЗАДАЧ
@@ -3701,6 +3702,7 @@ def update_profile(
     timezone=None,
     company=None,
     position=None,
+    languages=None,
     user_id=None,
     session=None,
 ):
@@ -3805,6 +3807,11 @@ def update_profile(
         old_position = profile.position
         profile.position = position
         updates_made.append(f"changed_position:{old_position}→{position}")
+    
+    if hasattr(profile, "languages") and languages:
+        old_languages = profile.languages
+        profile.languages = languages
+        updates_made.append(f"changed_languages:{old_languages}→{languages}")
     
     if timezone:
         user.timezone = timezone
@@ -4070,6 +4077,10 @@ TOOLS = [
                     "company": {
                         "type": "string",
                         "description": "Компания, в которой работает пользователь (заменяет старое значение), опционально",
+                    },
+                    "languages": {
+                        "type": "string",
+                        "description": "Языки пользователя (например: Русский (родной), English (C1), Español (A2)), заменяет старое значение, опционально",
                     },
                     "position": {"type": "string", "description": "Должность пользователя (заменяет старое значение), опционально"},
                 },
