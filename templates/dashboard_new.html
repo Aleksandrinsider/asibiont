@@ -1583,6 +1583,15 @@
                     peopleList.style.maxHeight = 'calc(100vh - 510px)';
                     peopleList.style.overflowY = 'auto';
                 }
+                // Добавляем ссылку на поддержку при загрузке, если профиль раскрыт
+                setTimeout(() => {
+                    if (!profileContent.querySelector('.support-link')) {
+                        const supportP = document.createElement('p');
+                        supportP.innerHTML = 'Поддержка: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #068487; text-decoration: none;">@aleksandrinsider</a>';
+                        supportP.className = 'support-link';
+                        profileContent.appendChild(supportP);
+                    }
+                }, 100);
             }
             
             // Загрузить историю чата
