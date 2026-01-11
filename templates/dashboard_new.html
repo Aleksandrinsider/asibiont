@@ -55,13 +55,12 @@
     </div>
     <div class="container">
         {% if not logged_in %}
-        <div class="welcome-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center;">
-            <div class="welcome-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(1px);"></div>
-            <div class="welcome-content" style="position: relative; z-index: 1; text-align: center; max-width: 600px; padding: 40px; background: rgba(255, 255, 255, 0.95); border-radius: 16px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.2);">
-                <h1 style="margin-bottom: 20px; font-size: 32px; color: #1F2328; font-weight: 700;">ASI BIONT</h1>
-                <p style="margin-bottom: 20px; color: #1F2328; line-height: 1.6; font-size: 16px;">Лаборатория искусственного интеллекта ASI Biont — закрытое сообщество для тех, кто создаёт будущее. Здесь нет места скучным знакомствам — только те, кто идёт в том же направлении.</p>
-                <p style="margin-bottom: 30px; color: #1F2328; line-height: 1.6; font-size: 16px;">Забудьте про мёртвые контакты и случайные связи. В ASI Biont вас окружают единомышленники, с которыми можно запустить крутой проект, достичь целей или просто весело провести время.</p>
-                <p style="margin-bottom: 20px; color: #656D76; font-size: 14px; font-weight: 500;">Авторизуйтесь через Telegram для начала</p>
+        <div class="welcome-section">
+            <div class="welcome-content">
+                <h1 style="margin-bottom: 20px; font-size: 24px; color: #1F2328;">ASI BIONT</h1>
+                <p style="margin-bottom: 20px; color: #1F2328; line-height: 1.4;">Лаборатория искусственного интеллекта ASI Biont — закрытое сообщество для тех, кто создаёт будущее. Здесь нет места скучным знакомствам — только те, кто идёт в том же направлении.</p>
+                <p style="margin-bottom: 30px; color: #1F2328; line-height: 1.4;">Забудьте про мёртвые контакты и случайные связи. В ASI Biont вас окружают единомышленники, с которыми можно запустить крутой проект, достичь целей или просто весело провести время.</p>
+                <p style="margin-bottom: 20px; color: #656D76; font-size: 13px;">Авторизуйтесь через Telegram для начала</p>
                 <div style="display: flex; justify-content: center; margin-top: 20px;">
                     <script async src="https://telegram.org/js/telegram-widget.js?22" 
                             data-telegram-login="{{ bot_username }}" 
