@@ -3355,7 +3355,9 @@ def get_partners_list(user_id=None, session=None):
             (UserProfile.interests.isnot(None))
             | (UserProfile.skills.isnot(None))
             | (UserProfile.position.isnot(None))
-            | (UserProfile.city.isnot(None)),
+            | (UserProfile.city.isnot(None))
+            | (UserProfile.bio.isnot(None))
+            | (UserProfile.languages.isnot(None)),
         )
         .all()
     )
@@ -3649,10 +3651,15 @@ def find_partners(user_id=None, session=None):
 
             if p.interests:
                 info_parts.append(f"интересы: {p.interests}")
+            if hasattr(p, "bio") and p.bio:
+                bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
+                info_parts.append(f"о себе: {bio_short}")
             if hasattr(p, "position") and p.position:
                 info_parts.append(f"{p.position}")
             if hasattr(p, "company") and p.company:
                 info_parts.append(f"компания: {p.company}")
+            if hasattr(p, "languages") and p.languages:
+                info_parts.append(f"языки: {p.languages}")
             if p.city:
                 info_parts.append(f"город: {p.city}")
 
@@ -4265,6 +4272,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     profile_info.append(f"Компания: {profile.company}")
                 if profile.position:
                     profile_info.append(f"Должность: {profile.position}")
+                if hasattr(profile, 'bio') and profile.bio:
+                    profile_info.append(f"О себе: {profile.bio}")
+                if hasattr(profile, 'languages') and profile.languages:
+                    profile_info.append(f"Языки: {profile.languages}")
                 if profile.skills:
                     profile_info.append(f"Навыки: {profile.skills}")
                 if profile.interests:
