@@ -1895,9 +1895,10 @@ async def on_startup(app):
         session_options = {
             'secure': True,
             'httponly': True,
-            'samesite': 'None',  # Changed back to 'None' for Railway HTTPS
+            'samesite': 'Lax',  # Use Lax for same-site requests
             'domain': None,  # Current domain only
-            'max_age': 3600  # 1 hour
+            'max_age': 86400,  # 24 hours
+            'path': '/'
         }
     else:
         # For local development
@@ -1905,26 +1906,35 @@ async def on_startup(app):
             'secure': False,
             'httponly': True,
             'samesite': 'Lax',
-            'max_age': 3600
+            'max_age': 86400,
+            'path': '/'
         }
     
     # Initialize session storage
-    # Temporarily use SafeSimpleCookieStorage instead of Redis for testing
+    # Use SimpleCookieStorage with enhanced logging
     class SafeSimpleCookieStorage(SimpleCookieStorage):
         async def load_session(self, request):
             from aiohttp_session import Session as AiohttpSession
             cookie = self.load_cookie(request)
+            logger.info(f"Loading session from cookie: {cookie is not None}")
             if cookie is None:
+                logger.info("No cookie found, creating new session")
                 return await self.new_session()
             try:
                 data = self._decoder(cookie)
+                logger.info(f"Session loaded successfully: {data}")
                 return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
             except json.JSONDecodeError:
+                logger.error("Invalid cookie JSON, creating new session")
                 # Invalid cookie, create new session
                 return await self.new_session()
+        
+        async def save_session(self, request, response, session):
+            logger.info(f"Saving session: {dict(session)}")
+            return await super().save_session(request, response, session)
     
     storage = SafeSimpleCookieStorage(**session_options)
-    logger.info("Session storage initialized with SafeSimpleCookieStorage (temporary)")
+    logger.info(f"Session storage initialized with SafeSimpleCookieStorage, options: {session_options}")
     
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware configured successfully")
