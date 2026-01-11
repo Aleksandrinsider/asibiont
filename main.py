@@ -1896,7 +1896,7 @@ async def on_startup(app):
             'secure': True,
             'httponly': True,
             'samesite': 'None',  # Use None to allow cookie in all contexts
-            'domain': None,  # Use None to default to the request's host
+            'domain': '.up.railway.app',  # Allow cookies for all Railway subdomains
             'max_age': 86400,  # 24 hours
             'path': '/'
         }
