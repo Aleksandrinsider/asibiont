@@ -278,9 +278,9 @@ async def chat_handler(message: Message):
                             
                             if text:
                                 logger.info(f"[VOICE] Transcribed text: {text}")
-                                # Создаем текстовое сообщение и обрабатываем его как обычное
-                                message.text = text
-                                # Продолжаем обработку как текстовое сообщение
+                                # Обрабатываем транскрибированный текст как обычное сообщение
+                                await process_text_message(user_id, text, message, None)
+                                return
                             else:
                                 await message.bot.send_message(
                                     message.chat.id, 
@@ -299,7 +299,18 @@ async def chat_handler(message: Message):
             await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке голосового сообщения.")
             return
     
-    logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {message.text[:50] if message.text else 'None'}")
+    # Обработка текстовых сообщений
+    if message.text:
+        await process_text_message(user_id, message.text, message, None)
+    else:
+        # Обработка других типов сообщений (геолокация и т.д.)
+        await process_other_message(user_id, message, None)
+
+
+async def process_text_message(user_id, text, message, state):
+    message_id = message.message_id
+    
+    logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {text[:50]}")
     
     try:
         # Check for duplicate message processing
@@ -328,26 +339,28 @@ async def chat_handler(message: Message):
             await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
             return
         
-        # Обработка геолокации
-        if message.location:
-            lat = message.location.latitude
-            lon = message.location.longitude
-            tf = TimezoneFinder()
-            timezone_str = tf.timezone_at(lng=lon, lat=lat)
-            if timezone_str:
-                session = Session()
-                user = session.query(User).filter_by(telegram_id=user_id).first()
-                if user:
-                    user.timezone = timezone_str
-                    session.commit()
-                    await message.bot.send_message(message.chat.id, f"Ваш часовой пояс установлен на {timezone_str}. Теперь время будет рассчитываться автоматически!")
-                session.close()
-            else:
-                await message.bot.send_message(message.chat.id, "Не удалось определить часовой пояс по вашим координатам. Попробуйте указать его вручную через диалог.")
+        # Handle delegation commands
+        if text.lower().startswith("принять задачу "):
+            task_id = text.split()[-1]
+            try:
+                from ai_integration import accept_delegated_task
+                result = accept_delegated_task(int(task_id), user_id=user_id)
+                await message.bot.send_message(message.chat.id, result)
+            except Exception as e:
+                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
             return
         
-        # Все сообщения обрабатываются через ИИ
-        if message.text.lower() == "очистить историю":
+        if text.lower().startswith("отклонить задачу "):
+            task_id = text.split()[-1]
+            try:
+                from ai_integration import reject_delegated_task
+                result = reject_delegated_task(int(task_id), user_id=user_id)
+                await message.bot.send_message(message.chat.id, result)
+            except Exception as e:
+                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
+            return
+        
+        if text.lower() == "очистить историю":
             context = []
             if redis_client:
                 try:
@@ -357,26 +370,6 @@ async def chat_handler(message: Message):
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
         
-        # Handle delegation commands
-        if message.text.lower().startswith("принять задачу "):
-            task_id = message.text.split()[-1]
-            try:
-                from ai_integration import accept_delegated_task
-                result = accept_delegated_task(int(task_id), user_id=user_id)
-                await message.bot.send_message(message.chat.id, result)
-            except Exception as e:
-                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
-            return
-        
-        if message.text.lower().startswith("отклонить задачу "):
-            task_id = message.text.split()[-1]
-            try:
-                from ai_integration import reject_delegated_task
-                result = reject_delegated_task(int(task_id), user_id=user_id)
-                await message.bot.send_message(message.chat.id, result)
-            except Exception as e:
-                await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
-            return
         context = []
         if redis_client:
             try:
@@ -393,11 +386,11 @@ async def chat_handler(message: Message):
                 context = []
         else:
             logger.warning("Redis client not initialized, context will not persist")
-        response = await chat_with_ai(message.text, context, user_id)
+        response = await chat_with_ai(text, context, user_id)
         logger.debug(f"AI response generated for user {user_id}: '{response[:100]}...'")
         print(f"[DEBUG HANDLER] Response from chat_with_ai: '{response}'")  # DEBUG
         # Сохранить контекст для продолжения
-        context.append({"user": message.text, "agent": response})
+        context.append({"user": text, "agent": response})
         if len(context) > 10:
             context = context[-10:]  # Keep last 10 exchanges
         if redis_client:
@@ -425,7 +418,7 @@ async def chat_handler(message: Message):
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if user:
             from models import Interaction
-            interaction = Interaction(user_id=user.id, message_type='user', content=message.text)
+            interaction = Interaction(user_id=user.id, message_type='user', content=text)
             session.add(interaction)
             if response and response.strip():
                 interaction = Interaction(user_id=user.id, message_type='ai', content=response.strip())
@@ -435,8 +428,28 @@ async def chat_handler(message: Message):
             session.commit()
         session.close()
     except Exception as e:
-        logger.error(f"Error in chat_handler for user {user_id}: {e}", exc_info=True)
+        logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
         await message.bot.send_message(message.chat.id, "Извините, произошла ошибка. Попробуйте позже.")
+
+
+async def process_other_message(user_id, message, state):
+    # Обработка геолокации
+    if message.location:
+        lat = message.location.latitude
+        lon = message.location.longitude
+        tf = TimezoneFinder()
+        timezone_str = tf.timezone_at(lng=lon, lat=lat)
+        if timezone_str:
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                user.timezone = timezone_str
+                session.commit()
+                await message.bot.send_message(message.chat.id, f"Ваш часовой пояс установлен на {timezone_str}. Теперь время будет рассчитываться автоматически!")
+            session.close()
+        else:
+            await message.bot.send_message(message.chat.id, "Не удалось определить часовой пояс по вашим координатам. Попробуйте указать его вручную через диалог.")
+        return
 
 @router.message(Command("dashboard"))
 async def dashboard_handler(message: Message):

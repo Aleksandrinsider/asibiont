@@ -785,7 +785,7 @@ class AIIntegration:
         return await generate_result_check(user_id, task_title)
 
     async def generate_proactive_message(self, user_id):
-        return generate_proactive_message(user_id)
+        return await generate_proactive_message(user_id)
 
     async def generate_daily_report(self, user_id):
         return generate_daily_report(user_id)
