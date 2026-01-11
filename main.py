@@ -547,8 +547,21 @@ async def dashboard_handler(request):
             }
             tasks_dict.append(task_dict)
         
-        # Get user avatar URL from database
+        # Get user avatar URL from database and update if needed
         user_avatar_url = user.photo_url if user and user.photo_url else None
+        
+        # Try to update avatar from Telegram API if bot is available
+        if 'bot' in request.app and user:
+            try:
+                updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+                if updated_avatar_url and updated_avatar_url != user.photo_url:
+                    user.photo_url = updated_avatar_url
+                    session_db.commit()
+                    logger.info(f"Updated avatar URL for user {user_id}")
+                    user_avatar_url = updated_avatar_url
+            except Exception as e:
+                logger.error(f"Error updating avatar for user {user_id}: {e}")
+        
         # Add random parameter to prevent caching if URL exists
         if user_avatar_url:
             import random
@@ -1816,8 +1829,21 @@ async def api_profile_handler(request):
             'rating_count': profile.rating_count or 0
         }
     
-    # Get user avatar URL from database
+    # Get user avatar URL from database and update if needed
     user_avatar_url = user.photo_url if user and user.photo_url else None
+    
+    # Try to update avatar from Telegram API if bot is available
+    if 'bot' in request.app and user:
+        try:
+            updated_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+            if updated_avatar_url and updated_avatar_url != user.photo_url:
+                user.photo_url = updated_avatar_url
+                session_db.commit()
+                logger.info(f"Updated avatar URL for user {user_id}")
+                user_avatar_url = updated_avatar_url
+        except Exception as e:
+            logger.error(f"Error updating avatar for user {user_id}: {e}")
+    
     # Add random parameter to prevent caching if URL exists
     if user_avatar_url:
         import random
