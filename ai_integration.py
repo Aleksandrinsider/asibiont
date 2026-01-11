@@ -4127,12 +4127,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         final_content, user_id, original_message
                                     )
 
-                                    # 🎯 ПРИНУЖДАЕМ СОБЛЮДЕНИЕ ГЛАВНОГО ПРОМПТА
-                                    intent_type = "list_tasks" if has_list_tasks else None
-                                    final_content = await enforce_prompt_compliance(
-                                        final_content, intent_type, user_id, context,
-                                        system_prompt, messages, url, headers
-                                    )
+                                    # Enforcement отключен - AI должен отвечать естественно
+                                    # intent_type = "list_tasks" if has_list_tasks else None
+                                    # final_content = await enforce_prompt_compliance(
+                                    #     final_content, intent_type, user_id, context,
+                                    #     system_prompt, messages, url, headers
+                                    # )
 
                                     logger.info(
                                         f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response"
@@ -4221,12 +4221,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             # Формируем финальный контент
                             final_content = "\n".join(natural_responses)
                             
-                            # 🎯 ПРИНУЖДАЕМ СОБЛЮДЕНИЕ ГЛАВНОГО ПРОМПТА
-                            intent_type = "list_tasks" if has_list_tasks else None
-                            final_content = await enforce_prompt_compliance(
-                                final_content, intent_type, user_id, context,
-                                system_prompt, messages, url, headers
-                            )
+                            # Enforcement отключен - AI должен отвечать естественно
+                            # intent_type = "list_tasks" if has_list_tasks else None
+                            # final_content = await enforce_prompt_compliance(
+                            #     final_content, intent_type, user_id, context,
+                            #     system_prompt, messages, url, headers
+                            # )
                             
                             print(f"[DEBUG FALLBACK] Returning final_content: '{final_content[:200]}...'")  # DEBUG
                             return final_content
@@ -4302,13 +4302,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     # 🎯 Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, original_message)
 
-                    # 🎯 ПРИНУЖДАЕМ СОБЛЮДЕНИЕ ГЛАВНОГО ПРОМПТА ДЛЯ ОБЫЧНЫХ ОТВЕТОВ
-                    intent = classify_user_intent(clean_message, mentions_str)
-                    intent_type = intent["type"] if intent["confidence"] >= 0.7 else None
-                    content = await enforce_prompt_compliance(
-                        content, intent_type, user_id, context,
-                        system_prompt, messages, url, headers
-                    )
+                    # Enforcement отключен - AI должен отвечать естественно без дополнительных API вызовов
 
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
