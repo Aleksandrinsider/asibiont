@@ -2058,13 +2058,7 @@
                         }
                         if (headerAvatarSmall) {
                             if (data.user_avatar_url) {
-                                // Check if avatar URL changed to avoid flickering (compare base URL without random parameter)
-                                const currentImg = headerAvatarSmall.querySelector('img');
-                                const currentSrc = currentImg ? currentImg.src.split('?')[0] : null;
-                                const newSrc = data.user_avatar_url.split('?')[0];
-                                if (!currentImg || currentSrc !== newSrc) {
-                                    headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">`;
-                                }
+                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">`;
                             } else {
                                 // Show initial if no avatar
                                 const initial = (data.profile.username || 'unknown').charAt(0).toUpperCase();
