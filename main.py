@@ -1933,8 +1933,10 @@ async def on_startup(app):
                 if data is None:
                     logger.warning("Decoded data is None, creating new session")
                     return AiohttpSession(None, data=None, new=True, max_age=self.max_age)
-                # Session constructor expects data as dict, will assign to _mapping
-                session = AiohttpSession(None, data=data, new=False, max_age=self.max_age)
+                # Create empty session first, then populate _mapping manually
+                session = AiohttpSession(None, data=None, new=False, max_age=self.max_age)
+                # Manually populate session data
+                session._mapping.update(data)
                 logger.info(f"Session created with _mapping: {session._mapping}")
                 logger.info(f"Session dict: {dict(session)}")
                 return session
