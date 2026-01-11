@@ -1083,7 +1083,9 @@ async def api_partners_handler(request):
     try:
         session_req = await get_session(request)
         user_id = session_req.get('user_id')
+        logger.info(f"API partners handler called, session: {dict(session_req) if session_req else 'None'}, user_id: {user_id}")
         if not user_id:
+            logger.error("No user_id in session for partners API")
             return web.json_response({'error': 'Not logged in'}, status=401)
         
         try:
@@ -1830,7 +1832,9 @@ async def api_avatar_handler(request):
 async def api_reminders_handler(request):
     session_req = await get_session(request)
     user_id = session_req.get('user_id')
+    logger.info(f"API reminders handler called, session: {dict(session_req) if session_req else 'None'}, user_id: {user_id}")
     if not user_id:
+        logger.error("No user_id in session for reminders API")
         return web.json_response({'error': 'Not logged in'}, status=401)
     
     session_db = Session()
@@ -1948,7 +1952,9 @@ async def on_startup(app):
 async def api_tasks_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
+    logger.info(f"API tasks handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
     if not user_id:
+        logger.error("No user_id in session for tasks API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
     
     session_db = Session()
@@ -2045,7 +2051,9 @@ async def api_delegations_handler(request):
     """API для получения делегированных задач"""
     session = await get_session(request)
     user_id = session.get('user_id')
+    logger.info(f"API delegations handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
     if not user_id:
+        logger.error("No user_id in session for delegations API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
     
     session_db = Session()
@@ -2109,7 +2117,9 @@ async def api_interactions_handler(request):
     """API для получения истории чата"""
     session = await get_session(request)
     user_id = session.get('user_id')
+    logger.info(f"API interactions handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
     if not user_id:
+        logger.error("No user_id in session for interactions API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
     
     session_db = Session()
