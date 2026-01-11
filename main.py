@@ -1896,14 +1896,16 @@ async def on_startup(app):
             'secure': True,
             'httponly': True,
             'samesite': 'None',  # Changed back to 'None' for Railway HTTPS
-            'domain': None  # Current domain only
+            'domain': None,  # Current domain only
+            'max_age': 3600  # 1 hour
         }
     else:
         # For local development
         session_options = {
             'secure': False,
             'httponly': True,
-            'samesite': 'Lax'
+            'samesite': 'Lax',
+            'max_age': 3600
         }
     
     # Initialize session storage
