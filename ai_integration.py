@@ -122,8 +122,8 @@ def classify_user_intent(message, mentions_str):
         for keyword in create_keywords:
             if keyword in message_lower:
                 after_keyword = message_lower.split(keyword, 1)[1].strip()
-                # Ищем время в оставшейся части
-                time_match = re.search(r"(через\s+\d+\s*(минут|час|часа|часов)|завтра\s+в\s+\d{1,2}:\d{2}|сегодня\s+в\s+\d{1,2}:\d{2})", after_keyword, re.IGNORECASE)
+                # Ищем время в оставшейся части - улучшенные паттерны
+                time_match = re.search(r"(через\s+\d+\s*(минут|час|часа|часов|дней|день|дня)|завтра\s+в\s+\d{1,2}:\d{2}|сегодня\s+в\s+\d{1,2}:\d{2}|\d{1,2}:\d{2})", after_keyword, re.IGNORECASE)
                 if time_match:
                     intent["params"]["reminder_time"] = time_match.group(1)
                     # Всё до времени - название задачи
@@ -467,7 +467,7 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
             # Выполняем соответствующее действие
             if intent["type"] == "add_task":
                 result = add_task(
-                    title=intent["params"].get("title", "Задача"),
+                    title=intent["params"].get("task_title", "Задача"),
                     description=intent["params"].get("description", ""),
                     reminder_time=intent["params"].get("reminder_time"),
                     user_id=user_id,
@@ -3053,7 +3053,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "add_task",
-            "description": "Добавить новую задачу с обязательным временем напоминания. ВАЖНО: Если задача сформулирована слишком общо (например 'проверить почту', 'позвонить другу'), СНАЧАЛА задай уточняющие вопросы для получения деталей: контекста, цели, ожидаемого результата. Только после уточнения добавляй задачу с детальной формулировкой. КРИТИЧНО: используй ТОЧНУЮ ТЕКУЩУЮ ДАТУ из system prompt ({{current_date}}), НЕ используй даты из твоих знаний!",
+            "description": "Добавить новую задачу с обязательным временем напоминания. ВАЖНО: Всегда добавляй description с практическими рекомендациями по выполнению задачи. Description должен содержать: шаги выполнения, ожидаемый результат, советы. КРИТИЧНО: используй ТОЧНУЮ ТЕКУЩУЮ ДАТУ из system prompt ({{current_date}}), НЕ используй даты из твоих знаний!",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -3063,12 +3063,12 @@ TOOLS = [
                     },
                     "description": {
                         "type": "string",
-                        "description": "Дополнительное описание задачи с деталями выполнения, ожидаемым результатом",
+                        "description": "ОБЯЗАТЕЛЬНОЕ подробное описание задачи с шагами выполнения, ожидаемым результатом и практическими советами",
                     },
                     "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM. ОБЯЗАТЕЛЬНО используй current_date из system prompt для вычисления даты! Например, если current_date=2026-01-11 и пользователь просит 'через 5 минут в 12:30', используй '2026-01-11 12:30', а НЕ дату из прошлого!"},
                     "due_date": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM, опционально"},
                 },
-                "required": ["title", "reminder_time"],
+                "required": ["title", "description", "reminder_time"],
             },
         },
     },
