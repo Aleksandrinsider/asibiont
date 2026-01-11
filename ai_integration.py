@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 redis_client = None
 
 
+def set_redis_client(client):
+    """Установка Redis клиента из main.py"""
+    global redis_client
+    redis_client = client
+
+
 def post_process_tool_calls(intent, tool_calls, message):
     """
     Пост-обработка tool calls для коррекции ошибок AI.
