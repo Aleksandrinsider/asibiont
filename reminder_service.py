@@ -286,9 +286,9 @@ class ReminderService:
             
             # Простое уведомление без AI-генерации
             if update_type == "completed":
-                message = f"✅ Задача '{task.title}' выполнена @{recipient.username}"
+                message = f"Задача '{task.title}' выполнена @{recipient.username}"
             else:
-                message = f"📊 Напоминание: задача '{task.title}' для @{recipient.username}, дедлайн: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указан'}"
+                message = f"Напоминание: задача '{task.title}' для @{recipient.username}, дедлайн: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указан'}"
             
             if self.bot:
                 await self.bot.send_message(delegator.telegram_id, message)

@@ -37,7 +37,6 @@
         <div class="header-content">
             <div class="header-left">
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
-                <span class="beta-badge">бета тест</span>
             </div>
             <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
                 <span class="reminder-pulse"></span>
@@ -335,7 +334,7 @@
         // Безопасная функция для fetch с обработкой ошибок
         async function safeFetch(url, options = {}) {
             try {
-                const response = await fetch(url, options);
+                const response = await fetch(url, { ...options, credentials: 'include' });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -492,7 +491,7 @@
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
                         try {
-                            const syncResponse = await fetch('/api/interactions');
+                            const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
                             if (syncResponse.ok) {
                                 const syncData = await syncResponse.json();
                                 lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
@@ -609,7 +608,7 @@
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
                         try {
-                            const syncResponse = await fetch('/api/interactions');
+                            const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
                             if (syncResponse.ok) {
                                 const syncData = await syncResponse.json();
                                 lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
@@ -651,7 +650,7 @@
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
                     setTimeout(async () => {
                         try {
-                            const response = await fetch('/api/interactions');
+                            const response = await fetch('/api/interactions', { credentials: 'include' });
                             if (!await checkAuth(response)) return;
                             if (response.ok) {
                                 const data = await response.json();
@@ -784,6 +783,7 @@
         async function loadInitialMessages() {
             try {
                 const response = await fetch('/api/interactions', {
+                    credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'
@@ -911,9 +911,9 @@
                 
                 if (recommendations.length > 0) {
                     html += '<div class="task-recommendations" style="margin-top: 8px; padding: 8px; background: #F6F8FA; border-radius: 6px; border-left: 3px solid #068487;">';
-                    html += '<div style="font-size: 12px; font-weight: 600; color: #068487; margin-bottom: 4px;">💡 Рекомендации:</div>';
+                    html += '<div style="font-size: 12px; font-weight: 600; color: #068487; margin-bottom: 4px;">Рекомендации:</div>';
                     recommendations.forEach(rec => {
-                        html += '<div style="font-size: 12px; color: #1F2328; margin-bottom: 2px;">• ' + rec + '</div>';
+                        html += '<div style="font-size: 12px; color: #1F2328; margin-bottom: 2px;">' + rec + '</div>';
                     });
                     html += '</div>';
                 }
@@ -1624,6 +1624,7 @@
         async function updateTasks() {
             try {
                 const response = await fetch('/api/tasks?t=' + Date.now(), {
+                    credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'
@@ -1664,6 +1665,7 @@
         async function updatePeople() {
             try {
                 const response = await fetch('/api/partners', {
+                    credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'
@@ -1932,7 +1934,7 @@
         
         async function updateDelegations() {
             try {
-                const response = await fetch('/api/delegations');
+                const response = await fetch('/api/delegations', { credentials: 'include' });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
@@ -1940,17 +1942,17 @@
                     // Update incoming delegations
                     const incomingSection = document.querySelector('.delegation-incoming');
                     if (incomingSection && data.incoming) {
-                        let html = '<h4>📥 Делегировано мне</h4>';
+                        let html = '<h4>Делегировано мне</h4>';
                         if (data.incoming.length > 0) {
                             data.incoming.forEach(task => {
-                                const statusText = task.status === 'accepted' ? '✅ Принято' : 
-                                                  task.status === 'rejected' ? '❌ Отклонено' : '⏳ Ожидание';
+                                const statusText = task.status === 'accepted' ? 'Принято' : 
+                                                  task.status === 'rejected' ? 'Отклонено' : 'Ожидание';
                                 html += `<div class="delegation-card">`;
                                 html += `<p><strong>${task.title}</strong></p>`;
                                 html += `<p>От: ${task.from_user}</p>`;
                                 html += `<p>Статус: ${statusText}</p>`;
                                 if (task.reminder_time) {
-                                    html += `<p>⏰ ${task.reminder_time}</p>`;
+                                    html += `<p>${task.reminder_time}</p>`;
                                 }
                                 html += `</div>`;
                             });
@@ -1963,17 +1965,17 @@
                     // Update outgoing delegations
                     const outgoingSection = document.querySelector('.delegation-outgoing');
                     if (outgoingSection && data.outgoing) {
-                        let html = '<h4>📤 Делегировано мной</h4>';
+                        let html = '<h4>Делегировано мной</h4>';
                         if (data.outgoing.length > 0) {
                             data.outgoing.forEach(task => {
-                                const statusText = task.status === 'accepted' ? '✅ Принято' : 
-                                                  task.status === 'rejected' ? '❌ Отклонено' : '⏳ Ожидание';
+                                const statusText = task.status === 'accepted' ? 'Принято' : 
+                                                  task.status === 'rejected' ? 'Отклонено' : 'Ожидание';
                                 html += `<div class="delegation-card">`;
                                 html += `<p><strong>${task.title}</strong></p>`;
                                 html += `<p>Кому: ${task.to_user}</p>`;
                                 html += `<p>Статус: ${statusText}</p>`;
                                 if (task.reminder_time) {
-                                    html += `<p>⏰ ${task.reminder_time}</p>`;
+                                    html += `<p>${task.reminder_time}</p>`;
                                 }
                                 html += `</div>`;
                             });
@@ -1998,6 +2000,7 @@
         async function updateProfile() {
             try {
                 const response = await fetch('/api/profile', {
+                    credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'
@@ -2142,6 +2145,7 @@
         async function updateChat() {
             try {
                 const response = await fetch('/api/interactions', {
+                    credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'
@@ -2333,7 +2337,7 @@
                     break;
                 case 'contacts':
                     content = `
-                        <h3>👥 Контакты и связи</h3>
+                        <h3>Контакты и связи</h3>
                         <p>Раздел для поиска и управления профессиональными контактами. Система анализирует профили пользователей для интеллектуального подбора партнеров по проектам.</p>
                         <p><strong>Зачем собираются данные контактов:</strong></p>
                         <ul>
@@ -2359,7 +2363,7 @@
                     break;
                 case 'chat':
                     content = `
-                        <h3>💬 Интеллектуальный чат-ассистент</h3>
+                        <h3>Интеллектуальный чат-ассистент</h3>
                         <p>AI-ассистент обрабатывает ваши сообщения на естественном языке, используя машинное обучение для понимания контекста и предоставления релевантных ответов.</p>
                         <p><strong>Зачем собираются данные чата:</strong></p>
                         <ul>

@@ -50,25 +50,51 @@ def cancel_subscription(user_id):
     finally:
         session.close()
 
-def get_subscription_status(user_id):
-    """Возвращает детальную информацию о подписке"""
+def activate_subscription(user_id, plan='monthly'):
+    """Активирует подписку для пользователя"""
     session = Session()
     try:
         # First find the user by telegram_id
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return None
+            return False, "Пользователь не найден"
         
-        # Then find subscription by user.id
+        # Check if subscription already exists
         sub = session.query(Subscription).filter_by(user_id=user.id).first()
+        
         if sub:
-            return {
-                'status': sub.status,
-                'plan': sub.plan,
-                'start_date': sub.start_date.isoformat() if sub.start_date else None,
-                'end_date': sub.end_date.isoformat() if sub.end_date else None,
-                'login_count': sub.login_count
-            }
-        return None
+            # Update existing subscription
+            sub.status = 'active'
+            sub.plan = plan
+            sub.start_date = datetime.datetime.now(datetime.timezone.utc)
+            if plan == 'monthly':
+                sub.end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
+            elif plan == 'yearly':
+                sub.end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+            session.commit()
+            return True, f"Подписка обновлена до {sub.end_date.strftime('%d.%m.%Y')}"
+        else:
+            # Create new subscription
+            end_date = None
+            if plan == 'monthly':
+                end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
+            elif plan == 'yearly':
+                end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+            
+            new_sub = Subscription(
+                user_id=user.id,
+                status='active',
+                plan=plan,
+                start_date=datetime.datetime.now(datetime.timezone.utc),
+                end_date=end_date,
+                login_count=0
+            )
+            session.add(new_sub)
+            session.commit()
+            return True, f"Подписка активирована до {end_date.strftime('%d.%m.%Y') if end_date else 'бессрочно'}"
+            
+    except Exception as e:
+        session.rollback()
+        return False, f"Ошибка активации подписки: {str(e)}"
     finally:
         session.close()
