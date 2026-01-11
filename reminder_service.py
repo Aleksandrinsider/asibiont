@@ -317,11 +317,22 @@ class ReminderService:
                 
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
+                # Вычисляем параметры cron триггера на основе интервала
+                interval = PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
+                if interval >= 60:
+                    hour_step = interval // 60
+                    minute = '0'
+                    hour = f'10-21/{hour_step}' if hour_step > 1 else '10-21'
+                else:
+                    minute = f'*/{interval}'
+                    hour = '10-21'
+                
                 # Планируем проактивные проверки с интервалом без задач (по умолчанию)
                 self.scheduler.add_job(
                     self.check_and_send_proactive,
                     trigger="cron",
-                    minute=f"*/{PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES}",
+                    minute=minute,
+                    hour=hour,
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=job_id,
@@ -429,11 +440,21 @@ class ReminderService:
             # Выбрать интервал в зависимости от наличия задач
             interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES if has_tasks else PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
             
+            # Вычисляем параметры cron триггера на основе интервала
+            if interval_minutes >= 60:
+                hour_step = interval_minutes // 60
+                minute = '0'
+                hour = f'10-21/{hour_step}' if hour_step > 1 else '10-21'
+            else:
+                minute = f'*/{interval_minutes}'
+                hour = '10-21'
+            
             # Перепланировать джоб с новым интервалом
             self.scheduler.add_job(
                 self.check_and_send_proactive,
                 trigger="cron",
-                minute=f"*/{interval_minutes}",
+                minute=minute,
+                hour=hour,
                 timezone=user_tz,
                 args=[user.telegram_id],
                 id=job_id,
