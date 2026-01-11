@@ -58,6 +58,20 @@ def run_migrations():
         else:
             logger.info("Migration: activity_streak column already exists")
             
+        # Migration for bio column
+        logger.info(f"Checking bio column, current columns: {columns}")
+        if 'bio' not in columns:
+            try:
+                logger.info("Adding bio column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN bio TEXT'))
+                session.commit()
+                logger.info("Migration: bio column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add bio column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: bio column already exists")
+            
         # Migration for subscriptions table
         if 'subscriptions' in inspector.get_table_names():
             sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
@@ -1028,9 +1042,11 @@ async def direct_login_handler(request):
     # Set session
     session = await get_session(request)
     session['user_id'] = user_id
-    logger.info(f"Direct login successful for user_id: {user_id}")
+    logger.info(f"Direct login: Setting user_id={user_id} in session")
+    logger.info(f"Session data after setting: {dict(session)}")
     
     response = web.HTTPFound('/dashboard')
+    logger.info(f"Direct login successful for user_id: {user_id}, redirecting to /dashboard")
     return response
 
 
@@ -1916,26 +1932,15 @@ async def on_startup(app):
     logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
     
     # Configure session cookie options
-    session_options = {}
-    if not LOCAL:
-        # For Railway HTTPS deployment
-        session_options = {
-            'secure': True,
-            'httponly': True,
-            'samesite': 'Lax',  # Use Lax for same-site requests
-            'domain': None,  # Use None to default to the request's host
-            'max_age': 86400,  # 24 hours
-            'path': '/'
-        }
-    else:
-        # For local development
-        session_options = {
-            'secure': False,
-            'httponly': True,
-            'samesite': 'Lax',
-            'max_age': 86400,
-            'path': '/'
-        }
+    # Note: Use secure=False for Railway as it uses internal HTTP behind proxy
+    session_options = {
+        'secure': False,  # Railway uses internal HTTP
+        'httponly': True,
+        'samesite': 'Lax',
+        'domain': None,  # Let browser set domain automatically
+        'max_age': 86400,  # 24 hours
+        'path': '/'
+    }
     
     # Initialize session storage
     # Use SimpleCookieStorage
@@ -2222,12 +2227,18 @@ async def update_timezone_handler(request):
 
 async def api_profile_handler(request):
     """API для получения профиля пользователя"""
-    session = await get_session(request)
-    user_id = session.get('user_id')
-    logger.info(f"API profile handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
-    if not user_id:
-        logger.error("No user_id in session for profile API")
-        return web.json_response({'error': 'Not authenticated'}, status=401)
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        logger.info(f"API profile: session exists={session is not None}, user_id={user_id}")
+        logger.info(f"API profile: session data={dict(session) if session else 'None'}")
+        logger.info(f"API profile: cookies={request.cookies}")
+        if not user_id:
+            logger.error("No user_id in session for profile API")
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+    except Exception as e:
+        logger.error(f"Error getting session in api_profile: {e}", exc_info=True)
+        return web.json_response({'error': 'Session error'}, status=500)
     
     # Try to get cached profile data first
     cache_key = f"profile:{user_id}"
