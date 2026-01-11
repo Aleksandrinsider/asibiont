@@ -12,6 +12,7 @@ class User(Base):
     telegram_id = Column(Integer, unique=True, nullable=False)
     username = Column(String(255))
     first_name = Column(String(255))
+    photo_url = Column(String(500))  # Telegram profile photo URL
     memory = Column(Text)  # Long-term memory for user info
     timezone = Column(String(50), default='UTC')
     do_not_disturb_until = Column(DateTime)

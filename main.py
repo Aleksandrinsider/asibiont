@@ -69,6 +69,17 @@ def run_migrations():
             else:
                 logger.info("Migration: telegram_username column already exists")
         
+        # Migration for users table
+        if 'users' in inspector.get_table_names():
+            user_columns = [col['name'] for col in inspector.get_columns('users')]
+            if 'photo_url' not in user_columns:
+                logger.info("Adding photo_url column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN photo_url VARCHAR(500)'))
+                session.commit()
+                logger.info("Migration: photo_url column added successfully")
+            else:
+                logger.info("Migration: photo_url column already exists")
+        
         session.close()
     except Exception as e:
         logger.error(f"Migration failed: {e}")
@@ -158,7 +169,7 @@ async def auth_handler(request):
                 timezone, city = await get_timezone_from_ip(ip_address)
                 logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
                 
-                user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), timezone=timezone)
+                user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), photo_url=data.get('photo_url'), timezone=timezone)
                 session_db.add(user)
                 session_db.commit()
                 
@@ -173,6 +184,10 @@ async def auth_handler(request):
                     session_db.commit()
             else:
                 logger.info(f"Found existing user: {user.id}")
+                # Update photo_url if provided and different
+                if data.get('photo_url') and user.photo_url != data.get('photo_url'):
+                    user.photo_url = data.get('photo_url')
+                    session_db.commit()
             
             # Increment login count if subscription exists
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
@@ -532,14 +547,12 @@ async def dashboard_handler(request):
             }
             tasks_dict.append(task_dict)
         
-        # Get user avatar URL
-        user_avatar_url = None
-        if 'bot' in request.app:
-            user_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-            # Add random parameter to prevent caching
-            if user_avatar_url:
-                import random
-                user_avatar_url += f"?r={random.randint(100000, 999999)}"
+        # Get user avatar URL from database
+        user_avatar_url = user.photo_url if user and user.photo_url else None
+        # Add random parameter to prevent caching if URL exists
+        if user_avatar_url:
+            import random
+            user_avatar_url += f"?r={random.randint(100000, 999999)}"
         
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
@@ -1798,14 +1811,12 @@ async def api_profile_handler(request):
             'rating_count': profile.rating_count or 0
         }
     
-    # Get user avatar URL
-    user_avatar_url = None
-    if 'bot' in request.app:
-        user_avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-        # Add random parameter to prevent caching
-        if user_avatar_url:
-            import random
-            user_avatar_url += f"?r={random.randint(100000, 999999)}"
+    # Get user avatar URL from database
+    user_avatar_url = user.photo_url if user and user.photo_url else None
+    # Add random parameter to prevent caching if URL exists
+    if user_avatar_url:
+        import random
+        user_avatar_url += f"?r={random.randint(100000, 999999)}"
     
     return web.json_response({
         'profile': profile_data,
