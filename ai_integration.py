@@ -3329,41 +3329,84 @@ def update_profile(
         profile = UserProfile(user_id=user.id)
         session.add(profile)
 
-    def update_list_field(field, value):
+    updates_made = []  # Отслеживаем что именно изменили
+    
+    def update_list_field(field, value, field_name):
         if not value:
-            return field
+            return field, None
         current = set((field or "").split(", ")) - {""}  # Разделяем по ", " и убираем пустые
+        action = None
+        
         if value.startswith("+"):
             new_item = value[1:].strip()
             if new_item:
                 current.add(new_item)
+                action = f"added_{field_name}:{new_item}"
         elif value.startswith("-"):
             remove_item = value[1:].strip()
-            current.discard(remove_item)
+            if remove_item in current:
+                current.discard(remove_item)
+                action = f"removed_{field_name}:{remove_item}"
         else:
             # Замена целиком
+            old_items = current.copy()
             current = set(value.split(", ")) - {""}
-        return ", ".join(sorted(current))
+            new_items = current - old_items
+            if new_items:
+                action = f"added_{field_name}:{', '.join(new_items)}"
+        
+        return ", ".join(sorted(current)), action
 
-    profile.skills = update_list_field(profile.skills, skills)
-    profile.interests = update_list_field(profile.interests, interests)
-    profile.goals = update_list_field(profile.goals, goals)
-    profile.city = city if city else profile.city
-    profile.current_plans = current_plans if current_plans else profile.current_plans
-    # current_time removed - should not persist in DB
+    if skills:
+        profile.skills, action = update_list_field(profile.skills, skills, "skills")
+        if action:
+            updates_made.append(action)
+    
+    if interests:
+        profile.interests, action = update_list_field(profile.interests, interests, "interests")
+        if action:
+            updates_made.append(action)
+    
+    if goals:
+        profile.goals, action = update_list_field(profile.goals, goals, "goals")
+        if action:
+            updates_made.append(action)
+    
+    if city:
+        old_city = profile.city
+        profile.city = city
+        updates_made.append(f"changed_city:{old_city}→{city}")
+    
+    if current_plans:
+        profile.current_plans = current_plans
+        updates_made.append(f"updated_plans")
+    
     # Безопасно добавляем новые поля (могут отсутствовать в старой БД)
-    if hasattr(profile, "company"):
-        profile.company = company if company else profile.company
-    if hasattr(profile, "position"):
-        profile.position = position if position else profile.position
+    if hasattr(profile, "company") and company:
+        old_company = profile.company
+        profile.company = company
+        updates_made.append(f"changed_company:{old_company}→{company}")
+    
+    if hasattr(profile, "position") and position:
+        old_position = profile.position
+        profile.position = position
+        updates_made.append(f"changed_position:{old_position}→{position}")
+    
     if timezone:
         user.timezone = timezone
+        updates_made.append(f"changed_timezone:{timezone}")
+    
     profile.contact_info = f"user{user_id}"  # Простой username
     profile.updated_at = datetime.now(pytz.UTC)
     session.commit()
     if close_session:
         session.close()
-    return "Профиль обновлен."
+    
+    # Возвращаем детальный ответ
+    if updates_made:
+        return f"Профиль обновлен: {'; '.join(updates_made)}"
+    else:
+        return "Профиль обновлен (изменений не обнаружено)"
 
 
 TOOLS = [
@@ -4246,9 +4289,65 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             natural_responses.append(result_text)
 
                                         elif "Профиль обновлен" in result_text:
-                                            natural_responses.append(
-                                                "Профиль обновлен! Теперь я лучше знаю твои интересы."
-                                            )
+                                            # Парсим детали обновления
+                                            if "added_interests:" in result_text:
+                                                match = re.search(r"added_interests:([^;]+)", result_text)
+                                                if match:
+                                                    items = match.group(1).strip()
+                                                    natural = f"Отлично! Добавил в твои интересы: {items}. Теперь я смогу находить для тебя людей с похожими увлечениями и предлагать релевантные активности."
+                                                    natural_responses.append(natural)
+                                                else:
+                                                    natural_responses.append("Профиль обновлен! Добавил новые интересы.")
+                                            
+                                            elif "removed_interests:" in result_text:
+                                                match = re.search(r"removed_interests:([^;]+)", result_text)
+                                                if match:
+                                                    items = match.group(1).strip()
+                                                    natural = f"Понял, убрал из интересов: {items}. Обновил твой профиль."
+                                                    natural_responses.append(natural)
+                                                else:
+                                                    natural_responses.append("Профиль обновлен! Убрал интересы.")
+                                            
+                                            elif "changed_city:" in result_text:
+                                                match = re.search(r"changed_city:([^→]+)→([^;]+)", result_text)
+                                                if match:
+                                                    old_city = match.group(1).strip()
+                                                    new_city = match.group(2).strip()
+                                                    natural = f"Обновил город с {old_city} на {new_city}! Теперь буду искать для тебя людей и события в {new_city}."
+                                                    natural_responses.append(natural)
+                                                else:
+                                                    natural_responses.append("Профиль обновлен! Изменил город.")
+                                            
+                                            elif "changed_company:" in result_text:
+                                                match = re.search(r"changed_company:([^→]+)→([^;]+)", result_text)
+                                                if match:
+                                                    new_company = match.group(2).strip()
+                                                    natural = f"Записал новое место работы: {new_company}. Профиль обновлен!"
+                                                    natural_responses.append(natural)
+                                                else:
+                                                    natural_responses.append("Профиль обновлен! Изменил компанию.")
+                                            
+                                            elif "added_skills:" in result_text:
+                                                match = re.search(r"added_skills:([^;]+)", result_text)
+                                                if match:
+                                                    items = match.group(1).strip()
+                                                    natural = f"Отлично! Добавил в навыки: {items}. Это поможет найти проекты и людей, которым нужны такие компетенции."
+                                                    natural_responses.append(natural)
+                                                else:
+                                                    natural_responses.append("Профиль обновлен! Добавил навыки.")
+                                            
+                                            elif "added_goals:" in result_text:
+                                                match = re.search(r"added_goals:([^;]+)", result_text)
+                                                if match:
+                                                    items = match.group(1).strip()
+                                                    natural = f"Записал новую цель: {items}. Буду помогать тебе двигаться к ней!"
+                                                    natural_responses.append(natural)
+                                                else:
+                                                    natural_responses.append("Профиль обновлен! Добавил цели.")
+                                            
+                                            else:
+                                                # Общий случай если не удалось распарсить
+                                                natural_responses.append("Профиль обновлен! Сохранил изменения.")
 
                                         elif "Задача" in result_text and "делегирована" in result_text:
                                             natural = "Отлично, задача делегирована! Я уведомлю получателя."
