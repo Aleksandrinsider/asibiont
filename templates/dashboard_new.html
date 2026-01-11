@@ -1245,7 +1245,14 @@
                 const isOldDelegationText = cleanDesc.match(/^Задача\s+(от|для|на)\s+@?[\wА-Яа-яЁё]+$/i);
                 
                 if (!isOldDelegationText) {
-                    html += '<div style="margin-top: 4px; font-size: 13px; color: #586069;">' + task.description + '</div>';
+                    // Обрезаем длинные описания до 120 символов, убираем "Шаги выполнения" и т.д.
+                    let shortDesc = cleanDesc.split(/Шаги выполнения:|Ожидаемый результат:|Советы:/)[0].trim();
+                    if (shortDesc.length > 120) {
+                        shortDesc = shortDesc.substring(0, 120) + '...';
+                    }
+                    if (shortDesc) {
+                        html += '<div style="margin-top: 4px; font-size: 13px; color: #586069;">' + shortDesc + '</div>';
+                    }
                 }
             }
             
