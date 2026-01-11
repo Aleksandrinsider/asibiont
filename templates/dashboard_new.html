@@ -114,7 +114,7 @@
                             </p>
                         </div>
                         {% else %}
-                        <p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите боту @Asibiont_bot, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>
+                        <p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>
                         {% endif %}
                     </div>
                 </div>
@@ -2117,7 +2117,7 @@
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const displayStyle = isCollapsed ? 'none' : 'block';
                         html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle}; margin-bottom: 15px;">`;
-                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите боту @Asibiont_bot, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>';
+                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>';
                         html += '</div>';
                         contextSection.innerHTML = html;
                     }
