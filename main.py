@@ -1884,29 +1884,6 @@ async def on_startup(app):
     set_redis_client(redis_client)
     logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
     
-    # Initialize session storage
-    if redis_client:
-        from aiohttp_session.redis_storage import RedisStorage
-        storage = RedisStorage(redis_client)
-        logger.info("Session storage initialized with Redis")
-    else:
-        # Custom storage to handle invalid JSON cookies
-        class SafeSimpleCookieStorage(SimpleCookieStorage):
-            async def load_session(self, request):
-                from aiohttp_session import Session as AiohttpSession
-                cookie = self.load_cookie(request)
-                if cookie is None:
-                    return await self.new_session()
-                try:
-                    data = self._decoder(cookie)
-                    return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
-                except json.JSONDecodeError:
-                    # Invalid cookie, create new session
-                    return await self.new_session()
-        
-        storage = SafeSimpleCookieStorage()
-        logger.info("Session storage initialized with SafeSimpleCookieStorage")
-    
     # Configure session cookie options
     session_options = {}
     if not LOCAL:
@@ -1925,7 +1902,30 @@ async def on_startup(app):
             'samesite': 'Lax'
         }
     
-    aiohttp_session.setup(app, storage, **session_options)
+    # Initialize session storage
+    if redis_client:
+        from aiohttp_session.redis_storage import RedisStorage
+        storage = RedisStorage(redis_client, **session_options)
+        logger.info("Session storage initialized with Redis")
+    else:
+        # Custom storage to handle invalid JSON cookies
+        class SafeSimpleCookieStorage(SimpleCookieStorage):
+            async def load_session(self, request):
+                from aiohttp_session import Session as AiohttpSession
+                cookie = self.load_cookie(request)
+                if cookie is None:
+                    return await self.new_session()
+                try:
+                    data = self._decoder(cookie)
+                    return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
+                except json.JSONDecodeError:
+                    # Invalid cookie, create new session
+                    return await self.new_session()
+        
+        storage = SafeSimpleCookieStorage(**session_options)
+        logger.info("Session storage initialized with SafeSimpleCookieStorage")
+    
+    aiohttp_session.setup(app, storage)
     logger.info("Session middleware configured successfully")
     
     # Set webhook
