@@ -1021,17 +1021,22 @@ body {
         order: 2;
     }
     
-    /* Скрыть чат в мобильной версии */
+    /* Показать чат в мобильной версии с уменьшенной высотой */
     .center-column {
-        display: none !important;
+        order: 1;
+        height: calc(100vh - 250px);
+        max-height: 400px;
+        margin-bottom: 12px;
+    }
+    
+    .chat-section {
+        margin-bottom: 0 !important;
     }
     
     .context-section,
     .people-section,
     .task-column {
         padding: 12px;
-        max-height: none !important;
-        overflow: visible !important;
     }
     
     .context-section h3,
@@ -1044,11 +1049,18 @@ body {
     /* Ограничить высоту для мобильных */
     .tasks-section,
     .people-list {
-        max-height: calc(100vh - 510px) !important;
+        max-height: calc(100vh - 300px) !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
         scrollbar-width: thin !important;
         scrollbar-color: #D1D9E0 transparent !important;
+    }
+    
+    .chat-messages {
+        max-height: calc(100vh - 400px) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
     }
     
     .task-item {
