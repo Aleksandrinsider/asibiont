@@ -183,7 +183,7 @@
                 <!-- Информационная панель -->
                 <div style="background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; padding: 10px 16px; margin-top: 0; display: flex; align-items: center; justify-content: space-between;">
                     <span style="color: #656D76; font-size: 13px;">Есть вопросы? Обращайтесь в поддержку</span>
-                    <button onclick="window.open(&quot;https://t.me/aleksandrinsider&quot;, &quot;_blank&quot;)" class="quick-action" style="color: #068487;">Поддержка</button>
+                    <button onclick="openSupport()" class="quick-action" style="color: #068487;">Поддержка</button>
                 </div>
             </div>
 
@@ -2232,6 +2232,10 @@
     <script>
         function logout() {
             window.location.href = '/logout';
+        }
+
+        function openSupport() {
+            window.open('https://t.me/aleksandrinsider', '_blank');
         }
 
         let isRecording = false;
