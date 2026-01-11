@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
+from handlers import PREMIUM_DESCRIPTION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -2025,6 +2026,13 @@ async def on_startup(app):
         logger.info(f"Webhook set to: {webhook_url}")
     else:
         logger.info("Local mode: skipping webhook setup")
+    
+    # Set bot description
+    try:
+        await bot.set_my_description(PREMIUM_DESCRIPTION)
+        logger.info("Bot description set successfully")
+    except Exception as e:
+        logger.error(f"Failed to set bot description: {e}")
     
     # Initialize handlers Redis
     async def init_handlers_redis(client):
