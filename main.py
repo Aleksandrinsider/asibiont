@@ -27,7 +27,6 @@ from datetime import datetime, timedelta
 from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
-from handlers import PREMIUM_DESCRIPTION
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -170,7 +169,16 @@ async def auth_handler(request):
                 timezone, city = await get_timezone_from_ip(ip_address)
                 logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
                 
-                user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), photo_url=data.get('photo_url'), timezone=timezone)
+                # Get avatar from Telegram API
+                avatar_url = None
+                if 'bot' in request.app:
+                    try:
+                        avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+                        logger.info(f"Got avatar URL for new user {user_id}: {avatar_url}")
+                    except Exception as e:
+                        logger.error(f"Error getting avatar for new user {user_id}: {e}")
+                
+                user = User(telegram_id=user_id, username=data.get('username'), first_name=data.get('first_name'), photo_url=avatar_url, timezone=timezone)
                 session_db.add(user)
                 session_db.commit()
                 
@@ -185,10 +193,16 @@ async def auth_handler(request):
                     session_db.commit()
             else:
                 logger.info(f"Found existing user: {user.id}")
-                # Always update photo_url to keep it fresh from Telegram
-                if data.get('photo_url'):
-                    user.photo_url = data.get('photo_url')
-                    session_db.commit()
+                # Update avatar from Telegram API
+                if 'bot' in request.app:
+                    try:
+                        avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+                        if avatar_url and avatar_url != user.photo_url:
+                            user.photo_url = avatar_url
+                            session_db.commit()
+                            logger.info(f"Updated avatar for user {user_id}: {avatar_url}")
+                    except Exception as e:
+                        logger.error(f"Error updating avatar for user {user_id}: {e}")
             
             # Increment login count if subscription exists
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
@@ -1332,10 +1346,23 @@ async def api_partners_handler(request):
         for p in partners:
             # Получаем telegram_id пользователя из базы
             partner_user = session_db.query(User).filter_by(id=p.user_id).first() if hasattr(p, 'user_id') and p.user_id else None
+            
+            # Update avatar from Telegram if available
+            photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
+            if partner_user and partner_user.telegram_id and 'bot' in request.app:
+                try:
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], partner_user.telegram_id)
+                    if updated_avatar and updated_avatar != partner_user.photo_url:
+                        partner_user.photo_url = updated_avatar
+                        session_db.commit()
+                        photo_url = updated_avatar
+                except Exception as e:
+                    logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
+            
             partners_data.append({
                 'contact_info': partner_user.username if partner_user and partner_user.username else f"user{partner_user.telegram_id if partner_user else 'unknown'}",
                 'telegram_id': partner_user.telegram_id if partner_user else None,
-                'photo_url': partner_user.photo_url if partner_user and partner_user.photo_url else None,
+                'photo_url': photo_url,
                 'city': getattr(p, 'city', None),
                 'common_interests': getattr(p, 'common_interests', None),
                 'common_skills': getattr(p, 'common_skills', None),
@@ -1406,10 +1433,25 @@ async def api_partners_handler(request):
                     common_task_words = user_task_keywords & delegator_task_keywords
                     common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
             
+            # Get delegator user object
+            delegator = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
+            
+            # Update avatar from Telegram if available
+            photo_url = delegator.photo_url if delegator and delegator.photo_url else None
+            if delegator and delegator.telegram_id and 'bot' in request.app:
+                try:
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id)
+                    if updated_avatar and updated_avatar != delegator.photo_url:
+                        delegator.photo_url = updated_avatar
+                        session_db.commit()
+                        photo_url = updated_avatar
+                except Exception as e:
+                    logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
+            
             partners_data.append({
                 'contact_info': contact['username'],
                 'telegram_id': delegator.telegram_id if delegator else None,
-                'photo_url': delegator.photo_url if delegator and delegator.photo_url else None,
+                'photo_url': photo_url,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),
@@ -1485,10 +1527,22 @@ async def api_partners_handler(request):
                     common_task_words = user_task_keywords & delegatee_task_keywords
                     common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
             
+            # Update avatar from Telegram if available
+            photo_url = delegatee.photo_url if delegatee and delegatee.photo_url else None
+            if delegatee and delegatee.telegram_id and 'bot' in request.app:
+                try:
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id)
+                    if updated_avatar and updated_avatar != delegatee.photo_url:
+                        delegatee.photo_url = updated_avatar
+                        session_db.commit()
+                        photo_url = updated_avatar
+                except Exception as e:
+                    logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
+            
             partners_data.append({
                 'contact_info': contact['username'],
                 'telegram_id': delegatee.telegram_id if delegatee else None,
-                'photo_url': delegatee.photo_url if delegatee and delegatee.photo_url else None,
+                'photo_url': photo_url,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
                 'interests': contact.get('interests'),
@@ -2026,13 +2080,6 @@ async def on_startup(app):
         logger.info(f"Webhook set to: {webhook_url}")
     else:
         logger.info("Local mode: skipping webhook setup")
-    
-    # Set bot description
-    try:
-        await bot.set_my_description(PREMIUM_DESCRIPTION)
-        logger.info("Bot description set successfully")
-    except Exception as e:
-        logger.error(f"Failed to set bot description: {e}")
     
     # Initialize handlers Redis
     async def init_handlers_redis(client):
