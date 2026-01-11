@@ -276,7 +276,7 @@ body {
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
+    padding: 16px 16px 0 16px;
     border-radius: 10px;
     margin-bottom: 0;
 }
