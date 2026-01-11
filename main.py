@@ -2373,6 +2373,8 @@ async def api_profile_handler(request):
             'goals': profile.goals if profile else None,
             'skills': profile.skills if profile else None,
             'interests': profile.interests if profile else None,
+            'languages': profile.languages if profile else None,
+            'bio': profile.bio if profile else None,
             'average_rating': profile.average_rating if profile else 0,
             'rating_count': profile.rating_count if profile else 0
         }

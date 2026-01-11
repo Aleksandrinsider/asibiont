@@ -398,6 +398,10 @@
         
         function addMessage(text, sender, timestamp) {
             const messages = document.getElementById('chat-messages');
+            if (!messages) {
+                console.error('Chat messages container not found');
+                return;
+            }
             
             // Normalize sender: 'agent' -> 'ai' for consistent styling
             const normalizedSender = sender === 'agent' ? 'ai' : sender;
