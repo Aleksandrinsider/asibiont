@@ -2077,7 +2077,14 @@
                         // Check if profile has meaningful data (not just username)
                         const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests || data.profile.username);
                         
-                        if (hasProfileData) {
+                        // Проверяем что данные полностью загрузились (есть formatted_end_date)
+                        // Если нет - не перезаписываем профиль, так как это может быть задержка загрузки
+                        if (!data.formatted_end_date && hasProfileData) {
+                            console.log('Skipping profile update: subscription data not loaded yet');
+                            return;
+                        }
+                        
+                        if (hasProfileData && data.formatted_end_date) {
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
@@ -2111,11 +2118,7 @@
                         } else {
                             html += '<p>Рекомендация: нет рекомендаций</p>';
                         }
-                        if (data.formatted_end_date) {
-                            html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
-                        } else {
-                            html += '<p style="margin-bottom: 20px;">Подписка: не активна</p>';
-                        }
+                        html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
