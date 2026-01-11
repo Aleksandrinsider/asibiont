@@ -1913,6 +1913,9 @@ async def on_startup(app):
     # Initialize session storage
     # Use SimpleCookieStorage with enhanced logging
     class SafeSimpleCookieStorage(SimpleCookieStorage):
+        def __init__(self, cookie_name='AIOHTTP_SESSION', **kwargs):
+            super().__init__(cookie_name, **kwargs)
+        
         async def load_session(self, request):
             from aiohttp_session import Session as AiohttpSession
             cookie = self.load_cookie(request)
@@ -1943,7 +1946,7 @@ async def on_startup(app):
                 logger.info("Session empty, deleting cookie")
                 response.del_cookie(self._cookie_name)
     
-    storage = SafeSimpleCookieStorage(**session_options)
+    storage = SafeSimpleCookieStorage(cookie_name='session', **session_options)
     logger.info(f"Session storage initialized with SafeSimpleCookieStorage, options: {session_options}")
     
     aiohttp_session.setup(app, storage)
