@@ -94,7 +94,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="profile-content" class="profile-content" style="display: none;">
+                    <div id="profile-content" class="profile-content" style="display: none; margin-bottom: 15px;">
                         {% if profile %}
                         <div class="context-item">
                             <p>Пользователь: @{{ user.username or 'неизвестен' }}</p>
@@ -2089,7 +2089,7 @@
                         html += `<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ${svgRotation};"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>`;
                         html += '</div>';
                         const displayStyle = isCollapsed ? 'none' : 'block';
-                        html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle};">`;
+                        html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle}; margin-bottom: 15px;">`;
                         html += '<div class="context-item">';
                         html += `<p style="margin-bottom: 8px;">Пользователь: @${data.profile.username || 'неизвестен'}</p>`;
                         html += `<p>Город: ${data.profile.city || 'Не указан'}</p>`;
@@ -2116,7 +2116,7 @@
                         html += '</div>';
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const displayStyle = isCollapsed ? 'none' : 'block';
-                        html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle};">`;
+                        html += `<div id="profile-content" class="profile-content" style="display: ${displayStyle}; margin-bottom: 15px;">`;
                         html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Профиль не заполнен.<br>Начните диалог для заполнения профиля.</p>';
                         html += '</div>';
                         contextSection.innerHTML = html;
