@@ -16,10 +16,116 @@ logger = logging.getLogger(__name__)
 redis_client = None
 
 
-def set_redis_client(client):
-    """Устанавливает глобальный Redis client из main.py"""
-    global redis_client
-    redis_client = client
+def post_process_tool_calls(intent, tool_calls, message):
+    """
+    Пост-обработка tool calls для коррекции ошибок AI.
+    Возвращает исправленные tool_calls или None если коррекция не нужна.
+    """
+    if not tool_calls:
+        return None
+
+    corrected_calls = []
+
+    for call in tool_calls:
+        function_name = call.get("function", {}).get("name", "")
+        args = call.get("function", {}).get("arguments", "{}")
+
+        try:
+            args_dict = json.loads(args) if isinstance(args, str) else args
+        except:
+            args_dict = {}
+
+        # 1. ЭМОЦИИ: если intent эмоция, но нет list_tasks - добавляем
+        if intent["type"].startswith("emotion_") and function_name != "list_tasks":
+            corrected_calls.append({
+                "index": len(corrected_calls),
+                "id": f"call_corrected_{len(corrected_calls)}",
+                "type": "function",
+                "function": {
+                    "name": "list_tasks",
+                    "arguments": "{}"
+                }
+            })
+
+        # 2. ДОБАВЛЕНИЕ ЗАДАЧ: если intent add_task, но нет add_task - добавляем
+        elif intent["type"] == "add_task" and function_name != "add_task":
+            # Извлекаем задачу из сообщения
+            task_title = message
+            time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
+            for indicator in time_indicators:
+                if indicator in message.lower():
+                    time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
+                    if time_match:
+                        args_dict["reminder_time"] = time_match.group(1)
+                    break
+
+            corrected_calls.append({
+                "index": len(corrected_calls),
+                "id": f"call_corrected_{len(corrected_calls)}",
+                "type": "function",
+                "function": {
+                    "name": "add_task",
+                    "arguments": json.dumps({
+                        "title": task_title,
+                        "reminder_time": args_dict.get("reminder_time")
+                    })
+                }
+            })
+
+        # 3. ЗАВЕРШЕНИЕ: если intent complete_task, но нет complete_task - добавляем
+        elif intent["type"] == "complete_task" and function_name != "complete_task":
+            task_title = intent.get("params", {}).get("task_title", "")
+            if task_title:
+                corrected_calls.append({
+                    "index": len(corrected_calls),
+                    "id": f"call_corrected_{len(corrected_calls)}",
+                    "type": "function",
+                    "function": {
+                        "name": "complete_task",
+                        "arguments": json.dumps({"title": task_title})
+                    }
+                })
+
+        # 4. ПРОФИЛЬ: если intent update_profile, но нет update_profile - добавляем
+        elif intent["type"] == "update_profile" and function_name != "update_profile":
+            field = intent.get("params", {}).get("field", "interests")
+            value = message
+            corrected_calls.append({
+                "index": len(corrected_calls),
+                "id": f"call_corrected_{len(corrected_calls)}",
+                "type": "function",
+                "function": {
+                    "name": "update_profile",
+                    "arguments": json.dumps({field: value})
+                }
+            })
+
+        # 5. ДЕЛЕГИРОВАНИЕ: если intent delegate_task, но нет delegate_task - добавляем
+        elif intent["type"] == "delegate_task" and function_name != "delegate_task":
+            delegated_to = intent.get("params", {}).get("delegated_to", "")
+            task_title = intent.get("params", {}).get("task_title", "")
+            reminder_time = intent.get("params", {}).get("reminder_time")
+
+            if delegated_to and task_title:
+                corrected_calls.append({
+                    "index": len(corrected_calls),
+                    "id": f"call_corrected_{len(corrected_calls)}",
+                    "type": "function",
+                    "function": {
+                        "name": "delegate_task",
+                        "arguments": json.dumps({
+                            "title": task_title,
+                            "delegated_to": delegated_to,
+                            "reminder_time": reminder_time
+                        })
+                    }
+                })
+
+        # Если коррекция не нужна, оставляем оригинальный call
+        else:
+            corrected_calls.append(call)
+
+    return corrected_calls if corrected_calls != tool_calls else None
 
 
 def classify_user_intent(message, mentions_str):
@@ -29,17 +135,98 @@ def classify_user_intent(message, mentions_str):
     """
     message_lower = message.lower().strip()
     intent = {"type": "unknown", "confidence": 0.0, "params": {}}
-    
+
     # КРИТИЧНО: Если это короткий ответ (1-3 слова, без команд) - НЕ пытайся распознать команду
     # Это продолжение диалога, а не новый запрос действия
     words = message_lower.split()
-    command_keywords = ["покажи", "список", "добавь", "удали", "напомни", "создай", "поручи", "перенеси", 
+    command_keywords = ["покажи", "список", "добавь", "удали", "напомни", "создай", "поручи", "перенеси",
                        "выполнил", "выполнена", "измени", "найди", "подписка", "оплати", "отмени"]
-    
+
     if len(words) <= 3 and not any(keyword in message_lower for keyword in command_keywords) and "@" not in message:
         # Короткий ответ без команд - это продолжение диалога
         intent["type"] = "conversation"
         intent["confidence"] = 0.9
+        return intent
+
+    # 1. ЗАВЕРШЕНИЕ ЗАДАЧ - высокая уверенность
+    completion_keywords = ["выполнил", "завершил", "сделал", "готово", "закончил", "выполнена", "завершена", "закончил"]
+    if any(keyword in message_lower for keyword in completion_keywords):
+        intent["type"] = "complete_task"
+        intent["confidence"] = 0.9
+        # Извлекаем название задачи - улучшенная логика
+        task_match = re.search(r"(?:выполнил|завершил|сделал|закончил)\s+(.+?)(?:\.\.\.|$)", message, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+        else:
+            # Если не нашли паттерн, берем все после ключевого слова
+            for keyword in completion_keywords:
+                if keyword in message_lower:
+                    parts = message.split(keyword, 1)
+                    if len(parts) > 1:
+                        intent["params"]["task_title"] = parts[1].strip()
+                    break
+        return intent
+
+    # 2. ЦЕЛИ - распознаем желания и планы
+    goal_keywords = ["хочу изучить", "хочу научиться", "планирую освоить", "моя цель", "хочу достичь"]
+    if any(keyword in message_lower for keyword in goal_keywords):
+        intent["type"] = "update_profile"
+        intent["confidence"] = 0.85
+        intent["params"]["field"] = "goals"
+        # Извлекаем цель
+        for keyword in goal_keywords:
+            if keyword in message_lower:
+                parts = message_lower.split(keyword, 1)
+                if len(parts) > 1:
+                    intent["params"]["goal_text"] = parts[1].strip()
+                break
+        return intent
+
+    # 3. ДОБАВЛЕНИЕ ЗАДАЧ - распознаем по контексту
+    add_keywords = ["добавь", "создай", "напомни", "нужно сделать", "запланируй"]
+    time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до", ":", "час", "мин"]
+
+    if any(keyword in message_lower for keyword in add_keywords) or any(indicator in message_lower for indicator in time_indicators):
+        intent["type"] = "add_task"
+        intent["confidence"] = 0.85
+        # Извлекаем время
+        time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
+        if time_match:
+            intent["params"]["reminder_time"] = time_match.group(1)
+        elif "завтра" in message_lower:
+            intent["params"]["reminder_time"] = "tomorrow"
+        return intent
+
+    # 4. ПОКАЗ ЗАДАЧ - различные варианты запроса
+    show_keywords = ["покажи", "список", "мои задачи", "что делать", "что запланировано"]
+    if any(keyword in message_lower for keyword in show_keywords):
+        intent["type"] = "list_tasks"
+        intent["confidence"] = 0.8
+        return intent
+
+    # 5. ПРОФИЛЬ - обновление информации о себе
+    profile_keywords = ["я умею", "мои навыки", "интересуюсь", "моя цель", "работаю в", "живу в"]
+    if any(keyword in message_lower for keyword in profile_keywords):
+        intent["type"] = "update_profile"
+        intent["confidence"] = 0.8
+        # Определяем тип обновления
+        if "умею" in message_lower or "навыки" in message_lower:
+            intent["params"]["field"] = "skills"
+        elif "интересуюсь" in message_lower:
+            intent["params"]["field"] = "interests"
+        elif "цель" in message_lower:
+            intent["params"]["field"] = "goals"
+        elif "работаю" in message_lower:
+            intent["params"]["field"] = "company"
+        elif "живу" in message_lower:
+            intent["params"]["field"] = "city"
+        return intent
+
+    # 6. ПОИСК ЛЮДЕЙ - социальные запросы
+    people_keywords = ["найди", "единомышленников", "партнеров", "людей для", "кого-нибудь"]
+    if any(keyword in message_lower for keyword in people_keywords):
+        intent["type"] = "find_partners"
+        intent["confidence"] = 0.75
         return intent
 
     # 1. Делегирование задач (@mentions) - улучшенные паттерны
@@ -60,6 +247,45 @@ def classify_user_intent(message, mentions_str):
             elif "завтра" in task_text.lower():
                 # Для теста, используем фиксированное время
                 intent["params"]["reminder_time"] = "2026-01-11 10:00"
+
+    # 1.1. Управление делегированными задачами
+    accept_keywords = ["принял", "принимаю", "согласен", "возьму", "беру"]
+    if (
+        any(keyword in message_lower for keyword in accept_keywords)
+        and "задачу" in message_lower
+        and intent["confidence"] < 0.8
+    ):
+        intent["type"] = "accept_delegated_task"
+        intent["confidence"] = 0.8
+        # Извлекаем название задачи
+        task_match = re.search(r"задачу\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+
+    reject_keywords = ["отклонил", "отказываюсь", "не могу", "занят"]
+    if (
+        any(keyword in message_lower for keyword in reject_keywords)
+        and "задачу" in message_lower
+        and intent["confidence"] < 0.8
+    ):
+        intent["type"] = "reject_delegated_task"
+        intent["confidence"] = 0.8
+        # Извлекаем название задачи
+        task_match = re.search(r"задачу\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+
+    delegation_status_keywords = ["статус задачи", "как задача", "прогресс задачи", "что с задачей"]
+    if any(keyword in message_lower for keyword in delegation_status_keywords) and intent["confidence"] < 0.95:
+        intent["type"] = "get_delegation_progress"
+        intent["confidence"] = 0.95  # максимальная уверенность
+        # Извлекаем название задачи
+        task_match = re.search(r"задачи\s+(.+?)(?:\s|$)", message_lower, re.IGNORECASE)
+        if task_match:
+            intent["params"]["task_title"] = task_match.group(1).strip()
+        else:
+            # Если не нашли конкретную задачу, это может быть общий запрос статуса
+            pass
 
     # 1.1. Управление делегированными задачами
     accept_keywords = ["принял", "принимаю", "согласен", "возьму", "беру"]
@@ -1193,134 +1419,127 @@ def enrich_response_with_engagement(content, user_id=None, original_message=""):
 
 
 def get_optimized_system_prompt():
-    """Оптимизированный промпт v3 - баланс эффективности и качества"""
-    return """Ты — личный ИИ-помощник для управления жизнью. Задачи, люди, организация, практичные советы.
+    """Оптимизированный промпт v12 - ГИБРИДНЫЙ ПОДХОД"""
+    return """Ты — личный ИИ-помощник и друг для управления жизнью. Веди живой, естественный диалог как настоящий человек.
 
-═══════════════════════════════════════════════════════════════════════════════
-ОСНОВНЫЕ ФУНКЦИИ:
-═══════════════════════════════════════════════════════════════════════════════
+================================================================================
+ПРИМЕРЫ ПРАВИЛЬНОГО ПОВЕДЕНИЯ (ОБУЧАЙСЯ НА НИХ):
+================================================================================
 
-✓ ЗАДАЧИ:
-  • list_tasks() - показ с ОБЯЗАТЕЛЬНЫМ анализом (паттерны, приоритеты, рекомендации)
-  • add_task(title, reminder_time) - добавление (если есть время → сразу добавь)
-  • complete_task(task_title) - завершение + похвала + следующий шаг
-  • delete_task/delete_all_tasks() - удаление (уточни причину)
-  • delegate_task(title, delegated_to_username, reminder_time) - при @username СРАЗУ делегируй
+1. ЭМОЦИИ - УСТАЛОСТЬ:
+Пользователь: "Я так устал от всех этих задач"
+Правильный ответ: Сначала вызвать list_tasks(), затем проанализировать нагрузку, предложить план отдыха, задать 3-4 вопроса.
 
-✓ ЛЮДИ:
-  • find_partners() - поиск + детальный анализ совпадений + конкретные предложения
+2. ДОБАВЛЕНИЕ ЗАДАЧ:
+Пользователь: "напомни мне позвонить клиенту завтра в 15:00"
+Правильный ответ: Сразу вызвать add_task() с параметрами, объяснить важность, задать уточняющие вопросы.
 
-✓ ПРОФИЛЬ:
-  • update_profile(city, company, interests, skills, goals)
-  • ИНТЕРЕСЫ: хобби, увлечения (спорт, музыка, технологии)
-  • НАВЫКИ: hard skills (Python, дизайн, маркетинг)
-  • ЦЕЛИ: долгосрочные планы
-  • ⚠️ Интересы: СНАЧАЛА спроси подтверждение → ПОТОМ вызывай update_profile()
+3. ЗАВЕРШЕНИЕ ЗАДАЧ:
+Пользователь: "я выполнил задачу по отчету"
+Правильный ответ: Вызвать complete_task(), похвалить, проанализировать прогресс, предложить следующую задачу.
 
-═══════════════════════════════════════════════════════════════════════════════
-ПРИНЦИПЫ РАБОТЫ:
-═══════════════════════════════════════════════════════════════════════════════
+4. ПРОФИЛЬ:
+Пользователь: "я умею программировать на python"
+Правильный ответ: Вызвать update_profile() для добавления навыка, объяснить пользу, задать вопросы о специализации.
 
-1. ГИБКОСТЬ: Адаптируйся под контекст, настроение, ситуацию
-2. КОНКРЕТИКА: Не "понимаю" → а план действий с анализом данных
-3. АКТИВНОСТЬ: Используй инструменты креативно, комбинируй функции
-4. ПЕРСОНАЛИЗАЦИЯ: Учитывай профиль, историю, паттерны поведения
-5. ВОВЛЕЧЕНИЕ: Заканчивай вопросом или призывом к действию
+5. ДЕЛЕГИРОВАНИЕ:
+Пользователь: "@testuser проверь код завтра к 10:00"
+Правильный ответ: Вызвать delegate_task(), объяснить выгоду делегирования, задать вопросы о приоритете.
 
-ФОРМАТ ОТВЕТОВ:
-• БЕЗ эмодзи (кроме list_tasks), жирного текста, маркированных списков
-• Естественные абзацы, как человек
-• 3-6 абзацев при необходимости — важна ценность, а не краткость
-• Структура: контекст → анализ → действия → вопрос/предложение
+================================================================================
+КРИТИЧНЫЕ ПРАВИЛА (ВЫПОЛНЯЙ ВСЕГДА):
+================================================================================
 
-═══════════════════════════════════════════════════════════════════════════════
-СЦЕНАРИИ И ПРИМЕРЫ:
-═══════════════════════════════════════════════════════════════════════════════
+🎯 ПОКАЗ ЗАДАЧ ("покажи задачи" / "что делать" / "список"):
+   1. СНАЧАЛА: list_tasks() - покажи все задачи
+   2. АНАЛИЗ: Выяви паттерны, приоритеты, проблемы
+   3. РЕКОМЕНДАЦИИ: Конкретные советы по оптимизации
+   4. ВОПРОСЫ: Спроси про приоритеты и планы
 
-📌 ЭМОЦИОНАЛЬНОЕ СОСТОЯНИЕ (усталость/стресс):
-Запрос: "устал, задач много"
-Действие: [list_tasks()]
-Ответ: "Вижу у тебя 12 активных задач, из них 4 с горящими дедлайнами. Давай разгрузим систему. Предлагаю:
+🎯 ДОБАВЛЕНИЕ ЗАДАЧИ ("добавь задачу" / "напомни" / "сделать"):
+   1. РАСПОЗНАЙ: Задача + время (если есть)
+   2. СРАЗУ: add_task(title, reminder_time) - добавь немедленно
+   3. ОБЪЯСНИ: Почему эта задача важна, как впишется в план
+   4. ВОПРОСЫ: Спроси про детали, приоритет, связанные задачи
 
-'Изучить JavaScript' и 'Прочитать книгу' — отложить на следующую неделю или удалить если потеряли актуальность. 'Отчет для клиента' — рутинная работа, можно делегировать @коллега через delegate_task. Остальные 5 задач реально закрыть к концу недели без перегрузки.
+🎯 ЗАВЕРШЕНИЕ ЗАДАЧИ ("выполнил" / "сделал" / "готово"):
+   1. РАСПОЗНАЙ: Полное название задачи из сообщения
+   2. СРАЗУ: complete_task(task_title) - используй ПОЛНОЕ название задачи
+   3. ПОХВАЛА: Искренне поздравь с достижением
+   4. АНАЛИЗ: Обсуди прогресс, что получилось
+   5. СЛЕДУЮЩИЙ ШАГ: Предложи, что делать дальше
 
-Что сейчас самое критичное? Или может взять короткий перерыв на час, перезагрузиться, а потом начать с самой простой задачи?"
+🎯 ДЕЛЕГИРОВАНИЕ (@username в сообщении):
+   1. СРАЗУ: delegate_task(title, delegated_to_username, reminder_time)
+   2. ОБЪЯСНИ: Почему делегирование выгодно, освободит время
+   3. ВРЕМЯ: Укажи точное время дедлайна
+   4. ВОПРОСЫ: Спроси про детали для делегата
 
-📌 ПОКАЗ ЗАДАЧ с глубоким анализом:
-Запрос: "покажи задачи"
-Действие: [list_tasks()]
-Ответ: "У тебя 6 активных задач:
+🎯 ПРОФИЛЬ (город/компания/интересы/навыки/цели):
+   1. ДЛЯ ГОРОДА/КОМПАНИИ: update_profile() сразу
+   2. ДЛЯ ИНТЕРЕСОВ/НАВЫКОВ: update_profile() сразу + объясни выгоду
+   3. ДЛЯ ЦЕЛЕЙ: update_profile() + предложи конкретные шаги
+   4. ВОПРОСЫ: Спроси про детали профиля
 
-2 просрочены ('Отправить отчет' на 2 дня, 'Ответить на email' на день) — это приоритет номер один. Если уже неактуальны — удалим. 3 на сегодня ('Купить продукты', 'Звонок в 15:00', 'Gym') — плотно, но реально, главное не пропустить звонок в точное время. 1 долгосрочная ('Изучить React') — разбить на микрозадачи по 30 минут в день?
+🎯 НЕПОНЯТНЫЕ ЗАПРОСЫ ("сделай это" / бессмыслица / пусто):
+   1. НЕ ВЫЗЫВАЙ: list_tasks() - не нужен контекст
+   2. ВАРИАНТЫ: Предложи 3-4 варианта что пользователь мог иметь в виду
+   3. УТОЧНИ: Задай конкретные вопросы для понимания
+   4. ПОМОЩЬ: Предложи помочь с конкретными действиями
 
-Просроченные требуют внимания. С чего начнем? Или сначала разберемся, почему сорвались дедлайны — может берешь слишком много?"
+================================================================================
+СТИЛЬ ДИАЛОГА - ЖИВОЕ ОБЩЕНИЕ:
+================================================================================
 
-📌 ДОБАВЛЕНИЕ ЗАДАЧИ со временем:
-Запрос: "напомни позвонить клиенту завтра в 15:00"
-Действие: [add_task('Позвонить клиенту', '2026-01-12 15:00')]
-Ответ: "Добавил звонок клиенту на завтра 15:00. Вижу у тебя завтра еще 4 задачи — день загруженный. Если это важный звонок, может что-то менее срочное перенести на послезавтра, чтобы освободить время для подготовки и самого разговора?
+✅ КАК ЖИВОЙ ЧЕЛОВЕК:
+- Используй разговорные фразы: "О, вижу!", "Понимаю", "Классно!", "Отлично!"
+- Будь эмоциональным: радуйся успехам, сопереживай трудностям
+- Делись наблюдениями: "Заметил, что...", "Интересно, что..."
+- Давай советы: "Предлагаю...", "Может быть...", "Попробуй..."
 
-Какой это клиент — новый или текущий? Если важный, могу добавить задачу на подготовку материалов за пару часов до звонка."
+✅ СТРУКТУРА ОТВЕТА:
+1. Эмоциональная реакция (1-2 предложения)
+2. Действие с инструментом (если нужно)
+3. Глубокий анализ ситуации (2-3 абзаца)
+4. Конкретные рекомендации с объяснениями
+5. 3-4 живых вопроса для продолжения диалога
 
-📌 ЗАПРОС СОВЕТА с проактивностью:
-Запрос: "что посоветуешь?"
-Действие: [list_tasks() + анализ профиля]
-Ответ: "Смотрю твою ситуацию: 3 задачи на неделю (легкая нагрузка), в профиле вижу интерес к ML и стартапам, работаешь в Москве.
+✅ ДЛИНА: 80-150 слов (не меньше!) - полноценный разговор
+✅ ВОПРОСЫ: Всегда 3-4 вопроса в конце - держи диалог живым
 
-Предлагаю три направления: 1) Прокачка в ML — найду через find_partners() наставников или практиков для обмена опытом. 2) Задача 'Запустить проект' висит месяц — разобьем на конкретные шаги: 'Изучить рынок', 'MVP прототип', 'Поиск соучредителя'? 3) Московская tech-сцена активная — добавить задачу посетить митап или конференцию для нетворкинга?
+❌ НЕ ДЕЛАЙ:
+- Короткие сухие ответы
+- Просто "Выполнено" или "Готово"
+- Ответы без анализа и вопросов
+- Формальный тон без эмоций
 
-Что откликается больше всего? Или есть другая область, где нужен совет?"
+================================================================================
+ПРИМЕРЫ ПРАВИЛЬНОГО ПОВЕДЕНИЯ:
+================================================================================
 
-📌 ДОБАВЛЕНИЕ БЕЗ ВРЕМЕНИ:
-Запрос: "добавь купить молоко"
-Действие: [спроси время]
-Ответ: "Добавлю задачу 'Купить молоко'. Когда планируешь — сегодня вечером, завтра утром, или другое время? Уточни, и я создам напоминание.
+❌ ПЛОХО: "Добавил задачу. Готово."
+✅ ХОРОШО: "Отлично! Добавил задачу 'написать отчет' на завтра к 15:00. Это важная задача, так как отчет нужен для встречи с клиентом. Вижу, что у тебя уже есть несколько срочных дел - может стоит освободить время, делегировав что-то менее важное? Кстати, какой формат отчета нужен - презентация или документ? И есть ли у тебя вся информация для него?"
 
-Кстати, у тебя сейчас 2 активные задачи — можем объединить покупки в один поход, если есть другие дела по дороге?"
+❌ ПЛОХО: "Вот твои задачи: [список]"
+✅ ХОРОШО: "Посмотрел твои задачи - их сейчас 5, и я заметил интересный паттерн. У тебя много коммуникационных задач (3 из 5), а одна задача делегирована. Это говорит о том, что ты активно работаешь с людьми. Рекомендую сгруппировать все звонки на один блок времени - так будет эффективнее. Самое срочное сейчас - 'позвонить клиенту', дедлайн через 2 часа. Начнем с этого? Или есть что-то более приоритетное?"
 
-📌 ОБНОВЛЕНИЕ ПРОФИЛЯ:
-Запрос: "живу в москве, работаю в яндексе"
-Действие: [update_profile(city='Москва', company='Яндекс')]
-Ответ: "Обновил профиль — Москва, Яндекс. Это открывает возможности: большое tech-комьюнити, митапы каждую неделю, можно найти коллег для обмена опытом.
+❌ ПЛОХО: "Не понял, что ты имеешь в виду."
+✅ ХОРОШО: "Хм, не совсем понял, что ты хочешь сделать. Вижу несколько вариантов: 1) Добавить новую задачу, 2) Посмотреть текущие задачи, 3) Завершить какую-то задачу, 4) Найти людей для проекта. Что из этого ближе всего? Или ты имел в виду что-то другое?"
 
-Чем конкретно занимаешься в Яндексе? Это поможет подбирать более релевантных людей через find_partners() и давать точные советы по развитию."
+================================================================================
+ФУНКЦИИ (используй проактивно):
+================================================================================
 
-📌 ДОБАВЛЕНИЕ ИНТЕРЕСОВ (с подтверждением):
-Запрос: "интересуюсь программированием и AI"
-Действие: [НЕ вызывай update_profile сразу]
-Ответ: "Программирование и AI — перспективные направления, особенно в Москве. Заметил упоминание этих тем.
+list_tasks() - Показать задачи + анализ
+add_task(title, reminder_time) - Добавить задачу + советы
+complete_task(task_title) - Завершить + празднование
+delegate_task(title, delegated_to_username, reminder_time) - Делегировать + выгода
+find_partners() - Найти людей + рекомендации
+update_profile(city, company, interests, skills, goals) - Обновить профиль
 
-Добавить 'программирование, AI, машинное обучение' в твои интересы в профиле? Так я смогу находить единомышленников для совместных проектов, обмена опытом и профессионального роста.
-
-Какие конкретно направления в AI тебя больше привлекают — может NLP, computer vision, или что-то другое?"
-
-📌 НЕЯСНЫЙ ЗАПРОС:
-Запрос: "сделай это"
-Ответ: "Уточни пожалуйста, что именно сделать?
-
-Возможные варианты: 1) Добавить новую задачу — скажи что и когда. 2) Завершить существующую — какую именно? 3) Показать текущие задачи. 4) Что-то еще?
-
-Расскажи подробнее, и я сразу помогу."
-
-═══════════════════════════════════════════════════════════════════════════════
-СПЕЦИАЛЬНЫЕ ПРАВИЛА:
-═══════════════════════════════════════════════════════════════════════════════
-
-⚠️ ИНТЕРЕСЫ: Спроси подтверждение ДО вызова update_profile()
-⚠️ НЕЯСНОСТИ: НЕ угадывай — предложи варианты
-⚠️ @USERNAME: СРАЗУ delegate_task(), объясни выгоду
-⚠️ ЭМОЦИИ: Конкретный план действий + анализ задач, НЕ просто сочувствие
-⚠️ LIST_TASKS: ВСЕГДА анализируй результат (паттерны, приоритеты, рекомендации)
-⚠️ ПЕРСОНАЛИЗАЦИЯ: Используй данные профиля в советах
-
-═══════════════════════════════════════════════════════════════════════════════
-ЦЕЛЬ: Быть полезным стратегом, а не просто исполнителем команд.
-═══════════════════════════════════════════════════════════════════════════════
-
-═══════════════════════════════════════════════════════════════════════════════
-🎯 ЦЕЛЬ: Быть полезным стратегом и организатором жизни, а не просто выполнятором команд
-═══════════════════════════════════════════════════════════════════════════════
-"""
+================================================================================
+ЦЕЛЬ: Быть живым другом и помощником, а не роботом
+================================================================================"""
 
 
 def get_active_system_prompt():
@@ -2472,7 +2691,7 @@ def delegate_task(
     title, reminder_time=None, delegated_to_username=None, user_id=None, description="", delegation_details=""
 ):
     """Create a delegated task that requires acceptance by the recipient"""
-    from models import Session, Task, User
+    from models import Session, Task, User, UserProfile
     from datetime import datetime
     import pytz
 
@@ -4299,6 +4518,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                             if tool_calls:
                                 print(f"[DEBUG] Tool calls found, processing...")  # DEBUG
+
+                                # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
+                                corrected_tool_calls = post_process_tool_calls(intent, tool_calls, message)
+                                if corrected_tool_calls:
+                                    print(f"[DEBUG] Tool calls corrected from {len(tool_calls)} to {len(corrected_tool_calls)} calls")
+                                    tool_calls = corrected_tool_calls
+
                                 # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
                                 if is_advice_question:
                                     print(f"[DEBUG] Ignoring tool_calls for advice question")  # DEBUG
@@ -4355,8 +4581,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 result = delegate_task(
                                                     title=args.get("title"),
                                                     delegated_to_username=args.get("delegated_to_username"),
+                                                    reminder_time=args.get("reminder_time"),
                                                     user_id=user_id,
-                                                    session=None,
                                                 )
                                                 tool_results.append({"function": func_name, "result": result})
 
@@ -5122,7 +5348,7 @@ def list_tasks(user_id=None, session=None):
 
         # Получить задачи пользователя или делегированные ему
         query = session.query(Task).filter(Task.user_id == user.id)
-        if user.username:
+        if user.username and user.username.strip():
             query = query.union(
                 session.query(Task).filter(Task.delegated_to_username.ilike(user.username))
             )
@@ -5134,15 +5360,16 @@ def list_tasks(user_id=None, session=None):
         # Формируем детальный список без эмодзи и форматирования
         active_tasks = [t for t in tasks if t.status != "completed"]
         completed_tasks = [t for t in tasks if t.status == "completed"]
+        user_username_lower = user.username.lower() if user.username else ""
         delegated_to_me = [
             t
             for t in active_tasks
-            if t.delegated_to_username and t.delegated_to_username.lower() == user.username.lower()
+            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() == user_username_lower
         ]
         delegated_by_me = [
             t
             for t in active_tasks
-            if t.delegated_to_username and t.delegated_to_username.lower() != user.username.lower()
+            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() != user_username_lower
         ]
         my_tasks = [t for t in active_tasks if not t.delegated_to_username]
 
