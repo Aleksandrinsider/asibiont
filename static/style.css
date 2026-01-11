@@ -1399,6 +1399,11 @@ body {
     gap: 6px;
 }
 
+.support-link {
+    margin: 0;
+    padding: 0;
+}
+
 /* Avatar fallback styles */
 .avatar-fallback {
     display: none;
