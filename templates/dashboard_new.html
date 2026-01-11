@@ -141,9 +141,13 @@
                             {% else %}
                             <p>Рекомендация: нет рекомендаций</p>
                             {% endif %}
+                            {% if formatted_end_date %}
                             <p style="margin-bottom: 20px;">Подписка: активна до {{ formatted_end_date }} 
                                 <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: none; margin-left: 8px;">продлить</a>
                             </p>
+                            {% else %}
+                            <p style="margin-bottom: 20px;">Подписка: информация загружается...</p>
+                            {% endif %}
                         </div>
                         {% else %}
                         <p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>
@@ -2112,7 +2116,11 @@
                         } else {
                             html += '<p>Рекомендация: нет рекомендаций</p>';
                         }
-                        html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
+                        if (data.formatted_end_date) {
+                            html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
+                        } else {
+                            html += '<p style="margin-bottom: 20px;">Подписка: информация загружается...</p>';
+                        }
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
