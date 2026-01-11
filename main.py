@@ -1914,7 +1914,7 @@ async def on_startup(app):
         session_options = {
             'secure': True,
             'httponly': True,
-            'samesite': 'Lax'
+            'samesite': 'None'  # Allow cross-site requests for API calls
         }
     else:
         # For local development

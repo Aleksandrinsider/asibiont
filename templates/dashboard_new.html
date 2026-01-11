@@ -347,10 +347,12 @@
         
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
+            console.log('checkAuth called with status:', response.status);
             if (response.status === 401 || response.status === 403) {
                 console.log('Session expired or unauthorized');
                 // Перезагрузить страницу только если мы не на странице логина
                 const isLoggedIn = document.querySelector('.main-layout') !== null;
+                console.log('isLoggedIn check:', isLoggedIn);
                 if (isLoggedIn) {
                     console.log('Redirecting to login page');
                     window.location.reload();
