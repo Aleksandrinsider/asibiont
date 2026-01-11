@@ -1021,16 +1021,9 @@ body {
         order: 2;
     }
     
-    /* Показать чат в мобильной версии с уменьшенной высотой */
+    /* Скрыть чат в мобильной версии */
     .center-column {
-        order: 1;
-        height: calc(100vh - 250px);
-        max-height: 400px;
-        margin-bottom: 12px;
-    }
-    
-    .chat-section {
-        margin-bottom: 0 !important;
+        display: none !important;
     }
     
     .context-section,
@@ -1055,12 +1048,6 @@ body {
         -webkit-overflow-scrolling: touch !important;
         scrollbar-width: thin !important;
         scrollbar-color: #D1D9E0 transparent !important;
-    }
-    
-    .chat-messages {
-        max-height: calc(100vh - 400px) !important;
-        overflow-y: auto !important;
-        -webkit-overflow-scrolling: touch !important;
     }
     
     .task-item {
