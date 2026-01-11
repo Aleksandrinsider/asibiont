@@ -2077,14 +2077,7 @@
                         // Check if profile has meaningful data (not just username)
                         const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests || data.profile.username);
                         
-                        // Проверяем что данные полностью загрузились (есть formatted_end_date)
-                        // Если нет - не перезаписываем профиль, так как это может быть задержка загрузки
-                        if (!data.formatted_end_date && hasProfileData) {
-                            console.log('Skipping profile update: subscription data not loaded yet');
-                            return;
-                        }
-                        
-                        if (hasProfileData && data.formatted_end_date) {
+                        if (hasProfileData) {
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>';
