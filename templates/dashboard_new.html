@@ -96,11 +96,14 @@
                     </div>
                     <div id="profile-content" class="profile-content" style="display: none; margin-bottom: 15px;">
                     <script>
-                        // Немедленно скрываем профиль если он должен быть свернут (до полной загрузки страницы)
+                        // Немедленно устанавливаем правильное состояние профиля (до полной загрузки страницы)
                         (function() {
                             var isCollapsed = localStorage.getItem('profileCollapsed');
-                            if (isCollapsed === null || isCollapsed === 'true') {
-                                document.getElementById('profile-content').style.display = 'none';
+                            var profileEl = document.getElementById('profile-content');
+                            if (isCollapsed === 'false') {
+                                profileEl.style.display = 'block';
+                            } else {
+                                profileEl.style.display = 'none';
                             }
                         })();
                     </script>
