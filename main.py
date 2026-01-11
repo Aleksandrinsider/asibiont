@@ -1895,8 +1895,8 @@ async def on_startup(app):
         session_options = {
             'secure': True,
             'httponly': True,
-            'samesite': 'Lax',  # Changed from 'None' to 'Lax' for Railway
-            'domain': None  # Changed from '.up.railway.app' to None for current domain only
+            'samesite': 'None',  # Changed back to 'None' for Railway HTTPS
+            'domain': None  # Current domain only
         }
     else:
         # For local development
