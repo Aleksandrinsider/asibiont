@@ -1909,27 +1909,22 @@ async def on_startup(app):
         }
     
     # Initialize session storage
-    if redis_client:
-        from aiohttp_session.redis_storage import RedisStorage
-        storage = RedisStorage(redis_client, **session_options)
-        logger.info("Session storage initialized with Redis")
-    else:
-        # Custom storage to handle invalid JSON cookies
-        class SafeSimpleCookieStorage(SimpleCookieStorage):
-            async def load_session(self, request):
-                from aiohttp_session import Session as AiohttpSession
-                cookie = self.load_cookie(request)
-                if cookie is None:
-                    return await self.new_session()
-                try:
-                    data = self._decoder(cookie)
-                    return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
-                except json.JSONDecodeError:
-                    # Invalid cookie, create new session
-                    return await self.new_session()
-        
-        storage = SafeSimpleCookieStorage(**session_options)
-        logger.info("Session storage initialized with SafeSimpleCookieStorage")
+    # Temporarily use SafeSimpleCookieStorage instead of Redis for testing
+    class SafeSimpleCookieStorage(SimpleCookieStorage):
+        async def load_session(self, request):
+            from aiohttp_session import Session as AiohttpSession
+            cookie = self.load_cookie(request)
+            if cookie is None:
+                return await self.new_session()
+            try:
+                data = self._decoder(cookie)
+                return AiohttpSession(None, data=data, new=False, max_age=self.max_age)
+            except json.JSONDecodeError:
+                # Invalid cookie, create new session
+                return await self.new_session()
+    
+    storage = SafeSimpleCookieStorage(**session_options)
+    logger.info("Session storage initialized with SafeSimpleCookieStorage (temporary)")
     
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware configured successfully")
