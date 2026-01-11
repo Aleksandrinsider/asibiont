@@ -1218,11 +1218,12 @@ def analyze_user_context_for_advice(user_id, message, context=None):
                 "city": profile.city or "не указан",
                 "company": profile.company or "не указана",
                 "position": profile.position or "не указана",
+                "bio": profile.bio or "не указано",
                 "languages": profile.languages or "не указаны",
                 "skills": profile.skills or "не указаны",
                 "interests": profile.interests or "не указаны",
                 "goals": profile.goals or "не указаны",
-                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.languages, profile.skills, profile.interests, profile.goals] if field])
+                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.bio, profile.languages, profile.skills, profile.interests, profile.goals] if field])
             }
 
         # 2. АНАЛИЗ ЗАДАЧ
@@ -3702,6 +3703,7 @@ def update_profile(
     timezone=None,
     company=None,
     position=None,
+    bio=None,
     languages=None,
     user_id=None,
     session=None,
@@ -3807,6 +3809,11 @@ def update_profile(
         old_position = profile.position
         profile.position = position
         updates_made.append(f"changed_position:{old_position}→{position}")
+    
+    if hasattr(profile, "bio") and bio:
+        old_bio = profile.bio
+        profile.bio = bio
+        updates_made.append(f"changed_bio:{old_bio}→{bio}")
     
     if hasattr(profile, "languages") and languages:
         old_languages = profile.languages
@@ -4077,6 +4084,10 @@ TOOLS = [
                     "company": {
                         "type": "string",
                         "description": "Компания, в которой работает пользователь (заменяет старое значение), опционально",
+                    },
+                    "bio": {
+                        "type": "string",
+                        "description": "Краткое описание пользователя (2-3 предложения о себе, опыте, увлечениях), заменяет старое значение, опционально",
                     },
                     "languages": {
                         "type": "string",

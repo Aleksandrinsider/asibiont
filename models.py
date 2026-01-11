@@ -68,6 +68,7 @@ class UserProfile(Base):
     city = Column(String(100))  # City for location-based matching
     company = Column(String(255))  # Company name
     position = Column(String(255))  # Job position
+    bio = Column(Text)  # Short bio/description (2-3 sentences about user)
     languages = Column(String(500))  # Languages: Русский (родной), English (C1), Español (A2)
     current_plans = Column(Text)  # Current plans or events, e.g., "Сегодня иду в кино, завтра на выставку"
     current_time = Column(String(10))  # User's current time in HH:MM format, for relative time calculations
