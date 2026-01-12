@@ -237,8 +237,7 @@ body {
     flex-direction: column;
     height: auto;
     max-height: none;
-    overflow-y: visible;
-    overflow-x: hidden;
+    overflow: visible;
     padding-bottom: 20px;
 }
 
@@ -468,11 +467,13 @@ body {
 }
 
 .message.user {
-    background-color: transparent;
+    background-color: #F6F8FA;
     color: #1F2328;
     align-self: flex-start;
     margin-right: auto;
-    padding: 6px 12px;
+    padding: 10px 14px;
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
 }
 
 .message.user .message-text {
@@ -484,14 +485,17 @@ body {
 }
 
 .message.ai {
-    background-color: transparent;
+    background-color: #FFFFFF;
     color: #1F2328;
     align-self: flex-start;
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
+    padding: 10px 14px;
 }
 
 .message.ai:hover {
-    background-color: transparent;
-    box-shadow: none;
+    background-color: #FAFBFC;
+    border-color: #1F2328;
 }
 
 .message.ai .message-text {
@@ -865,13 +869,12 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: none;
-    overflow-y: visible;
+    max-height: calc(100vh - 240px);
+    overflow-y: auto;
     overflow-x: hidden;
     transition: max-height 0.3s ease;
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
-    padding-right: 11px;
 }
 
 .people-list::-webkit-scrollbar {
@@ -1067,14 +1070,19 @@ body {
     }
     
     /* Ограничить высоту для мобильных */
-    .tasks-section,
-    .people-list {
+    .tasks-section {
         max-height: calc(100vh - 300px) !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
         -webkit-overflow-scrolling: touch !important;
         scrollbar-width: thin !important;
         scrollbar-color: #D1D9E0 transparent !important;
+    }
+    
+    .people-list {
+        max-height: none !important;
+        overflow-y: visible !important;
+        overflow-x: hidden !important;
     }
     
     .task-item {
@@ -1232,6 +1240,18 @@ body {
     background-color: #F6F8FA;
     border-color: #1F2328;
     box-shadow: 0 0 0 1px #1F2328;
+}
+
+.chat-action-btn.send-btn {
+    background-color: #068487;
+    color: #FFFFFF;
+    border-color: #068487;
+}
+
+.chat-action-btn.send-btn:hover {
+    background-color: #057A7D;
+    border-color: #057A7D;
+    box-shadow: 0 0 0 1px #057A7D;
 }
 
 .delete-btn {
