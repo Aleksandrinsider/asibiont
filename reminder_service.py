@@ -1,8 +1,10 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from aiogram import Bot
 from models import Session
 from models import Task, User
+from config import DATABASE_URL
 from datetime import datetime, timedelta
 import pytz
 import logging
@@ -15,7 +17,11 @@ class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
         self.bot = bot
         self.ai_service = ai_service
-        self.scheduler = AsyncIOScheduler(timezone=pytz.UTC)
+        # Use persistent jobstore (SQLAlchemy) to survive restarts
+        jobstores = {
+            'default': SQLAlchemyJobStore(url=DATABASE_URL)
+        }
+        self.scheduler = AsyncIOScheduler(timezone=pytz.UTC, jobstores=jobstores)
 
     async def start(self):
         self.scheduler.start()

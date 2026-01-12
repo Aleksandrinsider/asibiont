@@ -2023,6 +2023,16 @@ async def on_startup(app):
     
     await init_handlers_redis(redis_client)
     logger.info("Handlers Redis initialized")
+    
+    # Initialize APScheduler jobstore for persistence (SQLAlchemy)
+    try:
+        from reminder_service import reminder_service
+        # If using SQLAlchemyJobStore, it's already configured inside ReminderService
+        reminder_service.scheduler.start()
+        logger.info("ReminderService scheduler started with persistent jobstore")
+    except Exception as e:
+        logger.error(f"Failed to start or configure ReminderService scheduler: {e}")
+
 
 
 async def api_tasks_handler(request):
