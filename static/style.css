@@ -985,6 +985,11 @@ body {
         font-size: 16px;
     }
     
+    /* Скрыть поиск контактов на мобильных */
+    .contact-search-desktop {
+        display: none !important;
+    }
+    
     #next-task-center {
         position: static !important;
         transform: none !important;
