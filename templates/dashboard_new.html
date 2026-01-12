@@ -130,9 +130,9 @@
                         {% if profile %}
                         <div class="context-item">
                             <!-- Профиль с окружением -->
-                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 16px; gap: 8px; position: relative; min-height: 120px;">
+                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 16px; gap: 8px; position: relative;">
                                 <!-- Контакты слева -->
-                                <div id="circle-contacts-left" style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end;">
+                                <div id="circle-contacts-left" style="display: flex; gap: 6px; align-items: center;">
                                 </div>
                                 
                                 <!-- Основной аватар -->
@@ -147,7 +147,7 @@
                                 </div>
                                 
                                 <!-- Контакты справа -->
-                                <div id="circle-contacts-right" style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+                                <div id="circle-contacts-right" style="display: flex; gap: 6px; align-items: center;">
                                 </div>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
