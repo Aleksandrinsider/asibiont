@@ -13,6 +13,57 @@ from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_
 
 logger = logging.getLogger(__name__)
 
+# Singleton reference used by jobstore-safe wrapper functions
+REMINDER_SERVICE = None
+
+async def _send_reminder_job(task_id: int):
+    from models import Session, Task
+    db = Session()
+    try:
+        task = db.query(Task).filter_by(id=task_id).first()
+        if not task or not task.user:
+            logger.warning(f"_send_reminder_job: task {task_id} or user not found")
+            return
+        user_id = task.user.telegram_id
+        task_title = task.title
+    finally:
+        db.close()
+
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_reminder(user_id, task_title, task_id)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot send reminder")
+
+async def _send_result_check_job(task_id: int):
+    from models import Session, Task
+    db = Session()
+    try:
+        task = db.query(Task).filter_by(id=task_id).first()
+        if not task or not task.user:
+            logger.warning(f"_send_result_check_job: task {task_id} or user not found")
+            return
+        user_id = task.user.telegram_id
+        task_title = task.title
+    finally:
+        db.close()
+
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_result_check(user_id, task_title, task_id)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot send result check")
+
+async def _send_daily_report_job(user_id: int):
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_daily_report(user_id)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot send daily report")
+
+async def _check_and_send_proactive_job(user_id: int):
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.check_and_send_proactive(user_id)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot run proactive check")
+
 class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
         self.bot = bot
@@ -22,6 +73,9 @@ class ReminderService:
             'default': SQLAlchemyJobStore(url=DATABASE_URL)
         }
         self.scheduler = AsyncIOScheduler(timezone=pytz.UTC, jobstores=jobstores)
+        # Register singleton reference for jobstore-safe wrappers
+        global REMINDER_SERVICE
+        REMINDER_SERVICE = self
 
     async def start(self):
         self.scheduler.start()
@@ -79,10 +133,11 @@ class ReminderService:
             return
 
         trigger = DateTrigger(run_date=reminder_time, timezone=pytz.UTC)
+        # Use jobstore-safe module-level wrapper to avoid pickling scheduler-bound instances
         self.scheduler.add_job(
-            self.send_reminder,
+            _send_reminder_job,
             trigger=trigger,
-            args=[user_id, task_title, task_id],
+            args=[task_id],
             id=f"reminder_{task_id}",
             replace_existing=True
         )
@@ -94,10 +149,11 @@ class ReminderService:
             result_check_time = pytz.UTC.localize(result_check_time)
         
         trigger = DateTrigger(run_date=result_check_time, timezone=pytz.UTC)
+        # Use jobstore-safe wrapper
         self.scheduler.add_job(
-            self.send_result_check,
+            _send_result_check_job,
             trigger=trigger,
-            args=[user_id, task_title, task_id],
+            args=[task_id],
             id=f"result_check_{task_id}",
             replace_existing=True
         )
@@ -268,9 +324,9 @@ class ReminderService:
                         retry_time = datetime.now(pytz.UTC) + timedelta(minutes=10)
                         try:
                             self.scheduler.add_job(
-                                self.send_reminder,
+                                _send_reminder_job,
                                 trigger=DateTrigger(run_date=retry_time, timezone=pytz.UTC),
-                                args=[user_id, task_title, task_id],
+                                args=[task_id],
                                 id=f"retry_reminder_{task_id}_{int(retry_time.timestamp())}",
                                 replace_existing=False
                             )
@@ -325,8 +381,9 @@ class ReminderService:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
                 # Планируем ежедневный отчет в 22:00 по времени пользователя
+                # Use jobstore-safe wrapper function
                 self.scheduler.add_job(
-                    self.send_daily_report,
+                    _send_daily_report_job,
                     trigger="cron",
                     hour=DAILY_REPORT_HOUR,
                     minute=0,
@@ -418,8 +475,9 @@ class ReminderService:
                     hour = '10-21'
                 
                 # Планируем проактивные проверки с интервалом без задач (по умолчанию)
+                # Use jobstore-safe wrapper for proactive checks
                 self.scheduler.add_job(
-                    self.check_and_send_proactive,
+                    _check_and_send_proactive_job,
                     trigger="cron",
                     minute=minute,
                     hour=hour,
