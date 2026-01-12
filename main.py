@@ -110,10 +110,67 @@ def run_migrations():
         session.close()
     except Exception as e:
         logger.error(f"Migration failed: {e}")
+
+def add_test_sport_users():
+    """Добавляет тестовых пользователей с интересами 'спорт' если их еще нет"""
+    try:
+        session = Session()
+        
+        test_users_data = [
+            {'telegram_id': 111111, 'username': 'sportfan1', 'first_name': 'Алексей',
+             'interests': 'спорт, бег, фитнес', 'city': 'Москва', 'company': 'Фитнес-клуб', 'position': 'Тренер'},
+            {'telegram_id': 222222, 'username': 'sportfan2', 'first_name': 'Дмитрий',
+             'interests': 'спорт, футбол, плавание', 'city': 'Санкт-Петербург', 'company': 'Спортивная школа', 'position': 'Инструктор'},
+            {'telegram_id': 333333, 'username': 'sportfan3', 'first_name': 'Михаил',
+             'interests': 'спорт, теннис, йога', 'city': 'Москва', 'company': 'Теннисный центр', 'position': 'Спортсмен'},
+            {'telegram_id': 444444, 'username': 'sportfan4', 'first_name': 'Елена',
+             'interests': 'спорт, волейбол, танцы', 'city': 'Казань', 'company': 'Спортивный комплекс', 'position': 'Администратор'},
+            {'telegram_id': 555555, 'username': 'sportfan5', 'first_name': 'Анна',
+             'interests': 'спорт, гимнастика, пилатес', 'city': 'Москва', 'company': 'Студия пилатес', 'position': 'Инструктор'}
+        ]
+        
+        added_count = 0
+        for user_data in test_users_data:
+            existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
+            if not existing_user:
+                # Создаем пользователя
+                new_user = User(
+                    telegram_id=user_data['telegram_id'],
+                    username=user_data['username'],
+                    first_name=user_data['first_name'],
+                    timezone='Europe/Moscow',
+                    is_premium=False
+                )
+                session.add(new_user)
+                session.flush()
+                
+                # Создаем профиль
+                profile = UserProfile(
+                    user_id=new_user.id,
+                    interests=user_data['interests'],
+                    city=user_data['city'],
+                    company=user_data['company'],
+                    position=user_data['position'],
+                    average_rating=4.5,
+                    rating_count=10
+                )
+                session.add(profile)
+                added_count += 1
+                logger.info(f"Added test user: {user_data['username']}")
+        
+        session.commit()
+        if added_count > 0:
+            logger.info(f"Successfully added {added_count} test sport users")
+        else:
+            logger.info("All test sport users already exist")
+        session.close()
+    except Exception as e:
+        logger.error(f"Failed to add test sport users: {e}")
         
 try:
     run_migrations()
     logger.info("Database migrations completed")
+    add_test_sport_users()
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}")
 
@@ -2203,6 +2260,65 @@ async def api_interactions_handler(request):
     finally:
         session_db.close()
 
+async def api_search_contacts_handler(request):
+    """API для поиска контактов по username"""
+    try:
+        session_obj = await get_session(request)
+        user_id = session_obj.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        
+        query = request.query.get('q', '').strip().lower().replace('@', '')
+        if not query or len(query) < 2:
+            return web.json_response({'contacts': []})
+        
+        session_db = Session()
+        try:
+            # Поиск пользователей по username (частичное совпадение)
+            users = session_db.query(User).filter(
+                User.username.ilike(f'%{query}%')
+            ).limit(20).all()
+            
+            contacts_data = []
+            for user in users:
+                # Пропускаем текущего пользователя
+                if user.telegram_id == user_id:
+                    continue
+                
+                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                
+                # Обновляем аватар если нужно
+                photo_url = user.photo_url
+                if user.telegram_id and 'bot' in request.app:
+                    try:
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], user.telegram_id)
+                        if updated_avatar and updated_avatar != user.photo_url:
+                            user.photo_url = updated_avatar
+                            session_db.commit()
+                            photo_url = updated_avatar
+                    except Exception as e:
+                        logger.error(f"Error updating avatar for {user.telegram_id}: {e}")
+                
+                contacts_data.append({
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'telegram_id': user.telegram_id,
+                    'photo_url': photo_url,
+                    'city': profile.city if profile else None,
+                    'company': profile.company if profile else None,
+                    'position': profile.position if profile else None,
+                    'interests': profile.interests if profile else None,
+                    'average_rating': profile.average_rating if profile else 0,
+                    'rating_count': profile.rating_count if profile else 0
+                })
+            
+            return web.json_response({'contacts': contacts_data})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error searching contacts: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
 async def update_timezone_handler(request):
     """Обновляет timezone пользователя через веб-панель"""
     try:
@@ -2414,6 +2530,7 @@ app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)
+app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 
 # Setup for production
 dp = Dispatcher()

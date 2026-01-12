@@ -37,6 +37,14 @@
         <div class="header-content">
             <div class="header-left">
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
+                <!-- Поиск контактов -->
+                <div style="margin-left: 20px; position: relative;">
+                    <input type="text" id="contact-search-input" placeholder="Поиск @username..." 
+                        style="padding: 6px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; width: 200px; outline: none;"
+                        onkeyup="searchContacts(event)">
+                    <div id="contact-search-results" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #D1D9E0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 400px; overflow-y: auto; z-index: 1000; min-width: 300px;">
+                    </div>
+                </div>
             </div>
             <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 14px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
                 <span class="reminder-pulse"></span>
@@ -758,6 +766,113 @@
             cachedPartnersData = null;
             updatePeople();
         }
+
+        // Поиск контактов
+        let searchTimeout;
+        async function searchContacts(event) {
+            const input = document.getElementById('contact-search-input');
+            const resultsDiv = document.getElementById('contact-search-results');
+            const query = input.value.trim();
+            
+            // Clear previous timeout
+            clearTimeout(searchTimeout);
+            
+            // Hide results if query is too short
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Debounce search
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/search_contacts?q=${encodeURIComponent(query)}`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (!response.ok) {
+                        console.error('Failed to search contacts');
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    displaySearchResults(data.contacts);
+                } catch (error) {
+                    console.error('Error searching contacts:', error);
+                }
+            }, 300);
+        }
+
+        function displaySearchResults(contacts) {
+            const resultsDiv = document.getElementById('contact-search-results');
+            
+            if (!contacts || contacts.length === 0) {
+                resultsDiv.innerHTML = '<div style="padding: 12px; color: #656D76; font-size: 13px;">Ничего не найдено</div>';
+                resultsDiv.style.display = 'block';
+                return;
+            }
+            
+            let html = '';
+            contacts.forEach(contact => {
+                const isFavorite = isFavoriteContact(contact.username);
+                const photoUrl = contact.photo_url || 'https://via.placeholder.com/40';
+                const rating = contact.average_rating ? contact.average_rating.toFixed(1) : '0.0';
+                const ratingCount = contact.rating_count || 0;
+                
+                html += `
+                    <div style="padding: 10px 12px; border-bottom: 1px solid #F6F8FA; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background 0.2s;"
+                         onmouseover="this.style.background='#F6F8FA'" 
+                         onmouseout="this.style.background='white'">
+                        <img src="${photoUrl}" alt="${contact.first_name}" 
+                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 14px; font-weight: 500; color: #24292F;">
+                                ${contact.first_name || contact.username}
+                            </div>
+                            <div style="font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 8px;">
+                                <span>@${contact.username}</span>
+                                ${contact.city ? `<span>· ${contact.city}</span>` : ''}
+                            </div>
+                            ${contact.interests ? `<div style="font-size: 11px; color: #656D76; margin-top: 2px;">${contact.interests}</div>` : ''}
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 3px;">
+                                <span style="color: #FFA500;">★</span>
+                                <span>${rating}</span>
+                                <span style="color: #8B96A5;">(${ratingCount})</span>
+                            </div>
+                            <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')" 
+                                    style="background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; line-height: 1;"
+                                    title="${isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}">
+                                ${isFavorite ? '❤️' : '🤍'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+            resultsDiv.style.display = 'block';
+        }
+
+        function toggleFavoriteContactFromSearch(username) {
+            toggleFavoriteContact(username);
+            // Update search results to reflect change
+            const input = document.getElementById('contact-search-input');
+            searchContacts({target: input});
+        }
+
+        // Close search results when clicking outside
+        document.addEventListener('click', function(event) {
+            const searchInput = document.getElementById('contact-search-input');
+            const searchResults = document.getElementById('contact-search-results');
+            
+            if (searchInput && searchResults && 
+                !searchInput.contains(event.target) && 
+                !searchResults.contains(event.target)) {
+                searchResults.style.display = 'none';
+            }
+        });
 
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
