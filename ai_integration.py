@@ -1577,19 +1577,6 @@ def get_system_prompt():
     """DEPRECATED: Use get_optimized_prompt_final from improved_prompts_final.py"""
     raise NotImplementedError("Use get_optimized_prompt_final from improved_prompts_final.py")
 
-КОНТЕКСТ:
-- "это", "ту задачу" -> используй последнюю упомянутую
-- Уточнения к только что созданной -> edit_task(), НЕ новая задача
-- При неоднозначности -> переспроси
-
-ЗАПРЕЩЕНО:
-- JSON/код в ответе
-- "Профиль обновлен" для всех типов обновлений (будь конкретным!)
-- Односложные ответы типа "Готово"
-- Спрашивать о том, что есть в профиле
-- Добавлять интересы без подтверждения
-"""
-
 
 def get_active_system_prompt():
     system_prompt = """Ты - личный ИИ-помощник и друг для управления жизнью. Веди естественный диалог как настоящий человек.
