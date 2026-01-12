@@ -150,8 +150,7 @@ def add_test_sport_users():
                     telegram_id=user_data['telegram_id'],
                     username=user_data['username'],
                     first_name=user_data['first_name'],
-                    timezone='Europe/Moscow',
-                    is_premium=False
+                    timezone='Europe/Moscow'
                 )
                 session.add(new_user)
                 session.flush()
