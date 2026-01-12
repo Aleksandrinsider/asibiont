@@ -476,7 +476,7 @@ body {
 
 .message.user .message-text {
     font-weight: 400;
-    font-size: 15px;
+    font-size: 13px;
     line-height: 21px;
     color: #656D76;
     text-align: justify;
@@ -494,7 +494,7 @@ body {
 
 .message.ai .message-text {
     font-weight: 400;
-    font-size: 15px;
+    font-size: 13px;
     color: #1F2328;
     line-height: 21px;
     text-align: justify;
@@ -505,7 +505,7 @@ body {
     line-height: 21px;
     width: 100%;
     margin-bottom: 0;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 400;
 }
 
