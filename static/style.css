@@ -343,16 +343,36 @@ body {
 
 
 
-/* Side columns: keep content scrollable independently */
+/* Side columns: left column is non-scrollable, internal lists scroll; right column remains flexible */
 .left-column,
 .right-column {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    overflow: auto;
+    gap: 16px;
+    overflow: visible; /* Avoid extra outer scrollbar */
     max-height: 100%;
     padding: 8px;
     min-height: 0; /* Important for proper flex/grid behavior */
+}
+
+/* Make people section fill available vertical space and allow internal scrolling */
+.people-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background-color: #FFFFFF;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    min-height: 0;
+}
+
+.people-list {
+    overflow: auto;
+    max-height: calc(100vh - var(--header-height) - 220px); /* keeps list scrollable internally */
+    -webkit-overflow-scrolling: touch;
+    padding-right: 6px;
+    min-height: 0;
 }
 
 
