@@ -243,7 +243,7 @@ body {
 
 .left-column::-webkit-scrollbar,
 .right-column::-webkit-scrollbar {
-    width: 2px;
+    width: 1px;
 }
 
 .left-column::-webkit-scrollbar-track,
@@ -253,8 +253,8 @@ body {
 
 .left-column::-webkit-scrollbar-thumb,
 .right-column::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 2px;
+    background: #E6E9EC;
+    border-radius: 1px;
 }
 
 .left-column::-webkit-scrollbar-thumb:hover,
@@ -297,7 +297,7 @@ body {
 }
 
 .chat-messages::-webkit-scrollbar {
-    width: 2px;
+    width: 1px;
 }
 
 .chat-messages::-webkit-scrollbar-track {
@@ -305,8 +305,8 @@ body {
 }
 
 .chat-messages::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 2px;
+    background: #E6E9EC;
+    border-radius: 1px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
@@ -645,7 +645,7 @@ body {
 }
 
 .tasks-section::-webkit-scrollbar {
-    width: 2px;
+    width: 1px;
 }
 
 .tasks-section::-webkit-scrollbar-track {
@@ -653,8 +653,8 @@ body {
 }
 
 .tasks-section::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 2px;
+    background: #E6E9EC;
+    border-radius: 1px;
 }
 
 .tasks-section::-webkit-scrollbar-thumb:hover {
@@ -874,7 +874,7 @@ body {
 }
 
 .people-list::-webkit-scrollbar {
-    width: 2px;
+    width: 1px;
 }
 
 .people-list::-webkit-scrollbar-track {
@@ -882,8 +882,8 @@ body {
 }
 
 .people-list::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 2px;
+    background: #E6E9EC;
+    border-radius: 1px;
 }
 
 .people-list::-webkit-scrollbar-thumb:hover {
