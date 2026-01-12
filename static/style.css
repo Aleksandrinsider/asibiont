@@ -203,15 +203,15 @@ body {
 }
 
 .container {
-    margin: 68px 20px 0 20px;
-    width: calc(100vw - 40px);
+    margin: 68px 40px 0 40px;
+    width: calc(100vw - 80px);
     height: calc(100vh - 118px);
     overflow: hidden;
 }
 
 .main-layout {
     display: grid;
-    grid-template-columns: 430px 1fr 430px;
+    grid-template-columns: 500px 1fr 500px;
     height: 100%;
     column-gap: 10px;
     padding: 35px 0 20px 0;
@@ -223,7 +223,8 @@ body {
 .right-column {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 110px);
+    height: auto;
+    max-height: calc(100vh - 110px);
     overflow-y: auto;
     overflow-x: hidden;
     padding-bottom: 20px;
@@ -1030,8 +1031,8 @@ body {
     }
     
     .container {
-        margin: 100px 8px 0 8px;
-        width: calc(100vw - 16px);
+        margin: 100px 20px 0 20px;
+        width: calc(100vw - 40px);
     }
     
     .main-layout {
