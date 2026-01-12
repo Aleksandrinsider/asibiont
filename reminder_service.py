@@ -64,6 +64,14 @@ async def _check_and_send_proactive_job(user_id: int):
     else:
         logger.error("REMINDER_SERVICE not initialized; cannot run proactive check")
 
+async def _check_and_send_overdue_reminder_job(user_id: int):
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.check_and_send_overdue_reminder(user_id)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot check overdue")
+
+
+
 class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
         self.bot = bot
@@ -83,7 +91,6 @@ class ReminderService:
         self.schedule_daily_reports()
         self.schedule_proactive_checks()
         self.schedule_overdue_checks()
-        self.schedule_invalid_chat_alerts()
 
     def schedule_existing_reminders(self):
         import logging
@@ -307,19 +314,7 @@ class ReminderService:
                     err_text = str(send_error)
                     logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {err_text}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")
-                    # Если чат не найден или запрещён - помечаем пользователя invalid_chat
-                    if 'chat not found' in err_text.lower() or 'forbidden' in err_text.lower():
-                        try:
-                            db = Session()
-                            u = db.query(User).filter_by(telegram_id=user_id).first()
-                            if u:
-                                u.invalid_chat = True
-                                db.commit()
-                                logger.info(f"Marked user {user_id} as invalid_chat due to Telegram error: {err_text}")
-                        except Exception as e2:
-                            logger.error(f"Failed to mark invalid_chat for user {user_id}: {e2}")
-                        finally:
-                            db.close()
+
                     # Для серверных ошибок (5xx): планируем повторы через 10 минут
                     elif any(code in err_text for code in ['500','502','503','504']):
                         retry_time = datetime.now(pytz.UTC) + timedelta(minutes=10)
@@ -361,77 +356,9 @@ class ReminderService:
         else:
             logger.warning(f"Task {task_id} NOT marked as sent due to delivery failure - will retry on next schedule")
 
-    def schedule_invalid_chat_alerts(self):
-        """Планирование проверки роста invalid_chat пользователей каждый час"""
-        from models import Session
-        from models import User
 
-        # Проверяем, существует ли уже такой джоб
-        job_id = "invalid_chat_alert"
-        if self.scheduler.get_job(job_id):
-            logger.debug(f"Invalid chat alert job {job_id} already exists, skipping")
-            return
 
-        # Планируем проверку каждый час
-        self.scheduler.add_job(
-            self.check_invalid_chat_alert,
-            trigger="cron",
-            minute=0,  # Каждый час в 0 минут
-            id=job_id,
-            replace_existing=True
-        )
-        logger.info("Scheduled invalid_chat alert check (hourly)")
 
-    async def check_invalid_chat_alert(self):
-        """Проверка роста invalid_chat пользователей и отправка алерта при превышении порога"""
-        from models import Session, User
-        import logging
-        logger = logging.getLogger(__name__)
-
-        db = Session()
-        try:
-            # Подсчитываем новые invalid_chat за последний час
-            from datetime import datetime, timedelta
-            import pytz
-            hour_ago = datetime.now(pytz.UTC) - timedelta(hours=1)
-
-            new_invalid_count = db.query(User).filter(
-                User.invalid_chat == True,
-                User.updated_at > hour_ago
-            ).count()
-
-            # Подсчитываем общее количество invalid_chat
-            total_invalid_count = db.query(User).filter(User.invalid_chat == True).count()
-
-            # Порог алерта: 3 новых invalid_chat за час ИЛИ 5% от общего числа пользователей
-            total_users = db.query(User).count()
-            percentage_threshold = total_users * 0.05  # 5%
-
-            alert_triggered = new_invalid_count >= 3 or (total_users > 0 and new_invalid_count >= percentage_threshold)
-
-            if alert_triggered:
-                alert_msg = f"🚨 ALERT: Invalid chat growth detected!\n" \
-                           f"New invalid_chat users (last hour): {new_invalid_count}\n" \
-                           f"Total invalid_chat users: {total_invalid_count}\n" \
-                           f"Total users: {total_users}\n" \
-                           f"Percentage: {(new_invalid_count/total_users*100):.1f}%"
-
-                logger.warning(alert_msg)
-
-                # TODO: Отправить уведомление в Telegram (добавить ADMIN_TELEGRAM_ID в config)
-                # if hasattr(self, 'admin_chat_id'):
-                #     try:
-                #         await self.bot.send_message(chat_id=self.admin_chat_id, text=alert_msg)
-                #     except Exception as e:
-                #         logger.error(f"Failed to send alert to admin: {e}")
-
-            else:
-                logger.info(f"Invalid chat check: {new_invalid_count} new invalid users (OK)")
-
-        except Exception as e:
-            logger.error(f"Error in check_invalid_chat_alert: {e}")
-        finally:
-            db.close()
 
     def schedule_daily_reports(self):
         """Планирование ежедневных отчетов в 22:00 по времени пользователя"""
@@ -707,7 +634,7 @@ class ReminderService:
                 
                 # Планируем проверки просроченных задач каждые 15 минут
                 self.scheduler.add_job(
-                    self.check_and_send_overdue_reminder,
+                    _check_and_send_overdue_reminder_job,
                     trigger="cron",
                     minute=f"*/{OVERDUE_CHECK_INTERVAL_MINUTES}",
                     timezone=user_tz,
