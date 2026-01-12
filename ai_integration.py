@@ -4355,11 +4355,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             db_session.close()
 
         # Classify user intent (use improved version if available)
-if not PROMPTS_V2_AVAILABLE:
-                raise ImportError("improved_prompts_final.py is REQUIRED but not found!")
+        if not PROMPTS_V2_AVAILABLE:
+            raise ImportError("improved_prompts_final.py is REQUIRED but not found!")
             
-            intent = improved_classify_intent(clean_message, mentions_str)
-            logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
+        intent = improved_classify_intent(clean_message, mentions_str)
+        logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
