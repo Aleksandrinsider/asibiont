@@ -291,7 +291,7 @@ body {
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
-    padding: 16px 16px 0 16px;
+    padding: 16px 26px 0 16px;
     border-radius: 10px;
     margin-bottom: 0;
 }
@@ -641,6 +641,7 @@ body {
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
     padding-top: 0;
+    padding-right: 10px;
 }
 
 .tasks-section::-webkit-scrollbar {
@@ -869,10 +870,11 @@ body {
     transition: max-height 0.3s ease;
     scrollbar-width: thin;
     scrollbar-color: #D1D9E0 transparent;
+    padding-right: 10px;
 }
 
 .people-list::-webkit-scrollbar {
-    width: 4px;
+    width: 3px;
 }
 
 .people-list::-webkit-scrollbar-track {
