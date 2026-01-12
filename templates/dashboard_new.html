@@ -191,7 +191,7 @@
                     <div style="margin-bottom: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Мои</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #24292F; border: none; cursor: pointer; font-size: 12px; font-weight: 600;">Рекомендуемые</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #0969DA; border: none; cursor: pointer; font-size: 12px; font-weight: 600;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
                         <span style="color: #D1D9E0;">·</span>
@@ -1300,7 +1300,7 @@
             buttons.forEach(btn => {
                 const btnFilterType = btn.getAttribute('onclick').match(/filterContacts\('([^']+)'\)/)?.[1];
                 if (btnFilterType === filterType) {
-                    btn.style.color = '#24292F';
+                    btn.style.color = '#0969DA';
                     btn.style.fontWeight = '600';
                 } else {
                     btn.style.color = '#59636E';
