@@ -1340,14 +1340,7 @@
         }
         
         function filterContacts(filterType) {
-            // Если фильтр уже активен, не делаем ничего
-            if (currentContactFilter === filterType) {
-                return;
-            }
-            
-            currentContactFilter = filterType;
-            
-            // Сворачиваем профиль при клике на фильтр
+            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
             const profileContent = document.getElementById('profile-content');
             const profileBtn = document.getElementById('profile-toggle-btn');
             const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
@@ -1369,6 +1362,13 @@
                     peopleList.style.overflowY = 'auto';
                 }
             }
+            
+            // Если фильтр уже активен, только сворачиваем профиль
+            if (currentContactFilter === filterType) {
+                return;
+            }
+            
+            currentContactFilter = filterType;
             
             // Обновляем стили кнопок фильтров контактов
             const buttons = document.querySelectorAll('.contact-filter-btn');
