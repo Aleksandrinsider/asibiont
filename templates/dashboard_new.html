@@ -1499,9 +1499,10 @@
             const laterStats = formatStats(laterTasks);
             
             // Найти ближайшее напоминание
+            const nowTimestamp = Date.now(); // UTC milliseconds
             const upcomingTasks = tasks.filter(t => t.reminder_time && t.status !== 'completed' && t.status !== 'skipped')
                 .map(t => ({...t, date: new Date(t.reminder_time)}))
-                .filter(t => t.date > now)
+                .filter(t => t.date.getTime() > nowTimestamp) // Сравниваем UTC milliseconds
                 .sort((a, b) => a.date - b.date);
             
             const nextTaskCenterEl = document.getElementById('next-task-center');
@@ -1509,7 +1510,7 @@
             
             if (upcomingTasks.length > 0) {
                 const next = upcomingTasks[0];
-                const delta = next.date - now;
+                const delta = next.date.getTime() - nowTimestamp; // Разница в UTC milliseconds
                 const minutes = Math.floor(delta / 60000);
                 const hours = Math.floor(minutes / 60);
                 const days = Math.floor(hours / 24);
