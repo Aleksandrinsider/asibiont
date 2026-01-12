@@ -74,8 +74,8 @@ button:active {
 }
 
 :root {
-    --header-height: 72px;
-    --app-gap: 20px;
+    --header-height: 64px; /* Slightly smaller header */
+    --app-gap: 12px; /* Reduced gaps for tighter layout */
 }
 
 html, body {
@@ -87,8 +87,8 @@ html, body {
 body {
     background-color: #FFFFFF;
     color: #1F2328;
-    line-height: 21px;
-    font-size: 13px;
+    line-height: 22px;
+    font-size: 14px; /* Increased base font size for readability */
     font-weight: 400;
     letter-spacing: normal;
     width: 100%;
@@ -96,7 +96,7 @@ body {
     overflow: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-} 
+}  
 
 .app-header {
     width: 100%;
@@ -291,15 +291,26 @@ body {
 }
 
 .container {
-    margin: calc(var(--header-height) + 12px) auto 20px auto;
-    width: calc(100% - 40px);
-    max-width: 1400px; /* Center and limit width for better distribution */
-    height: calc(100vh - var(--header-height) - 32px);
-    overflow: hidden;
+    margin: calc(var(--header-height) + 8px) 12px 12px 12px; /* Use more of the screen */
+    width: calc(100% - 24px);
+    max-width: none; /* Allow full width */
+    height: calc(100vh - var(--header-height) - 20px);
+    overflow: visible;
     display: flex;
     flex-direction: column;
     align-items: stretch;
 }
+
+/* Ensure header aligns with container */
+.header-content {
+    display: flex;
+    align-items: center;
+    width: calc(100% - 24px);
+    max-width: none;
+    margin: 0 auto;
+    justify-content: space-between;
+    padding: 0 12px;
+} 
 
 /* Ensure header aligns with container */
 .header-content {
@@ -355,14 +366,14 @@ body {
 .center-column {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 20px;
+    gap: 12px;
+    padding: 12px; /* Reduced padding */
     overflow: auto;
     max-height: 100%;
     min-height: 0; /* Allow proper internal scrolling */
     -webkit-overflow-scrolling: touch;
     flex: 1 1 auto;
-}
+} 
 
 
 /* Responsive adjustments */
@@ -490,13 +501,29 @@ details[open] .details-content {
     background-color: #FFFFFF;
     border: 1px solid #D1D9E0;
     border-radius: 8px;
-    padding: 20px;
+    padding: 12px; /* Reduced padding */
     margin-top: 0;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
     height: 100%;
     max-height: 100%;
     overflow: hidden;
 }
+
+.welcome-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: calc(100vh - var(--header-height) - 24px);
+    text-align: center;
+}
+
+.welcome-content h1 {
+    font-size: 28px; /* larger heading */
+}
+
+.welcome-content p {
+    font-size: 15px; /* slightly larger body text */
+} 
 
 .chat-messages {
     display: flex;
@@ -761,9 +788,13 @@ details[open] .details-content {
 }
 
 .context-section {
-    padding: 12px;
-    margin-bottom: 20px;
+    padding: 8px; /* Reduced padding */
+    margin-bottom: 12px;
     overflow: visible;
+}
+
+.context-item p {
+    font-size: 14px; /* slightly larger text for readability */
 }
 
 .context-section h3 {
