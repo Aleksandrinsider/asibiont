@@ -97,65 +97,89 @@ class ReminderService:
         )
 
     async def send_result_check(self, user_id: int, task_title: str, task_id: int):
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.info("=== STARTING RESULT CHECK SEND ===")
+        logger.info(f"Sending result check for task {task_id}, user telegram_id {user_id}, title: {task_title}")
         from subscription_service import check_subscription
         
         # Проверить подписку - если нет доступа, не отправлять проверку результата
         if not check_subscription(user_id):
+            logger.info(f"Subscription check failed for user {user_id}, skipping result check")
             return
         
+        result_check_sent_successfully = False
+        result_text = None
+        
         try:
+            logger.info(f"Generating result check text for task {task_id}...")
             result_text = await self.ai_service.generate_result_check(user_id, task_title)
+            logger.info(f"Result check text generated: {result_text[:100]}...")
             
             if self.bot:
-                await self.bot.send_message(
-                    chat_id=user_id,
-                    text=result_text
-                )
+                logger.info(f"Attempting to send result check via Telegram to chat_id {user_id}...")
+                try:
+                    result = await self.bot.send_message(
+                        chat_id=user_id,
+                        text=result_text
+                    )
+                    logger.info(f"✅ Result check sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
+                    result_check_sent_successfully = True
+                except Exception as send_error:
+                    logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {send_error}")
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    result_check_sent_successfully = False
             else:
                 # Для тестов - вывод в консоль
                 logger.info(f"[RESULT CHECK SENT] To user {user_id}: {result_text}")
+                result_check_sent_successfully = True
         except Exception as e:
-            import logging
-            logging.error(f"Failed to send result check for task {task_id}: {e}")
+            logger.error(f"❌ Critical error in send_result_check for task {task_id}: {type(e).__name__}: {e}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            result_check_sent_successfully = False
         
-        # Обновить статус в БД
-        db = Session()
-        try:
-            task = db.query(Task).filter(Task.id == task_id).first()
-            if task:
-                task.result_check_sent = True
-                db.commit()
-                
-                # Установить pending_action для обработки ответа пользователя
-                user = db.query(User).filter(User.telegram_id == user_id).first()
-                if user:
-                    from datetime import datetime, timezone
-                    pending_data = {
-                        "type": "result_check_response",
-                        "task_id": task_id,
-                        "task_title": task_title,
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
-                    user.pending_action = json.dumps(pending_data)
-                    logger.info(f"Устанавливаем pending_action: {user.pending_action}")
+        # Обновить статус в БД ТОЛЬКО если отправка успешна
+        if result_check_sent_successfully:
+            db = Session()
+            try:
+                task = db.query(Task).filter(Task.id == task_id).first()
+                if task:
+                    task.result_check_sent = True
                     db.commit()
-                    db.refresh(user)  # Обновляем объект из БД
-                    logger.info(f"После commit pending_action: {user.pending_action}")
-                    logger.info("pending_action установлен")
-                else:
-                    logger.info(f"Пользователь с telegram_id {user_id} не найден")
-        except Exception as e:
-            import logging
-            logging.error(f"Failed to update result_check_sent for task {task_id}: {e}")
-            db.rollback()
-        finally:
-            db.close()
+                    logger.info(f"Task {task_id} marked as result_check_sent=True")
+                    
+                    # Установить pending_action для обработки ответа пользователя
+                    user = db.query(User).filter(User.telegram_id == user_id).first()
+                    if user:
+                        from datetime import datetime, timezone
+                        pending_data = {
+                            "type": "result_check_response",
+                            "task_id": task_id,
+                            "task_title": task_title,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
+                        user.pending_action = json.dumps(pending_data)
+                        logger.info(f"Set pending_action: {user.pending_action}")
+                        db.commit()
+                        db.refresh(user)
+                        logger.info(f"After commit pending_action: {user.pending_action}")
+                    else:
+                        logger.warning(f"User with telegram_id {user_id} not found for setting pending_action")
+            except Exception as e:
+                logger.error(f"Failed to update result_check_sent for task {task_id}: {e}")
+                db.rollback()
+            finally:
+                db.close()
+        else:
+            logger.warning(f"Task {task_id} NOT marked as result_check_sent due to delivery failure")
 
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
         import logging
+        import traceback
         logger = logging.getLogger(__name__)
         logger.info("=== STARTING REMINDER SEND ===")
-        logger.info(f"Sending reminder for task {task_id}, user {user_id}, title: {task_title}")
+        logger.info(f"Sending reminder for task {task_id}, user telegram_id {user_id}, title: {task_title}")
         from subscription_service import check_subscription
         from models import Interaction
         
@@ -164,8 +188,13 @@ class ReminderService:
         #     logger.info(f"Subscription check failed for user {user_id}")
         #     return
         
+        reminder_sent_successfully = False
+        reminder_text = None
+        
         try:
+            logger.info(f"Generating reminder text for task {task_id}...")
             reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
+            logger.info(f"Reminder text generated: {reminder_text[:100]}...")
             
             # Сохранить напоминание в историю чата
             db = Session()
@@ -181,38 +210,51 @@ class ReminderService:
                     )
                     db.add(interaction)
                     db.commit()
+                    logger.info(f"Reminder saved to interaction history for user {user_id}")
+                else:
+                    logger.warning(f"User with telegram_id {user_id} not found in database")
             finally:
                 db.close()
             
             if self.bot:
-                result = await self.bot.send_message(
-                    chat_id=user_id,
-                    text=reminder_text
-                )
-                import logging
-                logging.info(f"Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
+                logger.info(f"Attempting to send reminder via Telegram to chat_id {user_id}...")
+                try:
+                    result = await self.bot.send_message(
+                        chat_id=user_id,
+                        text=reminder_text
+                    )
+                    logger.info(f"✅ Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
+                    reminder_sent_successfully = True
+                except Exception as send_error:
+                    logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {send_error}")
+                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                    # Не помечаем как отправленное если произошла ошибка
+                    reminder_sent_successfully = False
             else:
                 # Для тестов - вывод в консоль
                 logger.info(f"[REMINDER SENT] To user {user_id}: {reminder_text}")
-                import logging
-                logging.info(f"Reminder printed to console for user {user_id} for task {task_id}")
+                reminder_sent_successfully = True
         except Exception as e:
-            import logging
-            logging.error(f"Failed to send reminder for task {task_id}: {e}")
+            logger.error(f"❌ Critical error in send_reminder for task {task_id}: {type(e).__name__}: {e}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            reminder_sent_successfully = False
         
-        # Обновить статус в БД даже если отправка не удалась
-        db = Session()
-        try:
-            task = db.query(Task).filter(Task.id == task_id).first()
-            if task:
-                task.reminder_sent = True
-                db.commit()
-        except Exception as e:
-            import logging
-            logging.error(f"Failed to update reminder_sent for task {task_id}: {e}")
-            db.rollback()
-        finally:
-            db.close()
+        # Обновить статус в БД ТОЛЬКО если отправка успешна
+        if reminder_sent_successfully:
+            db = Session()
+            try:
+                task = db.query(Task).filter(Task.id == task_id).first()
+                if task:
+                    task.reminder_sent = True
+                    db.commit()
+                    logger.info(f"Task {task_id} marked as reminder_sent=True")
+            except Exception as e:
+                logger.error(f"Failed to update reminder_sent for task {task_id}: {e}")
+                db.rollback()
+            finally:
+                db.close()
+        else:
+            logger.warning(f"Task {task_id} NOT marked as sent due to delivery failure - will retry on next schedule")
 
     def schedule_daily_reports(self):
         """Планирование ежедневных отчетов в 22:00 по времени пользователя"""
