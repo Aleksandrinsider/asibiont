@@ -39,7 +39,7 @@
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
                 <!-- Поиск контактов -->
                 {% if logged_in %}
-                <div style="margin-left: 20px; position: relative; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 12px;">
+                <div style="margin-left: 20px; position: relative; background: white; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 12px;">
                     <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram: @ ..." 
                         style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #24292F;"
                         onkeyup="searchContacts(event)">
@@ -140,7 +140,7 @@
                                     </div>
                                     
                                     <!-- Основной аватар -->
-                                    <div style="z-index: 10;">
+                                    <div style="z-index: 10; margin-top: 10px;">
                                         {% if user_avatar_url %}
                                         <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0;">
                                         {% else %}
@@ -207,7 +207,7 @@
             <div class="center-column">
                 <div class="chat-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 15px 0; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Чат</h3>
+                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Чат с ИИ</h3>
                     </div>
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
@@ -1294,6 +1294,16 @@
         
         function filterContacts(filterType) {
             currentContactFilter = filterType;
+            
+            // Сворачиваем профиль при клике на фильтр
+            const profileContent = document.getElementById('profile-content');
+            const profileBtn = document.getElementById('profile-toggle-btn');
+            const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
+            if (profileContent && profileContent.style.display !== 'none') {
+                profileContent.style.display = 'none';
+                if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
+                localStorage.setItem('profileCollapsed', 'true');
+            }
             
             // Обновляем стили кнопок фильтров контактов
             const buttons = document.querySelectorAll('.contact-filter-btn');

@@ -3758,8 +3758,12 @@ def update_profile(
     needs_confirmation = []  # Что требует подтверждения
     
     def update_list_field(field, value, field_name):
-        if not value:
+        if value is None:  # Если None - не трогаем поле
             return field, None, False
+        if value == "":  # Если пустая строка - очищаем поле
+            action = f"cleared_{field_name}"
+            return None, action, False
+        
         current = set((field or "").split(", ")) - {""}  # Разделяем по ", " и убираем пустые
         action = None
         requires_confirmation = False
@@ -3796,7 +3800,7 @@ def update_profile(
         
         return ", ".join(sorted(current)), action, requires_confirmation
 
-    if skills:
+    if skills is not None:  # Проверяем на None вместо просто if skills
         new_value, action, needs_confirm = update_list_field(profile.skills, skills, "skills")
         if needs_confirm:
             needs_confirmation.append(action)
@@ -3805,7 +3809,7 @@ def update_profile(
             if action:
                 updates_made.append(action)
     
-    if interests:
+    if interests is not None:  # Проверяем на None
         new_value, action, needs_confirm = update_list_field(profile.interests, interests, "interests")
         if needs_confirm:
             needs_confirmation.append(action)
@@ -3814,40 +3818,41 @@ def update_profile(
             if action:
                 updates_made.append(action)
     
-    if goals:
-        profile.goals, action = update_list_field(profile.goals, goals, "goals")
+    if goals is not None:  # Проверяем на None
+        new_value, action, _ = update_list_field(profile.goals, goals, "goals")
+        profile.goals = new_value
         if action:
             updates_made.append(action)
     
-    if city:
+    if city is not None:  # Разрешаем пустую строку для очистки
         old_city = profile.city
-        profile.city = city
-        updates_made.append(f"changed_city:{old_city}->{city}")
+        profile.city = city if city else None
+        updates_made.append(f"changed_city:{old_city}->{city if city else 'cleared'}")
     
     if current_plans:
         profile.current_plans = current_plans
         updates_made.append(f"updated_plans")
     
     # Безопасно добавляем новые поля (могут отсутствовать в старой БД)
-    if hasattr(profile, "company") and company:
+    if hasattr(profile, "company") and company is not None:  # Разрешаем пустую строку
         old_company = profile.company
-        profile.company = company
-        updates_made.append(f"changed_company:{old_company}->{company}")
+        profile.company = company if company else None
+        updates_made.append(f"changed_company:{old_company}->{company if company else 'cleared'}")
     
-    if hasattr(profile, "position") and position:
+    if hasattr(profile, "position") and position is not None:  # Разрешаем пустую строку
         old_position = profile.position
-        profile.position = position
-        updates_made.append(f"changed_position:{old_position}->{position}")
+        profile.position = position if position else None
+        updates_made.append(f"changed_position:{old_position}->{position if position else 'cleared'}")
     
-    if hasattr(profile, "bio") and bio:
+    if hasattr(profile, "bio") and bio is not None:  # Разрешаем пустую строку
         old_bio = profile.bio
-        profile.bio = bio
-        updates_made.append(f"changed_bio:{old_bio}->{bio}")
+        profile.bio = bio if bio else None
+        updates_made.append(f"changed_bio:{old_bio}->{bio if bio else 'cleared'}")
     
-    if hasattr(profile, "languages") and languages:
+    if hasattr(profile, "languages") and languages is not None:  # Разрешаем пустую строку
         old_languages = profile.languages
-        profile.languages = languages
-        updates_made.append(f"changed_languages:{old_languages}->{languages}")
+        profile.languages = languages if languages else None
+        updates_made.append(f"changed_languages:{old_languages}->{languages if languages else 'cleared'}")
     
     if timezone:
         user.timezone = timezone
@@ -4090,7 +4095,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "Обновить профиль пользователя. ВАЖНО: По умолчанию все значения ДОБАВЛЯЮТСЯ к существующим (не заменяют). Используй префикс '-' для удаления. Например: interests='бег' - добавит к существующим, interests='-криптовалюты' - удалит из списка",
+            "description": "Обновить профиль пользователя. ВАЖНО: По умолчанию все значения ДОБАВЛЯЮТСЯ к существующим (не заменяют). Используй префикс '-' для удаления. ДЛЯ ПОЛНОЙ ОЧИСТКИ ПРОФИЛЯ: передай пустые строки '' для всех полей (city='', company='', position='', bio='', languages='', skills='', interests='', goals=''). Например: interests='бег' - добавит к существующим, interests='-криптовалюты' - удалит из списка, interests='' - полностью очистит интересы",
             "parameters": {
                 "type": "object",
                 "properties": {
