@@ -279,21 +279,22 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: minmax(300px, 1fr) minmax(600px, 2fr) minmax(300px, 1fr);
+    grid-template-columns: 320px 1fr 320px;
     height: 100%;
     gap: 20px;
     padding: 20px;
     overflow: hidden;
-    justify-items: stretch;
-    align-items: stretch;
+    align-items: start;
 }
 
+/* Side columns: keep content visible and avoid layout-shifting scrollbars */
 .left-column,
 .right-column {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    overflow: auto;
+    overflow: visible;
+    max-height: calc(100vh - 160px);
 }
 
 .left-column::-webkit-scrollbar,
@@ -301,21 +302,54 @@ body {
     width: 0px;
 }
 
+/* Center column: single scrollable area to contain most vertical overflow */
 .center-column {
     display: flex;
     flex-direction: column;
     gap: 20px;
     padding: 20px;
-    overflow: hidden;
+    overflow: auto;
+    max-height: calc(100vh - 160px);
+    -webkit-overflow-scrolling: touch;
 }
 
-.center-column {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 110px);
-    overflow: hidden;
-    margin-top: 0px;
-    padding-bottom: 20px;
+/* Dropdowns / menus that must not push layout when opened */
+.dropdown, .menu, .context-menu {
+    position: relative;
+}
+.dropdown .dropdown-menu,
+.menu .dropdown-menu,
+.context-menu .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 3000;
+    min-width: 200px;
+    max-height: 320px;
+    overflow: auto;
+    background: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(31,35,40,0.08);
+    padding: 8px;
+}
+
+/* Ensure native selects and toggles render above content */
+select, .dropdown-toggle, details {
+    position: relative;
+    z-index: 2;
+}
+
+/* If using <details>, keep expanded content absolute to avoid layout push */
+details[open] .details-content {
+    position: absolute;
+    z-index: 4000;
+    background: #fff;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    max-height: 360px;
+    overflow: auto;
+    box-shadow: 0 6px 18px rgba(31,35,40,0.08);
 }
 
 .chat-section {
