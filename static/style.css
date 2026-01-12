@@ -679,7 +679,7 @@ body {
 .people-section h3,
 .tasks-section h3 {
     margin: 0 0 15px 0;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: #1F2328;
     line-height: 21px;
@@ -1061,7 +1061,7 @@ body {
     .context-section h3,
     .people-section h3,
     .task-column h3 {
-        font-size: 15px;
+        font-size: 14px;
         margin-bottom: 15px;
     }
     
