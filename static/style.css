@@ -7,8 +7,8 @@
 
 /* Унифицированные стили скроллов для всего приложения */
 *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
 }
 
 *::-webkit-scrollbar-track {
@@ -17,7 +17,7 @@
 
 *::-webkit-scrollbar-thumb {
     background: #D1D9E0;
-    border-radius: 3px;
+    border-radius: 2px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
@@ -294,6 +294,11 @@ body {
     flex-direction: column;
     gap: 20px;
     overflow: auto;
+}
+
+.left-column::-webkit-scrollbar,
+.right-column::-webkit-scrollbar {
+    width: 0px;
 }
 
 .center-column {
