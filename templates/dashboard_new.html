@@ -1304,10 +1304,23 @@
             const profileContent = document.getElementById('profile-content');
             const profileBtn = document.getElementById('profile-toggle-btn');
             const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
+            const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
+            
             if (profileContent && profileContent.style.display !== 'none') {
                 profileContent.style.display = 'none';
                 if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'true');
+                
+                // Разворачиваем список контактов
+                if (peopleSection) {
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = 'calc(100vh - 270px)';
+                    peopleList.style.overflowY = 'auto';
+                }
             }
             
             // Обновляем стили кнопок фильтров контактов
