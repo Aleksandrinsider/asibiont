@@ -113,6 +113,7 @@ def run_migrations():
 
 def add_test_sport_users():
     """Добавляет тестовых пользователей с интересами 'спорт' если их еще нет"""
+    from sqlalchemy import text
     try:
         session = Session()
         
@@ -128,6 +129,17 @@ def add_test_sport_users():
             {'telegram_id': 555555, 'username': 'sportfan5', 'first_name': 'Анна',
              'interests': 'спорт, гимнастика, пилатес', 'city': 'Москва', 'company': 'Студия пилатес', 'position': 'Инструктор'}
         ]
+        
+        # Проверяем есть ли хоть один тестовый пользователь
+        test_ids = [111111, 222222, 333333, 444444, 555555]
+        existing_count = session.query(User).filter(User.telegram_id.in_(test_ids)).count()
+        
+        if existing_count == len(test_ids):
+            logger.info(f"All {len(test_ids)} test sport users already exist")
+            session.close()
+            return
+        
+        logger.info(f"Found {existing_count}/{len(test_ids)} test users, adding missing ones...")
         
         added_count = 0
         for user_data in test_users_data:
@@ -156,16 +168,15 @@ def add_test_sport_users():
                 )
                 session.add(profile)
                 added_count += 1
-                logger.info(f"Added test user: {user_data['username']}")
+                logger.info(f"Added test user: {user_data['username']} (telegram_id: {user_data['telegram_id']})")
+            else:
+                logger.info(f"Test user {user_data['username']} already exists")
         
         session.commit()
-        if added_count > 0:
-            logger.info(f"Successfully added {added_count} test sport users")
-        else:
-            logger.info("All test sport users already exist")
+        logger.info(f"Successfully added {added_count} test sport users")
         session.close()
     except Exception as e:
-        logger.error(f"Failed to add test sport users: {e}")
+        logger.error(f"Failed to add test sport users: {e}", exc_info=True)
 
 def ensure_sport_interest():
     """Добавляет 'спорт' к интересам всех пользователей если его нет"""
