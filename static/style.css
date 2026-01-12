@@ -467,13 +467,11 @@ body {
 }
 
 .message.user {
-    background-color: #F6F8FA;
+    background-color: transparent;
     color: #1F2328;
     align-self: flex-start;
     margin-right: auto;
-    padding: 10px 14px;
-    border: 1px solid #D1D9E0;
-    border-radius: 8px;
+    padding: 6px 12px;
 }
 
 .message.user .message-text {
@@ -485,17 +483,13 @@ body {
 }
 
 .message.ai {
-    background-color: #FFFFFF;
+    background-color: transparent;
     color: #1F2328;
     align-self: flex-start;
-    border: 1px solid #D1D9E0;
-    border-radius: 8px;
-    padding: 10px 14px;
 }
 
 .message.ai:hover {
-    background-color: #FAFBFC;
-    border-color: #1F2328;
+    background-color: transparent;
 }
 
 .message.ai .message-text {
@@ -1242,18 +1236,6 @@ body {
     box-shadow: 0 0 0 1px #1F2328;
 }
 
-.chat-action-btn.send-btn {
-    background-color: #068487;
-    color: #FFFFFF;
-    border-color: #068487;
-}
-
-.chat-action-btn.send-btn:hover {
-    background-color: #057A7D;
-    border-color: #057A7D;
-    box-shadow: 0 0 0 1px #057A7D;
-}
-
 .delete-btn {
     padding: 8px;
     background-color: #FFFFFF;
@@ -1488,4 +1470,50 @@ body {
 
 #modal-search-results::-webkit-scrollbar-thumb:hover {
     background: #656D76;
+}
+/* Custom tooltips */
+[title] {
+    position: relative;
+}
+
+[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #1F2328;
+    color: #FFFFFF;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    animation: tooltip-appear 0.2s ease-out;
+    box-shadow: 0 4px 12px rgba(31, 35, 40, 0.15);
+}
+
+[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #1F2328;
+    z-index: 1000;
+    pointer-events: none;
+    animation: tooltip-appear 0.2s ease-out;
+}
+
+@keyframes tooltip-appear {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
 }
