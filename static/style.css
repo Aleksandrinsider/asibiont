@@ -567,7 +567,7 @@ body {
 
 .context-section {
     padding: 12px;
-    margin-bottom: -18px;
+    margin-bottom: 20px;
     overflow: visible;
 }
 
@@ -610,7 +610,7 @@ body {
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 4px;
+    margin-bottom: 20px;
 }
 
 .task-stats-block {
@@ -618,7 +618,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: -18px;
+    margin-bottom: 20px;
     margin-top: 0px;
 }
 
@@ -679,7 +679,7 @@ body {
 .people-section h3,
 .tasks-section h3 {
     margin: 0 0 15px 0;
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
     color: #1F2328;
     line-height: 21px;
@@ -1061,8 +1061,8 @@ body {
     .context-section h3,
     .people-section h3,
     .task-column h3 {
-        font-size: 13px;
-        margin-bottom: 10px;
+        font-size: 15px;
+        margin-bottom: 15px;
     }
     
     /* Ограничить высоту для мобильных */
