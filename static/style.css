@@ -229,7 +229,7 @@ body {
 
 .left-column::-webkit-scrollbar,
 .right-column::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
 }
 
 .left-column::-webkit-scrollbar-track,
