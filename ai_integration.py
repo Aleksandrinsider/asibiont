@@ -4379,12 +4379,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
         db_session.close()
 
-        # Classify user intent (use improved version if available)
-        if not PROMPTS_V2_AVAILABLE:
-            raise ImportError("improved_prompts_final.py is REQUIRED but not found!")
-            
-        intent = improved_classify_intent(clean_message, mentions_str)
-        logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
+        # Classify user intent (use improved version if available, fallback to legacy)
+        if PROMPTS_V2_AVAILABLE:
+            intent = improved_classify_intent(clean_message, mentions_str)
+            logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
+        else:
+            intent = classify_user_intent(clean_message, mentions_str)
+            logger.info(f"[LEGACY] User intent: {intent['type']} (confidence: {intent['confidence']})")
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
@@ -4402,14 +4403,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
-        # PROMPTS V2 ONLY - No fallback to legacy prompts
-        if not PROMPTS_V2_AVAILABLE:
-            raise ImportError("improved_prompts_final.py is REQUIRED but not found!")
         
-        system_prompt = get_optimized_prompt_final(
-            user_now, current_time_str, user_username, mentions_str, user_memory
-        )
-        logger.info("[PROMPTS V2] Using optimized prompt system")
+        if PROMPTS_V2_AVAILABLE:
+            system_prompt = get_optimized_prompt_final(
+                user_now, current_time_str, user_username, mentions_str, user_memory
+            )
+            logger.info("[PROMPTS V2] Using optimized prompt system")
+        else:
+            system_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+            logger.info("[LEGACY] Using extended prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -4825,6 +4827,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             logger.info(f"[PROMPTS V2] Fallback actions: {len(fallback_result)}")
                         else:
                             fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
+                            logger.info(f"[LEGACY] Fallback actions: {len(fallback_result)}")
                         print(
                             f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
                         )  # DEBUG
