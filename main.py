@@ -2567,7 +2567,7 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     try:
         port = PORT
-        host = '127.0.0.1'
+        host = '0.0.0.0' if not LOCAL else '127.0.0.1'
         logger.info(f"Starting web server on {host}:{port}")
         
         # Use asyncio AppRunner
