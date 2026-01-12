@@ -24,7 +24,7 @@ body {
     height: auto;
     background-color: #FFFFFF;
     color: #1F2328;
-    padding: 15px 16px;
+    padding: clamp(10px, 2vh, 15px) clamp(10px, 3vw, 16px);
     border-radius: 6px;
     margin: 0;
     position: fixed;
@@ -203,17 +203,17 @@ body {
 }
 
 .container {
-    margin: 68px 40px 0 40px;
-    width: calc(100vw - 80px);
-    height: calc(100vh - 118px);
+    margin: 68px clamp(20px, 5vw, 60px) 0 clamp(20px, 5vw, 60px);
+    width: calc(100vw - 2 * clamp(20px, 5vw, 60px));
+    height: calc(100vh - 68px - 50px);
     overflow: hidden;
 }
 
 .main-layout {
     display: grid;
-    grid-template-columns: 500px 1fr 500px;
+    grid-template-columns: minmax(400px, 1fr) 2fr minmax(400px, 1fr);
     height: 100%;
-    column-gap: 10px;
+    column-gap: clamp(10px, 2vw, 20px);
     padding: 35px 0 20px 0;
     align-items: stretch;
     overflow: hidden;
@@ -1031,8 +1031,9 @@ body {
     }
     
     .container {
-        margin: 100px 20px 0 20px;
-        width: calc(100vw - 40px);
+        margin: 100px clamp(10px, 3vw, 20px) 0 clamp(10px, 3vw, 20px);
+        width: calc(100vw - 2 * clamp(10px, 3vw, 20px));
+        height: calc(100vh - 100px);
     }
     
     .main-layout {
