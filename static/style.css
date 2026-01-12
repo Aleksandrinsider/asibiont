@@ -1024,6 +1024,9 @@ body {
     .left-column,
     .right-column {
         order: 2;
+        height: auto !important;
+        overflow-y: visible !important;
+        max-height: none !important;
     }
     
     /* Скрыть чат в мобильной версии */
