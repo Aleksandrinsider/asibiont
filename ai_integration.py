@@ -4352,7 +4352,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user.pending_action = None
                     db_session.commit()
 
-            db_session.close()
+        db_session.close()
 
         # Classify user intent (use improved version if available)
         if not PROMPTS_V2_AVAILABLE:
