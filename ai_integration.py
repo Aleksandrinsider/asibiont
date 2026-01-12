@@ -4448,11 +4448,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
-            "model": "deepseek-reasoner",
+            "model": "deepseek-chat",
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": "none" if is_advice_question else "auto",
-            "temperature": 0.3,
+            "temperature": 0.7,
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         # Retry loop for API call
