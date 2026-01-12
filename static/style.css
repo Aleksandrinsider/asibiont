@@ -568,6 +568,7 @@ body {
 .context-section {
     padding: 12px;
     margin-bottom: -18px;
+    overflow: visible;
 }
 
 .context-section h3 {
@@ -668,7 +669,7 @@ body {
     background-color: transparent;
     margin-top: 0;
     margin-bottom: 4px;
-    overflow-y: auto;
+    overflow: visible;
     box-shadow: none;
     transition: none;
 }
