@@ -152,10 +152,10 @@
                             var svg = profileBtn ? profileBtn.querySelector('svg') : null;
                             
                             if (isCollapsed === 'true') {
-                                profileEl.style.display = 'none';
+                                if (profileEl) profileEl.style.display = 'none';
                                 if (svg) svg.style.transform = 'rotate(-90deg)';
                             } else {
-                                profileEl.style.display = 'block';
+                                if (profileEl) profileEl.style.display = 'block';
                                 if (svg) svg.style.transform = 'rotate(0deg)';
                             }
                         })();
@@ -424,8 +424,8 @@
         function handleAvatarLoad(img, fallbackId) {
             avatarServiceAvailable = true;
             avatarCheckDone = true;
-            img.style.display = 'block';
-            const fallback = document.getElementById(fallbackId);
+            if (img) img.style.display = 'block';
+            const fallback = fallbackId ? document.getElementById(fallbackId) : null;
             if (fallback) {
                 fallback.style.display = 'none';
             }
@@ -659,12 +659,13 @@
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
-            input.value = `${hours}:${minutes}`;
-            modal.style.display = 'flex';
+            if (input) input.value = `${hours}:${minutes}`;
+            if (modal) modal.style.display = 'flex';
         }
 
         function closeTimeModal() {
-            document.getElementById('time-modal').style.display = 'none';
+            const modal = document.getElementById('time-modal');
+            if (modal) modal.style.display = 'none';
         }
 
         async function submitTimeChange() {
@@ -889,13 +890,13 @@
             const modalInput = document.getElementById('modal-search-input');
             const headerInput = document.getElementById('contact-search-input');
             
-            modal.style.display = 'flex';
-            modalInput.value = headerInput.value;
+            if (modal) modal.style.display = 'flex';
+            if (modalInput && headerInput) modalInput.value = headerInput.value || '';
             
             // Фокус на поле в модальном окне
             setTimeout(() => {
-                modalInput.focus();
-                if (headerInput.value) {
+                if (modalInput) modalInput.focus();
+                if (modalInput && headerInput && headerInput.value) {
                     searchContactsInModal({target: modalInput});
                 }
             }, 100);
@@ -904,7 +905,7 @@
         function closeSearchModal(event) {
             if (event && event.target.id !== 'search-modal') return;
             const modal = document.getElementById('search-modal');
-            modal.style.display = 'none';
+            if (modal) modal.style.display = 'none';
         }
 
         // Поиск в модальном окне
@@ -944,14 +945,15 @@
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
             const button = document.getElementById('profile-toggle-btn');
-            const svg = button.querySelector('svg');
+            const svg = button ? button.querySelector('svg') : null;
             const peopleSection = document.querySelector('.people-section');
             const peopleList = document.querySelector('.people-list');
+            if (!content) return; // nothing to toggle
             
-            const isCollapsed = content.style.display === 'none';
+            const isCollapsed = (content.style.display || '') === 'none';
             if (isCollapsed) {
                 content.style.display = 'block';
-                svg.style.transform = 'rotate(0deg)';
+                if (svg) svg.style.transform = 'rotate(0deg)';
                 if (peopleSection) {
                     peopleSection.style.flex = '';
                     peopleSection.style.minHeight = '';
@@ -963,7 +965,7 @@
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
-                svg.style.transform = 'rotate(-90deg)';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                     peopleSection.style.minHeight = '0';
@@ -979,13 +981,14 @@
         function toggleStatsSection() {
             const content = document.getElementById('stats-content');
             const button = document.getElementById('stats-toggle-btn');
-            const svg = button.querySelector('svg');
+            const svg = button ? button.querySelector('svg') : null;
             const tasksWrapper = document.querySelector('.tasks-section-wrapper');
             const tasksSection = document.querySelector('.tasks-section');
+            if (!content) return;
             
-            if (content.style.display === 'none') {
+            if ((content.style.display || '') === 'none') {
                 content.style.display = 'block';
-                svg.style.transform = 'rotate(0deg)';
+                if (svg) svg.style.transform = 'rotate(0deg)';
                 if (tasksWrapper) {
                     tasksWrapper.style.flex = '';
                     tasksWrapper.style.minHeight = '';
@@ -995,7 +998,7 @@
                 }
             } else {
                 content.style.display = 'none';
-                svg.style.transform = 'rotate(-90deg)';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (tasksWrapper) {
                     tasksWrapper.style.flex = '1 1 auto';
                     tasksWrapper.style.minHeight = '0';
