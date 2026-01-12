@@ -42,8 +42,39 @@
                 <div style="margin-left: 20px; position: relative; background: white; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 12px;">
                     <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram: @ ..." 
                         style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #24292F;"
-                        onkeyup="searchContacts(event)">
-                    <div id="contact-search-results" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #D1D9E0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 400px; overflow-y: auto; z-index: 1000; min-width: 300px;">
+                        onfocus="showSearchModal()"
+                        readonly>
+                </div>
+                
+                <!-- Модальное окно поиска -->
+                <div id="search-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center;" onclick="closeSearchModal(event)">
+                    <div style="background: white; border-radius: 12px; width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.2);" onclick="event.stopPropagation()">
+                        <!-- Заголовок -->
+                        <div style="padding: 20px 24px; border-bottom: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: space-between;">
+                            <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: #24292F;">Поиск контактов</h3>
+                            <button onclick="closeSearchModal()" style="background: none; border: none; cursor: pointer; color: #656D76; font-size: 24px; line-height: 1; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: background 0.2s;"
+                                    onmouseover="this.style.background='#F6F8FA'"
+                                    onmouseout="this.style.background='none'">
+                                ×
+                            </button>
+                        </div>
+                        
+                        <!-- Поле поиска -->
+                        <div style="padding: 16px 24px; border-bottom: 1px solid #D1D9E0;">
+                            <input type="text" id="modal-search-input" placeholder="Введите никнейм в Telegram (например, @username)" 
+                                style="width: 100%; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; outline: none; color: #24292F;"
+                                onkeyup="searchContactsInModal(event)">
+                        </div>
+                        
+                        <!-- Результаты -->
+                        <div id="modal-search-results" style="flex: 1; overflow-y: auto; padding: 16px 24px;">
+                            <div style="text-align: center; color: #656D76; padding: 40px 20px;">
+                                <svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;">
+                                    <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
+                                </svg>
+                                <div style="font-size: 14px;">Начните вводить никнейм для поиска</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 {% endif %}
@@ -774,29 +805,110 @@
             updatePeople();
         }
 
-        // Поиск контактов
-        let searchTimeout;
-        async function searchContacts(event) {
-            const input = document.getElementById('contact-search-input');
-            const resultsDiv = document.getElementById('contact-search-results');
-            const query = input.value.trim();
+        function displaySearchResults(contacts) {
+            const resultsDiv = document.getElementById('modal-search-results');
             
-            // Clear previous timeout
-            clearTimeout(searchTimeout);
-            
-            // Hide results if query is too short
-            if (query.length < 2) {
-                resultsDiv.style.display = 'none';
+            if (!contacts || contacts.length === 0) {
+                resultsDiv.innerHTML = '<div style="text-align: center; color: #656D76; padding: 40px 20px;"><svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path></svg><div style="font-size: 14px;">Ничего не найдено</div></div>';
                 return;
             }
             
-            // Debounce search
-            searchTimeout = setTimeout(async () => {
+            let html = '<div style="display: grid; gap: 12px;">';
+            contacts.forEach(contact => {
+                const isFavorite = isFavoriteContact(contact.username);
+                const photoUrl = contact.photo_url;
+                const rating = contact.average_rating ? contact.average_rating.toFixed(1) : '0.0';
+                const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
+                
+                html += `
+                    <div style="padding: 16px; border: 1px solid #D1D9E0; border-radius: 8px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: all 0.2s;"
+                         onmouseover="this.style.borderColor='#0969DA'; this.style.background='#F6F8FA'" 
+                         onmouseout="this.style.borderColor='#D1D9E0'; this.style.background='white'"
+                         onclick="window.open('https://t.me/${contact.username}', '_blank')">
+                        ${photoUrl ? 
+                            `<img src="${photoUrl}" alt="${contact.first_name}" 
+                                 style="width: 56px; height: 56px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; flex-shrink: 0;">` :
+                            `<div style="width: 56px; height: 56px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; flex-shrink: 0;">${initials}</div>`
+                        }
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-size: 16px; font-weight: 600; color: #24292F; margin-bottom: 4px;">
+                                ${contact.first_name || contact.username}
+                            </div>
+                            <div style="font-size: 14px; color: #656D76; display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <span>@${contact.username}</span>
+                                ${contact.city ? `<span>· ${contact.city}</span>` : ''}
+                            </div>
+                            ${contact.bio ? `<div style="font-size: 13px; color: #656D76; margin-bottom: 6px;">${contact.bio}</div>` : ''}
+                            ${contact.interests ? `<div style="font-size: 12px; color: #656D76; background: #F6F8FA; padding: 4px 8px; border-radius: 4px; display: inline-block;">${contact.interests}</div>` : ''}
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0;">
+                            <div style="background: #F6F8FA; padding: 6px 12px; border-radius: 6px; font-size: 14px; color: #656D76; display: flex; align-items: center; gap: 6px;">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="#FFA500">
+                                    <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path>
+                                </svg>
+                                <span style="font-weight: 500;">${rating}</span>
+                            </div>
+                            <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')" 
+                                    style="background: ${isFavorite ? '#0969DA' : '#F6F8FA'}; color: ${isFavorite ? 'white' : '#24292F'}; border: 1px solid ${isFavorite ? '#0969DA' : '#D1D9E0'}; border-radius: 6px; cursor: pointer; padding: 8px 16px; font-size: 14px; font-weight: 500; transition: all 0.2s; white-space: nowrap;"
+                                    onmouseover="this.style.background='${isFavorite ? '#0860CA' : '#EAEEF2'}'; this.style.transform='translateY(-1px)';" 
+                                    onmouseout="this.style.background='${isFavorite ? '#0969DA' : '#F6F8FA'}'; this.style.transform='translateY(0)';"
+                                    title="${isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}">
+                                ${isFavorite ? '★ В избранном' : '☆ В избранное'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function toggleFavoriteContactFromSearch(username) {
+            toggleFavoriteContact(username);
+            // Update search results to reflect change
+            const input = document.getElementById('modal-search-input');
+            searchContactsInModal({target: input});
+        }
+
+        // Модальное окно поиска
+        function showSearchModal() {
+            const modal = document.getElementById('search-modal');
+            const modalInput = document.getElementById('modal-search-input');
+            const headerInput = document.getElementById('contact-search-input');
+            
+            modal.style.display = 'flex';
+            modalInput.value = headerInput.value;
+            
+            // Фокус на поле в модальном окне
+            setTimeout(() => {
+                modalInput.focus();
+                if (headerInput.value) {
+                    searchContactsInModal({target: modalInput});
+                }
+            }, 100);
+        }
+
+        function closeSearchModal(event) {
+            if (event && event.target.id !== 'search-modal') return;
+            const modal = document.getElementById('search-modal');
+            modal.style.display = 'none';
+        }
+
+        // Поиск в модальном окне
+        let searchModalTimeout;
+        function searchContactsInModal(event) {
+            const query = event.target.value.trim();
+            
+            if (query.length < 2) {
+                document.getElementById('modal-search-results').innerHTML = '<div style="text-align: center; color: #656D76; padding: 40px 20px;"><svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path></svg><div style="font-size: 14px;">Введите минимум 2 символа для поиска</div></div>';
+                return;
+            }
+            
+            clearTimeout(searchModalTimeout);
+            searchModalTimeout = setTimeout(async () => {
                 try {
-                    const response = await fetch(`/api/search_contacts?q=${encodeURIComponent(query)}`, {
-                        credentials: 'include'
-                    });
-                    
+                    const response = await fetch(`/search_contacts?q=${encodeURIComponent(query)}`);
                     if (!response.ok) {
                         console.error('Failed to search contacts');
                         return;
@@ -810,76 +922,10 @@
             }, 300);
         }
 
-        function displaySearchResults(contacts) {
-            const resultsDiv = document.getElementById('contact-search-results');
-            
-            if (!contacts || contacts.length === 0) {
-                resultsDiv.innerHTML = '<div style="padding: 12px; color: #656D76; font-size: 13px;">Ничего не найдено</div>';
-                resultsDiv.style.display = 'block';
-                return;
-            }
-            
-            let html = '';
-            contacts.forEach(contact => {
-                const isFavorite = isFavoriteContact(contact.username);
-                const photoUrl = contact.photo_url || 'https://via.placeholder.com/40';
-                const rating = contact.average_rating ? contact.average_rating.toFixed(1) : '0.0';
-                
-                html += `
-                    <div style="padding: 10px 12px; border-bottom: 1px solid #F6F8FA; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: background 0.2s;"
-                         onmouseover="this.style.background='#F6F8FA'" 
-                         onmouseout="this.style.background='white'">
-                        <img src="${photoUrl}" alt="${contact.first_name}" 
-                             style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="font-size: 14px; font-weight: 500; color: #24292F;">
-                                ${contact.first_name || contact.username}
-                            </div>
-                            <div style="font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 8px;">
-                                <span>@${contact.username}</span>
-                                ${contact.city ? `<span>· ${contact.city}</span>` : ''}
-                            </div>
-                            ${contact.interests ? `<div style="font-size: 11px; color: #656D76; margin-top: 2px;">${contact.interests}</div>` : ''}
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="background: #F6F8FA; padding: 4px 8px; border-radius: 6px; font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 4px;">
-                                <svg width="12" height="12" viewBox="0 0 16 16" fill="#FFA500">
-                                    <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path>
-                                </svg>
-                                <span>${rating}</span>
-                            </div>
-                            <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')" 
-                                    style="background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px 10px; font-size: 14px; line-height: 1; transition: background 0.2s;"
-                                    onmouseover="this.style.background='#EAEEF2'" 
-                                    onmouseout="this.style.background='#F6F8FA'"
-                                    title="${isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}">
-                                ${isFavorite ? '♥' : '♡'}
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            resultsDiv.innerHTML = html;
-            resultsDiv.style.display = 'block';
-        }
-
-        function toggleFavoriteContactFromSearch(username) {
-            toggleFavoriteContact(username);
-            // Update search results to reflect change
-            const input = document.getElementById('contact-search-input');
-            searchContacts({target: input});
-        }
-
-        // Close search results when clicking outside
-        document.addEventListener('click', function(event) {
-            const searchInput = document.getElementById('contact-search-input');
-            const searchResults = document.getElementById('contact-search-results');
-            
-            if (searchInput && searchResults && 
-                !searchInput.contains(event.target) && 
-                !searchResults.contains(event.target)) {
-                searchResults.style.display = 'none';
+        // Закрытие модального окна по Escape
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closeSearchModal({target: document.getElementById('search-modal')});
             }
         });
 
