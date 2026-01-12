@@ -40,8 +40,8 @@
                 <!-- Поиск контактов -->
                 {% if logged_in %}
                 <div style="margin-left: 20px; position: relative; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 12px;">
-                    <input type="text" id="contact-search-input" placeholder="Поиск @username..." 
-                        style="padding: 0; border: none; background: transparent; font-size: 13px; width: 180px; outline: none; color: #24292F;"
+                    <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram @username" 
+                        style="padding: 0; border: none; background: transparent; font-size: 13px; width: 250px; outline: none; color: #24292F;"
                         onkeyup="searchContacts(event)">
                     <div id="contact-search-results" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #D1D9E0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 400px; overflow-y: auto; z-index: 1000; min-width: 300px;">
                     </div>
