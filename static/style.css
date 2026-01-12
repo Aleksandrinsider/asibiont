@@ -314,7 +314,7 @@ body {
 }
 
 .message {
-    padding: 10px 12px;
+    padding: 10px;
     margin: 6px 0;
     max-width: 100%;
     width: 100%;
@@ -595,7 +595,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-top: 20px;
+    margin-top: 0;
     margin-bottom: 20px;
     display: flex;
     flex-direction: column;
