@@ -223,7 +223,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: minmax(375px, 2.25fr) minmax(550px, 4.5fr) minmax(375px, 2.25fr);
+    grid-template-columns: minmax(400px, 2.5fr) minmax(500px, 4fr) minmax(400px, 2.5fr);
     height: 100%;
     column-gap: clamp(10px, 2vw, 20px);
     padding: 35px 0 20px 0;
