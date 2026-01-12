@@ -1831,10 +1831,9 @@
                         let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                         data.partners.forEach(partner => {
                             const telegramUrl = 'https://t.me/' + partner.contact_info;
-                            const displayStyle = partner.type === 'recommended' ? 'flex' : 'none';
                             
                             if (partner.type === 'recommended' && partner.contact_info) {
-                                html += '<li class="task-item contact-recommended" style="display: ' + displayStyle + '; margin-bottom: 8px; align-items: center;">';
+                                html += '<li class="task-item contact-recommended" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                 if (partner.photo_url) {
                                     const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
@@ -1909,7 +1908,7 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
-                                html += '<li class="task-item contact-delegating-to-me" style="display: none; margin-bottom: 8px; align-items: center;">';
+                                html += '<li class="task-item contact-delegating-to-me" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 if (partner.photo_url) {
                                     const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
@@ -1981,7 +1980,7 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
-                                html += '<li class="task-item contact-delegating-by-me" style="display: none; margin-bottom: 8px; align-items: center;">';
+                                html += '<li class="task-item contact-delegating-by-me" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 if (partner.photo_url) {
                                     const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
