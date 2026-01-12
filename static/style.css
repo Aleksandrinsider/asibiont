@@ -238,7 +238,7 @@ body {
     height: auto;
     max-height: none;
     overflow: visible;
-    padding-bottom: 20px;
+    padding-bottom: 10px;
 }
 
 .center-column {
@@ -807,7 +807,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: calc(100vh - 240px);
+    max-height: calc(100vh - 180px);
     overflow-y: auto;
     overflow-x: hidden;
     transition: max-height 0.3s ease;
@@ -816,7 +816,6 @@ body {
 
 .person-card {
     padding: 12px;
-    margin-bottom: 8px;
     border-radius: 6px;
     border: 1px solid #D1D9E0;
     background-color: #FFFFFF;
