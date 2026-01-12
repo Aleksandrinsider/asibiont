@@ -2025,12 +2025,12 @@ async def on_startup(app):
     logger.info("Session middleware configured successfully")
     
     # Set webhook
-    if not LOCAL:
+    if bot:
         webhook_url = WEBHOOK_URL
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook set to: {webhook_url}")
     else:
-        logger.info("Local mode: skipping webhook setup")
+        logger.warning("Bot not created, skipping webhook setup")
     
     # Initialize handlers Redis
     async def init_handlers_redis(client):
@@ -2586,7 +2586,7 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     try:
         port = PORT
-        host = '0.0.0.0' if not LOCAL else '127.0.0.1'
+        host = '0.0.0.0'
         logger.info(f"Starting web server on {host}:{port}")
         
         # Use asyncio AppRunner
@@ -2602,28 +2602,13 @@ if __name__ == "__main__":
                 logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
                 logger.info("Server is ready to accept connections")
                 
-                # Start polling if local mode
-                if LOCAL and bot and not os.getenv("SKIP_POLLING"):  # Enabled for local testing
-                    logger.info("Starting bot polling for local mode")
-                    await bot.delete_webhook()
-                    polling_task = asyncio.create_task(dp.start_polling(bot))
-                else:
-                    polling_task = None
-                
                 # Keep the server running
                 try:
-                    if LOCAL:
-                        # For local development, keep server running indefinitely
-                        while True:
-                            await asyncio.sleep(3600)
-                    else:
-                        # For production, keep server running indefinitely
-                        while True:
-                            await asyncio.sleep(3600)
+                    # Keep server running indefinitely
+                    while True:
+                        await asyncio.sleep(3600)
                 except KeyboardInterrupt:
                     logger.info("Shutting down server...")
-                    if polling_task:
-                        polling_task.cancel()
                 finally:
                     await runner.cleanup()
                     logger.info("Server shut down")
