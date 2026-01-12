@@ -908,7 +908,7 @@
             clearTimeout(searchModalTimeout);
             searchModalTimeout = setTimeout(async () => {
                 try {
-                    const response = await fetch(`/search_contacts?q=${encodeURIComponent(query)}`);
+                    const response = await fetch(`/api/search_contacts?q=${encodeURIComponent(query)}`);
                     if (!response.ok) {
                         console.error('Failed to search contacts');
                         return;
