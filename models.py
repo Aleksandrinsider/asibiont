@@ -18,6 +18,7 @@ class User(Base):
     do_not_disturb_until = Column(DateTime)
     pending_action = Column(Text)  # JSON for pending interactions
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    invalid_chat = Column(Boolean, default=False)  # Flag set when Telegram chat is invalid (chat not found)
 
 class Task(Base):
     __tablename__ = 'tasks'

@@ -198,6 +198,21 @@ class ReminderService:
         reminder_text = None
         
         try:
+            # Перед генерацией текста напоминания проверяем состояние пользователя
+            db = Session()
+            try:
+                from models import User
+                user = db.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    logger.warning(f"User with telegram_id {user_id} not found in database - aborting reminder for task {task_id}")
+                    return
+                # Проверяем режим 'не беспокоить' для пользователя
+                if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
+                    logger.info(f"User {user_id} in DND until {user.do_not_disturb_until}, skipping reminder for task {task_id}")
+                    return
+            finally:
+                db.close()
+
             logger.info(f"Generating reminder text for task {task_id}...")
             reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
             logger.info(f"Reminder text generated: {reminder_text[:100]}...")
@@ -232,9 +247,36 @@ class ReminderService:
                     logger.info(f"✅ Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     reminder_sent_successfully = True
                 except Exception as send_error:
-                    logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {send_error}")
+                    err_text = str(send_error)
+                    logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {err_text}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")
-                    # Не помечаем как отправленное если произошла ошибка
+                    # Если чат не найден или запрещён - помечаем пользователя invalid_chat
+                    if 'chat not found' in err_text.lower() or 'forbidden' in err_text.lower():
+                        try:
+                            db = Session()
+                            u = db.query(User).filter_by(telegram_id=user_id).first()
+                            if u:
+                                u.invalid_chat = True
+                                db.commit()
+                                logger.info(f"Marked user {user_id} as invalid_chat due to Telegram error: {err_text}")
+                        except Exception as e2:
+                            logger.error(f"Failed to mark invalid_chat for user {user_id}: {e2}")
+                        finally:
+                            db.close()
+                    # Для серверных ошибок (5xx): планируем повторы через 10 минут
+                    elif any(code in err_text for code in ['500','502','503','504']):
+                        retry_time = datetime.now(pytz.UTC) + timedelta(minutes=10)
+                        try:
+                            self.scheduler.add_job(
+                                self.send_reminder,
+                                trigger=DateTrigger(run_date=retry_time, timezone=pytz.UTC),
+                                args=[user_id, task_title, task_id],
+                                id=f"retry_reminder_{task_id}_{int(retry_time.timestamp())}",
+                                replace_existing=False
+                            )
+                            logger.info(f"Scheduled retry for reminder {task_id} at {retry_time}")
+                        except Exception as sched_err:
+                            logger.error(f"Failed to schedule retry for reminder {task_id}: {sched_err}")
                     reminder_sent_successfully = False
             else:
                 # Для тестов - вывод в консоль
