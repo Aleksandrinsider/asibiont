@@ -37,12 +37,6 @@
         <div class="header-content">
             <div class="header-left">
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
-                <!-- Переключатель компактного режима -->
-                <button id="compact-toggle" class="compact-toggle-btn" title="Переключить компактный режим" aria-pressed="false" onclick="toggleCompactMode()" style="margin-left:12px; padding:6px 10px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius:6px; cursor:pointer; font-size:13px; color:#59636E; display:flex; gap:8px; align-items:center;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="7" height="7" rx="1" fill="#068487"/><rect x="14" y="4" width="7" height="7" rx="1" fill="#D1D9E0"/><rect x="3" y="13" width="7" height="7" rx="1" fill="#D1D9E0"/><rect x="14" y="13" width="7" height="7" rx="1" fill="#D1D9E0"/></svg>
-                    <span style="font-size:13px;">Compact</span>
-                </button>
-
                 <!-- Поиск контактов -->
                 {% if logged_in %}
                 <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
@@ -390,39 +384,7 @@
     </div>
 
     <script>
-        // Compact mode functions
-        function applyCompactModeState() {
-            try {
-                const enabled = localStorage.getItem('compactMode') === 'true';
-                if (enabled) {
-                    document.body.classList.add('compact-mode');
-                    const btn = document.getElementById('compact-toggle');
-                    if (btn) { btn.setAttribute('aria-pressed', 'true'); btn.classList.add('active'); }
-                } else {
-                    document.body.classList.remove('compact-mode');
-                    const btn = document.getElementById('compact-toggle');
-                    if (btn) { btn.setAttribute('aria-pressed', 'false'); btn.classList.remove('active'); }
-                }
-            } catch (e) { console.error('Error applying compact mode', e); }
-        }
 
-        function toggleCompactMode() {
-            try {
-                const enabled = !document.body.classList.toggle('compact-mode');
-                // note: toggle returns true if class was added, so flip logic
-                const nowEnabled = document.body.classList.contains('compact-mode');
-                localStorage.setItem('compactMode', nowEnabled ? 'true' : 'false');
-                const btn = document.getElementById('compact-toggle');
-                if (btn) {
-                    btn.setAttribute('aria-pressed', nowEnabled ? 'true' : 'false');
-                    if (nowEnabled) btn.classList.add('active'); else btn.classList.remove('active');
-                }
-            } catch (e) { console.error('Error toggling compact mode', e); }
-        }
-
-        document.addEventListener('DOMContentLoaded', function(){
-            applyCompactModeState();
-        });
 
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
