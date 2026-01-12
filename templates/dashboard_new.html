@@ -848,13 +848,11 @@
                         <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0;">
                             <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')" 
                                     class="quick-action"
-                                    style="color: ${heartColor};"
-                                    title="${isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}">
+                                    style="color: ${heartColor};">
                                 ${isFavorite ? '♥' : '♡'}
                             </button>
                             <button onclick="event.stopPropagation();" 
-                                    class="quick-action"
-                                    title="Оценить контакт">
+                                    class="quick-action">
                                 ↑↓
                             </button>
                         </div>
