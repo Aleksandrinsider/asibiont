@@ -223,7 +223,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: minmax(400px, 2.5fr) minmax(500px, 4fr) minmax(400px, 2.5fr);
+    grid-template-columns: minmax(425px, 2.5fr) minmax(500px, 4fr) minmax(400px, 2.5fr);
     height: 100%;
     column-gap: clamp(10px, 2vw, 20px);
     padding: 35px 0 20px 0;
@@ -565,25 +565,6 @@ body {
 .chat-input input:focus {
     outline: none;
     border-color: #0969DA;
-}
-
-.chat-input button {
-    padding: 10px 20px;
-    background-color: #FFFFFF;
-    color: #59636E;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    cursor: pointer;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-    font-size: 13px;
-    line-height: 21px;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.chat-input button:hover {
-    background-color: #F6F8FA;
-    border-color: #1F2328;
 }
 
 .context-section {
@@ -1233,14 +1214,14 @@ body {
 .chat-action-btn {
     background-color: #FFFFFF;
     transition: all 0.2s;
-    padding: 8px;
+    padding: 12px;
     color: #59636E;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
-    min-width: 32px;
-    width: 32px;
-    height: 32px;
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
