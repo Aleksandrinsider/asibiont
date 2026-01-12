@@ -236,8 +236,8 @@ body {
     display: flex;
     flex-direction: column;
     height: auto;
-    max-height: calc(100vh - 110px);
-    overflow: visible;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
     padding-bottom: 10px;
 }
 
@@ -596,7 +596,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-top: -10px;
+    margin-top: 0;
     margin-bottom: 20px;
     display: flex;
     flex-direction: column;
