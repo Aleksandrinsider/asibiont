@@ -122,9 +122,9 @@
                         {% if profile %}
                         <div class="context-item">
                             <!-- Профиль с окружением -->
-                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 16px; gap: 8px; position: relative;">
-                                <!-- Контакты слева -->
-                                <div id="circle-contacts-left" style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end;">
+                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 16px; gap: 12px; position: relative; min-height: 120px;">
+                                <!-- Контакты слева - облачное размещение -->
+                                <div id="circle-contacts-left" style="display: flex; flex-wrap: wrap; gap: 8px; max-width: 120px; justify-content: flex-end; align-content: center;">
                                 </div>
                                 
                                 <!-- Основной аватар -->
@@ -138,8 +138,8 @@
                                     <p style="margin: 0; color: #656D76; font-size: 14px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                                 </div>
                                 
-                                <!-- Контакты справа -->
-                                <div id="circle-contacts-right" style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+                                <!-- Контакты справа - облачное размещение -->
+                                <div id="circle-contacts-right" style="display: flex; flex-wrap: wrap; gap: 8px; max-width: 120px; justify-content: flex-start; align-content: center;">
                                 </div>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -1976,9 +1976,8 @@
                 return;
             }
             
-            // Размеры: слева средние, справа маленькие
-            const leftSizes = [48, 52, 44, 50];
-            const rightSizes = [36, 40, 38, 42];
+            // Размеры: разнообразные для создания облачной композиции
+            const sizes = [52, 40, 36, 48, 42, 38, 44, 50];
             const displayContacts = myContacts.slice(0, 8);
             
             // Распределяем контакты: половина слева, половина справа
@@ -1986,38 +1985,38 @@
             const leftContacts = displayContacts.slice(0, leftCount);
             const rightContacts = displayContacts.slice(leftCount);
             
-            // Генерируем HTML для левой стороны (средние размеры)
+            // Генерируем HTML для левой стороны (облачное размещение)
             let leftHtml = '';
             leftContacts.forEach((contact, index) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
-                const size = leftSizes[index % leftSizes.length];
+                const size = sizes[index % sizes.length];
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 45 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 45 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
             
-            // Генерируем HTML для правой стороны (маленькие размеры)
+            // Генерируем HTML для правой стороны (облачное размещение)
             let rightHtml = '';
             rightContacts.forEach((contact, index) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
-                const size = rightSizes[index % rightSizes.length];
+                const size = sizes[(index + leftCount) % sizes.length];
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 45 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: 6px; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 45 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
