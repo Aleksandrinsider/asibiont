@@ -1823,6 +1823,10 @@
             currentContactFilter = null; // Сбрасываем, чтобы filterContacts сработал
             filterContacts('recommended');
             
+            // Обновлять время в шапке каждую минуту
+            updateHeaderTime();
+            setInterval(updateHeaderTime, 60000);
+            
             // Обновлять счетчик времени каждую минуту (оптимизировано)
             setInterval(() => {
                 const nextReminderEl = document.getElementById('next-reminder');
@@ -1831,6 +1835,27 @@
                 }
             }, 60000);
         });
+        
+        // Функция обновления времени в шапке
+        function updateHeaderTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
+                          'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+            const day = now.getDate();
+            const month = months[now.getMonth()];
+            const year = now.getFullYear();
+            
+            const timeString = `${hours}:${minutes}`;
+            const dateString = `${day} ${month} ${year} г.`;
+            
+            const headerTimeDisplay = document.getElementById('header-time-display');
+            if (headerTimeDisplay) {
+                headerTimeDisplay.textContent = `${timeString} · ${dateString}`;
+            }
+        }
         
         async function updateTasks() {
             try {
