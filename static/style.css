@@ -225,7 +225,7 @@ body {
     display: grid;
     grid-template-columns: minmax(450px, 2.5fr) minmax(500px, 4fr) minmax(400px, 2.5fr);
     height: 100%;
-    column-gap: clamp(10px, 2vw, 20px);
+    column-gap: 0px;
     padding: 35px 0 20px 0;
     align-items: stretch;
     overflow: hidden;
