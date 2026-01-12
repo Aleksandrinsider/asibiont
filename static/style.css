@@ -241,27 +241,6 @@ body {
     padding-bottom: 20px;
 }
 
-.left-column::-webkit-scrollbar,
-.right-column::-webkit-scrollbar {
-    width: 4px;
-}
-
-.left-column::-webkit-scrollbar-track,
-.right-column::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.left-column::-webkit-scrollbar-thumb,
-.right-column::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 4px;
-}
-
-.left-column::-webkit-scrollbar-thumb:hover,
-.right-column::-webkit-scrollbar-thumb:hover {
-    background: #656D76;
-}
-
 .center-column {
     display: flex;
     flex-direction: column;
@@ -294,23 +273,6 @@ body {
     padding: 16px 26px 0 16px;
     border-radius: 10px;
     margin-bottom: 0;
-}
-
-.chat-messages::-webkit-scrollbar {
-    width: 4px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 4px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb:hover {
-    background: #656D76;
 }
 
 .message {
@@ -638,27 +600,8 @@ body {
     overflow-y: auto;
     overflow-x: hidden;
     max-height: calc(100vh - 510px);
-    scrollbar-width: thin;
-    scrollbar-color: #D1D9E0 transparent;
     padding-top: 0;
     padding-right: 10px;
-}
-
-.tasks-section::-webkit-scrollbar {
-    width: 4px;
-}
-
-.tasks-section::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.tasks-section::-webkit-scrollbar-thumb {
-    background: #D1D9E0;
-    border-radius: 4px;
-}
-
-.tasks-section::-webkit-scrollbar-thumb:hover {
-    background: #656D76;
 }
 
 .context-section {
@@ -868,26 +811,7 @@ body {
     overflow-y: auto;
     overflow-x: hidden;
     transition: max-height 0.3s ease;
-    scrollbar-width: thin;
-    scrollbar-color: #D1D9E0 transparent;
     padding-right: 10px;
-}
-
-.people-list::-webkit-scrollbar {
-    width: 3px;
-}
-
-.people-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.people-list::-webkit-scrollbar-thumb {
-    background-color: #D1D9E0;
-    border-radius: 4px;
-}
-
-.people-list::-webkit-scrollbar-thumb:hover {
-    background: #656D76;
 }
 
 .person-card {
