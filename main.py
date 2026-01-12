@@ -1813,7 +1813,7 @@ async def rate_user_handler(request):
                     session_db.commit()
             
             # Сохранить сообщение в историю взаимодействий
-            success_message = f'✓ Оценка {rating}/10 для @{rated_username} сохранена'
+            success_message = f'Оценка {rating}/10 для @{rated_username} сохранена'
             interaction = Interaction(
                 user_id=rater.id,
                 message_type='ai',

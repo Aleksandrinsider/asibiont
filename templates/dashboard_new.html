@@ -40,7 +40,7 @@
                 <!-- Поиск контактов -->
                 {% if logged_in %}
                 <div style="margin-left: 20px; position: relative; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 12px;">
-                    <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram" 
+                    <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram: @ ..." 
                         style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #24292F;"
                         onkeyup="searchContacts(event)">
                     <div id="contact-search-results" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: white; border: 1px solid #D1D9E0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 400px; overflow-y: auto; z-index: 1000; min-width: 300px;">
@@ -189,11 +189,9 @@
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
-                        <button class="contact-filter-btn" onclick="filterContacts('all')" style="padding: 4px 8px; background: none; color: #24292F; border: none; cursor: pointer; font-size: 12px; font-weight: 600;">Все</button>
-                        <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Мои</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #24292F; border: none; cursor: pointer; font-size: 12px; font-weight: 600;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
                         <span style="color: #D1D9E0;">·</span>
@@ -1756,8 +1754,8 @@
                 });
             });
             
-            // Инициализировать фильтр контактов - показать все по умолчанию
-            filterContacts('all');
+            // Инициализировать фильтр контактов - показать рекомендуемые по умолчанию
+            filterContacts('recommended');
             
             // Обновлять счетчик времени каждую минуту (оптимизировано)
             setInterval(() => {
