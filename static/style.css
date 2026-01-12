@@ -319,7 +319,8 @@ body {
 }
 .dropdown .dropdown-menu,
 .menu .dropdown-menu,
-.context-menu .dropdown-menu {
+.context-menu .dropdown-menu,
+.dropdown-menu {
     position: absolute;
     top: 100%;
     left: 0;
@@ -332,6 +333,23 @@ body {
     border-radius: 8px;
     box-shadow: 0 6px 18px rgba(31,35,40,0.08);
     padding: 8px;
+}
+
+.dropdown-menu .dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 13px;
+    color: #1F2328;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.dropdown-menu .dropdown-item:hover {
+    background: #F6F8FA;
 }
 
 /* Ensure native selects and toggles render above content */
@@ -350,6 +368,23 @@ details[open] .details-content {
     max-height: 360px;
     overflow: auto;
     box-shadow: 0 6px 18px rgba(31,35,40,0.08);
+}
+
+/* Floating overlay used by the JS overlay manager */
+.floating-overlay {
+    position: fixed;
+    z-index: 5000;
+    background: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(31,35,40,0.12);
+    padding: 8px;
+    max-height: 50vh;
+    overflow: auto;
+}
+
+.floating-overlay.hidden {
+    display: none;
 }
 
 .chat-section {

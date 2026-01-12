@@ -1155,12 +1155,23 @@
             
             html += '</div>';
             
-            // Кнопки действий
+            // Кнопки действий (включая меню оверлей)
             html += '<div class="task-actions">';
             if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #238636; cursor: pointer; font-size: 16px; padding: 4px;">?</button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #238636; cursor: pointer; font-size: 16px; padding: 4px;" aria-label="Complete">✓</button>';
             }
-            html += '<button onclick="deleteTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #d73a49; cursor: pointer; font-size: 16px; padding: 4px;">?</button>';
+            html += '<button onclick="deleteTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #d73a49; cursor: pointer; font-size: 16px; padding: 4px;" aria-label="Delete">🗑</button>';
+            // More menu - uses overlay manager (data-overlay-target)
+            html += '<button class="task-action-btn use-overlay" data-overlay-target="#task-menu-' + task.id + '" style="background:none;border:none;padding:4px;cursor:pointer;font-size:18px;">⋯</button>';
+
+            // Menu content (kept in place until overlay manager moves it to body when opened)
+            html += '<div id="task-menu-' + task.id + '" class="dropdown-menu" style="display:none;">';
+            html += '<button onclick="editTask(' + task.id + ')" class="dropdown-item">Редактировать</button>';
+            html += '<button onclick="rescheduleTask(' + task.id + ')" class="dropdown-item">Перенести</button>';
+            html += '<button onclick="delegateTask(' + task.id + ')" class="dropdown-item">Делегировать</button>';
+            html += '<button onclick="showTaskInChat(' + task.id + ')" class="dropdown-item">Открыть в чате</button>';
+            html += '</div>';
+
             html += '</div>';
             
             return html;
@@ -2767,13 +2778,123 @@
             document.getElementById('info-modal').style.display = 'none';
         }
         
-        // Закрытие модального окна при клике вне его
+        // Закрытие модального окна при клике вне него
         window.onclick = function(event) {
             const modal = document.getElementById('info-modal');
             if (event.target == modal) {
                 modal.style.display = 'none';
             }
         }
+
+        // Overlay manager: move dropdowns/menus to <body> to avoid layout shifts
+        (function(){
+            function closeOverlay(el){
+                if(!el) return;
+                if(el.__overlayOriginalParent){
+                    // restore to original place
+                    el.classList.remove('floating-overlay');
+                    // restore display
+                    if(el.__overlayOldDisplay !== undefined){
+                        el.style.display = el.__overlayOldDisplay;
+                        delete el.__overlayOldDisplay;
+                    } else {
+                        el.style.display = '';
+                    }
+                    el.style.position = '';
+                    el.style.top = '';
+                    el.style.left = '';
+                    el.style.minWidth = '';
+                    el.style.maxHeight = '';
+                    el.style.overflow = '';
+                    document.body.appendChild(el.__overlayPlaceholder);
+                    el.__overlayOriginalParent.insertBefore(el, el.__overlayPlaceholder);
+                    el.__overlayPlaceholder.remove();
+                    delete el.__overlayOriginalParent;
+                    delete el.__overlayPlaceholder;
+                } else {
+                    el.remove();
+                }
+            }
+
+            function openOverlay(toggle, menu){
+                if(!menu) return;
+                // Toggle close if already floating
+                if(menu.classList.contains('floating-overlay')){
+                    closeOverlay(menu);
+                    return;
+                }
+                // create placeholder to remember original position
+                const placeholder = document.createElement('div');
+                placeholder.style.display = 'none';
+                menu.__overlayOriginalParent = menu.parentNode;
+                menu.__overlayPlaceholder = placeholder;
+                menu.parentNode.insertBefore(placeholder, menu);
+
+                menu.classList.add('floating-overlay');
+                document.body.appendChild(menu);
+
+                // position relative to toggle
+                const rect = toggle.getBoundingClientRect();
+                const margin = 8;
+                let top = rect.bottom + margin;
+                let left = rect.left;
+                // ensure on-screen
+                const maxRight = left + menu.offsetWidth;
+                if(maxRight > window.innerWidth - 8){
+                    left = Math.max(8, window.innerWidth - menu.offsetWidth - 8);
+                }
+                // adjust if overflow bottom
+                const estimatedHeight = Math.min(menu.offsetHeight, window.innerHeight * 0.5);
+                if(top + estimatedHeight > window.innerHeight - 8){
+                    top = rect.top - estimatedHeight - margin;
+                }
+                // Ensure visible when moved to body
+                menu.__overlayOldDisplay = menu.style.display || '';
+                menu.style.display = 'block';
+                menu.style.position = 'fixed';
+                menu.style.top = top + 'px';
+                menu.style.left = left + 'px';
+                menu.style.minWidth = rect.width + 'px';
+                menu.style.maxHeight = (window.innerHeight * 0.5) + 'px';
+                menu.style.overflow = 'auto';
+
+                // close on outside click or ESC
+                setTimeout(()=>{
+                    function onDocClick(e){
+                        if(!menu.contains(e.target) && !toggle.contains(e.target)){
+                            closeOverlay(menu);
+                            document.removeEventListener('click', onDocClick);
+                            document.removeEventListener('keydown', onEsc);
+                        }
+                    }
+                    function onEsc(e){ if(e.key === 'Escape'){ closeOverlay(menu); document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onEsc); } }
+                    document.addEventListener('click', onDocClick);
+                    document.addEventListener('keydown', onEsc);
+                    window.addEventListener('resize', ()=>{ closeOverlay(menu); }, { once: true });
+                }, 0);
+            }
+
+            // Delegate clicks for elements that reference menus via data-overlay-target="#menuId"
+            document.addEventListener('click', function(e){
+                const btn = e.target.closest('[data-overlay-target]');
+                if(!btn) return;
+                e.preventDefault();
+                const selector = btn.getAttribute('data-overlay-target');
+                if(!selector) return;
+                const menu = document.querySelector(selector);
+                if(!menu) return;
+                openOverlay(btn, menu);
+            });
+
+            // Auto-attach for elements with class .use-overlay: toggle their next sibling
+            document.querySelectorAll('.use-overlay').forEach(btn=>{
+                btn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    const menu = btn.nextElementSibling;
+                    if(menu) openOverlay(btn, menu);
+                });
+            });
+        })();
     </script>
 </body>
 </html>
