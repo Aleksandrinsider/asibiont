@@ -164,7 +164,9 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
-                            <p>О себе: {{ profile.bio or 'Не указано' }}</p>
+                            {% if profile.bio %}
+                            <p>О себе: {{ profile.bio }}</p>
+                            {% endif %}
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
@@ -2337,7 +2339,9 @@
                         html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
                         html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
-                        html += '<p>О себе: ' + (data.profile.bio || 'Не указано') + '</p>';
+                        if (data.profile.bio) {
+                            html += '<p>О себе: ' + data.profile.bio + '</p>';
+                        }
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
