@@ -223,7 +223,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: minmax(425px, 2.5fr) minmax(500px, 4fr) minmax(400px, 2.5fr);
+    grid-template-columns: minmax(450px, 2.5fr) minmax(500px, 4fr) minmax(400px, 2.5fr);
     height: 100%;
     column-gap: clamp(10px, 2vw, 20px);
     padding: 35px 0 20px 0;
@@ -601,7 +601,7 @@ body {
     margin-bottom: 20px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     transition: flex 0.3s ease;
 }
 
@@ -865,8 +865,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: calc(100vh - 240px);
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
     overflow-x: hidden;
     transition: max-height 0.3s ease;
     scrollbar-width: thin;

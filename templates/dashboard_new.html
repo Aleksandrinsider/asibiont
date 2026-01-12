@@ -271,7 +271,9 @@
                 <!-- Информационная панель -->
                 <div style="background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; padding: 10px 16px; margin-top: -10px; display: flex; align-items: center; justify-content: space-between;">
                     <span style="color: #656D76; font-size: 13px;">Есть вопросы? Обращайтесь в поддержку</span>
-                    <button onclick="openSupport()" class="quick-action" style="color: #656D76; font-weight: 400;">Поддержка</button>
+                    <button onclick="openSupport()" class="quick-action" title="Поддержка">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.92 6.085h.001a.749.749 0 1 1-1.342-.67c.169-.339.436-.701.849-.977C6.845 4.16 7.369 4 8 4a2.756 2.756 0 0 1 1.637.525c.503.377.863.965.863 1.725 0 .448-.115.83-.329 1.15-.205.307-.47.513-.692.662-.109.072-.22.138-.313.195l-.006.004a6.24 6.24 0 0 0-.26.16.952.952 0 0 0-.276.245.75.75 0 0 1-1.248-.832c.184-.264.42-.489.692-.661.103-.067.207-.132.313-.195l.007-.004c.1-.061.182-.11.258-.161a.969.969 0 0 0 .277-.245C8.96 6.514 9 6.427 9 6.25c0-.423-.179-.746-.399-.897A1.28 1.28 0 0 0 8 5.125c-.443 0-.72.12-.933.28a1.745 1.745 0 0 0-.447.68ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>
+                    </button>
                 </div>
             </div>
 
@@ -477,10 +479,16 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
+            // Парсинг @username в ссылки на Telegram
+            let processedText = text;
+            if (normalizedSender === 'ai') {
+                processedText = text.replace(/@(\w+)/g, '<a href="https://t.me/$1" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">@$1</a>');
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
             messageDiv.innerHTML = `
-                <div class="message-text">${text}</div>
+                <div class="message-text">${processedText}</div>
                 <div class="message-time">${dateString} ${timeString}</div>
             `;
             messages.appendChild(messageDiv);
