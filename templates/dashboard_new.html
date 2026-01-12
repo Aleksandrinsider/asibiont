@@ -1976,8 +1976,9 @@
                 return;
             }
             
-            // Размеры для создания интересной композиции (от 32px до 56px)
-            const sizes = [56, 48, 40, 44, 52, 36, 42, 50];
+            // Размеры: слева средние, справа маленькие
+            const leftSizes = [48, 52, 44, 50];
+            const rightSizes = [36, 40, 38, 42];
             const displayContacts = myContacts.slice(0, 8);
             
             // Распределяем контакты: половина слева, половина справа
@@ -1985,46 +1986,38 @@
             const leftContacts = displayContacts.slice(0, leftCount);
             const rightContacts = displayContacts.slice(leftCount);
             
-            // Генерируем HTML для левой стороны
+            // Генерируем HTML для левой стороны (средние размеры)
             let leftHtml = '';
             leftContacts.forEach((contact, index) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
-                const size = sizes[index % sizes.length];
+                const size = leftSizes[index % leftSizes.length];
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer; transition: all 0.2s; opacity: 0.85;" 
-                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
-                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer; transition: all 0.2s; opacity: 0.85;"
-                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
-                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
             
-            // Генерируем HTML для правой стороны
+            // Генерируем HTML для правой стороны (маленькие размеры)
             let rightHtml = '';
             rightContacts.forEach((contact, index) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
-                const size = sizes[(index + leftCount) % sizes.length];
+                const size = rightSizes[index % rightSizes.length];
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer; transition: all 0.2s; opacity: 0.85;" 
-                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
-                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer; transition: all 0.2s; opacity: 0.85;"
-                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
-                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: 6px; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
