@@ -224,21 +224,21 @@ body {
 .main-layout {
     display: flex;
     height: 100%;
-    gap: clamp(8px, 2vw, 16px);
-    padding: 35px clamp(8px, 2vw, 16px) 20px clamp(8px, 2vw, 16px);
+    gap: 20px;
+    padding: 20px;
     overflow: hidden;
 }
 
 .left-column {
     flex: 1;
-    min-width: 200px;
-    max-width: 300px;
+    min-width: 280px;
+    max-width: 380px;
     display: flex;
     flex-direction: column;
     height: auto;
     max-height: calc(100vh - 80px);
     overflow: auto;
-    padding-bottom: 10px;
+    padding-bottom: 20px;
 }
 
 .center-column {
@@ -254,14 +254,14 @@ body {
 
 .right-column {
     flex: 1;
-    min-width: 200px;
-    max-width: 300px;
+    min-width: 280px;
+    max-width: 380px;
     display: flex;
     flex-direction: column;
     height: auto;
     max-height: calc(100vh - 80px);
     overflow: auto;
-    padding-bottom: 10px;
+    padding-bottom: 20px;
 }
 
 .left-column::-webkit-scrollbar,
@@ -301,7 +301,7 @@ body {
     background-color: #FFFFFF;
     border: 1px solid #D1D9E0;
     border-radius: 8px;
-    padding-top: 15px;
+    padding: 20px;
     margin-top: 0;
     margin-bottom: 20px;
     height: 100%;
@@ -314,7 +314,7 @@ body {
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
-    padding: 16px 26px 0 16px;
+    padding: 20px;
     border-radius: 10px;
     margin-bottom: 0;
 }
@@ -1059,7 +1059,7 @@ body {
     
     .main-layout {
         flex-direction: column;
-        gap: 12px;
+        gap: 20px;
     }
     
     .left-column,
