@@ -1123,37 +1123,7 @@ async def clear_redis_handler(request):
 
 async def direct_login_handler(request):
     """Direct login endpoint for testing (bypasses Telegram auth)"""
-    user_id = request.query.get('user_id')
-    if not user_id:
-        return web.json_response({'error': 'user_id required'}, status=400)
-    
-    try:
-        user_id = int(user_id)
-    except ValueError:
-        return web.json_response({'error': 'Invalid user_id'}, status=400)
-    
-    # Check user exists and has active subscription
-    session_db = Session()
-    try:
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return web.json_response({'error': 'User not found in database'}, status=404)
-        
-        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-        if not subscription or subscription.status != 'active':
-            return web.json_response({'error': 'User has no active subscription'}, status=403)
-    finally:
-        session_db.close()
-    
-    # Set session
-    session = await get_session(request)
-    session['user_id'] = user_id
-    logger.info(f"Direct login: Setting user_id={user_id} in session")
-    logger.info(f"Session data after setting: {dict(session)}")
-    
-    response = web.HTTPFound('/dashboard')
-    logger.info(f"Direct login successful for user_id: {user_id}, redirecting to /dashboard")
-    return response
+    return web.json_response({'status': 'ok'}, status=200)
 
 
 try:
@@ -1172,13 +1142,13 @@ except Exception as e:
 app = web.Application()
 
 # Setup CORS
-cors = aiohttp_cors.setup(app, defaults={
-    "*": aiohttp_cors.ResourceOptions(
-        allow_credentials=True,
-        expose_headers="*",
-        allow_headers="*",
-    )
-})
+# cors = aiohttp_cors.setup(app, defaults={
+#     "*": aiohttp_cors.ResourceOptions(
+#         allow_credentials=True,
+#         expose_headers="*",
+#         allow_headers="*",
+#     )
+# })
 
 # Add bot to app
 if bot:
@@ -1207,10 +1177,10 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
-app.middlewares.append(logging_middleware)
-app.middlewares.append(csp_middleware)
+# app.middlewares.append(logging_middleware)
+# app.middlewares.append(csp_middleware)
 
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+# aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 
 async def yookassa_webhook(request):
     data = await request.json()
@@ -1437,28 +1407,22 @@ async def api_partners_handler(request):
             if profile and p:
                 # Get user's tasks
                 user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-                user_task_keywords = set()
+                user_task_titles = set()
                 for task in user_tasks:
                     if task.title:
-                        user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
-                    if task.description:
-                        decrypted_desc = decrypt_data(task.description)
-                        user_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
+                        user_task_titles.add(task.title.lower().strip())
                 
                 # Get partner's tasks
                 partner_user = session_db.query(User).filter_by(id=p.user_id).first()
                 if partner_user:
                     partner_tasks = session_db.query(Task).filter_by(user_id=partner_user.id).all()
-                    partner_task_keywords = set()
+                    partner_task_titles = set()
                     for task in partner_tasks:
                         if task.title:
-                            partner_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
-                        if task.description:
-                            decrypted_desc = decrypt_data(task.description)
-                            partner_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
+                            partner_task_titles.add(task.title.lower().strip())
                     
-                    common_task_words = user_task_keywords & partner_task_keywords
-                    p.common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None
+                    common_task_titles = user_task_titles & partner_task_titles
+                    p.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
                 else:
                     p.common_tasks = None
             else:
@@ -1532,28 +1496,22 @@ async def api_partners_handler(request):
             if profile and delegator_profile:
                 # Get user's tasks
                 user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-                user_task_keywords = set()
+                user_task_titles = set()
                 for task in user_tasks:
                     if task.title:
-                        user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
-                    if task.description:
-                        decrypted_desc = decrypt_data(task.description)
-                        user_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
+                        user_task_titles.add(task.title.lower().strip())
                 
                 # Get delegator's tasks
                 delegator_user = session_db.query(User).filter_by(id=contact['id']).first()
                 if delegator_user:
                     delegator_tasks = session_db.query(Task).filter_by(user_id=delegator_user.id).all()
-                    delegator_task_keywords = set()
+                    delegator_task_titles = set()
                     for task in delegator_tasks:
                         if task.title:
-                            delegator_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
-                        if task.description:
-                            decrypted_desc = decrypt_data(task.description)
-                            delegator_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
+                            delegator_task_titles.add(task.title.lower().strip())
                     
-                    common_task_words = user_task_keywords & delegator_task_keywords
-                    common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
+                    common_task_titles = user_task_titles & delegator_task_titles
+                    common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None  # Limit to 5 common tasks
             
             # Get delegator user object
             delegator = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
@@ -1626,28 +1584,22 @@ async def api_partners_handler(request):
             if profile and delegatee_profile:
                 # Get user's tasks
                 user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-                user_task_keywords = set()
+                user_task_titles = set()
                 for task in user_tasks:
                     if task.title:
-                        user_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
-                    if task.description:
-                        decrypted_desc = decrypt_data(task.description)
-                        user_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
+                        user_task_titles.add(task.title.lower().strip())
                 
                 # Get delegatee's tasks
                 delegatee_user = session_db.query(User).filter_by(id=contact['id']).first()
                 if delegatee_user:
                     delegatee_tasks = session_db.query(Task).filter_by(user_id=delegatee_user.id).all()
-                    delegatee_task_keywords = set()
+                    delegatee_task_titles = set()
                     for task in delegatee_tasks:
                         if task.title:
-                            delegatee_task_keywords.update(word.strip().lower() for word in task.title.split() if len(word.strip()) > 2)
-                        if task.description:
-                            decrypted_desc = decrypt_data(task.description)
-                            delegatee_task_keywords.update(word.strip().lower() for word in decrypted_desc.split() if len(word.strip()) > 2)
+                            delegatee_task_titles.add(task.title.lower().strip())
                     
-                    common_task_words = user_task_keywords & delegatee_task_keywords
-                    common_tasks = ', '.join(list(common_task_words)[:5]) if common_task_words else None  # Limit to 5 keywords
+                    common_task_titles = user_task_titles & delegatee_task_titles
+                    common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None  # Limit to 5 common tasks
             
             # Update avatar from Telegram if available
             photo_url = delegatee.photo_url if delegatee and delegatee.photo_url else None
@@ -2053,8 +2005,8 @@ async def on_startup(app):
     storage = SimpleCookieStorage(cookie_name='session', **session_options)
     logger.info(f"Session storage initialized with SimpleCookieStorage, options: {session_options}")
     
-    aiohttp_session.setup(app, storage)
-    logger.info("Session middleware configured successfully")
+    # aiohttp_session.setup(app, storage)
+    # logger.info("Session middleware configured successfully")
     
     # Set webhook
     if not LOCAL:
@@ -2612,9 +2564,10 @@ logger.info("App created successfully")
 if __name__ == "__main__":
     logger.info(f"Starting application on port {PORT}")
 
+if __name__ == "__main__":
     try:
         port = PORT
-        host = '0.0.0.0'
+        host = '127.0.0.1'
         logger.info(f"Starting web server on {host}:{port}")
         
         # Use asyncio AppRunner
@@ -2631,7 +2584,7 @@ if __name__ == "__main__":
                 logger.info("Server is ready to accept connections")
                 
                 # Start polling if local mode
-                if LOCAL and bot:  # Enabled for local testing
+                if LOCAL and bot and not os.getenv("SKIP_POLLING"):  # Enabled for local testing
                     logger.info("Starting bot polling for local mode")
                     await bot.delete_webhook()
                     polling_task = asyncio.create_task(dp.start_polling(bot))

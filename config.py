@@ -41,7 +41,7 @@ if not TELEGRAM_BOT_USERNAME:
     TELEGRAM_BOT_USERNAME = "Asibiont_bot"
 
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-if not WEBHOOK_URL:
+if not WEBHOOK_URL and not LOCAL:
     raise ValueError("WEBHOOK_URL is required")
 
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://yourapp.railway.app")

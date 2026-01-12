@@ -73,9 +73,27 @@ def post_process_tool_calls(intent, tool_calls, message):
             time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
             for indicator in time_indicators:
                 if indicator in message.lower():
+                    # Сначала попробуем найти абсолютное время
                     time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
                     if time_match:
                         args_dict["reminder_time"] = time_match.group(1)
+                    else:
+                        # Если абсолютного нет, попробуем извлечь относительное время
+                        relative_patterns = [
+                            r"через\s+(\d+)\s*мин",
+                            r"через\s+(\d+)\s*минут",
+                            r"через\s+(\d+)\s*час",
+                            r"через\s+(\d+)\s*часа",
+                            r"через\s+(\d+)\s*часов"
+                        ]
+                        for pattern in relative_patterns:
+                            rel_match = re.search(pattern, message, re.IGNORECASE)
+                            if rel_match:
+                                # Извлекаем всю фразу относительного времени
+                                full_match = re.search(r"(через\s+\d+\s*(?:мин|минут|час|часа|часов))", message, re.IGNORECASE)
+                                if full_match:
+                                    args_dict["reminder_time"] = full_match.group(1)
+                                break
                     break
 
             corrected_calls.append({

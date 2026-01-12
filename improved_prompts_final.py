@@ -420,9 +420,22 @@ def improved_classify_intent(message, mentions_str):
     if any(word in message_lower for word in ["напомни", "добавь", "создай задачу", "запланируй"]):
         intent["type"] = "add_task"
         intent["confidence"] = 0.85
+        # Извлекаем время: абсолютное или относительное
         time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
         if time_match:
             intent["params"]["reminder_time"] = time_match.group(1)
+        else:
+            # Ищем относительное время
+            relative_patterns = [
+                r"(через\s+\d+\s*(?:мин|минут|час|часа|часов))",
+                r"(завтра\s+\d{1,2}:\d{2})",
+                r"(сегодня\s+\d{1,2}:\d{2})"
+            ]
+            for pattern in relative_patterns:
+                rel_match = re.search(pattern, message, re.IGNORECASE)
+                if rel_match:
+                    intent["params"]["reminder_time"] = rel_match.group(1)
+                    break
         return intent
     
     # TIER 3: КОНТЕКСТНЫЕ КОМАНДЫ (0.7-0.8)
