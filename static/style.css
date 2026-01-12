@@ -378,6 +378,31 @@ body {
     }
 }
 
+/* Compact mode overrides */
+.compact-mode {
+    --header-height: 56px;
+    --app-gap: 12px;
+}
+
+.compact-mode .app-header {
+    height: var(--header-height);
+}
+
+.compact-mode .logo { font-size: 16px; padding: 2px 6px; }
+.compact-mode .main-layout { grid-template-columns: minmax(260px, 300px) 1fr minmax(260px, 320px); gap: 12px; }
+.compact-mode .left-column, .compact-mode .right-column { padding: 6px; }
+.compact-mode .context-item p { font-size: 12px; }
+.compact-mode .header-avatar-small img, .compact-mode .header-avatar img { width: 28px; height: 28px; border-radius: 6px; }
+.compact-mode .profile-content img { width: 48px; height: 48px; }
+.compact-mode .task-stats-block, .compact-mode .tasks-section-wrapper, .compact-mode .people-section { padding: 8px; }
+.compact-mode .chat-input input { padding: 8px; font-size: 13px; }
+.compact-mode .compact-toggle-btn.active { background: #068487; color: #fff; border-color: #068487; }
+
+/* Slight transitions for mode toggle */
+.app-header, .main-layout, .left-column, .right-column, .center-column {
+    transition: all 180ms ease-in-out;
+}
+
 /* Dropdowns / menus that must not push layout when opened */
 .dropdown, .menu, .context-menu {
     position: relative;
