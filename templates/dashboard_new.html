@@ -2814,9 +2814,15 @@
                     el.style.overflow = '';
                     document.body.appendChild(el.__overlayPlaceholder);
                     el.__overlayOriginalParent.insertBefore(el, el.__overlayPlaceholder);
-                    el.__overlayPlaceholder.remove();
-                    delete el.__overlayOriginalParent;
-                    delete el.__overlayPlaceholder;
+                    if (el.__overlayPlaceholder) {
+                        if (typeof el.__overlayPlaceholder.remove === 'function') {
+                            el.__overlayPlaceholder.remove();
+                        } else if (el.__overlayPlaceholder.parentNode) {
+                            el.__overlayPlaceholder.parentNode.removeChild(el.__overlayPlaceholder);
+                        }
+                        delete el.__overlayOriginalParent;
+                        delete el.__overlayPlaceholder;
+                    }
                 } else {
                     el.remove();
                 }
@@ -2876,7 +2882,9 @@
                     function onEsc(e){ if(e.key === 'Escape'){ closeOverlay(menu); document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onEsc); } }
                     document.addEventListener('click', onDocClick);
                     document.addEventListener('keydown', onEsc);
-                    window.addEventListener('resize', ()=>{ closeOverlay(menu); }, { once: true });
+                    // Use explicit handler to support browsers without `once` option
+                    function onResizeHandler(){ closeOverlay(menu); window.removeEventListener('resize', onResizeHandler); }
+                    window.addEventListener('resize', onResizeHandler);
                 }, 0);
             }
 
