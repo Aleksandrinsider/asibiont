@@ -4278,12 +4278,38 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     profile_info.append(f"Интересы: {profile.interests}")
                 if profile.goals:
                     profile_info.append(f"Цели: {profile.goals}")
+                
+                # Определяем незаполненные поля
+                empty_fields = []
+                if not profile.city:
+                    empty_fields.append("город")
+                if not profile.company:
+                    empty_fields.append("компания")
+                if not profile.position:
+                    empty_fields.append("должность")
+                if not profile.skills:
+                    empty_fields.append("навыки")
+                if not profile.interests:
+                    empty_fields.append("интересы")
+                if not profile.goals:
+                    empty_fields.append("цели")
+                if not (hasattr(profile, 'languages') and profile.languages):
+                    empty_fields.append("языки")
+                if not (hasattr(profile, 'bio') and profile.bio):
+                    empty_fields.append("чем могу помочь")
+                
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+                
+                # Проактивное заполнение при незаполненных полях
+                if empty_fields:
+                    fields_list = ', '.join(empty_fields[:3])  # Берем первые 3 незаполненных
+                    user_memory += f"\n⚠️ НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво)!"
+                
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
-                # Проактивное заполнение при первом сообщении
+                # Если профиль совсем пустой - срочно спроси в первом сообщении
                 if not profile_filled and (len(context) if context else 0 < 2):
-                    user_memory += "\nКРИТИЧНО ВАЖНО: Профиль ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
+                    user_memory += "\nКРИТИЧНО ВАЖНО: Профиль почти ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
             else:
                 user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
 
