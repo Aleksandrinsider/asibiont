@@ -86,7 +86,8 @@ class ReminderService:
         REMINDER_SERVICE = self
 
     async def start(self):
-        self.scheduler.start()
+        if not self.scheduler.running:
+            self.scheduler.start()
         self.schedule_existing_reminders()
         self.schedule_daily_reports()
         self.schedule_proactive_checks()
