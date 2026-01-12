@@ -1964,10 +1964,11 @@
             const rightContainer = document.getElementById('circle-contacts-right');
             if (!leftContainer || !rightContainer) return;
             
-            // Фильтруем контакты: берем тех, кто делегирует мне и кому я делегирую
-            const myContacts = partners ? partners.filter(p => 
-                p.type === 'delegating_to_me' || p.type === 'delegating_by_me'
-            ) : [];
+            // Фильтруем контакты: берем избранные (те, что в фильтре "Мои")
+            const myContacts = partners ? partners.filter(p => {
+                const username = p.contact_info ? p.contact_info.replace('@', '') : '';
+                return isFavoriteContact(username);
+            }) : [];
             
             if (myContacts.length === 0) {
                 leftContainer.innerHTML = '';
