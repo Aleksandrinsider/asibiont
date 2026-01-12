@@ -189,9 +189,11 @@
                         <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
+                        <button class="contact-filter-btn" onclick="filterContacts('all')" style="padding: 4px 8px; background: none; color: #24292F; border: none; cursor: pointer; font-size: 12px; font-weight: 600;">Все</button>
+                        <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Мои</button>
                         <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 12px; font-weight: 500;">Рекомендуемые</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Рекомендуемые</button>
                         <span style="color: #D1D9E0;">·</span>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 12px;">Делегируют мне</button>
                         <span style="color: #D1D9E0;">·</span>
@@ -1296,15 +1298,15 @@
             currentContactFilter = filterType;
             
             // Обновляем стили кнопок фильтров контактов
-            const buttons = document.querySelectorAll('.people-section button[onclick*="filterContacts"]');
+            const buttons = document.querySelectorAll('.contact-filter-btn');
             buttons.forEach(btn => {
                 const btnFilterType = btn.getAttribute('onclick').match(/filterContacts\('([^']+)'\)/)?.[1];
                 if (btnFilterType === filterType) {
-                    btn.style.color = '#068487';
-                    btn.style.fontWeight = '500';
+                    btn.style.color = '#24292F';
+                    btn.style.fontWeight = '600';
                 } else {
                     btn.style.color = '#59636E';
-                    btn.style.fontWeight = '400';
+                    btn.style.fontWeight = 'normal';
                 }
             });
             
@@ -1754,8 +1756,8 @@
                 });
             });
             
-            // Инициализировать фильтр контактов - показать рекомендованные по умолчанию
-            filterContacts('recommended');
+            // Инициализировать фильтр контактов - показать все по умолчанию
+            filterContacts('all');
             
             // Обновлять счетчик времени каждую минуту (оптимизировано)
             setInterval(() => {
