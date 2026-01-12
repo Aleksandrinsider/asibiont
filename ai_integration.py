@@ -3631,7 +3631,7 @@ def find_partners(user_id=None, session=None):
                 info_parts.append(f"интересы: {p.interests}")
             if hasattr(p, "bio") and p.bio:
                 bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
-                info_parts.append(f"о себе: {bio_short}")
+                info_parts.append(f"чем могу помочь: {bio_short}")
             if hasattr(p, "position") and p.position:
                 info_parts.append(f"{p.position}")
             if hasattr(p, "company") and p.company:
@@ -4077,7 +4077,7 @@ TOOLS = [
                     },
                     "bio": {
                         "type": "string",
-                        "description": "Краткое описание пользователя (2-3 предложения о себе, опыте, увлечениях), заменяет старое значение, опционально",
+                        "description": "Чем пользователь может помочь другим (экспертиза, консультации, области сотрудничества), заменяет старое значение, опционально",
                     },
                     "languages": {
                         "type": "string",
@@ -4256,7 +4256,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 if profile.position:
                     profile_info.append(f"Должность: {profile.position}")
                 if hasattr(profile, 'bio') and profile.bio:
-                    profile_info.append(f"О себе: {profile.bio}")
+                    profile_info.append(f"Чем могу помочь: {profile.bio}")
                 if hasattr(profile, 'languages') and profile.languages:
                     profile_info.append(f"Языки: {profile.languages}")
                 if profile.skills:
