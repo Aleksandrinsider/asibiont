@@ -816,8 +816,11 @@
             contacts.forEach(contact => {
                 const isFavorite = isFavoriteContact(contact.username);
                 const photoUrl = contact.photo_url;
-                const rating = contact.average_rating ? contact.average_rating.toFixed(1) : '0.0';
+                const rating = contact.average_rating || 0;
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
+                const ratingColor = rating < 5 ? '#d73a49' : (rating >= 9 ? '#D7AC0C' : '#1F2328');
+                const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Рекомендация: нет рекомендаций';
+                const heartColor = isFavorite ? '#068487' : '#24292F';
                 
                 html += `
                     <div style="padding: 12px; border: 1px solid #D1D9E0; border-radius: 6px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.15s; background: white;"
@@ -838,21 +841,20 @@
                                 ${contact.city ? `<span>· ${contact.city}</span>` : ''}
                             </div>
                             ${contact.bio ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px; line-height: 1.4;">${contact.bio}</div>` : ''}
-                            ${contact.interests ? `<div style="font-size: 11px; color: #656D76; background: #F6F8FA; padding: 3px 6px; border-radius: 3px; display: inline-block;">${contact.interests}</div>` : ''}
+                            ${contact.interests ? `<div style="font-size: 11px; color: #656D76; background: #F6F8FA; padding: 3px 6px; border-radius: 3px; display: inline-block; margin-bottom: 2px;">${contact.interests}</div>` : ''}
+                            <div style="margin-top: 2px;"><span style="font-size: 12px; color: ${ratingColor};">${ratingText}</span></div>
                         </div>
-                        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;">
-                            <div style="background: #F6F8FA; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 4px;">
-                                <svg width="12" height="12" viewBox="0 0 16 16" fill="#FFA500">
-                                    <path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path>
-                                </svg>
-                                <span style="font-weight: 500;">${rating}</span>
-                            </div>
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0;">
                             <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')" 
-                                    style="background: #F6F8FA; color: #24292F; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px 10px; font-size: 12px; font-weight: 500; transition: all 0.15s; white-space: nowrap;"
-                                    onmouseover="this.style.background='#EAEEF2'" 
-                                    onmouseout="this.style.background='#F6F8FA'"
+                                    class="quick-action"
+                                    style="color: ${heartColor};"
                                     title="${isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}">
                                 ${isFavorite ? '♥' : '♡'}
+                            </button>
+                            <button onclick="event.stopPropagation();" 
+                                    class="quick-action"
+                                    title="Оценить контакт">
+                                ↑↓
                             </button>
                         </div>
                     </div>
