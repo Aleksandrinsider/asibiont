@@ -236,9 +236,30 @@ body {
     display: flex;
     flex-direction: column;
     height: auto;
-    max-height: none;
+    max-height: calc(100vh - 110px);
     overflow: visible;
     padding-bottom: 10px;
+}
+
+.left-column::-webkit-scrollbar,
+.right-column::-webkit-scrollbar {
+    width: 2px;
+}
+
+.left-column::-webkit-scrollbar-track,
+.right-column::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.left-column::-webkit-scrollbar-thumb,
+.right-column::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 2px;
+}
+
+.left-column::-webkit-scrollbar-thumb:hover,
+.right-column::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .center-column {
@@ -273,6 +294,23 @@ body {
     padding: 16px 26px 0 16px;
     border-radius: 10px;
     margin-bottom: 0;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 2px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 2px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .message {
@@ -557,7 +595,7 @@ body {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-top: 0;
+    margin-top: -10px;
     margin-bottom: 20px;
     display: flex;
     flex-direction: column;
@@ -602,6 +640,25 @@ body {
     max-height: calc(100vh - 510px);
     padding-top: 0;
     padding-right: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #D1D9E0 transparent;
+}
+
+.tasks-section::-webkit-scrollbar {
+    width: 2px;
+}
+
+.tasks-section::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tasks-section::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 2px;
+}
+
+.tasks-section::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .context-section {
@@ -812,6 +869,25 @@ body {
     overflow-x: hidden;
     transition: max-height 0.3s ease;
     padding-right: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #D1D9E0 transparent;
+}
+
+.people-list::-webkit-scrollbar {
+    width: 2px;
+}
+
+.people-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.people-list::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 2px;
+}
+
+.people-list::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
 
 .person-card {
