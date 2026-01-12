@@ -291,7 +291,7 @@ body {
 
 .chat-messages::-webkit-scrollbar-thumb {
     background: #D1D9E0;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 .chat-messages::-webkit-scrollbar-thumb:hover {
@@ -1410,4 +1410,22 @@ body {
 /* Avatar fallback styles */
 .avatar-fallback {
     display: none;
+}
+
+/* Modal search results scrollbar */
+#modal-search-results::-webkit-scrollbar {
+    width: 4px;
+}
+
+#modal-search-results::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#modal-search-results::-webkit-scrollbar-thumb {
+    background: #D1D9E0;
+    border-radius: 4px;
+}
+
+#modal-search-results::-webkit-scrollbar-thumb:hover {
+    background: #656D76;
 }
