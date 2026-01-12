@@ -215,9 +215,9 @@ body {
 }
 
 .container {
-    margin: 68px 20px 0 20px;
+    margin: 68px 20px 20px 20px;
     width: calc(100vw - 40px);
-    height: calc(100vh - 68px - 50px);
+    height: calc(100vh - 88px);
     overflow: hidden;
 }
 
