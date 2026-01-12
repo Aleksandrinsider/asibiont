@@ -121,46 +121,26 @@
                     </script>
                         {% if profile %}
                         <div class="context-item">
-                            <!-- Визуализация окружения -->
-                            <div style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 100%); border-radius: 8px; border: 1px solid #D1D9E0;">
-                                <h4 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 600; color: #656D76;">МОЁ ОКРУЖЕНИЕ</h4>
-                                <div style="display: flex; align-items: center; justify-content: center; gap: 12px;">
-                                    <!-- Аватар пользователя слева -->
-                                    <div style="display: flex; flex-direction: column; align-items: center;">
-                                        {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Я" style="width: 56px; height: 56px; border-radius: 8px; object-fit: cover; border: 2px solid #0969DA; box-shadow: 0 2px 8px rgba(9, 105, 218, 0.2);">
-                                        {% else %}
-                                        <div style="width: 56px; height: 56px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 20px; border: 2px solid #0969DA; box-shadow: 0 2px 8px rgba(9, 105, 218, 0.2);">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
-                                        {% endif %}
-                                        <span style="font-size: 11px; color: #656D76; margin-top: 4px;">Я</span>
-                                    </div>
-                                    
-                                    <!-- Разделитель -->
-                                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                                        <div style="width: 16px; height: 1px; background: #D1D9E0;"></div>
-                                        <div style="width: 16px; height: 1px; background: #D1D9E0;"></div>
-                                        <div style="width: 16px; height: 1px; background: #D1D9E0;"></div>
-                                    </div>
-                                    
-                                    <!-- Контакты справа -->
-                                    <div id="circle-contacts" style="display: flex; gap: 8px; flex-wrap: wrap; max-width: 180px; justify-content: center;">
-                                        <div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-size: 18px; border: 1px solid #D1D9E0;">?</div>
-                                        <div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-size: 18px; border: 1px solid #D1D9E0;">?</div>
-                                        <div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-size: 18px; border: 1px solid #D1D9E0;">?</div>
-                                    </div>
+                            <!-- Профиль с окружением -->
+                            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 16px; gap: 8px; position: relative;">
+                                <!-- Контакты слева -->
+                                <div id="circle-contacts-left" style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end;">
                                 </div>
-                                <p style="margin: 12px 0 0 0; font-size: 11px; color: #656D76; text-align: center;">Начните делегировать задачи, чтобы увидеть ваше окружение</p>
-                            </div>
-                            
-                            <!-- Основная информация профиля -->
-                            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
-                                {% if user_avatar_url %}
-                                <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">
-                                {% else %}
-                                <div style="width: 64px; height: 64px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
-                                {% endif %}
-                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">{{ user.first_name or 'Пользователь' }}</p>
-                                <p style="margin: 0; color: #656D76; font-size: 14px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
+                                
+                                <!-- Основной аватар -->
+                                <div style="display: flex; flex-direction: column; align-items: center; z-index: 10;">
+                                    {% if user_avatar_url %}
+                                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 2px solid #0969DA; box-shadow: 0 2px 8px rgba(9, 105, 218, 0.15);">
+                                    {% else %}
+                                    <div style="width: 64px; height: 64px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #0969DA; box-shadow: 0 2px 8px rgba(9, 105, 218, 0.15);">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                    {% endif %}
+                                    <p style="margin: 8px 0 0 0; font-weight: 600; color: #1F2328; font-size: 16px;">{{ user.first_name or 'Пользователь' }}</p>
+                                    <p style="margin: 0; color: #656D76; font-size: 14px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
+                                </div>
+                                
+                                <!-- Контакты справа -->
+                                <div id="circle-contacts-right" style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start;">
+                                </div>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
@@ -1980,43 +1960,74 @@
         }
         
         function updateCircleContacts(partners) {
-            const circleContainer = document.getElementById('circle-contacts');
-            if (!circleContainer) return;
+            const leftContainer = document.getElementById('circle-contacts-left');
+            const rightContainer = document.getElementById('circle-contacts-right');
+            if (!leftContainer || !rightContainer) return;
             
             // Фильтруем контакты типа "my" (мои контакты)
             const myContacts = partners ? partners.filter(p => p.type === 'my') : [];
             
             if (myContacts.length === 0) {
-                // Показываем заглушки
-                circleContainer.innerHTML = `
-                    <div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-size: 18px; border: 1px solid #D1D9E0;">?</div>
-                    <div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-size: 18px; border: 1px solid #D1D9E0;">?</div>
-                    <div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-size: 18px; border: 1px solid #D1D9E0;">?</div>
-                `;
-            } else {
-                // Показываем до 6 контактов
-                const displayContacts = myContacts.slice(0, 6);
-                let html = '';
-                
-                displayContacts.forEach(contact => {
-                    const telegramUrl = 'https://t.me/' + contact.contact_info;
-                    const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
-                    
-                    if (contact.photo_url) {
-                        html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                            <img src="${contact.photo_url}" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer; transition: transform 0.2s;" 
-                            onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-                        </a>`;
-                    } else {
-                        html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                            <div style="width: 40px; height: 40px; border-radius: 6px; background: linear-gradient(135deg, #0969DA 0%, #0550AE 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #0969DA; cursor: pointer; transition: transform 0.2s;"
-                            onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">${initial}</div>
-                        </a>`;
-                    }
-                });
-                
-                circleContainer.innerHTML = html;
+                leftContainer.innerHTML = '';
+                rightContainer.innerHTML = '';
+                return;
             }
+            
+            // Размеры для создания интересной композиции (от 32px до 56px)
+            const sizes = [56, 48, 40, 44, 52, 36, 42, 50];
+            const displayContacts = myContacts.slice(0, 8);
+            
+            // Распределяем контакты: половина слева, половина справа
+            const leftCount = Math.ceil(displayContacts.length / 2);
+            const leftContacts = displayContacts.slice(0, leftCount);
+            const rightContacts = displayContacts.slice(leftCount);
+            
+            // Генерируем HTML для левой стороны
+            let leftHtml = '';
+            leftContacts.forEach((contact, index) => {
+                const telegramUrl = 'https://t.me/' + contact.contact_info;
+                const size = sizes[index % sizes.length];
+                const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
+                
+                if (contact.photo_url) {
+                    leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer; transition: all 0.2s; opacity: 0.85;" 
+                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
+                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">
+                    </a>`;
+                } else {
+                    leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
+                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer; transition: all 0.2s; opacity: 0.85;"
+                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
+                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">${initial}</div>
+                    </a>`;
+                }
+            });
+            
+            // Генерируем HTML для правой стороны
+            let rightHtml = '';
+            rightContacts.forEach((contact, index) => {
+                const telegramUrl = 'https://t.me/' + contact.contact_info;
+                const size = sizes[(index + leftCount) % sizes.length];
+                const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
+                
+                if (contact.photo_url) {
+                    rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer; transition: all 0.2s; opacity: 0.85;" 
+                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
+                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">
+                    </a>`;
+                } else {
+                    rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
+                        <div style="width: ${size}px; height: ${size}px; border-radius: ${size > 48 ? '8px' : '6px'}; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer; transition: all 0.2s; opacity: 0.85;"
+                        onmouseover="this.style.opacity='1'; this.style.transform='scale(1.05)'" 
+                        onmouseout="this.style.opacity='0.85'; this.style.transform='scale(1)'">${initial}</div>
+                    </a>`;
+                }
+            });
+            
+            leftContainer.innerHTML = leftHtml;
+            rightContainer.innerHTML = rightHtml;
         }
         
         async function updateDelegations() {
