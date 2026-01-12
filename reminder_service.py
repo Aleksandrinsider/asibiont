@@ -316,7 +316,7 @@ class ReminderService:
                     logger.error(f"Full traceback: {traceback.format_exc()}")
 
                     # Для серверных ошибок (5xx): планируем повторы через 10 минут
-                    elif any(code in err_text for code in ['500','502','503','504']):
+                    if any(code in err_text for code in ['500','502','503','504']):
                         retry_time = datetime.now(pytz.UTC) + timedelta(minutes=10)
                         try:
                             self.scheduler.add_job(
