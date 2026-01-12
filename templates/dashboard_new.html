@@ -39,10 +39,9 @@
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
                 <!-- Поиск контактов -->
                 {% if logged_in %}
-                <div class="contact-search-desktop" style="margin-left: 20px; position: relative; background: white; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 12px;">
+                <div class="contact-search-desktop" style="margin-left: 20px; position: relative; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" onclick="showSearchModal()">
                     <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram: @ ..." 
-                        style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #24292F;"
-                        onfocus="showSearchModal()"
+                        style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #59636E; font-weight: 500; cursor: pointer; pointer-events: none;"
                         readonly>
                 </div>
                 
