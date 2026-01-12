@@ -147,15 +147,19 @@ def post_process_tool_calls(intent, tool_calls, message):
     return corrected_calls if corrected_calls != tool_calls else None
 
 
+# LEGACY FUNCTION REMOVED - Use improved_classify_intent from improved_prompts_final.py
 def classify_user_intent(message, mentions_str):
-    """
-    Классифицирует намерение пользователя на основе паттернов в сообщении.
-    Возвращает словарь с intent и confidence score.
-    """
-    message_lower = message.lower().strip()
-    intent = {"type": "unknown", "confidence": 0.0, "params": {}}
+    """DEPRECATED: Use improved_classify_intent from improved_prompts_final.py"""
+    from improved_prompts_final import improved_classify_intent
+    return improved_classify_intent(message, mentions_str)
 
-    # КРИТИЧНО: Если это короткий ответ (1-3 слова, без команд) - НЕ пытайся распознать команду
+
+# LEGACY FUNCTION REMOVED - Use improved_fallback from improved_prompts_final.py
+def smart_fallback_handler(message, mentions_str, user_id, ai_response_content=""):
+    """DEPRECATED: Use improved_fallback from improved_prompts_final.py"""
+    from improved_prompts_final import improved_fallback, improved_classify_intent
+    intent = improved_classify_intent(message, mentions_str)
+    return improved_fallback(intent, None, ai_response_content, message, user_id)
     # Это продолжение диалога, а не новый запрос действия
     words = message_lower.split()
     command_keywords = ["покажи", "список", "добавь", "удали", "напомни", "создай", "поручи", "перенеси",
@@ -664,15 +668,12 @@ def classify_user_intent(message, mentions_str):
     return intent
 
 
+# LEGACY FUNCTION REMOVED - Use improved_fallback from improved_prompts_final.py
 def smart_fallback_handler(message, mentions_str, user_id, ai_response_content=""):
-    print(
-        f"[DEBUG FALLBACK] Called with message='{message[:30]}...', ai_response='{ai_response_content[:30]}...'"
-    )  # DEBUG
-    print(f"[DEBUG FALLBACK] ai_response_content length: {len(ai_response_content)}")  # DEBUG
-    """
-    Умная система fallback'ов - используется только когда AI явно не справляется.
-    Анализирует ответ AI и применяет fallback только при низкой уверенности.
-    """
+    """DEPRECATED: Use improved_fallback from improved_prompts_final.py"""
+    from improved_prompts_final import improved_fallback
+    intent = improved_classify_intent(message, mentions_str)
+    return improved_fallback(intent, None, ai_response_content, message, user_id)
     fallback_actions = []
 
     # СПЕЦИАЛЬНАЯ ОБРАБОТКА ПРИВЕТСТВИЙ
@@ -1571,9 +1572,10 @@ def get_active_system_prompt():
     return get_system_prompt()
 
 
+# LEGACY FUNCTION REMOVED - Use get_optimized_prompt_final from improved_prompts_final.py
 def get_system_prompt():
-    """Оптимизированный промпт v13 - без дубликатов"""
-    return """🚨 КРИТИЧНО: НЕ используй ** (жирный), списки (1. 2. или -), эмодзи. Только обычный текст!
+    """DEPRECATED: Use get_optimized_prompt_final from improved_prompts_final.py"""
+    raise NotImplementedError("Use get_optimized_prompt_final from improved_prompts_final.py")
 
 Ты - ASI Biont, ИИ-помощник для управления задачами и жизнью. Ты друг, наставник, организатор.
 
@@ -1960,11 +1962,11 @@ def get_active_system_prompt():
 """
 
 
+# LEGACY FUNCTION REMOVED - Use get_optimized_prompt_final from improved_prompts_final.py  
 def get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory, context=None, intent=None):
-    """
-    Создает расширенный system prompt на основе базового + дополнительные правила для текущего контекста
-    """
-    from datetime import timedelta
+    """DEPRECATED: Use get_optimized_prompt_final from improved_prompts_final.py"""
+    from improved_prompts_final import get_optimized_prompt_final
+    return get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory)
     
     # Базовый system prompt
     system_prompt = (
@@ -4438,11 +4440,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             db_session.close()
 
         # Classify user intent (use improved version if available)
-        if PROMPTS_V2_AVAILABLE:
+if not PROMPTS_V2_AVAILABLE:
+                raise ImportError("improved_prompts_final.py is REQUIRED but not found!")
+            
             intent = improved_classify_intent(clean_message, mentions_str)
             logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
-        else:
-            intent = classify_user_intent(clean_message, mentions_str)
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
@@ -4460,22 +4462,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
-        # Use improved prompt system if available
-        if PROMPTS_V2_AVAILABLE:
-            system_prompt = get_optimized_prompt_final(
-                user_now, current_time_str, user_username, mentions_str, user_memory
-            )
-            logger.info("[PROMPTS V2] Using optimized prompt system")
-        else:
-            system_prompt = get_extended_system_prompt(
-                user_now=user_now,
-                current_time_str=current_time_str,
-                user_username=user_username,
-                mentions_str=mentions_str,
-                user_memory=user_memory,
-                context=context,
-                intent=intent
-            )
+        # PROMPTS V2 ONLY - No fallback to legacy prompts
+        if not PROMPTS_V2_AVAILABLE:
+            raise ImportError("improved_prompts_final.py is REQUIRED but not found!")
+        
+        system_prompt = get_optimized_prompt_final(
+            user_now, current_time_str, user_username, mentions_str, user_memory
+        )
+        logger.info("[PROMPTS V2] Using optimized prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""

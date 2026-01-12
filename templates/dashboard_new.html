@@ -1823,17 +1823,17 @@
             currentContactFilter = null; // Сбрасываем, чтобы filterContacts сработал
             filterContacts('recommended');
             
-            // Обновлять время в шапке каждую минуту
+            // Обновлять время в шапке каждые 10 секунд
             updateHeaderTime();
-            setInterval(updateHeaderTime, 60000);
+            setInterval(updateHeaderTime, 10000);
             
-            // Обновлять счетчик времени каждую минуту (оптимизировано)
+            // Обновлять счетчик времени каждые 10 секунд (оптимизировано)
             setInterval(() => {
                 const nextReminderEl = document.getElementById('next-reminder');
                 if (nextReminderEl && nextReminderEl.style.display !== 'none') {
                     updateTasks();
                 }
-            }, 60000);
+            }, 10000);
         });
         
         // Функция обновления времени в шапке
