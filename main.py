@@ -2026,8 +2026,7 @@ async def on_startup(app):
     
     # Initialize APScheduler jobstore for persistence (SQLAlchemy)
     try:
-        from reminder_service import reminder_service
-        # If using SQLAlchemyJobStore, it's already configured inside ReminderService
+        # Use the existing ReminderService instance created above
         reminder_service.scheduler.start()
         logger.info("ReminderService scheduler started with persistent jobstore")
     except Exception as e:
