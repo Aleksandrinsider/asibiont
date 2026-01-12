@@ -315,7 +315,7 @@ body {
 
 .message {
     padding: 10px;
-    margin: 6px 0;
+    margin: 8px 0;
     max-width: 100%;
     width: 100%;
     word-wrap: break-word;
@@ -545,7 +545,7 @@ body {
 
 .chat-input {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     padding: 10px;
     background-color: #F6F8FA;
     border-top: 1px solid #D1D9E0;
@@ -814,7 +814,7 @@ body {
 .task-actions {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 8px;
     align-items: center;
     margin-left: 8px;
     flex-shrink: 0;
@@ -863,7 +863,7 @@ body {
 .people-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     max-height: calc(100vh - 240px);
     overflow-y: auto;
     overflow-x: hidden;
@@ -1092,7 +1092,7 @@ body {
     
     .task-actions {
         flex-wrap: wrap;
-        gap: 4px;
+        gap: 8px;
     }
     
     .task-actions button {
@@ -1436,7 +1436,7 @@ body {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 12px;
+    gap: 8px;
     padding: 6px 4px;
 }
 
@@ -1449,7 +1449,7 @@ body {
     flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 /* Avatar fallback styles */
 .avatar-fallback {
