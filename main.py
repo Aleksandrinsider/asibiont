@@ -106,6 +106,22 @@ def run_migrations():
                 logger.info("Migration: photo_url column added successfully")
             else:
                 logger.info("Migration: photo_url column already exists")
+            
+            if 'updated_at' not in user_columns:
+                logger.info("Adding updated_at column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN updated_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: updated_at column added successfully")
+            else:
+                logger.info("Migration: updated_at column already exists")
+            
+            if 'invalid_chat' not in user_columns:
+                logger.info("Adding invalid_chat column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN invalid_chat BOOLEAN DEFAULT FALSE'))
+                session.commit()
+                logger.info("Migration: invalid_chat column added successfully")
+            else:
+                logger.info("Migration: invalid_chat column already exists")
         
         session.close()
     except Exception as e:

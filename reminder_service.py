@@ -391,7 +391,8 @@ class ReminderService:
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=job_id,
-                    replace_existing=True
+                    replace_existing=True,
+                    misfire_grace_time=30
                 )
                 logger.debug(f"Scheduled daily report for user {user.telegram_id}")
         finally:
@@ -485,7 +486,8 @@ class ReminderService:
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=job_id,
-                    replace_existing=True
+                    replace_existing=True,
+                    misfire_grace_time=30
                 )
                 logger.debug(f"Scheduled proactive check for user {user.telegram_id} with {PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES}min interval")
         finally:
@@ -641,7 +643,8 @@ class ReminderService:
                     timezone=user_tz,
                     args=[user.telegram_id],
                     id=job_id,
-                    replace_existing=True
+                    replace_existing=True,
+                    misfire_grace_time=30
                 )
                 logger.debug(f"Scheduled overdue check for user {user.telegram_id}")
         finally:
