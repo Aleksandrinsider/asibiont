@@ -1177,10 +1177,10 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
-# app.middlewares.append(logging_middleware)
-# app.middlewares.append(csp_middleware)
+app.middlewares.append(logging_middleware)
+app.middlewares.append(csp_middleware)
 
-# aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 
 async def yookassa_webhook(request):
     data = await request.json()
@@ -2005,8 +2005,8 @@ async def on_startup(app):
     storage = SimpleCookieStorage(cookie_name='session', **session_options)
     logger.info(f"Session storage initialized with SimpleCookieStorage, options: {session_options}")
     
-    # aiohttp_session.setup(app, storage)
-    # logger.info("Session middleware configured successfully")
+    aiohttp_session.setup(app, storage)
+    logger.info("Session middleware configured successfully")
     
     # Set webhook
     if not LOCAL:
