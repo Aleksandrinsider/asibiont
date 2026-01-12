@@ -151,12 +151,12 @@
                             var profileBtn = document.getElementById('profile-toggle-btn');
                             var svg = profileBtn ? profileBtn.querySelector('svg') : null;
                             
-                            if (isCollapsed === 'false') {
-                                profileEl.style.display = 'block';
-                                if (svg) svg.style.transform = 'rotate(0deg)';
-                            } else {
+                            if (isCollapsed === 'true') {
                                 profileEl.style.display = 'none';
                                 if (svg) svg.style.transform = 'rotate(-90deg)';
+                            } else {
+                                profileEl.style.display = 'block';
+                                if (svg) svg.style.transform = 'rotate(0deg)';
                             }
                         })();
                     </script>
