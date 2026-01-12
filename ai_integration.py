@@ -9,6 +9,9 @@ from cryptography.fernet import Fernet, InvalidToken
 from models import User, UserProfile
 import pytz
 
+cipher = Fernet(ENCRYPTION_KEY.encode())
+logger = logging.getLogger(__name__)
+
 # Импорт улучшенных функций промтов
 try:
     from improved_prompts_final import (
@@ -21,9 +24,6 @@ try:
 except ImportError:
     PROMPTS_V2_AVAILABLE = False
     logger.warning("[PROMPTS V2] improved_prompts_final.py not found, using legacy prompts")
-
-cipher = Fernet(ENCRYPTION_KEY.encode())
-logger = logging.getLogger(__name__)
 
 # Redis client - будет импортирован из main.py
 redis_client = None
