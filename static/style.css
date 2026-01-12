@@ -222,46 +222,34 @@ body {
 }
 
 .main-layout {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) minmax(600px, 2fr) minmax(300px, 1fr);
     height: 100%;
     gap: 20px;
     padding: 20px;
     overflow: hidden;
+    justify-items: stretch;
+    align-items: stretch;
 }
 
-.left-column {
-    flex: 1;
-    min-width: 280px;
-    max-width: 380px;
+.left-column,
+.right-column {
     display: flex;
     flex-direction: column;
-    height: auto;
-    max-height: calc(100vh - 80px);
+    gap: 20px;
+    padding: 20px;
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
     overflow: auto;
-    padding-bottom: 20px;
 }
 
 .center-column {
-    flex: 2;
-    min-width: 400px;
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 110px);
+    gap: 20px;
+    padding: 20px;
     overflow: hidden;
-    margin-top: 0px;
-    padding-bottom: 20px;
-}
-
-.right-column {
-    flex: 1;
-    min-width: 280px;
-    max-width: 380px;
-    display: flex;
-    flex-direction: column;
-    height: auto;
-    max-height: calc(100vh - 80px);
-    overflow: auto;
-    padding-bottom: 20px;
 }
 
 .left-column::-webkit-scrollbar,
@@ -1058,25 +1046,28 @@ body {
     }
     
     .main-layout {
-        flex-direction: column;
+        grid-template-columns: 1fr;
         gap: 20px;
+        justify-items: stretch;
+        align-items: stretch;
     }
     
     .left-column,
     .right-column {
         order: 2;
-        height: auto !important;
-        overflow-y: visible !important;
-        max-height: none !important;
-        min-width: unset;
-        max-width: unset;
-        flex: none;
+        gap: 20px;
+        padding: 20px;
+        background-color: #FFFFFF;
+        border: 1px solid #D1D9E0;
+        border-radius: 8px;
+        overflow: visible;
+        max-height: none;
     }
     
     .center-column {
         order: 1;
-        min-width: unset;
-        flex: none;
+        gap: 20px;
+        padding: 20px;
     }
     
     /* Скрыть чат в мобильной версии */
