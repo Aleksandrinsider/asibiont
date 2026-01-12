@@ -60,9 +60,9 @@
                 </span>
                 <div class="header-avatar-small" style="margin-left: 10px;">
                     {% if user_avatar_url %}
-                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
                     {% else %}
-                    <div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                     {% endif %}
                 </div>
                 <button onclick="logout()" class="logout-button">Выход</button>
@@ -830,7 +830,7 @@
                          onmouseover="this.style.background='#F6F8FA'" 
                          onmouseout="this.style.background='white'">
                         <img src="${photoUrl}" alt="${contact.first_name}" 
-                             style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                             style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-size: 14px; font-weight: 500; color: #24292F;">
                                 ${contact.first_name || contact.username}
@@ -1293,6 +1293,11 @@
         }
         
         function filterContacts(filterType) {
+            // Если фильтр уже активен, не делаем ничего
+            if (currentContactFilter === filterType) {
+                return;
+            }
+            
             currentContactFilter = filterType;
             
             // Сворачиваем профиль при клике на фильтр
@@ -1844,10 +1849,10 @@
                                 if (partner.photo_url) {
                                     const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
                                     html += '</div>';
                                 } else {
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">' + initial + '</div></a></div>';
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">' + initial + '</div></a></div>';
                                 }
                                 html += '<div style="flex: 1;">';
                                 html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
@@ -1918,10 +1923,10 @@
                                 if (partner.photo_url) {
                                     const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
                                     html += '</div>';
                                 } else {
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a></div>';
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a></div>';
                                 }
                                 html += '<div style="flex: 1;">';
                                 html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
@@ -1991,11 +1996,11 @@
                                 if (partner.photo_url) {
                                     const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="position: relative; display: inline-block;">';
-                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><img id="' + imgId + '" src="' + partner.photo_url + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" /></a>';
                                     html += '</div>';
                                 } else {
                                     html += '<div style="position: relative; display: inline-block;">';
-                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>';
+                                    html += '<a href="' + telegramUrl + '" target="_blank" style="text-decoration: none;"><div style="width: 40px; height: 40px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></a>';
                                     html += '</div>';
                                 }
                                 html += '</div>';
@@ -2136,11 +2141,11 @@
                 
                 if (contact.photo_url) {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: 6px; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
