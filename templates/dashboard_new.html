@@ -40,8 +40,8 @@
                 <!-- Поиск контактов -->
                 {% if logged_in %}
                 <div class="contact-search-desktop" style="margin-left: 20px; position: relative; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; padding: 10px 12px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" onclick="showSearchModal()">
-                    <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram: @ ..." 
-                        style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #59636E; font-weight: 500; cursor: pointer; pointer-events: none;"
+                    <input type="text" id="contact-search-input" placeholder="Поиск по нику в Telegram" 
+                        style="padding: 0; border: none; background: transparent; font-size: 13px; width: 200px; outline: none; color: #59636E; font-weight: 400; cursor: pointer; pointer-events: none;"
                         readonly>
                 </div>
                 
@@ -833,15 +833,15 @@
                             `<div style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; flex-shrink: 0;">${initials}</div>`
                         }
                         <div style="flex: 1; min-width: 0;">
-                            <div style="font-size: 14px; font-weight: 600; color: #24292F; margin-bottom: 2px;">
+                            <div style="font-size: 14px; font-weight: 400; color: #24292F; margin-bottom: 2px;">
                                 ${contact.first_name || contact.username}
                             </div>
-                            <div style="font-size: 13px; color: #656D76; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                            <div style="font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                                 <span>@${contact.username}</span>
                                 ${contact.city ? `<span>· ${contact.city}</span>` : ''}
                             </div>
                             ${contact.bio ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px; line-height: 1.4;">${contact.bio}</div>` : ''}
-                            ${contact.interests ? `<div style="font-size: 11px; color: #656D76; background: #F6F8FA; padding: 3px 6px; border-radius: 3px; display: inline-block; margin-bottom: 2px;">${contact.interests}</div>` : ''}
+                            ${contact.interests ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px;">${contact.interests}</div>` : ''}
                             <div style="margin-top: 2px;"><span style="font-size: 12px; color: ${ratingColor};">${ratingText}</span></div>
                         </div>
                         <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0;">
