@@ -142,9 +142,9 @@
                                     <!-- Основной аватар -->
                                     <div style="z-index: 10; margin-top: 10px;">
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0;">
+                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
                                         {% else %}
-                                        <div style="width: 64px; height: 64px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                     </div>
                                     
@@ -1362,19 +1362,8 @@
                 allContacts.push(contactData);
             });
             
-            // Убираем дубликаты по username
-            const uniqueContacts = [];
-            const seenUsernames = new Set();
-            
-            allContacts.forEach(contact => {
-                if (!seenUsernames.has(contact.username)) {
-                    seenUsernames.add(contact.username);
-                    uniqueContacts.push(contact);
-                }
-            });
-            
             // Применяем фильтр: показываем только соответствующие типу
-            uniqueContacts.forEach(contact => {
+            allContacts.forEach(contact => {
                 const element = contact.element;
                 if (currentContactFilter === 'all') {
                     element.style.display = 'flex';
@@ -2129,11 +2118,11 @@
                 
                 if (contact.photo_url) {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: 6px; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
@@ -2326,10 +2315,10 @@
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
-                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 8px; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
+                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
                         } else {
                             const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
-                            html += '<div style="width: 64px; height: 64px; border-radius: 8px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
+                            html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">' + (data.profile.first_name || 'Пользователь') + '</p>';
                         html += '<p style="margin: 0; color: #656D76; font-size: 14px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
