@@ -232,6 +232,8 @@ async def chat_handler(message: Message):
     user_id = message.from_user.id
     message_id = message.message_id
     
+    logger.info(f"[HANDLER] chat_handler called: message_id={message_id}, user={user_id}, text={message.text[:30] if message.text else 'NO_TEXT'}")
+    
     # Обработка голосовых сообщений
     if message.voice:
         logger.info(f"[VOICE] Received voice message from user {user_id}")
@@ -319,11 +321,11 @@ async def process_text_message(user_id, text, message, state):
             logger.debug(f"[REDIS] Checking duplicate for key: {message_key}")
             is_duplicate = await redis_client.exists(message_key)
             if is_duplicate:
-                logger.warning(f"[DUPLICATE] Message {message_id} from user {user_id} IGNORED (already processed)")
+                logger.warning(f"[DUPLICATE BLOCKED] Message {message_id} from user {user_id} IGNORED (already processed)")
                 return
             # Set key with short expiration
             await redis_client.set(message_key, "1", ex=60)
-            logger.info(f"[REDIS] Marked message {message_id} as processed")
+            logger.info(f"[REDIS OK] Marked message {message_id} as processed, will respond")
         else:
             logger.warning(f"[NO REDIS] Cannot prevent duplicates for message {message_id}")
         
@@ -405,8 +407,9 @@ async def process_text_message(user_id, text, message, state):
         
         if response and response.strip():
             try:
+                logger.info(f"[SENDING] Sending response to user {user_id}, chat {message.chat.id}, message_id={message_id}")
                 await message.bot.send_message(message.chat.id, response.strip())
-                logger.info(f"Response sent successfully to user {user_id}")
+                logger.info(f"[SENT OK] Response sent successfully to user {user_id}")
             except Exception as e:
                 logger.error(f"Error sending message to {message.chat.id}: {e}")
                 await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при отправке ответа.")
