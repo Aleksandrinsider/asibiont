@@ -166,11 +166,37 @@ def add_test_sport_users():
         session.close()
     except Exception as e:
         logger.error(f"Failed to add test sport users: {e}")
+
+def ensure_sport_interest():
+    """Добавляет 'спорт' к интересам всех пользователей если его нет"""
+    try:
+        session = Session()
+        profiles = session.query(UserProfile).all()
+        updated = 0
+        for profile in profiles:
+            if profile.interests:
+                interests_lower = profile.interests.lower()
+                if 'спорт' not in interests_lower:
+                    profile.interests = profile.interests + ', спорт'
+                    updated += 1
+            else:
+                profile.interests = 'спорт'
+                updated += 1
+        
+        if updated > 0:
+            session.commit()
+            logger.info(f"Added 'спорт' interest to {updated} user profiles")
+        else:
+            logger.info("All users already have 'спорт' interest")
+        session.close()
+    except Exception as e:
+        logger.error(f"Failed to add sport interest: {e}")
         
 try:
     run_migrations()
     logger.info("Database migrations completed")
     add_test_sport_users()
+    ensure_sport_interest()
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}")
 
