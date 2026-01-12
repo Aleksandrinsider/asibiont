@@ -9,6 +9,19 @@ from cryptography.fernet import Fernet, InvalidToken
 from models import User, UserProfile
 import pytz
 
+# Импорт улучшенных функций промтов
+try:
+    from improved_prompts_final import (
+        get_optimized_prompt_final,
+        improved_classify_intent,
+        improved_fallback
+    )
+    PROMPTS_V2_AVAILABLE = True
+    logger.info("[PROMPTS V2] Loaded improved_prompts_final.py successfully")
+except ImportError:
+    PROMPTS_V2_AVAILABLE = False
+    logger.warning("[PROMPTS V2] improved_prompts_final.py not found, using legacy prompts")
+
 cipher = Fernet(ENCRYPTION_KEY.encode())
 logger = logging.getLogger(__name__)
 
@@ -4398,8 +4411,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
             db_session.close()
 
-        # Classify user intent
-        intent = classify_user_intent(clean_message, mentions_str)
+        # Classify user intent (use improved version if available)
+        if PROMPTS_V2_AVAILABLE:
+            intent = improved_classify_intent(clean_message, mentions_str)
+            logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
+        else:
+            intent = classify_user_intent(clean_message, mentions_str)
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
@@ -4417,15 +4434,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
-        system_prompt = get_extended_system_prompt(
-            user_now=user_now,
-            current_time_str=current_time_str,
-            user_username=user_username,
-            mentions_str=mentions_str,
-            user_memory=user_memory,
-            context=context,
-            intent=intent
-        )
+        # Use improved prompt system if available
+        if PROMPTS_V2_AVAILABLE:
+            system_prompt = get_optimized_prompt_final(
+                user_now, current_time_str, user_username, mentions_str, user_memory
+            )
+            logger.info("[PROMPTS V2] Using optimized prompt system")
+        else:
+            system_prompt = get_extended_system_prompt(
+                user_now=user_now,
+                current_time_str=current_time_str,
+                user_username=user_username,
+                mentions_str=mentions_str,
+                user_memory=user_memory,
+                context=context,
+                intent=intent
+            )
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -4829,11 +4853,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     logger.info("[AI ONLY] All requests handled by AI without forced triggers")
                     print(f"[DEBUG] About to check fallback, content='{content[:50]}...'")  # DEBUG
 
-                    # SMART FALLBACK: Проверяем, нужно ли применить умный fallback
-                    print(f"[DEBUG] Calling smart_fallback_handler...")  # DEBUG
-                    print(f"[DEBUG] About to call smart_fallback_handler, content='{content[:50]}...'")  # DEBUG
+                    # SMART FALLBACK: Проверяем, нужно ли применить умный fallback (use improved version if available)
+                    print(f"[DEBUG] Calling fallback handler...")  # DEBUG
+                    print(f"[DEBUG] About to call fallback handler, content='{content[:50]}...'")  # DEBUG
                     try:
-                        fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
+                        if PROMPTS_V2_AVAILABLE:
+                            fallback_result = improved_fallback(
+                                intent, tool_calls if 'tool_calls' in locals() else None, 
+                                content, original_message, user_id
+                            )
+                            logger.info(f"[PROMPTS V2] Fallback actions: {len(fallback_result)}")
+                        else:
+                            fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
                         print(
                             f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
                         )  # DEBUG
