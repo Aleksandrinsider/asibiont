@@ -222,17 +222,40 @@ body {
 }
 
 .main-layout {
-    display: grid;
-    grid-template-columns: 1.5fr 2fr 1.5fr;
+    display: flex;
     height: 100%;
-    column-gap: clamp(8px, 2vw, 16px);
+    gap: clamp(8px, 2vw, 16px);
     padding: 35px clamp(8px, 2vw, 16px) 20px clamp(8px, 2vw, 16px);
-    align-items: stretch;
     overflow: hidden;
 }
 
-.left-column,
+.left-column {
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    padding-bottom: 10px;
+}
+
+.center-column {
+    flex: 2;
+    min-width: 400px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 110px);
+    overflow: hidden;
+    margin-top: 0px;
+    padding-bottom: 20px;
+}
+
 .right-column {
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
     display: flex;
     flex-direction: column;
     height: auto;
@@ -1035,7 +1058,7 @@ body {
     }
     
     .main-layout {
-        grid-template-columns: 1fr;
+        flex-direction: column;
         gap: 12px;
     }
     
@@ -1045,6 +1068,15 @@ body {
         height: auto !important;
         overflow-y: visible !important;
         max-height: none !important;
+        min-width: unset;
+        max-width: unset;
+        flex: none;
+    }
+    
+    .center-column {
+        order: 1;
+        min-width: unset;
+        flex: none;
     }
     
     /* Скрыть чат в мобильной версии */
