@@ -5,6 +5,18 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
+button {
+    outline: none;
+}
+
+button:focus {
+    outline: none;
+}
+
+button:active {
+    outline: none;
+}
+
 body {
     background-color: #FFFFFF;
     color: #1F2328;
