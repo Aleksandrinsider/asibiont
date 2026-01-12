@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+п»ї<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASI Biont - Дашборд</title>
+    <title>ASI Biont - Р”Р°С€Р±РѕСЂРґ</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -37,21 +37,21 @@
         <div class="header-content">
             <div class="header-left">
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo">ASI Biont</a>
-                <!-- Поиск контактов -->
+                <!-- РџРѕРёСЃРє РєРѕРЅС‚Р°РєС‚РѕРІ -->
                 {% if logged_in %}
                 <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="opacity: 0.7;">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
                     </svg>
-                    Поиск по нику в Telegram
+                    РџРѕРёСЃРє РїРѕ РЅРёРєСѓ РІ Telegram
                 </button>
                 
-                <!-- Модальное окно поиска -->
+                <!-- РњРѕРґР°Р»СЊРЅРѕРµ РѕРєРЅРѕ РїРѕРёСЃРєР° -->
                 <div id="search-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 2000; justify-content: center; align-items: center;" onclick="closeSearchModal(event)">
                     <div style="background: #FFFFFF; border-radius: 6px; width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(0,0,0,0.15); border: 1px solid #D1D9E0;" onclick="event.stopPropagation()">
-                        <!-- Заголовок -->
+                        <!-- Р—Р°РіРѕР»РѕРІРѕРє -->
                         <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: space-between; background: #F6F8FA;">
-                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #24292F;">Поиск контактов</h3>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #24292F;">РџРѕРёСЃРє РєРѕРЅС‚Р°РєС‚РѕРІ</h3>
                             <button onclick="closeSearchModal()" style="background: none; border: none; cursor: pointer; color: #656D76; font-size: 20px; line-height: 1; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s;"
                                     onmouseover="this.style.background='#EAEEF2'"
                                     onmouseout="this.style.background='none'">
@@ -59,20 +59,20 @@
                             </button>
                         </div>
                         
-                        <!-- Поле поиска -->
+                        <!-- РџРѕР»Рµ РїРѕРёСЃРєР° -->
                         <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; background: white;">
-                            <input type="text" id="modal-search-input" placeholder="Введите никнейм в Telegram (например, @username)" 
+                            <input type="text" id="modal-search-input" placeholder="Р’РІРµРґРёС‚Рµ РЅРёРєРЅРµР№Рј РІ Telegram (РЅР°РїСЂРёРјРµСЂ, @username)" 
                                 style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; outline: none; color: #24292F; background: white;"
                                 onkeyup="searchContactsInModal(event)">
                         </div>
                         
-                        <!-- Результаты -->
+                        <!-- Р РµР·СѓР»СЊС‚Р°С‚С‹ -->
                         <div id="modal-search-results" style="flex: 1; overflow-y: auto; padding: 16px 20px; background: white; scrollbar-width: thin; scrollbar-color: #D1D9E0 transparent;">
                             <div style="text-align: center; color: #656D76; padding: 40px 20px;">
                                 <svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;">
                                     <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
                                 </svg>
-                                <div style="font-size: 13px;">Начните вводить никнейм для поиска</div>
+                                <div style="font-size: 13px;">РќР°С‡РЅРёС‚Рµ РІРІРѕРґРёС‚СЊ РЅРёРєРЅРµР№Рј РґР»СЏ РїРѕРёСЃРєР°</div>
                             </div>
                         </div>
                     </div>
@@ -81,22 +81,22 @@
             </div>
             <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 13px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
                 <span class="reminder-pulse"></span>
-                На очереди: <span id="next-task-text"></span>
+                РќР° РѕС‡РµСЂРµРґРё: <span id="next-task-text"></span>
             </div>
             <div class="header-info">
                 {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
-                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px;">изменить</a>
-                    <span id="header-time-display" style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
+                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px;">РёР·РјРµРЅРёС‚СЊ</a>
+                    <span id="header-time-display" style="margin-right: 5px;">{{ current_time }} В· {{ current_date }}</span>
                 </span>
                 <div class="header-avatar-small" style="margin-left: 10px;">
                     {% if user_avatar_url %}
-                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                    <img src="{{ user_avatar_url }}" alt="РђРІР°С‚Р°СЂ" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
                     {% else %}
                     <div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                     {% endif %}
                 </div>
-                <button onclick="logout()" class="logout-button">Выход</button>
+                <button onclick="logout()" class="logout-button">Р’С‹С…РѕРґ</button>
                 {% endif %}
             </div>
         </div>
@@ -106,9 +106,9 @@
         <div class="welcome-section">
             <div class="welcome-content">
                 <h1 style="margin-bottom: 20px; font-size: 24px; color: #1F2328;">ASI BIONT</h1>
-                <p style="margin-bottom: 20px; color: #1F2328; line-height: 1.4;">Лаборатория искусственного интеллекта ASI Biont — закрытое сообщество для тех, кто создаёт будущее. Здесь нет места скучным знакомствам — только те, кто идёт в том же направлении.</p>
-                <p style="margin-bottom: 30px; color: #1F2328; line-height: 1.4;">Забудьте про мёртвые контакты и случайные связи. В ASI Biont вас окружают единомышленники, с которыми можно запустить крутой проект, достичь целей или просто весело провести время.</p>
-                <p style="margin-bottom: 20px; color: #656D76; font-size: 13px;">Авторизуйтесь через Telegram для начала</p>
+                <p style="margin-bottom: 20px; color: #1F2328; line-height: 1.4;">Р›Р°Р±РѕСЂР°С‚РѕСЂРёСЏ РёСЃРєСѓСЃСЃС‚РІРµРЅРЅРѕРіРѕ РёРЅС‚РµР»Р»РµРєС‚Р° ASI Biont вЂ” Р·Р°РєСЂС‹С‚РѕРµ СЃРѕРѕР±С‰РµСЃС‚РІРѕ РґР»СЏ С‚РµС…, РєС‚Рѕ СЃРѕР·РґР°С‘С‚ Р±СѓРґСѓС‰РµРµ. Р—РґРµСЃСЊ РЅРµС‚ РјРµСЃС‚Р° СЃРєСѓС‡РЅС‹Рј Р·РЅР°РєРѕРјСЃС‚РІР°Рј вЂ” С‚РѕР»СЊРєРѕ С‚Рµ, РєС‚Рѕ РёРґС‘С‚ РІ С‚РѕРј Р¶Рµ РЅР°РїСЂР°РІР»РµРЅРёРё.</p>
+                <p style="margin-bottom: 30px; color: #1F2328; line-height: 1.4;">Р—Р°Р±СѓРґСЊС‚Рµ РїСЂРѕ РјС‘СЂС‚РІС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ Рё СЃР»СѓС‡Р°Р№РЅС‹Рµ СЃРІСЏР·Рё. Р’ ASI Biont РІР°СЃ РѕРєСЂСѓР¶Р°СЋС‚ РµРґРёРЅРѕРјС‹С€Р»РµРЅРЅРёРєРё, СЃ РєРѕС‚РѕСЂС‹РјРё РјРѕР¶РЅРѕ Р·Р°РїСѓСЃС‚РёС‚СЊ РєСЂСѓС‚РѕР№ РїСЂРѕРµРєС‚, РґРѕСЃС‚РёС‡СЊ С†РµР»РµР№ РёР»Рё РїСЂРѕСЃС‚Рѕ РІРµСЃРµР»Рѕ РїСЂРѕРІРµСЃС‚Рё РІСЂРµРјСЏ.</p>
+                <p style="margin-bottom: 20px; color: #656D76; font-size: 13px;">РђРІС‚РѕСЂРёР·СѓР№С‚РµСЃСЊ С‡РµСЂРµР· Telegram РґР»СЏ РЅР°С‡Р°Р»Р°</p>
                 <div style="display: flex; justify-content: center; margin-top: 20px;">
                     <script async src="https://telegram.org/js/telegram-widget.js?22" 
                             data-telegram-login="{{ bot_username }}" 
@@ -131,11 +131,11 @@
         </div>
         {% else %}
         <div class="main-layout">
-            <!-- Левая колонка - Люди -->
+            <!-- Р›РµРІР°СЏ РєРѕР»РѕРЅРєР° - Р›СЋРґРё -->
             <div class="left-column">
                 <div class="context-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Профиль</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">РџСЂРѕС„РёР»СЊ</h3>
                         <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -144,7 +144,7 @@
                     </div>
                     <div id="profile-content" class="profile-content" style="display: none; margin-bottom: 15px;">
                     <script>
-                        // Немедленно устанавливаем правильное состояние профиля (до полной загрузки страницы)
+                        // РќРµРјРµРґР»РµРЅРЅРѕ СѓСЃС‚Р°РЅР°РІР»РёРІР°РµРј РїСЂР°РІРёР»СЊРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РїСЂРѕС„РёР»СЏ (РґРѕ РїРѕР»РЅРѕР№ Р·Р°РіСЂСѓР·РєРё СЃС‚СЂР°РЅРёС†С‹)
                         (function() {
                             var isCollapsed = localStorage.getItem('profileCollapsed');
                             var profileEl = document.getElementById('profile-content');
@@ -162,124 +162,124 @@
                     </script>
                         {% if profile %}
                         <div class="context-item">
-                            <!-- Профиль с окружением -->
+                            <!-- РџСЂРѕС„РёР»СЊ СЃ РѕРєСЂСѓР¶РµРЅРёРµРј -->
                             <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
-                                <!-- Ряд с аватарами -->
+                                <!-- Р СЏРґ СЃ Р°РІР°С‚Р°СЂР°РјРё -->
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 8px;">
-                                    <!-- Контакты слева -->
+                                    <!-- РљРѕРЅС‚Р°РєС‚С‹ СЃР»РµРІР° -->
                                     <div id="circle-contacts-left" style="display: flex; gap: 4px; align-items: center;">
                                     </div>
                                     
-                                    <!-- Основной аватар -->
+                                    <!-- РћСЃРЅРѕРІРЅРѕР№ Р°РІР°С‚Р°СЂ -->
                                     <div style="z-index: 10; margin-top: 10px;">
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
+                                        <img src="{{ user_avatar_url }}" alt="РђРІР°С‚Р°СЂ" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
                                         {% else %}
                                         <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                     </div>
                                     
-                                    <!-- Контакты справа -->
+                                    <!-- РљРѕРЅС‚Р°РєС‚С‹ СЃРїСЂР°РІР° -->
                                     <div id="circle-contacts-right" style="display: flex; gap: 4px; align-items: center;">
                                     </div>
                                 </div>
                                 
-                                <!-- Имя и ник под аватаром -->
-                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">{{ user.first_name or 'Пользователь' }}</p>
-                                <p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
+                                <!-- РРјСЏ Рё РЅРёРє РїРѕРґ Р°РІР°С‚Р°СЂРѕРј -->
+                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">{{ user.first_name or 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ' }}</p>
+                                <p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'РЅРµРёР·РІРµСЃС‚РµРЅ' }}</p>
                             </div>
-                            <p>Город: {{ profile.city or 'Не указан' }}</p>
-                            <p>Компания: {{ profile.company or 'Не указана' }}</p>
-                            <p>Должность: {{ profile.position or 'Не указана' }}</p>
-                            <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
-                            <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
-                            <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
-                            <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
-                            <p>Чем могу помочь: {{ profile.bio or 'Не указано' }}</p>
+                            <p>Р“РѕСЂРѕРґ: {{ profile.city or 'РќРµ СѓРєР°Р·Р°РЅ' }}</p>
+                            <p>РљРѕРјРїР°РЅРёСЏ: {{ profile.company or 'РќРµ СѓРєР°Р·Р°РЅР°' }}</p>
+                            <p>Р”РѕР»Р¶РЅРѕСЃС‚СЊ: {{ profile.position or 'РќРµ СѓРєР°Р·Р°РЅР°' }}</p>
+                            <p>Р¦РµР»Рё: {{ profile.goals or 'РќРµ СѓРєР°Р·Р°РЅС‹' }}</p>
+                            <p>РќР°РІС‹РєРё: {{ profile.skills or 'РќРµ СѓРєР°Р·Р°РЅС‹' }}</p>
+                            <p>РРЅС‚РµСЂРµСЃС‹: {{ profile.interests or 'РќРµ СѓРєР°Р·Р°РЅС‹' }}</p>
+                            <p>РЇР·С‹РєРё: {{ profile.languages or 'РќРµ СѓРєР°Р·Р°РЅС‹' }}</p>
+                            <p>Р§РµРј РјРѕРіСѓ РїРѕРјРѕС‡СЊ: {{ profile.bio or 'РќРµ СѓРєР°Р·Р°РЅРѕ' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
-                            <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
+                            <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Р РµРєРѕРјРµРЅРґР°С†РёСЏ: {{ profile.average_rating }}/10</p>
                             {% else %}
-                            <p>Рекомендация: нет рекомендаций</p>
+                            <p>Р РµРєРѕРјРµРЅРґР°С†РёСЏ: РЅРµС‚ СЂРµРєРѕРјРµРЅРґР°С†РёР№</p>
                             {% endif %}
                             {% if formatted_end_date %}
-                            <p style="margin-bottom: 20px;">Подписка: активна до {{ formatted_end_date }} 
-                                <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: none; margin-left: 8px;">продлить</a>
+                            <p style="margin-bottom: 20px;">РџРѕРґРїРёСЃРєР°: Р°РєС‚РёРІРЅР° РґРѕ {{ formatted_end_date }} 
+                                <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: none; margin-left: 8px;">РїСЂРѕРґР»РёС‚СЊ</a>
                             </p>
                             {% else %}
-                            <p style="margin-bottom: 20px;">Подписка: информация загружается...</p>
+                            <p style="margin-bottom: 20px;">РџРѕРґРїРёСЃРєР°: РёРЅС„РѕСЂРјР°С†РёСЏ Р·Р°РіСЂСѓР¶Р°РµС‚СЃСЏ...</p>
                             {% endif %}
                         </div>
                         {% else %}
-                        <p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>
+                        <p style="margin: 0; color: #656D76; font-size: 13px;">Р’Р°С€ РїСЂРѕС„РёР»СЊ РµС‰Рµ РЅРµ РЅР°СЃС‚СЂРѕРµРЅ.<br>РќР°РїРёС€РёС‚Рµ РІ С‡Р°С‚, С‡С‚РѕР±С‹ Р·Р°РїРѕР»РЅРёС‚СЊ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ СЃРµР±Рµ Рё РЅР°С‡Р°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РІСЃРµРјРё С„СѓРЅРєС†РёСЏРјРё.</p>
                         {% endif %}
                     </div>
                 </div>
 
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Контакты</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">РљРѕРЅС‚Р°РєС‚С‹</h3>
                     </div>
                     <div style="margin-bottom: 32px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Мои</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 13px; font-weight: 600;">Рекомендуемые</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Делегируют мне</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Делегирую я</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">РњРѕРё</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 13px; font-weight: 600;">Р РµРєРѕРјРµРЅРґСѓРµРјС‹Рµ</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Р”РµР»РµРіРёСЂСѓСЋС‚ РјРЅРµ</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Р”РµР»РµРіРёСЂСѓСЋ СЏ</button>
                     </div>
                     <div class="people-list" id="people-list">
-                        <!-- Контакты будут загружены динамически -->
+                        <!-- РљРѕРЅС‚Р°РєС‚С‹ Р±СѓРґСѓС‚ Р·Р°РіСЂСѓР¶РµРЅС‹ РґРёРЅР°РјРёС‡РµСЃРєРё -->
                     </div>
                 </div>
             </div>
 
-            <!-- Центральная колонка - Чат -->
+            <!-- Р¦РµРЅС‚СЂР°Р»СЊРЅР°СЏ РєРѕР»РѕРЅРєР° - Р§Р°С‚ -->
             <div class="center-column">
                 <div class="chat-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 15px 0; padding: 0 16px 10px 16px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Чат с ИИ</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Р§Р°С‚ СЃ РР</h3>
                     </div>
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
-                            <p>?? Добро пожаловать! Войдите для общения с AI.</p>
-                            <button onclick="login()">Войти</button>
+                            <p>?? Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ! Р’РѕР№РґРёС‚Рµ РґР»СЏ РѕР±С‰РµРЅРёСЏ СЃ AI.</p>
+                            <button onclick="login()">Р’РѕР№С‚Рё</button>
                         </div>
                         {% endif %}
                     </div>
                     {% if logged_in %}
                     <div class="chat-input">
-                        <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
+                        <input type="text" id="message-input" placeholder="РЎРѕРѕР±С‰РµРЅРёРµ..." onkeypress="handleKeyPress(event)">
                         <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
                         <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn" style="padding: 10px; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                            <img src="https://cdn-icons-png.flaticon.com/512/1082/1082810.png" alt="Голосовое общение" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
+                            <img src="https://cdn-icons-png.flaticon.com/512/1082/1082810.png" alt="Р“РѕР»РѕСЃРѕРІРѕРµ РѕР±С‰РµРЅРёРµ" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
                         <button onclick="document.getElementById('file-input').click()" class="chat-action-btn" style="padding: 10px; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                            <img src="https://cdn-icons-png.flaticon.com/512/229/229930.png" alt="Прикрепить файл" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
+                            <img src="https://cdn-icons-png.flaticon.com/512/229/229930.png" alt="РџСЂРёРєСЂРµРїРёС‚СЊ С„Р°Р№Р»" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
                         <button onclick="clearChatHistory()" class="chat-action-btn" style="padding: 10px; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                            <img src="https://cdn-icons-png.flaticon.com/512/3096/3096673.png" alt="Очистить чат" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
+                            <img src="https://cdn-icons-png.flaticon.com/512/3096/3096673.png" alt="РћС‡РёСЃС‚РёС‚СЊ С‡Р°С‚" style="width: 18px; height: 18px; vertical-align: middle; filter: brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%);">
                         </button>
-                        <button onclick="sendChatMessage()">Отправить</button>
+                        <button onclick="sendChatMessage()">РћС‚РїСЂР°РІРёС‚СЊ</button>
                     </div>
                     {% endif %}
                 </div>
 
-                <!-- Информационная панель -->
+                <!-- РРЅС„РѕСЂРјР°С†РёРѕРЅРЅР°СЏ РїР°РЅРµР»СЊ -->
                 <div style="background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; padding: 10px 16px; margin-top: -10px; display: flex; align-items: center; justify-content: space-between;">
-                    <span style="color: #656D76; font-size: 13px;">Есть вопросы? Обращайтесь в поддержку</span>
-                    <button onclick="openSupport()" class="quick-action" style="color: #656D76; font-weight: 400;">Поддержка</button>
+                    <span style="color: #656D76; font-size: 13px;">Р•СЃС‚СЊ РІРѕРїСЂРѕСЃС‹? РћР±СЂР°С‰Р°Р№С‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ</span>
+                    <button onclick="openSupport()" class="quick-action" style="color: #656D76; font-weight: 400;">РџРѕРґРґРµСЂР¶РєР°</button>
                 </div>
             </div>
 
-            <!-- Правая колонка - Задачи -->
+            <!-- РџСЂР°РІР°СЏ РєРѕР»РѕРЅРєР° - Р—Р°РґР°С‡Рё -->
             {% if logged_in %}
             <div class="right-column">
-                <!-- Блок статистики -->
+                <!-- Р‘Р»РѕРє СЃС‚Р°С‚РёСЃС‚РёРєРё -->
                 <div class="task-stats-block">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Статистика</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">РЎС‚Р°С‚РёСЃС‚РёРєР°</h3>
                         <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -288,14 +288,14 @@
                     </div>
                     <div id="stats-content" class="stats-content">
                         <div class="task-stats">
-                            <div class="stats-text">Статистика по задачам: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
+                            <div class="stats-text">РЎС‚Р°С‚РёСЃС‚РёРєР° РїРѕ Р·Р°РґР°С‡Р°Рј: <span id="completed-count">0</span> / <span id="total-count">{% if tasks %}{{ tasks|length }}{% else %}0{% endif %}</span></div>
                             <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                             <div class="stats-text" style="margin-top: 8px;">
                                 <div id="today-stats"></div>
                             </div>
                             <div class="week-timeline" style="margin-top: 24px;">
                                 <div style="display: flex; justify-content: space-between; gap: 4px;" id="week-days">
-                                    <!-- Дни недели будут добавлены через JS -->
+                                    <!-- Р”РЅРё РЅРµРґРµР»Рё Р±СѓРґСѓС‚ РґРѕР±Р°РІР»РµРЅС‹ С‡РµСЂРµР· JS -->
                                 </div>
                             </div>
                         </div>
@@ -303,27 +303,27 @@
                 </div>
                 
 
-                <!-- Блок списка задач -->
+                <!-- Р‘Р»РѕРє СЃРїРёСЃРєР° Р·Р°РґР°С‡ -->
                 <div class="tasks-section-wrapper">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Задачи</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Р—Р°РґР°С‡Рё</h3>
                     </div>
                     <div style="margin-bottom: 22px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 13px; font-weight: 500;">Все задачи</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Личные задачи</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Назначенные мне</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Назначенные мной</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">С отставанием</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Завершенные</button>
+                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 13px; font-weight: 500;">Р’СЃРµ Р·Р°РґР°С‡Рё</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Р›РёС‡РЅС‹Рµ Р·Р°РґР°С‡Рё</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">РќР°Р·РЅР°С‡РµРЅРЅС‹Рµ РјРЅРµ</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">РќР°Р·РЅР°С‡РµРЅРЅС‹Рµ РјРЅРѕР№</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">РЎ РѕС‚СЃС‚Р°РІР°РЅРёРµРј</button>
+                        <span style="color: #D1D9E0;">В·</span>
+                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Р—Р°РІРµСЂС€РµРЅРЅС‹Рµ</button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container">
                         <div class="task-groups" id="task-groups">
-                            <!-- Задачи будут сгруппированы по срокам -->
+                            <!-- Р—Р°РґР°С‡Рё Р±СѓРґСѓС‚ СЃРіСЂСѓРїРїРёСЂРѕРІР°РЅС‹ РїРѕ СЃСЂРѕРєР°Рј -->
                         </div>
                     </div>
                 </div>
@@ -337,13 +337,13 @@
     <div id="rating-modal" class="rating-modal">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3>Рекомендовать контакт</h3>
+                <h3>Р РµРєРѕРјРµРЅРґРѕРІР°С‚СЊ РєРѕРЅС‚Р°РєС‚</h3>
                 <button onclick="closeRatingModal()" class="rating-close-btn">?</button>
             </div>
             <div class="rating-modal-body">
-                <p>Рекомендуете <span id="rating-username" style="font-weight: 600; color: #068487;"></span></p>
-                <p style="font-size: 12px; color: #59636E; margin-bottom: 8px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
-                <p style="font-size: 12px; color: #D7AC0C; margin-bottom: 16px;">Уровень рекомендации влияет на продвижение контакта</p>
+                <p>Р РµРєРѕРјРµРЅРґСѓРµС‚Рµ <span id="rating-username" style="font-weight: 600; color: #068487;"></span></p>
+                <p style="font-size: 12px; color: #59636E; margin-bottom: 8px;">1 - РѕС‡РµРЅСЊ РїР»РѕС…Р°СЏ СЂРµРєРѕРјРµРЅРґР°С†РёСЏ, 10 - РѕС‚Р»РёС‡РЅР°СЏ СЂРµРєРѕРјРµРЅРґР°С†РёСЏ</p>
+                <p style="font-size: 12px; color: #D7AC0C; margin-bottom: 16px;">РЈСЂРѕРІРµРЅСЊ СЂРµРєРѕРјРµРЅРґР°С†РёРё РІР»РёСЏРµС‚ РЅР° РїСЂРѕРґРІРёР¶РµРЅРёРµ РєРѕРЅС‚Р°РєС‚Р°</p>
                 <div class="rating-slider-container">
                     <input type="range" id="rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="updateRatingValue(this.value)">
                     <div class="rating-value-display">
@@ -351,8 +351,8 @@
                     </div>
                 </div>
                 <div class="rating-modal-actions">
-                    <button onclick="closeRatingModal()" class="rating-cancel-btn">Отмена</button>
-                    <button onclick="submitRating()" class="rating-submit-btn">Рекомендовать</button>
+                    <button onclick="closeRatingModal()" class="rating-cancel-btn">РћС‚РјРµРЅР°</button>
+                    <button onclick="submitRating()" class="rating-submit-btn">Р РµРєРѕРјРµРЅРґРѕРІР°С‚СЊ</button>
                 </div>
             </div>
         </div>
@@ -362,57 +362,57 @@
     <div id="time-modal" class="rating-modal">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3>Изменить местное время</h3>
+                <h3>РР·РјРµРЅРёС‚СЊ РјРµСЃС‚РЅРѕРµ РІСЂРµРјСЏ</h3>
                 <button onclick="closeTimeModal()" class="rating-close-btn">?</button>
             </div>
             <div class="rating-modal-body">
-                <p style="font-size: 13px; color: #59636E; margin-bottom: 16px;">Введите ваше текущее местное время</p>
+                <p style="font-size: 13px; color: #59636E; margin-bottom: 16px;">Р’РІРµРґРёС‚Рµ РІР°С€Рµ С‚РµРєСѓС‰РµРµ РјРµСЃС‚РЅРѕРµ РІСЂРµРјСЏ</p>
                 <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-size: 13px; color: #59636E; margin-bottom: 6px;">(например, 20:30 или 8:30 PM)</label>
+                    <label style="display: block; font-size: 13px; color: #59636E; margin-bottom: 6px;">(РЅР°РїСЂРёРјРµСЂ, 20:30 РёР»Рё 8:30 PM)</label>
                     <input type="text" id="time-input" placeholder="20:30" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
                 </div>
                 <div class="rating-modal-actions">
-                    <button onclick="closeTimeModal()" class="rating-cancel-btn">Отмена</button>
-                    <button onclick="submitTimeChange()" class="rating-submit-btn">Сохранить</button>
+                    <button onclick="closeTimeModal()" class="rating-cancel-btn">РћС‚РјРµРЅР°</button>
+                    <button onclick="submitTimeChange()" class="rating-submit-btn">РЎРѕС…СЂР°РЅРёС‚СЊ</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        let currentTaskFilter = 'all'; // Текущий фильтр задач
-        let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
+        let currentTaskFilter = 'all'; // РўРµРєСѓС‰РёР№ С„РёР»СЊС‚СЂ Р·Р°РґР°С‡
+        let currentContactFilter = 'recommended'; // РўРµРєСѓС‰РёР№ С„РёР»СЊС‚СЂ РєРѕРЅС‚Р°РєС‚РѕРІ - РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ СЂРµРєРѕРјРµРЅРґСѓРµРјС‹Рµ
         
-        // Функция склонения слова "задача"
+        // Р¤СѓРЅРєС†РёСЏ СЃРєР»РѕРЅРµРЅРёСЏ СЃР»РѕРІР° "Р·Р°РґР°С‡Р°"
         function pluralizeTask(count) {
             const lastDigit = count % 10;
             const lastTwoDigits = count % 100;
             
             if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
-                return 'задач';
+                return 'Р·Р°РґР°С‡';
             }
             if (lastDigit === 1) {
-                return 'задачу';
+                return 'Р·Р°РґР°С‡Сѓ';
             }
             if (lastDigit >= 2 && lastDigit <= 4) {
-                return 'задачи';
+                return 'Р·Р°РґР°С‡Рё';
             }
-            return 'задач';
+            return 'Р·Р°РґР°С‡';
         }
         
-        // Глобальная переменная для отслеживания доступности avatar API
-        // По умолчанию отключаем аватары, включим после первой успешной загрузки
+        // Р“Р»РѕР±Р°Р»СЊРЅР°СЏ РїРµСЂРµРјРµРЅРЅР°СЏ РґР»СЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ РґРѕСЃС‚СѓРїРЅРѕСЃС‚Рё avatar API
+        // РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РѕС‚РєР»СЋС‡Р°РµРј Р°РІР°С‚Р°СЂС‹, РІРєР»СЋС‡РёРј РїРѕСЃР»Рµ РїРµСЂРІРѕР№ СѓСЃРїРµС€РЅРѕР№ Р·Р°РіСЂСѓР·РєРё
         let avatarServiceAvailable = false;
         let avatarCheckDone = false;
         
-        // Функция обработки ошибки загрузки аватара
+        // Р¤СѓРЅРєС†РёСЏ РѕР±СЂР°Р±РѕС‚РєРё РѕС€РёР±РєРё Р·Р°РіСЂСѓР·РєРё Р°РІР°С‚Р°СЂР°
         function handleAvatarError(img, fallbackId) {
-            // Отключаем сервис аватаров после первой ошибки
+            // РћС‚РєР»СЋС‡Р°РµРј СЃРµСЂРІРёСЃ Р°РІР°С‚Р°СЂРѕРІ РїРѕСЃР»Рµ РїРµСЂРІРѕР№ РѕС€РёР±РєРё
             if (!avatarCheckDone) {
                 avatarServiceAvailable = false;
                 avatarCheckDone = true;
             }
-            // Fallback уже виден, ничего не делаем
+            // Fallback СѓР¶Рµ РІРёРґРµРЅ, РЅРёС‡РµРіРѕ РЅРµ РґРµР»Р°РµРј
         }
         
         function handleAvatarLoad(img, fallbackId) {
@@ -425,7 +425,7 @@
             }
         }
         
-        // Безопасная функция для fetch с обработкой ошибок
+        // Р‘РµР·РѕРїР°СЃРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ fetch СЃ РѕР±СЂР°Р±РѕС‚РєРѕР№ РѕС€РёР±РѕРє
         async function safeFetch(url, options = {}) {
             try {
                 const response = await fetch(url, { ...options, credentials: 'include' });
@@ -439,12 +439,12 @@
             }
         }
         
-        // Глобальная функция для проверки авторизации
+        // Р“Р»РѕР±Р°Р»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ РїСЂРѕРІРµСЂРєРё Р°РІС‚РѕСЂРёР·Р°С†РёРё
         async function checkAuth(response) {
             console.log('checkAuth called with status:', response.status);
             if (response.status === 401 || response.status === 403) {
                 console.log('Session expired or unauthorized');
-                // Перезагрузить страницу только если мы не на странице логина
+                // РџРµСЂРµР·Р°РіСЂСѓР·РёС‚СЊ СЃС‚СЂР°РЅРёС†Сѓ С‚РѕР»СЊРєРѕ РµСЃР»Рё РјС‹ РЅРµ РЅР° СЃС‚СЂР°РЅРёС†Рµ Р»РѕРіРёРЅР°
                 const isLoggedIn = document.querySelector('.main-layout') !== null;
                 console.log('isLoggedIn check:', isLoggedIn);
                 if (isLoggedIn) {
@@ -563,7 +563,7 @@
             }
             input.value = '';
             fileInput.value = '';
-            lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
+            lastMessageCount += 1; // РЈРІРµР»РёС‡РёРІР°РµРј СЃС‡РµС‚С‡РёРє РґР»СЏ СЃРѕРѕР±С‰РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
             showTypingIndicator();
 
             try {
@@ -588,7 +588,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
+                    // РћР±РЅРѕРІРёС‚СЊ СЃС‡РµС‚С‡РёРє С‡РµСЂРµР· API, С‡С‚РѕР±С‹ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ СЃ СЂРµР°Р»СЊРЅС‹Рј РєРѕР»РёС‡РµСЃС‚РІРѕРј
                     setTimeout(async () => {
                         try {
                             const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
@@ -597,18 +597,18 @@
                                 lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
                             }
                         } catch (e) {
-                            // Если не удалось синхронизировать, увеличиваем на 2
+                            // Р•СЃР»Рё РЅРµ СѓРґР°Р»РѕСЃСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ, СѓРІРµР»РёС‡РёРІР°РµРј РЅР° 2
                             lastMessageCount += 2;
                         }
                     }, 500);
-                    // Обновить список задач с задержкой для синхронизации с бэкендом
+                    // РћР±РЅРѕРІРёС‚СЊ СЃРїРёСЃРѕРє Р·Р°РґР°С‡ СЃ Р·Р°РґРµСЂР¶РєРѕР№ РґР»СЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё СЃ Р±СЌРєРµРЅРґРѕРј
                     setTimeout(async () => {
                         try {
                             await updateTasks();
                             await updateProfile();
                             await updatePeople();
                             console.log('Tasks updated after message');
-                            // Повторное обновление через 1 секунду
+                            // РџРѕРІС‚РѕСЂРЅРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ С‡РµСЂРµР· 1 СЃРµРєСѓРЅРґСѓ
                             setTimeout(async () => {
                                 try {
                                     await updateTasks();
@@ -617,7 +617,7 @@
                                     console.error('Error in delayed update:', e);
                                 }
                             }, 1000);
-                            // И еще одно через 3 секунды на случай медленной БД
+                            // Р РµС‰Рµ РѕРґРЅРѕ С‡РµСЂРµР· 3 СЃРµРєСѓРЅРґС‹ РЅР° СЃР»СѓС‡Р°Р№ РјРµРґР»РµРЅРЅРѕР№ Р‘Р”
                             setTimeout(async () => {
                                 try {
                                     await updateTasks();
@@ -631,11 +631,11 @@
                         }
                     }, 1000);
                 } else {
-                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    addMessage(`РћС€РёР±РєР°: ${data.error || 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°'}`, 'ai');
                 }
             } catch (error) {
                 hideTypingIndicator();
-                addMessage('Ошибка: ' + error.message, 'ai');
+                addMessage('РћС€РёР±РєР°: ' + error.message, 'ai');
             } finally {
                 window.sendingMessage = false;
             }
@@ -660,14 +660,14 @@
             const timeValue = input.value.trim();
             
             if (!timeValue) {
-                alert('Пожалуйста, введите время');
+                alert('РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РІРІРµРґРёС‚Рµ РІСЂРµРјСЏ');
                 return;
             }
             
             closeTimeModal();
             
-            // Отправляем сообщение в чат с введенным временем
-            const message = `мое местное время: ${timeValue}`;
+            // РћС‚РїСЂР°РІР»СЏРµРј СЃРѕРѕР±С‰РµРЅРёРµ РІ С‡Р°С‚ СЃ РІРІРµРґРµРЅРЅС‹Рј РІСЂРµРјРµРЅРµРј
+            const message = `РјРѕРµ РјРµСЃС‚РЅРѕРµ РІСЂРµРјСЏ: ${timeValue}`;
             
             // Add user message
             addMessage(message, 'user');
@@ -688,24 +688,24 @@
                 const data = await response.json();
                 if (response.ok) {
                     addMessage(data.response, 'ai');
-                    // Обновить профиль и время сразу
+                    // РћР±РЅРѕРІРёС‚СЊ РїСЂРѕС„РёР»СЊ Рё РІСЂРµРјСЏ СЃСЂР°Р·Сѓ
                     await updateProfile();
-                    // Принудительно обновляем время в шапке через небольшую задержку
+                    // РџСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РѕР±РЅРѕРІР»СЏРµРј РІСЂРµРјСЏ РІ С€Р°РїРєРµ С‡РµСЂРµР· РЅРµР±РѕР»СЊС€СѓСЋ Р·Р°РґРµСЂР¶РєСѓ
                     setTimeout(async () => {
                         await updateProfile();
-                        // Дополнительно обновляем время в шапке напрямую
+                        // Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕ РѕР±РЅРѕРІР»СЏРµРј РІСЂРµРјСЏ РІ С€Р°РїРєРµ РЅР°РїСЂСЏРјСѓСЋ
                         const now = new Date();
                         const headerTimeDisplay = document.getElementById('header-time-display');
                         if (headerTimeDisplay) {
                             const hours = now.getHours().toString().padStart(2, '0');
                             const minutes = now.getMinutes().toString().padStart(2, '0');
                             const timeStr = `${hours}:${minutes}`;
-                            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+                            const months = ['СЏРЅРІР°СЂСЏ', 'С„РµРІСЂР°Р»СЏ', 'РјР°СЂС‚Р°', 'Р°РїСЂРµР»СЏ', 'РјР°СЏ', 'РёСЋРЅСЏ', 'РёСЋР»СЏ', 'Р°РІРіСѓСЃС‚Р°', 'СЃРµРЅС‚СЏР±СЂСЏ', 'РѕРєС‚СЏР±СЂСЏ', 'РЅРѕСЏР±СЂСЏ', 'РґРµРєР°Р±СЂСЏ'];
                             const dateStr = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
-                            headerTimeDisplay.textContent = `${timeStr} · ${dateStr}`;
+                            headerTimeDisplay.textContent = `${timeStr} В· ${dateStr}`;
                         }
                     }, 1000);
-                    // Синхронизировать счетчик через API
+                    // РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ СЃС‡РµС‚С‡РёРє С‡РµСЂРµР· API
                     setTimeout(async () => {
                         try {
                             const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
@@ -718,18 +718,18 @@
                         }
                     }, 500);
                 } else {
-                    addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
+                    addMessage(`РћС€РёР±РєР°: ${data.error || 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°'}`, 'ai');
                     lastMessageCount += 1;
                 }
             } catch (error) {
                 hideTypingIndicator();
-                addMessage('Ошибка: ' + error.message, 'ai');
+                addMessage('РћС€РёР±РєР°: ' + error.message, 'ai');
                 lastMessageCount += 1;
             }
         }
 
         async function clearChatHistory() {
-            if (!confirm('Вы уверены, что хотите очистить всю историю чата? Это действие нельзя отменить.')) {
+            if (!confirm('Р’С‹ СѓРІРµСЂРµРЅС‹, С‡С‚Рѕ С…РѕС‚РёС‚Рµ РѕС‡РёСЃС‚РёС‚СЊ РІСЃСЋ РёСЃС‚РѕСЂРёСЋ С‡Р°С‚Р°? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ.')) {
                 return;
             }
             
@@ -741,13 +741,13 @@
                 
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
-                    // Очистить все сообщения из DOM
+                    // РћС‡РёСЃС‚РёС‚СЊ РІСЃРµ СЃРѕРѕР±С‰РµРЅРёСЏ РёР· DOM
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
-                    addMessage('История чата очищена', 'ai');
-                    lastMessageCount += 1; // Обновляем счётчик для сообщения
-                    // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
+                    addMessage('РСЃС‚РѕСЂРёСЏ С‡Р°С‚Р° РѕС‡РёС‰РµРЅР°', 'ai');
+                    lastMessageCount += 1; // РћР±РЅРѕРІР»СЏРµРј СЃС‡С‘С‚С‡РёРє РґР»СЏ СЃРѕРѕР±С‰РµРЅРёСЏ
+                    // РџРѕР»СѓС‡РёС‚СЊ С‚РµРєСѓС‰РµРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СЃРѕРѕР±С‰РµРЅРёР№ РёР· Р‘Р”, С‡С‚РѕР±С‹ updateChat РЅРµ РґРѕР±Р°РІР»СЏР» СЃС‚Р°СЂС‹Рµ
                     setTimeout(async () => {
                         try {
                             const response = await fetch('/api/interactions', { credentials: 'include' });
@@ -762,12 +762,12 @@
                     }, 500);
                 } else {
                     const data = await response.json();
-                    addMessage(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'ai');
-                    lastMessageCount += 1; // Обновляем счётчик для сообщения об ошибке
+                    addMessage(`РћС€РёР±РєР° РїСЂРё РѕС‡РёСЃС‚РєРµ: ${data.error || 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°'}`, 'ai');
+                    lastMessageCount += 1; // РћР±РЅРѕРІР»СЏРµРј СЃС‡С‘С‚С‡РёРє РґР»СЏ СЃРѕРѕР±С‰РµРЅРёСЏ РѕР± РѕС€РёР±РєРµ
                 }
             } catch (error) {
-                addMessage('Ошибка: ' + error.message, 'ai');
-                lastMessageCount += 1; // Обновляем счётчик для сообщения об ошибке
+                addMessage('РћС€РёР±РєР°: ' + error.message, 'ai');
+                lastMessageCount += 1; // РћР±РЅРѕРІР»СЏРµРј СЃС‡С‘С‚С‡РёРє РґР»СЏ СЃРѕРѕР±С‰РµРЅРёСЏ РѕР± РѕС€РёР±РєРµ
             }
         }
 
@@ -809,7 +809,7 @@
             const resultsDiv = document.getElementById('modal-search-results');
             
             if (!contacts || contacts.length === 0) {
-                resultsDiv.innerHTML = '<div style="text-align: center; color: #656D76; padding: 40px 20px;"><svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path></svg><div style="font-size: 13px;">Ничего не найдено</div></div>';
+                resultsDiv.innerHTML = '<div style="text-align: center; color: #656D76; padding: 40px 20px;"><svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path></svg><div style="font-size: 13px;">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div></div>';
                 return;
             }
             
@@ -820,7 +820,7 @@
                 const rating = contact.average_rating || 0;
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
                 const ratingColor = rating < 5 ? '#d73a49' : (rating >= 9 ? '#D7AC0C' : '#1F2328');
-                const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Рекомендация: нет рекомендаций';
+                const ratingText = rating > 0 ? `Р РµРєРѕРјРµРЅРґР°С†РёСЏ: ${rating}/10` : 'Р РµРєРѕРјРµРЅРґР°С†РёСЏ: РЅРµС‚ СЂРµРєРѕРјРµРЅРґР°С†РёР№';
                 const heartColor = isFavorite ? '#068487' : '#24292F';
                 
                 html += `
@@ -839,7 +839,7 @@
                             </div>
                             <div style="font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                                 <span>@${contact.username}</span>
-                                ${contact.city ? `<span>· ${contact.city}</span>` : ''}
+                                ${contact.city ? `<span>В· ${contact.city}</span>` : ''}
                             </div>
                             ${contact.bio ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px; line-height: 1.4;">${contact.bio}</div>` : ''}
                             ${contact.interests ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px;">${contact.interests}</div>` : ''}
@@ -849,7 +849,7 @@
                             <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')" 
                                     class="quick-action"
                                     style="color: ${heartColor};">
-                                ${isFavorite ? '¦' : '?'}
+                                ${isFavorite ? 'В¦' : '?'}
                             </button>
                             <button onclick="event.stopPropagation();" 
                                     class="quick-action">
@@ -871,7 +871,7 @@
             searchContactsInModal({target: input});
         }
 
-        // Модальное окно поиска
+        // РњРѕРґР°Р»СЊРЅРѕРµ РѕРєРЅРѕ РїРѕРёСЃРєР°
         function showSearchModal() {
             const modal = document.getElementById('search-modal');
             const modalInput = document.getElementById('modal-search-input');
@@ -880,7 +880,7 @@
             modal.style.display = 'flex';
             modalInput.value = headerInput.value;
             
-            // Фокус на поле в модальном окне
+            // Р¤РѕРєСѓСЃ РЅР° РїРѕР»Рµ РІ РјРѕРґР°Р»СЊРЅРѕРј РѕРєРЅРµ
             setTimeout(() => {
                 modalInput.focus();
                 if (headerInput.value) {
@@ -895,13 +895,13 @@
             modal.style.display = 'none';
         }
 
-        // Поиск в модальном окне
+        // РџРѕРёСЃРє РІ РјРѕРґР°Р»СЊРЅРѕРј РѕРєРЅРµ
         let searchModalTimeout;
         function searchContactsInModal(event) {
             const query = event.target.value.trim();
             
             if (query.length < 2) {
-                document.getElementById('modal-search-results').innerHTML = '<div style="text-align: center; color: #656D76; padding: 40px 20px;"><svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path></svg><div style="font-size: 13px;">Введите минимум 2 символа для поиска</div></div>';
+                document.getElementById('modal-search-results').innerHTML = '<div style="text-align: center; color: #656D76; padding: 40px 20px;"><svg width="48" height="48" viewBox="0 0 16 16" fill="#656D76" style="opacity: 0.5; margin-bottom: 16px;"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path></svg><div style="font-size: 13px;">Р’РІРµРґРёС‚Рµ РјРёРЅРёРјСѓРј 2 СЃРёРјРІРѕР»Р° РґР»СЏ РїРѕРёСЃРєР°</div></div>';
                 return;
             }
             
@@ -922,7 +922,7 @@
             }, 300);
         }
 
-        // Закрытие модального окна по Escape
+        // Р—Р°РєСЂС‹С‚РёРµ РјРѕРґР°Р»СЊРЅРѕРіРѕ РѕРєРЅР° РїРѕ Escape
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
                 closeSearchModal({target: document.getElementById('search-modal')});
@@ -1001,9 +1001,9 @@
         let currentPage = 1;
         const TASKS_PER_PAGE = 10;
         let allTasksData = [];
-        let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
+        let allTasksFromServer = []; // Р’СЃРµ Р·Р°РґР°С‡Рё СЃ СЃРµСЂРІРµСЂР° (РІРєР»СЋС‡Р°СЏ Р·Р°РІРµСЂС€РµРЅРЅС‹Рµ)
         let lastMessageCount = 0;
-        const displayedMessageIds = new Set(); // Для отслеживания уже показанных сообщений
+        const displayedMessageIds = new Set(); // Р”Р»СЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ СѓР¶Рµ РїРѕРєР°Р·Р°РЅРЅС‹С… СЃРѕРѕР±С‰РµРЅРёР№
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -1025,7 +1025,7 @@
                             .sort((a, b) => a.id - b.id);
                         
                         sortedInteractions.forEach((interaction) => {
-                            const msgId = interaction.id; // Используем database ID для уникальности
+                            const msgId = interaction.id; // РСЃРїРѕР»СЊР·СѓРµРј database ID РґР»СЏ СѓРЅРёРєР°Р»СЊРЅРѕСЃС‚Рё
                             if (!displayedMessageIds.has(msgId)) {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                 displayedMessageIds.add(msgId);
@@ -1045,7 +1045,7 @@
         renderTaskGroups(initialTasks);
         {% endif %}
         
-        // Задачи обновляются в главном цикле (см. ниже)
+        // Р—Р°РґР°С‡Рё РѕР±РЅРѕРІР»СЏСЋС‚СЃСЏ РІ РіР»Р°РІРЅРѕРј С†РёРєР»Рµ (СЃРј. РЅРёР¶Рµ)
         
         function groupTasksByDue(tasks) {
             const now = new Date();
@@ -1063,7 +1063,7 @@
             };
             
             tasks.forEach(task => {
-                // Завершённые задачи в отдельную группу
+                // Р—Р°РІРµСЂС€С‘РЅРЅС‹Рµ Р·Р°РґР°С‡Рё РІ РѕС‚РґРµР»СЊРЅСѓСЋ РіСЂСѓРїРїСѓ
                 if (task.status === 'completed') {
                     groups.completed.push(task);
                     return;
@@ -1082,7 +1082,7 @@
                 else groups.later.push(task);
             });
             
-            // Сортируем каждую группу по времени
+            // РЎРѕСЂС‚РёСЂСѓРµРј РєР°Р¶РґСѓСЋ РіСЂСѓРїРїСѓ РїРѕ РІСЂРµРјРµРЅРё
             const sortByTime = (a, b) => {
                 const timeA = a.reminder_time ? new Date(a.reminder_time).getTime() : 0;
                 const timeB = b.reminder_time ? new Date(b.reminder_time).getTime() : 0;
@@ -1100,10 +1100,10 @@
         function renderTaskItem(task) {
             let html = '<div class="task-content">';
             
-            // Название задачи
+            // РќР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё
             html += '<div class="task-title">' + task.title + '</div>';
             
-            // Время и статус
+            // Р’СЂРµРјСЏ Рё СЃС‚Р°С‚СѓСЃ
             let timeStr = '';
             if (task.reminder_time) {
                 const date = new Date(task.reminder_time);
@@ -1111,22 +1111,22 @@
                 const timeStrFormatted = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                 timeStr = dateStr + ' ' + timeStrFormatted;
             } else {
-                timeStr = 'Без времени';
+                timeStr = 'Р‘РµР· РІСЂРµРјРµРЅРё';
             }
             
-            let statusStr = 'В работе';
+            let statusStr = 'Р’ СЂР°Р±РѕС‚Рµ';
             let statusColor = '#068487';
             if (task.status === 'completed') {
-                statusStr = 'Завершена';
+                statusStr = 'Р—Р°РІРµСЂС€РµРЅР°';
                 statusColor = '#238636';
             } else if (task.overdue) {
-                statusStr = 'Просрочена';
+                statusStr = 'РџСЂРѕСЃСЂРѕС‡РµРЅР°';
                 statusColor = '#d73a49';
             }
             
             html += '<div class="task-meta" style="color: ' + statusColor + ';">' + timeStr + '<br>' + statusStr + '</div>';
             
-            // Рекомендации (если есть)
+            // Р РµРєРѕРјРµРЅРґР°С†РёРё (РµСЃР»Рё РµСЃС‚СЊ)
             if (task.recommendations && task.recommendations.length > 0) {
                 let recommendations = [];
                 try {
@@ -1137,7 +1137,7 @@
                 
                 if (recommendations.length > 0) {
                     html += '<div class="task-recommendations" style="margin-top: 8px; padding: 8px; background: #F6F8FA; border-radius: 6px; border-left: 3px solid #068487;">';
-                    html += '<div style="font-size: 12px; font-weight: 600; color: #068487; margin-bottom: 4px;">Рекомендации:</div>';
+                    html += '<div style="font-size: 12px; font-weight: 600; color: #068487; margin-bottom: 4px;">Р РµРєРѕРјРµРЅРґР°С†РёРё:</div>';
                     recommendations.forEach(rec => {
                         html += '<div style="font-size: 12px; color: #1F2328; margin-bottom: 2px;">' + rec + '</div>';
                     });
@@ -1147,7 +1147,7 @@
             
             html += '</div>';
             
-            // Кнопки действий
+            // РљРЅРѕРїРєРё РґРµР№СЃС‚РІРёР№
             html += '<div class="task-actions">';
             if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #238636; cursor: pointer; font-size: 16px; padding: 4px;">?</button>';
@@ -1159,32 +1159,32 @@
         }
         
         function renderTaskGroups(tasks) {
-            // Сохраняем все задачи с сервера
+            // РЎРѕС…СЂР°РЅСЏРµРј РІСЃРµ Р·Р°РґР°С‡Рё СЃ СЃРµСЂРІРµСЂР°
             if (tasks !== allTasksData) {
                 allTasksFromServer = tasks;
                 currentPage = 1;
             }
             
-            // Применяем фильтр
+            // РџСЂРёРјРµРЅСЏРµРј С„РёР»СЊС‚СЂ
             let filteredTasks = allTasksFromServer;
             
             if (currentTaskFilter === 'completed') {
-                // Показываем только завершенные задачи
+                // РџРѕРєР°Р·С‹РІР°РµРј С‚РѕР»СЊРєРѕ Р·Р°РІРµСЂС€РµРЅРЅС‹Рµ Р·Р°РґР°С‡Рё
                 filteredTasks = allTasksFromServer.filter(t => t.status === 'completed');
             } else if (currentTaskFilter === 'my') {
-                // Личные задачи - задачи без делегирования, незавершенные
+                // Р›РёС‡РЅС‹Рµ Р·Р°РґР°С‡Рё - Р·Р°РґР°С‡Рё Р±РµР· РґРµР»РµРіРёСЂРѕРІР°РЅРёСЏ, РЅРµР·Р°РІРµСЂС€РµРЅРЅС‹Рµ
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
-                // Назначенные мне - задачи делегированные мне, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - делегирована от @'));
+                // РќР°Р·РЅР°С‡РµРЅРЅС‹Рµ РјРЅРµ - Р·Р°РґР°С‡Рё РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹Рµ РјРЅРµ, РЅРµР·Р°РІРµСЂС€РµРЅРЅС‹Рµ
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - РґРµР»РµРіРёСЂРѕРІР°РЅР° РѕС‚ @'));
             } else if (currentTaskFilter === 'assigned-by-me') {
-                // Назначенные мной - задачи делегированные другим, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - делегирована на @'));
+                // РќР°Р·РЅР°С‡РµРЅРЅС‹Рµ РјРЅРѕР№ - Р·Р°РґР°С‡Рё РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹Рµ РґСЂСѓРіРёРј, РЅРµР·Р°РІРµСЂС€РµРЅРЅС‹Рµ
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - РґРµР»РµРіРёСЂРѕРІР°РЅР° РЅР° @'));
             } else if (currentTaskFilter === 'overdue') {
-                // С отставанием - просроченные задачи
+                // РЎ РѕС‚СЃС‚Р°РІР°РЅРёРµРј - РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ Р·Р°РґР°С‡Рё
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true);
             } else {
-                // Все задачи - показываем незавершенные
+                // Р’СЃРµ Р·Р°РґР°С‡Рё - РїРѕРєР°Р·С‹РІР°РµРј РЅРµР·Р°РІРµСЂС€РµРЅРЅС‹Рµ
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed');
             }
             
@@ -1194,8 +1194,8 @@
             const container = document.getElementById('task-groups');
             if (!container) return;
             
-            // Показываем просроченные задачи в начале списка "На очереди"
-            // Порядок: просроченные > сегодня > завтра > позже > без даты > завершенные
+            // РџРѕРєР°Р·С‹РІР°РµРј РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ Р·Р°РґР°С‡Рё РІ РЅР°С‡Р°Р»Рµ СЃРїРёСЃРєР° "РќР° РѕС‡РµСЂРµРґРё"
+            // РџРѕСЂСЏРґРѕРє: РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ > СЃРµРіРѕРґРЅСЏ > Р·Р°РІС‚СЂР° > РїРѕР·Р¶Рµ > Р±РµР· РґР°С‚С‹ > Р·Р°РІРµСЂС€РµРЅРЅС‹Рµ
             const groupOrder = ['overdue', 'today', 'tomorrow', 'later', 'nodate', 'completed'];
             let allSortedTasks = [];
             
@@ -1205,7 +1205,7 @@
                 }
             });
             
-            // Пагинация
+            // РџР°РіРёРЅР°С†РёСЏ
             const startIdx = (currentPage - 1) * TASKS_PER_PAGE;
             const endIdx = currentPage * TASKS_PER_PAGE;
             const tasksToShow = allSortedTasks.slice(startIdx, endIdx);
@@ -1221,7 +1221,7 @@
             
             html += '</ul>';
             
-            // Навигация стрелками
+            // РќР°РІРёРіР°С†РёСЏ СЃС‚СЂРµР»РєР°РјРё
             if (totalPages > 1) {
                 html += '<div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px;">';
                 if (currentPage > 1) {
@@ -1277,8 +1277,8 @@
             const now = new Date();
             now.setHours(0, 0, 0, 0);
             
-            const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-            const monthNames = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+            const dayNames = ['Р’СЃ', 'РџРЅ', 'Р’С‚', 'РЎСЂ', 'Р§С‚', 'РџС‚', 'РЎР±'];
+            const monthNames = ['СЏРЅРІ', 'С„РµРІ', 'РјР°СЂ', 'Р°РїСЂ', 'РјР°СЏ', 'РёСЋРЅ', 'РёСЋР»', 'Р°РІРі', 'СЃРµРЅ', 'РѕРєС‚', 'РЅРѕСЏ', 'РґРµРє'];
             
             let html = '';
             
@@ -1293,7 +1293,7 @@
                 const nextDay = new Date(date);
                 nextDay.setDate(nextDay.getDate() + 1);
                 
-                // Подсчитываем задачи на этот день (незавершенные)
+                // РџРѕРґСЃС‡РёС‚С‹РІР°РµРј Р·Р°РґР°С‡Рё РЅР° СЌС‚РѕС‚ РґРµРЅСЊ (РЅРµР·Р°РІРµСЂС€РµРЅРЅС‹Рµ)
                 const tasksForDay = tasks.filter(t => {
                     if (t.status === 'completed') return false;
                     if (!t.reminder_time) return false;
@@ -1321,9 +1321,9 @@
         
         function filterTasks(filterType) {
             currentTaskFilter = filterType;
-            currentPage = 1; // Сброс страницы при смене фильтра
+            currentPage = 1; // РЎР±СЂРѕСЃ СЃС‚СЂР°РЅРёС†С‹ РїСЂРё СЃРјРµРЅРµ С„РёР»СЊС‚СЂР°
             
-            // Обновляем стили кнопок
+            // РћР±РЅРѕРІР»СЏРµРј СЃС‚РёР»Рё РєРЅРѕРїРѕРє
             document.querySelectorAll('.task-filter-btn').forEach(btn => {
                 if (btn.getAttribute('data-filter') === filterType) {
                     btn.style.color = '#068487';
@@ -1336,12 +1336,12 @@
                 }
             });
             
-            // Перерендерим задачи с новым фильтром
+            // РџРµСЂРµСЂРµРЅРґРµСЂРёРј Р·Р°РґР°С‡Рё СЃ РЅРѕРІС‹Рј С„РёР»СЊС‚СЂРѕРј
             renderTaskGroups(allTasksFromServer);
         }
         
         function filterContacts(filterType) {
-            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
+            // РЎРІРѕСЂР°С‡РёРІР°РµРј РїСЂРѕС„РёР»СЊ РїСЂРё РєР»РёРєРµ РЅР° С„РёР»СЊС‚СЂ (РґР°Р¶Рµ РµСЃР»Рё С„РёР»СЊС‚СЂ СѓР¶Рµ Р°РєС‚РёРІРµРЅ)
             const profileContent = document.getElementById('profile-content');
             const profileBtn = document.getElementById('profile-toggle-btn');
             const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
@@ -1353,7 +1353,7 @@
                 if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
                 localStorage.setItem('profileCollapsed', 'true');
                 
-                // Разворачиваем список контактов
+                // Р Р°Р·РІРѕСЂР°С‡РёРІР°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚РѕРІ
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                     peopleSection.style.minHeight = '0';
@@ -1364,14 +1364,14 @@
                 }
             }
             
-            // Если фильтр уже активен, только сворачиваем профиль
+            // Р•СЃР»Рё С„РёР»СЊС‚СЂ СѓР¶Рµ Р°РєС‚РёРІРµРЅ, С‚РѕР»СЊРєРѕ СЃРІРѕСЂР°С‡РёРІР°РµРј РїСЂРѕС„РёР»СЊ
             if (currentContactFilter === filterType) {
                 return;
             }
             
             currentContactFilter = filterType;
             
-            // Обновляем стили кнопок фильтров контактов
+            // РћР±РЅРѕРІР»СЏРµРј СЃС‚РёР»Рё РєРЅРѕРїРѕРє С„РёР»СЊС‚СЂРѕРІ РєРѕРЅС‚Р°РєС‚РѕРІ
             const buttons = document.querySelectorAll('.contact-filter-btn');
             buttons.forEach(btn => {
                 const btnFilterType = btn.getAttribute('onclick').match(/filterContacts\('([^']+)'\)/)?.[1];
@@ -1384,7 +1384,7 @@
                 }
             });
             
-            // Перерендерим контакты с новым фильтром
+            // РџРµСЂРµСЂРµРЅРґРµСЂРёРј РєРѕРЅС‚Р°РєС‚С‹ СЃ РЅРѕРІС‹Рј С„РёР»СЊС‚СЂРѕРј
             renderContacts();
         }
         
@@ -1394,7 +1394,7 @@
             
             let allContacts = [];
             
-            // Собираем все контакты из всех категорий
+            // РЎРѕР±РёСЂР°РµРј РІСЃРµ РєРѕРЅС‚Р°РєС‚С‹ РёР· РІСЃРµС… РєР°С‚РµРіРѕСЂРёР№
             const recommendedCards = peopleList.querySelectorAll('.contact-recommended');
             recommendedCards.forEach(card => {
                 const contactData = {
@@ -1428,13 +1428,13 @@
                 allContacts.push(contactData);
             });
             
-            // Применяем фильтр: показываем только соответствующие типу
+            // РџСЂРёРјРµРЅСЏРµРј С„РёР»СЊС‚СЂ: РїРѕРєР°Р·С‹РІР°РµРј С‚РѕР»СЊРєРѕ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РёРµ С‚РёРїСѓ
             allContacts.forEach(contact => {
                 const element = contact.element;
                 if (currentContactFilter === 'all') {
                     element.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
-                    // Показываем только избранные контакты
+                    // РџРѕРєР°Р·С‹РІР°РµРј С‚РѕР»СЊРєРѕ РёР·Р±СЂР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
                     const username = contact.username.replace('@', '');
                     if (isFavoriteContact(username)) {
                         element.style.display = 'flex';
@@ -1455,41 +1455,41 @@
             const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
             const overdueIndicator = task.overdue ? '<span class="overdue-pulse"></span>' : '';
             
-            // Извлекаем чистый заголовок и информацию о делегировании
+            // РР·РІР»РµРєР°РµРј С‡РёСЃС‚С‹Р№ Р·Р°РіРѕР»РѕРІРѕРє Рё РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РґРµР»РµРіРёСЂРѕРІР°РЅРёРё
             let cleanTitle = task.title;
             let delegationInfo = '';
             
-            // Проверяем делегирование "от"
-            const fromMatch = task.title.match(/^(.+?) - делегирована от (@\w+)$/);
+            // РџСЂРѕРІРµСЂСЏРµРј РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ "РѕС‚"
+            const fromMatch = task.title.match(/^(.+?) - РґРµР»РµРіРёСЂРѕРІР°РЅР° РѕС‚ (@\w+)$/);
             if (fromMatch) {
                 cleanTitle = fromMatch[1];
-                delegationInfo = 'делегирована от ' + fromMatch[2];
+                delegationInfo = 'РґРµР»РµРіРёСЂРѕРІР°РЅР° РѕС‚ ' + fromMatch[2];
             } else {
-                // Проверяем делегирование "на"
-                const toMatch = task.title.match(/^(.+?) - делегирована на (@\w+)$/);
+                // РџСЂРѕРІРµСЂСЏРµРј РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ "РЅР°"
+                const toMatch = task.title.match(/^(.+?) - РґРµР»РµРіРёСЂРѕРІР°РЅР° РЅР° (@\w+)$/);
                 if (toMatch) {
                     cleanTitle = toMatch[1];
-                    delegationInfo = 'делегирована на ' + toMatch[2];
+                    delegationInfo = 'РґРµР»РµРіРёСЂРѕРІР°РЅР° РЅР° ' + toMatch[2];
                 }
             }
             
             html += '<div class="task-title"' + titleStyle + '>' + overdueIndicator + cleanTitle + '</div>';
             
-            // Если есть делегирование, показываем отдельной строкой
+            // Р•СЃР»Рё РµСЃС‚СЊ РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ, РїРѕРєР°Р·С‹РІР°РµРј РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРѕР№
             if (delegationInfo) {
                 html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + delegationInfo + '</span></div>';
             }
             
-            // Показываем описание задачи, если оно есть и это не устаревший текст делегирования
+            // РџРѕРєР°Р·С‹РІР°РµРј РѕРїРёСЃР°РЅРёРµ Р·Р°РґР°С‡Рё, РµСЃР»Рё РѕРЅРѕ РµСЃС‚СЊ Рё СЌС‚Рѕ РЅРµ СѓСЃС‚Р°СЂРµРІС€РёР№ С‚РµРєСЃС‚ РґРµР»РµРіРёСЂРѕРІР°РЅРёСЏ
             if (task.description && task.description.trim()) {
-                // Фильтруем устаревшие описания делегирования
+                // Р¤РёР»СЊС‚СЂСѓРµРј СѓСЃС‚Р°СЂРµРІС€РёРµ РѕРїРёСЃР°РЅРёСЏ РґРµР»РµРіРёСЂРѕРІР°РЅРёСЏ
                 const cleanDesc = task.description.trim();
-                // Ловим паттерны: "Задача от Имя", "Задача для Имя", "Задача на @username"
-                const isOldDelegationText = cleanDesc.match(/^Задача\s+(от|для|на)\s+@?[\wА-Яа-яЁё]+$/i);
+                // Р›РѕРІРёРј РїР°С‚С‚РµСЂРЅС‹: "Р—Р°РґР°С‡Р° РѕС‚ РРјСЏ", "Р—Р°РґР°С‡Р° РґР»СЏ РРјСЏ", "Р—Р°РґР°С‡Р° РЅР° @username"
+                const isOldDelegationText = cleanDesc.match(/^Р—Р°РґР°С‡Р°\s+(РѕС‚|РґР»СЏ|РЅР°)\s+@?[\wРђ-РЇР°-СЏРЃС‘]+$/i);
                 
                 if (!isOldDelegationText) {
-                    // Обрезаем длинные описания до 120 символов, убираем "Шаги выполнения" и т.д.
-                    let shortDesc = cleanDesc.split(/Шаги выполнения:|Ожидаемый результат:|Советы:/)[0].trim();
+                    // РћР±СЂРµР·Р°РµРј РґР»РёРЅРЅС‹Рµ РѕРїРёСЃР°РЅРёСЏ РґРѕ 120 СЃРёРјРІРѕР»РѕРІ, СѓР±РёСЂР°РµРј "РЁР°РіРё РІС‹РїРѕР»РЅРµРЅРёСЏ" Рё С‚.Рґ.
+                    let shortDesc = cleanDesc.split(/РЁР°РіРё РІС‹РїРѕР»РЅРµРЅРёСЏ:|РћР¶РёРґР°РµРјС‹Р№ СЂРµР·СѓР»СЊС‚Р°С‚:|РЎРѕРІРµС‚С‹:/)[0].trim();
                     if (shortDesc.length > 120) {
                         shortDesc = shortDesc.substring(0, 120) + '...';
                     }
@@ -1504,9 +1504,9 @@
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
                 if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
             }
-            let statusText = task.status === 'completed' ? 'Завершено' : 
-                           task.status === 'in_progress' ? 'В работе' : 
-                           task.status === 'skipped' ? 'Пропущено' : 'В работе';
+            let statusText = task.status === 'completed' ? 'Р—Р°РІРµСЂС€РµРЅРѕ' : 
+                           task.status === 'in_progress' ? 'Р’ СЂР°Р±РѕС‚Рµ' : 
+                           task.status === 'skipped' ? 'РџСЂРѕРїСѓС‰РµРЅРѕ' : 'Р’ СЂР°Р±РѕС‚Рµ';
             html += '<span class="task-meta">' + statusText + '</span>';
             html += '</div>';
             html += '</div>';
@@ -1524,7 +1524,7 @@
             const total = tasks.length;
             const percent = total > 0 ? (completed / total * 100) : 0;
             
-            // Подсчет задач на сегодня и завтра
+            // РџРѕРґСЃС‡РµС‚ Р·Р°РґР°С‡ РЅР° СЃРµРіРѕРґРЅСЏ Рё Р·Р°РІС‚СЂР°
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const tomorrow = new Date(today);
@@ -1532,7 +1532,7 @@
             const dayAfterTomorrow = new Date(tomorrow);
             dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
             
-            // Функция для подсчета задач по дате
+            // Р¤СѓРЅРєС†РёСЏ РґР»СЏ РїРѕРґСЃС‡РµС‚Р° Р·Р°РґР°С‡ РїРѕ РґР°С‚Рµ
             function getTasksByDate(targetDate) {
                 return tasks.filter(t => {
                     if (!t.reminder_time) return false;
@@ -1542,7 +1542,7 @@
                 });
             }
             
-            // Функция для форматирования статистики
+            // Р¤СѓРЅРєС†РёСЏ РґР»СЏ С„РѕСЂРјР°С‚РёСЂРѕРІР°РЅРёСЏ СЃС‚Р°С‚РёСЃС‚РёРєРё
             function formatStats(dateTasks) {
                 const inProgress = dateTasks.filter(t => t.status === 'pending' && !t.overdue).length;
                 const overdue = dateTasks.filter(t => t.overdue === true).length;
@@ -1563,11 +1563,11 @@
             const tomorrowStats = formatStats(tomorrowTasks);
             const laterStats = formatStats(laterTasks);
             
-            // Найти ближайшее напоминание
+            // РќР°Р№С‚Рё Р±Р»РёР¶Р°Р№С€РµРµ РЅР°РїРѕРјРёРЅР°РЅРёРµ
             const nowTimestamp = Date.now(); // UTC milliseconds
             const upcomingTasks = tasks.filter(t => t.reminder_time && t.status !== 'completed' && t.status !== 'skipped')
                 .map(t => ({...t, date: new Date(t.reminder_time)}))
-                .filter(t => t.date.getTime() > nowTimestamp) // Сравниваем UTC milliseconds
+                .filter(t => t.date.getTime() > nowTimestamp) // РЎСЂР°РІРЅРёРІР°РµРј UTC milliseconds
                 .sort((a, b) => a.date - b.date);
             
             const nextTaskCenterEl = document.getElementById('next-task-center');
@@ -1575,18 +1575,18 @@
             
             if (upcomingTasks.length > 0) {
                 const next = upcomingTasks[0];
-                const delta = next.date.getTime() - nowTimestamp; // Разница в UTC milliseconds
+                const delta = next.date.getTime() - nowTimestamp; // Р Р°Р·РЅРёС†Р° РІ UTC milliseconds
                 const minutes = Math.floor(delta / 60000);
                 const hours = Math.floor(minutes / 60);
                 const days = Math.floor(hours / 24);
                 
                 let timeText = '';
                 if (days > 0) {
-                    timeText = `через ${days} дн. ${hours % 24} ч.`;
+                    timeText = `С‡РµСЂРµР· ${days} РґРЅ. ${hours % 24} С‡.`;
                 } else if (hours > 0) {
-                    timeText = `через ${hours} ч. ${minutes % 60} мин.`;
+                    timeText = `С‡РµСЂРµР· ${hours} С‡. ${minutes % 60} РјРёРЅ.`;
                 } else {
-                    timeText = `через ${minutes} мин.`;
+                    timeText = `С‡РµСЂРµР· ${minutes} РјРёРЅ.`;
                 }
                 
                 nextTaskTextEl.textContent = `${next.title} ${timeText}`;
@@ -1595,7 +1595,7 @@
                 nextTaskCenterEl.style.display = 'none';
             }
             
-            // Обновить счетчики
+            // РћР±РЅРѕРІРёС‚СЊ СЃС‡РµС‚С‡РёРєРё
             const completedEl = document.getElementById('completed-count');
             const totalEl = document.getElementById('total-count');
             const progressEl = document.getElementById('progress-fill');
@@ -1605,23 +1605,23 @@
             if (totalEl) totalEl.textContent = total;
             if (progressEl) progressEl.style.width = percent + '%';
             
-            // Общая статистика по всем задачам (включая завершенные из allTasksFromServer)
+            // РћР±С‰Р°СЏ СЃС‚Р°С‚РёСЃС‚РёРєР° РїРѕ РІСЃРµРј Р·Р°РґР°С‡Р°Рј (РІРєР»СЋС‡Р°СЏ Р·Р°РІРµСЂС€РµРЅРЅС‹Рµ РёР· allTasksFromServer)
             const allTasks = allTasksFromServer.length > 0 ? allTasksFromServer : tasks;
             const totalInProgress = allTasks.filter(t => t.status === 'pending' && !t.overdue).length;
             const totalOverdue = allTasks.filter(t => t.overdue === true).length;
             const totalCompleted = allTasks.filter(t => t.status === 'completed').length;
             
             if (todayStatsEl) {
-                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">С отставанием: ${totalOverdue}</span> · Завершено: ${totalCompleted}</span>`;
+                todayStatsEl.innerHTML = `<span>Р’ СЂР°Р±РѕС‚Рµ: ${totalInProgress} В· <span style="color: #d73a49;">РЎ РѕС‚СЃС‚Р°РІР°РЅРёРµРј: ${totalOverdue}</span> В· Р—Р°РІРµСЂС€РµРЅРѕ: ${totalCompleted}</span>`;
             }
             
-            // Обновить визуализацию задач по дням недели
+            // РћР±РЅРѕРІРёС‚СЊ РІРёР·СѓР°Р»РёР·Р°С†РёСЋ Р·Р°РґР°С‡ РїРѕ РґРЅСЏРј РЅРµРґРµР»Рё
             updateWeekTimeline(allTasks);
         }
         
         async function completeTask(taskId) {
             try {
-                // Отправляем запрос на завершение задачи напрямую
+                // РћС‚РїСЂР°РІР»СЏРµРј Р·Р°РїСЂРѕСЃ РЅР° Р·Р°РІРµСЂС€РµРЅРёРµ Р·Р°РґР°С‡Рё РЅР°РїСЂСЏРјСѓСЋ
                 const response = await fetch('/complete_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1631,24 +1631,24 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
-                    // Обновить задачи и чат
+                    // РЎРѕРѕР±С‰РµРЅРёРµ Р±СѓРґРµС‚ РґРѕР±Р°РІР»РµРЅРѕ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё С‡РµСЂРµР· updateChat() РёР· Р‘Р”
+                    // РћР±РЅРѕРІРёС‚СЊ Р·Р°РґР°С‡Рё Рё С‡Р°С‚
                     await updateTasks();
                     await updateChat();
                 } else {
                     const error = await response.json();
-                    addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
-                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                    addMessage(`РћС€РёР±РєР° РїСЂРё Р·Р°РІРµСЂС€РµРЅРёРё Р·Р°РґР°С‡Рё: ${error.error}`, 'ai');
+                    lastMessageCount += 1; // РўРѕР»СЊРєРѕ РґР»СЏ Р»РѕРєР°Р»СЊРЅС‹С… СЃРѕРѕР±С‰РµРЅРёР№ РѕР± РѕС€РёР±РєР°С…
                 }
             } catch (error) {
                 console.error('Error completing task:', error);
-                addMessage('Ошибка при завершении задачи', 'ai');
+                addMessage('РћС€РёР±РєР° РїСЂРё Р·Р°РІРµСЂС€РµРЅРёРё Р·Р°РґР°С‡Рё', 'ai');
                 lastMessageCount += 1;
             }
         }
 
         async function deleteTask(taskId) {
-            if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
+            if (!confirm('Р’С‹ СѓРІРµСЂРµРЅС‹, С‡С‚Рѕ С…РѕС‚РёС‚Рµ СѓРґР°Р»РёС‚СЊ СЌС‚Сѓ Р·Р°РґР°С‡Сѓ?')) {
                 return;
             }
             
@@ -1662,17 +1662,17 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    // РЎРѕРѕР±С‰РµРЅРёРµ Р±СѓРґРµС‚ РґРѕР±Р°РІР»РµРЅРѕ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё С‡РµСЂРµР· updateChat() РёР· Р‘Р”
                     await updateTasks();
                     await updateChat();
                 } else {
                     const error = await response.json();
-                    addMessage(`Ошибка при удалении задачи: ${error.error}`, 'ai');
+                    addMessage(`РћС€РёР±РєР° РїСЂРё СѓРґР°Р»РµРЅРёРё Р·Р°РґР°С‡Рё: ${error.error}`, 'ai');
                     lastMessageCount += 1;
                 }
             } catch (error) {
                 console.error('Error deleting task:', error);
-                addMessage('Ошибка при удалении задачи', 'ai');
+                addMessage('РћС€РёР±РєР° РїСЂРё СѓРґР°Р»РµРЅРёРё Р·Р°РґР°С‡Рё', 'ai');
                 lastMessageCount += 1;
             }
         }
@@ -1688,7 +1688,7 @@
             
             usernameEl.textContent = `@${username}`;
             
-            // Получить текущую оценку пользователя
+            // РџРѕР»СѓС‡РёС‚СЊ С‚РµРєСѓС‰СѓСЋ РѕС†РµРЅРєСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
             try {
                 const getCurrentRating = await fetch(`/api/get_user_rating?username=${username}`, {
                     credentials: 'include'
@@ -1740,18 +1740,18 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    // РЎРѕРѕР±С‰РµРЅРёРµ Р±СѓРґРµС‚ РґРѕР±Р°РІР»РµРЅРѕ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё С‡РµСЂРµР· updateChat() РёР· Р‘Р”
                     closeRatingModal();
-                    await updatePeople(); // Обновить список контактов
-                    await updateChat(); // Обновить чат для загрузки нового сообщения
+                    await updatePeople(); // РћР±РЅРѕРІРёС‚СЊ СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚РѕРІ
+                    await updateChat(); // РћР±РЅРѕРІРёС‚СЊ С‡Р°С‚ РґР»СЏ Р·Р°РіСЂСѓР·РєРё РЅРѕРІРѕРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ
                 } else {
                     const error = await response.json();
-                    addMessage(`Ошибка: ${error.error}`, 'ai');
-                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                    addMessage(`РћС€РёР±РєР°: ${error.error}`, 'ai');
+                    lastMessageCount += 1; // РўРѕР»СЊРєРѕ РґР»СЏ Р»РѕРєР°Р»СЊРЅС‹С… СЃРѕРѕР±С‰РµРЅРёР№ РѕР± РѕС€РёР±РєР°С…
                 }
             } catch (error) {
                 console.error('Error submitting rating:', error);
-                addMessage('Ошибка при отправке рейтинга', 'ai');
+                addMessage('РћС€РёР±РєР° РїСЂРё РѕС‚РїСЂР°РІРєРµ СЂРµР№С‚РёРЅРіР°', 'ai');
                 lastMessageCount += 1;
             }
         }
@@ -1768,18 +1768,18 @@
                 if (!await checkAuth(response)) return;
                 
                 if (response.ok) {
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    // РЎРѕРѕР±С‰РµРЅРёРµ Р±СѓРґРµС‚ РґРѕР±Р°РІР»РµРЅРѕ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё С‡РµСЂРµР· updateChat() РёР· Р‘Р”
                     cachedPartnersData = null;
-                    await updatePeople(); // Обновить список контактов
-                    await updateChat(); // Обновить чат для загрузки нового сообщения
+                    await updatePeople(); // РћР±РЅРѕРІРёС‚СЊ СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚РѕРІ
+                    await updateChat(); // РћР±РЅРѕРІРёС‚СЊ С‡Р°С‚ РґР»СЏ Р·Р°РіСЂСѓР·РєРё РЅРѕРІРѕРіРѕ СЃРѕРѕР±С‰РµРЅРёСЏ
                 } else {
                     const error = await response.json();
-                    addMessage(`Ошибка: ${error.error}`, 'ai');
-                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                    addMessage(`РћС€РёР±РєР°: ${error.error}`, 'ai');
+                    lastMessageCount += 1; // РўРѕР»СЊРєРѕ РґР»СЏ Р»РѕРєР°Р»СЊРЅС‹С… СЃРѕРѕР±С‰РµРЅРёР№ РѕР± РѕС€РёР±РєР°С…
                 }
             } catch (error) {
                 console.error('Error hiding contact:', error);
-                addMessage('Ошибка при скрытии контакта', 'ai');
+                addMessage('РћС€РёР±РєР° РїСЂРё СЃРєСЂС‹С‚РёРё РєРѕРЅС‚Р°РєС‚Р°', 'ai');
                 lastMessageCount += 1;
             }
         }
@@ -1791,7 +1791,7 @@
         
         // Filter buttons
         document.addEventListener('DOMContentLoaded', () => {
-            // Проверить, залогинен ли пользователь
+            // РџСЂРѕРІРµСЂРёС‚СЊ, Р·Р°Р»РѕРіРёРЅРµРЅ Р»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ
             const isLoggedIn = document.querySelector('.main-layout') !== null;
             
             if (!isLoggedIn) {
@@ -1799,12 +1799,12 @@
                 return;
             }
             
-            // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
+            // РЎРѕСЃС‚РѕСЏРЅРёРµ РїСЂРѕС„РёР»СЏ СѓР¶Рµ СѓСЃС‚Р°РЅРѕРІР»РµРЅРѕ inline-СЃРєСЂРёРїС‚РѕРј, РЅРµ РЅСѓР¶РЅРѕ РїРѕРІС‚РѕСЂРЅРѕ РїСЂРёРјРµРЅСЏС‚СЊ
             
-            // Загрузить историю чата
+            // Р—Р°РіСЂСѓР·РёС‚СЊ РёСЃС‚РѕСЂРёСЋ С‡Р°С‚Р°
             loadChatHistory();
             
-            // Инициализировать задачи и контакты при загрузке страницы
+            // РРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ Р·Р°РґР°С‡Рё Рё РєРѕРЅС‚Р°РєС‚С‹ РїСЂРё Р·Р°РіСЂСѓР·РєРµ СЃС‚СЂР°РЅРёС†С‹
             {% if tasks %}
             updateStats(initialTasks);
             {% endif %}
@@ -1820,16 +1820,16 @@
                 });
             });
             
-            // Инициализировать фильтр контактов - показать рекомендуемые по умолчанию
-            // Принудительно применяем фильтр при загрузке
-            currentContactFilter = null; // Сбрасываем, чтобы filterContacts сработал
+            // РРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°С‚СЊ С„РёР»СЊС‚СЂ РєРѕРЅС‚Р°РєС‚РѕРІ - РїРѕРєР°Р·Р°С‚СЊ СЂРµРєРѕРјРµРЅРґСѓРµРјС‹Рµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
+            // РџСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РїСЂРёРјРµРЅСЏРµРј С„РёР»СЊС‚СЂ РїСЂРё Р·Р°РіСЂСѓР·РєРµ
+            currentContactFilter = null; // РЎР±СЂР°СЃС‹РІР°РµРј, С‡С‚РѕР±С‹ filterContacts СЃСЂР°Р±РѕС‚Р°Р»
             filterContacts('recommended');
             
-            // Обновлять время в шапке каждые 10 секунд
+            // РћР±РЅРѕРІР»СЏС‚СЊ РІСЂРµРјСЏ РІ С€Р°РїРєРµ РєР°Р¶РґС‹Рµ 10 СЃРµРєСѓРЅРґ
             updateHeaderTime();
             setInterval(updateHeaderTime, 10000);
             
-            // Обновлять счетчик времени каждые 10 секунд (оптимизировано)
+            // РћР±РЅРѕРІР»СЏС‚СЊ СЃС‡РµС‚С‡РёРє РІСЂРµРјРµРЅРё РєР°Р¶РґС‹Рµ 10 СЃРµРєСѓРЅРґ (РѕРїС‚РёРјРёР·РёСЂРѕРІР°РЅРѕ)
             setInterval(() => {
                 const nextReminderEl = document.getElementById('next-reminder');
                 if (nextReminderEl && nextReminderEl.style.display !== 'none') {
@@ -1838,24 +1838,24 @@
             }, 10000);
         });
         
-        // Функция обновления времени в шапке
+        // Р¤СѓРЅРєС†РёСЏ РѕР±РЅРѕРІР»РµРЅРёСЏ РІСЂРµРјРµРЅРё РІ С€Р°РїРєРµ
         function updateHeaderTime() {
             const now = new Date();
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             
-            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
-                          'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+            const months = ['СЏРЅРІР°СЂСЏ', 'С„РµРІСЂР°Р»СЏ', 'РјР°СЂС‚Р°', 'Р°РїСЂРµР»СЏ', 'РјР°СЏ', 'РёСЋРЅСЏ', 
+                          'РёСЋР»СЏ', 'Р°РІРіСѓСЃС‚Р°', 'СЃРµРЅС‚СЏР±СЂСЏ', 'РѕРєС‚СЏР±СЂСЏ', 'РЅРѕСЏР±СЂСЏ', 'РґРµРєР°Р±СЂСЏ'];
             const day = now.getDate();
             const month = months[now.getMonth()];
             const year = now.getFullYear();
             
             const timeString = `${hours}:${minutes}`;
-            const dateString = `${day} ${month} ${year} г.`;
+            const dateString = `${day} ${month} ${year} Рі.`;
             
             const headerTimeDisplay = document.getElementById('header-time-display');
             if (headerTimeDisplay) {
-                headerTimeDisplay.textContent = `${timeString} · ${dateString}`;
+                headerTimeDisplay.textContent = `${timeString} В· ${dateString}`;
             }
         }
         
@@ -1944,22 +1944,22 @@
                                 }
                                 html += '<div style="flex: 1;">';
                                 html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
-                                // Количество делегированных задач сразу под ником
+                                // РљРѕР»РёС‡РµСЃС‚РІРѕ РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹С… Р·Р°РґР°С‡ СЃСЂР°Р·Сѓ РїРѕРґ РЅРёРєРѕРј
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
-                                // Город на отдельной строке
+                                // Р“РѕСЂРѕРґ РЅР° РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 if (partner.city) {
-                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
+                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Р“РѕСЂРѕРґ: ' + partner.city + '</span></div>';
                                 }
                                 
-                                // Компания и должность на одной строке
+                                // РљРѕРјРїР°РЅРёСЏ Рё РґРѕР»Р¶РЅРѕСЃС‚СЊ РЅР° РѕРґРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 const companyParts = [];
                                 if (partner.company) {
-                                    companyParts.push('Компания: ' + partner.company);
+                                    companyParts.push('РљРѕРјРїР°РЅРёСЏ: ' + partner.company);
                                 }
                                 if (partner.position) {
-                                    companyParts.push('Должность: ' + partner.position);
+                                    companyParts.push('Р”РѕР»Р¶РЅРѕСЃС‚СЊ: ' + partner.position);
                                 }
                                 if (companyParts.length > 0) {
                                     html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
@@ -1969,35 +1969,35 @@
                                     html += '</div>';
                                 }
                                 
-                                // Остальное на отдельных строках
+                                // РћСЃС‚Р°Р»СЊРЅРѕРµ РЅР° РѕС‚РґРµР»СЊРЅС‹С… СЃС‚СЂРѕРєР°С…
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
-                                    html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
+                                    html += '<span class="task-meta">РРЅС‚РµСЂРµСЃС‹: ' + partner.interests + '</span>';
                                 }
                                 if (partner.common_interests) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹: ' + partner.common_interests + '</span>';
                                 }
                                 if (partner.common_skills) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ РЅР°РІС‹РєРё: ' + partner.common_skills + '</span>';
                                 }
                                 if (partner.common_goals) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ С†РµР»Рё: ' + partner.common_goals + '</span>';
                                 }
                                 if (partner.common_tasks) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ Р·Р°РґР°С‡Рё: ' + partner.common_tasks + '</span>';
                                 }
                                 html += '</div>';
-                                // Рекомендация на отдельной строке
+                                // Р РµРєРѕРјРµРЅРґР°С†РёСЏ РЅР° РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 if (partner.average_rating > 0) {
                                     const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: ' + partner.average_rating + '/10</span></div>';
                                 } else {
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: РЅРµС‚ СЂРµРєРѕРјРµРЅРґР°С†РёР№</span></div>';
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
                                 const isFavorite = isFavoriteContact(partner.contact_info);
-                                const heartIcon = isFavorite ? '¦' : '?';
+                                const heartIcon = isFavorite ? 'В¦' : '?';
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                 html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '">' + heartIcon + '</button>';
@@ -2018,22 +2018,22 @@
                                 }
                                 html += '<div style="flex: 1;">';
                                 html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
-                                // Количество делегированных задач сразу под ником
+                                // РљРѕР»РёС‡РµСЃС‚РІРѕ РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹С… Р·Р°РґР°С‡ СЃСЂР°Р·Сѓ РїРѕРґ РЅРёРєРѕРј
                                 if (partner.task_count) {
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">РґРµР»РµРіРёСЂСѓСЋС‚ РјРЅРµ ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
-                                // Город на отдельной строке
+                                // Р“РѕСЂРѕРґ РЅР° РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 if (partner.city) {
-                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
+                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Р“РѕСЂРѕРґ: ' + partner.city + '</span></div>';
                                 }
                                 
-                                // Компания и должность на одной строке
+                                // РљРѕРјРїР°РЅРёСЏ Рё РґРѕР»Р¶РЅРѕСЃС‚СЊ РЅР° РѕРґРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 const companyParts = [];
                                 if (partner.company) {
-                                    companyParts.push('Компания: ' + partner.company);
+                                    companyParts.push('РљРѕРјРїР°РЅРёСЏ: ' + partner.company);
                                 }
                                 if (partner.position) {
-                                    companyParts.push('Должность: ' + partner.position);
+                                    companyParts.push('Р”РѕР»Р¶РЅРѕСЃС‚СЊ: ' + partner.position);
                                 }
                                 if (companyParts.length > 0) {
                                     html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
@@ -2043,35 +2043,35 @@
                                     html += '</div>';
                                 }
                                 
-                                // Остальное на отдельных строках
+                                // РћСЃС‚Р°Р»СЊРЅРѕРµ РЅР° РѕС‚РґРµР»СЊРЅС‹С… СЃС‚СЂРѕРєР°С…
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
-                                    html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
+                                    html += '<span class="task-meta">РРЅС‚РµСЂРµСЃС‹: ' + partner.interests + '</span>';
                                 }
                                 if (partner.common_interests) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹: ' + partner.common_interests + '</span>';
                                 }
                                 if (partner.common_skills) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ РЅР°РІС‹РєРё: ' + partner.common_skills + '</span>';
                                 }
                                 if (partner.common_goals) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ С†РµР»Рё: ' + partner.common_goals + '</span>';
                                 }
                                 if (partner.common_tasks) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ Р·Р°РґР°С‡Рё: ' + partner.common_tasks + '</span>';
                                 }
                                 html += '</div>';
-                                // Рекомендация на отдельной строке
+                                // Р РµРєРѕРјРµРЅРґР°С†РёСЏ РЅР° РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 if (partner.average_rating > 0) {
                                     const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: ' + partner.average_rating + '/10</span></div>';
                                 } else {
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: РЅРµС‚ СЂРµРєРѕРјРµРЅРґР°С†РёР№</span></div>';
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
                                 const isFavorite = isFavoriteContact(partner.contact_info);
-                                const heartIcon = isFavorite ? '¦' : '?';
+                                const heartIcon = isFavorite ? 'В¦' : '?';
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                 html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '">' + heartIcon + '</button>';
@@ -2094,22 +2094,22 @@
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
                                 html += '<div class="task-title"><a href="' + telegramUrl + '" target="_blank" style="color: #1F2328; text-decoration: none !important;">@' + partner.contact_info + '</a></div>';
-                                // Количество делегированных задач сразу под ником
+                                // РљРѕР»РёС‡РµСЃС‚РІРѕ РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹С… Р·Р°РґР°С‡ СЃСЂР°Р·Сѓ РїРѕРґ РЅРёРєРѕРј
                                 if (partner.task_count) {
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегирую я ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">РґРµР»РµРіРёСЂСѓСЋ СЏ ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
-                                // Город на отдельной строке
+                                // Р“РѕСЂРѕРґ РЅР° РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 if (partner.city) {
-                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
+                                    html += '<div style="margin-top: 4px;"><span class="task-meta">Р“РѕСЂРѕРґ: ' + partner.city + '</span></div>';
                                 }
                                 
-                                // Компания и должность на одной строке
+                                // РљРѕРјРїР°РЅРёСЏ Рё РґРѕР»Р¶РЅРѕСЃС‚СЊ РЅР° РѕРґРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 const companyParts = [];
                                 if (partner.company) {
-                                    companyParts.push('Компания: ' + partner.company);
+                                    companyParts.push('РљРѕРјРїР°РЅРёСЏ: ' + partner.company);
                                 }
                                 if (partner.position) {
-                                    companyParts.push('Должность: ' + partner.position);
+                                    companyParts.push('Р”РѕР»Р¶РЅРѕСЃС‚СЊ: ' + partner.position);
                                 }
                                 if (companyParts.length > 0) {
                                     html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
@@ -2119,35 +2119,35 @@
                                     html += '</div>';
                                 }
                                 
-                                // Остальное на отдельных строках
+                                // РћСЃС‚Р°Р»СЊРЅРѕРµ РЅР° РѕС‚РґРµР»СЊРЅС‹С… СЃС‚СЂРѕРєР°С…
                                 html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                 if (partner.interests) {
-                                    html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
+                                    html += '<span class="task-meta">РРЅС‚РµСЂРµСЃС‹: ' + partner.interests + '</span>';
                                 }
                                 if (partner.common_interests) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹: ' + partner.common_interests + '</span>';
                                 }
                                 if (partner.common_skills) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + partner.common_skills + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ РЅР°РІС‹РєРё: ' + partner.common_skills + '</span>';
                                 }
                                 if (partner.common_goals) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + partner.common_goals + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ С†РµР»Рё: ' + partner.common_goals + '</span>';
                                 }
                                 if (partner.common_tasks) {
-                                    html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
+                                    html += '<span class="task-meta" style="color: #068487;">РћР±С‰РёРµ Р·Р°РґР°С‡Рё: ' + partner.common_tasks + '</span>';
                                 }
                                 html += '</div>';
-                                // Рекомендация на отдельной строке
+                                // Р РµРєРѕРјРµРЅРґР°С†РёСЏ РЅР° РѕС‚РґРµР»СЊРЅРѕР№ СЃС‚СЂРѕРєРµ
                                 if (partner.average_rating > 0) {
                                     const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: ' + ratingColor + ';">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: ' + partner.average_rating + '/10</span></div>';
                                 } else {
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Рекомендация: нет рекомендаций</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #656D76;">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: РЅРµС‚ СЂРµРєРѕРјРµРЅРґР°С†РёР№</span></div>';
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions">';
                                 const isFavorite = isFavoriteContact(partner.contact_info);
-                                const heartIcon = isFavorite ? '¦' : '?';
+                                const heartIcon = isFavorite ? 'В¦' : '?';
                                 const heartColor = isFavorite ? 'color: #068487;' : '';
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                 html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '">' + heartIcon + '</button>';
@@ -2158,10 +2158,10 @@
                         });
                         html += '</ul>';
                         peopleList.innerHTML = html;
-                        // После обновления контактов применяем текущий фильтр
+                        // РџРѕСЃР»Рµ РѕР±РЅРѕРІР»РµРЅРёСЏ РєРѕРЅС‚Р°РєС‚РѕРІ РїСЂРёРјРµРЅСЏРµРј С‚РµРєСѓС‰РёР№ С„РёР»СЊС‚СЂ
                         renderContacts();
                         
-                        // Обновляем визуализацию окружения
+                        // РћР±РЅРѕРІР»СЏРµРј РІРёР·СѓР°Р»РёР·Р°С†РёСЋ РѕРєСЂСѓР¶РµРЅРёСЏ
                         updateCircleContacts(data.partners);
                     } else {
                         peopleList.innerHTML = '';
@@ -2177,7 +2177,7 @@
             const rightContainer = document.getElementById('circle-contacts-right');
             if (!leftContainer || !rightContainer) return;
             
-            // Фильтруем контакты: берем избранные (те, что в фильтре "Мои")
+            // Р¤РёР»СЊС‚СЂСѓРµРј РєРѕРЅС‚Р°РєС‚С‹: Р±РµСЂРµРј РёР·Р±СЂР°РЅРЅС‹Рµ (С‚Рµ, С‡С‚Рѕ РІ С„РёР»СЊС‚СЂРµ "РњРѕРё")
             const myContacts = partners ? partners.filter(p => {
                 const username = p.contact_info ? p.contact_info.replace('@', '') : '';
                 return isFavoriteContact(username);
@@ -2189,20 +2189,20 @@
                 return;
             }
             
-            // Всегда перемешиваем контакты рандомно
+            // Р’СЃРµРіРґР° РїРµСЂРµРјРµС€РёРІР°РµРј РєРѕРЅС‚Р°РєС‚С‹ СЂР°РЅРґРѕРјРЅРѕ
             const shuffled = [...myContacts].sort(() => Math.random() - 0.5);
-            // Берем максимум 6 контактов (по 3 с каждой стороны)
+            // Р‘РµСЂРµРј РјР°РєСЃРёРјСѓРј 6 РєРѕРЅС‚Р°РєС‚РѕРІ (РїРѕ 3 СЃ РєР°Р¶РґРѕР№ СЃС‚РѕСЂРѕРЅС‹)
             const displayContacts = shuffled.slice(0, 6);
             
-            // Размеры уменьшаются от центра (большие в центре, меньше по краям)
-            const sizes = [40, 48, 52, 52, 48, 40]; // Максимум 52px в центре
+            // Р Р°Р·РјРµСЂС‹ СѓРјРµРЅСЊС€Р°СЋС‚СЃСЏ РѕС‚ С†РµРЅС‚СЂР° (Р±РѕР»СЊС€РёРµ РІ С†РµРЅС‚СЂРµ, РјРµРЅСЊС€Рµ РїРѕ РєСЂР°СЏРј)
+            const sizes = [40, 48, 52, 52, 48, 40]; // РњР°РєСЃРёРјСѓРј 52px РІ С†РµРЅС‚СЂРµ
             
-            // Распределяем: 3 слева, 3 справа
+            // Р Р°СЃРїСЂРµРґРµР»СЏРµРј: 3 СЃР»РµРІР°, 3 СЃРїСЂР°РІР°
             const leftCount = 3;
             const leftContacts = displayContacts.slice(0, leftCount);
             const rightContacts = displayContacts.slice(leftCount, 6);
             
-            // Генерируем HTML для левой стороны
+            // Р“РµРЅРµСЂРёСЂСѓРµРј HTML РґР»СЏ Р»РµРІРѕР№ СЃС‚РѕСЂРѕРЅС‹
             let leftHtml = '';
             leftContacts.forEach((contact, index) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
@@ -2220,11 +2220,11 @@
                 }
             });
             
-            // Генерируем HTML для правой стороны
+            // Р“РµРЅРµСЂРёСЂСѓРµРј HTML РґР»СЏ РїСЂР°РІРѕР№ СЃС‚РѕСЂРѕРЅС‹
             let rightHtml = '';
             rightContacts.forEach((contact, index) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
-                const size = sizes[index + 3]; // Начинаем с 4-го размера
+                const size = sizes[index + 3]; // РќР°С‡РёРЅР°РµРј СЃ 4-РіРѕ СЂР°Р·РјРµСЂР°
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
@@ -2252,22 +2252,22 @@
                     // Update incoming delegations
                     const incomingSection = document.querySelector('.delegation-incoming');
                     if (incomingSection && data.incoming) {
-                        let html = '<h4>Делегировано мне</h4>';
+                        let html = '<h4>Р”РµР»РµРіРёСЂРѕРІР°РЅРѕ РјРЅРµ</h4>';
                         if (data.incoming.length > 0) {
                             data.incoming.forEach(task => {
-                                const statusText = task.status === 'accepted' ? 'Принято' : 
-                                                  task.status === 'rejected' ? 'Отклонено' : 'Ожидание';
+                                const statusText = task.status === 'accepted' ? 'РџСЂРёРЅСЏС‚Рѕ' : 
+                                                  task.status === 'rejected' ? 'РћС‚РєР»РѕРЅРµРЅРѕ' : 'РћР¶РёРґР°РЅРёРµ';
                                 html += '<div class="delegation-card">';
                                 html += '<p><strong>' + task.title + '</strong></p>';
-                                html += '<p>От: ' + task.from_user + '</p>';
-                                html += '<p>Статус: ' + statusText + '</p>';
+                                html += '<p>РћС‚: ' + task.from_user + '</p>';
+                                html += '<p>РЎС‚Р°С‚СѓСЃ: ' + statusText + '</p>';
                                 if (task.reminder_time) {
                                     html += '<p>' + task.reminder_time + '</p>';
                                 }
                                 html += '</div>';
                             });
                         } else {
-                            html += '<p style="color: #656D76;">Нет входящих делегирований</p>';
+                            html += '<p style="color: #656D76;">РќРµС‚ РІС…РѕРґСЏС‰РёС… РґРµР»РµРіРёСЂРѕРІР°РЅРёР№</p>';
                         }
                         incomingSection.innerHTML = html;
                     }
@@ -2275,22 +2275,22 @@
                     // Update outgoing delegations
                     const outgoingSection = document.querySelector('.delegation-outgoing');
                     if (outgoingSection && data.outgoing) {
-                        let html = '<h4>Делегировано мной</h4>';
+                        let html = '<h4>Р”РµР»РµРіРёСЂРѕРІР°РЅРѕ РјРЅРѕР№</h4>';
                         if (data.outgoing.length > 0) {
                             data.outgoing.forEach(task => {
-                                const statusText = task.status === 'accepted' ? 'Принято' : 
-                                                  task.status === 'rejected' ? 'Отклонено' : 'Ожидание';
+                                const statusText = task.status === 'accepted' ? 'РџСЂРёРЅСЏС‚Рѕ' : 
+                                                  task.status === 'rejected' ? 'РћС‚РєР»РѕРЅРµРЅРѕ' : 'РћР¶РёРґР°РЅРёРµ';
                                 html += '<div class="delegation-card">';
                                 html += '<p><strong>' + task.title + '</strong></p>';
-                                html += '<p>Кому: ' + task.to_user + '</p>';
-                                html += '<p>Статус: ' + statusText + '</p>';
+                                html += '<p>РљРѕРјСѓ: ' + task.to_user + '</p>';
+                                html += '<p>РЎС‚Р°С‚СѓСЃ: ' + statusText + '</p>';
                                 if (task.reminder_time) {
                                     html += '<p>' + task.reminder_time + '</p>';
                                 }
                                 html += '</div>';
                             });
                         } else {
-                            html += '<p style="color: #656D76;">Нет исходящих делегирований</p>';
+                            html += '<p style="color: #656D76;">РќРµС‚ РёСЃС…РѕРґСЏС‰РёС… РґРµР»РµРіРёСЂРѕРІР°РЅРёР№</p>';
                         }
                         outgoingSection.innerHTML = html;
                     }
@@ -2324,7 +2324,7 @@
                     // Update time display in header
                     const headerTimeDisplay = document.getElementById('header-time-display');
                     if (headerTimeDisplay && data.current_time && data.current_date) {
-                        headerTimeDisplay.textContent = `${data.current_time} · ${data.current_date}`;
+                        headerTimeDisplay.textContent = `${data.current_time} В· ${data.current_date}`;
                     }
                     
                     // Check if profile data actually changed
@@ -2342,13 +2342,13 @@
                         user_avatar_url: data.user_avatar_url ? data.user_avatar_url.split('?')[0] : null
                     });
                     
-                    // Всегда обновляем если данные изменились
+                    // Р’СЃРµРіРґР° РѕР±РЅРѕРІР»СЏРµРј РµСЃР»Рё РґР°РЅРЅС‹Рµ РёР·РјРµРЅРёР»РёСЃСЊ
                     const profileDataChanged = lastProfileData !== currentProfileKey;
                     if (profileDataChanged) {
                         lastProfileData = currentProfileKey;
                     }
                     
-                    // Всегда обновляем аватар в шапке
+                    // Р’СЃРµРіРґР° РѕР±РЅРѕРІР»СЏРµРј Р°РІР°С‚Р°СЂ РІ С€Р°РїРєРµ
                     const headerInfoContainer = document.querySelector('.header-info');
                     if (headerInfoContainer) {
                         let headerAvatarSmall = headerInfoContainer.querySelector('.header-avatar-small');
@@ -2364,30 +2364,30 @@
                                 headerInfoContainer.appendChild(headerAvatarSmall);
                             }
                         }
-                        // Обновляем содержимое только если есть данные
+                        // РћР±РЅРѕРІР»СЏРµРј СЃРѕРґРµСЂР¶РёРјРѕРµ С‚РѕР»СЊРєРѕ РµСЃР»Рё РµСЃС‚СЊ РґР°РЅРЅС‹Рµ
                         if (headerAvatarSmall && data.user_avatar_url) {
-                            // Обновляем только если URL изменился или элемент пустой
+                            // РћР±РЅРѕРІР»СЏРµРј С‚РѕР»СЊРєРѕ РµСЃР»Рё URL РёР·РјРµРЅРёР»СЃСЏ РёР»Рё СЌР»РµРјРµРЅС‚ РїСѓСЃС‚РѕР№
                             const currentImg = headerAvatarSmall.querySelector('img');
                             if (!currentImg || !currentImg.src.includes(data.user_avatar_url.split('?')[0])) {
-                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">`;
+                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="РђРІР°С‚Р°СЂ" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">`;
                             }
                         } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.profile.first_name)) {
-                            // Показываем инициал только если элемент пустой и нет аватара
+                            // РџРѕРєР°Р·С‹РІР°РµРј РёРЅРёС†РёР°Р» С‚РѕР»СЊРєРѕ РµСЃР»Рё СЌР»РµРјРµРЅС‚ РїСѓСЃС‚РѕР№ Рё РЅРµС‚ Р°РІР°С‚Р°СЂР°
                             const initial = (data.profile.username || data.profile.first_name || 'U').charAt(0).toUpperCase();
                             headerAvatarSmall.innerHTML = `<div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                         }
                     }
                     
-                    // Обновляем секцию профиля только если данные изменились
+                    // РћР±РЅРѕРІР»СЏРµРј СЃРµРєС†РёСЋ РїСЂРѕС„РёР»СЏ С‚РѕР»СЊРєРѕ РµСЃР»Рё РґР°РЅРЅС‹Рµ РёР·РјРµРЅРёР»РёСЃСЊ
                     if (profileDataChanged) {
                         // Update profile section
                         const contextSection = document.querySelector('.context-section');
-                        if (!contextSection) return; // Элемент не найден
+                        if (!contextSection) return; // Р­Р»РµРјРµРЅС‚ РЅРµ РЅР°Р№РґРµРЅ
                         
                         // Check if profile has meaningful data (not just username)
                         const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests || data.profile.languages || data.profile.bio || data.profile.username);
                         
-                        // Не перезаписываем профиль, если данные подписки еще не загружены
+                        // РќРµ РїРµСЂРµР·Р°РїРёСЃС‹РІР°РµРј РїСЂРѕС„РёР»СЊ, РµСЃР»Рё РґР°РЅРЅС‹Рµ РїРѕРґРїРёСЃРєРё РµС‰Рµ РЅРµ Р·Р°РіСЂСѓР¶РµРЅС‹
                         if (!data.formatted_end_date && hasProfileData) {
                             console.log('Skipping profile update: subscription data not loaded yet');
                             return;
@@ -2396,7 +2396,7 @@
                         if (hasProfileData && data.formatted_end_date) {
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
-                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 600;">Профиль</h3>';
+                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 600;">РџСЂРѕС„РёР»СЊ</h3>';
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const svgRotation = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
                         html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">';
@@ -2408,39 +2408,39 @@
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
-                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
+                            html += '<img src="' + data.user_avatar_url + '" alt="РђРІР°С‚Р°СЂ" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
                         } else {
                             const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
                             html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
                         }
-                        html += '<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">' + (data.profile.first_name || 'Пользователь') + '</p>';
-                        html += '<p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
+                        html += '<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">' + (data.profile.first_name || 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ') + '</p>';
+                        html += '<p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'РЅРµРёР·РІРµСЃС‚РµРЅ') + '</p>';
                         html += '</div>';
-                        html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';
-                        html += '<p>Компания: ' + (data.profile.company || 'Не указана') + '</p>';
-                        html += '<p>Должность: ' + (data.profile.position || 'Не указана') + '</p>';
-                        html += '<p>Цели: ' + (data.profile.goals || 'Не указаны') + '</p>';
-                        html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
-                        html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
-                        html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
-                        html += '<p>Чем могу помочь: ' + (data.profile.bio || 'Не указано') + '</p>';
+                        html += '<p>Р“РѕСЂРѕРґ: ' + (data.profile.city || 'РќРµ СѓРєР°Р·Р°РЅ') + '</p>';
+                        html += '<p>РљРѕРјРїР°РЅРёСЏ: ' + (data.profile.company || 'РќРµ СѓРєР°Р·Р°РЅР°') + '</p>';
+                        html += '<p>Р”РѕР»Р¶РЅРѕСЃС‚СЊ: ' + (data.profile.position || 'РќРµ СѓРєР°Р·Р°РЅР°') + '</p>';
+                        html += '<p>Р¦РµР»Рё: ' + (data.profile.goals || 'РќРµ СѓРєР°Р·Р°РЅС‹') + '</p>';
+                        html += '<p>РќР°РІС‹РєРё: ' + (data.profile.skills || 'РќРµ СѓРєР°Р·Р°РЅС‹') + '</p>';
+                        html += '<p>РРЅС‚РµСЂРµСЃС‹: ' + (data.profile.interests || 'РќРµ СѓРєР°Р·Р°РЅС‹') + '</p>';
+                        html += '<p>РЇР·С‹РєРё: ' + (data.profile.languages || 'РќРµ СѓРєР°Р·Р°РЅС‹') + '</p>';
+                        html += '<p>Р§РµРј РјРѕРіСѓ РїРѕРјРѕС‡СЊ: ' + (data.profile.bio || 'РќРµ СѓРєР°Р·Р°РЅРѕ') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
-                            html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
+                            html += '<p style="' + ratingColor + '">Р РµРєРѕРјРµРЅРґР°С†РёСЏ: ' + data.profile.average_rating + '/10</p>';
                         } else {
-                            html += '<p>Рекомендация: нет рекомендаций</p>';
+                            html += '<p>Р РµРєРѕРјРµРЅРґР°С†РёСЏ: РЅРµС‚ СЂРµРєРѕРјРµРЅРґР°С†РёР№</p>';
                         }
                         if (data.formatted_end_date) {
-                            html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
+                            html += '<p style="margin-bottom: 20px;">РџРѕРґРїРёСЃРєР°: Р°РєС‚РёРІРЅР° РґРѕ ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">РїСЂРѕРґР»РёС‚СЊ</a></p>';
                         } else {
-                            html += '<p style="margin-bottom: 20px;">Подписка: информация загружается...</p>';
+                            html += '<p style="margin-bottom: 20px;">РџРѕРґРїРёСЃРєР°: РёРЅС„РѕСЂРјР°С†РёСЏ Р·Р°РіСЂСѓР¶Р°РµС‚СЃСЏ...</p>';
                         }
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
                     } else {
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
-                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 600;">Профиль</h3>';
+                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 600;">РџСЂРѕС„РёР»СЊ</h3>';
                         const svgRotation = (localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null) ? 'rotate(-90deg)' : 'rotate(0deg)';
                         html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">';
                         html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ' + svgRotation + ';"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
@@ -2449,7 +2449,7 @@
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const displayStyle = isCollapsed ? 'none' : 'block';
                         html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 15px;">';
-                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>';
+                        html += '<p style="margin: 0; color: #656D76; font-size: 13px;">Р’Р°С€ РїСЂРѕС„РёР»СЊ РµС‰Рµ РЅРµ РЅР°СЃС‚СЂРѕРµРЅ.<br>РќР°РїРёС€РёС‚Рµ РІ С‡Р°С‚, С‡С‚РѕР±С‹ Р·Р°РїРѕР»РЅРёС‚СЊ РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ СЃРµР±Рµ Рё РЅР°С‡Р°С‚СЊ РїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РІСЃРµРјРё С„СѓРЅРєС†РёСЏРјРё.</p>';
                         html += '</div>';
                         contextSection.innerHTML = html;
                     }
@@ -2466,7 +2466,7 @@
         loadInitialMessages();
         updateProfile();
 
-        // Auto-update every 5 seconds (оптимизировано для снижения нагрузки)
+        // Auto-update every 5 seconds (РѕРїС‚РёРјРёР·РёСЂРѕРІР°РЅРѕ РґР»СЏ СЃРЅРёР¶РµРЅРёСЏ РЅР°РіСЂСѓР·РєРё)
         setInterval(() => {
             updateTasks();
             updatePeople();
@@ -2489,7 +2489,7 @@
                     const data = await response.json();
                     if (data.interactions) {
                         if (lastMessageCount === 0) {
-                            // Первая загрузка - очищаем и показываем все сообщения
+                            // РџРµСЂРІР°СЏ Р·Р°РіСЂСѓР·РєР° - РѕС‡РёС‰Р°РµРј Рё РїРѕРєР°Р·С‹РІР°РµРј РІСЃРµ СЃРѕРѕР±С‰РµРЅРёСЏ
                             const chatMessages = document.getElementById('chat-messages');
                             chatMessages.innerHTML = '';
                             displayedMessageIds.clear();
@@ -2499,7 +2499,7 @@
                                 .sort((a, b) => a.id - b.id);
                             
                             sortedInteractions.forEach((interaction) => {
-                                const msgId = interaction.id; // Используем database ID для уникальности
+                                const msgId = interaction.id; // РСЃРїРѕР»СЊР·СѓРµРј database ID РґР»СЏ СѓРЅРёРєР°Р»СЊРЅРѕСЃС‚Рё
                                 if (!displayedMessageIds.has(msgId)) {
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
@@ -2507,12 +2507,12 @@
                             });
                             lastMessageCount = data.interactions.length;
                         } else if (data.interactions.length > lastMessageCount) {
-                            // Добавляем только новые сообщения
+                            // Р”РѕР±Р°РІР»СЏРµРј С‚РѕР»СЊРєРѕ РЅРѕРІС‹Рµ СЃРѕРѕР±С‰РµРЅРёСЏ
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
                             
                             sortedInteractions.forEach((interaction) => {
-                                const msgId = interaction.id; // Используем database ID для уникальности
+                                const msgId = interaction.id; // РСЃРїРѕР»СЊР·СѓРµРј database ID РґР»СЏ СѓРЅРёРєР°Р»СЊРЅРѕСЃС‚Рё
                                 if (!displayedMessageIds.has(msgId)) {
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
@@ -2528,7 +2528,7 @@
         }
 
         async function clearUserTasks() {
-            if (confirm('Вы уверены, что хотите удалить все задачи? Это действие нельзя отменить.')) {
+            if (confirm('Р’С‹ СѓРІРµСЂРµРЅС‹, С‡С‚Рѕ С…РѕС‚РёС‚Рµ СѓРґР°Р»РёС‚СЊ РІСЃРµ Р·Р°РґР°С‡Рё? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ.')) {
                 try {
                     const response = await fetch('/clear_user_tasks', {
                         method: 'POST',
@@ -2539,15 +2539,15 @@
                     });
                     if (!await checkAuth(response)) return;
                     if (response.ok) {
-                        alert('Задачи очищены');
+                        alert('Р—Р°РґР°С‡Рё РѕС‡РёС‰РµРЅС‹');
                         updateTasks(); // Refresh tasks
                     } else {
                         const error = await response.json();
-                        alert('Ошибка: ' + error.error);
+                        alert('РћС€РёР±РєР°: ' + error.error);
                     }
                 } catch (error) {
                     console.error('Error clearing tasks:', error);
-                    alert('Ошибка при очистке задач');
+                    alert('РћС€РёР±РєР° РїСЂРё РѕС‡РёСЃС‚РєРµ Р·Р°РґР°С‡');
                 }
             }
         }
@@ -2565,10 +2565,10 @@
         let isRecording = false;
 
         function startVoiceChat() {
-            if (isRecording) return; // Предотвратить повторный запуск
+            if (isRecording) return; // РџСЂРµРґРѕС‚РІСЂР°С‚РёС‚СЊ РїРѕРІС‚РѕСЂРЅС‹Р№ Р·Р°РїСѓСЃРє
             
             if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('Ваш браузер не поддерживает распознавание речи');
+                alert('Р’Р°С€ Р±СЂР°СѓР·РµСЂ РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ СЂР°СЃРїРѕР·РЅР°РІР°РЅРёРµ СЂРµС‡Рё');
                 return;
             }
 
@@ -2576,46 +2576,46 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
             
-            recognition.lang = 'ru-RU'; // Русский язык
+            recognition.lang = 'ru-RU'; // Р СѓСЃСЃРєРёР№ СЏР·С‹Рє
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
             
             recognition.onstart = function() {
                 isRecording = true;
-                console.log('Голосовое распознавание запущено');
-                // Изменить стиль кнопки - цвет как у лого ASI Biont
+                console.log('Р“РѕР»РѕСЃРѕРІРѕРµ СЂР°СЃРїРѕР·РЅР°РІР°РЅРёРµ Р·Р°РїСѓС‰РµРЅРѕ');
+                // РР·РјРµРЅРёС‚СЊ СЃС‚РёР»СЊ РєРЅРѕРїРєРё - С†РІРµС‚ РєР°Рє Сѓ Р»РѕРіРѕ ASI Biont
                 voiceButton.style.backgroundColor = '#068487';
                 voiceButton.style.color = '#ffffff';
                 voiceButton.style.borderColor = '#068487';
-                // Сделать иконку белой
+                // РЎРґРµР»Р°С‚СЊ РёРєРѕРЅРєСѓ Р±РµР»РѕР№
                 const micIcon = voiceButton.querySelector('img');
                 if (micIcon) {
                     micIcon.style.filter = 'brightness(0) invert(1)';
                 }
-                // Можно добавить пульсацию
+                // РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РїСѓР»СЊСЃР°С†РёСЋ
                 voiceButton.style.animation = 'pulse 1s infinite';
             };
             
             recognition.onresult = function(event) {
                 const transcript = event.results[0][0].transcript;
-                console.log('Распознанный текст:', transcript);
+                console.log('Р Р°СЃРїРѕР·РЅР°РЅРЅС‹Р№ С‚РµРєСЃС‚:', transcript);
                 
-                // Вставить текст в поле ввода
+                // Р’СЃС‚Р°РІРёС‚СЊ С‚РµРєСЃС‚ РІ РїРѕР»Рµ РІРІРѕРґР°
                 const messageInput = document.getElementById('message-input');
                 messageInput.value = transcript;
                 
-                // Автоматически отправить сообщение
+                // РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРё РѕС‚РїСЂР°РІРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ
                 sendChatMessage();
             };
             
             recognition.onerror = function(event) {
-                console.error('Ошибка распознавания:', event.error);
-                alert('Ошибка распознавания речи: ' + event.error);
+                console.error('РћС€РёР±РєР° СЂР°СЃРїРѕР·РЅР°РІР°РЅРёСЏ:', event.error);
+                alert('РћС€РёР±РєР° СЂР°СЃРїРѕР·РЅР°РІР°РЅРёСЏ СЂРµС‡Рё: ' + event.error);
                 resetVoiceButton();
             };
             
             recognition.onend = function() {
-                console.log('Голосовое распознавание завершено');
+                console.log('Р“РѕР»РѕСЃРѕРІРѕРµ СЂР°СЃРїРѕР·РЅР°РІР°РЅРёРµ Р·Р°РІРµСЂС€РµРЅРѕ');
                 resetVoiceButton();
             };
             
@@ -2625,7 +2625,7 @@
                 voiceButton.style.color = '#59636E';
                 voiceButton.style.borderColor = '#D1D9E0';
                 voiceButton.style.animation = '';
-                // Вернуть иконку к серому цвету
+                // Р’РµСЂРЅСѓС‚СЊ РёРєРѕРЅРєСѓ Рє СЃРµСЂРѕРјСѓ С†РІРµС‚Сѓ
                 const micIcon = voiceButton.querySelector('img');
                 if (micIcon) {
                     micIcon.style.filter = 'brightness(0) saturate(100%) invert(42%) sepia(7%) saturate(749%) hue-rotate(169deg) brightness(93%) contrast(88%)';
@@ -2643,111 +2643,111 @@
             switch(section) {
                 case 'profile':
                     content = `
-                        <h3>?? Профиль пользователя</h3>
-                        <p>Этот раздел содержит вашу персональную информацию и настройки аккаунта. Данные профиля используются AI-ассистентом для персонализации взаимодействия и улучшения рекомендаций.</p>
-                        <p><strong>Зачем собираются данные:</strong></p>
+                        <h3>?? РџСЂРѕС„РёР»СЊ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ</h3>
+                        <p>Р­С‚РѕС‚ СЂР°Р·РґРµР» СЃРѕРґРµСЂР¶РёС‚ РІР°С€Сѓ РїРµСЂСЃРѕРЅР°Р»СЊРЅСѓСЋ РёРЅС„РѕСЂРјР°С†РёСЋ Рё РЅР°СЃС‚СЂРѕР№РєРё Р°РєРєР°СѓРЅС‚Р°. Р”Р°РЅРЅС‹Рµ РїСЂРѕС„РёР»СЏ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ AI-Р°СЃСЃРёСЃС‚РµРЅС‚РѕРј РґР»СЏ РїРµСЂСЃРѕРЅР°Р»РёР·Р°С†РёРё РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёСЏ Рё СѓР»СѓС‡С€РµРЅРёСЏ СЂРµРєРѕРјРµРЅРґР°С†РёР№.</p>
+                        <p><strong>Р—Р°С‡РµРј СЃРѕР±РёСЂР°СЋС‚СЃСЏ РґР°РЅРЅС‹Рµ:</strong></p>
                         <ul>
-                            <li><strong>Имя пользователя:</strong> Уникальный идентификатор для коммуникации и делегирования задач</li>
-                            <li><strong>Город:</strong> Для поиска локальных партнеров и учета часового пояса</li>
-                            <li><strong>Компания и должность:</strong> Определение профессионального профиля для подбора контактов</li>
-                            <li><strong>Цели:</strong> Понимание ваших приоритетов для персонализированных рекомендаций</li>
-                            <li><strong>Навыки:</strong> Определение компетенций для поиска подходящих партнеров по проектам</li>
-                            <li><strong>Интересы:</strong> Темы, которые вас интересуют, для интеллектуального подбора контактов</li>
+                            <li><strong>РРјСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ:</strong> РЈРЅРёРєР°Р»СЊРЅС‹Р№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ РґР»СЏ РєРѕРјРјСѓРЅРёРєР°С†РёРё Рё РґРµР»РµРіРёСЂРѕРІР°РЅРёСЏ Р·Р°РґР°С‡</li>
+                            <li><strong>Р“РѕСЂРѕРґ:</strong> Р”Р»СЏ РїРѕРёСЃРєР° Р»РѕРєР°Р»СЊРЅС‹С… РїР°СЂС‚РЅРµСЂРѕРІ Рё СѓС‡РµС‚Р° С‡Р°СЃРѕРІРѕРіРѕ РїРѕСЏСЃР°</li>
+                            <li><strong>РљРѕРјРїР°РЅРёСЏ Рё РґРѕР»Р¶РЅРѕСЃС‚СЊ:</strong> РћРїСЂРµРґРµР»РµРЅРёРµ РїСЂРѕС„РµСЃСЃРёРѕРЅР°Р»СЊРЅРѕРіРѕ РїСЂРѕС„РёР»СЏ РґР»СЏ РїРѕРґР±РѕСЂР° РєРѕРЅС‚Р°РєС‚РѕРІ</li>
+                            <li><strong>Р¦РµР»Рё:</strong> РџРѕРЅРёРјР°РЅРёРµ РІР°С€РёС… РїСЂРёРѕСЂРёС‚РµС‚РѕРІ РґР»СЏ РїРµСЂСЃРѕРЅР°Р»РёР·РёСЂРѕРІР°РЅРЅС‹С… СЂРµРєРѕРјРµРЅРґР°С†РёР№</li>
+                            <li><strong>РќР°РІС‹РєРё:</strong> РћРїСЂРµРґРµР»РµРЅРёРµ РєРѕРјРїРµС‚РµРЅС†РёР№ РґР»СЏ РїРѕРёСЃРєР° РїРѕРґС…РѕРґСЏС‰РёС… РїР°СЂС‚РЅРµСЂРѕРІ РїРѕ РїСЂРѕРµРєС‚Р°Рј</li>
+                            <li><strong>РРЅС‚РµСЂРµСЃС‹:</strong> РўРµРјС‹, РєРѕС‚РѕСЂС‹Рµ РІР°СЃ РёРЅС‚РµСЂРµСЃСѓСЋС‚, РґР»СЏ РёРЅС‚РµР»Р»РµРєС‚СѓР°Р»СЊРЅРѕРіРѕ РїРѕРґР±РѕСЂР° РєРѕРЅС‚Р°РєС‚РѕРІ</li>
                         </ul>
-                        <p><strong>Как используются данные:</strong></p>
+                        <p><strong>РљР°Рє РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґР°РЅРЅС‹Рµ:</strong></p>
                         <ul>
-                            <li><strong>Рекомендации контактов:</strong> AI анализирует совпадения интересов, навыков и целей для предложения релевантных партнеров</li>
-                            <li><strong>Персонализация чата:</strong> Ассистент учитывает ваш профиль для более точных ответов и предложений</li>
-                            <li><strong>Умные напоминания:</strong> Учет часового пояса и предпочтений для оптимального времени уведомлений</li>
-                            <li><strong>Статистика и аналитика:</strong> Данные помогают улучшать систему рекомендаций и функциональность</li>
+                            <li><strong>Р РµРєРѕРјРµРЅРґР°С†РёРё РєРѕРЅС‚Р°РєС‚РѕРІ:</strong> AI Р°РЅР°Р»РёР·РёСЂСѓРµС‚ СЃРѕРІРїР°РґРµРЅРёСЏ РёРЅС‚РµСЂРµСЃРѕРІ, РЅР°РІС‹РєРѕРІ Рё С†РµР»РµР№ РґР»СЏ РїСЂРµРґР»РѕР¶РµРЅРёСЏ СЂРµР»РµРІР°РЅС‚РЅС‹С… РїР°СЂС‚РЅРµСЂРѕРІ</li>
+                            <li><strong>РџРµСЂСЃРѕРЅР°Р»РёР·Р°С†РёСЏ С‡Р°С‚Р°:</strong> РђСЃСЃРёСЃС‚РµРЅС‚ СѓС‡РёС‚С‹РІР°РµС‚ РІР°С€ РїСЂРѕС„РёР»СЊ РґР»СЏ Р±РѕР»РµРµ С‚РѕС‡РЅС‹С… РѕС‚РІРµС‚РѕРІ Рё РїСЂРµРґР»РѕР¶РµРЅРёР№</li>
+                            <li><strong>РЈРјРЅС‹Рµ РЅР°РїРѕРјРёРЅР°РЅРёСЏ:</strong> РЈС‡РµС‚ С‡Р°СЃРѕРІРѕРіРѕ РїРѕСЏСЃР° Рё РїСЂРµРґРїРѕС‡С‚РµРЅРёР№ РґР»СЏ РѕРїС‚РёРјР°Р»СЊРЅРѕРіРѕ РІСЂРµРјРµРЅРё СѓРІРµРґРѕРјР»РµРЅРёР№</li>
+                            <li><strong>РЎС‚Р°С‚РёСЃС‚РёРєР° Рё Р°РЅР°Р»РёС‚РёРєР°:</strong> Р”Р°РЅРЅС‹Рµ РїРѕРјРѕРіР°СЋС‚ СѓР»СѓС‡С€Р°С‚СЊ СЃРёСЃС‚РµРјСѓ СЂРµРєРѕРјРµРЅРґР°С†РёР№ Рё С„СѓРЅРєС†РёРѕРЅР°Р»СЊРЅРѕСЃС‚СЊ</li>
                         </ul>
-                        <p><strong>Конфиденциальность:</strong> Все данные хранятся securely и используются только для улучшения вашего опыта работы с системой. Вы можете обновить информацию в любое время через чат с ассистентом.</p>
-                        <p><strong>Как обновить:</strong> Отправьте боту сообщение "заполнить профиль" или используйте команды вроде "обновить город Москва".</p>
+                        <p><strong>РљРѕРЅС„РёРґРµРЅС†РёР°Р»СЊРЅРѕСЃС‚СЊ:</strong> Р’СЃРµ РґР°РЅРЅС‹Рµ С…СЂР°РЅСЏС‚СЃСЏ securely Рё РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ С‚РѕР»СЊРєРѕ РґР»СЏ СѓР»СѓС‡С€РµРЅРёСЏ РІР°С€РµРіРѕ РѕРїС‹С‚Р° СЂР°Р±РѕС‚С‹ СЃ СЃРёСЃС‚РµРјРѕР№. Р’С‹ РјРѕР¶РµС‚Рµ РѕР±РЅРѕРІРёС‚СЊ РёРЅС„РѕСЂРјР°С†РёСЋ РІ Р»СЋР±РѕРµ РІСЂРµРјСЏ С‡РµСЂРµР· С‡Р°С‚ СЃ Р°СЃСЃРёСЃС‚РµРЅС‚РѕРј.</p>
+                        <p><strong>РљР°Рє РѕР±РЅРѕРІРёС‚СЊ:</strong> РћС‚РїСЂР°РІСЊС‚Рµ Р±РѕС‚Сѓ СЃРѕРѕР±С‰РµРЅРёРµ "Р·Р°РїРѕР»РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ" РёР»Рё РёСЃРїРѕР»СЊР·СѓР№С‚Рµ РєРѕРјР°РЅРґС‹ РІСЂРѕРґРµ "РѕР±РЅРѕРІРёС‚СЊ РіРѕСЂРѕРґ РњРѕСЃРєРІР°".</p>
                     `;
                     break;
                 case 'contacts':
                     content = `
-                        <h3>Контакты и связи</h3>
-                        <p>Раздел для поиска и управления профессиональными контактами. Система анализирует профили пользователей для интеллектуального подбора партнеров по проектам.</p>
-                        <p><strong>Зачем собираются данные контактов:</strong></p>
+                        <h3>РљРѕРЅС‚Р°РєС‚С‹ Рё СЃРІСЏР·Рё</h3>
+                        <p>Р Р°Р·РґРµР» РґР»СЏ РїРѕРёСЃРєР° Рё СѓРїСЂР°РІР»РµРЅРёСЏ РїСЂРѕС„РµСЃСЃРёРѕРЅР°Р»СЊРЅС‹РјРё РєРѕРЅС‚Р°РєС‚Р°РјРё. РЎРёСЃС‚РµРјР° Р°РЅР°Р»РёР·РёСЂСѓРµС‚ РїСЂРѕС„РёР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РґР»СЏ РёРЅС‚РµР»Р»РµРєС‚СѓР°Р»СЊРЅРѕРіРѕ РїРѕРґР±РѕСЂР° РїР°СЂС‚РЅРµСЂРѕРІ РїРѕ РїСЂРѕРµРєС‚Р°Рј.</p>
+                        <p><strong>Р—Р°С‡РµРј СЃРѕР±РёСЂР°СЋС‚СЃСЏ РґР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚РѕРІ:</strong></p>
                         <ul>
-                            <li><strong>Профили пользователей:</strong> Информация о навыках, интересах и целях для точного matching</li>
-                            <li><strong>История взаимодействий:</strong> Анализ предыдущих коммуникаций для улучшения рекомендаций</li>
-                            <li><strong>Делегирования задач:</strong> Отслеживание активных поручений между пользователями</li>
+                            <li><strong>РџСЂРѕС„РёР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№:</strong> РРЅС„РѕСЂРјР°С†РёСЏ Рѕ РЅР°РІС‹РєР°С…, РёРЅС‚РµСЂРµСЃР°С… Рё С†РµР»СЏС… РґР»СЏ С‚РѕС‡РЅРѕРіРѕ matching</li>
+                            <li><strong>РСЃС‚РѕСЂРёСЏ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёР№:</strong> РђРЅР°Р»РёР· РїСЂРµРґС‹РґСѓС‰РёС… РєРѕРјРјСѓРЅРёРєР°С†РёР№ РґР»СЏ СѓР»СѓС‡С€РµРЅРёСЏ СЂРµРєРѕРјРµРЅРґР°С†РёР№</li>
+                            <li><strong>Р”РµР»РµРіРёСЂРѕРІР°РЅРёСЏ Р·Р°РґР°С‡:</strong> РћС‚СЃР»РµР¶РёРІР°РЅРёРµ Р°РєС‚РёРІРЅС‹С… РїРѕСЂСѓС‡РµРЅРёР№ РјРµР¶РґСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРјРё</li>
                         </ul>
-                        <p><strong>Как используются данные:</strong></p>
+                        <p><strong>РљР°Рє РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґР°РЅРЅС‹Рµ:</strong></p>
                         <ul>
-                            <li><strong>Алгоритм рекомендаций:</strong> AI сравнивает ваш профиль с профилями других пользователей, находя оптимальные совпадения по навыкам (70%), интересам (20%) и целям (10%)</li>
-                            <li><strong>Локальный поиск:</strong> Приоритет контактам из вашего города для удобства встреч</li>
-                            <li><strong>Делегирование:</strong> Система запоминает успешные взаимодействия для будущих рекомендаций</li>
-                            <li><strong>Сетевой эффект:</strong> Чем больше пользователей заполняют профили, тем точнее рекомендации</li>
+                            <li><strong>РђР»РіРѕСЂРёС‚Рј СЂРµРєРѕРјРµРЅРґР°С†РёР№:</strong> AI СЃСЂР°РІРЅРёРІР°РµС‚ РІР°С€ РїСЂРѕС„РёР»СЊ СЃ РїСЂРѕС„РёР»СЏРјРё РґСЂСѓРіРёС… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№, РЅР°С…РѕРґСЏ РѕРїС‚РёРјР°Р»СЊРЅС‹Рµ СЃРѕРІРїР°РґРµРЅРёСЏ РїРѕ РЅР°РІС‹РєР°Рј (70%), РёРЅС‚РµСЂРµСЃР°Рј (20%) Рё С†РµР»СЏРј (10%)</li>
+                            <li><strong>Р›РѕРєР°Р»СЊРЅС‹Р№ РїРѕРёСЃРє:</strong> РџСЂРёРѕСЂРёС‚РµС‚ РєРѕРЅС‚Р°РєС‚Р°Рј РёР· РІР°С€РµРіРѕ РіРѕСЂРѕРґР° РґР»СЏ СѓРґРѕР±СЃС‚РІР° РІСЃС‚СЂРµС‡</li>
+                            <li><strong>Р”РµР»РµРіРёСЂРѕРІР°РЅРёРµ:</strong> РЎРёСЃС‚РµРјР° Р·Р°РїРѕРјРёРЅР°РµС‚ СѓСЃРїРµС€РЅС‹Рµ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёСЏ РґР»СЏ Р±СѓРґСѓС‰РёС… СЂРµРєРѕРјРµРЅРґР°С†РёР№</li>
+                            <li><strong>РЎРµС‚РµРІРѕР№ СЌС„С„РµРєС‚:</strong> Р§РµРј Р±РѕР»СЊС€Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ Р·Р°РїРѕР»РЅСЏСЋС‚ РїСЂРѕС„РёР»Рё, С‚РµРј С‚РѕС‡РЅРµРµ СЂРµРєРѕРјРµРЅРґР°С†РёРё</li>
                         </ul>
-                        <p><strong>Типы контактов:</strong></p>
+                        <p><strong>РўРёРїС‹ РєРѕРЅС‚Р°РєС‚РѕРІ:</strong></p>
                         <ul>
-                            <li><strong>Рекомендуемые:</strong> Автоматический подбор на основе алгоритма similarity. Обновляется при изменении вашего профиля.</li>
-                            <li><strong>Делегируют мне:</strong> Активные поручения от других пользователей. Помогает отслеживать ответственность.</li>
-                            <li><strong>Делегирую я:</strong> Ваши активные поручения. Удобно для контроля над распределенными задачами.</li>
+                            <li><strong>Р РµРєРѕРјРµРЅРґСѓРµРјС‹Рµ:</strong> РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ РїРѕРґР±РѕСЂ РЅР° РѕСЃРЅРѕРІРµ Р°Р»РіРѕСЂРёС‚РјР° similarity. РћР±РЅРѕРІР»СЏРµС‚СЃСЏ РїСЂРё РёР·РјРµРЅРµРЅРёРё РІР°С€РµРіРѕ РїСЂРѕС„РёР»СЏ.</li>
+                            <li><strong>Р”РµР»РµРіРёСЂСѓСЋС‚ РјРЅРµ:</strong> РђРєС‚РёРІРЅС‹Рµ РїРѕСЂСѓС‡РµРЅРёСЏ РѕС‚ РґСЂСѓРіРёС… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№. РџРѕРјРѕРіР°РµС‚ РѕС‚СЃР»РµР¶РёРІР°С‚СЊ РѕС‚РІРµС‚СЃС‚РІРµРЅРЅРѕСЃС‚СЊ.</li>
+                            <li><strong>Р”РµР»РµРіРёСЂСѓСЋ СЏ:</strong> Р’Р°С€Рё Р°РєС‚РёРІРЅС‹Рµ РїРѕСЂСѓС‡РµРЅРёСЏ. РЈРґРѕР±РЅРѕ РґР»СЏ РєРѕРЅС‚СЂРѕР»СЏ РЅР°Рґ СЂР°СЃРїСЂРµРґРµР»РµРЅРЅС‹РјРё Р·Р°РґР°С‡Р°РјРё.</li>
                         </ul>
-                        <p><strong>Приватность:</strong> Контакты видны только вам. Система не раскрывает вашу информацию третьим лицам без согласия.</p>
+                        <p><strong>РџСЂРёРІР°С‚РЅРѕСЃС‚СЊ:</strong> РљРѕРЅС‚Р°РєС‚С‹ РІРёРґРЅС‹ С‚РѕР»СЊРєРѕ РІР°Рј. РЎРёСЃС‚РµРјР° РЅРµ СЂР°СЃРєСЂС‹РІР°РµС‚ РІР°С€Сѓ РёРЅС„РѕСЂРјР°С†РёСЋ С‚СЂРµС‚СЊРёРј Р»РёС†Р°Рј Р±РµР· СЃРѕРіР»Р°СЃРёСЏ.</p>
                     `;
                     break;
                 case 'chat':
                     content = `
-                        <h3>Интеллектуальный чат-ассистент</h3>
-                        <p>AI-ассистент обрабатывает ваши сообщения на естественном языке, используя машинное обучение для понимания контекста и предоставления релевантных ответов.</p>
-                        <p><strong>Зачем собираются данные чата:</strong></p>
+                        <h3>РРЅС‚РµР»Р»РµРєС‚СѓР°Р»СЊРЅС‹Р№ С‡Р°С‚-Р°СЃСЃРёСЃС‚РµРЅС‚</h3>
+                        <p>AI-Р°СЃСЃРёСЃС‚РµРЅС‚ РѕР±СЂР°Р±Р°С‚С‹РІР°РµС‚ РІР°С€Рё СЃРѕРѕР±С‰РµРЅРёСЏ РЅР° РµСЃС‚РµСЃС‚РІРµРЅРЅРѕРј СЏР·С‹РєРµ, РёСЃРїРѕР»СЊР·СѓСЏ РјР°С€РёРЅРЅРѕРµ РѕР±СѓС‡РµРЅРёРµ РґР»СЏ РїРѕРЅРёРјР°РЅРёСЏ РєРѕРЅС‚РµРєСЃС‚Р° Рё РїСЂРµРґРѕСЃС‚Р°РІР»РµРЅРёСЏ СЂРµР»РµРІР°РЅС‚РЅС‹С… РѕС‚РІРµС‚РѕРІ.</p>
+                        <p><strong>Р—Р°С‡РµРј СЃРѕР±РёСЂР°СЋС‚СЃСЏ РґР°РЅРЅС‹Рµ С‡Р°С‚Р°:</strong></p>
                         <ul>
-                            <li><strong>История сообщений:</strong> Анализ предыдущих взаимодействий для поддержания контекста беседы</li>
-                            <li><strong>Паттерны использования:</strong> Изучение ваших предпочтений в формулировках команд</li>
-                            <li><strong>Обратная связь:</strong> Отслеживание успешности выполнения задач для улучшения алгоритмов</li>
-                            <li><strong>Персонализация:</strong> Адаптация ответов под ваш стиль общения и профиль</li>
+                            <li><strong>РСЃС‚РѕСЂРёСЏ СЃРѕРѕР±С‰РµРЅРёР№:</strong> РђРЅР°Р»РёР· РїСЂРµРґС‹РґСѓС‰РёС… РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёР№ РґР»СЏ РїРѕРґРґРµСЂР¶Р°РЅРёСЏ РєРѕРЅС‚РµРєСЃС‚Р° Р±РµСЃРµРґС‹</li>
+                            <li><strong>РџР°С‚С‚РµСЂРЅС‹ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ:</strong> РР·СѓС‡РµРЅРёРµ РІР°С€РёС… РїСЂРµРґРїРѕС‡С‚РµРЅРёР№ РІ С„РѕСЂРјСѓР»РёСЂРѕРІРєР°С… РєРѕРјР°РЅРґ</li>
+                            <li><strong>РћР±СЂР°С‚РЅР°СЏ СЃРІСЏР·СЊ:</strong> РћС‚СЃР»РµР¶РёРІР°РЅРёРµ СѓСЃРїРµС€РЅРѕСЃС‚Рё РІС‹РїРѕР»РЅРµРЅРёСЏ Р·Р°РґР°С‡ РґР»СЏ СѓР»СѓС‡С€РµРЅРёСЏ Р°Р»РіРѕСЂРёС‚РјРѕРІ</li>
+                            <li><strong>РџРµСЂСЃРѕРЅР°Р»РёР·Р°С†РёСЏ:</strong> РђРґР°РїС‚Р°С†РёСЏ РѕС‚РІРµС‚РѕРІ РїРѕРґ РІР°С€ СЃС‚РёР»СЊ РѕР±С‰РµРЅРёСЏ Рё РїСЂРѕС„РёР»СЊ</li>
                         </ul>
-                        <p><strong>Как используются данные:</strong></p>
+                        <p><strong>РљР°Рє РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґР°РЅРЅС‹Рµ:</strong></p>
                         <ul>
-                            <li><strong>NLP обработка:</strong> Модель GPT анализирует текст для извлечения intent, entities и временных выражений</li>
-                            <li><strong>Контекстная память:</strong> Система помнит предыдущие 50 сообщений для поддержания связности диалога</li>
-                            <li><strong>Обучение модели:</strong> Анонимизированные данные используются для улучшения качества распознавания команд</li>
-                            <li><strong>Персональные настройки:</strong> AI учитывает ваш часовой пояс, профиль и историю для более точных ответов</li>
+                            <li><strong>NLP РѕР±СЂР°Р±РѕС‚РєР°:</strong> РњРѕРґРµР»СЊ GPT Р°РЅР°Р»РёР·РёСЂСѓРµС‚ С‚РµРєСЃС‚ РґР»СЏ РёР·РІР»РµС‡РµРЅРёСЏ intent, entities Рё РІСЂРµРјРµРЅРЅС‹С… РІС‹СЂР°Р¶РµРЅРёР№</li>
+                            <li><strong>РљРѕРЅС‚РµРєСЃС‚РЅР°СЏ РїР°РјСЏС‚СЊ:</strong> РЎРёСЃС‚РµРјР° РїРѕРјРЅРёС‚ РїСЂРµРґС‹РґСѓС‰РёРµ 50 СЃРѕРѕР±С‰РµРЅРёР№ РґР»СЏ РїРѕРґРґРµСЂР¶Р°РЅРёСЏ СЃРІСЏР·РЅРѕСЃС‚Рё РґРёР°Р»РѕРіР°</li>
+                            <li><strong>РћР±СѓС‡РµРЅРёРµ РјРѕРґРµР»Рё:</strong> РђРЅРѕРЅРёРјРёР·РёСЂРѕРІР°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґР»СЏ СѓР»СѓС‡С€РµРЅРёСЏ РєР°С‡РµСЃС‚РІР° СЂР°СЃРїРѕР·РЅР°РІР°РЅРёСЏ РєРѕРјР°РЅРґ</li>
+                            <li><strong>РџРµСЂСЃРѕРЅР°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё:</strong> AI СѓС‡РёС‚С‹РІР°РµС‚ РІР°С€ С‡Р°СЃРѕРІРѕР№ РїРѕСЏСЃ, РїСЂРѕС„РёР»СЊ Рё РёСЃС‚РѕСЂРёСЋ РґР»СЏ Р±РѕР»РµРµ С‚РѕС‡РЅС‹С… РѕС‚РІРµС‚РѕРІ</li>
                         </ul>
-                        <p><strong>Возможности ассистента:</strong></p>
+                        <p><strong>Р’РѕР·РјРѕР¶РЅРѕСЃС‚Рё Р°СЃСЃРёСЃС‚РµРЅС‚Р°:</strong></p>
                         <ul>
-                            <li><strong>Создание задач:</strong> Распознавание даты, времени и описания из свободного текста</li>
-                            <li><strong>Управление задачами:</strong> Понимание команд на изменение, перенос и завершение</li>
-                            <li><strong>Делегирование:</strong> Автоматическое распознавание @username для поручения задач</li>
-                            <li><strong>Аналитика:</strong> Генерация отчетов и статистики по вашим задачам</li>
+                            <li><strong>РЎРѕР·РґР°РЅРёРµ Р·Р°РґР°С‡:</strong> Р Р°СЃРїРѕР·РЅР°РІР°РЅРёРµ РґР°С‚С‹, РІСЂРµРјРµРЅРё Рё РѕРїРёСЃР°РЅРёСЏ РёР· СЃРІРѕР±РѕРґРЅРѕРіРѕ С‚РµРєСЃС‚Р°</li>
+                            <li><strong>РЈРїСЂР°РІР»РµРЅРёРµ Р·Р°РґР°С‡Р°РјРё:</strong> РџРѕРЅРёРјР°РЅРёРµ РєРѕРјР°РЅРґ РЅР° РёР·РјРµРЅРµРЅРёРµ, РїРµСЂРµРЅРѕСЃ Рё Р·Р°РІРµСЂС€РµРЅРёРµ</li>
+                            <li><strong>Р”РµР»РµРіРёСЂРѕРІР°РЅРёРµ:</strong> РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ СЂР°СЃРїРѕР·РЅР°РІР°РЅРёРµ @username РґР»СЏ РїРѕСЂСѓС‡РµРЅРёСЏ Р·Р°РґР°С‡</li>
+                            <li><strong>РђРЅР°Р»РёС‚РёРєР°:</strong> Р“РµРЅРµСЂР°С†РёСЏ РѕС‚С‡РµС‚РѕРІ Рё СЃС‚Р°С‚РёСЃС‚РёРєРё РїРѕ РІР°С€РёРј Р·Р°РґР°С‡Р°Рј</li>
                         </ul>
-                        <p><strong>Безопасность:</strong> Все сообщения шифруются в транзите и хранятся securely. Данные не передаются третьим сторонам.</p>
-                        <p><strong>Примеры команд:</strong> "Создай задачу на завтра в 10:00", "Перенеси встречу на пятницу", "Покажи статистику за неделю".</p>
+                        <p><strong>Р‘РµР·РѕРїР°СЃРЅРѕСЃС‚СЊ:</strong> Р’СЃРµ СЃРѕРѕР±С‰РµРЅРёСЏ С€РёС„СЂСѓСЋС‚СЃСЏ РІ С‚СЂР°РЅР·РёС‚Рµ Рё С…СЂР°РЅСЏС‚СЃСЏ securely. Р”Р°РЅРЅС‹Рµ РЅРµ РїРµСЂРµРґР°СЋС‚СЃСЏ С‚СЂРµС‚СЊРёРј СЃС‚РѕСЂРѕРЅР°Рј.</p>
+                        <p><strong>РџСЂРёРјРµСЂС‹ РєРѕРјР°РЅРґ:</strong> "РЎРѕР·РґР°Р№ Р·Р°РґР°С‡Сѓ РЅР° Р·Р°РІС‚СЂР° РІ 10:00", "РџРµСЂРµРЅРµСЃРё РІСЃС‚СЂРµС‡Сѓ РЅР° РїСЏС‚РЅРёС†Сѓ", "РџРѕРєР°Р¶Рё СЃС‚Р°С‚РёСЃС‚РёРєСѓ Р·Р° РЅРµРґРµР»СЋ".</p>
                     `;
                     break;
                 case 'tasks':
                     content = `
-                        <h3>?? Управление задачами</h3>
-                        <p>Центральный раздел для просмотра и управления задачами. Система собирает данные о ваших задачах для анализа продуктивности и оптимизации рабочих процессов.</p>
-                        <p><strong>Зачем собираются данные задач:</strong></p>
+                        <h3>?? РЈРїСЂР°РІР»РµРЅРёРµ Р·Р°РґР°С‡Р°РјРё</h3>
+                        <p>Р¦РµРЅС‚СЂР°Р»СЊРЅС‹Р№ СЂР°Р·РґРµР» РґР»СЏ РїСЂРѕСЃРјРѕС‚СЂР° Рё СѓРїСЂР°РІР»РµРЅРёСЏ Р·Р°РґР°С‡Р°РјРё. РЎРёСЃС‚РµРјР° СЃРѕР±РёСЂР°РµС‚ РґР°РЅРЅС‹Рµ Рѕ РІР°С€РёС… Р·Р°РґР°С‡Р°С… РґР»СЏ Р°РЅР°Р»РёР·Р° РїСЂРѕРґСѓРєС‚РёРІРЅРѕСЃС‚Рё Рё РѕРїС‚РёРјРёР·Р°С†РёРё СЂР°Р±РѕС‡РёС… РїСЂРѕС†РµСЃСЃРѕРІ.</p>
+                        <p><strong>Р—Р°С‡РµРј СЃРѕР±РёСЂР°СЋС‚СЃСЏ РґР°РЅРЅС‹Рµ Р·Р°РґР°С‡:</strong></p>
                         <ul>
-                            <li><strong>Сроки выполнения:</strong> Отслеживание дедлайнов для своевременных напоминаний</li>
-                            <li><strong>Статусы задач:</strong> Мониторинг прогресса и выявление узких мест</li>
-                            <li><strong>Делегирования:</strong> Отслеживание распределения задач между пользователями</li>
-                            <li><strong>История выполнения:</strong> Анализ паттернов продуктивности для рекомендаций</li>
+                            <li><strong>РЎСЂРѕРєРё РІС‹РїРѕР»РЅРµРЅРёСЏ:</strong> РћС‚СЃР»РµР¶РёРІР°РЅРёРµ РґРµРґР»Р°Р№РЅРѕРІ РґР»СЏ СЃРІРѕРµРІСЂРµРјРµРЅРЅС‹С… РЅР°РїРѕРјРёРЅР°РЅРёР№</li>
+                            <li><strong>РЎС‚Р°С‚СѓСЃС‹ Р·Р°РґР°С‡:</strong> РњРѕРЅРёС‚РѕСЂРёРЅРі РїСЂРѕРіСЂРµСЃСЃР° Рё РІС‹СЏРІР»РµРЅРёРµ СѓР·РєРёС… РјРµСЃС‚</li>
+                            <li><strong>Р”РµР»РµРіРёСЂРѕРІР°РЅРёСЏ:</strong> РћС‚СЃР»РµР¶РёРІР°РЅРёРµ СЂР°СЃРїСЂРµРґРµР»РµРЅРёСЏ Р·Р°РґР°С‡ РјРµР¶РґСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРјРё</li>
+                            <li><strong>РСЃС‚РѕСЂРёСЏ РІС‹РїРѕР»РЅРµРЅРёСЏ:</strong> РђРЅР°Р»РёР· РїР°С‚С‚РµСЂРЅРѕРІ РїСЂРѕРґСѓРєС‚РёРІРЅРѕСЃС‚Рё РґР»СЏ СЂРµРєРѕРјРµРЅРґР°С†РёР№</li>
                         </ul>
-                        <p><strong>Как используются данные:</strong></p>
+                        <p><strong>РљР°Рє РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґР°РЅРЅС‹Рµ:</strong></p>
                         <ul>
-                            <li><strong>Умные напоминания:</strong> AI анализирует ваши паттерны отклика и выбирает оптимальное время для уведомлений</li>
-                            <li><strong>Статистика продуктивности:</strong> Расчет метрик завершения задач, просрочек и эффективности</li>
-                            <li><strong>Рекомендации:</strong> Предложения по оптимизации времени на основе анализа выполненных задач</li>
-                            <li><strong>Прогнозирование:</strong> Оценка времени выполнения подобных задач в будущем</li>
-                            <li><strong>Аналитика команд:</strong> При делегировании - отслеживание эффективности распределения задач</li>
+                            <li><strong>РЈРјРЅС‹Рµ РЅР°РїРѕРјРёРЅР°РЅРёСЏ:</strong> AI Р°РЅР°Р»РёР·РёСЂСѓРµС‚ РІР°С€Рё РїР°С‚С‚РµСЂРЅС‹ РѕС‚РєР»РёРєР° Рё РІС‹Р±РёСЂР°РµС‚ РѕРїС‚РёРјР°Р»СЊРЅРѕРµ РІСЂРµРјСЏ РґР»СЏ СѓРІРµРґРѕРјР»РµРЅРёР№</li>
+                            <li><strong>РЎС‚Р°С‚РёСЃС‚РёРєР° РїСЂРѕРґСѓРєС‚РёРІРЅРѕСЃС‚Рё:</strong> Р Р°СЃС‡РµС‚ РјРµС‚СЂРёРє Р·Р°РІРµСЂС€РµРЅРёСЏ Р·Р°РґР°С‡, РїСЂРѕСЃСЂРѕС‡РµРє Рё СЌС„С„РµРєС‚РёРІРЅРѕСЃС‚Рё</li>
+                            <li><strong>Р РµРєРѕРјРµРЅРґР°С†РёРё:</strong> РџСЂРµРґР»РѕР¶РµРЅРёСЏ РїРѕ РѕРїС‚РёРјРёР·Р°С†РёРё РІСЂРµРјРµРЅРё РЅР° РѕСЃРЅРѕРІРµ Р°РЅР°Р»РёР·Р° РІС‹РїРѕР»РЅРµРЅРЅС‹С… Р·Р°РґР°С‡</li>
+                            <li><strong>РџСЂРѕРіРЅРѕР·РёСЂРѕРІР°РЅРёРµ:</strong> РћС†РµРЅРєР° РІСЂРµРјРµРЅРё РІС‹РїРѕР»РЅРµРЅРёСЏ РїРѕРґРѕР±РЅС‹С… Р·Р°РґР°С‡ РІ Р±СѓРґСѓС‰РµРј</li>
+                            <li><strong>РђРЅР°Р»РёС‚РёРєР° РєРѕРјР°РЅРґ:</strong> РџСЂРё РґРµР»РµРіРёСЂРѕРІР°РЅРёРё - РѕС‚СЃР»РµР¶РёРІР°РЅРёРµ СЌС„С„РµРєС‚РёРІРЅРѕСЃС‚Рё СЂР°СЃРїСЂРµРґРµР»РµРЅРёСЏ Р·Р°РґР°С‡</li>
                         </ul>
-                        <p><strong>Статистика и метрики:</strong></p>
+                        <p><strong>РЎС‚Р°С‚РёСЃС‚РёРєР° Рё РјРµС‚СЂРёРєРё:</strong></p>
                         <ul>
-                            <li><strong>Завершенные / Всего:</strong> Показатель продуктивности за выбранный период</li>
-                            <li><strong>Просроченные задачи:</strong> Выделены красным для срочного внимания</li>
-                            <li><strong>Временные паттерны:</strong> Анализ наиболее продуктивных часов и дней</li>
-                            <li><strong>Календарная визуализация:</strong> Недельный обзор распределения задач</li>
+                            <li><strong>Р—Р°РІРµСЂС€РµРЅРЅС‹Рµ / Р’СЃРµРіРѕ:</strong> РџРѕРєР°Р·Р°С‚РµР»СЊ РїСЂРѕРґСѓРєС‚РёРІРЅРѕСЃС‚Рё Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ</li>
+                            <li><strong>РџСЂРѕСЃСЂРѕС‡РµРЅРЅС‹Рµ Р·Р°РґР°С‡Рё:</strong> Р’С‹РґРµР»РµРЅС‹ РєСЂР°СЃРЅС‹Рј РґР»СЏ СЃСЂРѕС‡РЅРѕРіРѕ РІРЅРёРјР°РЅРёСЏ</li>
+                            <li><strong>Р’СЂРµРјРµРЅРЅС‹Рµ РїР°С‚С‚РµСЂРЅС‹:</strong> РђРЅР°Р»РёР· РЅР°РёР±РѕР»РµРµ РїСЂРѕРґСѓРєС‚РёРІРЅС‹С… С‡Р°СЃРѕРІ Рё РґРЅРµР№</li>
+                            <li><strong>РљР°Р»РµРЅРґР°СЂРЅР°СЏ РІРёР·СѓР°Р»РёР·Р°С†РёСЏ:</strong> РќРµРґРµР»СЊРЅС‹Р№ РѕР±Р·РѕСЂ СЂР°СЃРїСЂРµРґРµР»РµРЅРёСЏ Р·Р°РґР°С‡</li>
                         </ul>
-                        <p><strong>Приватность данных:</strong> Информация о задачах видна только вам и пользователям, которым вы делегировали задачи. Статистика используется анонимно для улучшения системы.</p>
-                        <p><strong>Экспорт и резервное копирование:</strong> Ваши задачи автоматически сохраняются и могут быть восстановлены при необходимости.</p>
+                        <p><strong>РџСЂРёРІР°С‚РЅРѕСЃС‚СЊ РґР°РЅРЅС‹С…:</strong> РРЅС„РѕСЂРјР°С†РёСЏ Рѕ Р·Р°РґР°С‡Р°С… РІРёРґРЅР° С‚РѕР»СЊРєРѕ РІР°Рј Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏРј, РєРѕС‚РѕСЂС‹Рј РІС‹ РґРµР»РµРіРёСЂРѕРІР°Р»Рё Р·Р°РґР°С‡Рё. РЎС‚Р°С‚РёСЃС‚РёРєР° РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ Р°РЅРѕРЅРёРјРЅРѕ РґР»СЏ СѓР»СѓС‡С€РµРЅРёСЏ СЃРёСЃС‚РµРјС‹.</p>
+                        <p><strong>Р­РєСЃРїРѕСЂС‚ Рё СЂРµР·РµСЂРІРЅРѕРµ РєРѕРїРёСЂРѕРІР°РЅРёРµ:</strong> Р’Р°С€Рё Р·Р°РґР°С‡Рё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё СЃРѕС…СЂР°РЅСЏСЋС‚СЃСЏ Рё РјРѕРіСѓС‚ Р±С‹С‚СЊ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅС‹ РїСЂРё РЅРµРѕР±С…РѕРґРёРјРѕСЃС‚Рё.</p>
                     `;
                     break;
             }
@@ -2760,7 +2760,7 @@
             document.getElementById('info-modal').style.display = 'none';
         }
         
-        // Закрытие модального окна при клике вне его
+        // Р—Р°РєСЂС‹С‚РёРµ РјРѕРґР°Р»СЊРЅРѕРіРѕ РѕРєРЅР° РїСЂРё РєР»РёРєРµ РІРЅРµ РµРіРѕ
         window.onclick = function(event) {
             const modal = document.getElementById('info-modal');
             if (event.target == modal) {
