@@ -69,7 +69,7 @@ body {
 }
 
 .user-info {
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 400;
     margin-left: 20px;
     margin-right: 20px;
@@ -679,7 +679,7 @@ body {
 
 .tasks-section::-webkit-scrollbar-thumb:hover {
     background: #656D76;
-} */
+}
 
 .context-section {
     padding: 12px;
@@ -1161,7 +1161,7 @@ body {
 }
 
 .no-subscription-content p {
-    font-size: 16px;
+    font-size: 13px;
     margin-bottom: 20px;
     color: #656D76;
 }
@@ -1194,7 +1194,7 @@ body {
 
 .auth-link {
     color: #656D76;
-    font-size: 16px;
+    font-size: 13px;
     text-decoration: none;
 }
 
