@@ -223,7 +223,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 1fr 2fr 1fr;
+    grid-template-columns: 1.5fr 2fr 1.5fr;
     height: 100%;
     column-gap: clamp(8px, 2vw, 16px);
     padding: 35px clamp(8px, 2vw, 16px) 20px clamp(8px, 2vw, 16px);
