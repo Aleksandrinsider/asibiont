@@ -132,7 +132,7 @@ body {
 
 .header-content h1 {
     margin: 0;
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 600;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     color: #068487;
@@ -147,7 +147,7 @@ body {
 }
 
 .logo {
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 400;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     color: #068487;
@@ -333,7 +333,7 @@ body {
     grid-template-columns: 450px minmax(500px, 1fr) 450px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc(100vh - 84px);
-    gap: 0px;
+    gap: 6px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
@@ -1003,7 +1003,6 @@ details[open] .details-content {
 }
 
 .task-item:hover {
-    background-color: rgba(6, 132, 135, 0.04);
     transform: translateX(2px);
     border-radius: 6px;
 }
@@ -1055,8 +1054,8 @@ details[open] .details-content {
 
 .quick-action {
     padding: 8px;
-    background-color: #F6F8FA;
-    color: #1F2328;
+    background-color: #FFFFFF;
+    color: #59636E;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
@@ -1077,7 +1076,7 @@ details[open] .details-content {
 }
 
 .quick-action:hover {
-    background-color: #FFFFFF;
+    background-color: #F6F8FA;
     border-color: #1F2328;
 }
 
