@@ -329,7 +329,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 380px minmax(680px, 1fr) 400px; /* Fixed-ish sidebars, flexible center */
+    grid-template-columns: 400px minmax(680px, 1fr) 400px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc(100vh - 84px);
     gap: 4px;
