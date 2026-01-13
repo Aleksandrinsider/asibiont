@@ -4981,6 +4981,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
+                    
+                    # Метрики качества ответа
+                    response_quality = {
+                        'length': len(content),
+                        'has_questions': '?' in content,
+                        'has_tools': bool(tool_calls),
+                        'intent_type': intent.get('type', 'unknown'),
+                        'user_id': user_id
+                    }
+                    logger.info(f"[RESPONSE QUALITY] {response_quality}")
+                    
+                    # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
+                    if not content or len(content.strip()) < 10:
+                        logger.warning(f"[FALLBACK] Empty or too short response, using fallback")
+                        content = improved_fallback(intent, tool_calls, content, message, user_id)
+                    
                     print(f"[DEBUG] About to return content: '{content}'")  # DEBUG
                     return content
 
@@ -5029,22 +5045,24 @@ async def generate_reminder(user_id, task_title):
                     user_memory = ""
             session.close()
 
-        # Используем расширенный system prompt с правилами verbose ответов
+        # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
         import pytz
         user_now = datetime.now(pytz.UTC)
         current_time_str = user_now.strftime("%H:%M")
         user_username = "пользователь"  # Можно получить из базы если нужно
         mentions_str = ""
-        
+
         base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
-        
-        # Добавляем специфические правила для напоминаний
-        system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
-        system_prompt += "Генерируй краткое, мотивирующее напоминание о задаче. Максимум 1 абзац.\n"
-        system_prompt += "Будь полезным и конкретным, но не навязчивым.\n"
-        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её.\n"
-        system_prompt += "Можно задать 1-2 вопроса для подготовки.\n"
+
+        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
+        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
+        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
+        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
+        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
+        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
+        system_prompt += "2-4 предложения, живое общение как с другом\n"
+        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
@@ -5095,12 +5113,30 @@ async def generate_result_check(user_id, task_title):
                     user_memory = ""
             session.close()
 
+        # Используем единый унифицированный промпт для всех AI-сообщений
+        from datetime import datetime
+        import pytz
+        user_now = datetime.now(pytz.UTC)
+        current_time_str = user_now.strftime("%H:%M")
+        user_username = "пользователь"
+        mentions_str = ""
+
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+
+        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
+        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
+        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
+        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
+        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
+        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
+        system_prompt += "2-4 предложения, живое общение как с другом\n"
+        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        system_prompt = get_active_system_prompt()
 
         messages = [
-            {"role": "system", "content": system_prompt + user_memory + "\n\nПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов, 4-6 предложений. Предоставь детальный анализ ситуации. Дай конкретные рекомендации с нумерацией. Задай вопросы для вовлечения пользователя."},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": f"Спроси о результате выполнения задачи '{task_title}'. Узнай о времени, сложностях, улучшениях.",
@@ -5172,12 +5208,30 @@ async def generate_proactive_message(user_id):
                 tasks_info = f"\nТекущие невыполненные задачи: {', '.join(pending_tasks[:3])}"
             session.close()
 
+        # Используем единый унифицированный промпт для всех AI-сообщений
+        from datetime import datetime
+        import pytz
+        user_now = datetime.now(pytz.UTC)
+        current_time_str = user_now.strftime("%H:%M")
+        user_username = "пользователь"
+        mentions_str = ""
+
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory + plans_info + tasks_info)
+
+        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
+        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
+        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
+        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
+        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
+        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
+        system_prompt += "2-4 предложения, живое общение как с другом\n"
+        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        system_prompt = get_active_system_prompt()
 
         messages = [
-            {"role": "system", "content": system_prompt + user_memory + plans_info + tasks_info + "\n\nПРАВИЛА ДЛЯ ОТВЕТА: 2-4 абзаца. Дай краткий анализ ситуации и конкретные рекомендации. Задай вопросы для вовлечения пользователя."},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": "У пользователя нет задач на ближайший час. Создай позитивное проактивное сообщение.",
@@ -5235,12 +5289,30 @@ async def generate_daily_report(user_id):
                     user_memory = ""
             session.close()
 
+        # Используем единый унифицированный промпт для всех AI-сообщений
+        from datetime import datetime
+        import pytz
+        user_now = datetime.now(pytz.UTC)
+        current_time_str = user_now.strftime("%H:%M")
+        user_username = "пользователь"
+        mentions_str = ""
+
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+
+        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
+        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
+        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
+        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
+        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
+        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
+        system_prompt += "2-4 предложения, живое общение как с другом\n"
+        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        system_prompt = get_active_system_prompt()
 
         messages = [
-            {"role": "system", "content": system_prompt + user_memory + "\n\nПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов, 4-6 предложений. Предоставь детальный анализ ситуации. Дай конкретные рекомендации с нумерацией. Задай вопросы для вовлечения пользователя."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"},
         ]
 
@@ -5284,9 +5356,24 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                     user_memory = ""
             session.close()
 
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        system_prompt = get_active_system_prompt()
+        # Используем единый унифицированный промпт для всех AI-сообщений
+        from datetime import datetime
+        import pytz
+        user_now = datetime.now(pytz.UTC)
+        current_time_str = user_now.strftime("%H:%M")
+        user_username = "пользователь"
+        mentions_str = ""
+
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+
+        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
+        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
+        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
+        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
+        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
+        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
+        system_prompt += "2-4 предложения, живое общение как с другом\n"
+        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
 
         # Адаптируем тон в зависимости от уровня эскалации
         if escalation_level == 1:
@@ -5296,8 +5383,11 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         else:  # 3+
             tone_instruction = "Будь очень строгим и мотивирующим. Предложи конкретные альтернативы и помощь."
 
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+
         messages = [
-            {"role": "system", "content": system_prompt + user_memory + "\n\nПРАВИЛА ДЛЯ ОТВЕТА: Минимум 300 слов, 4-6 предложений. Предоставь детальный анализ ситуации. Дай конкретные рекомендации с нумерацией. Задай вопросы для вовлечения пользователя. {tone_instruction}"},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.",
