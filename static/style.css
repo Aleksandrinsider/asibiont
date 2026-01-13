@@ -378,7 +378,6 @@ body {
     overflow: auto;
     flex: 1 1 auto;
     transition: all 0.3s ease;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
 }
 
 .people-list {
@@ -898,11 +897,9 @@ details[open] .details-content {
     border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
-    overflow: auto;
     flex: 1 1 auto;
     min-height: 0;
     transition: all 0.3s ease;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
 }
 
 
