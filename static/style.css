@@ -369,17 +369,9 @@ body {
 
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
     padding: 12px;
-    background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    min-height: 0;
-    overflow: auto;
-    flex: 1 1 auto;
-    transition: all 0.3s ease;
+    margin-top: 0;
+    margin-bottom: 12px;
 }
 
 .people-list {
