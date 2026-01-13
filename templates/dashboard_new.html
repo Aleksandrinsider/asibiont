@@ -138,7 +138,7 @@
             <!-- Левая колонка - Люди -->
             <div class="left-column">
                 <div class="context-section" id="profile-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #59636E; line-height: normal;">Профиль</h3>
                         <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #59636E; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
@@ -199,7 +199,7 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
-                            <p>Сфера деятельности: {{ profile.bio or 'Не указано' }}</p>
+                            <p>Доступность: {{ profile.bio or 'Не указано' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
@@ -815,7 +815,7 @@
                 return;
             }
             
-            let html = '<div style="display: grid; gap: 8px;">';
+            let html = '<div style="display: grid; gap: 6px;">';
             contacts.forEach(contact => {
                 const isFavorite = isFavoriteContact(contact.username);
                 const photoUrl = contact.photo_url;
@@ -852,6 +852,11 @@
                                     class="quick-action"
                                     style="color: ${heartColor};">
                                 ${isFavorite ? '¦' : '?'}
+                            </button>
+                            <button onclick="event.stopPropagation(); window.open('https://t.me/${contact.username}', '_blank')" 
+                                    class="quick-action"
+                                    title="Написать в Telegram">
+                                ?
                             </button>
                             <button onclick="event.stopPropagation();" 
                                     class="quick-action">
@@ -2429,7 +2434,7 @@
                         html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
                         html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
-                        html += '<p>Сфера деятельности: ' + (data.profile.bio || 'Не указано') + '</p>';
+                        html += '<p>Доступность: ' + (data.profile.bio || 'Не указано') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
