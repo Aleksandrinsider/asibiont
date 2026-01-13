@@ -2774,6 +2774,107 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     return result
 
 
+def analyze_task(task_id=None, user_id=None, session=None):
+    """Анализирует задачу с помощью AI и дает рекомендации"""
+    from models import Session, Task, UserProfile, Interaction
+    from datetime import datetime
+    from sqlalchemy import or_
+
+    print(f"[DEBUG ANALYZE_TASK] Called with task_id={task_id}, user_id={user_id}")  # DEBUG
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    print(f"[DEBUG ANALYZE_TASK] Found user: {user.id if user else None}")  # DEBUG
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден."
+
+    # Найти задачу по ID
+    if task_id:
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        task = (
+            session.query(Task)
+            .filter(
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username))
+            )
+            .first()
+        )
+    else:
+        if close_session:
+            session.close()
+        return "Не указан ID задачи."
+
+    if task:
+        # Получить профиль пользователя для контекста
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        # Собрать информацию о задаче для анализа
+        task_info = f"""
+        ЗАДАЧА ДЛЯ АНАЛИЗА:
+        Название: {task.title}
+        Описание: {task.description or 'Не указано'}
+        Статус: {task.status}
+        Время напоминания: {task.reminder_time.strftime('%Y-%m-%d %H:%M') if task.reminder_time else 'Не установлено'}
+        Просрочена: {'Да' if task.overdue else 'Нет'}
+        Делегирована: {'Да' if task.is_delegated else 'Нет'}
+        """
+        
+        # Добавить информацию из профиля пользователя
+        profile_info = ""
+        if profile:
+            profile_info = f"""
+        ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ:
+        Навыки: {profile.skills or 'Не указаны'}
+        Интересы: {profile.interests or 'Не указаны'}
+        Цели: {profile.goals or 'Не указаны'}
+        Город: {profile.city or 'Не указан'}
+        """
+        
+        # Запрос к AI для анализа
+        analysis_prompt = f"""{task_info}{profile_info}
+
+        Проанализируй эту задачу и дай полезные рекомендации:
+        1. Оцени сложность и реалистичность сроков
+        2. Предложи шаги для выполнения
+        3. Дай советы по оптимизации
+        4. Если задача просрочена, объясни почему и как исправить
+        5. Учитывай навыки и интересы пользователя при рекомендациях
+        
+        Будь конкретным и полезным в ответе."""
+
+        try:
+            # Используем chat_with_ai для анализа
+            analysis_result = chat_with_ai(analysis_prompt, [], user_id)
+            
+            # Сохранить результат анализа в историю взаимодействий
+            interaction = Interaction(user_id=user.id, message_type="ai", content=f"Анализ задачи '{task.title}':\n\n{analysis_result}")
+            session.add(interaction)
+            session.commit()
+            
+            result = f"Анализ задачи '{task.title}':\n\n{analysis_result}"
+            
+        except Exception as e:
+            logger.error(f"Error analyzing task {task_id}: {e}")
+            result = f"Ошибка при анализе задачи '{task.title}': {str(e)}"
+    else:
+        result = "Задача не найдена."
+    
+    if close_session:
+        session.close()
+    return result
+
+
 def set_reminder(task_id, reminder_time, user_id=None):
     from models import Session, Task
     from datetime import datetime
@@ -3808,7 +3909,7 @@ def find_partners(user_id=None, session=None):
                 info_parts.append(f"интересы: {p.interests}")
             if hasattr(p, "bio") and p.bio:
                 bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
-                info_parts.append(f"чем могу помочь: {bio_short}")
+                info_parts.append(f"мои навыки и опыт: {bio_short}")
             if hasattr(p, "position") and p.position:
                 info_parts.append(f"{p.position}")
             if hasattr(p, "company") and p.company:
@@ -4439,7 +4540,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 if profile.position:
                     profile_info.append(f"Должность: {profile.position}")
                 if hasattr(profile, 'bio') and profile.bio:
-                    profile_info.append(f"Чем могу помочь: {profile.bio}")
+                    profile_info.append(f"Мои навыки и опыт: {profile.bio}")
                 if hasattr(profile, 'languages') and profile.languages:
                     profile_info.append(f"Языки: {profile.languages}")
                 if profile.skills:
@@ -4466,7 +4567,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 if not (hasattr(profile, 'languages') and profile.languages):
                     empty_fields.append("языки")
                 if not (hasattr(profile, 'bio') and profile.bio):
-                    empty_fields.append("чем могу помочь")
+                    empty_fields.append("мои навыки и опыт")
                 
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"

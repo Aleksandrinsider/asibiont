@@ -1064,6 +1064,28 @@ async def complete_task_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def analyze_task_handler(request):
+    """Анализирует задачу с помощью AI"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    data = await request.json()
+    task_id = data.get('task_id')
+    if not task_id:
+        return web.json_response({'error': 'Task ID required'}, status=400)
+    
+    from ai_integration import analyze_task
+    try:
+        result = analyze_task(task_id=task_id, user_id=user_id)
+        logger.info(f"Task {task_id} analyzed by user {user_id}: {result[:100]}...")
+        return web.json_response({'message': result})
+    except Exception as e:
+        logger.error(f"Error analyzing task {task_id}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def clear_old_tasks_handler(request):
     """Admin endpoint to clear old test tasks"""
     # Check admin secret
@@ -2517,6 +2539,7 @@ app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/complete_task', complete_task_handler)
+app.router.add_post('/analyze_task', analyze_task_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/test_payment', test_payment_handler)  # Тестовый эндпоинт для симуляции оплаты

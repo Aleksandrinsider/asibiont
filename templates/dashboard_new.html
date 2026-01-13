@@ -1159,6 +1159,7 @@
             html += '<button onclick="editTask(' + task.id + ')" class="dropdown-item">Редактировать</button>';
             html += '<button onclick="rescheduleTask(' + task.id + ')" class="dropdown-item">Перенести</button>';
             html += '<button onclick="delegateTask(' + task.id + ')" class="dropdown-item">Делегировать</button>';
+            html += '<button onclick="analyzeTask(' + task.id + ')" class="dropdown-item">Анализировать задачу</button>';
             html += '<button onclick="showTaskInChat(' + task.id + ')" class="dropdown-item">Открыть в чате</button>';
             html += '</div>';
 
@@ -1675,6 +1676,40 @@
             } catch (error) {
                 console.error('Error deleting task:', error);
                 addMessage('Ошибка при удалении задачи', 'ai');
+                lastMessageCount += 1;
+            }
+        }
+
+        async function analyzeTask(taskId) {
+            try {
+                // Найти задачу в текущих данных
+                const task = allTasksFromServer.find(t => t.id === taskId);
+                if (!task) {
+                    addMessage('Задача не найдена', 'ai');
+                    lastMessageCount += 1;
+                    return;
+                }
+
+                // Отправить запрос на анализ задачи
+                const response = await fetch('/analyze_task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    await updateChat();
+                } else {
+                    const error = await response.json();
+                    addMessage(`Ошибка при анализе задачи: ${error.error}`, 'ai');
+                    lastMessageCount += 1;
+                }
+            } catch (error) {
+                console.error('Error analyzing task:', error);
+                addMessage('Ошибка при анализе задачи', 'ai');
                 lastMessageCount += 1;
             }
         }
