@@ -793,7 +793,6 @@ details[open] .details-content {
     display: flex;
     gap: 8px;
     padding: 10px;
-    background-color: #F6F8FA;
     border-top: 1px solid #D1D9E0;
 }
 
