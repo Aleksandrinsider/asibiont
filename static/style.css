@@ -329,12 +329,12 @@ body {
     display: grid;
     grid-template-columns: 380px minmax(680px, 1fr) 400px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
-    height: calc(100vh - 84px);
+    height: calc(100vh - 64px);
     gap: 4px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
-    margin-top: 20px;
+    margin-top: 0;
 }
 
 /* Ensure direct children can shrink properly inside grid */
@@ -364,7 +364,7 @@ body {
     padding: 8px;
     background-color: #FFFFFF;
     border-radius: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 6px;
     min-height: 0;
 }
 
@@ -789,7 +789,7 @@ details[open] .details-content {
 
 .context-section {
     padding: 8px; /* Reduced padding */
-    margin-bottom: 12px;
+    margin-bottom: 6px;
     overflow: visible;
 }
 
@@ -844,7 +844,7 @@ details[open] .details-content {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
     margin-top: 0px;
 }
 
