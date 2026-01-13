@@ -355,6 +355,7 @@ body {
     max-height: 100%;
     padding: 6px;
     min-height: 0; /* Important for proper flex/grid behavior */
+    margin-top: 20px;
 }
 
 /* Make people section fill available vertical space and allow internal scrolling */
@@ -394,6 +395,7 @@ body {
     min-height: 0; /* Allow proper internal scrolling */
     -webkit-overflow-scrolling: touch;
     flex: 1 1 auto;
+    margin-top: 20px;
 } 
 
 
