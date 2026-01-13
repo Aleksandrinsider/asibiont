@@ -615,7 +615,7 @@ async def dashboard_handler(request):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
         
-        current_time = str(int(datetime.now().timestamp()) + 9)
+        current_time = str(int(datetime.now().timestamp()) + 10)
         
         months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
         current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"

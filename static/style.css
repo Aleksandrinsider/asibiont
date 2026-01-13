@@ -844,6 +844,7 @@ details[open] .details-content {
     padding: 8px;
     border-radius: 8px;
     background-color: #FFFFFF;
+    margin-top: 3px;
 }
 
 .tasks-section-wrapper {
