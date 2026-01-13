@@ -511,10 +511,7 @@ details[open] .details-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    padding: 5px;
+    padding: 12px;
     height: 100%;
     max-height: calc(100% - 50px);
     overflow: hidden;
@@ -1269,7 +1266,6 @@ details[open] .details-content {
 }
 
 .chat-action-btn {
-    background-color: #FFFFFF;
     transition: all 0.2s;
     padding: 8px;
     color: #59636E;
@@ -1288,13 +1284,11 @@ details[open] .details-content {
 }
 
 .chat-action-btn:hover {
-    background-color: #F6F8FA;
     border-color: #1F2328;
 }
 
 .delete-btn {
     padding: 8px;
-    background-color: #FFFFFF;
     color: #59636E;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
@@ -1302,7 +1296,7 @@ details[open] .details-content {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: 1;
-    font-weight: 500;
+    font-weight: 400;
     margin-left: 0;
     transition: all 0.2s;
     min-width: 32px;
@@ -1316,7 +1310,6 @@ details[open] .details-content {
 }
 
 .delete-btn:hover {
-    background-color: #F6F8FA;
     border-color: #1F2328;
 }
 
