@@ -330,7 +330,7 @@ body {
     grid-template-columns: 450px minmax(500px, 1fr) 450px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc(100vh - 84px);
-    gap: 5px;
+    gap: 3px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
@@ -368,7 +368,7 @@ body {
 .people-section {
     padding: 12px;
     margin-top: 0;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 }
 
 .people-list {
@@ -838,14 +838,14 @@ details[open] .details-content {
     padding: 12px;
     border: none;
     margin-top: 0;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 }
 
 .task-stats-block {
     padding: 12px;
     border: none;
     margin-top: 0;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 }
 
 .tasks-section-wrapper {
