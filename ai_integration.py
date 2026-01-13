@@ -1,6 +1,15 @@
 import aiohttp
 import requests
-from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
+from config import (
+    DEEPSEEK_API_KEY, 
+    DEEPSEEK_MODEL,
+    AI_CACHE_ENABLED,
+    AI_MAX_TOKENS_RESPONSE,
+    AI_MAX_TOKENS_ANALYSIS,
+    AI_TEMPERATURE_LOW,
+    AI_TEMPERATURE_HIGH,
+    ENCRYPTION_KEY
+)
 import json
 from datetime import datetime, timezone, timedelta
 import re
@@ -9,6 +18,44 @@ import asyncio
 from cryptography.fernet import Fernet, InvalidToken
 from models import User, UserProfile
 import pytz
+import hashlib
+import time
+from functools import lru_cache
+
+# AI Response Cache
+_ai_response_cache = {}
+
+def get_ai_cache_key(prompt, model, temperature, max_tokens):
+    """Generate cache key for AI responses"""
+    key_data = f"{prompt}|{model}|{temperature}|{max_tokens}"
+    return hashlib.md5(key_data.encode()).hexdigest()
+
+def get_cached_ai_response(cache_key, max_age_seconds=3600):
+    """Get cached AI response if it exists and not expired"""
+    if not AI_CACHE_ENABLED:
+        return None
+        
+    if cache_key in _ai_response_cache:
+        cached_item = _ai_response_cache[cache_key]
+        if time.time() - cached_item['timestamp'] < max_age_seconds:
+            return cached_item['response']
+        else:
+            # Remove expired cache
+            del _ai_response_cache[cache_key]
+    return None
+
+def cache_ai_response(cache_key, response):
+    """Cache AI response"""
+    if AI_CACHE_ENABLED:
+        _ai_response_cache[cache_key] = {
+            'response': response,
+            'timestamp': time.time()
+        }
+
+@lru_cache(maxsize=100)
+def classify_intent_cached(message, mentions_str):
+    """Cached version of intent classification for repeated similar messages"""
+    return improved_classify_intent(message, mentions_str)
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
 logger = logging.getLogger(__name__)
@@ -150,6 +197,13 @@ def analyze_with_ai(profile, message):
     """
     import requests
     
+    # Check cache first
+    cache_key = get_ai_cache_key(f"profile_analysis:{message}:{profile.city}:{profile.interests}:{profile.skills}:{profile.company}", 
+                                DEEPSEEK_MODEL, AI_TEMPERATURE_LOW, 150)
+    cached_response = get_cached_ai_response(cache_key)
+    if cached_response:
+        return cached_response
+    
     empty_fields = []
     if not profile.city or profile.city.strip() == "":
         empty_fields.append("город")
@@ -187,10 +241,10 @@ def analyze_with_ai(profile, message):
             "Content-Type": "application/json"
         }
         data = {
-            "model": "deepseek-chat",
+            "model": DEEPSEEK_MODEL,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 150,
-            "temperature": 0.3
+            "temperature": AI_TEMPERATURE_LOW
         }
         
         response = requests.post(url, headers=headers, json=data, timeout=10)
@@ -198,6 +252,8 @@ def analyze_with_ai(profile, message):
             result = response.json()
             content = result["choices"][0]["message"]["content"].strip()
             if content and "None" not in content and len(content) > 10:
+                # Cache the response
+                cache_ai_response(cache_key, content)
                 return content
         return None
     except Exception as e:
