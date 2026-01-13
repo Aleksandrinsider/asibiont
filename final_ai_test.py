@@ -44,11 +44,11 @@ def test_all_ai_functions():
     print("-" * 40)
     session = Session()
     try:
-        user = User(id=4000, telegram_id=4000000)
+        user = User(id=9999, telegram_id=9999999)
         session.add(user)
 
         profile = UserProfile(
-            user_id=4000,
+            user_id=9999,
             city='Москва',
             interests='программирование, ИИ, стартапы',
             skills='Python, машинное обучение',
@@ -57,7 +57,7 @@ def test_all_ai_functions():
         session.add(profile)
         session.commit()
 
-        recommendations = generate_recommendations(4000)
+        recommendations = generate_recommendations(9999)
         print(f"Профиль: {profile.interests}, навыки: {profile.skills}")
         print(f"Рекомендаций: {len(recommendations)}")
         for rec in recommendations[:3]:  # Показываем первые 3

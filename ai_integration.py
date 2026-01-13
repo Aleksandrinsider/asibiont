@@ -20,42 +20,6 @@ from models import User, UserProfile
 import pytz
 import hashlib
 import time
-from functools import lru_cache
-
-# AI Response Cache
-_ai_response_cache = {}
-
-def get_ai_cache_key(prompt, model, temperature, max_tokens):
-    """Generate cache key for AI responses"""
-    key_data = f"{prompt}|{model}|{temperature}|{max_tokens}"
-    return hashlib.md5(key_data.encode()).hexdigest()
-
-def get_cached_ai_response(cache_key, max_age_seconds=3600):
-    """Get cached AI response if it exists and not expired"""
-    if not AI_CACHE_ENABLED:
-        return None
-        
-    if cache_key in _ai_response_cache:
-        cached_item = _ai_response_cache[cache_key]
-        if time.time() - cached_item['timestamp'] < max_age_seconds:
-            return cached_item['response']
-        else:
-            # Remove expired cache
-            del _ai_response_cache[cache_key]
-    return None
-
-def cache_ai_response(cache_key, response):
-    """Cache AI response"""
-    if AI_CACHE_ENABLED:
-        _ai_response_cache[cache_key] = {
-            'response': response,
-            'timestamp': time.time()
-        }
-
-@lru_cache(maxsize=100)
-def classify_intent_cached(message, mentions_str):
-    """Cached version of intent classification for repeated similar messages"""
-    return improved_classify_intent(message, mentions_str)
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
 logger = logging.getLogger(__name__)
@@ -197,13 +161,6 @@ def analyze_with_ai(profile, message):
     """
     import requests
     
-    # Check cache first
-    cache_key = get_ai_cache_key(f"profile_analysis:{message}:{profile.city}:{profile.interests}:{profile.skills}:{profile.company}", 
-                                DEEPSEEK_MODEL, AI_TEMPERATURE_LOW, 150)
-    cached_response = get_cached_ai_response(cache_key)
-    if cached_response:
-        return cached_response
-    
     empty_fields = []
     if not profile.city or profile.city.strip() == "":
         empty_fields.append("город")
@@ -252,8 +209,6 @@ def analyze_with_ai(profile, message):
             result = response.json()
             content = result["choices"][0]["message"]["content"].strip()
             if content and "None" not in content and len(content) > 10:
-                # Cache the response
-                cache_ai_response(cache_key, content)
                 return content
         return None
     except Exception as e:
@@ -706,14 +661,39 @@ def detect_duplicates(tasks):
     Находит дубликаты и конфликты в задачах.
     """
     import requests
+    from collections import Counter
     
     if not tasks:
         return []
     
+    # Сначала найдем точные дубликаты
+    titles = [t.get('title', '').strip().lower() for t in tasks]
+    title_counts = Counter(titles)
+    
+    duplicates = []
+    seen_indices = set()
+    
+    for i, title in enumerate(titles):
+        if title_counts[title] > 1 and i not in seen_indices:
+            # Найдем все индексы с этим title
+            indices = [j for j, t in enumerate(titles) if t == title]
+            duplicates.append({
+                "type": "duplicate",
+                "task_indices": [idx + 1 for idx in indices],  # 1-based
+                "description": f"Точные дубликаты: '{tasks[i].get('title', '')}'"
+            })
+            seen_indices.update(indices)
+    
+    # Если есть точные дубликаты, вернем их
+    if duplicates:
+        return duplicates
+    
+    # Иначе используем AI для семантических дубликатов
     tasks_text = "\n".join([f"{i+1}. {t.get('title', '')}" for i, t in enumerate(tasks[:15])])
     
     prompt = f"""
-    Проанализируй список задач и найди дубликаты или конфликты.
+    Проанализируй список задач и найди семантические дубликаты или конфликты.
+    Ищи задачи с похожим смыслом, но разным формулировкам.
     
     Задачи:
     {tasks_text}
@@ -726,6 +706,8 @@ def detect_duplicates(tasks):
             "description": "объяснение"
         }}
     ]
+    
+    Если дубликатов нет, верни пустой массив [].
     """
     
     try:
@@ -755,14 +737,15 @@ def detect_duplicates(tasks):
             
             try:
                 import json
-                duplicates = json.loads(content)
-                return duplicates if isinstance(duplicates, list) else []
+                ai_duplicates = json.loads(content)
+                if isinstance(ai_duplicates, list):
+                    duplicates.extend(ai_duplicates)
             except json.JSONDecodeError:
-                return []
-        return []
+                pass
+        return duplicates
     except Exception as e:
         logger.error(f"Duplicate detection error: {e}")
-        return []
+        return duplicates  # Вернем хотя бы точные дубликаты
 
 
 # Импорт улучшенных функций промтов
@@ -3967,7 +3950,7 @@ def find_partners(user_id=None, session=None):
                 info_parts.append(f"интересы: {p.interests}")
             if hasattr(p, "bio") and p.bio:
                 bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
-                info_parts.append(f"мои навыки и опыт: {bio_short}")
+                info_parts.append(f"сфера деятельности: {bio_short}")
             if hasattr(p, "position") and p.position:
                 info_parts.append(f"{p.position}")
             if hasattr(p, "company") and p.company:
@@ -4419,7 +4402,7 @@ TOOLS = [
                     },
                     "bio": {
                         "type": "string",
-                        "description": "Чем пользователь может помочь другим (экспертиза, консультации, области сотрудничества), заменяет старое значение, опционально",
+                        "description": "Сфера деятельности пользователя (экспертиза, консультации, области сотрудничества), заменяет старое значение, опционально",
                     },
                     "languages": {
                         "type": "string",
@@ -4472,9 +4455,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "cancel_subscription",
-            "description": "Отменить текущую подписку пользователя",
-            "parameters": {"type": "object", "properties": {}},
+            "name": "brainstorm_ideas",
+            "description": "Сгенерировать идеи для решения проблемы или улучшения процесса. Используй когда пользователь просит идеи, советы или brainstorming.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Тема или проблема для генерации идей",
+                    },
+                    "num_ideas": {
+                        "type": "integer",
+                        "description": "Количество идей (по умолчанию 5)",
+                        "default": 5,
+                    },
+                },
+                "required": ["topic"],
+            },
         },
     },
 ]
@@ -4598,7 +4595,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 if profile.position:
                     profile_info.append(f"Должность: {profile.position}")
                 if hasattr(profile, 'bio') and profile.bio:
-                    profile_info.append(f"Мои навыки и опыт: {profile.bio}")
+                    profile_info.append(f"Сфера деятельности: {profile.bio}")
                 if hasattr(profile, 'languages') and profile.languages:
                     profile_info.append(f"Языки: {profile.languages}")
                 if profile.skills:
@@ -4625,7 +4622,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 if not (hasattr(profile, 'languages') and profile.languages):
                     empty_fields.append("языки")
                 if not (hasattr(profile, 'bio') and profile.bio):
-                    empty_fields.append("мои навыки и опыт")
+                    empty_fields.append("сфера деятельности")
                 
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
@@ -5038,6 +5035,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 result = create_subscription_payment(user_id=user_id)
                                                 tool_results.append({"function": func_name, "result": result})
 
+                                            elif func_name == "brainstorm_ideas":
+                                                result = brainstorm_ideas(
+                                                    topic=args.get("topic"),
+                                                    num_ideas=args.get("num_ideas", 5),
+                                                    user_id=user_id
+                                                )
+                                                tool_results.append({"function": func_name, "result": result})
+
                                             else:
                                                 logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
                                                 tool_results.append(
@@ -5194,6 +5199,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 natural_responses.append(natural)
                                             else:
                                                 natural_responses.append(result_text)
+
+                                        elif "Идеи для темы" in result_text:
+                                            natural = f"{result_text}\n\nНадеюсь, эти идеи помогут! Если нужно углубить какую-то или сгенерировать больше вариантов - дай знать."
+                                            natural_responses.append(natural)
 
                                         else:
                                             natural_responses.append(result_text)
@@ -6263,3 +6272,40 @@ def cancel_subscription(user_id=None):
         return "Ошибка отмены подписки"
     finally:
         session.close()
+
+
+def brainstorm_ideas(topic, num_ideas=5, user_id=None):
+    """Генерирует идеи для решения проблемы или улучшения процесса"""
+    import requests
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+
+    prompt = f"""
+    Сгенерируй {num_ideas} креативных идей для темы: "{topic}"
+    
+    Идеи должны быть:
+    - Конкретными и реализуемыми
+    - Разнообразными
+    - Учитывать практические аспекты
+    
+    Формат ответа: пронумерованный список идей, каждая с кратким описанием почему она хороша.
+    """
+
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": DEEPSEEK_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1000,
+            "temperature": 0.7
+        }
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        ideas = result["choices"][0]["message"]["content"].strip()
+        return f"Идеи для темы '{topic}':\n\n{ideas}"
+    except Exception as e:
+        return f"Ошибка генерации идей: {str(e)}"

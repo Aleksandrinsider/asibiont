@@ -199,7 +199,7 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
-                            <p>Мои навыки и опыт: {{ profile.bio or 'Не указано' }}</p>
+                            <p>Сфера деятельности: {{ profile.bio or 'Не указано' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
@@ -1163,7 +1163,6 @@
             html += '<button onclick="editTask(' + task.id + ')" class="dropdown-item">Редактировать</button>';
             html += '<button onclick="rescheduleTask(' + task.id + ')" class="dropdown-item">Перенести</button>';
             html += '<button onclick="delegateTask(' + task.id + ')" class="dropdown-item">Делегировать</button>';
-            html += '<button onclick="analyzeTask(' + task.id + ')" class="dropdown-item">Анализировать задачу</button>';
             html += '<button onclick="showTaskInChat(' + task.id + ')" class="dropdown-item">Открыть в чате</button>';
             html += '</div>';
 
@@ -1680,45 +1679,6 @@
             } catch (error) {
                 console.error('Error deleting task:', error);
                 addMessage('Ошибка при удалении задачи', 'ai');
-                lastMessageCount += 1;
-            }
-        }
-
-        async function analyzeTask(taskId) {
-            try {
-                // Найти задачу в текущих данных
-                const task = allTasksFromServer.find(t => t.id === taskId);
-                if (!task) {
-                    addMessage('Задача не найдена', 'ai');
-                    lastMessageCount += 1;
-                    return;
-                }
-
-                // Показать индикатор загрузки
-                addMessage('🔍 Анализирую задачу...', 'ai');
-                lastMessageCount += 1;
-
-                // Отправить запрос на анализ задачи
-                const response = await fetch('/analyze_task', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId }),
-                    credentials: 'include'
-                });
-                if (!await checkAuth(response)) return;
-                if (response.ok) {
-                    const data = await response.json();
-                    // Добавить результат анализа непосредственно в чат
-                    addMessage(data.message, 'ai');
-                    lastMessageCount += 1;
-                } else {
-                    const error = await response.json();
-                    addMessage(`Ошибка при анализе задачи: ${error.error}`, 'ai');
-                    lastMessageCount += 1;
-                }
-            } catch (error) {
-                console.error('Error analyzing task:', error);
-                addMessage('Ошибка при анализе задачи', 'ai');
                 lastMessageCount += 1;
             }
         }
@@ -2469,7 +2429,7 @@
                         html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
                         html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
-                        html += '<p>Мои навыки и опыт: ' + (data.profile.bio || 'Не указано') + '</p>';
+                        html += '<p>Сфера деятельности: ' + (data.profile.bio || 'Не указано') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';

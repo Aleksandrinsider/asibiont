@@ -10,50 +10,34 @@ import os
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from ai_integration import get_ai_cache_key, get_cached_ai_response, cache_ai_response, classify_intent_cached
+from ai_integration import chat_with_ai
 from improved_prompts_final import improved_classify_intent
 
 def test_ai_caching():
-    """Test AI response caching"""
-    print("=== Тестирование кеширования ИИ ===")
-
-    # Test cache key generation
-    prompt = "Test prompt"
-    model = "deepseek-chat"
-    temp = 0.1
-    tokens = 150
-
-    cache_key = get_ai_cache_key(prompt, model, temp, tokens)
-    print(f"Cache key generated: {cache_key[:16]}...")
-
-    # Test caching
-    test_response = "Test cached response"
-    cache_ai_response(cache_key, test_response)
-
-    cached = get_cached_ai_response(cache_key)
-    print(f"Cache retrieval: {'✓' if cached == test_response else '✗'}")
+    """Test AI response caching - DISABLED"""
+    print("=== Кеширование ИИ отключено ===")
+    print("Кеширование ответов ИИ отключено для обеспечения живого диалога")
 
 def test_intent_caching():
-    """Test intent classification caching"""
-    print("\n=== Тестирование кеширования классификации намерений ===")
+    """Test intent classification (no caching)"""
+    print("\n=== Тестирование классификации намерений (без кеширования) ===")
 
     test_message = "Добавь задачу купить молоко завтра"
-    mentions = "нет"
 
     # First call
     start_time = time.time()
-    result1 = classify_intent_cached(test_message, mentions)
+    result1 = improved_classify_intent(test_message)
     first_call_time = time.time() - start_time
 
-    # Second call (should be cached)
+    # Second call (no caching)
     start_time = time.time()
-    result2 = classify_intent_cached(test_message, mentions)
+    result2 = improved_classify_intent(test_message)
     second_call_time = time.time() - start_time
 
     print(".2f")
     print(".2f")
     print(".2f")
-    print(f"Intent type: {result1.get('type', 'unknown')}")
+    print(f"Intent type: {result1}")
 
 def test_model_update_readiness():
     """Test readiness for model update"""
