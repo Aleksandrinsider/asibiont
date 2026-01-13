@@ -326,15 +326,15 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 350px minmax(680px, 1fr) 370px; /* Fixed-ish sidebars, flexible center */
+    grid-template-columns: 400px minmax(680px, 1fr) 420px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
-    height: calc(100vh - 60px);
+    height: calc(100vh - 50px);
     gap: 4px;
     padding: 8px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
-    margin-top: 60px;
+    margin-top: 50px;
 }
 
 /* Ensure direct children can shrink properly inside grid */
