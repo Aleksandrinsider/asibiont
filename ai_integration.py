@@ -1,4 +1,5 @@
 import aiohttp
+import requests
 from config import DEEPSEEK_API_KEY, ENCRYPTION_KEY
 import json
 from datetime import datetime, timezone, timedelta
@@ -11,6 +12,702 @@ import pytz
 
 cipher = Fernet(ENCRYPTION_KEY.encode())
 logger = logging.getLogger(__name__)
+
+def analyze_interaction_for_profile_update(user_id, message, ai_response):
+    """
+    Анализирует взаимодействие пользователя для предложения обновления профиля.
+    Возвращает предложение обновления профиля или None.
+    """
+    from models import Session, UserProfile
+    import re
+    
+    if not user_id or not message:
+        return None
+    
+    session = Session()
+    try:
+        # Получаем текущий профиль
+        profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+        if not profile:
+            # Профиль не существует - предложить создать
+            return "Чтобы лучше помогать тебе, давай заполним профиль. Расскажи о себе: где живешь, чем занимаешься, какие у тебя интересы?"
+        
+        # Проверяем, какие поля профиля пустые
+        empty_fields = []
+        suggestions = []
+        
+        if not profile.city or profile.city.strip() == "":
+            empty_fields.append("city")
+            # Ищем упоминание города в сообщении
+            city_keywords = ["москва", "питер", "спб", "екатеринбург", "новосибирск", "казань", "нижний новгород", "челябинск", "омск", "самара", "ростов", "уфа", "красноярск", "воронеж", "пермь", "волгоград"]
+            for city in city_keywords:
+                if city.lower() in message.lower():
+                    suggestions.append(f"Вижу, ты упомянул {city.title()}. Добавить в профиль как твой город?")
+                    break
+        
+        if not profile.interests or profile.interests.strip() == "":
+            empty_fields.append("interests")
+            # Ищем интересы в сообщении
+            interest_keywords = {
+                "спорт": ["бег", "фитнес", "тренировка", "спорт", "йога", "плавание"],
+                "программирование": ["код", "программирование", "python", "js", "разработка", "проект"],
+                "путешествия": ["путешествие", "отпуск", "туризм", "поездка"],
+                "музыка": ["музыка", "концерт", "гитара", "пение"],
+                "искусство": ["картина", "выставка", "театр", "кино"],
+                "чтение": ["книга", "читать", "литература"],
+                "кухня": ["готовить", "рецепт", "кухня", "еда"]
+            }
+            for interest, keywords in interest_keywords.items():
+                for keyword in keywords:
+                    if keyword.lower() in message.lower():
+                        suggestions.append(f"Вижу интерес к {interest}. Добавить '{interest}' в твои интересы?")
+                        break
+        
+        if not profile.skills or profile.skills.strip() == "":
+            empty_fields.append("skills")
+            # Ищем навыки в сообщении
+            skill_keywords = ["умею", "знаю", "могу", "опыт в", "работаю с", "специалист", "разработчик"]
+            for keyword in skill_keywords:
+                if keyword in message.lower():
+                    # Извлекаем навык из сообщения - улучшенная логика
+                    # Ищем паттерны типа "умею X", "знаю Y", "работаю с Z"
+                    patterns = [
+                        rf"{keyword}\s+(.+?)(?:\s|$|[.,!?;])",
+                        rf"{keyword}\s+(.+?)(?:\s+и\s+|$|[.,!?;])",
+                        rf"{keyword}\s+(.+?)(?:\s+на\s+|$|[.,!?;])"
+                    ]
+                    for pattern in patterns:
+                        skill_match = re.search(pattern, message.lower())
+                        if skill_match:
+                            skill = skill_match.group(1).strip()
+                            # Фильтруем разумные навыки
+                            if (len(skill) > 3 and len(skill) < 50 and 
+                                not any(word in skill.lower() for word in ["что", "как", "где", "когда", "почему"])):
+                                suggestions.append(f"Вижу, у тебя есть навык '{skill}'. Добавить в профиль?")
+                                break
+                    if suggestions and "skills" in [s.split()[-1] for s in suggestions]:
+                        break
+        
+        if not profile.company or profile.company.strip() == "":
+            empty_fields.append("company")
+            # Ищем упоминание компании - улучшенная логика
+            company_indicators = ["работаю в", "компания", "фирма", "организация", "работодатель"]
+            for indicator in company_indicators:
+                if indicator in message.lower():
+                    # Ищем название компании после индикатора
+                    patterns = [
+                        rf"{indicator}\s+(.+?)(?:\s|$|[.,!?;])",
+                        rf"{indicator}\s+(.+?)(?:\s+как\s+|$|[.,!?;])",
+                        rf"{indicator}\s+(.+?)(?:\s+на\s+|$|[.,!?;])"
+                    ]
+                    for pattern in patterns:
+                        company_match = re.search(pattern, message.lower())
+                        if company_match:
+                            company = company_match.group(1).strip()
+                            # Фильтруем разумные названия компаний
+                            if (len(company) > 2 and len(company) < 100 and 
+                                not any(word in company.lower() for word in ["большой", "маленькой", "своей", "другой", "этой"])):
+                                suggestions.append(f"Вижу, ты работаешь в '{company}'. Добавить компанию в профиль?")
+                                break
+                    if suggestions and "профиль?" in [s.split()[-1] for s in suggestions]:
+                        break
+        
+        # Если есть пустые поля и предложения, возвращаем первое подходящее
+        if empty_fields and suggestions:
+            return suggestions[0]
+        
+        # Если профиль почти пустой, но мы не нашли конкретных предложений
+        filled_fields = 0
+        if profile.city and profile.city.strip():
+            filled_fields += 1
+        if profile.interests and profile.interests.strip():
+            filled_fields += 1
+        if profile.skills and profile.skills.strip():
+            filled_fields += 1
+        if profile.company and profile.company.strip():
+            filled_fields += 1
+        
+        # Если нет предложений от ключевых слов, но профиль неполный и сообщение длинное - используем ИИ
+        if not suggestions and empty_fields and len(message.split()) > 5:
+            ai_suggestion = analyze_with_ai(profile, message)
+            if ai_suggestion:
+                return ai_suggestion
+        
+        if filled_fields < 2 and len(message.split()) > 5:  # Длинное сообщение
+            return "Чтобы лучше подбирать для тебя партнеров и рекомендации, заполни профиль. Что тебя интересует или чем ты занимаешься?"
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in analyze_interaction_for_profile_update: {e}")
+        return None
+    finally:
+        session.close()
+
+def analyze_with_ai(profile, message):
+    """
+    Анализирует сообщение с помощью ИИ для предложения обновления профиля.
+    """
+    import requests
+    
+    empty_fields = []
+    if not profile.city or profile.city.strip() == "":
+        empty_fields.append("город")
+    if not profile.interests or profile.interests.strip() == "":
+        empty_fields.append("интересы")
+    if not profile.skills or profile.skills.strip() == "":
+        empty_fields.append("навыки")
+    if not profile.company or profile.company.strip() == "":
+        empty_fields.append("компания")
+    
+    if not empty_fields:
+        return None
+    
+    prompt = f"""
+    Проанализируй сообщение пользователя и предложи обновление профиля.
+    Пустые поля профиля: {', '.join(empty_fields)}
+    
+    Сообщение: "{message}"
+    
+    Если в сообщении есть информация, относящаяся к пустым полям, предложи конкретное обновление.
+    Формат ответа: "Вижу, [что-то]. Добавить '[значение]' в [поле]?"
+    Если ничего подходящего нет, ответь только "None".
+    
+    Примеры:
+    - Для навыков: "Вижу, у тебя есть навык 'программирование на Python'. Добавить в профиль?"
+    - Для компании: "Вижу, ты работаешь в 'Google'. Добавить компанию в профиль?"
+    - Для города: "Вижу, ты упомянул 'Москва'. Добавить в профиль как твой город?"
+    - Для интересов: "Вижу интерес к 'спорту'. Добавить 'спорт' в твои интересы?"
+    """
+    
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 150,
+            "temperature": 0.3
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            if content and "None" not in content and len(content) > 10:
+                return content
+        return None
+    except Exception as e:
+        logger.error(f"AI analysis error: {e}")
+        return None
+
+def extract_tasks_with_ai(message, user_id=None):
+    """
+    Извлекает задачи из сообщения с помощью ИИ.
+    Возвращает список словарей с задачами.
+    """
+    import requests
+    import json
+    
+    prompt = f"""
+    Извлеки все задачи и действия из сообщения пользователя.
+    Верни результат в формате JSON массива объектов с полями:
+    - title: краткое название задачи
+    - description: подробное описание (если есть)
+    - priority: high/medium/low (определи на основе контекста)
+    - deadline: предполагаемый дедлайн в формате YYYY-MM-DD (если упоминается или можно логически вывести)
+    - category: категория задачи (работа/личное/проект/обучение и т.д.)
+    
+    Если задач нет, верни пустой массив [].
+    
+    Сообщение: "{message}"
+    
+    Примеры:
+    - "Нужно подготовить презентацию к пятнице" → {{"title": "Подготовить презентацию", "priority": "high", "deadline": "2026-01-17"}}
+    - "Хочу изучить Python и найти работу" → две задачи
+    """
+    
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+            "temperature": 0.2
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=15)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            # Попробуем распарсить JSON
+            try:
+                tasks = json.loads(content)
+                if isinstance(tasks, list):
+                    return tasks
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse JSON from AI response: {content}")
+                return []
+        return []
+    except Exception as e:
+        logger.error(f"Task extraction error: {e}")
+        return []
+
+def find_partners_with_ai(user_id, criteria=None):
+    """
+    Находит партнеров с помощью семантического поиска ИИ.
+    """
+    from models import Session, UserProfile
+    import requests
+    
+    session = Session()
+    try:
+        # Получаем профиль пользователя
+        user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+        if not user_profile:
+            return []
+        
+        # Получаем все профили для анализа
+        all_profiles = session.query(UserProfile).filter(UserProfile.user_id != user_id).all()
+        
+        prompt = f"""
+        Найди наиболее подходящих партнеров для пользователя на основе их профилей.
+        
+        Профиль пользователя:
+        - Город: {user_profile.city or 'Не указан'}
+        - Интересы: {user_profile.interests or 'Не указаны'}
+        - Навыки: {user_profile.skills or 'Не указаны'}
+        - Компания: {user_profile.company or 'Не указана'}
+        
+        Критерии поиска: {criteria or 'Общие рекомендации'}
+        
+        Проанализируй следующие профили и выбери 3-5 наиболее совместимых партнеров.
+        Для каждого партнера укажи:
+        - user_id: ID пользователя
+        - compatibility_score: оценка совместимости (0-100)
+        - reasons: почему этот партнер подходит (2-3 причины)
+        
+        Верни результат в формате JSON массива.
+        
+        Список профилей:
+        {chr(10).join([f'ID {p.user_id}: Город={p.city}, Интересы={p.interests}, Навыки={p.skills}, Компания={p.company}' for p in all_profiles[:20]])}
+        """
+        
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 500,
+            "temperature": 0.3
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=20)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            try:
+                import json
+                recommendations = json.loads(content)
+                return recommendations if isinstance(recommendations, list) else []
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse partner recommendations: {content}")
+                return []
+        return []
+    except Exception as e:
+        logger.error(f"Partner search error: {e}")
+        return []
+    finally:
+        session.close()
+
+def analyze_sentiment(message):
+    """
+    Определяет эмоции и тон сообщения.
+    Возвращает словарь с sentiment и intensity.
+    """
+    import requests
+    
+    prompt = f"""
+    Определи эмоциональный тон этого сообщения.
+    Верни результат в формате JSON:
+    {{
+        "sentiment": "positive"|"neutral"|"negative",
+        "intensity": число от 0 до 1 (насколько сильная эмоция),
+        "emotions": ["список эмоций, например: радость, гнев, спокойствие"],
+        "confidence": число от 0 до 1 (уверенность анализа)
+    }}
+    
+    Сообщение: "{message}"
+    """
+    
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 150,
+            "temperature": 0.1
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            try:
+                import json
+                sentiment_data = json.loads(content)
+                return sentiment_data
+            except json.JSONDecodeError:
+                return {"sentiment": "neutral", "intensity": 0.5, "emotions": ["нейтрально"], "confidence": 0.5}
+        return {"sentiment": "neutral", "intensity": 0.5, "emotions": ["нейтрально"], "confidence": 0.5}
+    except Exception as e:
+        logger.error(f"Sentiment analysis error: {e}")
+        return {"sentiment": "neutral", "intensity": 0.5, "emotions": ["нейтрально"], "confidence": 0.5}
+
+def generate_recommendations(user_id):
+    """
+    Генерирует персонализированные рекомендации на основе профиля.
+    """
+    from models import Session, UserProfile
+    import requests
+    
+    session = Session()
+    try:
+        profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+        if not profile:
+            return []
+        
+        prompt = f"""
+        На основе профиля пользователя сгенерируй 3-5 персонализированных рекомендаций.
+        Рекомендации могут быть: курсы, события, инструменты, сообщества, партнеры.
+        
+        Профиль пользователя:
+        - Город: {profile.city or 'Не указан'}
+        - Интересы: {profile.interests or 'Не указаны'}
+        - Навыки: {profile.skills or 'Не указаны'}
+        - Компания: {profile.company or 'Не указана'}
+        
+        Верни результат в формате JSON массива объектов с полями:
+        - type: "course"|"event"|"tool"|"community"|"partner"
+        - title: название рекомендации
+        - description: почему это подходит
+        - priority: high/medium/low
+        """
+        
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 400,
+            "temperature": 0.4
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=15)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            try:
+                import json
+                recommendations = json.loads(content)
+                return recommendations if isinstance(recommendations, list) else []
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse recommendations: {content}")
+                return []
+        return []
+    except Exception as e:
+        logger.error(f"Recommendations generation error: {e}")
+        return []
+    finally:
+        session.close()
+
+def optimize_task_schedule(user_id):
+    """
+    Оптимизирует расписание задач с помощью ИИ.
+    """
+    from models import Session, Task
+    import requests
+    from datetime import datetime
+    
+    session = Session()
+    try:
+        # Получаем активные задачи пользователя
+        tasks = session.query(Task).filter_by(user_id=user_id, completed=False).all()
+        
+        if not tasks:
+            return {"suggestions": [], "message": "Нет активных задач для оптимизации"}
+        
+        tasks_text = "\n".join([
+            f"- {t.title}: приоритет {t.priority or 'medium'}, дедлайн {t.deadline or 'не указан'}"
+            for t in tasks[:10]  # Ограничим для промпта
+        ])
+        
+        prompt = f"""
+        Проанализируй список задач пользователя и предложи оптимизацию расписания.
+        
+        Задачи:
+        {tasks_text}
+        
+        Предложи:
+        1. Порядок выполнения задач
+        2. Предупреждения о перегрузке
+        3. Возможные делегирования
+        4. Рекомендации по приоритетам
+        
+        Верни результат в формате JSON:
+        {{
+            "optimal_order": ["список задач в рекомендуемом порядке"],
+            "warnings": ["предупреждения"],
+            "delegation_suggestions": ["что можно делегировать"],
+            "priority_changes": ["изменения приоритетов"]
+        }}
+        """
+        
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 400,
+            "temperature": 0.2
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=15)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            try:
+                import json
+                optimization = json.loads(content)
+                return optimization
+            except json.JSONDecodeError:
+                return {"suggestions": [], "message": "Не удалось проанализировать задачи"}
+        return {"suggestions": [], "message": "Ошибка оптимизации"}
+    except Exception as e:
+        logger.error(f"Task optimization error: {e}")
+        return {"suggestions": [], "message": "Ошибка оптимизации"}
+    finally:
+        session.close()
+
+def understand_complex_query(message):
+    """
+    Разбирает сложные многошаговые запросы.
+    """
+    import requests
+    
+    prompt = f"""
+    Разбери этот запрос пользователя на компоненты.
+    Определи основное намерение и дополнительные критерии.
+    
+    Запрос: "{message}"
+    
+    Верни результат в формате JSON:
+    {{
+        "main_intent": "основное намерение",
+        "criteria": {{"ключ": "значение", ...}},
+        "steps": ["шаги для выполнения"],
+        "complexity": "simple"|"medium"|"complex"
+    }}
+    """
+    
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 300,
+            "temperature": 0.1
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            try:
+                import json
+                analysis = json.loads(content)
+                return analysis
+            except json.JSONDecodeError:
+                return {"main_intent": "unknown", "criteria": {}, "steps": [], "complexity": "simple"}
+        return {"main_intent": "unknown", "criteria": {}, "steps": [], "complexity": "simple"}
+    except Exception as e:
+        logger.error(f"Complex query analysis error: {e}")
+        return {"main_intent": "unknown", "criteria": {}, "steps": [], "complexity": "simple"}
+
+def summarize_conversation(messages, max_length=200):
+    """
+    Создает краткое резюме разговора.
+    """
+    import requests
+    
+    conversation_text = "\n".join([f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in messages[-20:]])  # Последние 20 сообщений
+    
+    prompt = f"""
+    Создай краткое резюме этого разговора (не более {max_length} символов).
+    Выдели ключевые темы, решения и следующие шаги.
+    
+    Разговор:
+    {conversation_text}
+    """
+    
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 150,
+            "temperature": 0.2
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            return content[:max_length]
+        return "Резюме недоступно"
+    except Exception as e:
+        logger.error(f"Conversation summary error: {e}")
+        return "Резюме недоступно"
+
+def detect_duplicates(tasks):
+    """
+    Находит дубликаты и конфликты в задачах.
+    """
+    import requests
+    
+    if not tasks:
+        return []
+    
+    tasks_text = "\n".join([f"{i+1}. {t.get('title', '')}" for i, t in enumerate(tasks[:15])])
+    
+    prompt = f"""
+    Проанализируй список задач и найди дубликаты или конфликты.
+    
+    Задачи:
+    {tasks_text}
+    
+    Верни результат в формате JSON массива:
+    [
+        {{
+            "type": "duplicate"|"conflict",
+            "task_indices": [номера задач],
+            "description": "объяснение"
+        }}
+    ]
+    """
+    
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 200,
+            "temperature": 0.1
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            # Удаляем блоки кода если есть
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            try:
+                import json
+                duplicates = json.loads(content)
+                return duplicates if isinstance(duplicates, list) else []
+            except json.JSONDecodeError:
+                return []
+        return []
+    except Exception as e:
+        logger.error(f"Duplicate detection error: {e}")
+        return []
+
 
 # Импорт улучшенных функций промтов
 try:
@@ -1130,8 +1827,17 @@ def validate_response_compliance(response_text, intent_type=None):
 
     # Проверка на запрещенные элементы (кроме list_tasks)
     if intent_type != "list_tasks":
-        if any(emoji in response_text for emoji in ["🚀", "✅", "📝", "🎯", "⚠️", "💡", "📋", "⏳", "🟡"]):
-            issues.append("Присутствуют эмодзи")
+        # Запрещенные технические эмодзи
+        forbidden_emojis = ["🚀", "✅", "📝", "🎯", "⚠️", "💡", "📋", "⏳", "🟡", "🔧", "📊", "🔍", "⚙️", "🛠️"]
+        if any(emoji in response_text for emoji in forbidden_emojis):
+            issues.append("Присутствуют запрещенные технические эмодзи")
+        
+        # Разрешаем 1-2 подходящих эмодзи для общения
+        allowed_emojis = ["👍", "👌", "✨", "🎉", "💪", "😊", "🙂", "😄", "👏", "🔥"]
+        emoji_count = sum(1 for emoji in allowed_emojis if emoji in response_text)
+        if emoji_count > 2:
+            issues.append("Больше 2 разрешенных эмодзи в сообщении")
+            
         if "**" in response_text:
             issues.append("Присутствует жирный текст")
 
@@ -1179,7 +1885,8 @@ async def enforce_prompt_compliance(response_text, intent_type, user_id, context
 {chr(10).join(f"- {issue}" for issue in issues)}
 
 СТРОГО ИСПРАВИТЬ:
-- Убрать все эмодзи, жирный текст, списки, нумерацию (кроме list_tasks)
+- Убрать запрещенные технические эмодзи (🚀 ✅ 📝 🎯 ⚠️ 💡 📋 ⏳ 🟡 🔧), но можно оставить 1-2 подходящих (👍 👌 ✨ 🎉 💪 😊)
+- Убрать жирный текст, списки, нумерацию (кроме list_tasks)
 - Адаптировать длину ответа под ситуацию: короткие для простых действий, подробные для анализа
 - Для add_task добавить 1-2 кратких совета (максимум 1-2 предложения), БЕЗ нумерованных списков, шагов и разделов
 - Всегда добавлять вопросы для вовлечения пользователя
@@ -1403,13 +2110,12 @@ def clean_technical_details(text):
     # Удаляем любые оставшиеся ```json блоки
     text = re.sub(r"```json[\s\S]*?```", "", text, flags=re.IGNORECASE)
 
-    # Убираем множественные пробелы и пустые строки
-    text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
-    text = re.sub(r"\s+", " ", text)  # Убираем лишние пробелы
-
-    # Убираем пробелы в начале и конце
-    text = text.strip()
-    text = re.sub(r" +", " ", text)
+    # Удаляем эмодзи - ТОЛЬКО технические, оставляем подходящие для общения
+    # (AI теперь может использовать 1-2 подходящих эмодзи согласно промпту)
+    # Удаляем только технические эмодзи, которые могут мешать
+    technical_emojis = ['🚀', '✅', '📝', '🎯', '⚠️', '💡', '📋', '⏳', '🟡', '🔧', '📋', '📊', '🔍', '⚙️', '🛠️']
+    for emoji in technical_emojis:
+        text = text.replace(emoji, '')
 
     # КРИТИЧЕСКАЯ ПРОВЕРКА: если после очистки ничего не осталось,
     # значит AI вернул только технические детали, вернуть оригинал
@@ -1461,6 +2167,24 @@ def enrich_response_with_engagement(content, user_id=None, original_message=""):
 def get_optimized_system_prompt():
     """Оптимизированный промпт v12 - ГИБРИДНЫЙ ПОДХОД"""
     return """Ты - личный ИИ-помощник и друг для управления жизнью. Веди живой, естественный диалог как настоящий человек.
+
+================================================================================
+СТРОГИЕ ПРАВИЛА ФОРМАТИРОВАНИЯ (ВЫПОЛНЯЙ БЕЗУСЛОВНО):
+================================================================================
+
+❌ ЗАПРЕЩЕННЫЕ ЭЛЕМЕНТЫ (НИКОГДА НЕ ИСПОЛЬЗОВАТЬ):
+- Жирный текст: **текст**
+- Нумерованные списки: 1. 2. 3. или 1) 2) 3)
+- Маркированные списки: • - *
+- Заголовки: ## ###
+- Технические эмодзи: 🚀 ✅ 📝 🎯 ⚠️ 💡 📋 ⏳ 🟡 😕 💪 🔧 📋
+
+✅ РАЗРЕШЕННЫЕ ЭЛЕМЕНТЫ:
+- Обычный текст без форматирования
+- Разговорный стиль
+- Естественные вопросы
+- Короткие советы в скобках (не более 2-3 слов)
+- 1-2 ПОДХОДЯЩИХ ЭМОДЗИ в сообщении (только позитивные: 👍 👌 ✨ 🎉 💪 😊)
 
 ================================================================================
 ПРИМЕРЫ ПРАВИЛЬНОГО ПОВЕДЕНИЯ (ОБУЧАЙСЯ НА НИХ):
@@ -2924,7 +3648,20 @@ def find_partners(user_id=None, session=None):
             pass
     partners = []
     tips = []
-    if user_profile:
+    # Проверяем, есть ли в профиле какие-то данные для поиска
+    has_profile_data = (
+        user_profile and (
+            (user_profile.interests and user_profile.interests.strip()) or
+            (user_profile.skills and user_profile.skills.strip()) or
+            (user_profile.goals and user_profile.goals.strip()) or
+            (user_profile.city and user_profile.city.strip()) or
+            (hasattr(user_profile, 'company') and user_profile.company and user_profile.company.strip()) or
+            (hasattr(user_profile, 'position') and user_profile.position and user_profile.position.strip()) or
+            (hasattr(user_profile, 'bio') and user_profile.bio and user_profile.bio.strip())
+        )
+    )
+    
+    if has_profile_data:
         # Сначала фильтруем по городу, если указан
         if user_profile.city:
             city_profiles = [p for p in profiles if p.city and p.city.lower() == user_profile.city.lower()]
@@ -3046,8 +3783,9 @@ def find_partners(user_id=None, session=None):
                             f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} - может быть интересно с твоими интересами в {interest.strip()}."
                         )
                         break
+                        break
     else:
-        # Если профиля нет, вернуть тестовых партнеров для демонстрации
+        # Если профиля нет или он пустой, вернуть тестовых партнеров для демонстрации
         partners = profiles[:3] if profiles else []
 
     if close_session:
@@ -3059,8 +3797,8 @@ def find_partners(user_id=None, session=None):
         for idx, p in enumerate(partners[:3], 1):
             info_parts = []
 
-            # Показываем причину совпадения
-            if user_profile and p in partner_scores:
+            # Показываем причину совпадения (только если профиль заполнен)
+            if has_profile_data and p in partner_scores:
                 score, matched = partner_scores[p]
                 # Берём первое самое релевантное совпадение
                 match_reason = matched[0] if matched else "общие интересы"
@@ -3083,35 +3821,41 @@ def find_partners(user_id=None, session=None):
             info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
             response += f"{idx}. @{p.contact_info}\n   {info_str}\n"
 
-        # Добавляем предложения совместных идей на основе задач
-        joint_ideas = []
-        for p in partners[:3]:
-            if user_profile and p in partner_scores:
-                score, matched = partner_scores[p]
-                # Если есть совпадение по задачам, предлагаем совместную идею
-                task_matches = [m for m in matched if m.startswith("совместные задачи")]
-                if task_matches:
-                    partner_user = session.query(User).filter_by(id=p.user_id).first()
-                    if partner_user:
-                        partner_tasks = session.query(Task).filter_by(user_id=partner_user.id).all()
-                        for pt in partner_tasks[:2]:  # Проверяем первые 2 задачи
-                            for ut in user_tasks[:2]:
-                                common_words = set(
-                                    re.findall(r"\b\w+\b", (pt.title + " " + (pt.description or "")).lower())
-                                ) & set(re.findall(r"\b\w+\b", (ut.title + " " + (ut.description or "")).lower()))
-                                if common_words:
-                                    joint_ideas.append(
-                                        f"@{p.contact_info} тоже работает над '{pt.title}' - можно объединиться для совместного изучения {', '.join(list(common_words)[:2])}!"
-                                    )
+        # Добавляем предложения совместных идей на основе задач (только если профиль заполнен)
+        if has_profile_data:
+            joint_ideas = []
+            for p in partners[:3]:
+                if p in partner_scores:
+                    score, matched = partner_scores[p]
+                    # Если есть совпадение по задачам, предлагаем совместную идею
+                    task_matches = [m for m in matched if m.startswith("совместные задачи")]
+                    if task_matches:
+                        partner_user = session.query(User).filter_by(id=p.user_id).first()
+                        if partner_user:
+                            partner_tasks = session.query(Task).filter_by(user_id=partner_user.id).all()
+                            for pt in partner_tasks[:2]:  # Проверяем первые 2 задачи
+                                for ut in user_tasks[:2]:
+                                    common_words = set(
+                                        re.findall(r"\b\w+\b", (pt.title + " " + (pt.description or "")).lower())
+                                    ) & set(re.findall(r"\b\w+\b", (ut.title + " " + (ut.description or "")).lower()))
+                                    if common_words:
+                                        joint_ideas.append(
+                                            f"@{p.contact_info} тоже работает над '{pt.title}' - можно объединиться для совместного изучения {', '.join(list(common_words)[:2])}!"
+                                        )
+                                        break
+                                if joint_ideas and len(joint_ideas) >= 2:  # Максимум 2 идеи
                                     break
-                            if joint_ideas and len(joint_ideas) >= 2:  # Максимум 2 идеи
-                                break
 
-        response = response.rstrip("\n")
-        if joint_ideas:
-            response += "\n\n" + "\n".join(joint_ideas[:2])
+            response = response.rstrip("\n")
+            if joint_ideas:
+                response += "\n\n" + "\n".join(joint_ideas[:2])
     else:
-        response = "Вижу, что у тебя пока не заполнен профиль или мало данных для поиска. Но это отличная возможность начать строить полезные знакомства! "
+        if has_profile_data:
+            # Профиль есть, но не нашли подходящих партнеров
+            response = "По твоему профилю пока не нашлось идеальных совпадений, но система развивается! "
+        else:
+            # Профиля нет или он пустой
+            response = "Вижу, что у тебя пока не заполнен профиль или мало данных для поиска. Но это отличная возможность начать строить полезные знакомства! "
         response += "Я могу найти для тебя коллег по работе для обмена опытом и совместных проектов, единомышленников по интересам для спорта, хобби или отдыха, партнеров для изучения новых навыков и достижения целей, а также людей из твоего города для реальных встреч. "
         response += "Расскажи мне о своих интересах, навыках или целях - и я сразу найду подходящих людей. Что тебя увлекает или над чем работаешь?"
 
@@ -4481,6 +5225,50 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         logger.warning(f"[FALLBACK] Empty or too short response, using fallback")
                         content = improved_fallback(intent, tool_calls, content, message, user_id)
                     
+                    # АНАЛИЗ ВЗАИМОДЕЙСТВИЯ ДЛЯ ПРЕДЛОЖЕНИЯ ОБНОВЛЕНИЯ ПРОФИЛЯ
+                    profile_suggestion = analyze_interaction_for_profile_update(user_id, clean_message, content)
+                    if profile_suggestion:
+                        content += f"\n\n{profile_suggestion}"
+                    
+                    # ДОПОЛНИТЕЛЬНЫЕ ИИ-АНАЛИЗЫ ДЛЯ УЛУЧШЕНИЯ ОТВЕТА
+                    
+                    # 1. Анализ эмоций пользователя
+                    sentiment = analyze_sentiment(clean_message)
+                    if sentiment['sentiment'] == 'negative' and sentiment['intensity'] > 0.6:
+                        content += "\n\nВижу, что ты расстроен. Если хочешь поговорить об этом или нужна помощь - я здесь!"
+                    elif sentiment['sentiment'] == 'positive' and sentiment['intensity'] > 0.7:
+                        content += "\n\nРад, что у тебя всё хорошо! 😊"
+                    
+                    # 2. Автоматическое извлечение задач из сообщения
+                    if len(clean_message.split()) > 3:  # Только для осмысленных сообщений
+                        extracted_tasks = extract_tasks_with_ai(clean_message, user_id)
+                        if extracted_tasks:
+                            content += f"\n\n📋 Я заметил, что ты упомянул {len(extracted_tasks)} задач(и). Хочешь, я добавлю их в твой список?"
+                            for task in extracted_tasks[:2]:  # Показываем первые 2
+                                content += f"\n• {task['title']}"
+                    
+                    # 3. Персонализированные рекомендации (раз в несколько сообщений)
+                    import random
+                    if random.random() < 0.3:  # 30% шанс
+                        recommendations = generate_recommendations(user_id)
+                        if recommendations:
+                            rec = random.choice(recommendations)
+                            content += f"\n\n💡 Рекомендация: {rec.get('title', '')} - {rec.get('description', '')}"
+                    
+                    # 4. Проверка на дубликаты задач (если упоминаются задачи)
+                    if any(word in clean_message.lower() for word in ['задача', 'задачи', 'дело', 'сделать']):
+                        # Получить текущие задачи пользователя
+                        from models import Session, Task
+                        session_db = Session()
+                        try:
+                            user_tasks = session_db.query(Task).filter_by(user_id=user_id, completed=False).limit(10).all()
+                            task_titles = [{'title': t.title} for t in user_tasks]
+                            duplicates = detect_duplicates(task_titles)
+                            if duplicates:
+                                content += f"\n\n⚠️ Обнаружено {len(duplicates)} возможных дубликатов или конфликтов в задачах. Проверь свой список!"
+                        finally:
+                            session_db.close()
+                    
                     print(f"[DEBUG] About to return content: '{content}'")  # DEBUG
                     return content
 
@@ -4571,6 +5359,16 @@ async def generate_reminder(user_id, task_title):
                     content = clean_technical_details(content)
                     # Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, task_title)
+                    
+                    # Проверяем и принуждаем соблюдение промпта
+                    is_compliant, issues = validate_response_compliance(content, "reminder")
+                    if not is_compliant:
+                        logger.warning(f"[COMPLIANCE] Reminder response not compliant: {issues}")
+                        # Принуждаем исправление
+                        content = await enforce_prompt_compliance(
+                            content, "reminder", user_id, None, system_prompt, messages, url, headers
+                        )
+                    
                     return content
                 else:
                     return "Ошибка генерации напоминания."
@@ -4642,6 +5440,16 @@ async def generate_result_check(user_id, task_title):
                     content = clean_technical_details(content)
                     # Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, task_title)
+                    
+                    # Проверяем и принуждаем соблюдение промпта
+                    is_compliant, issues = validate_response_compliance(content, "result_check")
+                    if not is_compliant:
+                        logger.warning(f"[COMPLIANCE] Result check response not compliant: {issues}")
+                        # Принуждаем исправление
+                        content = await enforce_prompt_compliance(
+                            content, "result_check", user_id, None, system_prompt, messages, url, headers
+                        )
+                    
                     return content
                 else:
                     return "Ошибка генерации вопроса."
@@ -4662,6 +5470,8 @@ async def generate_proactive_message(user_id):
 
             session = Session()
             user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user is None:
+                return "Добавьте задачу."
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
@@ -4737,6 +5547,16 @@ async def generate_proactive_message(user_id):
                     content = clean_technical_details(content)
                     # Проактивные сообщения уже вовлекающие, но можно усилить
                     content = enrich_response_with_engagement(content, user_id, "")
+                    
+                    # Проверяем и принуждаем соблюдение промпта
+                    is_compliant, issues = validate_response_compliance(content, "proactive")
+                    if not is_compliant:
+                        logger.warning(f"[COMPLIANCE] Proactive message response not compliant: {issues}")
+                        # Принуждаем исправление
+                        content = await enforce_prompt_compliance(
+                            content, "proactive", user_id, None, system_prompt, messages, url, headers
+                        )
+                    
                     return content
                 else:
                     return "Ошибка генерации сообщения."
@@ -4813,6 +5633,16 @@ async def generate_daily_report(user_id):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
+                    
+                    # Проверяем и принуждаем соблюдение промпта
+                    is_compliant, issues = validate_response_compliance(content, "daily_report")
+                    if not is_compliant:
+                        logger.warning(f"[COMPLIANCE] Daily report response not compliant: {issues}")
+                        # Принуждаем исправление
+                        content = await enforce_prompt_compliance(
+                            content, "daily_report", user_id, None, system_prompt, messages, url, headers
+                        )
+                    
                     return content
                 else:
                     return "Ошибка генерации отчета."
@@ -4824,7 +5654,11 @@ async def generate_daily_report(user_id):
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
     """Генерирует напоминание о просроченных задачах"""
     try:
-        task_titles = [t.title for t in overdue_tasks]
+        # Поддержка как объектов Task, так и словарей
+        if overdue_tasks and isinstance(overdue_tasks[0], dict):
+            task_titles = [t.get('title', 'Задача') for t in overdue_tasks]
+        else:
+            task_titles = [t.title for t in overdue_tasks]
         # Получить память пользователя
         user_memory = ""
         if user_id:
@@ -4891,6 +5725,16 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
+                    
+                    # Проверяем и принуждаем соблюдение промпта
+                    is_compliant, issues = validate_response_compliance(content, "overdue")
+                    if not is_compliant:
+                        logger.warning(f"[COMPLIANCE] Overdue reminder response not compliant: {issues}")
+                        # Принуждаем исправление
+                        content = await enforce_prompt_compliance(
+                            content, "overdue", user_id, None, system_prompt, messages, url, headers
+                        )
+                    
                     return content
                 else:
                     return "Ошибка генерации напоминания."
