@@ -1685,7 +1685,6 @@
         }
 
         async function analyzeTask(taskId) {
-            alert(`Анализ задачи ${taskId}`); // Временный alert для проверки
             try {
                 // Найти задачу в текущих данных
                 const task = allTasksFromServer.find(t => t.id === taskId);
@@ -1694,6 +1693,10 @@
                     lastMessageCount += 1;
                     return;
                 }
+
+                // Показать индикатор загрузки
+                addMessage('🔍 Анализирую задачу...', 'ai');
+                lastMessageCount += 1;
 
                 // Отправить запрос на анализ задачи
                 const response = await fetch('/analyze_task', {
@@ -1705,8 +1708,9 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
-                    await updateChat();
+                    // Добавить результат анализа непосредственно в чат
+                    addMessage(data.message, 'ai');
+                    lastMessageCount += 1;
                 } else {
                     const error = await response.json();
                     addMessage(`Ошибка при анализе задачи: ${error.error}`, 'ai');
