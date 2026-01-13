@@ -365,6 +365,7 @@ body {
     gap: 8px;
     padding: 8px;
     background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
     border-radius: 8px;
     margin-bottom: 20px;
     min-height: 0;
@@ -793,6 +794,9 @@ details[open] .details-content {
     padding: 8px; /* Reduced padding */
     margin-bottom: 20px;
     overflow: visible;
+    background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
+    border-radius: 8px;
 }
 
 .context-item p {
@@ -843,7 +847,7 @@ details[open] .details-content {
 
 .task-stats-block {
     padding: 12px;
-    border: none;
+    border: 1px solid #D1D9E0;
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-bottom: 20px;
