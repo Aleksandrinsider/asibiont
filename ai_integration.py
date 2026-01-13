@@ -481,7 +481,7 @@ def optimize_task_schedule(user_id):
     session = Session()
     try:
         # Получаем активные задачи пользователя
-        tasks = session.query(Task).filter_by(user_id=user_id, completed=False).all()
+        tasks = session.query(Task).filter_by(user_id=user_id, status='pending').all()
         
         if not tasks:
             return {"suggestions": [], "message": "Нет активных задач для оптимизации"}
@@ -4767,8 +4767,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         user_message_with_context = message + last_task_context
         messages.append({"role": "user", "content": user_message_with_context})
 
-        # Определяем, является ли сообщение вопросом о совете
-        is_advice_question = any(word in clean_message.lower() for word in [
+        # Используем intent classification вместо hardcoded проверок
+        is_advice_question = intent.get('type') in ['conversation', 'unknown'] and any(word in clean_message.lower() for word in [
             "что делать", "как", "совет", "помоги", "что посоветуешь", "как быть", 
             "что предпринять", "какие шаги", "что делать с", "как решить",
             "не знаю с чего начать", "с чего начать", "как начать", "что делать дальше",
@@ -4778,13 +4778,38 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             "с чего начать", "как эффективно", "что можно сделать", "как решить проблему"
         ])
 
+        # Определяем, является ли сообщение запросом на управление задачами на основе intent
+        is_task_request = intent.get('type') in [
+            'add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 
+            'delegate_task', 'find_partners', 'update_profile'
+        ]
+
+        # Умная логика выбора инструментов на основе intent classification
+        intent_type = intent.get('type', 'unknown')
+        
+        if intent_type in ['conversation', 'unknown'] and is_advice_question:
+            # Вопросы о совете - не используем инструменты, отвечаем текстом
+            tool_choice = "none"
+        elif intent_type in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 'delegate_task']:
+            # Явные запросы на управление задачами - используем инструменты
+            tool_choice = "auto"
+        elif intent_type == 'find_partners':
+            # Поиск партнеров - используем инструменты
+            tool_choice = "auto"
+        elif intent_type == 'update_profile':
+            # Обновление профиля - используем инструменты
+            tool_choice = "auto"
+        else:
+            # По умолчанию - автоопределение
+            tool_choice = "auto"
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
             "model": "deepseek-chat",
             "messages": messages,
             "tools": TOOLS,
-            "tool_choice": "none" if is_advice_question else "auto",
+            "tool_choice": tool_choice,
             "temperature": 0.7,
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
@@ -5364,7 +5389,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         from models import Session, Task
                         session_db = Session()
                         try:
-                            user_tasks = session_db.query(Task).filter_by(user_id=user_id, completed=False).limit(10).all()
+                            user_tasks = session_db.query(Task).filter_by(user_id=user_id, status='pending').limit(10).all()
                             task_titles = [{'title': t.title} for t in user_tasks]
                             duplicates = detect_duplicates(task_titles)
                             if duplicates:

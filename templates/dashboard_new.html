@@ -1681,6 +1681,7 @@
         }
 
         async function analyzeTask(taskId) {
+            alert(`Анализ задачи ${taskId}`); // Временный alert для проверки
             try {
                 // Найти задачу в текущих данных
                 const task = allTasksFromServer.find(t => t.id === taskId);
