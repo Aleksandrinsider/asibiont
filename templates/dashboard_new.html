@@ -2867,7 +2867,7 @@
                     }
                     // Ensure panel is below header if header exists
                     const headerEl = document.querySelector('.app-header');
-                    if (headerEl && typeof headerEl.getBoundingClientRect === 'function'){
+                    if (headerEl && typeof headerEl.getBoundingClientRect === "function"){
                         const headerBottom = headerEl.getBoundingClientRect().bottom;
                         top = Math.max(top, headerBottom + margin);
                     }
