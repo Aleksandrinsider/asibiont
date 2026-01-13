@@ -5419,48 +5419,28 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         content = improved_fallback(intent, tool_calls, content, message, user_id)
                     
                     # АНАЛИЗ ВЗАИМОДЕЙСТВИЯ ДЛЯ ПРЕДЛОЖЕНИЯ ОБНОВЛЕНИЯ ПРОФИЛЯ
-                    profile_suggestion = analyze_interaction_for_profile_update(user_id, clean_message, content)
-                    if profile_suggestion:
-                        content += f"\n\n{profile_suggestion}"
+                    # Убрано для лаконичности - профиль обновляется отдельно
                     
-                    # ДОПОЛНИТЕЛЬНЫЕ ИИ-АНАЛИЗЫ ДЛЯ УЛУЧШЕНИЯ ОТВЕТА
+                    # ДОПОЛНИТЕЛЬНЫЕ ИИ-АНАЛИЗЫ - УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
+                    # Анализ эмоций, извлечение задач, рекомендации - теперь реже и короче
                     
-                    # 1. Анализ эмоций пользователя
+                    # 1. Анализ эмоций - только для очень негативных случаев
                     sentiment = analyze_sentiment(clean_message)
-                    if sentiment['sentiment'] == 'negative' and sentiment['intensity'] > 0.6:
-                        content += "\n\nВижу, что ты расстроен. Если хочешь поговорить об этом или нужна помощь - я здесь!"
-                    elif sentiment['sentiment'] == 'positive' and sentiment['intensity'] > 0.7:
-                        content += "\n\nРад, что у тебя всё хорошо! 😊"
+                    if sentiment['sentiment'] == 'negative' and sentiment['intensity'] > 0.8:
+                        content += " 😔 Если нужна помощь - скажи."
                     
-                    # 2. Автоматическое извлечение задач из сообщения
-                    if len(clean_message.split()) > 3:  # Только для осмысленных сообщений
-                        extracted_tasks = extract_tasks_with_ai(clean_message, user_id)
-                        if extracted_tasks:
-                            content += f"\n\n📋 Я заметил, что ты упомянул {len(extracted_tasks)} задач(и). Хочешь, я добавлю их в твой список?"
-                            for task in extracted_tasks[:2]:  # Показываем первые 2
-                                content += f"\n• {task['title']}"
+                    # 2. Автоматическое извлечение задач - убрано, чтобы не перегружать
                     
-                    # 3. Персонализированные рекомендации (раз в несколько сообщений)
+                    # 3. Персонализированные рекомендации - только 10% шанс и короче
                     import random
-                    if random.random() < 0.3:  # 30% шанс
+                    if random.random() < 0.1:  # 10% шанс вместо 30%
                         recommendations = generate_recommendations(user_id)
                         if recommendations:
                             rec = random.choice(recommendations)
-                            content += f"\n\n💡 Рекомендация: {rec.get('title', '')} - {rec.get('description', '')}"
+                            content += f"\n💡 {rec.get('title', '')}"
                     
-                    # 4. Проверка на дубликаты задач (если упоминаются задачи)
-                    if any(word in clean_message.lower() for word in ['задача', 'задачи', 'дело', 'сделать']):
-                        # Получить текущие задачи пользователя
-                        from models import Session, Task
-                        session_db = Session()
-                        try:
-                            user_tasks = session_db.query(Task).filter_by(user_id=user_id, status='pending').limit(10).all()
-                            task_titles = [{'title': t.title} for t in user_tasks]
-                            duplicates = detect_duplicates(task_titles)
-                            if duplicates:
-                                content += f"\n\n⚠️ Обнаружено {len(duplicates)} возможных дубликатов или конфликтов в задачах. Проверь свой список!"
-                        finally:
-                            session_db.close()
+                    # 4. Проверка на дубликаты - только если явно запрошено
+                    # Убрано для лаконичности
                     
                     print(f"[DEBUG] About to return content: '{content}'")  # DEBUG
                     return content
