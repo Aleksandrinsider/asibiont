@@ -350,7 +350,7 @@ body {
 .right-column {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 0px;
     overflow: visible; /* Avoid extra outer scrollbar */
     max-height: 100%;
     padding: 6px;
