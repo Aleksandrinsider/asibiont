@@ -350,7 +350,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0px;
-    overflow: visible; /* Avoid extra outer scrollbar */
+    overflow: hidden; /* Prevent content from going off-screen */
     max-height: 100%;
     padding: 8px;
     min-height: 0; /* Important for proper flex/grid behavior */
@@ -373,6 +373,7 @@ body {
     background-color: #FFFFFF;
     border-radius: 8px;
     min-height: 0;
+    overflow: auto;
 }
 
 .people-list {
@@ -872,7 +873,7 @@ details[open] .details-content {
 }
 
 .tasks-section {
-    overflow-y: visible;
+    overflow-y: auto;
     overflow-x: hidden;
     padding-top: 0;
     padding-right: 10px;
