@@ -329,9 +329,9 @@ body {
     grid-template-columns: 350px minmax(680px, 1fr) 370px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc(100vh - 60px);
-    gap: var(--app-gap);
-    padding: 12px;
-    overflow: hidden;
+    gap: 4px;
+    padding: 8px;
+    overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
     margin-top: 60px;
@@ -349,10 +349,10 @@ body {
 .right-column {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     overflow: visible; /* Avoid extra outer scrollbar */
     max-height: 100%;
-    padding: 8px;
+    padding: 6px;
     min-height: 0; /* Important for proper flex/grid behavior */
 }
 
@@ -360,8 +360,8 @@ body {
 .people-section {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px;
+    gap: 8px;
+    padding: 8px;
     background-color: #FFFFFF;
     border-radius: 8px;
     margin-bottom: 12px;
@@ -387,9 +387,9 @@ body {
 .center-column {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px; /* Reduced padding */
-    overflow: auto;
+    gap: 8px;
+    padding: 8px; /* Reduced padding */
+    overflow: visible;
     max-height: 100%;
     min-height: 0; /* Allow proper internal scrolling */
     -webkit-overflow-scrolling: touch;
@@ -852,7 +852,7 @@ details[open] .details-content {
 }
 
 .tasks-section {
-    padding: 12px;
+    padding: 8px;
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
@@ -884,7 +884,7 @@ details[open] .details-content {
 }
 
 .tasks-section {
-    overflow-y: auto;
+    overflow-y: visible;
     overflow-x: hidden;
     padding-top: 0;
     padding-right: 10px;
