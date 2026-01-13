@@ -373,6 +373,13 @@ def post_process_tool_calls(intent, tool_calls, message):
 
 # DEPRECATED FUNCTIONS REMOVED - Use improved_prompts_final.py
 
+def smart_fallback_handler(message, mentions_str, user_id, ai_response_content=""):
+    """
+    Умный fallback-обработчик: пытается выполнить действие, если AI не справился.
+    Анализирует намерение пользователя и выполняет соответствующие действия напрямую.
+    """
+    fallback_actions = []
+    
     # ����������� ��������� �����������
     greeting_words = ["������", "����������", "���", "hello", "hi", "������", "������������"]
     is_greeting = len(message.strip()) <= 20 and any(  # �������� ���������
@@ -419,7 +426,8 @@ def post_process_tool_calls(intent, tool_calls, message):
         ai_confidence = 0.8  # AI ��� �������������� �����
 
     # �������������� ������: ���������, ������ �� ��� AI ������� tool calls
-    intent = classify_user_intent(message, mentions_str)
+    from improved_prompts_final import improved_classify_intent
+    intent = improved_classify_intent(message, mentions_str)
     
     # ���� ��� ������ ����������� ������� - fallback �� �����
     if intent["type"] == "conversation":
@@ -3628,13 +3636,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
         db_session.close()
 
-        # Classify user intent (use improved version if available, fallback to legacy)
+        # Classify user intent (use improved version)
         if PROMPTS_V2_AVAILABLE:
             intent = improved_classify_intent(clean_message, mentions_str)
             logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
         else:
-            intent = classify_user_intent(clean_message, mentions_str)
-            logger.info(f"[LEGACY] User intent: {intent['type']} (confidence: {intent['confidence']})")
+            # Fallback to basic intent if improved_prompts_final.py not available
+            intent = {"type": "conversation", "confidence": 0.5, "params": {}}
+            logger.warning("[FALLBACK] improved_prompts_final.py not available, using basic intent")
 
         # ������ ����������� ��������� ����������� - ��� ����� AI ������
 
