@@ -227,7 +227,6 @@ except Exception as e:
     logger.error(f"Failed to run migrations: {e}")
 
 redis_client = None
-redis_client = None
 
 async def get_timezone_from_ip(ip_address):
     """Определяет timezone по IP адресу через ipapi.co"""
@@ -1138,8 +1137,8 @@ async def clear_redis_handler(request):
 
 
 async def direct_login_handler(request):
-    """Direct login endpoint for testing (bypasses Telegram auth)"""
-    return web.json_response({'status': 'ok'}, status=200)
+    """Direct login disabled in production"""
+    return web.json_response({'status': 'disabled'}, status=403)
 
 
 try:
@@ -2452,56 +2451,6 @@ async def extend_subscription_handler(request):
         return web.Response(text=f'Ошибка создания платежа: {str(e)}', status=500)
 
 
-async def test_payment_handler(request):
-    """Тестовый эндпоинт для симуляции успешной оплаты (только для разработки)"""
-    # Отключено в продакшене
-    return web.Response(text='Not available in production', status=403)
-    
-    session_obj = await get_session(request)
-    user_id = session_obj.get('user_id')
-    
-    if not user_id:
-        return web.Response(text='Unauthorized', status=401)
-    
-    try:
-        session_db = Session()
-        user = session_db.query(User).filter_by(telegram_id=user_id).first()
-        if user:
-            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-            if not subscription:
-                subscription = Subscription(user_id=user.id, telegram_username=user.username)
-                session_db.add(subscription)
-            else:
-                # Update telegram_username if not set
-                if not subscription.telegram_username:
-                    subscription.telegram_username = user.username
-            
-            subscription.status = 'active'
-            subscription.start_date = datetime.now(pytz.UTC)
-            
-            # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
-            now = datetime.now(pytz.UTC)
-            old_end_date = subscription.end_date
-            if subscription.end_date and subscription.end_date > now:
-                subscription.end_date = subscription.end_date + timedelta(days=30)
-            else:
-                subscription.end_date = now + timedelta(days=30)
-            
-            session_db.commit()
-            
-            # Форматируем даты для отображения
-            user_tz = pytz.timezone(user.timezone if user.timezone else 'Europe/Moscow')
-            new_end = subscription.end_date.astimezone(user_tz).strftime('%d.%m.%Y')
-            old_end = old_end_date.astimezone(user_tz).strftime('%d.%m.%Y') if old_end_date else 'нет'
-            
-            logger.info(f"Test payment: extended subscription for user {user_id} from {old_end} to {new_end}")
-        session_db.close()
-        return web.HTTPFound('/dashboard')
-    except Exception as e:
-        logger.error(f"Error in test payment: {e}")
-        return web.Response(text=f'Ошибка: {str(e)}', status=500)
-
-
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/', login_handler)
@@ -2519,11 +2468,10 @@ app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/complete_task', complete_task_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
-app.router.add_get('/test_payment', test_payment_handler)  # Тестовый эндпоинт для симуляции оплаты
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
-app.router.add_get('/direct_login', direct_login_handler)  # Тестовый логин (только для пользователей с активной подпиской)
+app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
@@ -2579,9 +2527,6 @@ else:
     logger.warning("Bot not created, skipping webhook setup")
 
 logger.info("App created successfully")
-
-if __name__ == "__main__":
-    logger.info(f"Starting application on port {PORT}")
 
 if __name__ == "__main__":
     try:

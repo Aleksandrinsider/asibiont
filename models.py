@@ -130,9 +130,9 @@ engine = create_engine(
 )
 try:
     Base.metadata.create_all(engine)
-    print("Database tables created successfully")
+    logger.info("Database tables created successfully")
 except Exception as e:
-    print(f"Failed to create database tables: {e}")
+    logger.error(f"Failed to create database tables: {e}")
     raise
 
 Session = sessionmaker(bind=engine)

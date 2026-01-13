@@ -1,4 +1,4 @@
-import aiohttp
+﻿import aiohttp
 import requests
 from config import (
     DEEPSEEK_API_KEY, 
@@ -901,19 +901,13 @@ def post_process_tool_calls(intent, tool_calls, message):
     return corrected_calls if corrected_calls != tool_calls else None
 
 
-# LEGACY FUNCTION REMOVED - Use improved_classify_intent from improved_prompts_final.py
 def classify_user_intent(message, mentions_str):
     """DEPRECATED: Use improved_classify_intent from improved_prompts_final.py"""
     from improved_prompts_final import improved_classify_intent
     return improved_classify_intent(message, mentions_str)
 
 
-# LEGACY FUNCTION REMOVED - Use improved_fallback from improved_prompts_final.py
-def smart_fallback_handler(message, mentions_str, user_id, ai_response_content=""):
-    """DEPRECATED: Use improved_fallback from improved_prompts_final.py"""
-    from improved_prompts_final import improved_fallback, improved_classify_intent
-    intent = improved_classify_intent(message, mentions_str)
-    return improved_fallback(intent, None, ai_response_content, message, user_id)
+def set_redis_client(client):
     # Это продолжение диалога, а не новый запрос действия
     words = message_lower.split()
     command_keywords = ["покажи", "список", "добавь", "удали", "напомни", "создай", "поручи", "перенеси",
