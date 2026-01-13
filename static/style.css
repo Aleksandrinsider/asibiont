@@ -217,7 +217,7 @@ body {
 
 .logout-button {
     padding: 8px 16px;
-    background-color: #F6F8FA;
+    background-color: #FFFFFF;
     color: #1F2328;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
@@ -231,7 +231,7 @@ body {
 }
 
 .logout-button:hover {
-    background-color: #FFFFFF;
+    background-color: #F6F8FA;
     border-color: #1F2328;
     transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(31, 35, 40, 0.08);
@@ -880,8 +880,6 @@ details[open] .details-content {
     border: none;
     margin-top: 0;
     margin-bottom: 12px;
-    flex: 1 1 auto;
-    transition: all 0.3s ease;
 }
 
 
