@@ -1104,7 +1104,6 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
     # ЕСЛИ запрос требует действия И AI не вызвал tool calls - применяем fallback
     if should_have_tool_calls and intent["confidence"] >= 0.9:  # Увеличен порог с 0.7 до 0.9
         ai_confidence = 0.2  # Принудительно низкая уверенность для fallback
-        print(f"[DEBUG FALLBACK] Forcing fallback for {intent['type']} (confidence: {intent['confidence']})")  # DEBUG
 
     # Если запрос требует действия, но AI не дал содержательный ответ - низкая уверенность
     if should_have_tool_calls and ai_confidence < 0.6:
@@ -1118,7 +1117,6 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
         logger.info(
             f"[SMART FALLBACK] Applying fallback: message='{message[:50]}...', mentions='{mentions_str}', ai_response='{ai_response_content[:50]}...', intent_type='{intent['type']}', confidence={intent['confidence']}"
         )
-        print(f"[DEBUG FALLBACK] Applying fallback for {intent['type']}, ai_confidence={ai_confidence}")  # DEBUG
 
         if intent["confidence"] >= 0.7:  # Высокая уверенность в классификации
             logger.info(f"[SMART FALLBACK] Executing {intent['type']} with params: {intent['params']}")
@@ -1158,7 +1156,6 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
                 result = update_profile(
                     city=intent["params"].get("city"), interests=intent["params"].get("interests"), user_id=user_id
                 )
-                print(f"[DEBUG FALLBACK] update_profile result: {result}")  # DEBUG
 
             elif intent["type"] == "list_tasks":
                 result = list_tasks(user_id=user_id)
@@ -1693,20 +1690,19 @@ def clean_technical_details(text):
 
     logger = logging.getLogger(__name__)
     original_text = text
-    print(f"[DEBUG CLEAN] Original text: '{text}'")  # DEBUG
     import re
 
     # Удаляем вызовы функций в квадратных скобках: [add_task(...)]
     before = text
     text = re.sub(r"\[[\w_]+\([^]]*\)\]", "", text)
     if before != text:
-        print(f"[DEBUG CLEAN] After removing function calls: '{text}'")  # DEBUG
+        pass
 
     # Удаляем пустые квадратные скобки
     before = text
     text = re.sub(r"\[\s*\]", "", text)
     if before != text:
-        print(f"[DEBUG CLEAN] After removing empty brackets: '{text}'")  # DEBUG
+        pass
 
     # Удаляем названия функций (с скобками и без)
     before = text
@@ -1717,7 +1713,7 @@ def clean_technical_details(text):
         flags=re.IGNORECASE,
     )
     if before != text:
-        print(f"[DEBUG CLEAN] After removing function names: '{text}'")  # DEBUG
+        pass
 
     # Удаляем фразы о вызове функций
     patterns_to_remove = [
@@ -1768,7 +1764,6 @@ def clean_technical_details(text):
 
     if original_text != text:
         logger.warning(f"[CLEAN] Original: '{original_text[:100]}...' -> Cleaned: '{text[:100]}...'")
-        print(f"[DEBUG CLEAN] Final text: '{text}'")  # DEBUG
 
     return text.strip()
 
@@ -2341,14 +2336,12 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     from datetime import datetime
     from sqlalchemy import or_
 
-    print(f"[DEBUG COMPLETE_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")  # DEBUG
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
     user = session.query(User).filter_by(telegram_id=user_id).first()
-    print(f"[DEBUG COMPLETE_TASK] Found user: {user.id if user else None}")  # DEBUG
     if not user:
         if close_session:
             session.close()
@@ -2374,11 +2367,9 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     elif task_title:
         # Ищем по словам в названии для более гибкого поиска
         words = task_title.lower().split()
-        print(f"[DEBUG COMPLETE_TASK] Searching by title, words: {words}")  # DEBUG
         # OR вместо AND - ищем задачу содержащую хотя бы одно из слов
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
         task = session.query(Task).filter(Task.user_id == user.id, Task.status != "completed", or_(*conditions)).first()
-        print(f"[DEBUG COMPLETE_TASK] Found task by title: {task.title if task else None}")  # DEBUG
     else:
         if close_session:
             session.close()
@@ -2388,7 +2379,6 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
         session.commit()
-        print(f"[DEBUG COMPLETE_TASK] Task completed: {task.title}, status: {task.status}")  # DEBUG
 
         # Обновить аналитику профиля
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -2424,7 +2414,6 @@ def analyze_task(task_id=None, user_id=None, session=None):
     from sqlalchemy import or_
     import asyncio
 
-    print(f"[DEBUG ANALYZE_TASK] Called with task_id={task_id}, user_id={user_id}")  # DEBUG
     if session is None:
         session = Session()
         close_session = True
@@ -2432,7 +2421,6 @@ def analyze_task(task_id=None, user_id=None, session=None):
         close_session = False
     
     user = session.query(User).filter_by(telegram_id=user_id).first()
-    print(f"[DEBUG ANALYZE_TASK] Found user: {user.id if user else None}")  # DEBUG
     if not user:
         if close_session:
             session.close()
@@ -2618,17 +2606,13 @@ def delegate_task(
 
         # Find recipient by username
         recipient_username = delegated_to_username.replace("@", "").lower()
-        print(f"[DEBUG DELEGATE] Looking for recipient: '{recipient_username}'")  # DEBUG
         recipient = session.query(User).filter(User.username.ilike(recipient_username)).first()
-        print(f"[DEBUG DELEGATE] Found recipient: {recipient.username if recipient else None}")  # DEBUG
 
         if not recipient:
             return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
 
         # If delegating to self, create regular task instead
-        print(f"[DEBUG DELEGATE] Checking if self: recipient.id={recipient.id}, delegator.id={delegator.id}")  # DEBUG
         if recipient.id == delegator.id:
-            print(f"[DEBUG DELEGATE] Delegating to self")  # DEBUG
             # Create regular task for self
             task = Task(user_id=delegator.id, title=title, description=encrypt_data(description), status="pending")
             if reminder_time:
@@ -4525,7 +4509,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 result = await response.json()
                                 message_response = result["choices"][0]["message"]
                                 content = message_response.get("content", "")
-                                print(f"[DEBUG API] Raw content: '{content}'")  # DEBUG
                                 # Фильтровать сырые tool calls
                                 content = re.sub(r"<\|.*?\|>", "", content).strip()
                                 content = re.sub(
@@ -4545,7 +4528,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                                 # Проверяем tool_calls в API response
                                 tool_calls = message_response.get("tool_calls")
-                                print(f"[DEBUG API] tool_calls: {tool_calls}")  # DEBUG
                             except Exception as e:
                                 logger.error(f"Error parsing API response: {e}")
                                 if attempt < max_retries:
@@ -4957,7 +4939,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             #     system_prompt, messages, url, headers
                             # )
                             
-                            print(f"[DEBUG FALLBACK] Returning final_content: '{final_content[:200]}...'")  # DEBUG
                             return final_content
                     except Exception as e:
                         logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
@@ -5010,7 +4991,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     retry_content = replace_placeholders(retry_content, user_now, current_time_str)
                                     content = retry_content.strip()
                                     logger.info(f"[RETRY] Got retry content: '{content[:100]}...'")
-                                    print(f"[DEBUG RETRY] Retry content: '{content[:100]}...'")  # DEBUG
                                     if retry_content and len(retry_content.strip()) >= 3:
                                         content = retry_content
                                     else:
