@@ -2865,6 +2865,12 @@
                     if(top + estimatedHeight > window.innerHeight - 8){
                         top = (rect.top || 0) - estimatedHeight - margin;
                     }
+                    // Ensure panel is below header if header exists
+                    const headerEl = document.querySelector('.app-header');
+                    if (headerEl && typeof headerEl.getBoundingClientRect === 'function'){
+                        const headerBottom = headerEl.getBoundingClientRect().bottom;
+                        top = Math.max(top, headerBottom + margin);
+                    }
                     // Ensure visible when moved to body
                     menu.__overlayOldDisplay = (menu.style && menu.style.display) ? menu.style.display : '';
                     if (menu.style) {

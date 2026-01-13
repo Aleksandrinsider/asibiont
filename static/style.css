@@ -1491,7 +1491,7 @@ details[open] .details-content {
 .rating-modal {
     display: none;
     position: fixed;
-    z-index: 1000;
+    z-index: 6000; /* above header */
     left: 0;
     top: 0;
     width: 100%;
@@ -1499,6 +1499,10 @@ details[open] .details-content {
     background-color: rgba(31, 35, 40, 0.7);
     align-items: center;
     justify-content: center;
+}
+
+.rating-modal-content {
+    margin-top: calc(var(--header-height) + 12px); /* push content below header to avoid overlap */
 }
 
 .rating-modal-content {
