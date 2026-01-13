@@ -2779,6 +2779,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
     from models import Session, Task, UserProfile, Interaction
     from datetime import datetime
     from sqlalchemy import or_
+    import asyncio
 
     print(f"[DEBUG ANALYZE_TASK] Called with task_id={task_id}, user_id={user_id}")  # DEBUG
     if session is None:
@@ -2826,8 +2827,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
         Описание: {task.description or 'Не указано'}
         Статус: {task.status}
         Время напоминания: {task.reminder_time.strftime('%Y-%m-%d %H:%M') if task.reminder_time else 'Не установлено'}
-        Просрочена: {'Да' if task.overdue else 'Нет'}
-        Делегирована: {'Да' if task.is_delegated else 'Нет'}
+        Делегирована: {'Да' if task.delegated_to_username else 'Нет'}
         """
         
         # Добавить информацию из профиля пользователя
@@ -2848,14 +2848,16 @@ def analyze_task(task_id=None, user_id=None, session=None):
         1. Оцени сложность и реалистичность сроков
         2. Предложи шаги для выполнения
         3. Дай советы по оптимизации
-        4. Если задача просрочена, объясни почему и как исправить
-        5. Учитывай навыки и интересы пользователя при рекомендациях
+        4. Учитывай навыки и интересы пользователя при рекомендациях
         
         Будь конкретным и полезным в ответе."""
 
         try:
-            # Используем chat_with_ai для анализа
-            analysis_result = chat_with_ai(analysis_prompt, [], user_id)
+            # Создаем event loop для синхронного вызова асинхронной функции
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            analysis_result = loop.run_until_complete(chat_with_ai(analysis_prompt, [], user_id))
+            loop.close()
             
             # Сохранить результат анализа в историю взаимодействий
             interaction = Interaction(user_id=user.id, message_type="ai", content=f"Анализ задачи '{task.title}':\n\n{analysis_result}")
