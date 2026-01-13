@@ -1,8 +1,10 @@
 import datetime
+import logging
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
+logger = logging.getLogger(__name__)
 Base = declarative_base()
 
 class User(Base):
