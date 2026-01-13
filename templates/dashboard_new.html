@@ -51,7 +51,7 @@
                     <div style="background: #FFFFFF; border-radius: 6px; width: 90%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 4px 16px rgba(0,0,0,0.15); border: 1px solid #D1D9E0;" onclick="event.stopPropagation()">
                         <!-- Заголовок -->
                         <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; display: flex; align-items: center; justify-content: space-between; background: #F6F8FA;">
-                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #24292F;">Поиск контактов</h3>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: #656D76;">Поиск контактов</h3>
                             <button onclick="closeSearchModal()" style="background: none; border: none; cursor: pointer; color: #656D76; font-size: 20px; line-height: 1; padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 4px; transition: background 0.2s;"
                                     onmouseover="this.style.background='#EAEEF2'"
                                     onmouseout="this.style.background='none'">
@@ -62,7 +62,7 @@
                         <!-- Поле поиска -->
                         <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; background: white;">
                             <input type="text" id="modal-search-input" placeholder="Введите никнейм в Telegram (например, @username)" 
-                                style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; outline: none; color: #24292F; background: white;"
+                                style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; outline: none; color: #656D76; background: white;"
                                 onkeyup="searchContactsInModal(event)">
                         </div>
                         
@@ -79,7 +79,7 @@
                 </div>
                 {% endif %}
             </div>
-            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #24292F; font-size: 13px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
+            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #656D76; font-size: 13px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
                 <span class="reminder-pulse"></span>
                 На очереди: <span id="next-task-text"></span>
             </div>
