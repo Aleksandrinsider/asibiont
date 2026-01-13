@@ -703,14 +703,13 @@ details[open] .details-content {
 .message.user {
     background-color: transparent;
     color: #1F2328;
-    align-self: flex-start;
-    margin-right: auto;
+    width: 100%;
     padding: 6px 12px;
 }
 
 .message.user .message-text {
     font-weight: 400;
-    font-size: 13px;
+    font-size: 14px;
     line-height: 21px;
     color: #656D76;
     text-align: justify;
@@ -719,7 +718,7 @@ details[open] .details-content {
 .message.ai {
     background-color: transparent;
     color: #1F2328;
-    align-self: flex-start;
+    width: 100%;
 }
 
 .message.ai:hover {
@@ -728,7 +727,7 @@ details[open] .details-content {
 
 .message.ai .message-text {
     font-weight: 400;
-    font-size: 13px;
+    font-size: 14px;
     color: #1F2328;
     line-height: 21px;
     text-align: justify;
@@ -739,7 +738,7 @@ details[open] .details-content {
     line-height: 21px;
     width: 100%;
     margin-bottom: 0;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 400;
 }
 
