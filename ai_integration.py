@@ -5554,105 +5554,56 @@ def list_tasks(user_id=None, session=None):
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         now = datetime.now(user_tz)
 
-        result = f"У вас {len(active_tasks)} активных задач\n\n"
+        # Подсчёт просроченных задач
+        overdue_count = 0
+        for task in active_tasks:
+            if task.reminder_time:
+                try:
+                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    if reminder_dt < now:
+                        overdue_count += 1
+                except:
+                    pass
 
-        # Мои задачи
-        if my_tasks:
+        # Формируем краткий ответ
+        if not active_tasks:
+            return "Нет активных задач. Что планируете?"
+
+        result = f"У вас {len(active_tasks)} {'задача' if len(active_tasks) == 1 else 'задач'}\n\n"
+
+        # Показываем только первые 3 задачи
+        tasks_to_show = my_tasks[:3]
+        if tasks_to_show:
             result += "Ваши задачи:\n"
-            for task in my_tasks:
+            for task in tasks_to_show:
                 reminder_info = ""
                 if task.reminder_time:
                     try:
                         reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                         if reminder_dt < now:
                             delta = now - reminder_dt
-                            total_minutes = int(delta.total_seconds() / 60)
-                            
-                            if total_minutes < 60:
-                                reminder_info = f" - просрочено на {total_minutes} мин"
-                            elif total_minutes < 1440:  # меньше 24 часов
-                                hours = total_minutes // 60
-                                minutes = total_minutes % 60
-                                if minutes > 0:
-                                    reminder_info = f" - просрочено на {hours} ч {minutes} мин"
-                                else:
-                                    reminder_info = f" - просрочено на {hours} ч"
+                            days = delta.days
+                            hours = (delta.seconds // 3600)
+                            if days > 0:
+                                reminder_info = f" - просрочено на {days} д {hours} ч" if hours else f" - просрочено на {days} д"
                             else:
-                                days = delta.days
-                                hours = (total_minutes % 1440) // 60
-                                if hours > 0:
-                                    reminder_info = f" - просрочено на {days} д {hours} ч"
-                                else:
-                                    reminder_info = f" - просрочено на {days} д"
+                                reminder_info = f" - просрочено на {hours} ч"
                         else:
                             reminder_info = f" - {reminder_dt.strftime('%d.%m %H:%M')}"
                     except:
                         pass
+                result += f"- {task.title}{reminder_info}\n"
+            
+            if len(my_tasks) > 3:
+                result += f"...и ещё {len(my_tasks) - 3}\n"
 
-                priority_text = {"high": "высокий", "medium": "средний", "low": "низкий"}.get(getattr(task, 'priority', None), "")
-                priority_info = f" ({priority_text} приоритет)" if priority_text else ""
-                result += f"- {task.title}{reminder_info}{priority_info}\n"
-            result += "\n"
-
-        # Делегированные мне
-        if delegated_to_me:
-            result += "Делегировано вам:\n"
-            for task in delegated_to_me:
-                creator = session.query(User).filter_by(id=task.user_id).first()
-                creator_name = f"от @{creator.username}" if creator else "от кого-то"
-                result += f"- {task.title} ({creator_name})\n"
-            result += "\n"
-
-        # Делегированные мной
-        if delegated_by_me:
-            result += "Вы делегировали:\n"
-            for task in delegated_by_me:
-                result += f"- {task.title} (на @{task.delegated_to_username})\n"
-            result += "\n"
-
-        # Завершённые (последние 3)
-        if completed_tasks:
-            recent_completed = completed_tasks[-3:]
-            result += f"Завершено: {len(completed_tasks)} задач\n"
-
-        # Анализ и рекомендации
-        recommendations = []
-
-        # Проверяем просроченные задачи
-        overdue_tasks = []
-        for task in active_tasks:
-            if task.reminder_time:
-                try:
-                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
-                    if reminder_dt < now:
-                        overdue_tasks.append(task)
-                except:
-                    pass
-
-        if overdue_tasks:
-            recommendations.append(f"У вас {len(overdue_tasks)} просроченных задач. Рекомендую выполнить их или перенести сроки.")
-
-        # Проверяем задачи без сроков
-        tasks_without_deadline = [t for t in active_tasks if not t.reminder_time]
-        if tasks_without_deadline:
-            recommendations.append(f"{len(tasks_without_deadline)} задач без сроков. Установите конкретные даты для лучшего планирования.")
-
-        # Проверяем делегированные задачи
-        if delegated_by_me:
-            recommendations.append(f"Вы делегировали {len(delegated_by_me)} задач. Проверьте их статус у получателей.")
-
-        # Общие рекомендации
-        if len(active_tasks) > 5:
-            recommendations.append("У вас много задач. Попробуйте приоритизировать - отметьте самые важные.")
-
-        if not active_tasks:
-            recommendations.append("Все задачи выполнены. Что планируете добавить?")
+        # Краткая рекомендация
+        if overdue_count > 0:
+            result += f"\n\n{overdue_count} просроченных - стоит разобраться"
         elif len(active_tasks) == 1:
-            recommendations.append("Одна задача - легче сосредоточиться.")
-
-        # Добавляем рекомендации к результату
-        if recommendations:
-            result += "\nРекомендации:\n" + "\n".join(f"- {rec}" for rec in recommendations[:3])  # Максимум 3 рекомендации
+            result += "\n\nОдна задача - отличный фокус"
+        elif len(active_tasks) > 5:
+            result += "\n\nМного задач - приоритизируй"
 
         return result.strip()
     except Exception as e:
