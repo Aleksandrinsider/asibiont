@@ -4771,40 +4771,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             intent = classify_user_intent(clean_message, mentions_str)
             logger.info(f"[LEGACY] User intent: {intent['type']} (confidence: {intent['confidence']})")
 
-        # СПЕЦИАЛЬНАЯ ОБРАБОТКА ПРОСТЫХ ПРИВЕТСТВИЙ
-        if intent.get('type') == 'greeting':
-            # Получаем краткий обзор задач пользователя
-            from models import Session
-            db_session = Session()
-            try:
-                # Получаем активные и просроченные задачи
-                from models import Task
-                from datetime import datetime
-                now = datetime.now()
-                
-                active_tasks = db_session.query(Task).filter_by(user_id=user_id, status='pending').all()
-                overdue_tasks = [t for t in active_tasks if t.reminder_time and t.reminder_time < now]
-                active_tasks = [t for t in active_tasks if not t.reminder_time or t.reminder_time >= now]
-                
-                greeting_parts = ["Привет! 👋"]
-                
-                if active_tasks or overdue_tasks:
-                    if overdue_tasks:
-                        overdue_titles = [f'"{t.title}"' for t in overdue_tasks[:2]]
-                        greeting_parts.append(f"У тебя есть просроченные задачи: {', '.join(overdue_titles)}.")
-                    
-                    if active_tasks:
-                        active_count = len(active_tasks)
-                        greeting_parts.append(f"Активных задач: {active_count}.")
-                    
-                    greeting_parts.append("Чем могу помочь?")
-                else:
-                    greeting_parts.append("У тебя пока нет активных задач. Чем могу помочь?")
-                
-                return " ".join(greeting_parts)
-                
-            finally:
-                db_session.close()
+        # Убрана специальная обработка приветствий - все через AI промпт
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
