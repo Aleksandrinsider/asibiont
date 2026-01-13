@@ -743,7 +743,7 @@ details[open] .details-content {
 
 .message-text {
     word-wrap: break-word;
-    line-height: 1.6;
+    line-height: normal;
     width: 100%;
     margin-bottom: 0;
     font-size: 13px;
@@ -756,7 +756,7 @@ details[open] .details-content {
     margin-top: 4px;
     opacity: 0.7;
     font-weight: 400;
-    line-height: 1.6;
+    line-height: normal;
     font-variant-numeric: tabular-nums;
 }
 
