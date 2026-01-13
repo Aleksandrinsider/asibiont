@@ -332,7 +332,7 @@ body {
     grid-template-columns: 400px minmax(680px, 1fr) 400px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc(100vh - 84px);
-    gap: 4px;
+    gap: 2px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
