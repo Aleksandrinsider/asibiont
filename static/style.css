@@ -373,7 +373,6 @@ body {
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    border-radius: 6px;
     min-height: 0;
     overflow: auto;
     flex: 1 1 auto;
@@ -853,32 +852,26 @@ details[open] .details-content {
 .tasks-section {
     padding: 12px;
     border: none;
-    border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
 }
 
 .task-stats-block {
     padding: 12px;
     border: none;
-    border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
 }
 
 .tasks-section-wrapper {
     padding: 12px;
     border: none;
-    border-radius: 6px;
     display: flex;
     flex-direction: column;
     overflow: auto;
     transition: all 0.3s ease;
     flex: 1 1 auto;
     min-height: 0;
-    box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
 }
 
 .tasks-section {
@@ -894,11 +887,9 @@ details[open] .details-content {
 .context-section {
     padding: 12px;
     border: none;
-    border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
     flex: 1 1 auto;
-    min-height: 0;
     transition: all 0.3s ease;
 }
 
