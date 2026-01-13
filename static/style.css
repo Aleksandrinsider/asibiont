@@ -898,7 +898,7 @@ details[open] .details-content {
 .people-section h3,
 .tasks-section h3 {
     margin: 0 0 15px 0;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #1F2328;
     line-height: 21px;
@@ -1175,7 +1175,7 @@ details[open] .details-content {
     margin: 0 0 8px 0;
     color: #1F2328;
     line-height: 21px;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 400;
 }
 

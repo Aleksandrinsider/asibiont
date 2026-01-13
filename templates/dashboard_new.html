@@ -93,7 +93,7 @@
                     {% if user_avatar_url %}
                     <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
                     {% else %}
-                    <div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                    <div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                     {% endif %}
                 </div>
                 <button onclick="logout()" class="logout-button">Выход</button>
@@ -135,7 +135,7 @@
             <div class="left-column">
                 <div class="context-section" id="profile-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Профиль</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Профиль</h3>
                         <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #656D76; font-size: 12px; font-weight: bold; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
@@ -175,7 +175,7 @@
                                         {% if user_avatar_url %}
                                         <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0;">
                                         {% else %}
-                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                     </div>
                                     
@@ -185,7 +185,7 @@
                                 </div>
                                 
                                 <!-- Имя и ник под аватаром -->
-                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">{{ user.first_name or 'Пользователь' }}</p>
+                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
                                 <p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -217,7 +217,7 @@
 
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 14px; font-weight: 600;">Контакты</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 600;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Мои</button>
