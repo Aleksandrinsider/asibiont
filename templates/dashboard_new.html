@@ -2829,63 +2829,79 @@
             }
 
             function openOverlay(toggle, menu){
-                if(!menu) return;
-                // Toggle close if already floating
-                if(menu.classList.contains('floating-overlay')){
-                    closeOverlay(menu);
-                    return;
-                }
-                // create placeholder to remember original position
-                const placeholder = document.createElement('div');
-                placeholder.style.display = 'none';
-                menu.__overlayOriginalParent = menu.parentNode;
-                menu.__overlayPlaceholder = placeholder;
-                menu.parentNode.insertBefore(placeholder, menu);
+                try {
+                    if(!menu || !toggle) return;
+                    // Ensure toggle supports bounding rect
+                    if(typeof toggle.getBoundingClientRect !== 'function') return;
 
-                menu.classList.add('floating-overlay');
-                document.body.appendChild(menu);
-
-                // position relative to toggle
-                const rect = toggle.getBoundingClientRect();
-                const margin = 8;
-                let top = rect.bottom + margin;
-                let left = rect.left;
-                // ensure on-screen
-                const maxRight = left + menu.offsetWidth;
-                if(maxRight > window.innerWidth - 8){
-                    left = Math.max(8, window.innerWidth - menu.offsetWidth - 8);
-                }
-                // adjust if overflow bottom
-                const estimatedHeight = Math.min(menu.offsetHeight, window.innerHeight * 0.5);
-                if(top + estimatedHeight > window.innerHeight - 8){
-                    top = rect.top - estimatedHeight - margin;
-                }
-                // Ensure visible when moved to body
-                menu.__overlayOldDisplay = menu.style.display || '';
-                menu.style.display = 'block';
-                menu.style.position = 'fixed';
-                menu.style.top = top + 'px';
-                menu.style.left = left + 'px';
-                menu.style.minWidth = rect.width + 'px';
-                menu.style.maxHeight = (window.innerHeight * 0.5) + 'px';
-                menu.style.overflow = 'auto';
-
-                // close on outside click or ESC
-                setTimeout(()=>{
-                    function onDocClick(e){
-                        if(!menu.contains(e.target) && !toggle.contains(e.target)){
-                            closeOverlay(menu);
-                            document.removeEventListener('click', onDocClick);
-                            document.removeEventListener('keydown', onEsc);
-                        }
+                    // Toggle close if already floating
+                    if(menu.classList && menu.classList.contains('floating-overlay')){
+                        closeOverlay(menu);
+                        return;
                     }
-                    function onEsc(e){ if(e.key === 'Escape'){ closeOverlay(menu); document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onEsc); } }
-                    document.addEventListener('click', onDocClick);
-                    document.addEventListener('keydown', onEsc);
-                    // Use explicit handler to support browsers without `once` option
-                    function onResizeHandler(){ closeOverlay(menu); window.removeEventListener('resize', onResizeHandler); }
-                    window.addEventListener('resize', onResizeHandler);
-                }, 0);
+
+                    // create placeholder to remember original position
+                    const placeholder = document.createElement('div');
+                    placeholder.style.display = 'none';
+                    menu.__overlayOriginalParent = menu.parentNode;
+                    menu.__overlayPlaceholder = placeholder;
+                    if (menu.parentNode) menu.parentNode.insertBefore(placeholder, menu);
+
+                    if (menu.classList) menu.classList.add('floating-overlay');
+                    document.body.appendChild(menu);
+
+                    // position relative to toggle
+                    const rect = toggle.getBoundingClientRect();
+                    const margin = 8;
+                    let top = rect.bottom + margin;
+                    let left = rect.left;
+                    // ensure on-screen
+                    const maxRight = left + (menu.offsetWidth || 0);
+                    if(maxRight > window.innerWidth - 8){
+                        left = Math.max(8, window.innerWidth - (menu.offsetWidth || 0) - 8);
+                    }
+                    // adjust if overflow bottom
+                    const estimatedHeight = Math.min(menu.offsetHeight || 0, window.innerHeight * 0.5);
+                    if(top + estimatedHeight > window.innerHeight - 8){
+                        top = (rect.top || 0) - estimatedHeight - margin;
+                    }
+                    // Ensure visible when moved to body
+                    menu.__overlayOldDisplay = (menu.style && menu.style.display) ? menu.style.display : '';
+                    if (menu.style) {
+                        menu.style.display = 'block';
+                        menu.style.position = 'fixed';
+                        menu.style.top = top + 'px';
+                        menu.style.left = left + 'px';
+                        menu.style.minWidth = (rect.width || 0) + 'px';
+                        menu.style.maxHeight = (window.innerHeight * 0.5) + 'px';
+                        menu.style.overflow = 'auto';
+                    }
+
+                    // close on outside click or ESC
+                    setTimeout(()=>{
+                        function onDocClick(e){
+                            try {
+                                const target = e && e.target;
+                                if(!menu.contains(target) && !toggle.contains(target)){
+                                    closeOverlay(menu);
+                                    document.removeEventListener('click', onDocClick);
+                                    document.removeEventListener('keydown', onEsc);
+                                }
+                            } catch (err) {
+                                // ignore
+                            }
+                        }
+                        function onEsc(e){ if(e && e.key === 'Escape'){ closeOverlay(menu); document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onEsc); } }
+                        document.addEventListener('click', onDocClick);
+                        document.addEventListener('keydown', onEsc);
+                        // Use explicit handler to support browsers without `once` option
+                        function onResizeHandler(){ closeOverlay(menu); window.removeEventListener('resize', onResizeHandler); }
+                        window.addEventListener('resize', onResizeHandler);
+                    }, 0);
+                } catch (err) {
+                    console.error('openOverlay error', err);
+                }
+            }
             }
 
             // Delegate clicks for elements that reference menus via data-overlay-target="#menuId"
