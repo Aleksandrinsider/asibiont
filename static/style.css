@@ -630,6 +630,7 @@ details[open] .details-content {
     background-color: #068487;
     border-radius: 50%;
     display: inline-block;
+    vertical-align: middle;
     -webkit-animation: pulse 1.5s ease-in-out infinite;
     animation: pulse 1.5s ease-in-out infinite;
 }
