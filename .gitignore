@@ -11,6 +11,7 @@ venv/
 .DS_Store
 local.db
 test.db
+test_local.db
 test_comprehensive.db
 test_results.txt
 production_test.db
