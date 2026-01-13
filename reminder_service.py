@@ -75,7 +75,13 @@ async def _check_and_send_overdue_reminder_job(user_id: int):
 class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
         self.bot = bot
-        self.ai_service = ai_service
+        # Import AI functions directly
+        from ai_integration import generate_reminder, generate_result_check, generate_daily_report, generate_proactive_message, generate_overdue_reminder
+        self.generate_reminder = generate_reminder
+        self.generate_result_check = generate_result_check
+        self.generate_daily_report = generate_daily_report
+        self.generate_proactive_message = generate_proactive_message
+        self.generate_overdue_reminder = generate_overdue_reminder
         # Use persistent jobstore (SQLAlchemy) to survive restarts
         jobstores = {
             'default': SQLAlchemyJobStore(url=DATABASE_URL)
@@ -185,7 +191,7 @@ class ReminderService:
         
         try:
             logger.info(f"Generating result check text for task {task_id}...")
-            result_text = await self.ai_service.generate_result_check(user_id, task_title)
+            result_text = await self.generate_result_check(user_id, task_title)
             logger.info(f"Result check text generated: {result_text[:100]}...")
             
             if self.bot:
@@ -279,7 +285,7 @@ class ReminderService:
                 db.close()
 
             logger.info(f"Generating reminder text for task {task_id}...")
-            reminder_text = await self.ai_service.generate_reminder(user_id, task_title)
+            reminder_text = await self.generate_reminder(user_id, task_title)
             logger.info(f"Reminder text generated: {reminder_text[:100]}...")
             
             # Сохранить напоминание в историю чата
@@ -407,7 +413,7 @@ class ReminderService:
             return
         
         try:
-            report_text = await self.ai_service.generate_daily_report(user_id)
+            report_text = await self.generate_daily_report(user_id)
             
             if self.bot:
                 await self.bot.send_message(
@@ -727,7 +733,7 @@ class ReminderService:
             
             # Отправить проактивное сообщение с номером для разнообразия
             try:
-                proactive_text = await self.ai_service.generate_proactive_message(user_id)
+                proactive_text = await self.generate_proactive_message(user_id)
                 
                 if self.bot:
                     await self.bot.send_message(
@@ -779,7 +785,7 @@ class ReminderService:
             
             # Генерируем текст напоминания с учётом эскалации
             max_reminders = max(task.overdue_reminders_sent for task in overdue_tasks)
-            overdue_text = await self.ai_service.generate_overdue_reminder(user_id, overdue_tasks, escalation_level=max_reminders)
+            overdue_text = await self.generate_overdue_reminder(user_id, overdue_tasks, escalation_level=max_reminders)
             
             if self.bot:
                 await self.bot.send_message(

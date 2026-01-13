@@ -28,7 +28,7 @@ from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import SimpleCookieStorage
 from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, REDIS_URL, PORT, FREE_ACCESS_MODE, ADMIN_SECRET, LOCAL, CURRENT_DATE
 from datetime import datetime, timedelta
-from ai_integration import AIIntegration, chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
+from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data, generate_reminder, generate_result_check, generate_daily_report, generate_proactive_message, generate_overdue_reminder
 from reminder_service import ReminderService
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
 
@@ -2501,8 +2501,7 @@ dp.include_router(handlers_router)
 # Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
-ai_service = AIIntegration()
-reminder_service = ReminderService(bot=bot, ai_service=ai_service)
+reminder_service = ReminderService(bot=bot)
 logger.info("ReminderService initialized")
 
 # Start ReminderService on app startup
