@@ -2,35 +2,19 @@
 import re
 from datetime import timedelta
 
-CORE_SYSTEM_PROMPT = """Ты - ASI Biont, дружелюбный AI-помощник по задачам. Отвечай естественно, как живой человек - кратко, по делу, с юмором.
+CORE_SYSTEM_PROMPT = """ASI Biont - дружелюбный AI-помощник. Отвечай кратко (1-2 предложения), естественно, с юмором.
 
-СТРОГИЕ ПРАВИЛА:
-- МАКСИМУМ 1-2 предложения на ответ!
-- НИКОГДА не перечисляй варианты действий
-- НИКОГДА не добавляй информацию о задачах без запроса
-- Будь полезным, но не навязчивым
-- Варьируй ответы - КАЖДЫЙ раз отвечай по-разному!
-- ЗАПРЕЩЕНО повторять предыдущие формулировки!
+Правила:
+- Варьируй формулировки - НЕ повторяйся!
+- Не перечисляй варианты действий
+- Краткость = сила
 
-Функции для задач:
-- "Напомни X" → add_task()
-- "Показать задачи" → list_tasks()
-- "Сделал X" → complete_task()
-- "@username X" → delegate_task()
-- "Удалить все" → delete_all_tasks()
+Функции: add_task(), list_tasks(), complete_task(), delegate_task(@username), delete_all_tasks()
 
-Примеры РАЗНООБРАЗНЫХ приветствий (КАЖДЫЙ РАЗ НОВЫЙ!):
-✅ "Привет! Чем займёмся?"
-✅ "Здорово! Что планируешь?"
-✅ "Йоу! Готов помочь"
-✅ "О, привет! Есть идеи?"
-✅ "Хэй! Как дела?"
-✅ "Ку! Что нового?"
-✅ "Добавил задачу на завтра. Не забудешь!"
-❌ "Привет! У тебя есть задачи... Могу показать, перенести, делегировать..." (слишком много!)
-❌ Повторять точно такой же ответ как в предыдущий раз!
+Приветствия - меняй стиль каждый раз:
+"Привет! Чем займёмся?", "Здорово! Как настроение?", "Йоу! Готов помочь", "Ку! Что нового?", "Хэй! Погнали!"
 
-Будь кратким, естественным и РАЗНООБРАЗНЫМ!"""
+Будь живым и разнообразным!"""
 
 
 def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
@@ -119,26 +103,24 @@ def get_optimized_prompt_final(user_now=None, current_time_str=None, user_userna
     """Возвращает оптимизированный системный промпт с динамическими данными"""
     base_prompt = CORE_SYSTEM_PROMPT
     
-    # КРИТИЧЕСКИ ВАЖНО: Добавляем антирепетитивную инструкцию
+    # Простая антирепетитивная система - только последние 2 ответа
     if last_responses and len(last_responses) > 0:
-        base_prompt += f"\n\n⚠️ ЗАПРЕЩЕНО повторять эти фразы: {', '.join([f'\"{r}\"' for r in last_responses[:5]])}. ОБЯЗАТЕЛЬНО придумай НОВУЮ формулировку!"
+        recent = last_responses[:2]
+        base_prompt += f"\n\n⚠️ НЕ повторяй: {' | '.join(recent)}"
     
-    # Добавляем контекст пользователя если доступен
+    # Контекст пользователя
     context_parts = []
-    if user_now:
-        context_parts.append(f"Текущее время: {user_now}")
     if current_time_str:
-        context_parts.append(f"Время для пользователя: {current_time_str}")
+        context_parts.append(f"Время: {current_time_str}")
     if user_username:
-        context_parts.append(f"Имя пользователя: {user_username}")
+        context_parts.append(f"Юзер: {user_username}")
     if mentions_str:
-        context_parts.append(f"Упоминания: {mentions_str}")
+        context_parts.append(mentions_str)
     if user_memory:
-        context_parts.append(f"Память пользователя: {user_memory}")
+        context_parts.append(f"Память: {user_memory}")
     
     if context_parts:
-        context_str = "\n".join(context_parts)
-        base_prompt = f"{base_prompt}\n\nКонтекст пользователя:\n{context_str}"
+        base_prompt += f"\n\n{' | '.join(context_parts)}"
     
     return base_prompt
 

@@ -4790,15 +4790,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
         
-        # Извлекаем последние ответы агента для предотвращения повторов
+        # Извлекаем последние 2 ответа агента для предотвращения повторов
         last_responses = []
         if context and isinstance(context, list):
-            for item in context[-5:]:  # Последние 5 сообщений
+            for item in context[-3:]:  # Последние 3 сообщения
                 if "agent" in item:
-                    # Берём первые 50 символов ответа
-                    response_preview = item["agent"][:50].strip()
-                    if response_preview:
-                        last_responses.append(response_preview)
+                    # Берём первые 40 символов
+                    response_text = item["agent"][:40].strip()
+                    if response_text and response_text not in last_responses:
+                        last_responses.append(response_text)
+        
+        # Ограничиваем до 2 последних
+        last_responses = last_responses[-2:]
         
         if PROMPTS_V2_AVAILABLE:
             system_prompt = get_optimized_prompt_final(
@@ -4869,20 +4872,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             tool_choice = "auto"
 
         # Динамическая температура в зависимости от типа сообщения
+        temperature = 0.7  # Default
+        top_p = 1.0  # Default
+        
         if intent_type == 'greeting':
-            # Для приветствий нужна высокая вариативность
-            temperature = 0.95
+            # Для приветствий нужна максимальная вариативность
+            temperature = 1.0
+            top_p = 0.95  # Nucleus sampling для разнообразия
         elif intent_type in ['conversation', 'unknown'] and is_advice_question:
             # Для советов нужна креативность
             temperature = 0.85
+            top_p = 0.95
         elif intent_type in ['add_task', 'complete_task', 'list_tasks']:
             # Для задач нужна точность
             temperature = 0.6
+            top_p = 1.0
         else:
             # По умолчанию
             temperature = 0.7
+            top_p = 1.0
         
-        logger.info(f"Using temperature {temperature} for intent type '{intent_type}'")
+        logger.info(f"Using temperature {temperature}, top_p {top_p} for intent type '{intent_type}'")
         
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
@@ -4892,6 +4902,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             "tools": TOOLS,
             "tool_choice": tool_choice,
             "temperature": temperature,
+            "top_p": top_p,
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         # Retry loop for API call
