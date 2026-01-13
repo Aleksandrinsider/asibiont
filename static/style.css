@@ -87,9 +87,9 @@ html, body {
 
 body {
     background-color: #FFFFFF;
-    color: #1F2328;
-    line-height: 22px;
-    font-size: 14px; /* Increased base font size for readability */
+    color: #656D76;
+    line-height: 21px;
+    font-size: 13px; /* Changed from 14px */
     font-weight: 400;
     letter-spacing: normal;
     width: 100%;
