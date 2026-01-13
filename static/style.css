@@ -329,13 +329,13 @@ body {
     display: grid;
     grid-template-columns: 400px minmax(680px, 1fr) 420px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
-    height: calc(100vh - 20px);
+    height: calc(100vh - 64px);
     gap: 4px;
-    padding: 8px;
+    padding: 20px 8px 8px 8px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
-    margin-top: 20px;
+    margin-top: 0;
 }
 
 /* Ensure direct children can shrink properly inside grid */
