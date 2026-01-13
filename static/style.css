@@ -371,7 +371,7 @@ body {
     gap: 8px;
     padding: 8px;
     background-color: #FFFFFF;
-    border-radius: 8px;
+    border-radius: 6px;
     min-height: 0;
     overflow: auto;
 }
@@ -499,7 +499,7 @@ details[open] .details-content {
     z-index: 5000;
     background: #FFFFFF;
     border: 1px solid #D1D9E0;
-    border-radius: 8px;
+    border-radius: 6px;
     box-shadow: 0 8px 24px rgba(31,35,40,0.12);
     padding: 8px;
     max-height: 50vh;
@@ -516,7 +516,7 @@ details[open] .details-content {
     flex-direction: column;
     background-color: #FFFFFF;
     border: 1px solid #D1D9E0;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 5px; /* Reduced padding */
     height: 100%;
     max-height: calc(100% - 50px);
@@ -562,7 +562,7 @@ details[open] .details-content {
     transition: all 0.2s ease;
     animation: message-appear 0.3s ease-out;
     position: relative;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 @keyframes message-appear {
@@ -581,7 +581,7 @@ details[open] .details-content {
     margin: 10px 0;
     max-width: 85%;
     background-color: transparent;
-    border-radius: 8px;
+    border-radius: 6px;
     align-self: flex-start;
     animation: message-appear 0.3s ease-out;
 }
@@ -803,7 +803,7 @@ details[open] .details-content {
     padding: 8px; /* Reduced padding */
     overflow: visible;
     background-color: #FFFFFF;
-    border-radius: 8px;
+    border-radius: 6px;
 }
 
 .context-item p {
@@ -831,12 +831,12 @@ details[open] .details-content {
 }
 
 .people-section {
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
+    padding: 8px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
     display: flex;
     flex-direction: column;
     overflow: visible;
@@ -845,24 +845,26 @@ details[open] .details-content {
 
 .tasks-section {
     padding: 8px;
-    border: none;
-    border-radius: 8px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
 }
 
 .task-stats-block {
     padding: 8px;
-    border-radius: 8px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     background-color: #FFFFFF;
-    margin-top: 3px;
+    margin-top: 0;
+    margin-bottom: 8px;
 }
 
 .tasks-section-wrapper {
     padding: 8px;
-    border: none;
-    border-radius: 8px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     background-color: #FFFFFF;
     display: flex;
     flex-direction: column;
@@ -883,12 +885,12 @@ details[open] .details-content {
 }
 
 .context-section {
-    padding: 12px;
-    border: none;
-    border-radius: 0;
-    background-color: transparent;
+    padding: 8px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    background-color: #FFFFFF;
     margin-top: 0;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     overflow: visible;
     box-shadow: none;
     transition: none;
