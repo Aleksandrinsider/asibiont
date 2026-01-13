@@ -86,6 +86,7 @@ async def test_dialogue():
 
     # Test scenarios
     scenarios = [
+        "Привет",
         "Добавь задачу: купить молоко завтра в 10 утра",
         "Покажи мои задачи",
         "Заверши задачу купить молоко",
@@ -118,7 +119,13 @@ async def test_dialogue():
             context.append({"role": "assistant", "content": ai_response})
 
             # Verify AI follows prompts (basic check)
-            if "задача" in user_message.lower() and "добав" in user_message.lower():
+            if "привет" in user_message.lower() or "здравствуй" in user_message.lower():
+                if "привет" in ai_response.lower() and ("задач" in ai_response.lower() or "помочь" in ai_response.lower()):
+                    print("✓ AI correctly responded to greeting with task overview")
+                else:
+                    print("⚠ AI may not have responded to greeting properly")
+
+            elif "задача" in user_message.lower() and "добав" in user_message.lower():
                 if "добавил" in ai_response.lower() or "создал" in ai_response.lower():
                     print("✓ AI correctly added task")
                 else:
