@@ -1036,7 +1036,6 @@ details[open] .details-content {
 
 .quick-action {
     padding: 8px;
-    background-color: #FFFFFF;
     color: #59636E;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
@@ -1058,7 +1057,6 @@ details[open] .details-content {
 }
 
 .quick-action:hover {
-    background-color: #F6F8FA;
     border-color: #1F2328;
 }
 
