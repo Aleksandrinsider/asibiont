@@ -364,7 +364,7 @@ body {
     padding: 8px;
     background-color: #FFFFFF;
     border-radius: 8px;
-    margin-bottom: 6px;
+    margin-bottom: 20px;
     min-height: 0;
 }
 
@@ -789,7 +789,7 @@ details[open] .details-content {
 
 .context-section {
     padding: 8px; /* Reduced padding */
-    margin-bottom: 6px;
+    margin-bottom: 20px;
     overflow: visible;
 }
 
@@ -844,7 +844,7 @@ details[open] .details-content {
     border: none;
     border-radius: 8px;
     background-color: #FFFFFF;
-    margin-bottom: 10px;
+    margin-bottom: 20px;
     margin-top: 0px;
 }
 
