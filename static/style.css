@@ -120,6 +120,8 @@ body {
     display: flex;
     align-items: center;
     width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
     padding: 0 8px;
     justify-content: space-between;
 }
