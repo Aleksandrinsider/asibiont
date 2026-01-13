@@ -220,13 +220,10 @@
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #59636E; line-height: normal;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="contact-filter-btn" onclick="filterContacts('favorite')" style="padding: 4px 8px; background-color: #FFFFFF; border: 1px solid #D1D9E0; cursor: pointer;">Мои</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('recommended')" style="padding: 4px 8px; background-color: #FFFFFF; border: 1px solid #D1D9E0; cursor: pointer;">Рекомендуемые</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')" style="padding: 4px 8px; background-color: #FFFFFF; border: 1px solid #D1D9E0; cursor: pointer;">Делегируют мне</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')" style="padding: 4px 8px; background-color: #FFFFFF; border: 1px solid #D1D9E0; cursor: pointer;">Делегирую я</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('favorite')">Мои</button>
+                        <button class="contact-filter-btn active" onclick="filterContacts('recommended')">Рекомендуемые</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')">Делегируют мне</button>
+                        <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')">Делегирую я</button>
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
@@ -306,17 +303,12 @@
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #59636E; line-height: normal;">Задачи</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 4px 8px; background: none; color: #068487; border: none; cursor: pointer; font-size: 13px; font-weight: 400;">Все задачи</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Личные задачи</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Назначенные мне</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Назначенные мной</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">С отставанием</button>
-                        <span style="color: #D1D9E0;">·</span>
-                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 4px 8px; background: none; color: #59636E; border: none; cursor: pointer; font-size: 13px;">Завершенные</button>
+                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
+                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')">Личные задачи</button>
+                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
+                        <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')">Назначенные мной</button>
+                        <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
+                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Завершенные</button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container">
                         <div class="task-groups" id="task-groups">
@@ -1343,12 +1335,8 @@
             // Обновляем стили кнопок
             document.querySelectorAll('.task-filter-btn').forEach(btn => {
                 if (btn.getAttribute('data-filter') === filterType) {
-                    btn.style.color = '#068487';
-                    btn.style.fontWeight = '500';
                     btn.classList.add('active');
                 } else {
-                    btn.style.color = '#59636E';
-                    btn.style.fontWeight = '400';
                     btn.classList.remove('active');
                 }
             });
@@ -1392,11 +1380,9 @@
             buttons.forEach(btn => {
                 const btnFilterType = btn.getAttribute('onclick').match(/filterContacts\('([^']+)'\)/)?.[1];
                 if (btnFilterType === filterType) {
-                    btn.style.color = '#068487';
-                    btn.style.fontWeight = '600';
+                    btn.classList.add('active');
                 } else {
-                    btn.style.color = '#59636E';
-                    btn.style.fontWeight = 'normal';
+                    btn.classList.remove('active');
                 }
             });
             

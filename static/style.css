@@ -1284,10 +1284,10 @@ details[open] .details-content {
 
 .contact-filter-btn {
     padding: 4px 8px;
-    background-color: #FFFFFF;
+    background: none;
     color: #59636E;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
+    border: none;
+    border-radius: 0;
     cursor: pointer;
     font-size: 13px;
     font-weight: 400;
@@ -1296,7 +1296,32 @@ details[open] .details-content {
 
 .contact-filter-btn:hover {
     background-color: #F6F8FA;
-    border-color: #1F2328;
+}
+
+.contact-filter-btn.active {
+    background-color: #F6F8FA;
+    color: #1F2328;
+}
+
+.task-filter-btn {
+    padding: 4px 8px;
+    background: none;
+    color: #59636E;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 400;
+    transition: all 0.2s;
+}
+
+.task-filter-btn:hover {
+    background-color: #F6F8FA;
+}
+
+.task-filter-btn.active {
+    background-color: #F6F8FA;
+    color: #1F2328;
 }
 
 .delete-btn {
