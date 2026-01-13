@@ -1285,6 +1285,8 @@ details[open] .details-content {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    font-weight: 500;
+    line-height: 21px;
 }
 
 .chat-action-btn:hover {
