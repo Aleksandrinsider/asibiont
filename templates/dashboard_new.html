@@ -2888,7 +2888,7 @@
                         function onDocClick(e){
                             try {
                                 const target = e && e.target;
-                                if (target && menu && typeof menu.contains === 'function' && toggle && typeof toggle.contains === 'function' && !menu.contains(target) && !toggle.contains(target)){
+                                if (target && menu && menu.contains && typeof menu.contains === 'function' && toggle && toggle.contains && typeof toggle.contains === 'function' && !menu.contains(target) && !toggle.contains(target)){
                                     closeOverlay(menu);
                                     document.removeEventListener('click', onDocClick);
                                     document.removeEventListener('keydown', onEsc);
