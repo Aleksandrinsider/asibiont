@@ -771,6 +771,7 @@ details[open] .details-content {
     gap: 8px;
     padding: 10px;
     border-top: 1px solid #D1D9E0;
+    background-color: #F6F8FA;
 }
 
 .chat-input input {
@@ -778,7 +779,7 @@ details[open] .details-content {
     padding: 10px;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
-    background-color: #FFFFFF;
+    background-color: #F6F8FA;
     color: #1F2328;
 }
 
@@ -1260,7 +1261,7 @@ details[open] .details-content {
 }
 
 .chat-action-btn {
-    background-color: #FFFFFF;
+    background-color: #F6F8FA;
     transition: all 0.2s;
     padding: 12px;
     color: #59636E;
