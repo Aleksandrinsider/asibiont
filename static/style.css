@@ -502,6 +502,7 @@ details[open] .details-content {
     display: flex;
     flex-direction: column;
     background-color: #FFFFFF;
+    border: 1px solid #D1D9E0;
     border-radius: 8px;
     padding: 12px; /* Reduced padding */
     margin-top: 0;
