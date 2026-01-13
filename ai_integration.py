@@ -4790,9 +4790,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
         
+        # Извлекаем последние ответы агента для предотвращения повторов
+        last_responses = []
+        if context and isinstance(context, list):
+            for item in context[-5:]:  # Последние 5 сообщений
+                if "agent" in item:
+                    # Берём первые 50 символов ответа
+                    response_preview = item["agent"][:50].strip()
+                    if response_preview:
+                        last_responses.append(response_preview)
+        
         if PROMPTS_V2_AVAILABLE:
             system_prompt = get_optimized_prompt_final(
-                user_now, current_time_str, user_username, mentions_str, user_memory
+                user_now, current_time_str, user_username, mentions_str, user_memory, last_responses
             )
             logger.info("[PROMPTS V2] Using optimized prompt system")
         else:
@@ -4858,6 +4868,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             # По умолчанию - автоопределение
             tool_choice = "auto"
 
+        # Динамическая температура в зависимости от типа сообщения
+        if intent_type == 'greeting':
+            # Для приветствий нужна высокая вариативность
+            temperature = 0.95
+        elif intent_type in ['conversation', 'unknown'] and is_advice_question:
+            # Для советов нужна креативность
+            temperature = 0.85
+        elif intent_type in ['add_task', 'complete_task', 'list_tasks']:
+            # Для задач нужна точность
+            temperature = 0.6
+        else:
+            # По умолчанию
+            temperature = 0.7
+        
+        logger.info(f"Using temperature {temperature} for intent type '{intent_type}'")
+        
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
@@ -4865,7 +4891,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": tool_choice,
-            "temperature": 0.7,
+            "temperature": temperature,
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         # Retry loop for API call

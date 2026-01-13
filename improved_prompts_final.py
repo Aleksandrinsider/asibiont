@@ -9,7 +9,8 @@ CORE_SYSTEM_PROMPT = """Ты - ASI Biont, дружелюбный AI-помощн
 - НИКОГДА не перечисляй варианты действий
 - НИКОГДА не добавляй информацию о задачах без запроса
 - Будь полезным, но не навязчивым
-- Варьируй ответы - не повторяйся!
+- Варьируй ответы - КАЖДЫЙ раз отвечай по-разному!
+- ЗАПРЕЩЕНО повторять предыдущие формулировки!
 
 Функции для задач:
 - "Напомни X" → add_task()
@@ -18,12 +19,18 @@ CORE_SYSTEM_PROMPT = """Ты - ASI Biont, дружелюбный AI-помощн
 - "@username X" → delegate_task()
 - "Удалить все" → delete_all_tasks()
 
-Примеры:
-✅ "Привет! Готов помочь с задачами"
+Примеры РАЗНООБРАЗНЫХ приветствий (КАЖДЫЙ РАЗ НОВЫЙ!):
+✅ "Привет! Чем займёмся?"
+✅ "Здорово! Что планируешь?"
+✅ "Йоу! Готов помочь"
+✅ "О, привет! Есть идеи?"
+✅ "Хэй! Как дела?"
+✅ "Ку! Что нового?"
 ✅ "Добавил задачу на завтра. Не забудешь!"
 ❌ "Привет! У тебя есть задачи... Могу показать, перенести, делегировать..." (слишком много!)
+❌ Повторять точно такой же ответ как в предыдущий раз!
 
-Будь кратким и естественным!"""
+Будь кратким, естественным и РАЗНООБРАЗНЫМ!"""
 
 
 def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
@@ -33,12 +40,12 @@ def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
     # Простые приветствия - отдельный intent
     greetings = [
         r'привет', r'здравствуй', r'добрый день', r'доброе утро', r'добрый вечер',
-        r'хай', r'hello', r'hi', r'hey'
+        r'хай', r'hello', r'hi', r'hey', r'ку', r'йоу', r'здорово'
     ]
     if any(re.search(greeting, message_lower) for greeting in greetings) and len(message_lower.split()) <= 3:
         return {
             "type": "greeting",
-            "confidence": 0.9,
+            "confidence": 0.95,
             "params": {}
         }
 
@@ -108,9 +115,13 @@ def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
     }
 
 
-def get_optimized_prompt_final(user_now=None, current_time_str=None, user_username=None, mentions_str=None, user_memory=None) -> str:
+def get_optimized_prompt_final(user_now=None, current_time_str=None, user_username=None, mentions_str=None, user_memory=None, last_responses=None) -> str:
     """Возвращает оптимизированный системный промпт с динамическими данными"""
     base_prompt = CORE_SYSTEM_PROMPT
+    
+    # КРИТИЧЕСКИ ВАЖНО: Добавляем антирепетитивную инструкцию
+    if last_responses and len(last_responses) > 0:
+        base_prompt += f"\n\n⚠️ ЗАПРЕЩЕНО повторять эти фразы: {', '.join([f'\"{r}\"' for r in last_responses[:5]])}. ОБЯЗАТЕЛЬНО придумай НОВУЮ формулировку!"
     
     # Добавляем контекст пользователя если доступен
     context_parts = []
