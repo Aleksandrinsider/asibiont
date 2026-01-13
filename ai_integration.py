@@ -215,148 +215,8 @@ def analyze_with_ai(profile, message):
         logger.error(f"AI analysis error: {e}")
         return None
 
-def extract_tasks_with_ai(message, user_id=None):
-    """
-    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½.
-    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
-    """
-    import requests
-    import json
-    
-    prompt = f"""
-    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
-    ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ JSON ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½:
-    - title: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-    - description: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
-    - priority: high/medium/low (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
-    - deadline: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ YYYY-MM-DD (ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
-    - category: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½.ï¿½.)
-    
-    ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ [].
-    
-    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: "{message}"
-    
-    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½:
-    - "ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½" > {{"title": "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "priority": "high", "deadline": "2026-01-17"}}
-    - "ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Python ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½" > ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-    """
-    
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 300,
-            "temperature": 0.2
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=15)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ JSON
-            try:
-                tasks = json.loads(content)
-                if isinstance(tasks, list):
-                    return tasks
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse JSON from AI response: {content}")
-                return []
-        return []
-    except Exception as e:
-        logger.error(f"Task extraction error: {e}")
-        return []
-
-def find_partners_with_ai(user_id, criteria=None):
-    """
-    ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½.
-    """
-    from models import Session, UserProfile
-    import requests
-    
-    session = Session()
-    try:
-        # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-        user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-        if not user_profile:
-            return []
-        
-        # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-        all_profiles = session.query(UserProfile).filter(UserProfile.user_id != user_id).all()
-        
-        prompt = f"""
-        ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
-        
-        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½:
-        - ï¿½ï¿½ï¿½ï¿½ï¿½: {user_profile.city or 'ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½'}
-        - ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: {user_profile.interests or 'ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½'}
-        - ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: {user_profile.skills or 'ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½'}
-        - ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: {user_profile.company or 'ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½'}
-        
-        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: {criteria or 'ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½'}
-        
-        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 3-5 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
-        ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½:
-        - user_id: ID ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-        - compatibility_score: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (0-100)
-        - reasons: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (2-3 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
-        
-        ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ JSON ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
-        
-        ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½:
-        {chr(10).join([f'ID {p.user_id}: ï¿½ï¿½ï¿½ï¿½ï¿½={p.city}, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½={p.interests}, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½={p.skills}, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½={p.company}' for p in all_profiles[:20]])}
-        """
-        
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.3
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=20)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            try:
-                import json
-                recommendations = json.loads(content)
-                return recommendations if isinstance(recommendations, list) else []
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse partner recommendations: {content}")
-                return []
-        return []
-    except Exception as e:
-        logger.error(f"Partner search error: {e}")
-        return []
-    finally:
-        session.close()
-
+# UNUSED FUNCTION REMOVED: extract_tasks_with_ai (never called anywhere)
+# UNUSED FUNCTION REMOVED: find_partners_with_ai (never called anywhere)
 
 # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 try:
@@ -511,18 +371,7 @@ def post_process_tool_calls(intent, tool_calls, message):
     return corrected_calls if corrected_calls != tool_calls else None
 
 
-def classify_user_intent(message, mentions_str):
-    """DEPRECATED: Use improved_classify_intent from improved_prompts_final.py"""
-    from improved_prompts_final import improved_classify_intent
-    return improved_classify_intent(message, mentions_str)
-
-
-def set_redis_client(client):
-    """DEPRECATED: Use improved_fallback from improved_prompts_final.py"""
-    from improved_prompts_final import improved_fallback
-    intent = improved_classify_intent(message, mentions_str)
-    return improved_fallback(intent, None, ai_response_content, message, user_id)
-    fallback_actions = []
+# DEPRECATED FUNCTIONS REMOVED - Use improved_prompts_final.py
 
     # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     greeting_words = ["ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½", "hello", "hi", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½", "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"]
@@ -1439,10 +1288,7 @@ update_profile(city, company, interests, skills, goals) - ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï
 ================================================================================"""
 
 
-# LEGACY FUNCTION REMOVED - Use get_optimized_prompt_final from improved_prompts_final.py
-def get_system_prompt():
-    """DEPRECATED: Use get_optimized_prompt_final from improved_prompts_final.py"""
-    raise NotImplementedError("Use get_optimized_prompt_final from improved_prompts_final.py")
+# DEPRECATED get_system_prompt REMOVED - Use get_optimized_prompt_final from improved_prompts_final.py
 
 
 def get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory, context=None, intent=None):
@@ -2558,66 +2404,7 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
     return result
 
 
-def delete_all_tasks(user_id=None):
-    import logging
-
-    logger = logging.getLogger(__name__)
-    logger.info(f"[DELETE_ALL] Starting delete_all_tasks for user_id: {user_id} (type: {type(user_id)})")
-
-    try:
-        from models import Session, Task
-
-        session = Session()
-        logger.info(f"[DELETE_ALL] Session created")
-
-        # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ user_id ï¿½ int, ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½
-        try:
-            user_id = int(user_id)
-        except (ValueError, TypeError):
-            logger.error(f"[DELETE_ALL] Invalid user_id: {user_id}")
-            session.close()
-            return "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ID ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½."
-
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            logger.warning(f"[DELETE_ALL] User not found for telegram_id: {user_id}")
-            session.close()
-            return "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½."
-
-        logger.info(f"[DELETE_ALL] Found user: {user.id}, telegram_id: {user.telegram_id}")
-
-        # ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½)
-        from sqlalchemy import or_
-
-        conditions = [Task.user_id == user.id]
-        if user.username:
-            conditions.append(Task.delegated_to_username.ilike(user.username))
-
-        tasks_to_delete = session.query(Task).filter(or_(*conditions)).all()
-        deleted_count = len(tasks_to_delete)
-        logger.info(f"[DELETE_ALL] Found {deleted_count} tasks to delete")
-
-        for task in tasks_to_delete:
-            logger.info(f"[DELETE_ALL] Deleting task: {task.id} - {task.title}")
-            session.delete(task)
-
-        session.commit()
-        logger.info(f"[DELETE_ALL] Commit successful, deleted {deleted_count} tasks")
-        session.close()
-
-        if deleted_count > 0:
-            return f"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ {deleted_count} ï¿½ï¿½ï¿½ï¿½ï¿½."
-        else:
-            return "ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½."
-
-    except Exception as e:
-        logger.error(f"[DELETE_ALL] Error in delete_all_tasks: {e}", exc_info=True)
-        try:
-            session.close()
-        except:
-            pass
-        return "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½."
-
+# DUPLICATE delete_all_tasks REMOVED - Using version at line 1628
 
 def get_task_details(task_id, user_id=None):
     from models import Session, Task
@@ -5193,30 +4980,7 @@ def enrich_task_list_with_insights(task_list_text, user_id):
         session.close()
 
 
-def cancel_subscription(user_id=None):
-    """ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"""
-    from models import Session, User, Subscription
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
-
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if not subscription:
-            return "ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
-
-        subscription.status = "cancelled"
-        session.commit()
-        return "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
-    except Exception as e:
-        session.rollback()
-        print(f"Error cancelling subscription: {e}")
-        return "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
-    finally:
-        session.close()
-
+# DUPLICATE cancel_subscription REMOVED - Using version at line 2149 (calls subscription_service)
 
 def brainstorm_ideas(topic, num_ideas=5, user_id=None):
     """ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"""
