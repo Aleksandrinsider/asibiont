@@ -355,6 +355,7 @@ body {
     padding: 8px;
     min-height: 0; /* Important for proper flex/grid behavior */
     margin-top: 8px;
+    padding-bottom: 8px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: 21px;
