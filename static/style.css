@@ -365,7 +365,6 @@ body {
     gap: 8px;
     padding: 8px;
     background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
     border-radius: 8px;
     margin-bottom: 20px;
     min-height: 0;
@@ -795,7 +794,6 @@ details[open] .details-content {
     margin-bottom: 20px;
     overflow: visible;
     background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
     border-radius: 8px;
 }
 
@@ -846,8 +844,7 @@ details[open] .details-content {
 }
 
 .task-stats-block {
-    padding: 12px;
-    border: 1px solid #D1D9E0;
+    padding: 8px;
     border-radius: 8px;
     background-color: #FFFFFF;
     margin-bottom: 20px;
