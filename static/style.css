@@ -88,7 +88,7 @@ html, body {
 body {
     background-color: #FFFFFF;
     color: #656D76;
-    line-height: 21px;
+    line-height: 1.6;
     font-size: 13px; /* Changed from 14px */
     font-weight: 400;
     letter-spacing: normal;
@@ -224,7 +224,7 @@ body {
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
-    line-height: 21px;
+    line-height: 1.6;
     font-weight: 500;
     transition: all 0.2s;
 }
@@ -271,7 +271,7 @@ body {
 .welcome-content p {
     margin: 0 0 5px 0;
     color: #1F2328;
-    line-height: 21px;
+    line-height: 1.6;
     font-size: 13px;
     font-weight: 400;
 }
@@ -358,7 +358,7 @@ body {
     padding-bottom: 8px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
-    line-height: 21px;
+    line-height: 1.6;
     font-weight: 400;
     letter-spacing: normal;
     color: #656D76;
@@ -405,7 +405,7 @@ body {
     margin-top: 8px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
-    line-height: 21px;
+    line-height: 1.6;
     font-weight: 400;
     letter-spacing: normal;
     color: #656D76;
@@ -544,14 +544,14 @@ details[open] .details-content {
     flex-direction: column;
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
-    border-radius: 10px;
+    padding: 12px;
+    border-radius: 0;
     margin-bottom: 0;
 }
 
 .message {
-    padding: 10px;
-    margin: 8px 0;
+    padding: 0;
+    margin: 12px 0;
     max-width: 100%;
     width: 100%;
     word-wrap: break-word;
@@ -562,7 +562,7 @@ details[open] .details-content {
     transition: all 0.2s ease;
     animation: message-appear 0.3s ease-out;
     position: relative;
-    border-radius: 6px;
+    border-radius: 0;
 }
 
 @keyframes message-appear {
@@ -707,15 +707,15 @@ details[open] .details-content {
     background-color: transparent;
     color: #1F2328;
     width: 100%;
-    padding: 6px 12px;
+    padding: 0;
 }
 
 .message.user .message-text {
     font-weight: 400;
-    font-size: 14px;
-    line-height: 21px;
+    font-size: 13px;
+    line-height: 1.6;
     color: #656D76;
-    text-align: justify;
+    text-align: left;
 }
 
 .message.ai {
@@ -730,28 +730,28 @@ details[open] .details-content {
 
 .message.ai .message-text {
     font-weight: 400;
-    font-size: 14px;
+    font-size: 13px;
     color: #1F2328;
-    line-height: 21px;
-    text-align: justify;
+    line-height: 1.6;
+    text-align: left;
 }
 
 .message-text {
     word-wrap: break-word;
-    line-height: 21px;
+    line-height: 1.6;
     width: 100%;
     margin-bottom: 0;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 400;
 }
 
 .message-time {
-    font-size: 13px;
+    font-size: 12px;
     color: #8C959F;
-    margin-top: 6px;
+    margin-top: 4px;
     opacity: 0.7;
     font-weight: 400;
-    line-height: 21px;
+    line-height: 1.6;
     font-variant-numeric: tabular-nums;
 }
 
@@ -769,7 +769,7 @@ details[open] .details-content {
     cursor: pointer;
     font-size: 13px;
     font-weight: 400;
-    line-height: 21px;
+    line-height: 1.6;
     color: #1F2328;
     transition: all 0.2s;
 }
@@ -814,14 +814,14 @@ details[open] .details-content {
     margin: 0 0 15px 0;
     font-size: 16px;
     font-weight: 600;
-    line-height: 21px;
+    line-height: 1.6;
     color: #1F2328;
 }
 
 .context-item p {
     margin: 0 0 8px 0;
     color: #1F2328;
-    line-height: 21px;
+    line-height: 1.6;
     font-size: 13px;
     font-weight: 400;
 }
@@ -904,7 +904,7 @@ details[open] .details-content {
     font-size: 13px;
     font-weight: 600;
     color: #1F2328;
-    line-height: 21px;
+    line-height: 1.6;
 }
 
 .tasks-section ul {
@@ -945,7 +945,7 @@ details[open] .details-content {
     color: #656D76;
     margin-bottom: 6px;
     font-weight: 400;
-    line-height: 21px;
+    line-height: 1.6;
 }
 
 .progress-bar {
@@ -968,7 +968,7 @@ details[open] .details-content {
 .task-group h4 {
     font-size: 13px;
     font-weight: 600;
-    line-height: 21px;
+    line-height: 1.6;
     color: #1F2328;
     margin-bottom: 6px;
     padding-bottom: 4px;
@@ -1014,7 +1014,7 @@ details[open] .details-content {
 .task-meta {
     font-size: 13px;
     color: #656D76;
-    line-height: 21px;
+    line-height: 1.6;
     font-weight: 400;
 }
 
@@ -1023,7 +1023,7 @@ details[open] .details-content {
     color: #656D76;
     margin: 0;
     font-weight: 400;
-    line-height: 21px;
+    line-height: 1.6;
 }
 
 .task-status {
@@ -1031,7 +1031,7 @@ details[open] .details-content {
     color: #656D76;
     margin: 0;
     font-weight: 400;
-    line-height: 21px;
+    line-height: 1.6;
 }
 
 .task-actions {
@@ -1114,7 +1114,7 @@ details[open] .details-content {
 .person-card p {
     margin: 0;
     color: #1F2328;
-    line-height: 21px;
+    line-height: 1.6;
     font-size: 15px;
     font-weight: 400;
 }
@@ -1177,7 +1177,7 @@ details[open] .details-content {
 .task-item p {
     margin: 0 0 8px 0;
     color: #1F2328;
-    line-height: 21px;
+    line-height: 1.6;
     font-size: 13px;
     font-weight: 400;
 }
@@ -1186,7 +1186,7 @@ details[open] .details-content {
     color: #656D76;
     font-size: 13px;
     font-weight: 400;
-    line-height: 21px;
+    line-height: 1.6;
 }
 
 .no-subscription-section {
@@ -1262,7 +1262,7 @@ details[open] .details-content {
     cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
-    line-height: 21px;
+    line-height: 1.6;
     font-weight: 500;
     transition: all 0.2s;
     text-decoration: none;
@@ -1290,7 +1290,7 @@ details[open] .details-content {
     justify-content: center;
     flex-shrink: 0;
     font-weight: 500;
-    line-height: 21px;
+    line-height: 1.6;
 }
 
 .chat-action-btn:hover {
