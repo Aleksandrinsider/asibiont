@@ -330,7 +330,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 400px minmax(600px, 1fr) 400px; /* Fixed-ish sidebars, flexible center */
+    grid-template-columns: 450px minmax(500px, 1fr) 450px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc(100vh - 84px);
     gap: 0px;
@@ -373,7 +373,6 @@ body {
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    background-color: #F6F8FA;
     border-radius: 6px;
     min-height: 0;
     overflow: auto;
@@ -856,7 +855,6 @@ details[open] .details-content {
     padding: 12px;
     border: none;
     border-radius: 6px;
-    background-color: #F6F8FA;
     margin-top: 0;
     margin-bottom: 12px;
     box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
@@ -866,7 +864,6 @@ details[open] .details-content {
     padding: 12px;
     border: none;
     border-radius: 6px;
-    background-color: #F6F8FA;
     margin-top: 0;
     margin-bottom: 12px;
     box-shadow: 0 1px 3px rgba(31, 35, 40, 0.04);
@@ -876,7 +873,6 @@ details[open] .details-content {
     padding: 12px;
     border: none;
     border-radius: 6px;
-    background-color: #F6F8FA;
     display: flex;
     flex-direction: column;
     overflow: auto;
@@ -900,7 +896,6 @@ details[open] .details-content {
     padding: 12px;
     border: none;
     border-radius: 6px;
-    background-color: #F6F8FA;
     margin-top: 0;
     margin-bottom: 12px;
     overflow: auto;
@@ -1084,8 +1079,6 @@ details[open] .details-content {
 .quick-action:hover {
     background-color: #FFFFFF;
     border-color: #1F2328;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(31, 35, 40, 0.08);
 }
 
 .message-emoji {
@@ -1318,7 +1311,6 @@ details[open] .details-content {
 .chat-action-btn:hover {
     background-color: #F6F8FA;
     border-color: #1F2328;
-    box-shadow: 0 0 0 1px #1F2328;
 }
 
 .delete-btn {
