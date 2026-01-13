@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>ASI Biont - Дашборд</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css?v={{ current_time }}">
+    <!-- Dashboard version: 2026-01-13 -->
     <style>
         @keyframes pulse {
             0% { transform: scale(1); }
@@ -195,7 +199,7 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
-                            <p>Чем могу помочь: {{ profile.bio or 'Не указано' }}</p>
+                            <p>Мои навыки и опыт: {{ profile.bio or 'Не указано' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
@@ -2461,7 +2465,7 @@
                         html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
                         html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
-                        html += '<p>Чем могу помочь: ' + (data.profile.bio || 'Не указано') + '</p>';
+                        html += '<p>Мои навыки и опыт: ' + (data.profile.bio || 'Не указано') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
@@ -2903,7 +2907,15 @@
                         function onDocClick(e){
                             try {
                                 const target = e && e.target;
-                                if (target && target instanceof Element && menu && menu instanceof Element && menu.contains && typeof menu.contains === 'function' && toggle && toggle instanceof Element && toggle.contains && typeof toggle.contains === 'function' && !menu.contains(target) && !toggle.contains(target)){
+                                if (!target || !(target instanceof Element)) return;
+                                
+                                if (!menu || !(menu instanceof Element) || typeof menu.contains !== 'function') return;
+                                if (!toggle || !(toggle instanceof Element) || typeof toggle.contains !== 'function') return;
+                                
+                                const isInsideMenu = menu.contains(target);
+                                const isInsideToggle = toggle.contains(target);
+                                
+                                if (!isInsideMenu && !isInsideToggle){
                                     closeOverlay(menu);
                                     document.removeEventListener('click', onDocClick);
                                     document.removeEventListener('keydown', onEsc);
