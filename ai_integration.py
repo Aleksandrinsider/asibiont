@@ -357,396 +357,6 @@ def find_partners_with_ai(user_id, criteria=None):
     finally:
         session.close()
 
-def analyze_sentiment(message):
-    """
-    Определяет эмоции и тон сообщения.
-    Возвращает словарь с sentiment и intensity.
-    """
-    import requests
-    
-    prompt = f"""
-    Определи эмоциональный тон этого сообщения.
-    Верни результат в формате JSON:
-    {{
-        "sentiment": "positive"|"neutral"|"negative",
-        "intensity": число от 0 до 1 (насколько сильная эмоция),
-        "emotions": ["список эмоций, например: радость, гнев, спокойствие"],
-        "confidence": число от 0 до 1 (уверенность анализа)
-    }}
-    
-    Сообщение: "{message}"
-    """
-    
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 150,
-            "temperature": 0.1
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # Удаляем блоки кода если есть
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            try:
-                import json
-                sentiment_data = json.loads(content)
-                return sentiment_data
-            except json.JSONDecodeError:
-                return {"sentiment": "neutral", "intensity": 0.5, "emotions": ["нейтрально"], "confidence": 0.5}
-        return {"sentiment": "neutral", "intensity": 0.5, "emotions": ["нейтрально"], "confidence": 0.5}
-    except Exception as e:
-        logger.error(f"Sentiment analysis error: {e}")
-        return {"sentiment": "neutral", "intensity": 0.5, "emotions": ["нейтрально"], "confidence": 0.5}
-
-def generate_recommendations(user_id):
-    """
-    Генерирует персонализированные рекомендации на основе профиля.
-    """
-    from models import Session, UserProfile
-    import requests
-    
-    session = Session()
-    try:
-        profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-        if not profile:
-            return []
-        
-        prompt = f"""
-        На основе профиля пользователя сгенерируй 3-5 персонализированных рекомендаций.
-        Рекомендации могут быть: курсы, события, инструменты, сообщества, партнеры.
-        
-        Профиль пользователя:
-        - Город: {profile.city or 'Не указан'}
-        - Интересы: {profile.interests or 'Не указаны'}
-        - Навыки: {profile.skills or 'Не указаны'}
-        - Компания: {profile.company or 'Не указана'}
-        
-        Верни результат в формате JSON массива объектов с полями:
-        - type: "course"|"event"|"tool"|"community"|"partner"
-        - title: название рекомендации
-        - description: почему это подходит
-        - priority: high/medium/low
-        """
-        
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.4
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=15)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # Удаляем блоки кода если есть
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            try:
-                import json
-                recommendations = json.loads(content)
-                return recommendations if isinstance(recommendations, list) else []
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse recommendations: {content}")
-                return []
-        return []
-    except Exception as e:
-        logger.error(f"Recommendations generation error: {e}")
-        return []
-    finally:
-        session.close()
-
-def optimize_task_schedule(user_id):
-    """
-    Оптимизирует расписание задач с помощью ИИ.
-    """
-    from models import Session, Task
-    import requests
-    from datetime import datetime
-    
-    session = Session()
-    try:
-        # Получаем активные задачи пользователя
-        tasks = session.query(Task).filter_by(user_id=user_id, status='pending').all()
-        
-        if not tasks:
-            return {"suggestions": [], "message": "Нет активных задач для оптимизации"}
-        
-        tasks_text = "\n".join([
-            f"- {t.title}: приоритет {t.priority or 'medium'}, дедлайн {t.deadline or 'не указан'}"
-            for t in tasks[:10]  # Ограничим для промпта
-        ])
-        
-        prompt = f"""
-        Проанализируй список задач пользователя и предложи оптимизацию расписания.
-        
-        Задачи:
-        {tasks_text}
-        
-        Предложи:
-        1. Порядок выполнения задач
-        2. Предупреждения о перегрузке
-        3. Возможные делегирования
-        4. Рекомендации по приоритетам
-        
-        Верни результат в формате JSON:
-        {{
-            "optimal_order": ["список задач в рекомендуемом порядке"],
-            "warnings": ["предупреждения"],
-            "delegation_suggestions": ["что можно делегировать"],
-            "priority_changes": ["изменения приоритетов"]
-        }}
-        """
-        
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.2
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=15)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # Удаляем блоки кода если есть
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            try:
-                import json
-                optimization = json.loads(content)
-                return optimization
-            except json.JSONDecodeError:
-                return {"suggestions": [], "message": "Не удалось проанализировать задачи"}
-        return {"suggestions": [], "message": "Ошибка оптимизации"}
-    except Exception as e:
-        logger.error(f"Task optimization error: {e}")
-        return {"suggestions": [], "message": "Ошибка оптимизации"}
-    finally:
-        session.close()
-
-def understand_complex_query(message):
-    """
-    Разбирает сложные многошаговые запросы.
-    """
-    import requests
-    
-    prompt = f"""
-    Разбери этот запрос пользователя на компоненты.
-    Определи основное намерение и дополнительные критерии.
-    
-    Запрос: "{message}"
-    
-    Верни результат в формате JSON:
-    {{
-        "main_intent": "основное намерение",
-        "criteria": {{"ключ": "значение", ...}},
-        "steps": ["шаги для выполнения"],
-        "complexity": "simple"|"medium"|"complex"
-    }}
-    """
-    
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 300,
-            "temperature": 0.1
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # Удаляем блоки кода если есть
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            try:
-                import json
-                analysis = json.loads(content)
-                return analysis
-            except json.JSONDecodeError:
-                return {"main_intent": "unknown", "criteria": {}, "steps": [], "complexity": "simple"}
-        return {"main_intent": "unknown", "criteria": {}, "steps": [], "complexity": "simple"}
-    except Exception as e:
-        logger.error(f"Complex query analysis error: {e}")
-        return {"main_intent": "unknown", "criteria": {}, "steps": [], "complexity": "simple"}
-
-def summarize_conversation(messages, max_length=200):
-    """
-    Создает краткое резюме разговора.
-    """
-    import requests
-    
-    conversation_text = "\n".join([f"{msg.get('role', 'user')}: {msg.get('content', '')}" for msg in messages[-20:]])  # Последние 20 сообщений
-    
-    prompt = f"""
-    Создай краткое резюме этого разговора (не более {max_length} символов).
-    Выдели ключевые темы, решения и следующие шаги.
-    
-    Разговор:
-    {conversation_text}
-    """
-    
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 150,
-            "temperature": 0.2
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            return content[:max_length]
-        return "Резюме недоступно"
-    except Exception as e:
-        logger.error(f"Conversation summary error: {e}")
-        return "Резюме недоступно"
-
-def detect_duplicates(tasks):
-    """
-    Находит дубликаты и конфликты в задачах.
-    """
-    import requests
-    from collections import Counter
-    
-    if not tasks:
-        return []
-    
-    # Сначала найдем точные дубликаты
-    titles = [t.get('title', '').strip().lower() for t in tasks]
-    title_counts = Counter(titles)
-    
-    duplicates = []
-    seen_indices = set()
-    
-    for i, title in enumerate(titles):
-        if title_counts[title] > 1 and i not in seen_indices:
-            # Найдем все индексы с этим title
-            indices = [j for j, t in enumerate(titles) if t == title]
-            duplicates.append({
-                "type": "duplicate",
-                "task_indices": [idx + 1 for idx in indices],  # 1-based
-                "description": f"Точные дубликаты: '{tasks[i].get('title', '')}'"
-            })
-            seen_indices.update(indices)
-    
-    # Если есть точные дубликаты, вернем их
-    if duplicates:
-        return duplicates
-    
-    # Иначе используем AI для семантических дубликатов
-    tasks_text = "\n".join([f"{i+1}. {t.get('title', '')}" for i, t in enumerate(tasks[:15])])
-    
-    prompt = f"""
-    Проанализируй список задач и найди семантические дубликаты или конфликты.
-    Ищи задачи с похожим смыслом, но разным формулировкам.
-    
-    Задачи:
-    {tasks_text}
-    
-    Верни результат в формате JSON массива:
-    [
-        {{
-            "type": "duplicate"|"conflict",
-            "task_indices": [номера задач],
-            "description": "объяснение"
-        }}
-    ]
-    
-    Если дубликатов нет, верни пустой массив [].
-    """
-    
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 200,
-            "temperature": 0.1
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
-            
-            # Удаляем блоки кода если есть
-            if content.startswith('```json'):
-                content = content[7:]
-            if content.endswith('```'):
-                content = content[:-3]
-            content = content.strip()
-            
-            try:
-                import json
-                ai_duplicates = json.loads(content)
-                if isinstance(ai_duplicates, list):
-                    duplicates.extend(ai_duplicates)
-            except json.JSONDecodeError:
-                pass
-        return duplicates
-    except Exception as e:
-        logger.error(f"Duplicate detection error: {e}")
-        return duplicates  # Вернем хотя бы точные дубликаты
-
 
 # Импорт улучшенных функций промтов
 try:
@@ -4946,12 +4556,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                             # Обработка tool calls и т.д.
                             tool_results = []  # Инициализируем заранее
-                            print(f"[DEBUG] tool_calls value: {tool_calls}, bool: {bool(tool_calls)}")  # DEBUG
 
                             # Проверяем, не написал ли AI JSON в текст вместо tool_calls
                             json_in_text = re.search(r'\{.*?"name":\s*"(.*?)"\s*,\s*"arguments":\s*(\{.*?\})\s*\}', content, re.DOTALL)
                             if json_in_text and not tool_calls:
-                                print(f"[DEBUG] Found JSON in text, converting to tool_call")  # DEBUG
                                 try:
                                     func_name = json_in_text.group(1)
                                     func_args = json.loads(json_in_text.group(2))
@@ -4964,20 +4572,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     # Удаляем JSON из текста
                                     content = re.sub(r'\{.*?"name":\s*".*?"\s*,\s*"arguments":\s*\{.*?\}\s*\}', '', content, flags=re.DOTALL).strip()
                                 except Exception as e:
-                                    print(f"[DEBUG] Failed to parse JSON in text: {e}")  # DEBUG
+                                    pass
 
                             if tool_calls:
-                                print(f"[DEBUG] Tool calls found, processing...")  # DEBUG
 
                                 # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
                                 corrected_tool_calls = post_process_tool_calls(intent, tool_calls, message)
                                 if corrected_tool_calls:
-                                    print(f"[DEBUG] Tool calls corrected from {len(tool_calls)} to {len(corrected_tool_calls)} calls")
                                     tool_calls = corrected_tool_calls
 
                                 # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
                                 if is_advice_question:
-                                    print(f"[DEBUG] Ignoring tool_calls for advice question")  # DEBUG
                                     tool_calls = None
                                 else:
                                     # Обработка tool calls
@@ -5263,15 +4868,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
                                 pass
 
-                    print(f"[DEBUG] Exited tool_calls if block")  # DEBUG
-                    print(f"[DEBUG] After tool_calls block, about to check fallback")  # DEBUG
                     # Все запросы обрабатывает AI, без принудительных триггеров
                     logger.info("[AI ONLY] All requests handled by AI without forced triggers")
-                    print(f"[DEBUG] About to check fallback, content='{content[:50]}...'")  # DEBUG
 
                     # SMART FALLBACK: Проверяем, нужно ли применить умный fallback (use improved version if available)
-                    print(f"[DEBUG] Calling fallback handler...")  # DEBUG
-                    print(f"[DEBUG] About to call fallback handler, content='{content[:50]}...'")  # DEBUG
                     try:
                         if PROMPTS_V2_AVAILABLE:
                             fallback_result = improved_fallback(
@@ -5361,21 +4961,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             return final_content
                     except Exception as e:
                         logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
-                        print(f"[DEBUG] Fallback error: {e}")  # DEBUG
 
                     # Если forced calls не сработали, обрабатываем обычный ответ AI
-                    print(f"[DEBUG] After fallback, going to regular response processing")  # DEBUG
                     # Обрабатываем обычный ответ AI без tool calls
                     logger.info("[TOOL CALLS] Tool calls completed, 0 results. Generating natural response...")
-                    print(f"[DEBUG] Processing regular AI response, content='{content[:100]}...'")  # DEBUG
-                    print(f"[DEBUG] About to enter regular response processing")  # DEBUG
                     original_content = message_response.get("content", "")
                     content = original_content
-                    print(f"[DEBUG] Original content: '{original_content[:100]}...'")  # DEBUG
 
                     # Для обычных ответов ТОЛЬКО заменяем плейсхолдеры, без дополнительной очистки
                     content = replace_placeholders(content, user_now, current_time_str)
-                    print(f"[DEBUG] After replace_placeholders: '{content[:100]}...'")  # DEBUG
 
                     # КРИТИЧЕСКАЯ ПРОВЕРКА: если content пустой или слишком короткий
                     if not content or len(content.strip()) < 3:
@@ -5454,7 +5048,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
                     # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
                     
-                    print(f"[DEBUG] About to return content: '{content}'")  # DEBUG
                     return content
 
             except Exception as e:
@@ -6175,68 +5768,6 @@ def enrich_task_list_with_insights(task_list_text, user_id):
     except Exception as e:
         print(f"Error enriching task list: {e}")
         return task_list_text
-    finally:
-        session.close()
-
-
-def check_subscription_status(user_id=None):
-    """Проверяет статус подписки"""
-    from models import Session, User, Subscription
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if not subscription or subscription.status != "active":
-            return "У вас нет активной подписки. Используйте /subscribe для оформления."
-
-        return f"Подписка активна до {subscription.end_date.strftime('%d.%m.%Y') if subscription.end_date else 'неизвестно'}"
-    except Exception as e:
-        print(f"Error checking subscription: {e}")
-        return "Ошибка проверки подписки"
-    finally:
-        session.close()
-
-
-def create_subscription_payment(user_id=None):
-    """Создает платеж для подписки"""
-    from models import Session, User, Subscription
-    from datetime import datetime, timedelta
-    import pytz
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден"
-
-        # Проверить существующую подписку
-        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
-        if subscription and subscription.status == "active":
-            return "У вас уже есть активная подписка"
-
-        # Создать или обновить подписку
-        if not subscription:
-            subscription = Subscription(user_id=user.id, telegram_username=user.username)
-            session.add(subscription)
-        else:
-            # Update telegram_username if not set
-            if not subscription.telegram_username:
-                subscription.telegram_username = user.username
-
-        subscription.status = "pending_payment"
-        subscription.start_date = datetime.now(pytz.UTC)
-        subscription.end_date = subscription.start_date + timedelta(days=30)
-        session.commit()
-
-        return "Платеж создан. Используйте ссылку для оплаты: https://yookassa.ru/..."
-    except Exception as e:
-        session.rollback()
-        print(f"Error creating subscription payment: {e}")
-        return "Ошибка создания платежа"
     finally:
         session.close()
 
