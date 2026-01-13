@@ -1156,9 +1156,9 @@
             // Кнопки действий (включая меню оверлей)
             html += '<div class="task-actions">';
             if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #238636; cursor: pointer; font-size: 16px; padding: 4px;" aria-label="Complete">✓</button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="delete-btn" style="color: #238636;" aria-label="Complete">✓</button>';
             }
-            html += '<button onclick="deleteTask(' + task.id + ')" class="task-action-btn" style="background: none; border: none; color: #d73a49; cursor: pointer; font-size: 16px; padding: 4px;" aria-label="Delete">🗑</button>';
+            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn" style="color: #d73a49;" aria-label="Delete">🗑</button>';
             // More menu - uses overlay manager (data-overlay-target)
             html += '<button class="task-action-btn use-overlay" data-overlay-target="#task-menu-' + task.id + '" style="background:none;border:none;padding:4px;cursor:pointer;font-size:18px;">⋯</button>';
 
