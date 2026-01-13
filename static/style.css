@@ -75,7 +75,7 @@ button:active {
 
 :root {
     --header-height: 64px; /* Slightly smaller header */
-    --app-gap: 12px; /* Reduced gaps for tighter layout */
+    --app-gap: 8px; /* Reduced gaps for tighter layout */
 }
 
 html, body {
@@ -328,12 +328,13 @@ body {
     display: grid;
     grid-template-columns: 300px minmax(680px, 1fr) 320px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
-    height: 100%;
+    height: calc(100vh - var(--header-height));
     gap: var(--app-gap);
     padding: 12px;
     overflow: hidden;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
+    margin-top: var(--header-height);
 }
 
 /* Ensure direct children can shrink properly inside grid */
