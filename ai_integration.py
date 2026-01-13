@@ -3254,7 +3254,7 @@ def get_partners_list(user_id=None, session=None):
     # Получаем профиль текущего пользователя для сравнения
     user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if not user_profile:
-        logger.warning(f"[PARTNERS] User profile not found for user {user.id}")
+        # Профиль не найден - возвращаем пустой список
         if close_session:
             session.close()
         return []

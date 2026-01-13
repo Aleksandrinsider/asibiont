@@ -5,10 +5,14 @@ import pytz
 import hashlib
 import hmac
 import json
+import warnings
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Скрываем некритичные предупреждения
+warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
 
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application

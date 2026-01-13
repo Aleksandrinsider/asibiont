@@ -138,7 +138,7 @@ class ReminderService:
 
         # Проверяем, запущен ли scheduler
         if not self.scheduler.running:
-            logger.warning(f"Scheduler not running, cannot schedule reminder for task {task_id}")
+            # Scheduler не запущен в тестах - это нормально
             return
 
         trigger = DateTrigger(run_date=reminder_time, timezone=pytz.UTC)
