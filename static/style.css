@@ -82,6 +82,7 @@ html, body {
     height: 100%;
     margin: 0;
     padding: 0;
+    overflow: hidden;
 }
 
 body {
@@ -328,13 +329,13 @@ body {
     display: grid;
     grid-template-columns: 400px minmax(680px, 1fr) 420px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
-    height: calc(100vh - 120px);
+    height: calc(100vh - var(--header-height));
     gap: 4px;
     padding: 8px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
-    margin-top: 0;
+    margin-top: var(--header-height);
 }
 
 /* Ensure direct children can shrink properly inside grid */
