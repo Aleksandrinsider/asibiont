@@ -103,7 +103,7 @@ body {
     height: var(--header-height);
     background-color: #FFFFFF;
     color: #1F2328;
-    padding: 0 clamp(10px, 3vw, 16px);
+    padding: 0 8px;
     margin: 0;
     position: fixed;
     top: 0;
