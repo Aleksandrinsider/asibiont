@@ -222,7 +222,7 @@ body {
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: 21px;
     font-weight: 500;
@@ -1246,7 +1246,7 @@ details[open] .details-content {
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: 21px;
     font-weight: 500;
@@ -1456,7 +1456,7 @@ details[open] .details-content {
     font-size: 13px;
     font-weight: 500;
     transition: all 0.2s;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 .rating-cancel-btn {
