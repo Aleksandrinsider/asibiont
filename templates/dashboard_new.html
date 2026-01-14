@@ -269,6 +269,7 @@
             </div>
 
             <!-- Правая колонка - Задачи -->
+            {% if logged_in %}
             <div class="right-column">
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
@@ -317,6 +318,7 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
         {% endif %}
     </div>
