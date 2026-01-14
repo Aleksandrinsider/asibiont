@@ -358,7 +358,6 @@ body {
     padding-bottom: 6px;
     background-color: #FFFFFF;
     border-radius: 6px;
-    border: 1px solid red; /* временная рамка для проверки */
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: normal;

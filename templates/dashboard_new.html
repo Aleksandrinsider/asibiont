@@ -269,8 +269,8 @@
             </div>
 
             <!-- Правая колонка - Задачи -->
-            {% if logged_in %}
             <div class="right-column">
+                {% if logged_in %}
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
@@ -317,8 +317,8 @@
                         </div>
                     </div>
                 </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
         {% endif %}
     </div>
