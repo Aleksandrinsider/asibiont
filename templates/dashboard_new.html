@@ -263,6 +263,19 @@
                     </div>
                     {% endif %}
                 </div>
+                
+                <!-- Блок тех. поддержки -->
+                <div style="margin-top: 16px; padding: 12px; border: 1px solid #D1D9E0; border-radius: 6px; background-color: #F6F8FA;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color: #656D76;">
+                            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5.5a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"></path>
+                        </svg>
+                        <h4 style="margin: 0; font-size: 13px; font-weight: 500; color: #1F2328;">Техническая поддержка</h4>
+                    </div>
+                    <p style="margin: 0; font-size: 12px; color: #656D76; line-height: 1.5;">
+                        При возникновении проблем или вопросов обращайтесь в тех.поддержку: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #0969DA; text-decoration: none;">@aleksandrinsider</a>
+                    </p>
+                </div>
 
             </div>
 
@@ -307,7 +320,7 @@
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
                         <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')">Назначенные мной</button>
                         <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
-                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Завершенные</button>
+                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Выполненные</button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container">
                         <div class="task-groups" id="task-groups">
@@ -1228,7 +1241,7 @@
             // Кнопки действий (включая меню оверлей)
             html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
             if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Завершить"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
                 html += '<button onclick="rescheduleTask(' + task.id + ')" class="quick-action" title="Перенести"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.001 7.001 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.501 5.501 0 0 0 8 2.5zM1.705 8.005a.75.75 0 0 1 .834-1.246A5.501 5.501 0 0 0 13 9.5a5.487 5.487 0 0 0 4.131-1.869l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.001 7.001 0 0 1 1.05 8.84a.75.75 0 0 1-.834-1.246z"></path></svg></button>';
                 html += '<button onclick="getTaskAdvice(' + task.id + ')" class="quick-action" title="Совет"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.543c0 .083.042.160.11.208l2.295-2.295a.75.75 0 0 1 .545-.208h6.44a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm13.75 9.75H14v.5a.75.75 0 0 1-.75.75h-6.5a.75.75 0 0 1-.545-.208L4.81 9.75H1.75a.75.75 0 0 1-.75-.75V3h14Z"></path></svg></button>';
             } else {
@@ -1588,7 +1601,7 @@
             html += '</div>';
             html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
             if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Завершить"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
                 html += '<button onclick="rescheduleTask(' + task.id + ')" class="quick-action" title="Перенести"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.001 7.001 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.501 5.501 0 0 0 8 2.5zM1.705 8.005a.75.75 0 0 1 .834-1.246A5.501 5.501 0 0 0 13 9.5a5.487 5.487 0 0 0 4.131-1.869l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.001 7.001 0 0 1 1.05 8.84a.75.75 0 0 1-.834-1.246z"></path></svg></button>';
                 html += '<button onclick="getTaskAdvice(' + task.id + ')" class="quick-action" title="Совет"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.543c0 .083.042.160.11.208l2.295-2.295a.75.75 0 0 1 .545-.208h6.44a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm13.75 9.75H14v.5a.75.75 0 0 1-.75.75h-6.5a.75.75 0 0 1-.545-.208L4.81 9.75H1.75a.75.75 0 0 1-.75-.75V3h14Z"></path></svg></button>';
             } else {
@@ -1702,19 +1715,28 @@
         
         async function completeTask(taskId) {
             try {
-                // Отправляем запрос на завершение задачи напрямую
-                const response = await fetch('/complete_task', {
+                // Отправляем сообщение агенту о выполнении задачи
+                const response = await fetch('/api/send_message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId }),
+                    body: JSON.stringify({
+                        message: `Отметь задачу с ID ${taskId} как выполненную.`
+                    }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
-                    const data = await response.json();
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
                     // Обновить задачи и чат
                     await updateTasks();
+                    await updateChat();
+                } else {
+                    showNotification('Ошибка при выполнении задачи', 'error');
+                }
+            } catch (error) {
+                console.error('Error completing task:', error);
+                showNotification('Ошибка при выполнении задачи', 'error');
+            }
+        }
                     await updateChat();
                 } else {
                     const error = await response.json();
@@ -1759,55 +1781,51 @@
         }
 
         async function rescheduleTask(taskId) {
-            const newDate = prompt('Введите новую дату для задачи (YYYY-MM-DD):');
+            const newDate = prompt('Введите новую дату для задачи (YYYY-MM-DD или текст типа "завтра", "через неделю"):');
             if (!newDate) return;
 
             try {
-                const response = await fetch('/reschedule_task', {
+                const response = await fetch('/api/send_message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId, new_date: newDate }),
+                    body: JSON.stringify({
+                        message: `Перенеси задачу с ID ${taskId} на ${newDate}.`
+                    }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
-                    const data = await response.json();
                     await updateTasks();
                     await updateChat();
                 } else {
-                    const error = await response.json();
-                    addMessage(`Ошибка при переносе задачи: ${error.error}`, 'ai');
-                    lastMessageCount += 1;
+                    showNotification('Ошибка при переносе задачи', 'error');
                 }
             } catch (error) {
                 console.error('Error rescheduling task:', error);
-                addMessage('Ошибка при переносе задачи', 'ai');
-                lastMessageCount += 1;
+                showNotification('Ошибка при переносе задачи', 'error');
             }
         }
 
         async function getTaskAdvice(taskId) {
             try {
-                const response = await fetch('/get_task_advice', {
+                const response = await fetch('/api/send_message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId }),
+                    body: JSON.stringify({
+                        message: `Дай мне совет по задаче с ID ${taskId}. Что мне делать с этой задачей?`
+                    }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
-                    const data = await response.json();
                     await updateTasks();
                     await updateChat();
                 } else {
-                    const error = await response.json();
-                    addMessage(`Ошибка при получении совета: ${error.error}`, 'ai');
-                    lastMessageCount += 1;
+                    showNotification('Ошибка при получении совета', 'error');
                 }
             } catch (error) {
                 console.error('Error getting task advice:', error);
-                addMessage('Ошибка при получении совета', 'ai');
-                lastMessageCount += 1;
+                showNotification('Ошибка при получении совета', 'error');
             }
         }
 
@@ -2243,7 +2261,7 @@
                                 html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="Избранное">' + starSvg + '</button>';
                                 html += '<button onclick="delegateToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Делегировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                 html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
-                                html += '<button onclick="hideContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Скрыть"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                                html += '<button onclick="hideContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Скрыть на 7 дней"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                 
                                 html += '</div>';
                                 html += '</li>';
@@ -3105,7 +3123,7 @@
                         menu.style.minWidth = (rect.width || 0) + 'px';
                         menu.style.maxHeight = (window.innerHeight * 0.5) + 'px';
                         menu.style.overflow = 'auto';
-                    }
+                    };
 
                     // close on outside click or ESC
                     setTimeout(()=>{
