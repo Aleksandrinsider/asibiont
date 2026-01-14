@@ -1836,8 +1836,8 @@ async def api_contact_profile_handler(request):
             return web.json_response({'partner': profile_data})
             
         except Exception as e:
-            logger.error(f"Error getting contact profile: {e}")
-            return web.json_response({'error': 'Internal server error'}, status=500)
+            logger.error(f"Error getting contact profile for username '{username}': {e}", exc_info=True)
+            return web.json_response({'error': f'Internal server error: {str(e)}'}, status=500)
         finally:
             session_db.close()
             
