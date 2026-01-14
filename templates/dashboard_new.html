@@ -1737,13 +1737,10 @@
         
         async function restoreTask(taskId) {
             try {
-                // Отправляем сообщение агенту о восстановлении задачи
-                const response = await fetch('/api/send_message', {
+                const response = await fetch('/restore_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: `Восстанови задачу с ID ${taskId} в работу.`
-                    }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
