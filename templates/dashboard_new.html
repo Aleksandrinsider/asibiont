@@ -1687,7 +1687,7 @@
                 nextTaskCenterEl.style.display = 'none';
             }
             
-            // Обновить счетчики
+            // Обновить счетчики - version 2026-01-14
             const completedEl = document.getElementById('completed-count');
             const totalEl = document.getElementById('total-count');
             const progressEl = document.getElementById('progress-fill');
@@ -3035,7 +3035,7 @@
         // Overlay manager: move dropdowns/menus to <body> to avoid layout shifts
         (function(){
             function closeOverlay(el){
-                if(!el) return;
+                if(!el || !(el instanceof Element)) return;
                 if(el.__overlayOriginalParent){
                     // restore to original place
                     el.classList.remove('floating-overlay');
