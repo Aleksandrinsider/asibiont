@@ -1797,22 +1797,8 @@ async def api_contact_profile_handler(request):
             if not contact_user:
                 return web.json_response({'error': 'Contact not found'}, status=404)
             
-            # Get contact profile (create basic profile if doesn't exist)
+            # Get contact profile (if doesn't exist, use defaults)
             profile = session_db.query(UserProfile).filter_by(user_id=contact_user.id).first()
-            if not profile:
-                # Create minimal profile from User data
-                profile = UserProfile(
-                    user_id=contact_user.id,
-                    first_name=None,
-                    last_name=None,
-                    city=None,
-                    company=None,
-                    position=None,
-                    interests=None,
-                    average_rating=0.0
-                )
-                session_db.add(profile)
-                session_db.commit()
             
             # Get current user's profile for common interests/skills
             current_user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -1820,7 +1806,7 @@ async def api_contact_profile_handler(request):
             
             # Calculate common interests/skills
             common_interests = None
-            if current_profile and current_profile.interests and profile.interests:
+            if profile and current_profile and current_profile.interests and profile.interests:
                 current_interests = set(i.strip().lower() for i in current_profile.interests.split(','))
                 profile_interests = set(i.strip().lower() for i in profile.interests.split(','))
                 common = current_interests & profile_interests
@@ -1832,18 +1818,18 @@ async def api_contact_profile_handler(request):
                 Task.status.in_(['in_progress', 'pending'])
             ).count()
             
-            # Prepare profile data
+            # Prepare profile data (use defaults if profile doesn't exist)
             profile_data = {
                 'contact_info': contact_user.username,
-                'first_name': profile.first_name,
-                'last_name': profile.last_name,
+                'first_name': contact_user.first_name if contact_user.first_name else None,
+                'last_name': contact_user.last_name if contact_user.last_name else None,
                 'photo_url': contact_user.photo_url,
-                'city': profile.city,
-                'company': profile.company,
-                'position': profile.position,
-                'interests': profile.interests,
+                'city': profile.city if profile else None,
+                'company': profile.company if profile else None,
+                'position': profile.position if profile else None,
+                'interests': profile.interests if profile else None,
                 'common_interests': common_interests,
-                'average_rating': profile.average_rating,
+                'average_rating': profile.average_rating if profile else 0,
                 'task_count': active_tasks
             }
             
