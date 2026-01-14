@@ -393,7 +393,7 @@
 
     <script>
 
-        // Version: 2026-01-14 fix overlay errors
+        // Version: 2026-01-14 fix overlay errors - timestamp: 1736860000
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
         
@@ -3146,8 +3146,12 @@
                                 const isInsideToggle = currentToggle.contains(target);
                                 
                                 if (!isInsideMenu && !isInsideToggle){
-                                    if (currentMenu && typeof closeOverlay === 'function') {
-                                        closeOverlay(currentMenu);
+                                    if (currentMenu && closeOverlay) {
+                                        try {
+                                            closeOverlay(currentMenu);
+                                        } catch (err) {
+                                            console.error('closeOverlay error in onDocClick:', err);
+                                        }
                                     }
                                     document.removeEventListener('click', onDocClick);
                                     document.removeEventListener('keydown', onEsc);
@@ -3158,8 +3162,12 @@
                         }
                         function onEsc(e){ 
                             if(e && e.key === 'Escape'){ 
-                                if (currentMenu && typeof closeOverlay === 'function') {
-                                    closeOverlay(currentMenu); 
+                                if (currentMenu && closeOverlay) {
+                                    try {
+                                        closeOverlay(currentMenu); 
+                                    } catch (err) {
+                                        console.error('closeOverlay error in onEsc:', err);
+                                    }
                                 }
                                 document.removeEventListener('click', onDocClick); 
                                 document.removeEventListener('keydown', onEsc); 
@@ -3169,8 +3177,12 @@
                         document.addEventListener('keydown', onEsc);
                         // Use explicit handler to support browsers without `once` option
                         function onResizeHandler(){ 
-                            if (currentMenu && typeof closeOverlay === 'function') {
-                                closeOverlay(currentMenu); 
+                            if (currentMenu && closeOverlay) {
+                                try {
+                                    closeOverlay(currentMenu); 
+                                } catch (err) {
+                                    console.error('closeOverlay error in onResizeHandler:', err);
+                                }
                             }
                             window.removeEventListener('resize', onResizeHandler); 
                         }
