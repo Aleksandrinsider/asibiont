@@ -1734,19 +1734,7 @@
                 console.error('Error completing task:', error);
                 showNotification('Ошибка при выполнении задачи', 'error');
             }
-        }
-                    await updateChat();
-                } else {
-                    const error = await response.json();
-                    addMessage(`Ошибка при завершении задачи: ${error.error}`, 'ai');
-                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
-                }
-            } catch (error) {
-                console.error('Error completing task:', error);
-                addMessage('Ошибка при завершении задачи', 'ai');
-                lastMessageCount += 1;
-            }
-        }
+
 
         async function deleteTask(taskId) {
             if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
