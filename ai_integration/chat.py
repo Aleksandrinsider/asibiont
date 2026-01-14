@@ -428,6 +428,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         if intent_type in ['conversation', 'unknown'] and is_advice_question:
             # Вопросы о совете - не используем инструменты, отвечаем текстом
             tool_choice = "none"
+        elif intent_type == 'greeting':
+            # Приветствия - не используем инструменты, отвечаем текстом
+            tool_choice = "none"
         elif intent_type in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 'delegate_task']:
             # Явные запросы на управление задачами - используем инструменты
             tool_choice = "auto"

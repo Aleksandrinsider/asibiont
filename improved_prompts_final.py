@@ -180,3 +180,6 @@ def improved_fallback(intent: dict, tool_calls=None, ai_response_content="", mes
     
     # Для других случаев возвращаем пустой список (fallback не применяется)
     return []
+
+# Флаг доступности улучшенных промптов
+PROMPTS_V2_AVAILABLE = True
