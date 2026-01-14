@@ -265,11 +265,15 @@
                 </div>
 
                 <!-- Блок тех. поддержки -->
-                <div style="margin-top: 10px; padding: 12px 16px; border-radius: 6px;">
-                    <div style="display: flex; align-items: center; justify-content: center;">
+                <div style="margin-top: 8px; padding: 10px 14px; background: #F6F8FA; border: 1px solid #D0D7DE; border-radius: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
                         <span style="font-size: 13px; color: #59636E;">
-                            При возникновении проблем или вопросов обращайтесь: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #0969DA; text-decoration: none; font-weight: 500;">@aleksandrinsider</a>
+                            Возникли вопросы?
                         </span>
+                        <a href="https://t.me/aleksandrinsider" target="_blank" 
+                           style="padding: 6px 12px; background: #0969DA; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; white-space: nowrap;">
+                            Написать в поддержку
+                        </a>
                     </div>
                 </div>
 
@@ -1602,6 +1606,7 @@
                 html += '<button onclick="rescheduleTask(' + task.id + ')" class="quick-action" title="Перенести"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.001 7.001 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.501 5.501 0 0 0 8 2.5zM1.705 8.005a.75.75 0 0 1 .834-1.246A5.501 5.501 0 0 0 13 9.5a5.487 5.487 0 0 0 4.131-1.869l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.001 7.001 0 0 1 1.05 8.84a.75.75 0 0 1-.834-1.246z"></path></svg></button>';
                 html += '<button onclick="getTaskAdvice(' + task.id + ')" class="quick-action" title="Совет"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.543c0 .083.042.160.11.208l2.295-2.295a.75.75 0 0 1 .545-.208h6.44a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm13.75 9.75H14v.5a.75.75 0 0 1-.75.75h-6.5a.75.75 0 0 1-.545-.208L4.81 9.75H1.75a.75.75 0 0 1-.75-.75V3h14Z"></path></svg></button>';
             } else {
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 5v6l4-3-4-3z"/></svg></button>';
                 html += '<button onclick="rescheduleTask(' + task.id + ')" class="quick-action" title="Перенести"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.001 7.001 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.501 5.501 0 0 0 8 2.5zM1.705 8.005a.75.75 0 0 1 .834-1.246A5.501 5.501 0 0 0 13 9.5a5.487 5.487 0 0 0 4.131-1.869l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.001 7.001 0 0 1 1.05 8.84a.75.75 0 0 1-.834-1.246z"></path></svg></button>';
                 html += '<button onclick="getTaskAdvice(' + task.id + ')" class="quick-action" title="Совет"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.543c0 .083.042.160.11.208l2.295-2.295a.75.75 0 0 1 .545-.208h6.44a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm13.75 9.75H14v.5a.75.75 0 0 1-.75.75h-6.5a.75.75 0 0 1-.545-.208L4.81 9.75H1.75a.75.75 0 0 1-.75-.75V3h14Z"></path></svg></button>';
             }
