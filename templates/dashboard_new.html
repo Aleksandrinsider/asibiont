@@ -1734,8 +1734,8 @@
                 console.error('Error completing task:', error);
                 showNotification('Ошибка при выполнении задачи', 'error');
             }
-
-
+        }
+        
         async function deleteTask(taskId) {
             if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
                 return;
@@ -2746,19 +2746,6 @@
                             displayedMessageIds.clear();
                             
                             // Sort by database ID (guarantees insertion order)
-                            const sortedInteractions = data.interactions
-                                .sort((a, b) => a.id - b.id);
-                            
-                            sortedInteractions.forEach((interaction) => {
-                                const msgId = interaction.id; // Используем database ID для уникальности
-                                if (!displayedMessageIds.has(msgId)) {
-                                    addMessage(interaction.content, interaction.message_type, interaction.created_at);
-                                    displayedMessageIds.add(msgId);
-                                }
-                            });
-                            lastMessageCount = data.interactions.length;
-                        } else if (data.interactions.length > lastMessageCount) {
-                            // Добавляем только новые сообщения
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
                             
