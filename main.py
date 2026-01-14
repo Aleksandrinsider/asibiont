@@ -1828,7 +1828,11 @@ async def api_contact_profile_handler(request):
                     'city': getattr(profile, 'city', None) if profile else None,
                     'company': getattr(profile, 'company', None) if profile else None,
                     'position': getattr(profile, 'position', None) if profile else None,
+                    'goals': getattr(profile, 'goals', None) if profile else None,
+                    'skills': getattr(profile, 'skills', None) if profile else None,
                     'interests': getattr(profile, 'interests', None) if profile else None,
+                    'languages': getattr(profile, 'languages', None) if profile else None,
+                    'bio': getattr(profile, 'bio', None) if profile else None,
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks
@@ -1844,7 +1848,11 @@ async def api_contact_profile_handler(request):
                     'city': None,
                     'company': None,
                     'position': None,
+                    'goals': None,
+                    'skills': None,
                     'interests': None,
+                    'languages': None,
+                    'bio': None,
                     'common_interests': None,
                     'average_rating': 0,
                     'task_count': 0
