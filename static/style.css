@@ -292,7 +292,7 @@ body {
 }
 
 .container {
-    margin: calc(var(--header-height) + 8px) 12px 12px 12px; /* Use more of the screen */
+    margin: calc(var(--header-height) + 8px) 12px 22px 12px; /* Use more of the screen */
     width: calc(100% - 24px);
     max-width: none; /* Allow full width */
     height: calc(100vh - var(--header-height) - 20px);
