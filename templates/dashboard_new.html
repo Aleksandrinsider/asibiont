@@ -952,16 +952,20 @@
                         </div>
                         <div style="display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex-shrink: 0;">
                             <button onclick="toggleFavoriteContactFromSearch('${contact.username}')"
-                                    style="padding: 8px 16px; background: #FFFFFF; color: ${heartColor}; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;"
+                                    style="padding: 8px 16px; background: #FFFFFF; color: ${heartColor}; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px;"
                                     onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';"
                                     onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
-                                ${isFavorite ? '¦' : '?'}
+                                ${isFavorite 
+                                    ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
+                                    : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'}
+                                <span>Избранное</span>
                             </button>
                             <button onclick="window.open('https://t.me/${contact.username}', '_blank')"
-                                    style="padding: 8px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;"
+                                    style="padding: 8px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px;"
                                     onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';"
                                     onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
-                                ^v
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.75 14.25a.75.75 0 0 1-.75-.75V2.75l-.5.5a.75.75 0 0 1-1.06-1.06l2-2a.751.751 0 0 1 .976-.073.75.75 0 0 1 .084.073l2 2a.75.75 0 1 1-1.06 1.06l-.5-.5V13.5a.75.75 0 0 1-.75.75Zm4.5-8.5a.75.75 0 0 0 .75.75h3.5a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75Zm0 4a.75.75 0 0 0 .75.75h2.5a.75.75 0 0 0 0-1.5h-2.5a.75.75 0 0 0-.75.75Zm0 4a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 0-1.5h-1.5a.75.75 0 0 0-.75.75Z"></path></svg>
+                                <span>Написать</span>
                             </button>
                         </div>
                     </div>
