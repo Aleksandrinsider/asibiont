@@ -911,38 +911,40 @@
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
                 const ratingColor = rating < 5 ? '#d73a49' : (rating >= 9 ? '#D7AC0C' : '#1F2328');
                 const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Рекомендация: нет рекомендаций';
-                const heartColor = isFavorite ? '#068487' : '#24292F';
+                const heartColor = isFavorite ? '#068487' : '#59636E';
                 
                 html += `
-                    <div style="padding: 12px; border: 1px solid #D1D9E0; border-radius: 6px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.15s; background: white;"
+                    <div style="padding: 12px; border: 1px solid #D1D9E0; border-radius: 6px; display: flex; align-items: center; gap: 12px; transition: all 0.15s; background: #FFFFFF;"
                          onmouseover="this.style.background='#F6F8FA'" 
-                         onmouseout="this.style.background='white'"
-                         onclick="window.open('https://t.me/${contact.username}', '_blank')">
+                         onmouseout="this.style.background='#FFFFFF'">
                         ${photoUrl ? 
-                            `<img src="${photoUrl}" alt="${contact.first_name}" 
-                                 style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; flex-shrink: 0;">` :
-                            `<div style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; flex-shrink: 0;">${initials}</div>`
+                            `<img src="${photoUrl}" alt="${contact.first_name}" onclick="openContactProfileModal('${contact.username}')"
+                                 style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">` :
+                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">${initials}</div>`
                         }
                         <div style="flex: 1; min-width: 0;">
-                            <div style="font-size: 13px; font-weight: 400; color: #24292F; margin-bottom: 2px;">
+                            <div onclick="openContactProfileModal('${contact.username}')" style="font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 2px; cursor: pointer;">
                                 ${contact.first_name || contact.username}
                             </div>
-                            <div style="font-size: 12px; color: #656D76; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                            <div style="font-size: 13px; color: #656D76; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
                                 <span>@${contact.username}</span>
                                 ${contact.city ? `<span>· ${contact.city}</span>` : ''}
                             </div>
-                            ${contact.bio ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px; line-height: 1.4;">${contact.bio}</div>` : ''}
-                            ${contact.interests ? `<div style="font-size: 12px; color: #656D76; margin-bottom: 4px;">${contact.interests}</div>` : ''}
-                            <div style="margin-top: 2px;"><span style="font-size: 12px; color: ${ratingColor};">${ratingText}</span></div>
+                            ${contact.bio ? `<div style="font-size: 13px; color: #656D76; margin-bottom: 4px; line-height: 1.4;">${contact.bio}</div>` : ''}
+                            ${contact.interests ? `<div style="font-size: 13px; color: #656D76; margin-bottom: 4px;">${contact.interests}</div>` : ''}
+                            <div style="margin-top: 2px;"><span style="font-size: 13px; color: ${ratingColor};">${ratingText}</span></div>
                         </div>
-                        <div style="display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; flex-shrink: 0; justify-content: center;">
-                            <button onclick="event.stopPropagation(); toggleFavoriteContactFromSearch('${contact.username}')"
-                                    class="quick-action"
-                                    style="color: ${heartColor};">
+                        <div style="display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex-shrink: 0;">
+                            <button onclick="toggleFavoriteContactFromSearch('${contact.username}')"
+                                    style="padding: 6px 12px; background-color: #FFFFFF; color: ${heartColor}; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;"
+                                    onmouseover="this.style.backgroundColor='#F6F8FA'; this.style.borderColor='#1F2328';"
+                                    onmouseout="this.style.backgroundColor='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                                 ${isFavorite ? '¦' : '?'}
                             </button>
-                            <button onclick="event.stopPropagation();"
-                                    class="quick-action">
+                            <button onclick="window.open('https://t.me/${contact.username}', '_blank')"
+                                    style="padding: 6px 12px; background-color: #068487; color: #FFFFFF; border: 1px solid #068487; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;"
+                                    onmouseover="this.style.backgroundColor='#057578'; this.style.borderColor='#057578';"
+                                    onmouseout="this.style.backgroundColor='#068487'; this.style.borderColor='#068487';">
                                 ^v
                             </button>
                         </div>
