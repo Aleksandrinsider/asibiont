@@ -516,7 +516,7 @@ details[open] .details-content {
     flex-direction: column;
     padding: 12px;
     height: 100%;
-    max-height: calc(100% - 50px);
+    max-height: calc(100% - 40px);
     overflow: hidden;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
@@ -550,10 +550,10 @@ details[open] .details-content {
 }
 
 .message {
-    padding: 0 12px;
+    padding: 0;
     margin: 12px 0;
-    max-width: calc(100% - 24px);
-    width: calc(100% - 24px);
+    max-width: 100%;
+    width: 100%;
     word-wrap: break-word;
     display: flex;
     flex-direction: column;
