@@ -265,16 +265,25 @@
                 </div>
                 
                 <!-- Блок тех. поддержки -->
-                <div style="margin-top: 16px; padding: 12px; border: 1px solid #D1D9E0; border-radius: 6px; background-color: #F6F8FA;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color: #656D76;">
-                            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM6.5 5.5a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"></path>
-                        </svg>
-                        <h4 style="margin: 0; font-size: 13px; font-weight: 500; color: #1F2328;">Техническая поддержка</h4>
+                <div style="margin-top: 16px; padding: 16px; border: 1px solid #D1D9E0; border-radius: 6px; background-color: #FFFFFF; box-shadow: 0 1px 3px rgba(31,35,40,0.04);">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <div style="flex-shrink: 0; margin-top: 2px;">
+                            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" style="color: #0969DA;">
+                                <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 1.5 0v-3.5ZM8 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"></path>
+                            </svg>
+                        </div>
+                        <div style="flex: 1;">
+                            <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 500; color: #1F2328; line-height: 1.4;">
+                                При возникновении проблем или вопросов обращайтесь:
+                            </p>
+                            <a href="https://t.me/aleksandrinsider" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #0969DA; text-decoration: none; font-weight: 500;">
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M15.698.045a1.09 1.09 0 0 0-1.11.07L.49 7.177a.944.944 0 0 0-.14 1.566l3.62 2.87a.5.5 0 0 0 .54.06l5.59-3.491a.25.25 0 0 1 .32.38l-4.73 4.73a.5.5 0 0 0-.06.7l2.61 3.48a.944.944 0 0 0 1.58-.03l6.13-14.1a1.09 1.09 0 0 0-.31-1.33z"></path>
+                                </svg>
+                                @aleksandrinsider
+                            </a>
+                        </div>
                     </div>
-                    <p style="margin: 0; font-size: 12px; color: #656D76; line-height: 1.5;">
-                        При возникновении проблем или вопросов обращайтесь в тех.поддержку: <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #0969DA; text-decoration: none;">@aleksandrinsider</a>
-                    </p>
                 </div>
 
             </div>
@@ -3123,7 +3132,7 @@
                         menu.style.minWidth = (rect.width || 0) + 'px';
                         menu.style.maxHeight = (window.innerHeight * 0.5) + 'px';
                         menu.style.overflow = 'auto';
-                    };
+                    }
 
                     // close on outside click or ESC
                     setTimeout(()=>{
