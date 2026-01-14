@@ -1067,6 +1067,51 @@ async def complete_task_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def reschedule_task_handler(request):
+    """Переносит задачу на новую дату"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    data = await request.json()
+    task_id = data.get('task_id')
+    new_date = data.get('new_date')
+    if not task_id or not new_date:
+        return web.json_response({'error': 'Task ID and new date required'}, status=400)
+    
+    from ai_integration import reschedule_task
+    try:
+        result = reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
+        logger.info(f"Task {task_id} rescheduled by user {user_id}: {result}")
+        return web.json_response({'message': result})
+    except Exception as e:
+        logger.error(f"Error rescheduling task {task_id}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def get_task_advice_handler(request):
+    """Получает совет по задаче от AI"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    data = await request.json()
+    task_id = data.get('task_id')
+    if not task_id:
+        return web.json_response({'error': 'Task ID required'}, status=400)
+    
+    from ai_integration import get_task_advice
+    try:
+        result = get_task_advice(task_id=task_id, user_id=user_id)
+        logger.info(f"Task advice requested for task {task_id} by user {user_id}: {result}")
+        return web.json_response({'message': result})
+    except Exception as e:
+        logger.error(f"Error getting advice for task {task_id}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def clear_old_tasks_handler(request):
     """Admin endpoint to clear old test tasks"""
     # Check admin secret
@@ -1710,6 +1755,75 @@ async def api_partners_handler(request):
             session_db.close()
         except Exception:
             pass
+
+async def api_contact_profile_handler(request):
+    """Get detailed profile of a contact"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+        
+        username = request.query.get('username')
+        if not username:
+            return web.json_response({'error': 'Username required'}, status=400)
+        
+        session_db = Session()
+        try:
+            # Find the contact user
+            contact_user = session_db.query(User).filter_by(username=username).first()
+            if not contact_user:
+                return web.json_response({'error': 'Contact not found'}, status=404)
+            
+            # Get contact profile
+            profile = session_db.query(UserProfile).filter_by(user_id=contact_user.id).first()
+            if not profile:
+                return web.json_response({'error': 'Profile not found'}, status=404)
+            
+            # Get current user's profile for common interests/skills
+            current_user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            current_profile = session_db.query(UserProfile).filter_by(user_id=current_user.id).first() if current_user else None
+            
+            # Calculate common interests/skills
+            common_interests = None
+            if current_profile and current_profile.interests and profile.interests:
+                current_interests = set(i.strip().lower() for i in current_profile.interests.split(','))
+                profile_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                common = current_interests & profile_interests
+                common_interests = ', '.join(common) if common else None
+            
+            # Get active task count
+            active_tasks = session_db.query(Task).filter(
+                Task.user_id == contact_user.id,
+                Task.status.in_(['in_progress', 'pending'])
+            ).count()
+            
+            # Prepare profile data
+            profile_data = {
+                'contact_info': contact_user.username,
+                'first_name': profile.first_name,
+                'last_name': profile.last_name,
+                'photo_url': contact_user.photo_url,
+                'city': profile.city,
+                'company': profile.company,
+                'position': profile.position,
+                'interests': profile.interests,
+                'common_interests': common_interests,
+                'average_rating': profile.average_rating,
+                'task_count': active_tasks
+            }
+            
+            return web.json_response({'partner': profile_data})
+            
+        except Exception as e:
+            logger.error(f"Error getting contact profile: {e}")
+            return web.json_response({'error': 'Internal server error'}, status=500)
+        finally:
+            session_db.close()
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in api_contact_profile_handler: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
 
 async def rate_user_handler(request):
     """Rate another user (1-10 scale)"""
@@ -2470,6 +2584,8 @@ app.router.add_post('/clear_history', clear_history_handler)
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/complete_task', complete_task_handler)
+app.router.add_post('/reschedule_task', reschedule_task_handler)
+app.router.add_post('/get_task_advice', get_task_advice_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
@@ -2481,6 +2597,7 @@ app.router.add_post('/yookassa-webhook', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
+app.router.add_get('/api/contact_profile', api_contact_profile_handler)
 app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)

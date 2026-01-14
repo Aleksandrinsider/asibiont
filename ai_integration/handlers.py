@@ -300,6 +300,140 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     return result
 
 
+def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
+    """Reschedule task to a new date"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден."
+
+    # Find task by ID
+    if task_id:
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        task = session.query(Task).filter(Task.id == task_id_int, Task.user_id == user.id).first()
+    else:
+        if close_session:
+            session.close()
+        return "Не указан task_id."
+
+    if task:
+        try:
+            # Parse new date
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            if " " in new_date:  # Full datetime
+                local_dt = datetime.strptime(new_date, "%Y-%m-%d %H:%M")
+            else:  # Date only, keep existing time
+                local_dt = datetime.strptime(new_date, "%Y-%m-%d")
+                if task.reminder_time:
+                    existing_time = task.reminder_time.astimezone(user_tz).time()
+                    local_dt = datetime.combine(local_dt.date(), existing_time)
+                else:
+                    local_dt = local_dt.replace(hour=9, minute=0)  # Default to 9 AM
+            
+            local_dt = user_tz.localize(local_dt)
+            task.reminder_time = local_dt.astimezone(pytz.UTC)
+            session.commit()
+            
+            result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
+            
+            # Save to interaction history
+            interaction = Interaction(user_id=user.id, message_type="ai", content=result)
+            session.add(interaction)
+            session.commit()
+        except ValueError as e:
+            result = f"Ошибка формата даты: {e}. Используйте формат YYYY-MM-DD или YYYY-MM-DD HH:MM."
+    else:
+        result = "Задача не найдена."
+    
+    if close_session:
+        session.close()
+    return result
+
+
+def get_task_advice(task_id=None, user_id=None, session=None):
+    """Get AI advice for a task"""
+    import asyncio
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден."
+
+    # Find task by ID
+    if task_id:
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        task = session.query(Task).filter(Task.id == task_id_int, Task.user_id == user.id).first()
+    else:
+        if close_session:
+            session.close()
+        return "Не указан task_id."
+
+    if task:
+        # Get task details
+        title = task.title
+        description = decrypt_data(task.description) if task.description else ""
+        status = task.status
+        
+        # Generate advice using AI
+        prompt = f"""Дай полезный совет по выполнению этой задачи:
+
+Задача: {title}
+Описание: {description}
+Статус: {status}
+
+Дай конкретные, практические рекомендации по:
+1. Как лучше подойти к выполнению
+2. Возможные сложности и как их избежать
+3. Советы по эффективности
+
+Ответ должен быть кратким и полезным."""
+        
+        try:
+            from ..ai_integration import chat_with_ai
+            advice = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=500))
+            result = f"Совет по задаче '{title}':\n\n{advice}"
+            
+            # Save to interaction history
+            interaction = Interaction(user_id=user.id, message_type="ai", content=result)
+            session.add(interaction)
+            session.commit()
+        except Exception as e:
+            logger.error(f"Error getting AI advice: {e}")
+            result = f"Не удалось получить совет по задаче '{title}'. Попробуйте позже."
+    else:
+        result = "Задача не найдена."
+    
+    if close_session:
+        session.close()
+    return result
+
+
 def analyze_task(task_id=None, user_id=None, session=None):
     """Analyze task with AI and provide recommendations"""
     import asyncio
