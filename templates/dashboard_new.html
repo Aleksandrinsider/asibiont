@@ -1940,58 +1940,45 @@
                     
                     let html = '';
                     
-                    // Avatar and basic info
-                    html += '<div style="text-align: center; margin-bottom: 20px;">';
+                    // Avatar and basic info - в стиле панели профиля
+                    html += '<div style="text-align: center; margin-bottom: 16px;">';
                     if (partner.photo_url) {
-                        html += `<img src="${partner.photo_url}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid #D1D9E0; margin-bottom: 12px;">`;
+                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 80px; height: 80px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 32px; border: 2px solid #D1D9E0; margin: 0 auto 12px auto;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin: 0 auto 8px auto;">${initial}</div>`;
                     }
-                    html += `<h3 style="margin: 0 0 4px 0; color: #1F2328;">@${partner.contact_info}</h3>`;
+                    
+                    // Имя и ник под аватаром
                     if (partner.first_name || partner.last_name) {
-                        const fullName = [partner.first_name, partner.last_name].filter(Boolean).join(' ');
-                        html += `<p style="margin: 0; color: #59636E; font-size: 14px;">${fullName}</p>`;
+                        const fullName = [partner.first_name, partner.last_name].filter(Boolean).join(' ') || 'Пользователь';
+                        html += `<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">${fullName}</p>`;
+                    } else {
+                        html += `<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">Пользователь</p>`;
                     }
+                    html += `<p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@${partner.contact_info}</p>`;
                     html += '</div>';
                     
-                    // Profile details
-                    html += '<div style="margin-bottom: 20px;">';
-                    
-                    if (partner.city) {
-                        html += `<div style="margin-bottom: 8px;"><strong style="color: #1F2328;">Город:</strong> <span style="color: #59636E;">${partner.city}</span></div>`;
-                    }
-                    
-                    if (partner.company || partner.position) {
-                        html += '<div style="margin-bottom: 8px;">';
-                        if (partner.company) {
-                            html += `<strong style="color: #1F2328;">Компания:</strong> <span style="color: #59636E;">${partner.company}</span>`;
-                        }
-                        if (partner.position) {
-                            if (partner.company) html += ' • ';
-                            html += `<strong style="color: #1F2328;">Должность:</strong> <span style="color: #59636E;">${partner.position}</span>`;
-                        }
-                        html += '</div>';
-                    }
-                    
-                    if (partner.interests) {
-                        html += `<div style="margin-bottom: 8px;"><strong style="color: #1F2328;">Интересы:</strong> <span style="color: #59636E;">${partner.interests}</span></div>`;
-                    }
+                    // Profile details - простой текст без div и strong, как в панели
+                    html += `<p>Город: ${partner.city || 'Не указан'}</p>`;
+                    html += `<p>Компания: ${partner.company || 'Не указана'}</p>`;
+                    html += `<p>Должность: ${partner.position || 'Не указана'}</p>`;
+                    html += `<p>Интересы: ${partner.interests || 'Не указаны'}</p>`;
                     
                     if (partner.common_interests) {
-                        html += `<div style="margin-bottom: 8px;"><strong style="color: #1F2328;">Общие интересы:</strong> <span style="color: #068487;">${partner.common_interests}</span></div>`;
+                        html += `<p>Общие интересы: <span style="color: #068487;">${partner.common_interests}</span></p>`;
                     }
                     
                     if (partner.average_rating > 0) {
-                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
-                        html += `<div style="margin-bottom: 8px;"><strong style="color: #1F2328;">Рекомендация:</strong> <span style="color: ${ratingColor};">${partner.average_rating}/10</span></div>`;
+                        const ratingStyle = partner.average_rating < 5 ? ' style="color: #d73a49;"' : (partner.average_rating >= 9 ? ' style="color: #D7AC0C;"' : '');
+                        html += `<p${ratingStyle}>Рекомендация: ${partner.average_rating}/10</p>`;
+                    } else {
+                        html += `<p>Рекомендация: нет рекомендаций</p>`;
                     }
                     
                     if (partner.task_count) {
-                        html += `<div style="margin-bottom: 8px;"><strong style="color: #1F2328;">Активных задач:</strong> <span style="color: #59636E;">${partner.task_count}</span></div>`;
+                        html += `<p style="margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
                     }
-                    
-                    html += '</div>';
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
