@@ -3154,11 +3154,20 @@
                                 console.error('onDocClick error:', err);
                             }
                         }
-                        function onEsc(e){ if(e && e.key === 'Escape'){ closeOverlay(currentMenu); document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onEsc); } }
+                        function onEsc(e){ 
+                            if(e && e.key === 'Escape'){ 
+                                closeOverlay(currentMenu); 
+                                document.removeEventListener('click', onDocClick); 
+                                document.removeEventListener('keydown', onEsc); 
+                            } 
+                        }
                         document.addEventListener('click', onDocClick);
                         document.addEventListener('keydown', onEsc);
                         // Use explicit handler to support browsers without `once` option
-                        function onResizeHandler(){ closeOverlay(currentMenu); window.removeEventListener('resize', onResizeHandler); }
+                        function onResizeHandler(){ 
+                            closeOverlay(currentMenu); 
+                            window.removeEventListener('resize', onResizeHandler); 
+                        }
                         window.addEventListener('resize', onResizeHandler);
                     }, 0);
                 } catch (err) {
