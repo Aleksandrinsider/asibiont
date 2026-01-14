@@ -393,7 +393,7 @@
 
     <script>
 
-        // Version: 2026-01-14 fix syntax errors
+        // Version: 2026-01-14 fix overlay errors
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'recommended'; // Текущий фильтр контактов - по умолчанию рекомендуемые
         
@@ -3146,7 +3146,9 @@
                                 const isInsideToggle = currentToggle.contains(target);
                                 
                                 if (!isInsideMenu && !isInsideToggle){
-                                    closeOverlay(currentMenu);
+                                    if (currentMenu && typeof closeOverlay === 'function') {
+                                        closeOverlay(currentMenu);
+                                    }
                                     document.removeEventListener('click', onDocClick);
                                     document.removeEventListener('keydown', onEsc);
                                 }
@@ -3156,7 +3158,9 @@
                         }
                         function onEsc(e){ 
                             if(e && e.key === 'Escape'){ 
-                                closeOverlay(currentMenu); 
+                                if (currentMenu && typeof closeOverlay === 'function') {
+                                    closeOverlay(currentMenu); 
+                                }
                                 document.removeEventListener('click', onDocClick); 
                                 document.removeEventListener('keydown', onEsc); 
                             } 
@@ -3165,7 +3169,9 @@
                         document.addEventListener('keydown', onEsc);
                         // Use explicit handler to support browsers without `once` option
                         function onResizeHandler(){ 
-                            closeOverlay(currentMenu); 
+                            if (currentMenu && typeof closeOverlay === 'function') {
+                                closeOverlay(currentMenu); 
+                            }
                             window.removeEventListener('resize', onResizeHandler); 
                         }
                         window.addEventListener('resize', onResizeHandler);
