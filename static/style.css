@@ -217,7 +217,7 @@ body {
 
 .logout-button {
     padding: 8px 16px;
-    background-color: #FFFFFF;
+    background: #FFFFFF;
     color: #59636E;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
@@ -230,7 +230,7 @@ body {
 }
 
 .logout-button:hover {
-    background-color: #F6F8FA;
+    background: #F6F8FA;
     border-color: #1F2328;
 }
 
@@ -1384,7 +1384,7 @@ details[open] .details-content {
 
 .rating-modal-content {
     background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 6px;
     width: 90%;
     max-width: 420px;
@@ -1522,24 +1522,24 @@ details[open] .details-content {
 }
 
 .rating-cancel-btn {
-    background-color: #FFFFFF;
+    background: #FFFFFF;
     color: #59636E;
 }
 
 .rating-cancel-btn:hover {
-    background-color: #F6F8FA;
+    background: #F6F8FA;
     border-color: #1F2328;
 }
 
 .rating-submit-btn {
-    background-color: #068487;
-    color: #FFFFFF;
-    border-color: #068487;
+    background: #FFFFFF;
+    color: #59636E;
+    border: 1px solid #D1D9E0;
 }
 
 .rating-submit-btn:hover {
-    background-color: #057578;
-    border-color: #057578;
+    background: #F6F8FA;
+    border-color: #1F2328;
 }
 
 /* Search Modal */
@@ -1560,7 +1560,7 @@ details[open] .details-content {
 
 .search-modal-content {
     background-color: #FFFFFF;
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 6px;
     width: 90%;
     max-width: 800px;
