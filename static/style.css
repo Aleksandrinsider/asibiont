@@ -1387,6 +1387,12 @@ details[open] .details-content {
     width: 90%;
     max-width: 420px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    font-size: 13px;
+    line-height: normal;
+    font-weight: 400;
+    letter-spacing: normal;
+    color: #59636E;
 }
 
 .rating-modal-header {
@@ -1428,7 +1434,7 @@ details[open] .details-content {
 }
 
 .rating-modal-body {
-    padding: 20px;
+    padding: 12px;
 }
 
 .rating-modal-body p {
