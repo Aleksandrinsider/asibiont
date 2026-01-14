@@ -1052,12 +1052,12 @@ details[open] .details-content {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    background-color: #FFFFFF;
+    background: #FFFFFF;
 }
 
 .quick-action:hover {
     border-color: #1F2328;
-    background-color: #F6F8FA;
+    background: #F6F8FA;
 }
 
 .message-emoji {
