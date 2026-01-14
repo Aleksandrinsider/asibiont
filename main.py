@@ -1797,10 +1797,22 @@ async def api_contact_profile_handler(request):
             if not contact_user:
                 return web.json_response({'error': 'Contact not found'}, status=404)
             
-            # Get contact profile
+            # Get contact profile (create basic profile if doesn't exist)
             profile = session_db.query(UserProfile).filter_by(user_id=contact_user.id).first()
             if not profile:
-                return web.json_response({'error': 'Profile not found'}, status=404)
+                # Create minimal profile from User data
+                profile = UserProfile(
+                    user_id=contact_user.id,
+                    first_name=None,
+                    last_name=None,
+                    city=None,
+                    company=None,
+                    position=None,
+                    interests=None,
+                    average_rating=0.0
+                )
+                session_db.add(profile)
+                session_db.commit()
             
             # Get current user's profile for common interests/skills
             current_user = session_db.query(User).filter_by(telegram_id=user_id).first()
