@@ -1819,19 +1819,36 @@ async def api_contact_profile_handler(request):
             ).count()
             
             # Prepare profile data (use defaults if profile doesn't exist)
-            profile_data = {
-                'contact_info': contact_user.username,
-                'first_name': contact_user.first_name if contact_user.first_name else None,
-                'last_name': contact_user.last_name if contact_user.last_name else None,
-                'photo_url': contact_user.photo_url,
-                'city': profile.city if profile else None,
-                'company': profile.company if profile else None,
-                'position': profile.position if profile else None,
-                'interests': profile.interests if profile else None,
-                'common_interests': common_interests,
-                'average_rating': profile.average_rating if profile else 0,
-                'task_count': active_tasks
-            }
+            try:
+                profile_data = {
+                    'contact_info': contact_user.username if hasattr(contact_user, 'username') else None,
+                    'first_name': getattr(contact_user, 'first_name', None),
+                    'last_name': getattr(contact_user, 'last_name', None),
+                    'photo_url': getattr(contact_user, 'photo_url', None),
+                    'city': getattr(profile, 'city', None) if profile else None,
+                    'company': getattr(profile, 'company', None) if profile else None,
+                    'position': getattr(profile, 'position', None) if profile else None,
+                    'interests': getattr(profile, 'interests', None) if profile else None,
+                    'common_interests': common_interests,
+                    'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
+                    'task_count': active_tasks
+                }
+            except Exception as profile_error:
+                logger.error(f"Error building profile data: {profile_error}", exc_info=True)
+                # Fallback to minimal data
+                profile_data = {
+                    'contact_info': username,
+                    'first_name': None,
+                    'last_name': None,
+                    'photo_url': None,
+                    'city': None,
+                    'company': None,
+                    'position': None,
+                    'interests': None,
+                    'common_interests': None,
+                    'average_rating': 0,
+                    'task_count': 0
+                }
             
             return web.json_response({'partner': profile_data})
             
