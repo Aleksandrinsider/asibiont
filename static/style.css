@@ -117,14 +117,15 @@ body {
     display: flex;
     align-items: center;
     width: 100%;
-    padding: 0 16px;
     justify-content: space-between;
+    padding-right: 16px;
 }
 
 .header-left {
     display: flex;
     align-items: center;
     gap: 12px;
+    padding-left: 16px;
 }
 
 .header-content h1 {
