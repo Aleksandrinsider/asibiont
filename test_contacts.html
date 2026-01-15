@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Contact Functions</title>
+</head>
+<body>
+    <h1>Testing Contact Functions</h1>
+
+    <div id="test-output"></div>
+
+    <script>
+        // Test functions from dashboard
+        function getFavoriteContacts() {
+            const favorites = localStorage.getItem('favoriteContacts');
+            return favorites ? JSON.parse(favorites) : [];
+        }
+
+        function saveFavoriteContacts(favorites) {
+            localStorage.setItem('favoriteContacts', JSON.stringify(favorites));
+        }
+
+        function isFavoriteContact(username) {
+            const favorites = getFavoriteContacts();
+            return favorites.includes(username);
+        }
+
+        function toggleFavoriteContact(username) {
+            let favorites = getFavoriteContacts();
+            const index = favorites.indexOf(username);
+            if (index > -1) {
+                favorites.splice(index, 1);
+                log('Removed ' + username + ' from favorites');
+            } else {
+                favorites.push(username);
+                log('Added ' + username + ' to favorites');
+            }
+            saveFavoriteContacts(favorites);
+        }
+
+        // Test renderContacts logic
+        function testRenderContacts() {
+            // Simulate contact data
+            const contacts = [
+                { username: 'testuser1', type: 'recommended' },
+                { username: 'testuser2', type: 'recommended' },
+                { username: 'testuser3', type: 'recommended' }
+            ];
+
+            // Add some favorites
+            toggleFavoriteContact('testuser1');
+            toggleFavoriteContact('testuser3');
+
+            // Test filtering
+            const favoriteContacts = contacts.filter(contact => {
+                const username = contact.username.startsWith('@') ? contact.username.substring(1) : contact.username;
+                return isFavoriteContact(username);
+            });
+
+            log('Favorite contacts: ' + favoriteContacts.map(c => c.username).join(', '));
+        }
+
+        function log(message) {
+            const output = document.getElementById('test-output');
+            output.innerHTML += '<div>' + message + '</div>';
+        }
+
+        // Run tests
+        testRenderContacts();
+    </script>
+</body>
+</html></content>
+<parameter name="filePath">test_contacts.html
