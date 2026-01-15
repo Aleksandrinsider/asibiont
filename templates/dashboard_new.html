@@ -205,10 +205,7 @@
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                                 
                                 <!-- Горизонтальный ряд избранных контактов -->
-                                <div id="circle-contacts-orbit" style="display: flex; gap: 8px; flex-wrap: wrap; max-width: 100%; padding: 8px 0; justify-content: center;">
-                                </div>
-                                <!-- Счетчик избранных контактов -->
-                                <div id="favorite-contacts-count" style="font-size: 12px; color: #59636E; margin-top: 4px;">
+                                <div id="circle-contacts-orbit" style="display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 8px 0; scrollbar-width: thin;">
                                 </div>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -394,9 +391,9 @@
                 </button>
             </div>
             <div class="rating-modal-body">
-                <p style="font-size: 13px; color: #374151; margin-bottom: 8px;">Введите ваше текущее местное время</p>
-                <p style="font-size: 12px; color: #59636E; margin-bottom: 16px;">(например, 20:30 или 8:30 PM)</p>
+                <p style="font-size: 13px; color: #374151; margin-bottom: 16px;">Введите ваше текущее местное время</p>
                 <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px;">(например, 20:30 или 8:30 PM)</label>
                     <input type="text" id="time-input" placeholder="20:30" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
                 </div>
                 <div class="rating-modal-actions">
@@ -1062,6 +1059,7 @@
             const button = document.getElementById('profile-toggle-btn');
             const svg = button ? button.querySelector('svg') : null;
             const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
             if (!content) return; // nothing to toggle
             
             const isCollapsed = (content.style.display || '') === 'none';
@@ -1069,14 +1067,24 @@
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (peopleSection) {
-                    peopleSection.style.display = 'block';
+                    peopleSection.style.flex = '';
+                    peopleSection.style.minHeight = '';
+                    peopleSection.style.marginBottom = '';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
                 }
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (peopleSection) {
-                    peopleSection.style.display = 'none';
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                    peopleSection.style.marginBottom = '40px';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
                 }
                 localStorage.setItem('profileCollapsed', 'true');
             }
@@ -2463,7 +2471,6 @@
         
         function updateCircleContacts(partners) {
             const orbitContainer = document.getElementById('circle-contacts-orbit');
-            const countContainer = document.getElementById('favorite-contacts-count');
             if (!orbitContainer) return;
             
             // Фильтруем контакты: берем избранные
@@ -2475,7 +2482,6 @@
             if (myContacts.length === 0) {
                 orbitContainer.innerHTML = '';
                 orbitContainer.style.display = 'none';
-                if (countContainer) countContainer.innerHTML = '';
                 return;
             }
             
@@ -2504,11 +2510,6 @@
             });
             
             orbitContainer.innerHTML = html;
-            
-            // Обновляем счетчик
-            if (countContainer) {
-                countContainer.innerHTML = `Избранных контактов: ${myContacts.length}`;
-            }
         }
         
         async function updateDelegations() {
