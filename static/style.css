@@ -130,59 +130,11 @@ body {
     padding-left: 10px;
 }
 
-.header-content h1 {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 400;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-    color: #374151;
-}
-
-.user-info {
-    font-size: 13px;
-    font-weight: 400;
-    margin-left: 20px;
-    margin-right: 20px;
-    margin-top: 20px;
-}
-
-.logo {
-    font-size: 13px;
-    font-weight: 400;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-    color: #374151;
-    background-color: #FFFFFF;
-    padding: 4px 8px;
-    border-radius: 4px;
-    display: inline-block;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-decoration: none;
-}
-
-.logo:hover {
-    color: #374151;
-}
-
-.beta-badge {
-    background-color: #F6F8FA;
-    color: #374151;
-    font-size: 13px;
-    font-weight: 400;
-    padding: 2px 6px;
-    border-radius: 4px;
-    border: 1px solid #D1D9E0;
-}
-
-.header-avatar {
+.header-center {
     display: flex;
     align-items: center;
-}
-
-.header-avatar-small {
-    display: flex;
-    align-items: center;
-    /* margin-right: 8px; */ /* Removed since avatar is now on the right */
+    justify-content: center;
+    flex: 1;
 }
 
 .header-info {

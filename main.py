@@ -2325,12 +2325,12 @@ async def on_startup(app):
     logger.info("Session middleware configured successfully")
 
     # Set webhook
-    if bot:
+    if bot and not LOCAL:
         webhook_url = WEBHOOK_URL
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook set to: {webhook_url}")
     else:
-        logger.warning("Bot not created, skipping webhook setup")
+        logger.warning("Bot not created or local mode, skipping webhook setup")
 
     # Initialize handlers Redis
     async def init_handlers_redis(client):
@@ -2844,39 +2844,51 @@ else:
 logger.info("App created successfully")
 
 if __name__ == "__main__":
-    try:
-        port = PORT
-        host = '0.0.0.0'
-        logger.info(f"Starting web server on {host}:{port}")
-
-        # Use asyncio AppRunner
-        logger.info("Using asyncio AppRunner")
+    from config import LOCAL
+    if LOCAL:
+        # Local mode: run polling
+        logger.info("Running in local mode with polling")
+        async def run_polling():
+            try:
+                await dp.start_polling(bot)
+            except Exception as e:
+                logger.error(f"Error in polling: {e}")
+        asyncio.run(run_polling())
+    else:
+        # Production mode: run web server
         try:
-            async def run_server():
-                runner = web.AppRunner(app)
-                await runner.setup()
-                site = web.TCPSite(runner, host, port)
-                await site.start()
-                logger.info(f"Server started on {host}:{port}")
-                logger.info(f"Health check endpoint: http://{host}:{port}/health")
-                logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
-                logger.info("Server is ready to accept connections")
+            port = PORT
+            host = '0.0.0.0'
+            logger.info(f"Starting web server on {host}:{port}")
 
-                # Keep the server running
-                try:
-                    # Keep server running indefinitely
-                    while True:
-                        await asyncio.sleep(3600)
-                except KeyboardInterrupt:
-                    logger.info("Shutting down server...")
-                finally:
-                    await runner.cleanup()
-                    logger.info("Server shut down")
+            # Use asyncio AppRunner
+            logger.info("Using asyncio AppRunner")
+            try:
+                async def run_server():
+                    runner = web.AppRunner(app)
+                    await runner.setup()
+                    site = web.TCPSite(runner, host, port)
+                    await site.start()
+                    logger.info(f"Server started on {host}:{port}")
+                    logger.info(f"Health check endpoint: http://{host}:{port}/health")
+                    logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
+                    logger.info("Server is ready to accept connections")
 
-            asyncio.run(run_server())
-        except Exception as serve_error:
-            logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
+                    # Keep the server running
+                    try:
+                        # Keep server running indefinitely
+                        while True:
+                            await asyncio.sleep(3600)
+                    except KeyboardInterrupt:
+                        logger.info("Shutting down server...")
+                    finally:
+                        await runner.cleanup()
+                        logger.info("Server shut down")
+
+                asyncio.run(run_server())
+            except Exception as serve_error:
+                logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
+                raise
+        except Exception as e:
+            logger.error(f"Failed to start application: {e}", exc_info=True)
             raise
-    except Exception as e:
-        logger.error(f"Failed to start application: {e}", exc_info=True)
-        raise

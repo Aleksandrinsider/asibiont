@@ -6,7 +6,7 @@ load_dotenv()
 
 # App settings first
 PORT = int(os.getenv("PORT", 8000))
-LOCAL = False  # Always production mode
+LOCAL = os.getenv("LOCAL", "False").lower() in ("true", "1", "yes")  # Allow override for local testing
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
 USE_OPTIMIZED_PROMPT = os.getenv("USE_OPTIMIZED_PROMPT", "True").lower() in ("true", "1", "yes")
 CURRENT_DATE_STR = os.getenv("CURRENT_DATE")
