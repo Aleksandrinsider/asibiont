@@ -899,29 +899,16 @@ async def chat_handler(request):
                 if file:
                     content += f" [Файл: {file.filename}]"
 
-                # Проверяем, не было ли уже сохранено такое же сообщение в последние 5 секунд
-                # чтобы избежать дублирования при повторных запросах
-                from datetime import timedelta
-                five_seconds_ago = user_message_timestamp - timedelta(seconds=5)
-                recent_interaction = session_db.query(Interaction).filter(
-                    Interaction.user_id == user.id,
-                    Interaction.message_type == 'user',
-                    Interaction.content == content,
-                    Interaction.created_at >= five_seconds_ago
-                ).first()
-
-                if not recent_interaction:
-                    interaction_user = Interaction(
-                        user_id=user.id,
-                        message_type='user',
-                        content=content,
-                        created_at=user_message_timestamp  # Точное время ДО вызова AI
-                    )
-                    session_db.add(interaction_user)
-                    session_db.commit()
-                    logger.info("Saved user message to database")
-                else:
-                    logger.info("Skipped duplicate user message")
+                # Сохраняем сообщение пользователя (дубликаты контролируются через Redis)
+                interaction_user = Interaction(
+                    user_id=user.id,
+                    message_type='user',
+                    content=content,
+                    created_at=user_message_timestamp  # Точное время ДО вызова AI
+                )
+                session_db.add(interaction_user)
+                session_db.commit()
+                logger.info("Saved user message to database")
 
             # Get AI response (will take time, so agent timestamp will be later)
             try:
@@ -961,30 +948,18 @@ async def chat_handler(request):
                 except Exception as e:
                     logger.error(f"Error saving context: {e}")
 
-            # Save agent response
+            # Save agent response (дубликаты контролируются через Redis на уровне запроса)
             if user:
-                # Проверяем, не было ли уже сохранено такое же сообщение AI в последние 5 секунд
                 agent_response_timestamp = datetime.now(dt_timezone.utc)
-                five_seconds_ago_agent = agent_response_timestamp - timedelta(seconds=5)
-                recent_ai_interaction = session_db.query(Interaction).filter(
-                    Interaction.user_id == user.id,
-                    Interaction.message_type == 'ai',
-                    Interaction.content == response,
-                    Interaction.created_at >= five_seconds_ago_agent
-                ).first()
-
-                if not recent_ai_interaction:
-                    interaction_agent = Interaction(
-                        user_id=user.id,
-                        message_type='ai',
-                        content=response,
-                        created_at=agent_response_timestamp
-                    )
-                    session_db.add(interaction_agent)
-                    session_db.commit()
-                    logger.info("Saved AI response to database")
-                else:
-                    logger.info("Skipped duplicate AI response")
+                interaction_agent = Interaction(
+                    user_id=user.id,
+                    message_type='ai',
+                    content=response,
+                    created_at=agent_response_timestamp
+                )
+                session_db.add(interaction_agent)
+                session_db.commit()
+                logger.info("Saved AI response to database")
         finally:
             session_db.close()
 
