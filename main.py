@@ -127,6 +127,17 @@ def run_migrations():
             else:
                 logger.info("Migration: invalid_chat column already exists")
 
+            # Migration for subscription_tier column
+            if 'subscription_tier' not in user_columns:
+                logger.info("Adding subscription_tier column to users table")
+                # First create the enum type if it doesn't exist
+                session.execute(text("DO $$ BEGIN CREATE TYPE subscription_tier_enum AS ENUM ('bronze', 'silver', 'gold'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
+                session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'bronze\''))
+                session.commit()
+                logger.info("Migration: subscription_tier column added successfully")
+            else:
+                logger.info("Migration: subscription_tier column already exists")
+
         session.close()
     except Exception as e:
         logger.error(f"Migration failed: {e}")
