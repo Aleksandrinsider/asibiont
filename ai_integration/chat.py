@@ -733,13 +733,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 task_id = int(match.group(2))
 
                                                 # Получаем рекомендации из базы данных
-                                                from models import Session, Task
                                                 session_db = Session()
                                                 try:
                                                     task = session_db.query(Task).filter_by(id=task_id).first()
                                                     recommendations = []
                                                     if task and task.recommendations:
-                                                        import json
                                                         try:
                                                             recommendations = json.loads(task.recommendations)
                                                         except Exception as e:
@@ -1098,17 +1096,15 @@ async def generate_reminder(user_id, task_title):
         # Получить память пользователя
         user_memory = ""
         if user_id:
-            from models import Session, User
-
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            db_session = Session()
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except (Exception,):
                     user_memory = ""
-            session.close()
+            db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
@@ -1176,17 +1172,15 @@ async def generate_result_check(user_id, task_title):
         # Получить память пользователя
         user_memory = ""
         if user_id:
-            from models import Session, User
-
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            db_session = Session()
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except (Exception,):
                     user_memory = ""
-            session.close()
+            db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
@@ -1266,10 +1260,8 @@ async def generate_proactive_message(user_id):
         plans_info = ""
         tasks_info = ""
         if user_id:
-            from models import Session, User, UserProfile, Task
-
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            db_session = Session()
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user is None:
                 return "Добавьте задачу."
             if user and user.memory:
@@ -1279,10 +1271,10 @@ async def generate_proactive_message(user_id):
                 except (Exception,):
                     user_memory = ""
             # Получить профиль пользователя
-            user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            user_profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
             if user_profile and user_profile.interests:
                 # Найти планы других пользователей, совпадающие с интересами
-                profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+                profiles = db_session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
                 tips = []
                 for p in profiles:
                     if p.current_plans and p.contact_info != f"user{user_id}":
@@ -1296,11 +1288,11 @@ async def generate_proactive_message(user_id):
                 if tips:
                     plans_info = "\nПланы людей: " + " ".join(tips[:2])
             # Получить текущие задачи
-            tasks = session.query(Task).filter_by(user_id=user.id).all()
+            tasks = db_session.query(Task).filter_by(user_id=user.id).all()
             pending_tasks = [t.title for t in tasks if t.status in ["pending", "in_progress"]]
             if pending_tasks:
                 tasks_info = f"\nТекущие невыполненные задачи: {', '.join(pending_tasks[:3])}"
-            session.close()
+            db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
@@ -1376,11 +1368,9 @@ async def generate_daily_report(user_id):
     """Генерирует ежедневный отчет о задачах"""
     try:
         # Получить задачи пользователя
-        from models import Session, Task
-
-        session = Session()
-        tasks = session.query(Task).filter_by(user_id=user_id).all()
-        session.close()
+        db_session = Session()
+        tasks = db_session.query(Task).filter_by(user_id=user_id).all()
+        db_session.close()
 
         completed = [t for t in tasks if t.status == "completed"]
         pending = [t for t in tasks if t.status in ["pending", "in_progress"]]
@@ -1388,17 +1378,15 @@ async def generate_daily_report(user_id):
         # Получить память пользователя
         user_memory = ""
         if user_id:
-            from models import Session, User
-
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            db_session = Session()
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except (Exception,):
                     user_memory = ""
-            session.close()
+            db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
@@ -1469,17 +1457,15 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         # Получить память пользователя
         user_memory = ""
         if user_id:
-            from models import Session, User
-
-            session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            db_session = Session()
+            user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
                     user_memory = f"\nИнформация о пользователе: {decrypted}"
                 except (Exception,):
                     user_memory = ""
-            session.close()
+            db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
