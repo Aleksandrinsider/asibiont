@@ -99,6 +99,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now
         current_time_str = user_now.strftime("%H:%M")
+        months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         user_username = "user"
 
