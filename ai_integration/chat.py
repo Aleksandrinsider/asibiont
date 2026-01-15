@@ -21,7 +21,7 @@ from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 
 try:
-    from improved_prompts_final import improved_classify_intent, get_optimized_prompt_final, PROMPTS_V2_AVAILABLE, improved_fallback
+    from improved_prompts_final import improved_classify_intent, get_optimized_prompt_final, PROMPTS_V2_AVAILABLE, improved_fallback, ai_classify_intent
 except ImportError:
     PROMPTS_V2_AVAILABLE = False
 
@@ -335,10 +335,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
         db_session.close()
 
-        # Classify user intent (use improved version)
+        # Classify user intent (use AI-powered version)
         if PROMPTS_V2_AVAILABLE:
-            intent = improved_classify_intent(clean_message, mentions_str)
-            logger.info(f"[PROMPTS V2] User intent: {intent['type']} (confidence: {intent['confidence']})")
+            intent = await ai_classify_intent(clean_message, mentions_str, DEEPSEEK_API_KEY)
+            logger.info(f"[AI INTENT] User intent: {intent['type']} (confidence: {intent['confidence']})")
         else:
             # Fallback to basic intent if improved_prompts_final.py not available
             intent = {"type": "conversation", "confidence": 0.5, "params": {}}
@@ -611,11 +611,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                                             if func_name == "add_task":
                                                 logger.info(
-                                                    f"[AI TOOL CALL] add_task called with reminder_time: {
-                                                        args.get('reminder_time')}, current user_now: {user_now}")
+                                                    f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
                                                 
                                                 # Проверяем наличие времени
                                                 reminder_time = args.get("reminder_time")
+                                                if not reminder_time or '@unknown' in str(reminder_time):
+                                                    reminder_time = intent.get("params", {}).get("reminder_time")
+                                                logger.info(f"[ADD TASK] reminder_time resolved to: {reminder_time}")
                                                 if not reminder_time and intent.get("params", {}).get("has_time") == False:
                                                     # Нет времени - просим указать
                                                     tool_results.append({"function": func_name, "result": "NEED_TIME"})
@@ -630,9 +632,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     tool_results.append({"function": func_name, "result": result})
 
                                             elif func_name == "complete_task":
+                                                task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
                                                 result = complete_task(
                                                     task_id=args.get("task_id"),
-                                                    task_title=args.get("task_title"),
+                                                    task_title=task_title,
                                                     user_id=user_id,
                                                     session=None,
                                                 )

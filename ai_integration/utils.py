@@ -469,6 +469,8 @@ def parse_relative_time(message, current_time):
         (r"через\s+(\d+)\s*час", lambda m: timedelta(hours=int(m.group(1)))),
         (r"через\s+(\d+)\s*часа", lambda m: timedelta(hours=int(m.group(1)))),
         (r"через\s+(\d+)\s*часов", lambda m: timedelta(hours=int(m.group(1)))),
+        (r"через\s+час", lambda m: timedelta(hours=1)),  # без числа
+        (r"через\s+минут", lambda m: timedelta(minutes=1)),  # без числа, но редко
     ]
 
     for pattern, delta_func in patterns:
