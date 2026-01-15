@@ -37,80 +37,9 @@
     </style>
 </head>
 <body>
-    <div class="app-header">
-        <div class="header-content">
-            <div class="header-left">
-                <!-- Поиск контактов -->
-                {% if logged_in %}
-                <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
-                        <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
-                    </svg>
-                    Поиск контактов
-                </button>
-
-                <!-- Модальное окно поиска -->
-                <div id="search-modal" class="search-modal" onclick="closeSearchModal(event)">
-                    <div class="search-modal-content" onclick="event.stopPropagation()">
-                        <!-- Заголовок -->
-                        <div class="search-modal-header">
-                            <h3>Поиск контактов</h3>
-                            <button onclick="closeSearchModal()" class="search-modal-close-btn">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                                    <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
-                                </svg>
-                            </button>
-                        </div>
-                        
-                        <!-- Поле поиска -->
-                        <div class="search-modal-search">
-                            <input type="text" id="modal-search-input" placeholder="Введите никнейм в Telegram (например, @username)" 
-                                onkeyup="searchContactsInModal(event)">
-                        </div>
-                        
-                        <!-- Результаты -->
-                        <div id="modal-search-results" class="search-modal-results">
-                            <div style="text-align: center; color: #374151; padding: 40px 20px;">
-                                <svg width="48" height="48" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.5; margin-bottom: 16px;">
-                                    <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
-                                </svg>
-                                <div style="font-size: 13px;">Начните вводить никнейм для поиска</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-            <div class="header-center">
-                <a href="https://t.me/Asibiont_bot" target="_blank" class="logo" style="display: flex; align-items: center; text-decoration: none;">
-                    <span style="font-weight: 600;">ASI Biont</span>
-                </a>
-            </div>
-            <div id="next-task-center" style="position: absolute; left: 50%; transform: translateX(-50%); color: #374151; font-size: 13px; font-weight: 400; display: none; align-items: center; gap: 8px; z-index: 10; white-space: nowrap;">
-                <span class="reminder-pulse"></span>
-                На очереди: <span id="next-task-text"></span>
-            </div>
-            <div class="header-info">
-                {% if logged_in %}
-                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
-                    <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
-                    <a href="#" onclick="changeTime()" style="margin: 0; color: #374151; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">изменить</a>
-                </span>
-                <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 20px 4px 4px; border-radius: 6px; background: #F6F8FA;">
-                    <div class="header-avatar-small">
-                        {% if user_avatar_url %}
-                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
-                        {% else %}
-                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
-                        {% endif %}
-                    </div>
-                    <button onclick="logout()" style="background: none; border: none; color: #374151; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">Выход</button>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    <div class="container">
+    <div class="container" style="margin-top: 0;">
+        {% if not logged_in %}
+        <div class="welcome-section">
         {% if not logged_in %}
         <div class="welcome-section">
             <div class="welcome-content" style="border: 1px solid #D1D9E0; max-width: 520px; padding: 40px;">
