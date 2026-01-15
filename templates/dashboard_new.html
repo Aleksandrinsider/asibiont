@@ -1832,8 +1832,14 @@
         }
         
         let currentProfileUsername = null;
+        let currentPartnersData = {}; // Store partner access info
         
-        async function openContactProfileModal(username) {
+        async function openContactProfileModal(username, canAccess = true) {
+            // Check if this contact has restricted access
+            if (!canAccess) {
+                return; // Don't open modal for restricted contacts
+            }
+            
             currentProfileUsername = username;
             const modal = document.getElementById('contact-profile-modal');
             const content = document.getElementById('contact-profile-content');
@@ -2099,16 +2105,29 @@
                             if (partner.type === 'recommended' && partner.contact_info) {
                                 html += '<li class="task-item contact-recommended" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                const canAccess = partner.can_access !== false;
+                                const clickHandler = canAccess ? `onclick="openContactProfileModal('${partner.contact_info}', true)"` : '';
+                                const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
+                                
                                 if (partner.photo_url) {
                                     const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                    html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />';
+                                    html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; ' + cursorStyle + '" />';
                                     html += '</div>';
                                 } else {
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">' + initial + '</div></div>';
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; ' + cursorStyle + '">' + initial + '</div></div>';
                                 }
                                 html += '<div style="flex: 1;">';
-                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                
+                                // Show username or tier requirement
+                                if (canAccess) {
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                } else {
+                                    const tierNames = {'bronze': '🥉 Бронза', 'silver': '🥈 Серебро', 'gold': '🥇 Золото'};
+                                    const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                    html += '<div class="task-title" style="color: #6C727F; cursor: default;">🔒 Требуется тариф ' + requiredTierName + '</div>';
+                                }
+                                
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
@@ -2176,16 +2195,29 @@
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
                                 html += '<li class="task-item contact-delegating-to-me" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                const canAccess = partner.can_access !== false;
+                                const clickHandler = canAccess ? `onclick="openContactProfileModal('${partner.contact_info}', true)"` : '';
+                                const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
+                                
                                 if (partner.photo_url) {
                                     const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                    html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />';
+                                    html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; ' + cursorStyle + '" />';
                                     html += '</div>';
                                 } else {
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
                                 }
                                 html += '<div style="flex: 1;">';
-                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                
+                                // Show username or tier requirement
+                                if (canAccess) {
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                } else {
+                                    const tierNames = {'bronze': '🥉 Бронза', 'silver': '🥈 Серебро', 'gold': '🥇 Золото'};
+                                    const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                    html += '<div class="task-title" style="color: #6C727F; cursor: default;">🔒 Требуется тариф ' + requiredTierName + '</div>';
+                                }
+                                
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
@@ -2251,20 +2283,32 @@
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
                                 html += '<li class="task-item contact-delegating-by-me" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                const canAccess = partner.can_access !== false;
+                                const clickHandler = canAccess ? `onclick="openContactProfileModal('${partner.contact_info}', true)"` : '';
+                                const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
+                                
                                 html += '<div style="display: flex; align-items: center; margin-right: 12px;">';
                                 if (partner.photo_url) {
                                     const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
                                     html += '<div style="position: relative; display: inline-block;">';
-                                    html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />';
+                                    html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; ' + cursorStyle + '" />';
                                     html += '</div>';
                                 } else {
                                     html += '<div style="position: relative; display: inline-block;">';
-                                    html += '<div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
+                                    html += '<div ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div>';
                                     html += '</div>';
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
-                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                
+                                // Show username or tier requirement
+                                if (canAccess) {
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                } else {
+                                    const tierNames = {'bronze': '🥉 Бронза', 'silver': '🥈 Серебро', 'gold': '🥇 Золото'};
+                                    const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                    html += '<div class="task-title" style="color: #6C727F; cursor: default;">🔒 Требуется тариф ' + requiredTierName + '</div>';
+                                }
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегирую я ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';

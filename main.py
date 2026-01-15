@@ -1465,34 +1465,8 @@ async def api_partners_handler(request):
                     p for p in partners if p.contact_info and p.contact_info.replace(
                         '@', '').lower() not in hidden_contacts]
 
-            # Filter by subscription tier access
-            # Bronze can see only Bronze contacts
-            # Silver can see Bronze + Silver contacts
-            # Gold can see all contacts (Bronze + Silver + Gold)
-            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
-            
-            filtered_partners = []
-            for p in partners:
-                partner_user = session_db.query(User).filter_by(id=p.user_id).first()
-                if not partner_user:
-                    continue
-                    
-                partner_tier = partner_user.subscription_tier if partner_user.subscription_tier else SubscriptionTier.BRONZE
-                
-                # Check if current user can see this partner based on tier rules
-                if user_tier == SubscriptionTier.BRONZE:
-                    # Bronze only sees Bronze
-                    if partner_tier == SubscriptionTier.BRONZE:
-                        filtered_partners.append(p)
-                elif user_tier == SubscriptionTier.SILVER:
-                    # Silver sees Bronze + Silver
-                    if partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
-                        filtered_partners.append(p)
-                elif user_tier == SubscriptionTier.GOLD:
-                    # Gold sees all
-                    filtered_partners.append(p)
-            
-            partners = filtered_partners
+            # Don't filter by tier - everyone sees everyone
+            # But we'll add tier info to determine access on frontend
 
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             interactions = session_db.query(Interaction).filter_by(
@@ -1678,12 +1652,33 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
 
+            # Check tier access
+            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
+            partner_tier = partner_user.subscription_tier if partner_user and partner_user.subscription_tier else SubscriptionTier.BRONZE
+            
+            # Determine if user can access this contact
+            can_access = False
+            required_tier = None
+            
+            if user_tier == SubscriptionTier.BRONZE:
+                can_access = (partner_tier == SubscriptionTier.BRONZE)
+                if not can_access:
+                    required_tier = 'silver' if partner_tier == SubscriptionTier.SILVER else 'gold'
+            elif user_tier == SubscriptionTier.SILVER:
+                can_access = (partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
+                if not can_access:
+                    required_tier = 'gold'
+            elif user_tier == SubscriptionTier.GOLD:
+                can_access = True
+
             partners_data.append(
                 {
-                    'contact_info': partner_user.username if partner_user and partner_user.username else f"user{
-                        partner_user.telegram_id if partner_user else 'unknown'}",
+                    'contact_info': partner_user.username if (partner_user and partner_user.username and can_access) else None,
                     'telegram_id': partner_user.telegram_id if partner_user else None,
                     'photo_url': photo_url,
+                    'can_access': can_access,
+                    'required_tier': required_tier,
+                    'partner_tier': partner_tier.value if partner_tier else 'bronze',
                     'city': getattr(
                         p,
                         'city',
@@ -1789,9 +1784,30 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
 
+            # Check tier access
+            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
+            delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.BRONZE
+            
+            can_access = False
+            required_tier = None
+            
+            if user_tier == SubscriptionTier.BRONZE:
+                can_access = (delegator_tier == SubscriptionTier.BRONZE)
+                if not can_access:
+                    required_tier = 'silver' if delegator_tier == SubscriptionTier.SILVER else 'gold'
+            elif user_tier == SubscriptionTier.SILVER:
+                can_access = (delegator_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
+                if not can_access:
+                    required_tier = 'gold'
+            elif user_tier == SubscriptionTier.GOLD:
+                can_access = True
+
             partners_data.append({
-                'contact_info': contact['username'],
+                'contact_info': contact['username'] if can_access else None,
                 'telegram_id': delegator.telegram_id if delegator else None,
+                'can_access': can_access,
+                'required_tier': required_tier,
+                'partner_tier': delegator_tier.value if delegator_tier else 'bronze',
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
@@ -1877,9 +1893,30 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
 
+            # Check tier access
+            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
+            delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.BRONZE
+            
+            can_access = False
+            required_tier = None
+            
+            if user_tier == SubscriptionTier.BRONZE:
+                can_access = (delegatee_tier == SubscriptionTier.BRONZE)
+                if not can_access:
+                    required_tier = 'silver' if delegatee_tier == SubscriptionTier.SILVER else 'gold'
+            elif user_tier == SubscriptionTier.SILVER:
+                can_access = (delegatee_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
+                if not can_access:
+                    required_tier = 'gold'
+            elif user_tier == SubscriptionTier.GOLD:
+                can_access = True
+
             partners_data.append({
-                'contact_info': contact['username'],
+                'contact_info': contact['username'] if can_access else None,
                 'telegram_id': delegatee.telegram_id if delegatee else None,
+                'can_access': can_access,
+                'required_tier': required_tier,
+                'partner_tier': delegatee_tier.value if delegatee_tier else 'bronze',
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
                 'position': contact.get('position'),
