@@ -756,13 +756,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                             logger.warning(f"Could not parse recommendations: {e}")
                                                             pass
 
-                                                    # Формируем естественный ответ БЕЗ технических деталей
+                                                    # Передаем AI только факты для генерации живого ответа
+                                                    context_info = f"TASK_ADDED: '{title}'"
                                                     if recommendations:
-                                                        natural = f'Готово, напомню. {recommendations[0]} может помочь с этим.'
-                                                    else:
-                                                        natural = f'Сделано, напомню о "{title}".'
-
-                                                    natural_responses.append(natural)
+                                                        context_info += f" | RECOMMENDATIONS: {', '.join(recommendations[:2])}"
+                                                    natural_responses.append(context_info)
                                                 finally:
                                                     session_db.close()
                                             else:
@@ -772,8 +770,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             match = re.search(r"Завершена задача '([^']+)'", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f'Отлично, отметил задачу "{title}" как выполненную! Это важный шаг вперед. Теперь стоит проанализировать, что было сделано правильно, и подумать о следующих задачах. Есть ли уроки, которые можно извлечь из выполнения этой задачи? Может быть, стоит отметить достижения или запланировать что-то новое?'
-                                                natural_responses.append(natural)
+                                                # Передаем AI только факт для генерации уникального ответа
+                                                natural_responses.append(f"TASK_COMPLETED: '{title}'")
                                             else:
                                                 natural_responses.append(result_text)
 
@@ -789,13 +787,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             natural_responses.append(result_text)
 
                                         elif "Профиль обновлен" in result_text:
-                                            # Парсим детали обновления
+                                            # Парсим детали обновления и передаем AI факты
                                             if "added_interests:" in result_text:
                                                 match = re.search(r"added_interests:([^;]+)", result_text)
                                                 if match:
                                                     items = match.group(1).strip()
-                                                    natural = f"Отлично! Добавил в твои интересы: {items}. Теперь я смогу находить для тебя людей с похожими увлечениями и предлагать релевантные активности."
-                                                    natural_responses.append(natural)
+                                                    natural_responses.append(f"PROFILE_UPDATED: added_interests={items}")
                                                 else:
                                                     natural_responses.append(
                                                         "Профиль обновлен! Добавил новые интересы.")
