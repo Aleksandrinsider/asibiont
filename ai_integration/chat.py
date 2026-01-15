@@ -759,7 +759,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 title = match.group(1)
                                                 task_id = int(match.group(2))
 
-                                                # Получаем рекомендации из базы данных
+                                                # Получаем рекомендации и релевантные контакты из базы данных
                                                 session_db = Session()
                                                 try:
                                                     task = session_db.query(Task).filter_by(id=task_id).first()
@@ -771,9 +771,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                             logger.warning(f"Could not parse recommendations: {e}")
                                                             pass
 
-                                                    # ИСПРАВЛЕНО: Передаем контекст для AI, не формируем ответ сами
-                                                    # AI должен сгенерировать естественный ответ по промпту
-                                                    natural_responses.append(f"TASK_CREATED: title='{title}', id={task_id}")
+                                                    # КРИТИЧНО: Автоматически находим релевантные контакты для задачи
+                                                    relevant_contacts = []
+                                                    partners_result = find_partners(user_id=user_id, session=session_db)
+                                                    if partners_result and "Нашёл подходящих" in partners_result:
+                                                        # Извлекаем @username из результата
+                                                        import re as re_module
+                                                        usernames = re_module.findall(r'@(\w+)', partners_result)
+                                                        relevant_contacts = usernames[:2]  # Максимум 2 контакта
+                                                    
+                                                    # ИСПРАВЛЕНО: Передаем контекст для AI с контактами
+                                                    context_parts = [f"TASK_CREATED: title='{title}', id={task_id}"]
+                                                    if relevant_contacts:
+                                                        context_parts.append(f"RELEVANT_CONTACTS: {', '.join(['@' + u for u in relevant_contacts])}")
+                                                    
+                                                    natural_responses.append(" | ".join(context_parts))
                                                 finally:
                                                     session_db.close()
                                             else:
@@ -883,7 +895,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     # Это гарантирует что ответ будет по промпту, а не шаблонный
                                     if final_content and not has_list_tasks:
                                         # Формируем сообщение для AI с результатами действий
-                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}\n\nСформулируй ЕСТЕСТВЕННЫЙ ответ пользователю по стилю промпта:\n- Без нумерации, списков, шаблонов\n- Коротко и по делу, как живой человек\n- ОБЯЗАТЕЛЬНО предложи 2-3 альтернативных варианта дальнейших действий (учитывай контекст, возможности, ситуацию)\n- Варианты описывай свободно, не списком"
+                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}\n\nСформулируй ЕСТЕСТВЕННЫЙ ответ пользователю по стилю промпта:\n- Без нумерации, списков, шаблонов\n- Коротко и по делу, как живой человек\n- ОБЯЗАТЕЛЬНО предложи 2-3 альтернативных варианта дальнейших действий (учитывай контекст, возможности, ситуацию)\n- Варианты описывай свободно, не списком\n- КРИТИЧНО: Если есть RELEVANT_CONTACTS - ОБЯЗАТЕЛЬНО упомяни их как вариант решения (кто может помочь или кому можешь помочь ты)\n- Контакты упоминай естественно в контексте альтернатив: 'можешь обратиться к @username' или 'предложи помощь @username'"
                                         
                                         # Добавляем контекст в messages
                                         messages.append({"role": "user", "content": original_message})
