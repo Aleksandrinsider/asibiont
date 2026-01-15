@@ -324,7 +324,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 450px minmax(500px, 1fr) 450px; /* Fixed-ish sidebars, flexible center */
+    grid-template-columns: 400px minmax(600px, 1fr) 400px; /* Fixed-ish sidebars, flexible center */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height)) * 0.98);
     gap: 0.5px;
