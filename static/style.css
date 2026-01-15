@@ -363,6 +363,11 @@ body {
     color: #374151;
 }
 
+/* Ensure right column also stretches to full height */
+.right-column {
+    height: 100%;
+}
+
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
     padding: 12px;
