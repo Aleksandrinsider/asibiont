@@ -1546,7 +1546,7 @@
                     element.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
                     // Показываем только избранные контакты
-                    const username = contact.username.replace('@', '');
+                    const username = contact.username.startsWith('@') ? contact.username.substring(1) : contact.username;
                     if (isFavoriteContact(username)) {
                         element.style.display = 'flex';
                     } else {
