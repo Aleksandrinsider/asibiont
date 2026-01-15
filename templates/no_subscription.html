@@ -12,13 +12,15 @@
 <body>
     <div class="container" style="margin-top: 0;">
         <div class="welcome-section">
-        <div class="welcome-section">
-            <div class="welcome-content">
-                <h1 style="margin-bottom: 20px; font-size: 24px; color: #374151;">Доступ ограничен</h1>
-                <p style="margin-bottom: 30px; color: #374151; line-height: 1.4;">Для использования ASI Biont необходима активная подписка.</p>
-                <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
-                    <a href="/dashboard" class="back-btn">Назад</a>
-                    <a href="https://t.me/{{bot_username}}" target="_blank" class="send-btn">Оформить подписку</a>
+            <div class="welcome-content" style="border: 1px solid #D1D9E0; max-width: 520px; padding: 40px;">
+                <div style="text-align: left; margin-bottom: 24px;">
+                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">Доступ ограничен</h1>
+                    <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Для использования ASI Biont необходима активная подписка.</p>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <a href="https://t.me/{{bot_username}}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #374151; color: #FFFFFF; text-decoration: none; border-radius: 6px; font-weight: 500; text-align: center; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#30363D'" onmouseout="this.style.backgroundColor='#374151'">Оформить подписку</a>
+                    <a href="/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #F6F8FA; color: #374151; text-decoration: none; border-radius: 6px; font-weight: 500; border: 1px solid #D1D9E0; text-align: center; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#E6E9EC'" onmouseout="this.style.backgroundColor='#F6F8FA'">Назад</a>
                 </div>
             </div>
         </div>
