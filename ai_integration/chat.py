@@ -613,14 +613,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 logger.info(
                                                     f"[AI TOOL CALL] add_task called with reminder_time: {
                                                         args.get('reminder_time')}, current user_now: {user_now}")
-                                                result = add_task(
-                                                    title=args.get("title", args.get("task_title", "Задача")),
-                                                    description=args.get("description", ""),
-                                                    reminder_time=args.get("reminder_time"),
-                                                    user_id=user_id,
-                                                    session=None,
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
+                                                
+                                                # Проверяем наличие времени
+                                                reminder_time = args.get("reminder_time")
+                                                if not reminder_time and intent.get("params", {}).get("has_time") == False:
+                                                    # Нет времени - просим указать
+                                                    tool_results.append({"function": func_name, "result": "NEED_TIME"})
+                                                else:
+                                                    result = add_task(
+                                                        title=args.get("title", args.get("task_title", "Задача")),
+                                                        description=args.get("description", ""),
+                                                        reminder_time=reminder_time,
+                                                        user_id=user_id,
+                                                        session=None,
+                                                    )
+                                                    tool_results.append({"function": func_name, "result": result})
 
                                             elif func_name == "complete_task":
                                                 result = complete_task(
@@ -725,6 +732,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         if func_name == "list_tasks":
                                             has_list_tasks = True
                                             list_tasks_result = result_text
+                                        
+                                        # Если нужно время - запрашиваем
+                                        if result_text == "NEED_TIME":
+                                            natural_responses.append("Когда напомнить? Укажи время (например: через 5 минут, завтра в 10:00, в 15:30)")
+                                            continue
 
                                         if "Добавлена задача" in result_text:
                                             match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
@@ -744,12 +756,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                             logger.warning(f"Could not parse recommendations: {e}")
                                                             pass
 
-                                                    # Формируем краткий ответ
+                                                    # Формируем естественный ответ БЕЗ технических деталей
                                                     if recommendations:
-                                                        rec_text = " Рекомендации: " + ", ".join(recommendations[:3])
-                                                        natural = f'Задача "{title}" добавлена и запланирована.{rec_text}'
+                                                        natural = f'Готово, напомню. {recommendations[0]} может помочь с этим.'
                                                     else:
-                                                        natural = f'Задача "{title}" добавлена и запланирована.'
+                                                        natural = f'Сделано, напомню о "{title}".'
 
                                                     natural_responses.append(natural)
                                                 finally:

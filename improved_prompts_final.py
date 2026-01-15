@@ -163,7 +163,7 @@ def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
                 return {
                     "type": intent_type,
                     "confidence": 0.9,
-                    "params": {}
+                    "params": {"has_time": has_time}
                 }
 
     # Простые приветствия - проверяем ПОСЛЕ задач
