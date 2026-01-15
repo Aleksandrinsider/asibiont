@@ -1374,10 +1374,6 @@ details[open] .details-content {
 }
 
 .rating-modal-content {
-    margin-top: calc(var(--header-height) + 12px); /* push content below header to avoid overlap */
-}
-
-.rating-modal-content {
     background-color: #FFFFFF;
     border: none;
     border-radius: 6px;
