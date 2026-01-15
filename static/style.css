@@ -337,11 +337,12 @@ body {
     grid-template-columns: 1fr 1.5fr 1fr; /* Center column 50% wider than side columns */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height)) * 0.98);
-    gap: 0.5px;
+    gap: 8px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
     margin-top: 0;
+    padding: 0 8px;
 }
 
 /* Ensure direct children can shrink properly inside grid */
@@ -530,7 +531,7 @@ details[open] .details-content {
     height: 100%;
     max-height: 100%;
     overflow: hidden;
-    border: none;
+    border: 1px solid #D1D9E0;
     border-radius: 6px;
     margin-bottom: 10px;
 }
@@ -842,7 +843,8 @@ details[open] .details-content {
 
 .people-section {
     padding: 12px;
-    border: none;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
     display: flex;
@@ -862,15 +864,17 @@ details[open] .details-content {
 
 .task-stats-block {
     padding: 12px;
-    border: none;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     margin-top: 0;
-    margin-bottom: 3px;
+    margin-bottom: 12px;
     flex: 0 0 auto;
 }
 
 .tasks-section-wrapper {
     padding: 12px;
-    border: none;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     display: flex;
     flex-direction: column;
     overflow: auto;
@@ -891,9 +895,10 @@ details[open] .details-content {
 
 .context-section {
     padding: 12px;
-    border: none;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     margin-top: 0;
-    margin-bottom: 5px;
+    margin-bottom: 12px;
 }
 
 
