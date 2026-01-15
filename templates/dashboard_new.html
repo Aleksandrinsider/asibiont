@@ -506,10 +506,20 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
-            // Парсинг @username в ссылки на профили контактов
+            // Парсинг @username в ссылки на профили контактов и убираем Markdown форматирование
             let processedText = text;
+            
+            // КРИТИЧНО: AI не должен использовать форматирование - убираем его полностью
+            // Убираем жирный шрифт **текст**
+            processedText = processedText.replace(/\*\*(.+?)\*\*/g, '$1');
+            // Убираем курсив *текст*
+            processedText = processedText.replace(/\*(.+?)\*/g, '$1');
+            // Убираем нумерацию и списки в начале строки
+            processedText = processedText.replace(/^\d+\.\s+/gm, '');
+            processedText = processedText.replace(/^[-•]\s+/gm, '');
+            
             if (normalizedSender === 'ai') {
-                processedText = text.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; font-weight: 500; cursor: pointer;">@$1</a>');
+                processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; font-weight: 500; cursor: pointer;">@$1</a>');
             }
             
             const messageDiv = document.createElement('div');

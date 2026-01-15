@@ -13,8 +13,8 @@ from models import Session, User, Task, UserProfile, Subscription
 from .memory import decrypt_data
 from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
-    replace_placeholders, clean_technical_details, enrich_response_with_engagement,
-    validate_response_compliance, post_process_tool_calls, smart_fallback_handler,
+    replace_placeholders, clean_technical_details,
+    post_process_tool_calls, smart_fallback_handler,
     redis_client
 )
 from .prompts import get_extended_system_prompt
@@ -889,10 +889,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     # Для list_tasks анализ уже добавлен выше
 
                                     final_content = "\n".join(natural_responses)
-                                    # Обогащаем ответ вовлекающими элементами
-                                    final_content = enrich_response_with_engagement(
-                                        final_content, user_id, original_message
-                                    )
 
                                     # Enforcement отключен - AI должен отвечать естественно
                                     # intent_type = "list_tasks" if has_list_tasks else None
@@ -1060,13 +1056,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     if not content:
                         content = "Хорошо, продолжим работу!"
 
-                    # Обогащаем ответ вовлекающими элементами
-                    content = enrich_response_with_engagement(content, user_id, original_message)
-
-                    # Enforcement отключен - AI должен отвечать естественно без дополнительных API вызовов
-
-                    # Очистка от технических деталей перед возвратом
-                    # НЕ применяем clean_technical_details для обычных ответов AI!
+                    # ИЗБЫТОЧНЫЕ ОБРАБОТКИ УБРАНЫ:
+                    # - enrich_response_with_engagement (AI сам задает вопросы через промпт)
+                    # - validate_response_compliance (ничего не делает, enforce отключен)
+                    # - clean_technical_details (только для сгенерированных ответов, не для основного AI)
 
                     # Метрики качества ответа
                     response_quality = {
@@ -1169,23 +1162,12 @@ async def generate_reminder(user_id, task_title):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
-                    # Обогащаем ответ вовлекающими элементами
-                    content = enrich_response_with_engagement(content, user_id, task_title)
-
-                    # Проверяем и принуждаем соблюдение промпта
-                    is_compliant, issues = validate_response_compliance(content, "reminder")
-                    if not is_compliant:
-                        logger.warning(f"[COMPLIANCE] Reminder response not compliant: {issues}")
-                        # Принуждаем исправление - функция временно отключена
-                        # content = await enforce_prompt_compliance(
-                        #     content, "reminder", user_id, None, system_prompt, messages, url, headers
-                        # )
 
                     return content
                 else:
                     return "Ошибка генерации напоминания."
     except Exception as e:
-        print(f"Error in generate_reminder: {e}")
+        logger.error(f"Error in generate_reminder: {e}")
         return f"Напоминание о '{task_title}'."
 
 
@@ -1255,23 +1237,12 @@ async def generate_result_check(user_id, task_title):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
-                    # Обогащаем ответ вовлекающими элементами
-                    content = enrich_response_with_engagement(content, user_id, task_title)
-
-                    # Проверяем и принуждаем соблюдение промпта
-                    is_compliant, issues = validate_response_compliance(content, "result_check")
-                    if not is_compliant:
-                        logger.warning(f"[COMPLIANCE] Result check response not compliant: {issues}")
-                        # Принуждаем исправление - функция временно отключена
-                        # content = await enforce_prompt_compliance(
-                        #     content, "result_check", user_id, None, system_prompt, messages, url, headers
-                        # )
 
                     return content
                 else:
                     return "Ошибка генерации вопроса."
     except Exception as e:
-        print(f"Error in generate_result_check: {e}")
+        logger.error(f"Error in generate_result_check: {e}")
         return f"Результат задачи '{task_title}'?"
 
 
@@ -1383,7 +1354,7 @@ async def generate_proactive_message(user_id):
                 else:
                     return "Ошибка генерации сообщения."
     except Exception as e:
-        print(f"Error in generate_proactive_message: {e}")
+        logger.error(f"Error in generate_proactive_message: {e}")
         return "Добавьте задачу."
 
 
@@ -1465,7 +1436,7 @@ async def generate_daily_report(user_id):
                 else:
                     return "Ошибка генерации отчета."
     except Exception as e:
-        print(f"Error in generate_daily_report: {e}")
+        logger.error(f"Error in generate_daily_report: {e}")
         return "Отчет о задачах."
 
 
@@ -1553,7 +1524,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                 else:
                     return "Ошибка генерации напоминания."
     except Exception as e:
-        print(f"Error in generate_overdue_reminder: {e}")
+        logger.error(f"Error in generate_overdue_reminder: {e}")
         return "Просроченные задачи."
 
 

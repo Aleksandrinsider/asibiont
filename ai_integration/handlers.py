@@ -849,7 +849,7 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
     """Async implementation of suggest_alternatives"""
     from config import DEEPSEEK_API_KEY
     from .prompts import get_optimized_system_prompt
-    from .utils import clean_technical_details, enrich_response_with_engagement
+    from .utils import clean_technical_details
     import aiohttp
 
     session = Session()
@@ -895,7 +895,6 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
                     content = clean_technical_details(content)
-                    content = enrich_response_with_engagement(content, user_id, task.title)
                     return content
                 else:
                     return "Не удалось сгенерировать альтернативы."
@@ -1352,7 +1351,7 @@ def list_tasks(user_id=None, session=None):
 
         return result.strip()
     except Exception as e:
-        print(f"Error listing tasks: {e}")
+        logger.error(f"Error listing tasks: {e}")
         return "Ошибка получения списка задач"
     finally:
         if close_session:
@@ -1448,7 +1447,7 @@ def enrich_task_list_with_insights(task_list_text, user_id):
         return result
 
     except Exception as e:
-        print(f"Error enriching task list: {e}")
+        logger.error(f"Error enriching task list: {e}")
         return task_list_text
     finally:
         session.close()
