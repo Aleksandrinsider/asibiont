@@ -1,11 +1,18 @@
 import datetime
 import logging
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey
+import enum
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
+
+
+class SubscriptionTier(enum.Enum):
+    BRONZE = 'bronze'  # 3000 RUB/month
+    SILVER = 'silver'  # 9000 RUB/month
+    GOLD = 'gold'      # 27000 RUB/month
 
 
 class User(Base):
@@ -26,6 +33,7 @@ class User(Base):
             datetime.timezone.utc), onupdate=datetime.datetime.now(
             datetime.timezone.utc))
     invalid_chat = Column(Boolean, default=False)  # Flag set when Telegram chat is invalid (chat not found)
+    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # User's subscription tier
 
 
 class Task(Base):
@@ -117,6 +125,7 @@ class Subscription(Base):
     telegram_username = Column(String(100))  # Telegram username for identification
     status = Column(String(50), default='inactive')  # active, inactive, expired
     plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
+    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # Subscription tier
     start_date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     end_date = Column(DateTime)
     login_count = Column(Integer, default=0)  # Number of logins

@@ -1,5 +1,5 @@
 from handlers import router as handlers_router
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -1363,6 +1363,8 @@ async def yookassa_webhook(request):
     if data.get('event') == 'payment.succeeded':
         payment = data['object']
         user_id = payment['metadata']['user_id']
+        tier = payment['metadata'].get('tier', 'bronze')  # Get tier from payment metadata
+        
         session = Session()
         user = session.query(User).filter_by(telegram_id=int(user_id)).first()
         if user:
@@ -1377,6 +1379,17 @@ async def yookassa_webhook(request):
 
             subscription.status = 'active'
             subscription.start_date = datetime.now(pytz.UTC)
+            
+            # Update tier
+            if tier == 'bronze':
+                subscription.tier = SubscriptionTier.BRONZE
+                user.subscription_tier = SubscriptionTier.BRONZE
+            elif tier == 'silver':
+                subscription.tier = SubscriptionTier.SILVER
+                user.subscription_tier = SubscriptionTier.SILVER
+            elif tier == 'gold':
+                subscription.tier = SubscriptionTier.GOLD
+                user.subscription_tier = SubscriptionTier.GOLD
 
             # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
             now = datetime.now(pytz.UTC)
@@ -1386,7 +1399,10 @@ async def yookassa_webhook(request):
                 subscription.end_date = now + timedelta(days=30)
 
             session.commit()
-            await bot.send_message(int(user_id), "Подписка активирована! Теперь у вас доступ ко всем премиум-функциям.")
+            
+            from payments import get_tier_name
+            tier_name = get_tier_name(tier)
+            await bot.send_message(int(user_id), f"Подписка {tier_name} активирована! Теперь у вас доступ ко всем премиум-функциям.")
         session.close()
     return web.Response(text="OK")
 
@@ -1448,6 +1464,35 @@ async def api_partners_handler(request):
                 partners = [
                     p for p in partners if p.contact_info and p.contact_info.replace(
                         '@', '').lower() not in hidden_contacts]
+
+            # Filter by subscription tier access
+            # Bronze can see only Bronze contacts
+            # Silver can see Bronze + Silver contacts
+            # Gold can see all contacts (Bronze + Silver + Gold)
+            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
+            
+            filtered_partners = []
+            for p in partners:
+                partner_user = session_db.query(User).filter_by(id=p.user_id).first()
+                if not partner_user:
+                    continue
+                    
+                partner_tier = partner_user.subscription_tier if partner_user.subscription_tier else SubscriptionTier.BRONZE
+                
+                # Check if current user can see this partner based on tier rules
+                if user_tier == SubscriptionTier.BRONZE:
+                    # Bronze only sees Bronze
+                    if partner_tier == SubscriptionTier.BRONZE:
+                        filtered_partners.append(p)
+                elif user_tier == SubscriptionTier.SILVER:
+                    # Silver sees Bronze + Silver
+                    if partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
+                        filtered_partners.append(p)
+                elif user_tier == SubscriptionTier.GOLD:
+                    # Gold sees all
+                    filtered_partners.append(p)
+            
+            partners = filtered_partners
 
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
             interactions = session_db.query(Interaction).filter_by(
@@ -2738,22 +2783,40 @@ async def api_profile_handler(request):
 
 
 async def extend_subscription_handler(request):
-    """Создает платеж для продления подписки"""
+    """Перенаправление на страницу выбора тарифа"""
+    return web.HTTPFound('/subscription_tiers')
+
+
+@aiohttp_jinja2.template('subscription_tiers.html')
+async def subscription_tiers_handler(request):
+    """Страница выбора тарифа подписки"""
+    return {}
+
+
+async def create_payment_handler(request):
+    """Создает платеж для выбранного тарифа"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
     if not user_id:
         return web.Response(text='Unauthorized', status=401)
 
+    tier = request.query.get('tier', 'bronze')
+    if tier not in ['bronze', 'silver', 'gold']:
+        tier = 'bronze'
+
     try:
-        from payments import create_payment
-        # Создаем платеж на 30 дней (можно настроить сумму)
+        from payments import create_payment, get_tier_price, get_tier_name
+        
+        amount = get_tier_price(tier)
+        tier_name = get_tier_name(tier)
+        
         payment_url = create_payment(
-            amount="3000.00",  # Цена за месяц
-            description="Продление подписки ASI Biont на 30 дней",
-            user_id=user_id
+            amount=str(amount),
+            description=f"Подписка ASI Biont - {tier_name} на 30 дней",
+            user_id=user_id,
+            tier=tier
         )
-        # Редирект на страницу оплаты
         return web.HTTPFound(payment_url)
     except Exception as e:
         logger.error(f"Error creating payment: {e}")
@@ -2782,6 +2845,8 @@ app.router.add_post('/reschedule_task', reschedule_task_handler)
 app.router.add_post('/get_task_advice', get_task_advice_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
+app.router.add_get('/subscription_tiers', subscription_tiers_handler)
+app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
