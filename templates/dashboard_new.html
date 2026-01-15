@@ -191,25 +191,22 @@
                         <div class="context-item">
                             <!-- Профиль с окружением -->
                             <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">
-                                <!-- Круговое расположение аватаров -->
-                                <div style="position: relative; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
-                                    <!-- Контейнер для круговых контактов -->
-                                    <div id="circle-contacts-orbit" style="position: absolute; width: 100%; height: 100%;">
-                                    </div>
-                                    
-                                    <!-- Основной аватар -->
-                                    <div style="z-index: 10; position: relative;">
-                                        {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #068487; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                                        {% else %}
-                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid #068487; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
-                                        {% endif %}
-                                    </div>
+                                <!-- Основной аватар -->
+                                <div style="margin-bottom: 8px;">
+                                    {% if user_avatar_url %}
+                                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover;">
+                                    {% else %}
+                                    <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                    {% endif %}
                                 </div>
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
+                                
+                                <!-- Горизонтальный ряд избранных контактов -->
+                                <div id="circle-contacts-orbit" style="display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 8px 0; scrollbar-width: thin;">
+                                </div>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
@@ -2476,36 +2473,30 @@
             
             if (myContacts.length === 0) {
                 orbitContainer.innerHTML = '';
+                orbitContainer.style.display = 'none';
                 return;
             }
             
-            // Перемешиваем и берем до 8 контактов
-            const shuffled = [...myContacts].sort(() => Math.random() - 0.5);
-            const displayContacts = shuffled.slice(0, 8);
+            orbitContainer.style.display = 'flex';
             
-            // Размер аватаров и радиус орбиты
+            // Перемешиваем контакты
+            const shuffled = [...myContacts].sort(() => Math.random() - 0.5);
+            
+            // Размер аватаров
             const avatarSize = 40;
-            const orbitRadius = 70; // Радиус круга от центра
-            const centerX = 90; // Центр контейнера (180 / 2)
-            const centerY = 90;
             
             let html = '';
-            displayContacts.forEach((contact, index) => {
+            shuffled.forEach((contact) => {
                 const telegramUrl = 'https://t.me/' + contact.contact_info;
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
-                // Вычисляем позицию по кругу
-                const angle = (index / displayContacts.length) * 2 * Math.PI - Math.PI / 2; // Начинаем сверху
-                const x = centerX + orbitRadius * Math.cos(angle) - avatarSize / 2;
-                const y = centerY + orbitRadius * Math.sin(angle) - avatarSize / 2;
-                
                 if (contact.photo_url) {
-                    html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="position: absolute; left: ${x}px; top: ${y}px; text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; object-fit: cover; border: 2px solid #D1D9E0; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onmouseover="this.style.transform='scale(1.1)'; this.style.borderColor='#068487';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#D1D9E0';">
+                    html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="flex-shrink: 0; text-decoration: none;">
+                        <img src="${contact.photo_url}" style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; object-fit: cover; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">
                     </a>`;
                 } else {
-                    html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="position: absolute; left: ${x}px; top: ${y}px; text-decoration: none;">
-                        <div style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(avatarSize * 0.4)}px; border: 2px solid #D1D9E0; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" onmouseover="this.style.transform='scale(1.1)'; this.style.borderColor='#068487';" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#D1D9E0';">${initial}</div>
+                    html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="flex-shrink: 0; text-decoration: none;">
+                        <div style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(avatarSize * 0.4)}px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">${initial}</div>
                     </a>`;
                 }
             });
