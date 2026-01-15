@@ -1089,6 +1089,28 @@ async def restore_task_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def skip_task_handler(request):
+    """Пропускает задачу"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+    
+    data = await request.json()
+    task_id = data.get('task_id')
+    if not task_id:
+        return web.json_response({'error': 'Task ID required'}, status=400)
+    
+    from ai_integration import skip_task
+    try:
+        result = skip_task(task_id=task_id, user_id=user_id)
+        logger.info(f"Task {task_id} skipped by user {user_id}: {result}")
+        return web.json_response({'message': result})
+    except Exception as e:
+        logger.error(f"Error skipping task {task_id}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def reschedule_task_handler(request):
     """Переносит задачу на новую дату"""
     session = await get_session(request)
@@ -2630,6 +2652,7 @@ app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
 app.router.add_post('/clear_single_task', clear_single_task_handler)
 app.router.add_post('/complete_task', complete_task_handler)
 app.router.add_post('/restore_task', restore_task_handler)
+app.router.add_post('/skip_task', skip_task_handler)
 app.router.add_post('/reschedule_task', reschedule_task_handler)
 app.router.add_post('/get_task_advice', get_task_advice_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)

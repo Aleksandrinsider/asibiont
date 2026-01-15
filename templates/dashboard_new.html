@@ -1263,6 +1263,7 @@
             html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
             if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="skipTask(' + task.id + ')" class="quick-action" title="Пропустить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3.88l4.5 4.5-1.77 1.77L6 7.06v4.44a.75.75 0 0 1-1.5 0V7.06L2.77 9.15 1 7.38l4.5-4.5zM0 1.5a.5.5 0 0 1 .5-.5h15a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5z"/></svg></button>';
             } else {
                 html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 5v6l4-3-4-3z"/></svg></button>';
             }
@@ -1619,6 +1620,7 @@
             html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
             if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="skipTask(' + task.id + ')" class="quick-action" title="Пропустить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3.88l4.5 4.5-1.77 1.77L6 7.06v4.44a.75.75 0 0 1-1.5 0V7.06L2.77 9.15 1 7.38l4.5-4.5zM0 1.5a.5.5 0 0 1 .5-.5h15a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5z"/></svg></button>';
             } else {
                 html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 5v6l4-3-4-3z"/></svg></button>';
             }
@@ -1749,6 +1751,31 @@
             } catch (error) {
                 console.error('Error completing task:', error);
                 showNotification('Ошибка при выполнении задачи', 'error');
+            }
+        }
+        
+        async function skipTask(taskId) {
+            try {
+                // Отправляем сообщение агенту о пропуске задачи
+                const response = await fetch('/api/send_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: `Отметь задачу с ID ${taskId} как пропущенную.`
+                    }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    // Обновить задачи и чат
+                    await updateTasks();
+                    await updateChat();
+                } else {
+                    showNotification('Ошибка при пропуске задачи', 'error');
+                }
+            } catch (error) {
+                console.error('Error skipping task:', error);
+                showNotification('Ошибка при пропуске задачи', 'error');
             }
         }
         
