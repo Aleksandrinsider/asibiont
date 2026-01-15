@@ -93,7 +93,6 @@ body {
     font-weight: 400;
     letter-spacing: normal;
     width: 100%;
-    min-height: 100vh;
     overflow: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
