@@ -1449,6 +1449,15 @@ def get_partners_list(user_id=None, session=None):
             if user_interests & profile_interests:
                 has_match = True
 
+        # Check current_plans for interest matches
+        if user_profile.interests and profile.current_plans:
+            user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
+            for interest in user_interests:
+                interest_words = interest.strip().lower().split()
+                if any(word in profile.current_plans.lower() for word in interest_words):
+                    has_match = True
+                    break
+
         # Check goals
         if user_profile.goals and profile.goals:
             user_goals = set(g.strip().lower() for g in user_profile.goals.split(","))
