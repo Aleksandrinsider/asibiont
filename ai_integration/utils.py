@@ -811,8 +811,30 @@ def post_process_tool_calls(intent, tool_calls, message):
 
         # 2. ДОБАВЛЕНИЕ ЗАДАЧ: если intent add_task, но нет add_task - добавляем
         elif intent["type"] == "add_task" and function_name != "add_task":
-            # Извлекаем задачу из сообщения
-            task_title = message
+            # Извлекаем задачу из сообщения, очищая от временных указаний
+            task_title = message.lower()
+            
+            # Удаляем слова типа "напомни", "добавь" и т.д.
+            remove_words = ["напомни", "добавь", "запомни", "создай задачу", "новая задача", "задача"]
+            for word in remove_words:
+                task_title = re.sub(rf"\b{word}\b", "", task_title, flags=re.IGNORECASE)
+            
+            # Удаляем временные указания
+            time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до", "утром", "вечером", "днем", "ночью"]
+            for indicator in time_indicators:
+                task_title = re.sub(rf"\b{indicator}\b.*", "", task_title, flags=re.IGNORECASE)
+            
+            # Удаляем числа и время
+            task_title = re.sub(r"\d{1,2}:\d{2}", "", task_title)
+            task_title = re.sub(r"\d+", "", task_title)
+            
+            # Очищаем от лишних пробелов и пунктуации
+            task_title = re.sub(r"[^\w\s]", "", task_title).strip()
+            
+            # Если title пустой, используем оригинальное сообщение
+            if not task_title:
+                task_title = message
+            
             time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
             for indicator in time_indicators:
                 if indicator in message.lower():
