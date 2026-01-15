@@ -11,6 +11,11 @@ from config import DEEPSEEK_API_KEY
 async def comprehensive_agent_test():
     """Комплексное тестирование всех функций агента"""
 
+    # Unicode-safe printing for Windows console
+    import sys
+    if sys.platform == 'win32':
+        sys.stdout.reconfigure(encoding='utf-8')
+    
     print("🚀 КОМПЛЕКСНОЕ ТЕСТИРОВАНИЕ АГЕНТА ASI BIONT")
     print("=" * 60)
 
@@ -80,7 +85,7 @@ async def comprehensive_agent_test():
             try:
                 tasks_count = session.query(Task).filter_by(user_id=1).count()
                 profile = session.query(UserProfile).filter_by(user_id=1).first()
-                profile_filled = bool(profile and (profile.city or profile.company or profile.position))
+                profile_filled = bool(profile and (profile.city or profile.company or profile.position or profile.skills))
                 print(f"💾 БД статус: задач - {tasks_count}, профиль заполнен - {'✅' if profile_filled else '❌'}")
             finally:
                 session.close()

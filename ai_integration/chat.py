@@ -613,15 +613,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                 logger.info(
                                                     f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
                                                 
-                                                # Проверяем наличие времени
+                                                # СТРОГАЯ проверка наличия времени
                                                 reminder_time = args.get("reminder_time")
                                                 if not reminder_time or '@unknown' in str(reminder_time):
                                                     reminder_time = intent.get("params", {}).get("reminder_time")
-                                                logger.info(f"[ADD TASK] reminder_time resolved to: {reminder_time}")
-                                                if not reminder_time and intent.get("params", {}).get("has_time") == False:
-                                                    # Нет времени - просим указать
+                                                
+                                                # Валидация reminder_time
+                                                has_time = intent.get("params", {}).get("has_time", False)
+                                                logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
+                                                
+                                                # БЛОКИРУЕМ создание задач без времени
+                                                if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
+                                                    logger.warning(f"[ADD TASK] BLOCKED - no valid reminder_time provided")
                                                     tool_results.append({"function": func_name, "result": "NEED_TIME"})
                                                 else:
+                                                    # Вызываем add_task только с валидным временем
                                                     result = add_task(
                                                         title=args.get("title", args.get("task_title", "Задача")),
                                                         description=args.get("description", ""),
@@ -736,9 +742,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             has_list_tasks = True
                                             list_tasks_result = result_text
                                         
-                                        # Если нужно время - запрашиваем
-                                        if result_text == "NEED_TIME":
-                                            natural_responses.append("Когда напомнить? Укажи время (например: через 5 минут, завтра в 10:00, в 15:30)")
+                                        # Если нужно время - запрашиваем (задача НЕ создана)
+                                        if result_text == "NEED_TIME" or (result_text and result_text.startswith("NEED_TIME:")):
+                                            time_request_msg = "Когда тебе напомнить об этом? Укажи время (например: через 5 минут, завтра в 10:00, в 15:30)"
+                                            if result_text.startswith("NEED_TIME:"):
+                                                # Извлекаем пользовательское сообщение если есть
+                                                custom_msg = result_text.replace("NEED_TIME:", "").strip()
+                                                if custom_msg:
+                                                    time_request_msg = custom_msg
+                                            natural_responses.append(time_request_msg)
                                             continue
 
                                         if "Добавлена задача" in result_text:
@@ -911,9 +923,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         else:
                             fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
                             logger.info(f"[LEGACY] Fallback actions: {len(fallback_result)}")
-                        print(
-                            f"[DEBUG] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
-                        )  # DEBUG
+                        logger.debug(
+                            f"[FALLBACK] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
+                        )
                         if fallback_result:
                             logger.info(
                                 f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}"
@@ -1001,9 +1013,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                     # КРИТИЧЕСКАЯ ПРОВЕРКА: если content пустой или слишком короткий
                     if not content or len(content.strip()) < 3:
-                        print(
-                            f"[DEBUG] Content is empty or too short: '{content}', len={len(content.strip())}"
-                        )  # DEBUG
+                        logger.debug(
+                            f"[RESPONSE] Content is empty or too short: '{content}', len={len(content.strip())}"
+                        )
                         logger.warning(f"[EMPTY RESPONSE] Original: '{original_content[:100]}...', returning original")
                         content = original_content.strip()
                         if not content:

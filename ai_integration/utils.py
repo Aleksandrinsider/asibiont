@@ -508,6 +508,71 @@ def parse_absolute_time(message):
     return None
 
 
+def parse_natural_time(time_str, current_time):
+    """Parse natural time expressions like 'завтра в 10 утра', 'вечером в 8', etc.
+    
+    Args:
+        time_str: String like 'завтра в 10 утра'
+        current_time: Current datetime in user's timezone
+    
+    Returns:
+        Datetime object in user's timezone or None
+    """
+    import re
+    from datetime import datetime, timedelta
+    
+    if not time_str or not isinstance(time_str, str):
+        return None
+    
+    time_str = time_str.lower().strip()
+    
+    # Extract time part (HH:MM or natural like '10 утра')
+    time_match = None
+    
+    # Patterns for time
+    time_patterns = [
+        (r'(\d{1,2}):(\d{2})', lambda h, m: (int(h), int(m))),  # 10:30
+        (r'(\d{1,2})\s*утра', lambda h, m: (int(h) if int(h) <= 12 else int(h) - 12, 0)),  # 10 утра
+        (r'(\d{1,2})\s*вечера', lambda h, m: ((int(h) + 12) if int(h) < 12 else int(h), 0)),  # 8 вечера
+        (r'(\d{1,2})\s*ночи', lambda h, m: (int(h), 0)),  # 2 ночи
+        (r'(\d{1,2})\s*дня', lambda h, m: (int(h), 0)),  # 2 дня
+    ]
+    
+    for pattern, converter in time_patterns:
+        match = re.search(pattern, time_str)
+        if match:
+            if len(match.groups()) == 2:
+                h, m = converter(match.group(1), match.group(2))
+            else:
+                h, m = converter(match.group(1), '0')
+            time_match = (h, m)
+            break
+    
+    if not time_match:
+        return None
+    
+    h, m = time_match
+    
+    # Determine date
+    date = current_time.date()
+    
+    if 'завтра' in time_str:
+        date = current_time.date() + timedelta(days=1)
+    elif 'послезавтра' in time_str:
+        date = current_time.date() + timedelta(days=2)
+    elif 'вечером' in time_str and h < 12:
+        h += 12  # Assume evening means PM
+    elif 'утром' in time_str and h >= 12:
+        h -= 12  # Assume morning means AM
+    
+    # Create datetime
+    try:
+        result = current_time.replace(year=date.year, month=date.month, day=date.day, hour=h, minute=m, second=0, microsecond=0)
+        return result
+    except ValueError:
+        return None
+
+
 def replace_placeholders(content, user_now=None, current_time_str=None):
     """Заменяет плейсхолдеры типа {{current_time}} на реальные значения"""
     if content is None:
@@ -796,7 +861,8 @@ def post_process_tool_calls(intent, tool_calls, message):
 
         try:
             args_dict = json.loads(args) if isinstance(args, str) else args
-        except:
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logger.warning(f"Failed to parse tool call arguments: {e}")
             args_dict = {}
 
         # 1. ЭМОЦИИ: если intent эмоция, но нет list_tasks - добавляем

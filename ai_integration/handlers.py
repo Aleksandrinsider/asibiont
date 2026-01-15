@@ -8,7 +8,7 @@ from models import Session, Task, User, UserProfile, Interaction
 from sqlalchemy import or_
 
 from .memory import encrypt_data, decrypt_data
-from .utils import parse_relative_time, parse_time_to_datetime, generate_task_recommendations
+from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,13 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         task_id = existing_task.id
         task = existing_task
     else:
-        # Create new task
+        # Create new task - ТРЕБУЕТСЯ время напоминания
+        if not reminder_time:
+            if close_session:
+                session.close()
+            logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
+            return "NEED_TIME: У каждой задачи должно быть время напоминания. Когда напомнить?"
+        
         task = Task(user_id=user.id, title=title, description=encrypt_data(description))
         if reminder_time:
             try:
@@ -74,14 +80,27 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         logging.info(
                             f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
                 else:
-                    # Parse as absolute time
-                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                    local_dt = user_tz.localize(local_dt)
-                    task.reminder_time = local_dt.astimezone(pytz.UTC)
-                    logging.info(
-                        f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
-            except ValueError:
-                pass
+                    # Try natural time parsing first
+                    current_time = datetime.now(user_tz)
+                    parsed_time = parse_natural_time(reminder_time, current_time)
+                    if parsed_time:
+                        if parsed_time.tzinfo is None:
+                            parsed_time = user_tz.localize(parsed_time)
+                        task.reminder_time = parsed_time.astimezone(pytz.UTC)
+                        logging.info(
+                            f"Task {title} natural time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+                    else:
+                        # Fallback to absolute time format
+                        try:
+                            local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                            local_dt = user_tz.localize(local_dt)
+                            task.reminder_time = local_dt.astimezone(pytz.UTC)
+                            logging.info(
+                                f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+                        except ValueError:
+                            logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
+            except Exception as e:
+                logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
         if due_date:
             try:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
