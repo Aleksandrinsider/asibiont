@@ -734,8 +734,9 @@ def enrich_response_with_engagement(content, user_id=None, original_message=""):
 
 def analyze_user_context_for_advice(user_id, message, context=None):
     """
-    Глубокий анализ контекста пользователя для генерации персонализированных советов.
-    Возвращает структурированный анализ для использования в промпте.
+    ПОЛНЫЙ глубокий анализ контекста пользователя для генерации МАКСИМАЛЬНО РЕЛЕВАНТНЫХ советов.
+    Анализирует ВСЁ: задачи, контакты, профиль, паттерны, текущую ситуацию.
+    Возвращает детальный анализ для использования в промпте.
     """
     from models import Session, User, UserProfile, Task
     from datetime import datetime, timedelta
@@ -747,15 +748,17 @@ def analyze_user_context_for_advice(user_id, message, context=None):
         if not user:
             return {"error": "Пользователь не найден"}
 
+        now = datetime.now(pytz.UTC)
         analysis = {
             "profile": {},
             "tasks": {},
             "patterns": {},
             "context_insights": {},
-            "recommendations": {}
+            "recommendations": {},
+            "relevant_contacts": []
         }
 
-        # 1. АНАЛИЗ ПРОФИЛЯ
+        # 1. ДЕТАЛЬНЫЙ АНАЛИЗ ПРОФИЛЯ
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
             analysis["profile"] = {
@@ -767,77 +770,197 @@ def analyze_user_context_for_advice(user_id, message, context=None):
                 "skills": profile.skills or "не указаны",
                 "interests": profile.interests or "не указаны",
                 "goals": profile.goals or "не указаны",
-                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.bio, profile.languages, profile.skills, profile.interests, profile.goals] if field])
+                "filled_fields": sum([1 for field in [profile.city, profile.company, profile.position, profile.bio, profile.languages, profile.skills, profile.interests, profile.goals] if field]),
+                "raw": profile  # Сохраняем объект для дальнейшего анализа
             }
 
-        # 2. АНАЛИЗ ЗАДАЧ
+        # 2. ГЛУБОКИЙ АНАЛИЗ ЗАДАЧ С ДЕТАЛЯМИ
         all_tasks = session.query(Task).filter_by(user_id=user.id).all()
         pending_tasks = [t for t in all_tasks if t.status == "pending"]
         completed_tasks = [t for t in all_tasks if t.status == "completed"]
+        
+        # Разделяем задачи по временным категориям
+        overdue_tasks = [t for t in pending_tasks if t.reminder_time and (t.reminder_time.replace(tzinfo=pytz.UTC) if t.reminder_time.tzinfo is None else t.reminder_time) < now]
+        today_tasks = [t for t in pending_tasks if t.reminder_time and (t.reminder_time.replace(tzinfo=pytz.UTC) if t.reminder_time.tzinfo is None else t.reminder_time).date() == now.date() and t not in overdue_tasks]
+        upcoming_tasks = [t for t in pending_tasks if t.reminder_time and (t.reminder_time.replace(tzinfo=pytz.UTC) if t.reminder_time.tzinfo is None else t.reminder_time) > now and t not in today_tasks]
 
         analysis["tasks"] = {
             "total": len(all_tasks),
             "pending": len(pending_tasks),
             "completed": len(completed_tasks),
             "completion_rate": len(completed_tasks) / max(len(all_tasks), 1),
-            "overdue": len([t for t in pending_tasks if t.reminder_time and (t.reminder_time.replace(tzinfo=pytz.UTC) if t.reminder_time.tzinfo is None else t.reminder_time) < datetime.now(pytz.UTC)]),
-            "delegated": len([t for t in all_tasks if t.delegated_to_username])
+            "overdue": len(overdue_tasks),
+            "overdue_list": [{"title": t.title, "time": t.reminder_time} for t in overdue_tasks[:5]],
+            "today": len(today_tasks),
+            "today_list": [{"title": t.title, "time": t.reminder_time} for t in today_tasks[:5]],
+            "upcoming": len(upcoming_tasks),
+            "upcoming_list": [{"title": t.title, "time": t.reminder_time} for t in upcoming_tasks[:5]],
+            "delegated": len([t for t in all_tasks if t.delegated_to_username]),
+            "delegated_list": [{"title": t.title, "to": t.delegated_to_username} for t in all_tasks if t.delegated_to_username][:3]
         }
 
-        # 3. АНАЛИЗ ПАТТЕРНОВ
+        # 3. РАСШИРЕННЫЙ АНАЛИЗ ПАТТЕРНОВ
         # Анализ тем задач
         task_titles = [t.title.lower() for t in all_tasks]
         themes = {
-            "development": sum(1 for title in task_titles if any(word in title for word in ["разработка", "код", "программирование", "dev", "backend", "frontend"])),
-            "meetings": sum(1 for title in task_titles if any(word in title for word in ["встреча", "совещание", "митинг", "meeting"])),
-            "documents": sum(1 for title in task_titles if any(word in title for word in ["документ", "отчет", "презентация", "документация"])),
-            "communication": sum(1 for title in task_titles if any(word in title for word in ["звонок", "позвонить", "написать", "ответить"])),
-            "learning": sum(1 for title in task_titles if any(word in title for word in ["изучить", "обучить", "курс", "тренинг"])),
-            "business": sum(1 for title in task_titles if any(word in title for word in ["инвестор", "стартап", "бизнес", "продажа", "клиент"]))
+            "development": sum(1 for title in task_titles if any(word in title for word in ["разработка", "код", "программирование", "dev", "backend", "frontend", "api", "база данных"])),
+            "meetings": sum(1 for title in task_titles if any(word in title for word in ["встреча", "совещание", "митинг", "meeting", "созвон"])),
+            "documents": sum(1 for title in task_titles if any(word in title for word in ["документ", "отчет", "презентация", "документация", "составить"])),
+            "communication": sum(1 for title in task_titles if any(word in title for word in ["звонок", "позвонить", "написать", "ответить", "связаться"])),
+            "learning": sum(1 for title in task_titles if any(word in title for word in ["изучить", "обучить", "курс", "тренинг", "прочитать", "освоить"])),
+            "business": sum(1 for title in task_titles if any(word in title for word in ["инвестор", "стартап", "бизнес", "продажа", "клиент", "договор"])),
+            "health": sum(1 for title in task_titles if any(word in title for word in ["спорт", "зал", "тренировка", "здоровье", "врач"])),
+            "personal": sum(1 for title in task_titles if any(word in title for word in ["купить", "заказать", "забрать", "оплатить", "оформить"]))
         }
 
+        # Частота выполнения задач
+        days_active = max((now.date() - user.created_at.replace(tzinfo=None).date()).days, 1)
+        
         analysis["patterns"] = {
             "main_themes": sorted(themes.items(), key=lambda x: x[1], reverse=True)[:3],
-            "task_frequency": len(all_tasks) / max((datetime.now() - user.created_at.replace(tzinfo=None)).days, 1),
+            "task_frequency": len(all_tasks) / days_active,
             "delegation_ratio": len([t for t in all_tasks if t.delegated_to_username]) / max(len(all_tasks), 1),
-            "overdue_ratio": analysis["tasks"]["overdue"] / max(analysis["tasks"]["pending"], 1)
+            "overdue_ratio": len(overdue_tasks) / max(len(pending_tasks), 1),
+            "completion_rate_percent": int((len(completed_tasks) / max(len(all_tasks), 1)) * 100),
+            "avg_tasks_per_week": (len(all_tasks) / days_active) * 7,
+            "most_productive_time": "утро" if sum(1 for t in completed_tasks if t.reminder_time and (t.reminder_time.replace(tzinfo=pytz.UTC) if t.reminder_time.tzinfo is None else t.reminder_time).hour < 12) > len(completed_tasks) / 2 else "вечер"
         }
 
-        # 4. АНАЛИЗ КОНТЕКСТА СООБЩЕНИЯ
+        # 4. ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА СООБЩЕНИЯ И СИТУАЦИИ
         message_lower = message.lower()
+        
+        # Определяем эмоциональное состояние более точно
+        stress_words = ["стресс", "давление", "проблема", "застрял", "сложно", "не получается", "устал", "выгорание"]
+        motivated_words = ["хочу", "заинтересован", "готов", "вдохновлен", "цель", "мечта", "амбиции"]
+        
         analysis["context_insights"] = {
-            "urgency_level": "high" if any(word in message_lower for word in ["срочно", "дедлайн", "завтра", "сегодня", "немедленно"]) else "normal",
-            "emotional_state": "stressed" if any(word in message_lower for word in ["стресс", "давление", "проблема", "застрял", "сложно"]) else
-                            "motivated" if any(word in message_lower for word in ["хочу", "заинтересован", "готов", "вдохновлен"]) else "neutral",
-            "request_type": "advice" if any(word in message_lower for word in ["как", "что делать", "совет", "помоги"]) else
-                          "action" if any(word in message_lower for word in ["сделай", "добавь", "удали", "обнови"]) else "info"
+            "urgency_level": "high" if any(word in message_lower for word in ["срочно", "дедлайн", "завтра", "сегодня", "немедленно", "важно"]) else "normal",
+            "emotional_state": "stressed" if any(word in message_lower for word in stress_words) else
+                            "motivated" if any(word in message_lower for word in motivated_words) else "neutral",
+            "request_type": "advice" if any(word in message_lower for word in ["как", "что делать", "совет", "помоги", "подскажи"]) else
+                          "action" if any(word in message_lower for word in ["сделай", "добавь", "удали", "обнови", "напомни"]) else "info",
+            "seeks_help": any(word in message_lower for word in ["помоги", "помощь", "подскажи", "как", "не знаю"]),
+            "wants_optimization": any(word in message_lower for word in ["быстрее", "эффективнее", "автоматизировать", "упростить", "оптимизировать"]),
+            "mentions_time_pressure": any(word in message_lower for word in ["времени нет", "успеть", "дедлайн", "горит"])
         }
 
-        # 5. ПЕРСОНАЛИЗИРОВАННЫЕ РЕКОМЕНДАЦИИ
+        # 5. РАСШИРЕННЫЕ ПЕРСОНАЛИЗИРОВАННЫЕ РЕКОМЕНДАЦИИ
         recommendations = []
 
-        # На основе профиля
-        if analysis["profile"].get("skills") and "python" in analysis["profile"]["skills"].lower():
-            recommendations.append("Использовать Python-библиотеки для автоматизации рутинных задач")
+        # На основе профиля и навыков
+        if analysis["profile"].get("skills"):
+            skills_lower = analysis["profile"]["skills"].lower()
+            if "python" in skills_lower or "программирование" in skills_lower:
+                recommendations.append("Автоматизировать рутинные задачи через Python-скрипты")
+            if "менеджмент" in skills_lower or "управление" in skills_lower:
+                recommendations.append("Применить agile-методологии для эффективного управления задачами")
+            if "дизайн" in skills_lower:
+                recommendations.append("Визуализировать планы и цели через mind maps и kanban-доски")
 
-        if analysis["profile"].get("company") and "tech" in analysis["profile"]["company"].lower():
-            recommendations.append("Внедрить agile-методологии в командную работу")
+        # На основе компании и позиции
+        if analysis["profile"].get("company") and analysis["profile"].get("position"):
+            company_lower = analysis["profile"]["company"].lower()
+            position_lower = analysis["profile"]["position"].lower()
+            if "tech" in company_lower or "it" in company_lower:
+                recommendations.append("Внедрить инструменты DevOps для автоматизации процессов")
+            if "менеджер" in position_lower or "руководитель" in position_lower:
+                recommendations.append("Делегировать до 30% задач для фокуса на стратегических целях")
 
         # На основе паттернов задач
         if analysis["patterns"]["overdue_ratio"] > 0.3:
-            recommendations.append("Внедрить систему приоритизации задач (Eisenhower matrix)")
+            recommendations.append("СРОЧНО: внедрить систему Eisenhower Matrix для приоритизации - более 30% задач просрочено")
+        elif analysis["patterns"]["overdue_ratio"] > 0.15:
+            recommendations.append("Пересмотреть планирование - часть задач регулярно просрочивается")
 
-        if analysis["patterns"]["delegation_ratio"] < 0.1:
-            recommendations.append("Начать делегировать рутинные задачи для фокуса на стратегических")
+        if analysis["patterns"]["delegation_ratio"] < 0.1 and len(all_tasks) > 10:
+            recommendations.append("Начать делегировать задачи - сейчас всё на тебе, это неэффективно")
+
+        if analysis["patterns"]["completion_rate_percent"] < 50:
+            recommendations.append("Ставить реалистичные дедлайны - процент выполнения низкий")
+        elif analysis["patterns"]["completion_rate_percent"] > 80:
+            recommendations.append("Отличная продуктивность! Можно брать более амбициозные задачи")
 
         # На основе тем
         main_theme = analysis["patterns"]["main_themes"][0][0] if analysis["patterns"]["main_themes"] else None
         if main_theme == "development":
-            recommendations.append("Внедрить code review процесс и автоматизированное тестирование")
+            recommendations.append("Внедрить code review и CI/CD для повышения качества кода")
         elif main_theme == "business":
-            recommendations.append("Создать систему отслеживания метрик бизнеса и регулярные отчеты")
+            recommendations.append("Создать CRM-систему для отслеживания клиентов и сделок")
+        elif main_theme == "learning":
+            recommendations.append("Использовать технику Pomodoro для эффективного обучения")
 
-        analysis["recommendations"] = recommendations[:5]  # Ограничить до 5 рекомендаций
+        # На основе текущей ситуации
+        if len(overdue_tasks) > 0:
+            recommendations.append(f"ВАЖНО: {len(overdue_tasks)} просроченных задач требуют внимания")
+        if len(today_tasks) > 5:
+            recommendations.append(f"Сегодня {len(today_tasks)} задач - стоит пересмотреть приоритеты")
+
+        # На основе эмоционального состояния
+        if analysis["context_insights"]["emotional_state"] == "stressed":
+            recommendations.append("При стрессе: разбить задачи на микрошаги по 15-20 минут")
+        if analysis["context_insights"]["wants_optimization"]:
+            recommendations.append("Проанализировать повторяющиеся задачи для автоматизации")
+
+        analysis["recommendations"] = recommendations[:7]  # Увеличили до 7 наиболее релевантных
+
+        # 6. ПОИСК РЕЛЕВАНТНЫХ КОНТАКТОВ НА ОСНОВЕ ТЕКУЩЕГО КОНТЕКСТА
+        # Анализируем текущую ситуацию и ищем подходящих людей
+        if profile:
+            all_profiles = session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+            contact_matches = []
+            
+            for contact_profile in all_profiles:
+                relevance_score = 0
+                reasons = []
+                
+                # Совпадение по интересам
+                if profile.interests and contact_profile.interests:
+                    user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                    contact_interests = set(i.strip().lower() for i in contact_profile.interests.split(','))
+                    common_interests = user_interests & contact_interests
+                    if common_interests:
+                        relevance_score += len(common_interests) * 2
+                        reasons.append(f"общие интересы: {', '.join(list(common_interests)[:2])}")
+                
+                # Совпадение по навыкам (кто может помочь)
+                if profile.goals and contact_profile.skills:
+                    goals_lower = profile.goals.lower()
+                    skills_lower = contact_profile.skills.lower()
+                    if any(skill in goals_lower for skill in skills_lower.split(',')):
+                        relevance_score += 3
+                        reasons.append("может помочь с текущими целями")
+                
+                # Город (локальные связи)
+                if profile.city and contact_profile.city and profile.city.lower() == contact_profile.city.lower():
+                    relevance_score += 1
+                    reasons.append("из того же города")
+                
+                # Компания/индустрия
+                if profile.company and contact_profile.company:
+                    if profile.company.lower() == contact_profile.company.lower():
+                        relevance_score += 2
+                        reasons.append("работает в той же компании")
+                
+                # Темы задач и навыки контакта
+                if contact_profile.skills and main_theme:
+                    skills_lower = contact_profile.skills.lower()
+                    if (main_theme == "development" and any(word in skills_lower for word in ["python", "javascript", "программирование"])) or \
+                       (main_theme == "business" and any(word in skills_lower for word in ["продажи", "маркетинг", "бизнес"])) or \
+                       (main_theme == "learning" and any(word in skills_lower for word in ["преподавание", "коучинг", "менторство"])):
+                        relevance_score += 2
+                        reasons.append(f"эксперт в {main_theme}")
+                
+                if relevance_score > 0:
+                    contact_matches.append({
+                        "username": contact_profile.contact_info or f"user_{contact_profile.user_id}",
+                        "score": relevance_score,
+                        "reasons": reasons,
+                        "profile": contact_profile
+                    })
+            
+            # Сортируем по релевантности
+            contact_matches.sort(key=lambda x: x["score"], reverse=True)
+            analysis["relevant_contacts"] = contact_matches[:3]  # Топ-3 наиболее релевантных
 
         return analysis
 
