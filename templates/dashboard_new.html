@@ -90,10 +90,10 @@
             </div>
             <div class="header-info">
                 {% if logged_in %}
-                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #656D76; font-size: 13px;">
+                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #1F2328; font-size: 13px;">
                     <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
                     <span style="opacity: 0.8;">·</span>
-                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#656D76'">изменить</a>
+                    <a href="#" onclick="changeTime()" style="margin: 0; color: #1F2328; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#656D76'" onmouseout="this.style.color='#1F2328'">изменить</a>
                 </span>
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px 4px 4px; border-radius: 6px; background: #F6F8FA;">
                     <div class="header-avatar-small">
@@ -103,7 +103,7 @@
                         <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
-                    <button onclick="logout()" style="background: none; border: none; color: #656D76; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#656D76'">Выход</button>
+                    <button onclick="logout()" style="background: none; border: none; color: #1F2328; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#656D76'" onmouseout="this.style.color='#1F2328'">Выход</button>
                 </div>
                 {% endif %}
             </div>
@@ -114,22 +114,22 @@
         <div class="welcome-section">
             <div class="welcome-content" style="border: 1px solid #D1D9E0; max-width: 520px; padding: 40px;">
                 <div style="text-align: left; margin-bottom: 24px;">
-                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #656D76;">ASI Biont</h1>
-                    <p style="margin: 0 0 12px 0; color: #656D76; font-size: 14px; line-height: 1.5;">Закрытое сообщество от лаборатории искусственного интеллекта ASI Biont с живым поиском единомышленников через ваши текущие дела: система анализирует задачи и цели, находя партнеров в вашем городе.</p>
-                    <p style="margin: 0; color: #656D76; font-size: 14px; line-height: 1.5;">AI-агент запоминает контекст вашей жизни, связывает задачи, понимает голосовые сообщения и предлагает умные шаги с напоминаниями. Панель управления объединяет всё: задачи, партнеры, встречи, историю взаимодействий и статистику.</p>
+                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #1F2328;">ASI Biont</h1>
+                    <p style="margin: 0 0 12px 0; color: #1F2328; font-size: 14px; line-height: 1.5;">Закрытое сообщество от лаборатории искусственного интеллекта ASI Biont с живым поиском единомышленников через ваши текущие дела: система анализирует задачи и цели, находя партнеров в вашем городе.</p>
+                    <p style="margin: 0; color: #1F2328; font-size: 14px; line-height: 1.5;">AI-агент запоминает контекст вашей жизни, связывает задачи, понимает голосовые сообщения и предлагает умные шаги с напоминаниями. Панель управления объединяет всё: задачи, партнеры, встречи, историю взаимодействий и статистику.</p>
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white;">
-                        <span style="color: #656D76; font-size: 14px;">Живой поиск людей через ваши дела</span>
+                        <span style="color: #1F2328; font-size: 14px;">Живой поиск людей через ваши дела</span>
                     </div>
                     
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white;">
-                        <span style="color: #656D76; font-size: 14px;">AI-агент, который понимает контекст вашей жизни</span>
+                        <span style="color: #1F2328; font-size: 14px;">AI-агент, который понимает контекст вашей жизни</span>
                     </div>
                     
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white;">
-                        <span style="color: #656D76; font-size: 14px;">Панель управления всей экосистемой</span>
+                        <span style="color: #1F2328; font-size: 14px;">Панель управления всей экосистемой</span>
                     </div>
                 </div>
                 
