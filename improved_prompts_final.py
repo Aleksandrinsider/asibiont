@@ -119,7 +119,7 @@ def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
             r'напомни(?:ть)?\s+мне',
             r'добавь\s+задачу',
             r'запомни\s+задачу'
-        ] if has_time else [],  # Только если есть время
+        ],
         'list_tasks': [
             r'покажи\s+задачи',
             r'список\s+задач',

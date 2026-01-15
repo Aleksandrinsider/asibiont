@@ -811,28 +811,23 @@ def post_process_tool_calls(intent, tool_calls, message):
 
         # 2. ДОБАВЛЕНИЕ ЗАДАЧ: если intent add_task, но нет add_task - добавляем
         elif intent["type"] == "add_task" and function_name != "add_task":
-            # Извлекаем задачу из сообщения, очищая от временных указаний
-            task_title = message.lower()
+            # Извлекаем задачу из сообщения
+            task_title = message
             
-            # Удаляем слова типа "напомни", "добавь" и т.д.
-            remove_words = ["напомни", "добавь", "запомни", "создай задачу", "новая задача", "задача"]
-            for word in remove_words:
-                task_title = re.sub(rf"\b{word}\b", "", task_title, flags=re.IGNORECASE)
+            # Удаляем команды в начале
+            task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', task_title, flags=re.IGNORECASE)
             
-            # Удаляем временные указания
-            time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до", "утром", "вечером", "днем", "ночью"]
-            for indicator in time_indicators:
-                task_title = re.sub(rf"\b{indicator}\b.*", "", task_title, flags=re.IGNORECASE)
+            # Удаляем временные указания с контекстом ("через 5 минут", "завтра в 10:00" и т.д.)
+            task_title = re.sub(r'\bчерез\s+\d+\s*(?:мин(?:ут)?|час(?:а|ов)?|дн(?:я|ей)?|недел(?:ю|и|ь)?|месяц(?:а|ев)?|год(?:а)?)', '', task_title, flags=re.IGNORECASE)
+            task_title = re.sub(r'\b(?:завтра|сегодня|послезавтра)(?:\s+в\s+\d{1,2}:\d{2})?', '', task_title, flags=re.IGNORECASE)
+            task_title = re.sub(r'\bв\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
+            task_title = re.sub(r'\bна\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
             
-            # Удаляем числа и время
-            task_title = re.sub(r"\d{1,2}:\d{2}", "", task_title)
-            task_title = re.sub(r"\d+", "", task_title)
+            # Очищаем от лишних пробелов
+            task_title = ' '.join(task_title.split()).strip()
             
-            # Очищаем от лишних пробелов и пунктуации
-            task_title = re.sub(r"[^\w\s]", "", task_title).strip()
-            
-            # Если title пустой, используем оригинальное сообщение
-            if not task_title:
+            # Если title пустой или слишком короткий, используем оригинальное сообщение
+            if not task_title or len(task_title) < 3:
                 task_title = message
             
             time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
