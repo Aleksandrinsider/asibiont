@@ -103,7 +103,7 @@ async def start_handler(message: Message):
         if await redis_client.exists(message_key):
             logger.info(f"Duplicate /start message {message.message_id} ignored")
             return
-        await redis_client.set(message_key, "1", ex=60)
+        await redis_client.set(message_key, "1", ex=3600)
     
     # Create user if doesn't exist
     session = Session()
@@ -321,8 +321,8 @@ async def process_text_message(user_id, text, message, state):
             if is_duplicate:
                 logger.warning(f"[DUPLICATE BLOCKED] Message {message_id} from user {user_id} IGNORED (already processed)")
                 return
-            # Set key with short expiration
-            await redis_client.set(message_key, "1", ex=60)
+            # Set key with longer expiration
+            await redis_client.set(message_key, "1", ex=3600)
             logger.info(f"[REDIS OK] Marked message {message_id} as processed, will respond")
         else:
             logger.warning(f"[NO REDIS] Cannot prevent duplicates for message {message_id}")
