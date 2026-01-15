@@ -2520,11 +2520,11 @@
                 
                 if (contact.photo_url) {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid #068487; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     leftHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #0969DA 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 2px solid #068487; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
@@ -2538,11 +2538,11 @@
                 
                 if (contact.photo_url) {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <img src="${telegramUrl}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid #068487; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <img src="${contact.photo_url}" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;">
                     </a>`;
                 } else {
                     rightHtml += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="text-decoration: none;">
-                        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #0969DA 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 2px solid #068487; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${initial}</div>
+                        <div style="width: ${size}px; height: ${size}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(size * 0.4)}px; border: 1px solid #6C757D; cursor: pointer;">${initial}</div>
                     </a>`;
                 }
             });
