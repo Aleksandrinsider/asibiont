@@ -783,8 +783,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             match = re.search(r"Завершена задача '([^']+)'", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                # Передаем AI только факт для генерации уникального ответа
-                                                natural_responses.append(f"Задача '{title}' выполнена")
+                                                # Передаем контекст для AI генерации естественного ответа
+                                                natural_responses.append(f"TASK_COMPLETED: title='{title}'")
                                             else:
                                                 natural_responses.append(result_text)
 
@@ -800,80 +800,71 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             natural_responses.append(result_text)
 
                                         elif "Профиль обновлен" in result_text:
-                                            # Парсим детали обновления и передаем AI факты
+                                            # Парсим детали обновления и передаем AI только факты
                                             if "added_interests:" in result_text:
                                                 match = re.search(r"added_interests:([^;]+)", result_text)
                                                 if match:
                                                     items = match.group(1).strip()
                                                     natural_responses.append(f"PROFILE_UPDATED: added_interests={items}")
                                                 else:
-                                                    natural_responses.append(
-                                                        "Профиль обновлен! Добавил новые интересы.")
+                                                    natural_responses.append("PROFILE_UPDATED: type=interests")
 
                                             elif "removed_interests:" in result_text:
                                                 match = re.search(r"removed_interests:([^;]+)", result_text)
                                                 if match:
                                                     items = match.group(1).strip()
-                                                    natural = f"Понял, убрал из интересов: {items}. Обновил твой профиль."
-                                                    natural_responses.append(natural)
+                                                    natural_responses.append(f"PROFILE_UPDATED: removed_interests={items}")
                                                 else:
-                                                    natural_responses.append("Профиль обновлен! Убрал интересы.")
+                                                    natural_responses.append("PROFILE_UPDATED: removed=interests")
 
                                             elif "changed_city:" in result_text:
                                                 match = re.search(r"changed_city:([^->]+)->([^;]+)", result_text)
                                                 if match:
                                                     old_city = match.group(1).strip()
                                                     new_city = match.group(2).strip()
-                                                    natural = f"Обновил город с {old_city} на {new_city}! Теперь буду искать для тебя людей и события в {new_city}."
-                                                    natural_responses.append(natural)
+                                                    natural_responses.append(f"PROFILE_UPDATED: city={old_city}->{new_city}")
                                                 else:
-                                                    natural_responses.append("Профиль обновлен! Изменил город.")
+                                                    natural_responses.append("PROFILE_UPDATED: type=city")
 
                                             elif "changed_company:" in result_text:
                                                 match = re.search(r"changed_company:([^->]+)->([^;]+)", result_text)
                                                 if match:
                                                     new_company = match.group(2).strip()
-                                                    natural = f"Записал новое место работы: {new_company}. Профиль обновлен!"
-                                                    natural_responses.append(natural)
+                                                    natural_responses.append(f"PROFILE_UPDATED: company={new_company}")
                                                 else:
-                                                    natural_responses.append("Профиль обновлен! Изменил компанию.")
+                                                    natural_responses.append("PROFILE_UPDATED: type=company")
 
                                             elif "added_skills:" in result_text:
                                                 match = re.search(r"added_skills:([^;]+)", result_text)
                                                 if match:
                                                     items = match.group(1).strip()
-                                                    natural = f"Отлично! Добавил в навыки: {items}. Это поможет найти проекты и людей, которым нужны такие компетенции."
-                                                    natural_responses.append(natural)
+                                                    natural_responses.append(f"PROFILE_UPDATED: added_skills={items}")
                                                 else:
-                                                    natural_responses.append("Профиль обновлен! Добавил навыки.")
+                                                    natural_responses.append("PROFILE_UPDATED: type=skills")
 
                                             elif "added_goals:" in result_text:
                                                 match = re.search(r"added_goals:([^;]+)", result_text)
                                                 if match:
                                                     items = match.group(1).strip()
-                                                    natural = f"Записал новую цель: {items}. Буду помогать тебе двигаться к ней!"
-                                                    natural_responses.append(natural)
+                                                    natural_responses.append(f"PROFILE_UPDATED: added_goals={items}")
                                                 else:
-                                                    natural_responses.append("Профиль обновлен! Добавил цели.")
+                                                    natural_responses.append("PROFILE_UPDATED: type=goals")
 
                                             else:
-                                                # Общий случай если не удалось распарсить
-                                                natural_responses.append("Профиль обновлен! Сохранил изменения.")
+                                                # Общий случай
+                                                natural_responses.append("PROFILE_UPDATED: general")
 
                                         elif "Задача" in result_text and "делегирована" in result_text:
-                                            natural = "Отлично, задача делегирована! Я уведомлю получателя."
-                                            natural_responses.append(natural)
+                                            natural_responses.append("TASK_DELEGATED")
 
                                         elif "Удалены все задачи" in result_text:
-                                            natural = "Удалил все твои задачи. Теперь список пуст - можно начинать с чистого листа!"
-                                            natural_responses.append(natural)
+                                            natural_responses.append("ALL_TASKS_DELETED")
 
                                         elif "Задача" in result_text and "удалена" in result_text:
                                             match = re.search(r"Задача '([^']+)' удалена", result_text)
                                             if match:
                                                 title = match.group(1)
-                                                natural = f'Удалил задачу "{title}". Что дальше?'
-                                                natural_responses.append(natural)
+                                                natural_responses.append(f"TASK_DELETED: title='{title}'")
                                             else:
                                                 natural_responses.append(result_text)
 
@@ -892,7 +883,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     # Это гарантирует что ответ будет по промпту, а не шаблонный
                                     if final_content and not has_list_tasks:
                                         # Формируем сообщение для AI с результатами действий
-                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}\n\nСформулируй ЕСТЕСТВЕННЫЙ ответ пользователю по стилю промпта (без нумерации, списков, шаблонов). Коротко и по делу, как живой человек."
+                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}\n\nСформулируй ЕСТЕСТВЕННЫЙ ответ пользователю по стилю промпта:\n- Без нумерации, списков, шаблонов\n- Коротко и по делу, как живой человек\n- ОБЯЗАТЕЛЬНО предложи 2-3 альтернативных варианта дальнейших действий (учитывай контекст, возможности, ситуацию)\n- Варианты описывай свободно, не списком"
                                         
                                         # Добавляем контекст в messages
                                         messages.append({"role": "user", "content": original_message})
