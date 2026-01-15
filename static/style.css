@@ -325,7 +325,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr; /* Equal width flexible columns */
+    grid-template-columns: 1fr 1.5fr 1fr; /* Center column 50% wider than side columns */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height)) * 0.98);
     gap: 0.5px;
