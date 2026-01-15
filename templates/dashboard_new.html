@@ -205,7 +205,10 @@
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                                 
                                 <!-- Горизонтальный ряд избранных контактов -->
-                                <div id="circle-contacts-orbit" style="display: flex; gap: 8px; overflow-x: auto; max-width: 100%; padding: 8px 0; scrollbar-width: thin;">
+                                <div id="circle-contacts-orbit" style="display: flex; gap: 8px; flex-wrap: wrap; max-width: 100%; padding: 8px 0; justify-content: center;">
+                                </div>
+                                <!-- Счетчик избранных контактов -->
+                                <div id="favorite-contacts-count" style="font-size: 12px; color: #59636E; margin-top: 4px;">
                                 </div>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -1059,7 +1062,6 @@
             const button = document.getElementById('profile-toggle-btn');
             const svg = button ? button.querySelector('svg') : null;
             const peopleSection = document.querySelector('.people-section');
-            const peopleList = document.querySelector('.people-list');
             if (!content) return; // nothing to toggle
             
             const isCollapsed = (content.style.display || '') === 'none';
@@ -1067,24 +1069,14 @@
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (peopleSection) {
-                    peopleSection.style.flex = '';
-                    peopleSection.style.minHeight = '';
-                    peopleSection.style.marginBottom = '';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
+                    peopleSection.style.display = 'block';
                 }
                 localStorage.setItem('profileCollapsed', 'false');
             } else {
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto';
-                    peopleSection.style.minHeight = '0';
-                    peopleSection.style.marginBottom = '40px';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
+                    peopleSection.style.display = 'none';
                 }
                 localStorage.setItem('profileCollapsed', 'true');
             }
@@ -2471,6 +2463,7 @@
         
         function updateCircleContacts(partners) {
             const orbitContainer = document.getElementById('circle-contacts-orbit');
+            const countContainer = document.getElementById('favorite-contacts-count');
             if (!orbitContainer) return;
             
             // Фильтруем контакты: берем избранные
@@ -2482,6 +2475,7 @@
             if (myContacts.length === 0) {
                 orbitContainer.innerHTML = '';
                 orbitContainer.style.display = 'none';
+                if (countContainer) countContainer.innerHTML = '';
                 return;
             }
             
@@ -2510,6 +2504,11 @@
             });
             
             orbitContainer.innerHTML = html;
+            
+            // Обновляем счетчик
+            if (countContainer) {
+                countContainer.innerHTML = `Избранных контактов: ${myContacts.length}`;
+            }
         }
         
         async function updateDelegations() {
