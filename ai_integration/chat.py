@@ -771,11 +771,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                             logger.warning(f"Could not parse recommendations: {e}")
                                                             pass
 
-                                                    # Передаем AI только факты для генерации живого ответа
-                                                    context_info = f"Задача '{title}' успешно добавлена"
-                                                    if recommendations:
-                                                        context_info += f". Рекомендации: {', '.join(recommendations[:2])}"
-                                                    natural_responses.append(context_info)
+                                                    # ИСПРАВЛЕНО: Передаем контекст для AI, не формируем ответ сами
+                                                    # AI должен сгенерировать естественный ответ по промпту
+                                                    natural_responses.append(f"TASK_CREATED: title='{title}', id={task_id}")
                                                 finally:
                                                     session_db.close()
                                             else:
@@ -889,6 +887,35 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     # Для list_tasks анализ уже добавлен выше
 
                                     final_content = "\n".join(natural_responses)
+
+                                    # КРИТИЧНО: Отправляем результаты tool calls обратно в AI для естественного ответа
+                                    # Это гарантирует что ответ будет по промпту, а не шаблонный
+                                    if final_content and not has_list_tasks:
+                                        # Формируем сообщение для AI с результатами действий
+                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}\n\nСформулируй ЕСТЕСТВЕННЫЙ ответ пользователю по стилю промпта (без нумерации, списков, шаблонов). Коротко и по делу, как живой человек."
+                                        
+                                        # Добавляем контекст в messages
+                                        messages.append({"role": "user", "content": original_message})
+                                        messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
+                                        messages.append({"role": "user", "content": tool_context_msg})
+                                        
+                                        # Запрашиваем естественный ответ от AI
+                                        data = {
+                                            "model": "deepseek-chat",
+                                            "messages": messages,
+                                            "temperature": 0.7,
+                                            "max_tokens": 200
+                                        }
+                                        
+                                        try:
+                                            async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
+                                                if ai_response.status == 200:
+                                                    ai_result = await ai_response.json()
+                                                    final_content = ai_result["choices"][0]["message"]["content"].strip()
+                                                    logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
+                                        except Exception as e:
+                                            logger.warning(f"[AI NATURAL RESPONSE] Failed to get natural response, using original: {e}")
+                                            # Оставляем original final_content если AI не ответил
 
                                     # Enforcement отключен - AI должен отвечать естественно
                                     # intent_type = "list_tasks" if has_list_tasks else None
