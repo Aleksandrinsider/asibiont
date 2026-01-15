@@ -7,6 +7,7 @@ from config import DATABASE_URL
 logger = logging.getLogger(__name__)
 Base = declarative_base()
 
+
 class User(Base):
     __tablename__ = 'users'
 
@@ -20,8 +21,12 @@ class User(Base):
     do_not_disturb_until = Column(DateTime)
     pending_action = Column(Text)  # JSON for pending interactions
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), onupdate=datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(
+        DateTime, default=datetime.datetime.now(
+            datetime.timezone.utc), onupdate=datetime.datetime.now(
+            datetime.timezone.utc))
     invalid_chat = Column(Boolean, default=False)  # Flag set when Telegram chat is invalid (chat not found)
+
 
 class Task(Base):
     __tablename__ = 'tasks'
@@ -49,6 +54,7 @@ class Task(Base):
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])
 
+
 class Interaction(Base):
     __tablename__ = 'interactions'
 
@@ -59,6 +65,7 @@ class Interaction(Base):
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="interactions")
+
 
 class UserProfile(Base):
     __tablename__ = 'user_profiles'
@@ -87,6 +94,7 @@ class UserProfile(Base):
 
     user = relationship("User", backref="profile")
 
+
 class UserRating(Base):
     __tablename__ = 'user_ratings'
 
@@ -99,6 +107,7 @@ class UserRating(Base):
 
     rater = relationship("User", foreign_keys=[rater_user_id])
     rated_user = relationship("User", foreign_keys=[rated_user_id])
+
 
 class Subscription(Base):
     __tablename__ = 'subscriptions'
@@ -115,6 +124,7 @@ class Subscription(Base):
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="subscription")
+
 
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
@@ -139,6 +149,7 @@ except Exception as e:
 
 Session = sessionmaker(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     db = SessionLocal()

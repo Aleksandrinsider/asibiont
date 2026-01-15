@@ -1,5 +1,5 @@
+from . import handlers
 import aiohttp
-import requests
 import json
 import logging
 import asyncio
@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import re
 import pytz
 
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from config import DEEPSEEK_API_KEY
 from models import Session, User, Task, UserProfile, Subscription
 from .memory import decrypt_data
 from .utils import (
@@ -27,11 +27,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-from . import handlers
 
 add_task = handlers.add_task
 complete_task = handlers.complete_task
-list_tasks = handlers.list_tasks  
+list_tasks = handlers.list_tasks
 find_partners = handlers.find_partners
 update_profile = handlers.update_profile
 delegate_task = handlers.delegate_task
@@ -45,14 +44,8 @@ enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 
 
-
 async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     # Force rebuild v3.0 - FIXED clean_content issue
-    import re
-    import json
-    from datetime import datetime, timezone, timedelta
-    import pytz
-
     logger = logging.getLogger(__name__)
 
     # Ensure context is a list or None
@@ -80,8 +73,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
     )
     logger.info(
-        f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}"
-    )
+        f"chat_with_ai called with message: {
+            clean_message[
+                :50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {
+            file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
 
     if not DEEPSEEK_API_KEY:
@@ -99,13 +94,23 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now
         current_time_str = user_now.strftime("%H:%M")
-        months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+        months = [
+            'января',
+            'февраля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'августа',
+            'сентября',
+            'октября',
+            'ноября',
+            'декабря']
         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         user_username = "user"
 
         if user_id:
-            from models import Session, User, Task, UserProfile, Subscription
-
             db_session = Session()
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
 
@@ -173,7 +178,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     profile_info.append(f"Интересы: {profile.interests}")
                 if profile.goals:
                     profile_info.append(f"Цели: {profile.goals}")
-                
+
                 # Определяем незаполненные поля
                 empty_fields = []
                 if not profile.city:
@@ -190,21 +195,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     empty_fields.append("цели")
                 if not (hasattr(profile, 'languages') and profile.languages):
                     empty_fields.append("языки")
-                
+
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
-                
+
                 # Проактивное заполнение при незаполненных полях
                 if empty_fields:
                     fields_list = ', '.join(empty_fields[:3])  # Берем первые 3 незаполненных
                     user_memory += f"\n⚠️ НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво)!"
-                
+
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
                 # Если профиль совсем пустой - срочно спроси в первом сообщении
                 if not profile_filled and (len(context) if context else 0 < 2):
                     user_memory += "\nКРИТИЧНО ВАЖНО: Профиль почти ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
             else:
-                user_memory += f"\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
+                user_memory += "\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
 
             # НЕ загружаем задачи в user_memory! Агент должен сам вызвать list_tasks()
             # Это критично для предотвращения выдумывания задач
@@ -345,10 +350,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
         if "error" not in context_analysis:
             # Добавляем анализ в user_memory для использования в промпте
-            user_memory += f"\n\nАНАЛИЗ КОНТЕКСТА:\n"
+            user_memory += "\n\nАНАЛИЗ КОНТЕКСТА:\n"
             user_memory += f"Профиль заполнен на {context_analysis['profile'].get('filled_fields', 0)}/6 полей\n"
-            user_memory += f"Задачи: {context_analysis['tasks']['pending']} активных, {context_analysis['tasks']['completed']} выполнено\n"
-            user_memory += f"Основные темы: {', '.join([f'{theme}: {count}' for theme, count in context_analysis['patterns']['main_themes']])}\n"
+            user_memory += f"Задачи: {
+                context_analysis['tasks']['pending']} активных, {
+                context_analysis['tasks']['completed']} выполнено\n"
+            user_memory += f"Основные темы: {', '.join([f'{theme}: {count}' for theme,
+                                                        count in context_analysis['patterns']['main_themes']])}\n"
             user_memory += f"Эмоциональное состояние: {context_analysis['context_insights']['emotional_state']}\n"
             user_memory += f"Уровень срочности: {context_analysis['context_insights']['urgency_level']}\n"
             if context_analysis['recommendations']:
@@ -357,7 +365,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
-        
+
         # Извлекаем последние 2 ответа агента для предотвращения повторов
         last_responses = []
         if context and isinstance(context, list):
@@ -367,17 +375,23 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     response_text = item["agent"][:40].strip()
                     if response_text and response_text not in last_responses:
                         last_responses.append(response_text)
-        
+
         # Ограничиваем до 2 последних
         last_responses = last_responses[-2:]
-        
+
         if PROMPTS_V2_AVAILABLE:
             system_prompt = get_optimized_prompt_final(
                 user_now, current_time_str, user_username, mentions_str, user_memory, last_responses
             )
             logger.info("[PROMPTS V2] Using optimized prompt system")
         else:
-            system_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
+            system_prompt = get_extended_system_prompt(
+                user_now,
+                current_time_str,
+                current_date_str,
+                user_username,
+                mentions_str,
+                user_memory)
             logger.info("[LEGACY] Using extended prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
@@ -387,7 +401,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 last_task_data = await redis_client.get(f"last_task_id:{user_id}")
                 if last_task_data:
                     task_info = json.loads(last_task_data.decode("utf-8"))
-                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={task_info['id']}, название='{task_info['title']}', время='{task_info.get('reminder_time', '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={task_info['id']}, ...)!"
+                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={
+                        task_info['id']}, название='{
+                        task_info['title']}', время='{
+                        task_info.get(
+                            'reminder_time',
+                            '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={
+                        task_info['id']}, ...)!"
                     logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: {task_info}")
             except Exception as e:
                 logger.error(f"Error loading last_task_id from Redis: {e}")
@@ -404,25 +424,50 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         messages.append({"role": "user", "content": user_message_with_context})
 
         # Используем intent classification вместо hardcoded проверок
-        is_advice_question = intent.get('type') in ['conversation', 'unknown'] and any(word in clean_message.lower() for word in [
-            "что делать", "как", "совет", "помоги", "что посоветуешь", "как быть", 
-            "что предпринять", "какие шаги", "что делать с", "как решить",
-            "не знаю с чего начать", "с чего начать", "как начать", "что делать дальше",
-            "что делать если", "как лучше", "что посоветуешь", "какой совет",
-            "нужен совет", "посоветуй", "как поступить", "что делать в ситуации",
-            "как оптимизировать", "как улучшить", "как подготовиться", "как начать",
-            "с чего начать", "как эффективно", "что можно сделать", "как решить проблему"
-        ])
+        is_advice_question = intent.get('type') in [
+            'conversation',
+            'unknown'] and any(
+            word in clean_message.lower() for word in [
+                "что делать",
+                "как",
+                "совет",
+                "помоги",
+                "что посоветуешь",
+                "как быть",
+                "что предпринять",
+                "какие шаги",
+                "что делать с",
+                "как решить",
+                "не знаю с чего начать",
+                "с чего начать",
+                "как начать",
+                "что делать дальше",
+                "что делать если",
+                "как лучше",
+                "что посоветуешь",
+                "какой совет",
+                "нужен совет",
+                "посоветуй",
+                "как поступить",
+                "что делать в ситуации",
+                "как оптимизировать",
+                "как улучшить",
+                "как подготовиться",
+                "как начать",
+                "с чего начать",
+                "как эффективно",
+                "что можно сделать",
+                "как решить проблему"])
 
         # Определяем, является ли сообщение запросом на управление задачами на основе intent
         is_task_request = intent.get('type') in [
-            'add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 
+            'add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task',
             'delegate_task', 'find_partners', 'update_profile'
         ]
 
         # Умная логика выбора инструментов на основе intent classification
         intent_type = intent.get('type', 'unknown')
-        
+
         if intent_type in ['conversation', 'unknown'] and is_advice_question:
             # Вопросы о совете - не используем инструменты, отвечаем текстом
             tool_choice = "none"
@@ -445,7 +490,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         # Динамическая температура в зависимости от типа сообщения
         temperature = 0.7  # Default
         top_p = 1.0  # Default
-        
+
         if intent_type == 'greeting':
             # Для приветствий нужна максимальная вариативность
             temperature = 1.0
@@ -462,9 +507,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             # По умолчанию
             temperature = 0.7
             top_p = 1.0
-        
+
         logger.info(f"Using temperature {temperature}, top_p {top_p} for intent type '{intent_type}'")
-        
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
@@ -523,7 +568,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             tool_results = []  # Инициализируем заранее
 
                             # Проверяем, не написал ли AI JSON в текст вместо tool_calls
-                            json_in_text = re.search(r'\{.*?"name":\s*"(.*?)"\s*,\s*"arguments":\s*(\{.*?\})\s*\}', content, re.DOTALL)
+                            json_in_text = re.search(
+                                r'\{.*?"name":\s*"(.*?)"\s*,\s*"arguments":\s*(\{.*?\})\s*\}', content, re.DOTALL)
                             if json_in_text and not tool_calls:
                                 try:
                                     func_name = json_in_text.group(1)
@@ -535,8 +581,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                         }
                                     }]
                                     # Удаляем JSON из текста
-                                    content = re.sub(r'\{.*?"name":\s*".*?"\s*,\s*"arguments":\s*\{.*?\}\s*\}', '', content, flags=re.DOTALL).strip()
+                                    content = re.sub(
+                                        r'\{.*?"name":\s*".*?"\s*,\s*"arguments":\s*\{.*?\}\s*\}',
+                                        '',
+                                        content,
+                                        flags=re.DOTALL).strip()
                                 except Exception as e:
+                                    logger.warning(f"Could not parse JSON in content: {e}")
                                     pass
 
                             if tool_calls:
@@ -559,7 +610,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
 
                                             if func_name == "add_task":
-                                                logger.info(f"[AI TOOL CALL] add_task called with reminder_time: {args.get('reminder_time')}, current user_now: {user_now}")
+                                                logger.info(
+                                                    f"[AI TOOL CALL] add_task called with reminder_time: {
+                                                        args.get('reminder_time')}, current user_now: {user_now}")
                                                 result = add_task(
                                                     title=args.get("title", args.get("task_title", "Задача")),
                                                     description=args.get("description", ""),
@@ -678,7 +731,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             if match:
                                                 title = match.group(1)
                                                 task_id = int(match.group(2))
-                                                
+
                                                 # Получаем рекомендации из базы данных
                                                 from models import Session, Task
                                                 session_db = Session()
@@ -689,16 +742,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                         import json
                                                         try:
                                                             recommendations = json.loads(task.recommendations)
-                                                        except:
+                                                        except Exception as e:
+                                                            logger.warning(f"Could not parse recommendations: {e}")
                                                             pass
-                                                    
+
                                                     # Формируем краткий ответ
                                                     if recommendations:
                                                         rec_text = " Рекомендации: " + ", ".join(recommendations[:3])
                                                         natural = f'Задача "{title}" добавлена и запланирована.{rec_text}'
                                                     else:
                                                         natural = f'Задача "{title}" добавлена и запланирована.'
-                                                    
+
                                                     natural_responses.append(natural)
                                                 finally:
                                                     session_db.close()
@@ -734,8 +788,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     natural = f"Отлично! Добавил в твои интересы: {items}. Теперь я смогу находить для тебя людей с похожими увлечениями и предлагать релевантные активности."
                                                     natural_responses.append(natural)
                                                 else:
-                                                    natural_responses.append("Профиль обновлен! Добавил новые интересы.")
-                                            
+                                                    natural_responses.append(
+                                                        "Профиль обновлен! Добавил новые интересы.")
+
                                             elif "removed_interests:" in result_text:
                                                 match = re.search(r"removed_interests:([^;]+)", result_text)
                                                 if match:
@@ -744,7 +799,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     natural_responses.append(natural)
                                                 else:
                                                     natural_responses.append("Профиль обновлен! Убрал интересы.")
-                                            
+
                                             elif "changed_city:" in result_text:
                                                 match = re.search(r"changed_city:([^->]+)->([^;]+)", result_text)
                                                 if match:
@@ -754,7 +809,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     natural_responses.append(natural)
                                                 else:
                                                     natural_responses.append("Профиль обновлен! Изменил город.")
-                                            
+
                                             elif "changed_company:" in result_text:
                                                 match = re.search(r"changed_company:([^->]+)->([^;]+)", result_text)
                                                 if match:
@@ -763,7 +818,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     natural_responses.append(natural)
                                                 else:
                                                     natural_responses.append("Профиль обновлен! Изменил компанию.")
-                                            
+
                                             elif "added_skills:" in result_text:
                                                 match = re.search(r"added_skills:([^;]+)", result_text)
                                                 if match:
@@ -772,7 +827,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     natural_responses.append(natural)
                                                 else:
                                                     natural_responses.append("Профиль обновлен! Добавил навыки.")
-                                            
+
                                             elif "added_goals:" in result_text:
                                                 match = re.search(r"added_goals:([^;]+)", result_text)
                                                 if match:
@@ -781,7 +836,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                     natural_responses.append(natural)
                                                 else:
                                                     natural_responses.append("Профиль обновлен! Добавил цели.")
-                                            
+
                                             else:
                                                 # Общий случай если не удалось распарсить
                                                 natural_responses.append("Профиль обновлен! Сохранил изменения.")
@@ -826,8 +881,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                     # )
 
                                     logger.info(
-                                        f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response"
-                                    )
+                                        f"[TOOL CALLS] Processed {
+                                            len(tool_results)} tool calls, returning natural response")
                                     return final_content
                             else:
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
@@ -840,7 +895,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     try:
                         if PROMPTS_V2_AVAILABLE:
                             fallback_result = improved_fallback(
-                                intent, tool_calls if 'tool_calls' in locals() else None, 
+                                intent, tool_calls if 'tool_calls' in locals() else None,
                                 content, original_message, user_id
                             )
                             logger.info(f"[PROMPTS V2] Fallback actions: {len(fallback_result)}")
@@ -911,17 +966,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                             # Для list_tasks просто добавляем результат - главный промпт уже содержит все правила
                             if has_list_tasks and list_tasks_result:
                                 natural_responses.append(list_tasks_result)
-                            
+
                             # Формируем финальный контент
                             final_content = "\n".join(natural_responses)
-                            
+
                             # Enforcement отключен - AI должен отвечать естественно
                             # intent_type = "list_tasks" if has_list_tasks else None
                             # final_content = await enforce_prompt_compliance(
                             #     final_content, intent_type, user_id, context,
                             #     system_prompt, messages, url, headers
                             # )
-                            
+
                             return final_content
                     except Exception as e:
                         logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
@@ -945,9 +1000,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         if not content:
                             logger.warning("[RETRY] Response empty, retrying with explicit instruction")
                             retry_system = (
-                                system_prompt
-                                + "\n\nКРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!"
-                            )
+                                system_prompt +
+                                "\n\nКРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!")
 
                             retry_messages = [{"role": "system", "content": retry_system}]
                             if context:
@@ -992,7 +1046,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
                     # Очистка от технических деталей перед возвратом
                     # НЕ применяем clean_technical_details для обычных ответов AI!
-                    
+
                     # Метрики качества ответа
                     response_quality = {
                         'length': len(content),
@@ -1002,20 +1056,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                         'user_id': user_id
                     }
                     logger.info(f"[RESPONSE QUALITY] {response_quality}")
-                    
+
                     # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
                     if not content or len(content.strip()) < 10:
-                        logger.warning(f"[FALLBACK] Empty or too short response, using fallback")
+                        logger.warning("[FALLBACK] Empty or too short response, using fallback")
                         content = improved_fallback(intent, tool_calls, content, message, user_id)
-                    
+
                     # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
                     # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
-                    
+
                     return content
 
             except Exception as e:
-                import traceback
-
                 logger.error(f"Error in chat_with_ai: {e}")
                 logger.error(f"Error type: {type(e).__name__}")
                 logger.error(f"Traceback:\n{traceback.format_exc()}")
@@ -1038,8 +1090,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             last_frame = tb[-1]
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
         return f"Ошибка: {str(e)} [v2]"
-
-
 
 
 async def generate_reminder(user_id, task_title):
@@ -1102,24 +1152,22 @@ async def generate_reminder(user_id, task_title):
                     content = clean_technical_details(content)
                     # Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, task_title)
-                    
+
                     # Проверяем и принуждаем соблюдение промпта
                     is_compliant, issues = validate_response_compliance(content, "reminder")
                     if not is_compliant:
                         logger.warning(f"[COMPLIANCE] Reminder response not compliant: {issues}")
-                        # Принуждаем исправление
-                        content = await enforce_prompt_compliance(
-                            content, "reminder", user_id, None, system_prompt, messages, url, headers
-                        )
-                    
+                        # Принуждаем исправление - функция временно отключена
+                        # content = await enforce_prompt_compliance(
+                        #     content, "reminder", user_id, None, system_prompt, messages, url, headers
+                        # )
+
                     return content
                 else:
                     return "Ошибка генерации напоминания."
     except Exception as e:
         print(f"Error in generate_reminder: {e}")
         return f"Напоминание о '{task_title}'."
-
-
 
 
 async def generate_result_check(user_id, task_title):
@@ -1145,10 +1193,17 @@ async def generate_result_check(user_id, task_title):
         import pytz
         user_now = datetime.now(pytz.UTC)
         current_time_str = user_now.strftime("%H:%M")
+        current_date_str = user_now.strftime("%Y-%m-%d")
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(
+            user_now,
+            current_time_str,
+            current_date_str,
+            user_username,
+            mentions_str,
+            user_memory)
 
         # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
         system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
@@ -1185,24 +1240,22 @@ async def generate_result_check(user_id, task_title):
                     content = clean_technical_details(content)
                     # Обогащаем ответ вовлекающими элементами
                     content = enrich_response_with_engagement(content, user_id, task_title)
-                    
+
                     # Проверяем и принуждаем соблюдение промпта
                     is_compliant, issues = validate_response_compliance(content, "result_check")
                     if not is_compliant:
                         logger.warning(f"[COMPLIANCE] Result check response not compliant: {issues}")
-                        # Принуждаем исправление
-                        content = await enforce_prompt_compliance(
-                            content, "result_check", user_id, None, system_prompt, messages, url, headers
-                        )
-                    
+                        # Принуждаем исправление - функция временно отключена
+                        # content = await enforce_prompt_compliance(
+                        #     content, "result_check", user_id, None, system_prompt, messages, url, headers
+                        # )
+
                     return content
                 else:
                     return "Ошибка генерации вопроса."
     except Exception as e:
         print(f"Error in generate_result_check: {e}")
         return f"Результат задачи '{task_title}'?"
-
-
 
 
 async def generate_proactive_message(user_id):
@@ -1257,7 +1310,14 @@ async def generate_proactive_message(user_id):
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory + plans_info + tasks_info)
+        base_prompt = get_optimized_prompt_final(
+            user_now,
+            current_time_str,
+            user_username,
+            mentions_str,
+            user_memory +
+            plans_info +
+            tasks_info)
 
         # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
         system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
@@ -1294,24 +1354,22 @@ async def generate_proactive_message(user_id):
                     content = clean_technical_details(content)
                     # Проактивные сообщения уже вовлекающие, но можно усилить
                     content = enrich_response_with_engagement(content, user_id, "")
-                    
+
                     # Проверяем и принуждаем соблюдение промпта
                     is_compliant, issues = validate_response_compliance(content, "proactive")
                     if not is_compliant:
                         logger.warning(f"[COMPLIANCE] Proactive message response not compliant: {issues}")
-                        # Принуждаем исправление
-                        content = await enforce_prompt_compliance(
-                            content, "proactive", user_id, None, system_prompt, messages, url, headers
-                        )
-                    
+                        # Принуждаем исправление - функция временно отключена
+                        # content = await enforce_prompt_compliance(
+                        #     content, "proactive", user_id, None, system_prompt, messages, url, headers
+                        # )
+
                     return content
                 else:
                     return "Ошибка генерации сообщения."
     except Exception as e:
         print(f"Error in generate_proactive_message: {e}")
         return "Добавьте задачу."
-
-
 
 
 async def generate_daily_report(user_id):
@@ -1382,24 +1440,22 @@ async def generate_daily_report(user_id):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
-                    
+
                     # Проверяем и принуждаем соблюдение промпта
                     is_compliant, issues = validate_response_compliance(content, "daily_report")
                     if not is_compliant:
                         logger.warning(f"[COMPLIANCE] Daily report response not compliant: {issues}")
-                        # Принуждаем исправление
-                        content = await enforce_prompt_compliance(
-                            content, "daily_report", user_id, None, system_prompt, messages, url, headers
-                        )
-                    
+                        # Принуждаем исправление - функция временно отключена
+                        # content = await enforce_prompt_compliance(
+                        #     content, "daily_report", user_id, None, system_prompt, messages, url, headers
+                        # )
+
                     return content
                 else:
                     return "Ошибка генерации отчета."
     except Exception as e:
         print(f"Error in generate_daily_report: {e}")
         return "Отчет о задачах."
-
-
 
 
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
@@ -1456,12 +1512,10 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
         messages = [
-            {"role": "system", "content": system_prompt},
             {
-                "role": "user",
-                "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.",
-            },
-        ]
+                "role": "system", "content": system_prompt}, {
+                "role": "user", "content": f"Напомни о просроченных задачах: {
+                    ', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.", }, ]
 
         data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
@@ -1476,16 +1530,16 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
-                    
+
                     # Проверяем и принуждаем соблюдение промпта
                     is_compliant, issues = validate_response_compliance(content, "overdue")
                     if not is_compliant:
                         logger.warning(f"[COMPLIANCE] Overdue reminder response not compliant: {issues}")
-                        # Принуждаем исправление
-                        content = await enforce_prompt_compliance(
-                            content, "overdue", user_id, None, system_prompt, messages, url, headers
-                        )
-                    
+                        # Принуждаем исправление - функция временно отключена
+                        # content = await enforce_prompt_compliance(
+                        #     content, "overdue", user_id, None, system_prompt, messages, url, headers
+                        # )
+
                     return content
                 else:
                     return "Ошибка генерации напоминания."

@@ -7,11 +7,9 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from ai_integration import chat_with_ai
-from models import Session, User, UserProfile, Subscription
+from models import Session, User, Subscription
 from config import WEBHOOK_URL
-from config import WEB_APP_URL
-from redis.asyncio import Redis
-from config import REDIS_URL, FREE_ACCESS_MODE
+from config import WEB_APP_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
 
 try:
@@ -22,6 +20,7 @@ except Exception as e:
     logging.warning(f"Voice recognition not available: {e}")
     VOICE_RECOGNITION_AVAILABLE = False
 
+
 def transcribe_audio_sync(audio_file_path):
     """
     Синхронная транскрибация аудио файла в текст.
@@ -30,14 +29,14 @@ def transcribe_audio_sync(audio_file_path):
     if not VOICE_RECOGNITION_AVAILABLE:
         logging.error("Voice recognition libraries not available")
         return None
-        
+
     wav_path = None
     try:
         # Конвертируем OGG в WAV для SpeechRecognition
         audio = AudioSegment.from_ogg(audio_file_path)
         wav_path = audio_file_path.replace('.ogg', '.wav')
         audio.export(wav_path, format='wav')
-        
+
         # Используем Google Speech Recognition (бесплатный, без API ключа)
         recognizer = sr.Recognizer()
         with sr.AudioFile(wav_path) as source:
@@ -45,7 +44,7 @@ def transcribe_audio_sync(audio_file_path):
             text = recognizer.recognize_google(audio_data, language='ru-RU')
             logging.info(f"Successfully transcribed: {text[:50]}...")
             return text
-            
+
     except Exception as e:
         logging.error(f"Error transcribing audio: {e}", exc_info=True)
         return None
@@ -54,8 +53,10 @@ def transcribe_audio_sync(audio_file_path):
         if wav_path and os.path.exists(wav_path):
             try:
                 os.unlink(wav_path)
-            except:
+            except Exception as e:
+                logging.warning(f"Failed to remove temporary WAV file {wav_path}: {e}")
                 pass
+
 
 async def transcribe_audio(audio_file_path):
     """Асинхронная обёртка для транскрибации."""
@@ -66,16 +67,16 @@ PREMIUM_DESCRIPTION = """🎯 Закрытое сообщество от лаб�
 
 3000₽/месяц — доступ к экосистеме + AI-инструменты
 
-✓ Живой поиск людей через ваши дела  
+✓ Живой поиск людей через ваши дела
 Система анализирует ваши задачи и цели, находя тех, кто занят похожим прямо сейчас в вашем городе. Не статичный профиль, а профиль, который обновляется с вашими делами. Здесь знакомства превращаются в проекты, дружбу и реальные результаты.
 
-✓ AI-агент, который понимает контекст вашей жизни  
+✓ AI-агент, который понимает контекст вашей жизни
 Агент помнит всё, связывает задачи, предлагает следующие шаги. Понимает голосовые сообщения — просто говорите в микрофон. Умные напоминания учитывают дедлайны.
 
-✓ Панель управления всей экосистемой  
+✓ Панель управления всей экосистемой
 Все задачи, партнёры, встречи — в одном месте. Отслеживайте свои дедлайны, делегируйте задачи через чат с AI. Видите историю взаимодействий с партнёрами, статистику выполненных задач.
 
-✓ Надёжная конфиденциальность  
+✓ Надёжная конфиденциальность
 Никто не видит ваши реальные задачи. Система работает с ключевыми словами — "стартап", "маркетинг", "бег" — для поиска партнёров. End-to-end шифрование всех данных. Ваши планы, переписки, контакты доступны только вам. Полный контроль над тем, кто и что о вас знает.
 
 Станьте частью сообщества созидателей — /subscribe
@@ -87,16 +88,18 @@ logger = logging.getLogger(__name__)
 # Global Redis client
 redis_client = None
 
+
 async def init_redis(client):
     global redis_client
     redis_client = client
 
 router = Router()
 
+
 @router.message(Command("start"))
 async def start_handler(message: Message):
     user_id = message.from_user.id
-    
+
     # Check for duplicate message processing
     message_key = f"processed_message:{message.message_id}"
     if redis_client:
@@ -104,7 +107,7 @@ async def start_handler(message: Message):
             logger.info(f"Duplicate /start message {message.message_id} ignored")
             return
         await redis_client.set(message_key, "1", ex=3600)
-    
+
     # Create user if doesn't exist
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -114,11 +117,12 @@ async def start_handler(message: Message):
         session.commit()
         logger.info(f"Created new user {user_id}")
     session.close()
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
     await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
+
 
 @router.message(Command("update_profile"))
 async def update_profile_handler(message: Message):
@@ -151,8 +155,8 @@ async def update_profile_handler(message: Message):
                     context = json.loads(context_data)
         else:
             context = []
-    except Exception as e:
-            context = []
+    except Exception:
+        context = []
     response = await chat_with_ai(prompt, context, user_id)
     await message.bot.send_message(message.chat.id, response)
     # Сохранить контекст
@@ -162,8 +166,9 @@ async def update_profile_handler(message: Message):
     try:
         if redis_client:
             redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-    except Exception as e:
+    except Exception:
         pass
+
 
 @router.message(Command("find_partners"))
 async def find_partners_handler(message: Message):
@@ -191,7 +196,7 @@ async def find_partners_handler(message: Message):
                     context = json.loads(context_data)
         else:
             context = []
-    except Exception as e:
+    except Exception:
         context = []
     response = await chat_with_ai("Найди партнеров", context, user_id)
     await message.bot.send_message(message.chat.id, response)
@@ -202,8 +207,9 @@ async def find_partners_handler(message: Message):
     try:
         if redis_client:
             redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-    except Exception as e:
+    except Exception:
         pass
+
 
 @router.message(Command("subscribe"))
 async def subscribe_handler(message: Message):
@@ -225,17 +231,19 @@ async def subscribe_handler(message: Message):
     await message.bot.send_message(message.chat.id, f"Оплатите подписку удобным способом:\n\nСсылка на оплату (ЮКАССА, СБЕР или банковская карта): {payment_url}\n\nПосле оплаты подписка активируется мгновенно — никаких задержек!")
     session.close()
 
+
 @router.message()
 async def chat_handler(message: Message):
     user_id = message.from_user.id
     message_id = message.message_id
-    
-    logger.info(f"[HANDLER] chat_handler called: message_id={message_id}, user={user_id}, text={message.text[:30] if message.text else 'NO_TEXT'}")
-    
+
+    logger.info(
+        f"[HANDLER] chat_handler called: message_id={message_id}, user={user_id}, text={message.text[:30] if message.text else 'NO_TEXT'}")
+
     # Обработка голосовых сообщений
     if message.voice:
         logger.info(f"[VOICE] Received voice message from user {user_id}")
-        
+
         try:
             # Проверка подписки
             session = Session()
@@ -246,21 +254,21 @@ async def chat_handler(message: Message):
                 session.commit()
             subscription = session.query(Subscription).filter_by(user_id=user.id).first()
             session.close()
-            
+
             if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
                 await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
                 return
-            
+
             # Скачиваем голосовое сообщение
             file = await message.bot.get_file(message.voice.file_id)
             file_path = file.file_path
-            
+
             # Скачиваем файл
             import aiohttp
-            
+
             bot_token = message.bot.token
             file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
-            
+
             async with aiohttp.ClientSession() as session_http:
                 async with session_http.get(file_url) as resp:
                     if resp.status == 200:
@@ -268,14 +276,14 @@ async def chat_handler(message: Message):
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp_file:
                             tmp_file.write(await resp.read())
                             tmp_file_path = tmp_file.name
-                        
+
                         try:
                             # Показываем индикатор "печатает..."
                             await message.bot.send_chat_action(message.chat.id, "typing")
-                            
+
                             # Транскрибируем аудио в текст
                             text = await transcribe_audio(tmp_file_path)
-                            
+
                             if text:
                                 logger.info(f"[VOICE] Transcribed text: {text}")
                                 # Обрабатываем транскрибированный текст как обычное сообщение
@@ -283,7 +291,7 @@ async def chat_handler(message: Message):
                                 return
                             else:
                                 await message.bot.send_message(
-                                    message.chat.id, 
+                                    message.chat.id,
                                     "Не удалось распознать голосовое сообщение. Попробуйте отправить текст."
                                 )
                                 return
@@ -298,7 +306,7 @@ async def chat_handler(message: Message):
             logger.error(f"[VOICE] Error processing voice message: {e}", exc_info=True)
             await message.bot.send_message(message.chat.id, "Произошла ошибка при обработке голосового сообщения.")
             return
-    
+
     # Обработка текстовых сообщений
     if message.text:
         await process_text_message(user_id, message.text, message, None)
@@ -309,9 +317,9 @@ async def chat_handler(message: Message):
 
 async def process_text_message(user_id, text, message, state):
     message_id = message.message_id
-    
+
     logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {text[:50]}")
-    
+
     try:
         # Check for duplicate message processing
         message_key = f"processed_message:{message_id}:{user_id}"
@@ -319,14 +327,15 @@ async def process_text_message(user_id, text, message, state):
             logger.debug(f"[REDIS] Checking duplicate for key: {message_key}")
             is_duplicate = await redis_client.exists(message_key)
             if is_duplicate:
-                logger.warning(f"[DUPLICATE BLOCKED] Message {message_id} from user {user_id} IGNORED (already processed)")
+                logger.warning(
+                    f"[DUPLICATE BLOCKED] Message {message_id} from user {user_id} IGNORED (already processed)")
                 return
             # Set key with longer expiration
             await redis_client.set(message_key, "1", ex=3600)
             logger.info(f"[REDIS OK] Marked message {message_id} as processed, will respond")
         else:
             logger.warning(f"[NO REDIS] Cannot prevent duplicates for message {message_id}")
-        
+
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
@@ -338,7 +347,7 @@ async def process_text_message(user_id, text, message, state):
         if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
             await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION)
             return
-        
+
         # Handle delegation commands
         if text.lower().startswith("принять задачу "):
             task_id = text.split()[-1]
@@ -349,7 +358,7 @@ async def process_text_message(user_id, text, message, state):
             except Exception as e:
                 await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
             return
-        
+
         if text.lower().startswith("отклонить задачу "):
             task_id = text.split()[-1]
             try:
@@ -359,7 +368,7 @@ async def process_text_message(user_id, text, message, state):
             except Exception as e:
                 await message.bot.send_message(message.chat.id, f"Ошибка: {str(e)}")
             return
-        
+
         if text.lower() == "очистить историю":
             context = []
             if redis_client:
@@ -369,7 +378,7 @@ async def process_text_message(user_id, text, message, state):
                     logger.error(f"Error saving context to Redis: {e}")
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
-        
+
         context = []
         if redis_client:
             try:
@@ -402,10 +411,12 @@ async def process_text_message(user_id, text, message, state):
                 logger.error(f"Error saving context to Redis: {e}", exc_info=True)
         else:
             logger.warning("Redis client not initialized, context not saved")
-        
+
         if response and response.strip():
             try:
-                logger.info(f"[SENDING] Sending response to user {user_id}, chat {message.chat.id}, message_id={message_id}")
+                logger.info(
+                    f"[SENDING] Sending response to user {user_id}, chat {
+                        message.chat.id}, message_id={message_id}")
                 await message.bot.send_message(message.chat.id, response.strip())
                 logger.info(f"[SENT OK] Response sent successfully to user {user_id}")
             except Exception as e:
@@ -424,7 +435,10 @@ async def process_text_message(user_id, text, message, state):
             if response and response.strip():
                 interaction = Interaction(user_id=user.id, message_type='ai', content=response.strip())
             else:
-                interaction = Interaction(user_id=user.id, message_type='ai', content="Извините, не удалось сгенерировать ответ.")
+                interaction = Interaction(
+                    user_id=user.id,
+                    message_type='ai',
+                    content="Извините, не удалось сгенерировать ответ.")
             session.add(interaction)
             session.commit()
         session.close()
@@ -452,6 +466,7 @@ async def process_other_message(user_id, message, state):
             await message.bot.send_message(message.chat.id, "Не удалось определить часовой пояс по вашим координатам. Попробуйте указать его вручную через диалог.")
         return
 
+
 @router.message(Command("dashboard"))
 async def dashboard_handler(message: Message):
     user_id = message.from_user.id
@@ -462,7 +477,7 @@ async def dashboard_handler(message: Message):
         session.close()
         return
     session.close()
-    
+
     # Generate dashboard URL
     base_url = WEBHOOK_URL.replace("/webhook", "")
     dashboard_url = f"{base_url}/dashboard?telegram_id={user_id}"

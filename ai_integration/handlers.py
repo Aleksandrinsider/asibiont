@@ -1,9 +1,8 @@
 # Task and profile handler functions
 
 import logging
-import re
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import pytz
 from models import Session, Task, User, UserProfile, Interaction
 from sqlalchemy import or_
@@ -17,7 +16,7 @@ logger = logging.getLogger(__name__)
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     """Add a new task"""
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}")
-    
+
     if session is None:
         session = Session()
         close_session = True
@@ -25,7 +24,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     else:
         close_session = False
         logger.info("[ADD_TASK] Using provided session")
-    
+
     # Check if user exists
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
@@ -63,7 +62,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                     except pytz.exceptions.UnknownTimeZoneError:
                         logging.warning(f"Unknown timezone {user.timezone}, using UTC")
                         user_tz = pytz.UTC
-                
+
                 # Check if time is relative
                 if "через" in reminder_time.lower():
                     current_time = datetime.now(user_tz)
@@ -72,13 +71,15 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         if parsed_time.tzinfo is None:
                             parsed_time = user_tz.localize(parsed_time)
                         task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                        logging.info(f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+                        logging.info(
+                            f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
                 else:
                     # Parse as absolute time
                     local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
                     local_dt = user_tz.localize(local_dt)
                     task.reminder_time = local_dt.astimezone(pytz.UTC)
-                    logging.info(f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+                    logging.info(
+                        f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
             except ValueError:
                 pass
         if due_date:
@@ -90,7 +91,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             except ValueError:
                 pass
         session.add(task)
-        
+
         # Generate recommendations
         try:
             logger.info(f"[ADD_TASK] Generating recommendations for task '{title}'")
@@ -101,7 +102,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 logger.info(f"[ADD_TASK] Saved recommendations to task: {task.recommendations}")
         except Exception as e:
             logging.warning(f"Could not generate recommendations for task {title}: {e}")
-        
+
         session.commit()
         task_id = task.id
 
@@ -235,7 +236,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
@@ -294,7 +295,7 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         session.commit()
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -307,7 +308,7 @@ def skip_task(task_id=None, task_title=None, user_id=None, session=None):
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
@@ -357,7 +358,7 @@ def skip_task(task_id=None, task_title=None, user_id=None, session=None):
         session.commit()
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -370,7 +371,7 @@ def restore_task(task_id=None, task_title=None, user_id=None, session=None):
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
@@ -423,7 +424,7 @@ def restore_task(task_id=None, task_title=None, user_id=None, session=None):
         session.commit()
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -436,7 +437,7 @@ def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
@@ -471,13 +472,13 @@ def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
                     local_dt = datetime.combine(local_dt.date(), existing_time)
                 else:
                     local_dt = local_dt.replace(hour=9, minute=0)  # Default to 9 AM
-            
+
             local_dt = user_tz.localize(local_dt)
             task.reminder_time = local_dt.astimezone(pytz.UTC)
             session.commit()
-            
+
             result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
-            
+
             # Save to interaction history
             interaction = Interaction(user_id=user.id, message_type="ai", content=result)
             session.add(interaction)
@@ -486,7 +487,7 @@ def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
             result = f"Ошибка формата даты: {e}. Используйте формат YYYY-MM-DD или YYYY-MM-DD HH:MM."
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -495,13 +496,13 @@ def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
 def get_task_advice(task_id=None, user_id=None, session=None):
     """Get AI advice for a task"""
     import asyncio
-    
+
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
@@ -528,7 +529,7 @@ def get_task_advice(task_id=None, user_id=None, session=None):
         title = task.title
         description = decrypt_data(task.description) if task.description else ""
         status = task.status
-        
+
         # Generate advice using AI
         prompt = f"""Дай полезный совет по выполнению этой задачи:
 
@@ -542,12 +543,12 @@ def get_task_advice(task_id=None, user_id=None, session=None):
 3. Советы по эффективности
 
 Ответ должен быть кратким и полезным."""
-        
+
         try:
             from ..ai_integration import chat_with_ai
             advice = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=500))
             result = f"Совет по задаче '{title}':\n\n{advice}"
-            
+
             # Save to interaction history
             interaction = Interaction(user_id=user.id, message_type="ai", content=result)
             session.add(interaction)
@@ -557,7 +558,7 @@ def get_task_advice(task_id=None, user_id=None, session=None):
             result = f"Не удалось получить совет по задаче '{title}'. Попробуйте позже."
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -572,7 +573,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
@@ -603,7 +604,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
     if task:
         # Get user profile for context
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        
+
         # Collect task info for analysis
         task_info = f"""
         ЗАДАЧА ДЛЯ АНАЛИЗА:
@@ -613,7 +614,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
         Время напоминания: {task.reminder_time.strftime('%Y-%m-%d %H:%M') if task.reminder_time else 'Не установлено'}
         Делегирована: {'Да' if task.delegated_to_username else 'Нет'}
         """
-        
+
         # Add profile info
         profile_info = ""
         if profile:
@@ -624,7 +625,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
         Цели: {profile.goals or 'Не указаны'}
         Город: {profile.city or 'Не указан'}
         """
-        
+
         # AI analysis prompt
         analysis_prompt = f"""{task_info}{profile_info}
 
@@ -633,7 +634,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
         2. Предложи шаги для выполнения
         3. Дай советы по оптимизации
         4. Учитывай навыки и интересы пользователя при рекомендациях
-        
+
         Будь конкретным и полезным в ответе."""
 
         try:
@@ -643,20 +644,24 @@ def analyze_task(task_id=None, user_id=None, session=None):
             asyncio.set_event_loop(loop)
             analysis_result = loop.run_until_complete(chat_with_ai(analysis_prompt, [], user_id))
             loop.close()
-            
+
             # Save result to interaction history
-            interaction = Interaction(user_id=user.id, message_type="ai", content=f"Анализ задачи '{task.title}':\n\n{analysis_result}")
+            interaction = Interaction(
+                user_id=user.id,
+                message_type="ai",
+                content=f"Анализ задачи '{
+                    task.title}':\n\n{analysis_result}")
             session.add(interaction)
             session.commit()
-            
+
             result = f"Анализ задачи '{task.title}':\n\n{analysis_result}"
-            
+
         except Exception as e:
             logger.error(f"Error analyzing task {task_id}: {e}")
             result = f"Ошибка при анализе задачи '{task.title}': {str(e)}"
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -843,7 +848,8 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
         if user.memory:
             try:
                 user_memory = f"\nИнформация о пользователе: {decrypt_data(user.memory)}"
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to decrypt user memory: {e}")
                 user_memory = ""
 
         # Generate alternatives via AI
@@ -1056,8 +1062,6 @@ def get_delegation_progress(task_id, user_id=None):
         if not task or not task.delegated_to_username:
             return "Делегированная задача не найдена."
 
-        recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
-
         if task.delegation_status == "pending":
             status_msg = f"@{task.delegated_to_username} еще не ответил на предложение."
         elif task.delegation_status == "accepted":
@@ -1079,20 +1083,27 @@ def get_delegation_progress(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
-def edit_task(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None, session=None):
+def edit_task(
+        task_id=None,
+        task_title=None,
+        title=None,
+        description=None,
+        reminder_time=None,
+        user_id=None,
+        session=None):
     """Edit task properties"""
     if session is None:
         session = Session()
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
             session.close()
         return "Пользователь не найден."
-    
+
     # Find task by ID or title
     task = None
     if task_id:
@@ -1102,7 +1113,7 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
             Task.user_id == user.id,
             Task.title.ilike(f"%{task_title}%")
         ).first()
-    
+
     if task:
         # Check access rights
         has_access = False
@@ -1133,7 +1144,8 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
                         session.close()
                         return "Не удалось распарсить относительное время."
                 else:
-                    reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+                    reminder_time_parsed = datetime.strptime(
+                        reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
                     task.reminder_time = reminder_time_parsed
                     logger.info(f"Task {task.id} absolute time updated: {reminder_time_parsed}")
             except ValueError:
@@ -1144,7 +1156,7 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
         result = f"Обновлена задача '{task.title}'."
     else:
         result = "Задача не найдена."
-    
+
     if close_session:
         session.close()
     return result
@@ -1157,7 +1169,7 @@ def get_task_details(task_id, user_id=None):
     if not user:
         session.close()
         return "Пользователь не найден."
-    
+
     task = session.query(Task).filter_by(id=int(task_id)).first()
     if task:
         # Check access rights
@@ -1182,7 +1194,7 @@ def get_task_details(task_id, user_id=None):
 def set_priority(task_id, priority, user_id=None):
     """Set task priority - stub function for backward compatibility"""
     # This function is referenced in __init__.py but not actually used
-    return f"Функция set_priority временно недоступна"
+    return "Функция set_priority временно недоступна"
 
 
 def brainstorm_ideas(topic, num_ideas=5, user_id=None):
@@ -1192,12 +1204,12 @@ def brainstorm_ideas(topic, num_ideas=5, user_id=None):
 
     prompt = f"""
     Сгенерируй {num_ideas} креативных идей для темы: "{topic}"
-    
+
     Идеи должны быть:
     - Конкретными и реализуемыми
     - Разнообразными
     - Учитывать практические аспекты
-    
+
     Формат ответа: пронумерованный список идей, каждая с кратким описанием почему она хороша.
     """
 
@@ -1248,18 +1260,18 @@ def list_tasks(user_id=None, session=None):
 
         # Format detailed list
         active_tasks = [t for t in tasks if t.status != "completed"]
-        completed_tasks = [t for t in tasks if t.status == "completed"]
-        user_username_lower = user.username.lower() if user.username else ""
-        delegated_to_me = [
-            t
-            for t in active_tasks
-            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() == user_username_lower
-        ]
-        delegated_by_me = [
-            t
-            for t in active_tasks
-            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() != user_username_lower
-        ]
+        # completed_tasks = [t for t in tasks if t.status == "completed"]  # noqa: F841
+        # user_username_lower = user.username.lower() if user.username else ""  # noqa: F841
+        # delegated_to_me = [  # noqa: F841
+        #     t
+        #     for t in active_tasks
+        #     if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() == user_username_lower
+        # ]
+        # delegated_by_me = [  # noqa: F841
+        #     t
+        #     for t in active_tasks
+        #     if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() != user_username_lower
+        # ]
         my_tasks = [t for t in active_tasks if not t.delegated_to_username]
 
         # Determine user timezone
@@ -1274,7 +1286,8 @@ def list_tasks(user_id=None, session=None):
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     if reminder_dt < now:
                         overdue_count += 1
-                except:
+                except Exception as e:
+                    logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
                     pass
 
         # Format brief response
@@ -1302,10 +1315,11 @@ def list_tasks(user_id=None, session=None):
                                 reminder_info = f" - просрочено на {hours} ч"
                         else:
                             reminder_info = f" - {reminder_dt.strftime('%d.%m %H:%M')}"
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
                         pass
                 result += f"- {task.title}{reminder_info}\n"
-            
+
             if len(my_tasks) > 3:
                 result += f"...и ещё {len(my_tasks) - 3}\n"
 
@@ -1333,78 +1347,87 @@ def enrich_task_list_with_insights(task_list_text, user_id):
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return task_list_text
-            
+
         # Get tasks for analysis
         tasks = session.query(Task).filter(
             Task.user_id == user.id,
             Task.status != "completed"
         ).all()
-        
+
         # Analyze patterns
         insights = []
-        
+
         # 1. Analyze workload
         task_count = len(tasks)
         if task_count == 0:
-            insights.append("Отличная работа - все задачи выполнены! Раньше ты мог часами вспоминать, что нужно сделать, теперь все под контролем.")
+            insights.append(
+                "Отличная работа - все задачи выполнены! Раньше ты мог часами вспоминать, что нужно сделать, теперь все под контролем.")
         elif task_count == 1:
-            insights.append("Одна задача - идеально для фокуса. Раньше ты мог теряться в длинных списках, теперь приоритет ясен.")
+            insights.append(
+                "Одна задача - идеально для фокуса. Раньше ты мог теряться в длинных списках, теперь приоритет ясен.")
         elif task_count > 5:
-            insights.append(f"{task_count} задач - стоит приоритизировать. Я помогу организовать, чтобы не терять время на хаос.")
-        
+            insights.append(
+                f"{task_count} задач - стоит приоритизировать. Я помогу организовать, чтобы не терять время на хаос.")
+
         # 2. Analyze overdue tasks
         overdue_count = 0
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         now = datetime.now(user_tz)
-        
+
         for task in tasks:
             if task.reminder_time:
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     if reminder_dt < now:
                         overdue_count += 1
-                except:
+                except Exception as e:
+                    logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
                     pass
-        
+
         if overdue_count > 0:
-            insights.append(f"{overdue_count} просроченных задач. Раньше это могло вызвать стресс и потерю времени - теперь давай исправим ситуацию.")
-        
+            insights.append(
+                f"{overdue_count} просроченных задач. Раньше это могло вызвать стресс и потерю времени - теперь давай исправим ситуацию.")
+
         # 3. Analyze delegation
         delegated_count = sum(1 for t in tasks if t.delegated_to_username)
         if delegated_count > 0:
-            insights.append(f"Ты делегируешь {delegated_count} задач - умный подход! Раньше все приходилось делать самому, теперь команда помогает.")
-        
+            insights.append(
+                f"Ты делегируешь {delegated_count} задач - умный подход! Раньше все приходилось делать самому, теперь команда помогает.")
+
         # 4. Optimization suggestions
         tasks_without_time = sum(1 for t in tasks if not t.reminder_time)
         if tasks_without_time > 0:
-            insights.append(f"{tasks_without_time} задач без времени - добавим сроки, чтобы избежать спешки в последний момент.")
-        
+            insights.append(
+                f"{tasks_without_time} задач без времени - добавим сроки, чтобы избежать спешки в последний момент.")
+
         # Format final response
         result = task_list_text
         if insights:
             result += "\n\nАнализ ситуации: " + ", ".join(insights[:3])
             result += "\n\nЧто приоритизируем? Или может найдем партнеров для совместной работы над похожими задачами?"
-        
+
         # Add social suggestions based on profile
         user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if user_profile and (user_profile.interests or user_profile.skills):
             social_suggestions = []
-            
+
             if user_profile.interests:
                 interests_list = [i.strip() for i in user_profile.interests.split(',')]
                 if any(i.lower() in ['бег', 'спорт', 'фитнес', 'йога'] for i in interests_list):
                     social_suggestions.append("Вижу интерес к спорту - могу найти партнеров для совместных тренировок")
                 if any(i.lower() in ['программирование', 'it', 'разработка'] for i in interests_list):
-                    social_suggestions.append("Занимаешься IT - найдем коллег для обмена опытом или совместных проектов")
+                    social_suggestions.append(
+                        "Занимаешься IT - найдем коллег для обмена опытом или совместных проектов")
                 if any(i.lower() in ['путешествия', 'кино', 'театр', 'музыка'] for i in interests_list):
-                    social_suggestions.append("Любишь культурные мероприятия - подберу компанию для походов в кино или театр")
-            
+                    social_suggestions.append(
+                        "Любишь культурные мероприятия - подберу компанию для походов в кино или театр")
+
             if social_suggestions:
                 result += "\n\nСоциальные возможности: " + ", ".join(social_suggestions[:2])
                 result += "\n\nХочешь найти единомышленников прямо сейчас?"
-        
+
         return result
-        
+
     except Exception as e:
         print(f"Error enriching task list: {e}")
         return task_list_text
@@ -1573,21 +1596,21 @@ def find_partners(user_id=None, session=None):
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         if close_session:
             session.close()
         return "Пользователь не найден."
-    
+
     # Get partners list
     partners = get_partners_list(user_id, session)
-    
+
     if not partners:
         if close_session:
             session.close()
         return "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"
-    
+
     # Format response
     response = "Нашёл подходящих людей:\n"
     for idx, p in enumerate(partners[:3], 1):
@@ -1605,15 +1628,15 @@ def find_partners(user_id=None, session=None):
             info_parts.append(f"город: {p.city}")
 
         info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-        
+
         # Get username
         partner_user = session.query(User).filter_by(id=p.user_id).first()
         if partner_user and partner_user.username:
             response += f"{idx}. @{partner_user.username}\n   {info_str}\n"
-    
+
     if close_session:
         session.close()
-    
+
     return response
 
 
@@ -1637,29 +1660,29 @@ def update_profile(
         close_session = True
     else:
         close_session = False
-    
+
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
         user = User(telegram_id=user_id)
         session.add(user)
         session.commit()
-    
+
     profile = session.query(UserProfile).filter_by(user_id=user.id).first()
     if not profile:
         profile = UserProfile(user_id=user.id)
         session.add(profile)
 
     updates_made = []
-    
+
     def update_list_field(field, value, field_name):
         if value is None:
             return field, None, False
         if value == "":
             return None, f"cleared_{field_name}", False
-        
+
         current = set((field or "").split(", ")) - {""}
         action = None
-        
+
         if value.startswith("+"):
             new_item = value[1:].strip()
             if new_item:
@@ -1677,7 +1700,7 @@ def update_profile(
                     current.add(item)
             if new_items_list:
                 action = f"added_{field_name}:{', '.join(new_items_list)}"
-        
+
         return ", ".join(sorted(current)), action, False
 
     if skills is not None:
@@ -1685,57 +1708,57 @@ def update_profile(
         profile.skills = new_value
         if action:
             updates_made.append(action)
-    
+
     if interests is not None:
         new_value, action, _ = update_list_field(profile.interests, interests, "interests")
         profile.interests = new_value
         if action:
             updates_made.append(action)
-    
+
     if goals is not None:
         new_value, action, _ = update_list_field(profile.goals, goals, "goals")
         profile.goals = new_value
         if action:
             updates_made.append(action)
-    
+
     if city is not None:
         old_city = profile.city
         profile.city = city if city else None
         updates_made.append(f"changed_city:{old_city}->{city if city else 'cleared'}")
-    
+
     if current_plans:
         profile.current_plans = current_plans
         updates_made.append("updated_plans")
-    
+
     if hasattr(profile, "company") and company is not None:
         old_company = profile.company
         profile.company = company if company else None
         updates_made.append(f"changed_company:{old_company}->{company if company else 'cleared'}")
-    
+
     if hasattr(profile, "position") and position is not None:
         old_position = profile.position
         profile.position = position if position else None
         updates_made.append(f"changed_position:{old_position}->{position if position else 'cleared'}")
-    
+
     if hasattr(profile, "bio") and bio is not None:
         old_bio = profile.bio
         profile.bio = bio if bio else None
         updates_made.append(f"changed_bio:{old_bio}->{bio if bio else 'cleared'}")
-    
+
     if hasattr(profile, "languages") and languages is not None:
         old_languages = profile.languages
         profile.languages = languages if languages else None
         updates_made.append(f"changed_languages:{old_languages}->{languages if languages else 'cleared'}")
-    
+
     if timezone:
         user.timezone = timezone
         updates_made.append(f"updated_timezone:{timezone}")
-    
+
     session.commit()
-    
+
     if close_session:
         session.close()
-    
+
     if updates_made:
         return f"Профиль обновлен: {'; '.join(updates_made)}"
     else:
