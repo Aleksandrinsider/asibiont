@@ -757,9 +757,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                                             pass
 
                                                     # Передаем AI только факты для генерации живого ответа
-                                                    context_info = f"TASK_ADDED: '{title}'"
+                                                    context_info = f"Задача '{title}' успешно добавлена"
                                                     if recommendations:
-                                                        context_info += f" | RECOMMENDATIONS: {', '.join(recommendations[:2])}"
+                                                        context_info += f". Рекомендации: {', '.join(recommendations[:2])}"
                                                     natural_responses.append(context_info)
                                                 finally:
                                                     session_db.close()
@@ -771,7 +771,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                                             if match:
                                                 title = match.group(1)
                                                 # Передаем AI только факт для генерации уникального ответа
-                                                natural_responses.append(f"TASK_COMPLETED: '{title}'")
+                                                natural_responses.append(f"Задача '{title}' выполнена")
                                             else:
                                                 natural_responses.append(result_text)
 
