@@ -103,7 +103,7 @@
                         <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
-                    <button onclick="logout()" style="background: none; border: none; color: #374151; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">Выход</button>
+                    <button onclick="logout()" style="background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; color: #374151; font-size: 13px; cursor: pointer; padding: 8px 16px; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'; this.style.background='#F6F8FA';" onmouseout="this.style.borderColor='#D1D9E0'; this.style.background='#FFFFFF';">Выход</button>
                 </div>
                 {% endif %}
             </div>
