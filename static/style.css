@@ -41,7 +41,7 @@ select {
     padding: 8px 12px;
     font-size: 13px;
     font-family: inherit;
-    color: #1F2328;
+    color: #656D76;
     cursor: pointer;
     transition: all 0.2s;
     background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2365636E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
@@ -52,7 +52,7 @@ select {
 }
 
 select:hover {
-    border-color: #1F2328;
+    border-color: #656D76;
 }
 
 select:focus {
@@ -100,7 +100,7 @@ body {
     width: 100%;
     height: var(--header-height);
     background-color: #FFFFFF;
-    color: #1F2328;
+    color: #656D76;
     margin: 0;
     position: fixed;
     top: 0;
@@ -158,12 +158,12 @@ body {
 }
 
 .logo:hover {
-    color: #1F2328;
+    color: #656D76;
 }
 
 .beta-badge {
     background-color: #F6F8FA;
-    color: #1F2328;
+    color: #656D76;
     font-size: 13px;
     font-weight: 400;
     padding: 2px 6px;
@@ -186,13 +186,13 @@ body {
     display: flex;
     gap: 10px;
     font-size: 13px;
-    color: #1F2328;
+    color: #656D76;
     flex-wrap: wrap;
     align-items: center;
 }
 
 .user-name {
-    color: #1F2328;
+    color: #656D76;
     text-decoration: none;
     padding: 4px 8px;
     border-radius: 4px;
@@ -209,7 +209,7 @@ body {
 }
 
 .logout-btn:hover {
-    color: #1F2328;
+    color: #656D76;
 }
 
 .logout-button {
@@ -228,7 +228,7 @@ body {
 
 .logout-button:hover {
     background: #F6F8FA;
-    border-color: #1F2328;
+    border-color: #656D76;
 }
 
 .welcome-section {
@@ -262,12 +262,12 @@ body {
 .welcome-content h1 {
     font-size: 24px;
     margin-bottom: 10px;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .welcome-content p {
     margin: 0 0 5px 0;
-    color: #1F2328;
+    color: #656D76;
     line-height: 1.6;
     font-size: 13px;
     font-weight: 400;
@@ -276,7 +276,7 @@ body {
 .auth-btn {
     display: inline-block;
     padding: 10px 20px;
-    background-color: #1F2328;
+    background-color: #656D76;
     color: #FFFFFF;
     text-decoration: none;
     border-radius: 6px;
@@ -463,7 +463,7 @@ body {
     border: none;
     text-align: left;
     font-size: 13px;
-    color: #1F2328;
+    color: #656D76;
     cursor: pointer;
     border-radius: 6px;
 }
@@ -701,7 +701,7 @@ details[open] .details-content {
 
 .message.user {
     background-color: transparent;
-    color: #1F2328;
+    color: #656D76;
     width: 100%;
     padding: 0;
 }
@@ -716,7 +716,7 @@ details[open] .details-content {
 
 .message.ai {
     background-color: transparent;
-    color: #1F2328;
+    color: #656D76;
     width: 100%;
 }
 
@@ -727,7 +727,7 @@ details[open] .details-content {
 .message.ai .message-text {
     font-weight: 400;
     font-size: 13px;
-    color: #1F2328;
+    color: #656D76;
     line-height: 1.6;
     text-align: left;
 }
@@ -766,7 +766,7 @@ details[open] .details-content {
     font-size: 13px;
     font-weight: 400;
     line-height: 1.6;
-    color: #1F2328;
+    color: #656D76;
     transition: all 0.2s;
 }
 
@@ -787,7 +787,7 @@ details[open] .details-content {
     padding: 8px;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .chat-input input:focus {
@@ -811,12 +811,12 @@ details[open] .details-content {
     font-size: 16px;
     font-weight: 600;
     line-height: 1.6;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .context-item p {
     margin: 0 0 8px 0;
-    color: #1F2328;
+    color: #656D76;
     line-height: 1.6;
     font-size: 13px;
     font-weight: 400;
@@ -913,8 +913,8 @@ details[open] .details-content {
 }
 
 .tasks-header:hover {
-    border-color: #1F2328;
-    color: #1F2328;
+    border-color: #656D76;
+    color: #656D76;
 }
 
 
@@ -955,7 +955,7 @@ details[open] .details-content {
     font-size: 13px;
     font-weight: 600;
     line-height: 1.6;
-    color: #1F2328;
+    color: #656D76;
     margin-bottom: 6px;
     padding-bottom: 4px;
 }
@@ -1052,7 +1052,7 @@ details[open] .details-content {
 }
 
 .quick-action:hover {
-    border-color: #1F2328;
+    border-color: #656D76;
     background: #F6F8FA;
 }
 
@@ -1103,7 +1103,7 @@ details[open] .details-content {
 
 .person-card p {
     margin: 0;
-    color: #1F2328;
+    color: #656D76;
     line-height: 1.6;
     font-size: 15px;
     font-weight: 400;
@@ -1166,7 +1166,7 @@ details[open] .details-content {
 
 .task-item p {
     margin: 0 0 8px 0;
-    color: #1F2328;
+    color: #656D76;
     line-height: 1.6;
     font-size: 13px;
     font-weight: 400;
@@ -1197,7 +1197,7 @@ details[open] .details-content {
 .no-subscription-content h1 {
     font-size: 24px;
     margin-bottom: 10px;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .no-subscription-content p {
@@ -1221,7 +1221,7 @@ details[open] .details-content {
 }
 
 .back-link:hover {
-    color: #1F2328;
+    color: #656D76;
     text-decoration: none !important;
 }
 
@@ -1260,7 +1260,7 @@ details[open] .details-content {
 
 .send-btn:hover {
     background-color: #F6F8FA;
-    border-color: #1F2328;
+    border-color: #656D76;
     text-decoration: none;
 }
 
@@ -1284,7 +1284,7 @@ details[open] .details-content {
 }
 
 .chat-action-btn:hover {
-    border-color: #1F2328;
+    border-color: #656D76;
     background-color: #F6F8FA;
 }
 
@@ -1306,7 +1306,7 @@ details[open] .details-content {
 
 .contact-filter-btn.active {
     background-color: #F6F8FA;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .task-filter-btn {
@@ -1327,13 +1327,13 @@ details[open] .details-content {
 
 .task-filter-btn.active {
     background-color: #F6F8FA;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .delete-btn {
     padding: 8px;
     background-color: #FFFFFF;
-    color: #1F2328;
+    color: #656D76;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     cursor: pointer;
@@ -1355,7 +1355,7 @@ details[open] .details-content {
 
 .delete-btn:hover {
     background-color: #F6F8FA;
-    border-color: #1F2328;
+    border-color: #656D76;
 }
 
 /* Rating Modal */
@@ -1428,7 +1428,7 @@ details[open] .details-content {
 
 .rating-close-btn:hover {
     background-color: #F6F8FA;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .rating-modal-body {
@@ -1437,7 +1437,7 @@ details[open] .details-content {
 
 .rating-modal-body p {
     margin: 0 0 8px 0;
-    color: #1F2328;
+    color: #656D76;
     font-size: 13px;
 }
 
@@ -1524,7 +1524,7 @@ details[open] .details-content {
 
 .rating-cancel-btn:hover {
     background: #F6F8FA;
-    border-color: #1F2328;
+    border-color: #656D76;
 }
 
 .rating-submit-btn {
@@ -1535,7 +1535,7 @@ details[open] .details-content {
 
 .rating-submit-btn:hover {
     background: #F6F8FA;
-    border-color: #1F2328;
+    border-color: #656D76;
 }
 
 /* Search Modal */
@@ -1608,7 +1608,7 @@ details[open] .details-content {
 
 .search-modal-close-btn:hover {
     background-color: #F6F8FA;
-    color: #1F2328;
+    color: #656D76;
 }
 
 .search-modal-search {
@@ -1661,3 +1661,4 @@ details[open] .details-content {
 .avatar-fallback {
     display: none;
 }
+
