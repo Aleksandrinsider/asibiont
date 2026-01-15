@@ -235,7 +235,6 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: calc(100vh - 84px);
     text-align: center;
     padding: 20px 0;
 }
@@ -525,7 +524,6 @@ details[open] .details-content {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: calc(100vh - var(--header-height) - 24px);
     text-align: center;
 }
 
