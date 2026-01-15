@@ -546,7 +546,7 @@ details[open] .details-content {
 }
 
 .message {
-    padding: 12px;
+    padding: 16px 20px;
     margin: 0;
     max-width: 100%;
     width: 100%;
@@ -703,7 +703,6 @@ details[open] .details-content {
     background-color: transparent;
     color: #656D76;
     width: 100%;
-    padding: 0;
 }
 
 .message.user .message-text {
