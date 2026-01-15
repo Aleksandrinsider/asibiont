@@ -99,17 +99,18 @@ body {
 .app-header {
     width: 100%;
     height: var(--header-height);
-    background-color: #FFFFFF;
-    color: #656D76;
+    background: linear-gradient(to bottom, #FFFFFF 0%, #FAFBFC 100%);
+    color: #374151;
     margin: 0;
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 1000;
-    border-bottom: 1px solid #D1D9E0;
+    border-bottom: 1px solid #E5E8EC;
     display: flex;
     align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
 }
 
 
