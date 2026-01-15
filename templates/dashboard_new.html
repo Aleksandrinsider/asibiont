@@ -88,18 +88,21 @@
             </div>
             <div class="header-info">
                 {% if logged_in %}
-                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px;">
-                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px;">изменить</a>
-                    <span id="header-time-display" style="margin-right: 5px;">{{ current_time }} · {{ current_date }}</span>
+                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #656D76; font-size: 13px;">
+                    <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
+                    <span style="opacity: 0.8;">·</span>
+                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#656D76'">изменить</a>
                 </span>
-                <div class="header-avatar-small" style="margin-left: 10px;">
-                    {% if user_avatar_url %}
-                    <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
-                    {% else %}
-                    <div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
-                    {% endif %}
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px 4px 4px; border-radius: 6px; transition: background 0.2s;" onmouseover="this.style.background='#F6F8FA'" onmouseout="this.style.background='transparent'">
+                    <div class="header-avatar-small">
+                        {% if user_avatar_url %}
+                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                        {% else %}
+                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                        {% endif %}
+                    </div>
+                    <button onclick="logout()" style="background: none; border: none; color: #656D76; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#656D76'">Выход</button>
                 </div>
-                <button onclick="logout()" class="logout-button">Выход</button>
                 {% endif %}
             </div>
         </div>
@@ -1511,7 +1514,7 @@
                 const contactData = {
                     type: 'recommended',
                     html: card.innerHTML,
-                    username: card.querySelector('.task-title a')?.textContent || '',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || '',
                     element: card
                 };
                 allContacts.push(contactData);
@@ -1522,7 +1525,7 @@
                 const contactData = {
                     type: 'delegating_to_me',
                     html: card.innerHTML,
-                    username: card.querySelector('.task-title a')?.textContent || '',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || '',
                     element: card
                 };
                 allContacts.push(contactData);
@@ -1533,7 +1536,7 @@
                 const contactData = {
                     type: 'delegating_by_me',
                     html: card.innerHTML,
-                    username: card.querySelector('.task-title a')?.textContent || '',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || '',
                     element: card
                 };
                 allContacts.push(contactData);
@@ -1546,8 +1549,7 @@
                     element.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
                     // Показываем только избранные контакты
-                    const username = contact.username.startsWith('@') ? contact.username.substring(1) : contact.username;
-                    if (isFavoriteContact(username)) {
+                    if (isFavoriteContact(contact.username)) {
                         element.style.display = 'flex';
                     } else {
                         element.style.display = 'none';
