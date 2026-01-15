@@ -118,7 +118,7 @@ body {
     align-items: center;
     width: 100%;
     justify-content: space-between;
-    padding: 0;
+    padding: 0 10px;
 }
 
 .header-left {
@@ -127,6 +127,7 @@ body {
     gap: 12px;
     padding: 0;
     flex: 1;
+    padding-left: 10px;
 }
 
 .header-content h1 {
@@ -197,6 +198,7 @@ body {
 
 .header-right {
     flex: 1;
+    padding-right: 10px;
 }
 
 .user-name {
