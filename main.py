@@ -444,7 +444,7 @@ async def dashboard_handler(request):
                     logger.error(f"Error checking history_cleared_timestamp: {e}")
             else:
                 # Fallback на session если Redis недоступен
-                history_cleared_timestamp = session_req.get('history_cleared_timestamp')
+                history_cleared_timestamp = session.get('history_cleared_timestamp')
                 logger.info(f"History cleared timestamp from session: {history_cleared_timestamp}")
             
             # Берем последние 50 сообщений, но фильтруем по timestamp очистки
