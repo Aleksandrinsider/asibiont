@@ -513,7 +513,7 @@ details[open] .details-content {
     flex-direction: column;
     padding: 12px;
     height: 100%;
-    max-height: calc(100% - 40px);
+    max-height: calc(100% - 60px);
     overflow: hidden;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
