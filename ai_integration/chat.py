@@ -163,8 +163,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     profile_info.append(f"Компания: {profile.company}")
                 if profile.position:
                     profile_info.append(f"Должность: {profile.position}")
-                if hasattr(profile, 'bio') and profile.bio:
-                    profile_info.append(f"Сфера деятельности: {profile.bio}")
                 if hasattr(profile, 'languages') and profile.languages:
                     profile_info.append(f"Языки: {profile.languages}")
                 if profile.skills:
@@ -190,8 +188,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     empty_fields.append("цели")
                 if not (hasattr(profile, 'languages') and profile.languages):
                     empty_fields.append("языки")
-                if not (hasattr(profile, 'bio') and profile.bio):
-                    empty_fields.append("сфера деятельности")
                 
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
