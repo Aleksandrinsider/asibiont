@@ -110,17 +110,50 @@
     <div class="container">
         {% if not logged_in %}
         <div class="welcome-section">
-            <div class="welcome-content">
-                <h1 style="margin-bottom: 20px; font-size: 24px; color: #1F2328;">ASI BIONT</h1>
-                <p style="margin-bottom: 20px; color: #1F2328; line-height: 1.4;">Лаборатория искусственного интеллекта ASI Biont — закрытое сообщество для тех, кто создаёт будущее. Здесь нет места скучным знакомствам — только те, кто идёт в том же направлении.</p>
-                <p style="margin-bottom: 30px; color: #1F2328; line-height: 1.4;">Забудьте про мёртвые контакты и случайные связи. В ASI Biont вас окружают единомышленники, с которыми можно запустить крутой проект, достичь целей или просто весело провести время.</p>
-                <p style="margin-bottom: 20px; color: #656D76; font-size: 13px;">Авторизуйтесь через Telegram для начала</p>
-                <div style="display: flex; justify-content: center; margin-top: 20px;">
-                    <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                            data-telegram-login="{{ bot_username }}" 
-                            data-size="large" 
-                            data-onauth="onTelegramAuth(user)" 
-                            data-request-access="write"></script>
+            <div class="welcome-content" style="border: 1px solid #D1D9E0;">
+                <div style="text-align: center; margin-bottom: 32px;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(135deg, #0969DA 0%, #068487 100%); margin-bottom: 16px;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V7.99l7-3.5v8.5z"/>
+                        </svg>
+                    </div>
+                    <h1 style="margin: 0 0 12px 0; font-size: 28px; font-weight: 600; color: #1F2328;">ASI Biont</h1>
+                    <p style="margin: 0; color: #656D76; font-size: 15px; line-height: 1.5;">Закрытое сообщество для тех, кто создаёт будущее</p>
+                </div>
+                
+                <div style="background: #F6F8FA; border-radius: 6px; padding: 24px; margin-bottom: 24px; text-align: left;">
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <div style="flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #0969DA; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">1</div>
+                        <div>
+                            <p style="margin: 0 0 4px 0; font-weight: 600; color: #1F2328; font-size: 13px;">Единомышленники</p>
+                            <p style="margin: 0; color: #656D76; font-size: 13px; line-height: 1.5;">Окружите себя людьми, которые идут в том же направлении</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                        <div style="flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">2</div>
+                        <div>
+                            <p style="margin: 0 0 4px 0; font-weight: 600; color: #1F2328; font-size: 13px;">Эффективное сотрудничество</p>
+                            <p style="margin: 0; color: #656D76; font-size: 13px; line-height: 1.5;">Делегируйте задачи и работайте над проектами вместе</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <div style="flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #8250DF; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">3</div>
+                        <div>
+                            <p style="margin: 0 0 4px 0; font-weight: 600; color: #1F2328; font-size: 13px;">ИИ-помощник</p>
+                            <p style="margin: 0; color: #656D76; font-size: 13px; line-height: 1.5;">Умный бот помогает находить контакты и управлять задачами</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center;">
+                    <p style="margin: 0 0 16px 0; color: #656D76; font-size: 13px;">Войдите через Telegram, чтобы начать</p>
+                    <div style="display: flex; justify-content: center;">
+                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                                data-telegram-login="{{ bot_username }}" 
+                                data-size="large" 
+                                data-onauth="onTelegramAuth(user)" 
+                                data-request-access="write"></script>
+                    </div>
                 </div>
                 <script type="text/javascript">
                     function onTelegramAuth(user) {
