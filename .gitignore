@@ -10,6 +10,10 @@ venv/
 .env.local
 .DS_Store
 local.db
+my/
+static/
+templates/
+*.sqlite3
 test.db
 test_local.db
 test_comprehensive.db
