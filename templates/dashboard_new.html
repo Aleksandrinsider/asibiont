@@ -113,42 +113,44 @@
     <div class="container">
         {% if not logged_in %}
         <div class="welcome-section">
-            <div class="welcome-content" style="border: 1px solid #D1D9E0;">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 80px; height: 80px; margin-bottom: 16px;">
-                    <h1 style="margin: 0 0 12px 0; font-size: 28px; font-weight: 600; color: #1F2328;">ASI Biont</h1>
-                    <p style="margin: 0; color: #656D76; font-size: 15px; line-height: 1.5;">Закрытое сообщество для тех, кто создаёт будущее</p>
+            <div class="welcome-content" style="border: 1px solid #D1D9E0; max-width: 480px; padding: 32px;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 64px; height: 64px; margin-bottom: 12px;">
+                    <h1 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600; color: #1F2328;">ASI Biont</h1>
+                    <p style="margin: 0; color: #656D76; font-size: 14px; line-height: 1.4;">Закрытое сообщество для тех,<br>кто создаёт будущее</p>
                 </div>
                 
-                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 0; margin-bottom: 24px; overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; background: #F6F8FA;">
-                        <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">Единомышленники</p>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 12px 16px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#0969DA">
+                                <path d="M2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.493 3.493 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Z"></path>
+                            </svg>
+                            <span style="color: #1F2328; font-size: 13px; font-weight: 500;">Единомышленники</span>
+                        </div>
                     </div>
-                    <div style="padding: 12px 20px; background: white;">
-                        <p style="margin: 0; color: #656D76; font-size: 13px; line-height: 1.5;">Окружите себя людьми, которые идут в том же направлении</p>
+                    
+                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 12px 16px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#068487">
+                                <path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v9.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-9.5C0 1.784.784 1 1.75 1ZM1.5 2.75v9.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25Zm7.03 5.53a.75.75 0 0 1-1.06 0L6.22 7.03a.75.75 0 0 1 1.06-1.06l.97.97 2.47-2.47a.75.75 0 0 1 1.06 1.06l-3 3Z"></path>
+                            </svg>
+                            <span style="color: #1F2328; font-size: 13px; font-weight: 500;">Эффективное сотрудничество</span>
+                        </div>
                     </div>
-                </div>
-                
-                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 0; margin-bottom: 24px; overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; background: #F6F8FA;">
-                        <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">Эффективное сотрудничество</p>
-                    </div>
-                    <div style="padding: 12px 20px; background: white;">
-                        <p style="margin: 0; color: #656D76; font-size: 13px; line-height: 1.5;">Делегируйте задачи и работайте над проектами вместе</p>
-                    </div>
-                </div>
-                
-                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 0; margin-bottom: 24px; overflow: hidden;">
-                    <div style="padding: 16px 20px; border-bottom: 1px solid #D1D9E0; background: #F6F8FA;">
-                        <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">ИИ-помощник</p>
-                    </div>
-                    <div style="padding: 12px 20px; background: white;">
-                        <p style="margin: 0; color: #656D76; font-size: 13px; line-height: 1.5;">Умный бот помогает находить контакты и управлять задачами</p>
+                    
+                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 12px 16px; background: white;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#8250DF">
+                                <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75Z"></path>
+                            </svg>
+                            <span style="color: #1F2328; font-size: 13px; font-weight: 500;">ИИ-помощник</span>
+                        </div>
                     </div>
                 </div>
                 
                 <div style="text-align: center;">
-                    <p style="margin: 0 0 16px 0; color: #656D76; font-size: 13px;">Войдите через Telegram, чтобы начать</p>
+                    <p style="margin: 0 0 12px 0; color: #656D76; font-size: 13px;">Войдите через Telegram</p>
                     <div style="display: flex; justify-content: center;">
                         <script async src="https://telegram.org/js/telegram-widget.js?22" 
                                 data-telegram-login="{{ bot_username }}" 
