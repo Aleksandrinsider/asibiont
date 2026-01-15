@@ -381,7 +381,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
 
         if PROMPTS_V2_AVAILABLE:
             system_prompt = get_optimized_prompt_final(
-                user_now, current_time_str, user_username, mentions_str, user_memory, last_responses
+                user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, last_responses
             )
             logger.info("[PROMPTS V2] Using optimized prompt system")
         else:
