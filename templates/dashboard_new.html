@@ -2782,17 +2782,20 @@
 
 
 
-        // Initial update
-        loadInitialMessages();
-        updateProfile();
-
-        // Auto-update every 5 seconds (оптимизировано для снижения нагрузки)
-        setInterval(() => {
-            updateTasks();
-            updatePeople();
+        // Initial update only for logged in users
+        const isLoggedIn = document.querySelector('.main-layout') !== null;
+        if (isLoggedIn) {
+            loadInitialMessages();
             updateProfile();
-            updateChat();
-        }, 5000);
+            
+            // Auto-update every 5 seconds (оптимизировано для снижения нагрузки)
+            setInterval(() => {
+                updateTasks();
+                updatePeople();
+                updateProfile();
+                updateChat();
+            }, 5000);
+        }
 
         async function updateChat() {
             try {
