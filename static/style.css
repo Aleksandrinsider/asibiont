@@ -107,7 +107,7 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
-    border-bottom: 1px solid #D1D9E0;
+    border-bottom: none;
     display: flex;
     align-items: center;
 }
@@ -843,7 +843,7 @@ details[open] .details-content {
 
 .people-section {
     padding: 12px;
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
@@ -864,7 +864,7 @@ details[open] .details-content {
 
 .task-stats-block {
     padding: 12px;
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
@@ -873,7 +873,7 @@ details[open] .details-content {
 
 .tasks-section-wrapper {
     padding: 12px;
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 6px;
     display: flex;
     flex-direction: column;
@@ -895,7 +895,7 @@ details[open] .details-content {
 
 .context-section {
     padding: 12px;
-    border: 1px solid #D1D9E0;
+    border: none;
     border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
