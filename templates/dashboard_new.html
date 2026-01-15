@@ -45,7 +45,7 @@
                 </a>
                 <!-- Поиск контактов -->
                 {% if logged_in %}
-                <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 8px 16px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #404040; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
+                <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 8px 16px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #374151; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="opacity: 0.7;">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
                     </svg>
@@ -162,8 +162,8 @@
             <div class="left-column">
                 <div class="context-section" id="profile-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Профиль</h3>
-                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #404040; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>
+                        <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                             </svg>
@@ -244,7 +244,7 @@
 
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Контакты</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')">Мои</button>
@@ -262,7 +262,7 @@
             <div class="center-column">
                 <div class="chat-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Чат с ИИ</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Чат с ИИ</h3>
                     </div>
                     <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
@@ -295,7 +295,7 @@
                 <!-- Блок тех. поддержки -->
                 <div style="margin-top: 8px; padding: 10px 14px; background: #F6F8FA; border: 1px solid #D0D7DE; border-radius: 6px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                        <span style="font-size: 13px; color: #404040;">
+                        <span style="font-size: 13px; color: #374151;">
                             Возникли вопросы?
                         </span>
                         <button onclick="window.open('https://t.me/aleksandrinsider', '_blank')" class="chat-action-btn" style="padding: 6px 12px; min-width: auto; width: auto; height: auto;">
@@ -312,8 +312,8 @@
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Статистика</h3>
-                        <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #404040; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Статистика</h3>
+                        <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s;">
                                 <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                             </svg>
@@ -339,7 +339,7 @@
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Задачи</h3>
+                        <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
@@ -374,7 +374,7 @@
             </div>
             <div class="rating-modal-body">
                 <p>Рекомендуете <span id="rating-username" style="font-weight: 600; color: #068487;"></span></p>
-                <p style="font-size: 12px; color: #404040; margin-bottom: 8px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
+                <p style="font-size: 12px; color: #374151; margin-bottom: 8px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
                 <p style="font-size: 12px; color: #D7AC0C; margin-bottom: 16px;">Уровень рекомендации влияет на продвижение контакта</p>
                 <div class="rating-slider-container">
                     <input type="range" id="rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="updateRatingValue(this.value)">
@@ -402,9 +402,9 @@
                 </button>
             </div>
             <div class="rating-modal-body">
-                <p style="font-size: 13px; color: #404040; margin-bottom: 16px;">Введите ваше текущее местное время</p>
+                <p style="font-size: 13px; color: #374151; margin-bottom: 16px;">Введите ваше текущее местное время</p>
                 <div style="margin-bottom: 16px;">
-                    <label style="display: block; font-size: 13px; color: #404040; margin-bottom: 6px;">(например, 20:30 или 8:30 PM)</label>
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px;">(например, 20:30 или 8:30 PM)</label>
                     <input type="text" id="time-input" placeholder="20:30" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px;" />
                 </div>
                 <div class="rating-modal-actions">
@@ -951,7 +951,7 @@
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
                 const ratingColor = rating < 5 ? '#d73a49' : (rating >= 9 ? '#D7AC0C' : '#1F2328');
                 const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Рекомендация: нет рекомендаций';
-                const heartColor = isFavorite ? '#068487' : '#404040';
+                const heartColor = isFavorite ? '#068487' : '#374151';
                 
                 html += `
                     <div style="padding: 12px; border: 1px solid #D1D9E0; border-radius: 6px; display: flex; align-items: center; gap: 12px; transition: all 0.15s; background: #FFFFFF;"
@@ -985,7 +985,7 @@
                                 <span>Избранное</span>
                             </button>
                             <button onclick="window.open('https://t.me/${contact.username}', '_blank')"
-                                    style="padding: 8px 16px; background: #FFFFFF; color: #404040; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px;"
+                                    style="padding: 8px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px;"
                                     onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';"
                                     onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.75 14.25a.75.75 0 0 1-.75-.75V2.75l-.5.5a.75.75 0 0 1-1.06-1.06l2-2a.751.751 0 0 1 .976-.073.75.75 0 0 1 .084.073l2 2a.75.75 0 1 1-1.06 1.06l-.5-.5V13.5a.75.75 0 0 1-.75.75Zm4.5-8.5a.75.75 0 0 0 .75.75h3.5a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75Zm0 4a.75.75 0 0 0 .75.75h2.5a.75.75 0 0 0 0-1.5h-2.5a.75.75 0 0 0-.75.75Zm0 4a.75.75 0 0 0 .75.75h1.5a.75.75 0 0 0 0-1.5h-1.5a.75.75 0 0 0-.75.75Z"></path></svg>
@@ -1447,11 +1447,11 @@
                 const hasTasks = tasksForDay > 0;
                 
                 html += '<div style="flex: 1; text-align: center; font-size: 11px;">';
-                html += '<div style="color: ' + (isToday ? '#068487' : '#404040') + '; font-weight: ' + (isToday ? '600' : '400') + '; margin-bottom: 4px;">' + dayOfWeek + '</div>';
+                html += '<div style="color: ' + (isToday ? '#068487' : '#374151') + '; font-weight: ' + (isToday ? '600' : '400') + '; margin-bottom: 4px;">' + dayOfWeek + '</div>';
                 html += '<div style="color: ' + (isToday ? '#068487' : '#8B949E') + '; font-size: 10px; margin-bottom: 6px;">' + dayOfMonth + ' ' + month + '</div>';
                 html += '<div style="width: 100%; height: 6px; background: #D1D9E0; border-radius: 3px; position: relative; overflow: hidden;">';
                 if (hasTasks) {
-                    html += '<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: ' + (isToday ? '#068487' : '#404040') + '; border-radius: 3px;"></div>';
+                    html += '<div style="position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: ' + (isToday ? '#068487' : '#374151') + '; border-radius: 3px;"></div>';
                 }
                 html += '</div>';
                 html += '<div style="color: ' + (hasTasks ? (isToday ? '#068487' : '#24292F') : '#8B949E') + '; font-weight: ' + (hasTasks ? '500' : '400') + '; margin-top: 4px; font-size: 11px;">' + tasksForDay + '</div>';
@@ -2704,10 +2704,10 @@
                         if (hasProfileData && data.formatted_end_date) {
                         const extendUrl = '/extend_subscription';
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
-                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Профиль</h3>';
+                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>';
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const svgRotation = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #404040; font-size: 13px; font-weight: 400; display: flex; align-items: center;">';
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">';
                         html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ' + svgRotation + ';"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
                         html += '</button>';
                         html += '</div>';
@@ -2748,9 +2748,9 @@
                         contextSection.innerHTML = html;
                     } else {
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
-                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #404040; line-height: normal;">Профиль</h3>';
+                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>';
                         const svgRotation = (localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null) ? 'rotate(-90deg)' : 'rotate(0deg)';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #404040; font-size: 13px; font-weight: 400; display: flex; align-items: center;">';
+                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">';
                         html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="transition: transform 0.2s; transform: ' + svgRotation + ';"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
                         html += '</button>';
                         html += '</div>';
@@ -2920,7 +2920,7 @@
             function resetVoiceButton() {
                 isRecording = false;
                 voiceButton.style.backgroundColor = '#FFFFFF';
-                voiceButton.style.color = '#404040';
+                voiceButton.style.color = '#374151';
                 voiceButton.style.borderColor = '#D1D9E0';
                 voiceButton.style.animation = '';
                 // Вернуть иконку к серому цвету
@@ -3254,5 +3254,6 @@
     </script>
 </body>
 </html>
+
 
 
