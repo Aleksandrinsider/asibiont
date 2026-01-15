@@ -1397,7 +1397,7 @@ details[open] .details-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 16px;
+    padding: 16px 20px;
     border-bottom: 1px solid #D1D9E0;
     background: #FFFFFF;
 }
@@ -1432,7 +1432,7 @@ details[open] .details-content {
 }
 
 .rating-modal-body {
-    padding: 12px;
+    padding: 16px 20px;
 }
 
 .rating-modal-body p {
@@ -1573,7 +1573,7 @@ details[open] .details-content {
 }
 
 .search-modal-header {
-    padding: 12px 16px;
+    padding: 16px 20px;
     border-bottom: 1px solid #D1D9E0;
     display: flex;
     align-items: center;
