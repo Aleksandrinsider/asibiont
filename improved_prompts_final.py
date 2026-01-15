@@ -146,7 +146,7 @@ def improved_classify_intent(message: str, mentions_str: str = "") -> dict:
     }
 
 
-def get_optimized_prompt_final(user_now=None, current_time_str=None, user_username=None, mentions_str=None, user_memory=None, last_responses=None) -> str:
+def get_optimized_prompt_final(user_now=None, current_time_str=None, current_date_str=None, user_username=None, mentions_str=None, user_memory=None, last_responses=None) -> str:
     """Возвращает оптимизированный системный промпт с динамическими данными"""
     base_prompt = CORE_SYSTEM_PROMPT
     
@@ -159,6 +159,8 @@ def get_optimized_prompt_final(user_now=None, current_time_str=None, user_userna
     context_parts = []
     if current_time_str:
         context_parts.append(f"Время: {current_time_str}")
+    if current_date_str:
+        context_parts.append(f"Дата: {current_date_str}")
     if user_username:
         context_parts.append(f"Юзер: {user_username}")
     if mentions_str:

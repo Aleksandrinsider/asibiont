@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 import pytz
 
 
-def get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory, context=None, intent=None):
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None):
     """Get extended system prompt for AI"""
     from improved_prompts_final import get_optimized_prompt_final
-    return get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory)
+    return get_optimized_prompt_final(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
 
 
 def replace_placeholders(content, user_now=None, current_time_str=None):

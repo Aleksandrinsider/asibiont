@@ -99,6 +99,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now
         current_time_str = user_now.strftime("%H:%M")
+        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         user_username = "user"
 
         if user_id:
@@ -375,7 +376,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             )
             logger.info("[PROMPTS V2] Using optimized prompt system")
         else:
-            system_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+            system_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
             logger.info("[LEGACY] Using extended prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
@@ -1146,7 +1147,7 @@ async def generate_result_check(user_id, task_title):
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_extended_system_prompt(user_now, current_time_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
 
         # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
         system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
