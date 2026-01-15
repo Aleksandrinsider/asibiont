@@ -90,10 +90,10 @@
             </div>
             <div class="header-info">
                 {% if logged_in %}
-                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #1F2328; font-size: 13px;">
+                <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #656D76; font-size: 13px;">
                     <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
                     <span style="opacity: 0.8;">·</span>
-                    <a href="#" onclick="changeTime()" style="margin: 0; color: #1F2328; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#656D76'" onmouseout="this.style.color='#1F2328'">изменить</a>
+                    <a href="#" onclick="changeTime()" style="margin: 0; color: #656D76; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#656D76'" onmouseout="this.style.color='#1F2328'">изменить</a>
                 </span>
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px 4px 4px; border-radius: 6px; background: #F6F8FA;">
                     <div class="header-avatar-small">
@@ -103,7 +103,7 @@
                         <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
-                    <button onclick="logout()" style="background: none; border: none; color: #1F2328; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#656D76'" onmouseout="this.style.color='#1F2328'">Выход</button>
+                    <button onclick="logout()" style="background: none; border: none; color: #656D76; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#656D76'" onmouseout="this.style.color='#1F2328'">Выход</button>
                 </div>
                 {% endif %}
             </div>
@@ -114,22 +114,22 @@
         <div class="welcome-section">
             <div class="welcome-content" style="border: 1px solid #D1D9E0; max-width: 520px; padding: 40px;">
                 <div style="text-align: left; margin-bottom: 24px;">
-                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #1F2328;">ASI Biont</h1>
-                    <p style="margin: 0 0 12px 0; color: #1F2328; font-size: 14px; line-height: 1.5;">Закрытое сообщество от лаборатории искусственного интеллекта ASI Biont с живым поиском единомышленников через ваши текущие дела: система анализирует задачи и цели, находя партнеров в вашем городе.</p>
-                    <p style="margin: 0; color: #1F2328; font-size: 14px; line-height: 1.5;">AI-агент запоминает контекст вашей жизни, связывает задачи, понимает голосовые сообщения и предлагает умные шаги с напоминаниями. Панель управления объединяет всё: задачи, партнеры, встречи, историю взаимодействий и статистику.</p>
+                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #656D76;">ASI Biont</h1>
+                    <p style="margin: 0 0 12px 0; color: #656D76; font-size: 14px; line-height: 1.5;">Закрытое сообщество от лаборатории искусственного интеллекта ASI Biont с живым поиском единомышленников через ваши текущие дела: система анализирует задачи и цели, находя партнеров в вашем городе.</p>
+                    <p style="margin: 0; color: #656D76; font-size: 14px; line-height: 1.5;">AI-агент запоминает контекст вашей жизни, связывает задачи, понимает голосовые сообщения и предлагает умные шаги с напоминаниями. Панель управления объединяет всё: задачи, партнеры, встречи, историю взаимодействий и статистику.</p>
                 </div>
                 
                 <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white;">
-                        <span style="color: #1F2328; font-size: 14px;">Живой поиск людей через ваши дела</span>
+                        <span style="color: #656D76; font-size: 14px;">Живой поиск людей через ваши дела</span>
                     </div>
                     
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white;">
-                        <span style="color: #1F2328; font-size: 14px;">AI-агент, который понимает контекст вашей жизни</span>
+                        <span style="color: #656D76; font-size: 14px;">AI-агент, который понимает контекст вашей жизни</span>
                     </div>
                     
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white;">
-                        <span style="color: #1F2328; font-size: 14px;">Панель управления всей экосистемой</span>
+                        <span style="color: #656D76; font-size: 14px;">Панель управления всей экосистемой</span>
                     </div>
                 </div>
                 
@@ -212,7 +212,7 @@
                                 </div>
                                 
                                 <!-- Имя и ник под аватаром -->
-                                <p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
+                                <p style="margin: 0; font-weight: 600; color: #656D76; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
                                 <p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -960,10 +960,10 @@
                         ${photoUrl ? 
                             `<img src="${photoUrl}" alt="${contact.first_name}" onclick="openContactProfileModal('${contact.username}')"
                                  style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">` :
-                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">${initials}</div>`
+                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">${initials}</div>`
                         }
                         <div style="flex: 1; min-width: 0;">
-                            <div onclick="openContactProfileModal('${contact.username}')" style="font-size: 13px; font-weight: 600; color: #1F2328; margin-bottom: 2px; cursor: pointer;">
+                            <div onclick="openContactProfileModal('${contact.username}')" style="font-size: 13px; font-weight: 600; color: #656D76; margin-bottom: 2px; cursor: pointer;">
                                 ${contact.first_name || contact.username}
                             </div>
                             <div style="font-size: 13px; color: #656D76; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
@@ -1275,7 +1275,7 @@
                     html += '<div class="task-recommendations" style="margin-top: 8px; padding: 8px; background: #F6F8FA; border-radius: 6px; border-left: 3px solid #068487;">';
                     html += '<div style="font-size: 12px; font-weight: 600; color: #068487; margin-bottom: 4px;">Рекомендации:</div>';
                     recommendations.forEach(rec => {
-                        html += '<div style="font-size: 12px; color: #1F2328; margin-bottom: 2px;">' + rec + '</div>';
+                        html += '<div style="font-size: 12px; color: #656D76; margin-bottom: 2px;">' + rec + '</div>';
                     });
                     html += '</div>';
                 }
@@ -1991,12 +1991,12 @@
                         html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin: 0 auto 8px auto;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin: 0 auto 8px auto;">${initial}</div>`;
                     }
                     
                     // Имя и ник под аватаром
                     const fullName = partner.first_name || 'Пользователь';
-                    html += `<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 13px;">${fullName}</p>`;
+                    html += `<p style="margin: 0; font-weight: 600; color: #656D76; font-size: 13px;">${fullName}</p>`;
                     html += `<p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@${partner.contact_info || 'неизвестен'}</p>`;
                     html += '</div>';
                     
@@ -2239,10 +2239,10 @@
                                     html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />';
                                     html += '</div>';
                                 } else {
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">' + initial + '</div></div>';
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">' + initial + '</div></div>';
                                 }
                                 html += '<div style="flex: 1;">';
-                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #1F2328;">@' + partner.contact_info + '</div>';
+                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #656D76;">@' + partner.contact_info + '</div>';
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
@@ -2316,10 +2316,10 @@
                                     html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />';
                                     html += '</div>';
                                 } else {
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
                                 }
                                 html += '<div style="flex: 1;">';
-                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #1F2328;">@' + partner.contact_info + '</div>';
+                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #656D76;">@' + partner.contact_info + '</div>';
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
@@ -2393,12 +2393,12 @@
                                     html += '</div>';
                                 } else {
                                     html += '<div style="position: relative; display: inline-block;">';
-                                    html += '<div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #1F2328; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
+                                    html += '<div onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #656D76; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
                                     html += '</div>';
                                 }
                                 html += '</div>';
                                 html += '<div style="flex: 1;">';
-                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #1F2328;">@' + partner.contact_info + '</div>';
+                                html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\')" style="cursor: pointer; color: #656D76;">@' + partner.contact_info + '</div>';
                                 // Количество делегированных задач сразу под ником
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегирую я ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
@@ -2721,7 +2721,7 @@
                             const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
                             html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
                         }
-                        html += '<p style="margin: 0; font-weight: 600; color: #1F2328; font-size: 16px;">' + (data.profile.first_name || 'Пользователь') + '</p>';
+                        html += '<p style="margin: 0; font-weight: 600; color: #656D76; font-size: 16px;">' + (data.profile.first_name || 'Пользователь') + '</p>';
                         html += '<p style="margin: 0; color: #656D76; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
                         html += '</div>';
                         html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';
@@ -3254,3 +3254,4 @@
     </script>
 </body>
 </html>
+
