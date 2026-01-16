@@ -147,14 +147,21 @@
                     <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
                     <a href="#" onclick="changeTime()" style="margin: 0; color: #374151; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">изменить</a>
                 </span>
-                <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 20px 4px 4px; border-radius: 6px; background: #F6F8FA;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px; border-radius: 6px; background: #F6F8FA;">
                     <div class="header-avatar-small">
+                        {% set tier_glow = '#CD7F32' %}
+                        {% if subscription_tier.lower() == 'silver' %}
+                            {% set tier_glow = '#C0C0C0' %}
+                        {% elif subscription_tier.lower() == 'gold' %}
+                            {% set tier_glow = '#FFD700' %}
+                        {% endif %}
                         {% if user_avatar_url %}
-                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid white; box-shadow: 0 0 6px {{ tier_glow }}, 0 0 10px {{ tier_glow }};">
                         {% else %}
-                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid white; box-shadow: 0 0 6px {{ tier_glow }}, 0 0 10px {{ tier_glow }};">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
+                    <span style="padding: 2px 6px; background: white; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier.lower() }}</span>
                     <button onclick="logout()" style="background: none; border: none; color: #374151; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">Выход</button>
                 </div>
             </div>
@@ -276,12 +283,7 @@
                                 
                                 <!-- Имя и ник под аватаром -->
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
-                                <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">
-                                    <p style="margin: 0; color: #374151; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
-                                    {% if subscription_tier %}
-                                    <span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier.lower() }}</span>
-                                    {% endif %}
-                                </div>
+                                <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                                 
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
@@ -2205,22 +2207,35 @@
                     
                     // Avatar and basic info - точно как в панели профиля
                     html += '<div style="text-align: center; margin-bottom: 16px;">';
+                    
+                    // Определяем цвет сияния по тарифу
+                    const tier = (partner.subscription_tier || '').toLowerCase();
+                    let glowColor = '#CD7F32'; // Bronze по умолчанию
+                    if (tier === 'silver') {
+                        glowColor = '#C0C0C0';
+                    } else if (tier === 'gold') {
+                        glowColor = '#FFD700';
+                    }
+                    
                     if (partner.photo_url) {
-                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">`;
+                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 0 12px ${glowColor}, 0 0 20px ${glowColor}; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin: 0 auto 8px auto;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid white; box-shadow: 0 0 12px ${glowColor}, 0 0 20px ${glowColor}; margin: 0 auto 8px auto;">${initial}</div>`;
                     }
                     
                     // Имя и ник под аватаром
                     const fullName = partner.first_name || 'Пользователь';
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
-                    html += '<div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">';
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${partner.contact_info || 'неизвестен'}</p>`;
+                    
+                    // Тариф под ником
                     if (partner.subscription_tier) {
-                        html += `<span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">${partner.subscription_tier.toLowerCase()}</span>`;
+                        html += `<div style="margin-top: 4px; margin-bottom: 8px;"><span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">${partner.subscription_tier.toLowerCase()}</span></div>`;
+                    } else {
+                        html += '<div style="margin-bottom: 8px;"></div>';
                     }
-                    html += '</div>';
+                    
                     html += '</div>';
                     
                     // Profile details - точно такие же поля как в основном профиле
