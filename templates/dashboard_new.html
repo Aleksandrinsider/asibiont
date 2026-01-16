@@ -923,10 +923,13 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    // Показываем уведомление об успешной отправке
-                    showNotification('Запрос на делегирование отправлен агенту!', 'success');
                     // Обновляем чат для отображения ответа
                     await updateChat();
+                    // Прокручиваем чат вниз к новым сообщениям
+                    const chatMessages = document.getElementById('chat-messages');
+                    if (chatMessages) {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
                 } else if (response.status === 403) {
                     // Ошибка из-за ограничений тарифа
                     const errorData = await response.json();
