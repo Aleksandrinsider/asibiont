@@ -1742,6 +1742,17 @@ async def logging_middleware(request, handler):
 
 
 @web.middleware
+async def redirect_to_www_middleware(request, handler):
+    """Redirect non-www domain to www subdomain"""
+    host = request.host
+    if host.startswith('asibiont.ru') and not host.startswith('www.'):
+        new_url = f"https://www.{host}{request.path_qs}"
+        logger.info(f"Redirecting from {host} to www.{host}")
+        return web.HTTPMovedPermanently(new_url)
+    return await handler(request)
+
+
+@web.middleware
 async def csp_middleware(request, handler):
     response = await handler(request)
     response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.deepseek.com; frame-src https://oauth.telegram.org;"
@@ -1751,6 +1762,7 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
+app.middlewares.append(redirect_to_www_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
