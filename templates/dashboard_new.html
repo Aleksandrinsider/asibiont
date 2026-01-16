@@ -149,16 +149,10 @@
                 </span>
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px; border-radius: 6px; background: #F6F8FA;">
                     <div class="header-avatar-small">
-                        {% set tier_glow = '#CD7F32' %}
-                        {% if subscription_tier.lower() == 'silver' %}
-                            {% set tier_glow = '#C0C0C0' %}
-                        {% elif subscription_tier.lower() == 'gold' %}
-                            {% set tier_glow = '#FFD700' %}
-                        {% endif %}
                         {% if user_avatar_url %}
-                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid white; box-shadow: 0 0 6px {{ tier_glow }}, 0 0 10px {{ tier_glow }};">
+                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
                         {% else %}
-                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid white; box-shadow: 0 0 6px {{ tier_glow }}, 0 0 10px {{ tier_glow }};">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
                     <span style="padding: 2px 6px; background: white; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier.lower() }}</span>
@@ -274,9 +268,9 @@
                                             {% set tier_glow = '#FFD700' %}
                                         {% endif %}
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 0 12px {{ tier_glow }}, 0 0 20px {{ tier_glow }};">
+                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 0 6px {{ tier_glow }}, 0 0 10px {{ tier_glow }};">
                                         {% else %}
-                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white; box-shadow: 0 0 12px {{ tier_glow }}, 0 0 20px {{ tier_glow }};">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white; box-shadow: 0 0 6px {{ tier_glow }}, 0 0 10px {{ tier_glow }};">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -979,7 +973,7 @@
                 avatar.style.height = `${size}px`;
                 avatar.style.borderRadius = '50%';
                 avatar.style.border = '1px solid white';
-                avatar.style.boxShadow = `0 0 8px ${glowColor}, 0 0 12px ${glowColor}`;
+                avatar.style.boxShadow = `0 0 4px ${glowColor}, 0 0 6px ${glowColor}`;
                 avatar.style.overflow = 'hidden';
                 avatar.style.cursor = 'pointer';
                 avatar.style.transition = 'transform 0.2s, box-shadow 0.2s';
@@ -988,11 +982,11 @@
                 // Hover эффект
                 avatar.onmouseenter = () => {
                     avatar.style.transform = 'scale(1.2)';
-                    avatar.style.boxShadow = `0 0 12px ${glowColor}, 0 0 20px ${glowColor}`;
+                    avatar.style.boxShadow = `0 0 6px ${glowColor}, 0 0 10px ${glowColor}`;
                 };
                 avatar.onmouseleave = () => {
                     avatar.style.transform = 'scale(1)';
-                    avatar.style.boxShadow = `0 0 8px ${glowColor}, 0 0 12px ${glowColor}`;
+                    avatar.style.boxShadow = `0 0 4px ${glowColor}, 0 0 6px ${glowColor}`;
                 };
                 
                 // Клик открывает профиль
@@ -2218,10 +2212,10 @@
                     }
                     
                     if (partner.photo_url) {
-                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 0 12px ${glowColor}, 0 0 20px ${glowColor}; margin-bottom: 8px;">`;
+                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 0 6px ${glowColor}, 0 0 10px ${glowColor}; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid white; box-shadow: 0 0 12px ${glowColor}, 0 0 20px ${glowColor}; margin: 0 auto 8px auto;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid white; box-shadow: 0 0 6px ${glowColor}, 0 0 10px ${glowColor}; margin: 0 auto 8px auto;">${initial}</div>`;
                     }
                     
                     // Имя и ник под аватаром
