@@ -22,11 +22,11 @@
         }
 
         .container {
-            margin-top: 0;
+            margin-top: 80px;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            min-height: calc(100vh - 80px);
             padding: 40px 20px;
         }
 
@@ -184,6 +184,30 @@
     </style>
 </head>
 <body>
+    <div class="app-header" style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
+        <div class="header-content">
+            <div class="header-left">
+                <!-- Логотип -->
+                <a href="https://t.me/Asibiont_bot" target="_blank" class="logo" style="display: flex; align-items: center; text-decoration: none; margin-left: 10px;">
+                    <span style="font-weight: 600; color: #374151;">ASI Biont</span>
+                </a>
+            </div>
+            <div class="header-center">
+                <!-- Пусто для центрирования -->
+            </div>
+            <div class="header-info">
+                {% if logged_in %}
+                <span style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
+                    <a href="/logout" class="logout-btn">Выйти</a>
+                </span>
+                {% else %}
+                <span style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
+                    <a href="/login" style="color: #068487; text-decoration: none; padding: 4px 8px; border-radius: 4px; transition: all 0.2s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#068487'">Войти</a>
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
     <div class="container">
         <div class="pricing-container">
             <div class="pricing-content">

@@ -1049,8 +1049,7 @@ async def chat_handler(request):
                 if context_data:
                     full_context = json.loads(context_data.decode('utf-8'))
                     # Filter messages from last 24 hours
-                    from datetime import datetime, timezone
-                    cutoff_time = datetime.now(timezone.utc).timestamp() - 24 * 3600
+                    cutoff_time = datetime.now(dt_timezone.utc).timestamp() - 24 * 3600
                     context = [msg for msg in full_context if datetime.fromisoformat(
                         msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
                     logger.info(f"Loaded and filtered context with {len(context)} messages from last 24h")

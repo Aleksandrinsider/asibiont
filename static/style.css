@@ -314,7 +314,7 @@ body {
     height: 100%;
     padding: 10px 10px;
     min-height: 0;
-    margin-top: 0;
+    margin-top: 10px;
     padding-bottom: 10px;
     -webkit-overflow-scrolling: touch;
     padding-right: 6px;
@@ -366,7 +366,7 @@ body {
     max-height: 100%;
     min-height: 0;
     -webkit-overflow-scrolling: touch;
-    margin-top: 0;
+    margin-top: 10px;
     background-color: #FFFFFF;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
@@ -1629,10 +1629,44 @@ details[open] .details-content {
     display: none;
 }
 
+/* Contact filter buttons */
+.contact-filter-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    background-color: #F6F8FA;
+    color: #374151;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    margin-right: 4px;
+}
+
+.contact-filter-btn:hover {
+    background-color: #E6E9EC;
+    border-color: #374151;
+    color: #374151;
+}
+
+.contact-filter-btn.active {
+    background-color: #068487;
+    border-color: #068487;
+    color: #FFFFFF;
+}
+
+.contact-filter-btn.active:hover {
+    background-color: #057a7c;
+    border-color: #057a7c;
+}
 
 
 
 
 
-. b a c k - b t n   {   d i s p l a y :   i n l i n e - b l o c k ;   p a d d i n g :   1 0 p x   2 0 p x ;   b a c k g r o u n d - c o l o r :   # F 6 F 8 F A ;   c o l o r :   # 3 7 4 1 5 1 ;   t e x t - d e c o r a t i o n :   n o n e ;   b o r d e r - r a d i u s :   6 p x ;   f o n t - w e i g h t :   5 0 0 ;   t r a n s i t i o n :   b a c k g r o u n d - c o l o r   0 . 2 s ;   b o r d e r :   1 p x   s o l i d   # D 1 D 9 E 0 ;   }   . b a c k - b t n : h o v e r   {   b a c k g r o u n d - c o l o r :   # E 6 E 9 E C ;   }  
+
+. b a c k - b t n   {   d i s p l a y :   i n l i n e - b l o c k ;   p a d d i n g :   1 0 p x   2 0 p x ;   b a c k g r o u n d - c o l o r :   # F 6 F 8 F A ;   c o l o r :   # 3 7 4 1 5 1 ;   t e x t - d e c o r a t i o n :   n o n e ;   b o r d e r - r a d i u s :   6 p x ;   f o n t - w e i g h t :   5 0 0 ;   t r a n s i t i o n :   b a c k g r o u n d - c o l o r   0 . 2 s ;   b o r d e r :   1 p x   s o l i d   # D 1 D 9 E 0 ;   }   . b a c k - b t n : h o v e r   {   b a c k g r o u n d - c o l o r :   # E 6 E 9 E C ;   } 
+ 
  
