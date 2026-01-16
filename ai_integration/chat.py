@@ -1226,10 +1226,11 @@ async def generate_reminder(user_id, task_title):
 
                     return content
                 else:
-                    return "Ошибка генерации напоминания."
+                    logger.error(f"Failed to generate reminder: status {response.status}")
+                    return f"Привет! Напоминаю о задаче: {task_title}. Как продвигается?"
     except Exception as e:
         logger.error(f"Error in generate_reminder: {e}")
-        return f"Напоминание о '{task_title}'."
+        return f"Пора заняться задачей: {task_title}. Все получится! 💪"
 
 
 async def generate_result_check(user_id, task_title):
@@ -1301,10 +1302,11 @@ async def generate_result_check(user_id, task_title):
 
                     return content
                 else:
-                    return "Ошибка генерации вопроса."
+                    logger.error(f"Failed to generate result check: status {response.status}")
+                    return f"Привет! Как прошло выполнение задачи '{task_title}'? Поделись результатами! 😊"
     except Exception as e:
         logger.error(f"Error in generate_result_check: {e}")
-        return f"Результат задачи '{task_title}'?"
+        return f"Как успехи с задачей '{task_title}'? Расскажи, что получилось!"
 
 
 async def generate_proactive_message(user_id):
@@ -1413,10 +1415,11 @@ async def generate_proactive_message(user_id):
 
                     return content
                 else:
-                    return "Ошибка генерации сообщения."
+                    logger.error(f"Failed to generate proactive message: status {response.status}")
+                    return "Как дела? Может быть, есть задачи на сегодня? Давай спланируем день! 📋"
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
-        return "Добавьте задачу."
+        return "Привет! Как твои дела? Чем могу помочь сегодня? 😊"
 
 
 async def generate_daily_report(user_id):
@@ -1495,10 +1498,11 @@ async def generate_daily_report(user_id):
 
                     return content
                 else:
-                    return "Ошибка генерации отчета."
+                    logger.error(f"Failed to generate daily report: status {response.status}")
+                    return "Привет! Время подвести итоги дня. Как прошли дела? 📊"
     except Exception as e:
         logger.error(f"Error in generate_daily_report: {e}")
-        return "Отчет о задачах."
+        return "Давай посмотрим, что сегодня сделано! Расскажи о своих успехах! 🌟"
 
 
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
@@ -1583,10 +1587,11 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
 
                     return content
                 else:
-                    return "Ошибка генерации напоминания."
+                    logger.error(f"Failed to generate overdue reminder: status {response.status}")
+                    return "Привет! Заметил несколько просроченных задач. Давай вместе разберемся? 🤝"
     except Exception as e:
         logger.error(f"Error in generate_overdue_reminder: {e}")
-        return "Просроченные задачи."
+        return "Есть задачи, которые ждут внимания. Может, начнем с них? 💪"
 
 
 # Функции для работы с задачами
