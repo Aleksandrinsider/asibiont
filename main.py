@@ -3,11 +3,12 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL
 from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 from redis.asyncio import Redis
+from sqlalchemy import text
 import re
 import jinja2
 import aiohttp_jinja2
@@ -263,13 +264,24 @@ def ensure_sport_interest():
         logger.error(f"Failed to add sport interest: {e}")
 
 
+# Test database connection before starting
+try:
+    test_session = Session()
+    test_session.execute(text('SELECT 1'))
+    test_session.close()
+    logger.info("✅ Database connection successful")
+except Exception as e:
+    logger.error(f"❌ CRITICAL: Cannot connect to database: {e}", exc_info=True)
+    logger.error(f"DATABASE_URL: {DATABASE_URL[:50]}..." if DATABASE_URL else "DATABASE_URL not set")
+    # Don't exit, let Railway restart the app
+
 try:
     run_migrations()
     logger.info("Database migrations completed")
     add_test_sport_users()
     ensure_sport_interest()
 except Exception as e:
-    logger.error(f"Failed to run migrations: {e}")
+    logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
 redis_client = None
 
@@ -341,8 +353,9 @@ async def auth_handler(request):
         user_id = int(data['id'])
         logger.info(f"Authentication successful for user_id: {user_id}")
 
-        session_db = Session()
+        session_db = None
         try:
+            session_db = Session()
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 logger.info(f"Creating new user with telegram_id: {user_id}")
@@ -397,8 +410,14 @@ async def auth_handler(request):
             if subscription:
                 subscription.login_count += 1
                 session_db.commit()
+        except Exception as e:
+            logger.error(f"Database error in auth_handler: {e}", exc_info=True)
+            if session_db:
+                session_db.rollback()
+            return web.Response(text=f'Ошибка подключения к базе данных. Попробуйте позже.', status=500)
         finally:
-            session_db.close()
+            if session_db:
+                session_db.close()
 
         session = await get_session(request)
         session['user_id'] = user_id
