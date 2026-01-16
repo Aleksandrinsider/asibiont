@@ -1216,7 +1216,7 @@ async def api_send_message_handler(request):
                 logger.error(f"Error loading context from Redis: {e}")
 
         # Import chat function
-        from ai_integration.chat import chat
+        from ai_integration.chat import chat_with_ai as chat
 
         # Get user from database
         session_db = Session()
