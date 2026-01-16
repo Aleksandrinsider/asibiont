@@ -15,7 +15,7 @@ from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
     replace_placeholders, clean_technical_details,
     post_process_tool_calls, smart_fallback_handler,
-    redis_client
+    redis_client, post_process_response
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
@@ -371,86 +371,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Убрана специальная обработка приветствий - все через AI промпт
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
-        context_analysis = analyze_user_context_for_advice(user_id, clean_message, context)
-        if "error" not in context_analysis:
-            # Добавляем ДЕТАЛЬНЫЙ анализ в user_memory для использования в промпте
-            user_memory += "\n\n═══ ПОЛНЫЙ КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ ═══\n"
-            
-            # Профиль
-            user_memory += f"\n📋 ПРОФИЛЬ ({context_analysis['profile'].get('filled_fields', 0)}/8 полей):\n"
-            if context_analysis['profile'].get('position'):
-                user_memory += f"  Позиция: {context_analysis['profile']['position']}"
-                if context_analysis['profile'].get('company'):
-                    user_memory += f" @ {context_analysis['profile']['company']}"
-                user_memory += "\n"
-            if context_analysis['profile'].get('skills'):
-                user_memory += f"  Навыки: {context_analysis['profile']['skills']}\n"
-            if context_analysis['profile'].get('interests'):
-                user_memory += f"  Интересы: {context_analysis['profile']['interests']}\n"
-            if context_analysis['profile'].get('goals'):
-                user_memory += f"  Цели: {context_analysis['profile']['goals']}\n"
-            
-            # Текущая ситуация с задачами
-            tasks_info = context_analysis['tasks']
-            user_memory += f"\n📊 ЗАДАЧИ (выполнено {int(tasks_info['completion_rate'] * 100)}%):\n"
-            
-            if tasks_info['overdue'] > 0:
-                user_memory += f"  🔴 ПРОСРОЧЕНО: {tasks_info['overdue']} задач\n"
-                for task in tasks_info['overdue_list'][:3]:
-                    user_memory += f"     • {task['title']}\n"
-            
-            if tasks_info['today'] > 0:
-                user_memory += f"  🟡 СЕГОДНЯ: {tasks_info['today']} задач\n"
-                for task in tasks_info['today_list'][:3]:
-                    user_memory += f"     • {task['title']}\n"
-            
-            if tasks_info['upcoming'] > 0:
-                user_memory += f"  🟢 БУДУЩИЕ: {tasks_info['upcoming']} задач\n"
-            
-            if tasks_info['delegated'] > 0:
-                user_memory += f"  👥 Делегировано: {tasks_info['delegated']}\n"
-                for task in tasks_info['delegated_list']:
-                    user_memory += f"     • {task['title']} → {task['to']}\n"
-            
-            # Паттерны и аналитика
-            patterns = context_analysis['patterns']
-            user_memory += f"\n📈 ПАТТЕРНЫ ПОВЕДЕНИЯ:\n"
-            user_memory += f"  Основные темы: {', '.join([f'{theme}' for theme, count in patterns['main_themes'] if count > 0])}\n"
-            user_memory += f"  Продуктивное время: {patterns['most_productive_time']}\n"
-            user_memory += f"  Средняя активность: {patterns['avg_tasks_per_week']:.1f} задач/неделю\n"
-            
-            # Текущее состояние
-            insights = context_analysis['context_insights']
-            user_memory += f"\n💡 ТЕКУЩАЯ СИТУАЦИЯ:\n"
-            if insights['urgency_level'] == 'high':
-                user_memory += f"  ⚡ Высокая срочность\n"
-            if insights['emotional_state'] != 'neutral':
-                state_emoji = "😰" if insights['emotional_state'] == 'stressed' else "🎯"
-                state_text = "стресс" if insights['emotional_state'] == 'stressed' else "мотивация"
-                user_memory += f"  {state_emoji} Эмоциональное состояние: {state_text}\n"
-            if insights['seeks_help']:
-                user_memory += f"  🆘 Ищет помощь/совет\n"
-            if insights['wants_optimization']:
-                user_memory += f"  ⚙️ Хочет оптимизировать процессы\n"
-            if insights['mentions_time_pressure']:
-                user_memory += f"  ⏰ Давление по времени\n"
-            
-            # Релевантные контакты
-            if context_analysis.get('relevant_contacts'):
-                user_memory += f"\n👥 РЕЛЕВАНТНЫЕ КОНТАКТЫ:\n"
-                for contact in context_analysis['relevant_contacts'][:3]:
-                    user_memory += f"  • @{contact['username']}"
-                    if contact['reasons']:
-                        user_memory += f" ({', '.join(contact['reasons'][:2])})"
-                    user_memory += "\n"
-            
-            # Персонализированные рекомендации
-            if context_analysis['recommendations']:
-                user_memory += f"\n💎 РЕКОМЕНДАЦИИ (используй при формировании ответа):\n"
-                for rec in context_analysis['recommendations'][:5]:
-                    user_memory += f"  → {rec}\n"
-            
-            user_memory += "\n═══════════════════════════════════\n"
+        # context_analysis = analyze_user_context_for_advice(user_id, db_session)
+        # if "error" not in context_analysis:
+        #     # Большой блок анализа отключен - теперь используется пост-обработка в utils.py
+        #     pass
 
         # Construct system prompt with replaced placeholders
         # Расширяем system prompt для работы с относительным временем
@@ -1120,6 +1044,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             #     system_prompt, messages, url, headers
                             # )
 
+                            # Пост-обработка для улучшения качества ответа
+                            final_content = post_process_response(final_content, user_id, db_session)
+
                             return final_content
                     except Exception as e:
                         logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
@@ -1204,6 +1131,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
                     # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
                     # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
+
+                    # Пост-обработка для улучшения качества ответа
+                    content = post_process_response(content, user_id, db_session)
 
                     return content
 

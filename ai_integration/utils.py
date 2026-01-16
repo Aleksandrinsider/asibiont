@@ -922,6 +922,22 @@ def analyze_user_context_for_advice(user_id, message, context=None):
                         relevance_score += 3
                         reasons.append("может помочь с текущими целями")
                 
+                # Совпадение по целям контакта и навыкам пользователя (кому пользователь может помочь)
+                if profile.skills and contact_profile.goals:
+                    user_skills_lower = profile.skills.lower()
+                    contact_goals_lower = contact_profile.goals.lower()
+                    if any(skill in contact_goals_lower for skill in user_skills_lower.split(',')):
+                        relevance_score += 3
+                        reasons.append("нуждается в твоей помощи")
+                
+                # Совпадение по задачам контакта и навыкам пользователя
+                if profile.skills and contact_profile.current_plans:
+                    user_skills_lower = profile.skills.lower()
+                    contact_plans_lower = contact_profile.current_plans.lower()
+                    if any(skill in contact_plans_lower for skill in user_skills_lower.split(',')):
+                        relevance_score += 2
+                        reasons.append("работает над тем, в чем ты силен")
+                
                 # Город (локальные связи)
                 if profile.city and contact_profile.city and profile.city.lower() == contact_profile.city.lower():
                     relevance_score += 1
@@ -1215,3 +1231,144 @@ def generate_task_recommendations(title, description, user_id):
         import logging
         logging.warning(f"Error generating recommendations: {e}")
         return []
+
+
+def analyze_user_context_for_advice(user_id, db_session=None):
+    """
+    Анализирует контекст пользователя для проактивных советов и предложений контактов.
+    Возвращает словарь с рекомендациями, включая обратные связи (кого пользователь может помочь).
+    """
+    if not user_id:
+        return {}
+    
+    if db_session is None:
+        from models import Session
+        db_session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return {}
+        
+        profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            return {}
+        
+        recommendations = {
+            'contact_suggestions': [],
+            'reverse_contacts': [],  # Кто может помочь пользователю
+            'helpful_contacts': [],  # Кого пользователь может помочь
+            'task_suggestions': [],
+            'profile_improvements': []
+        }
+        
+        # Анализ всех профилей для поиска потенциальных контактов
+        all_profiles = db_session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
+        
+        user_skills = set((profile.skills or "").lower().split(", ")) if profile.skills else set()
+        user_interests = set((profile.interests or "").lower().split(", ")) if profile.interests else set()
+        user_goals = set((profile.goals or "").lower().split(", ")) if profile.goals else set()
+        
+        for other_profile in all_profiles:
+            if not other_profile.contact_info or other_profile.contact_info == f"user{user_id}":
+                continue
+                
+            other_skills = set((other_profile.skills or "").lower().split(", ")) if other_profile.skills else set()
+            other_interests = set((other_profile.interests or "").lower().split(", ")) if other_profile.interests else set()
+            other_goals = set((other_profile.goals or "").lower().split(", ")) if other_profile.goals else set()
+            
+            # Проверяем, кому пользователь может помочь (reverse contacts)
+            skills_match = user_skills & other_goals  # Навыки пользователя совпадают с целями другого
+            if skills_match and len(recommendations['helpful_contacts']) < 3:
+                contact_name = other_profile.contact_info.split('@')[-1] if '@' in other_profile.contact_info else other_profile.contact_info
+                recommendations['helpful_contacts'].append({
+                    'contact': contact_name,
+                    'reason': f"можешь помочь с {', '.join(list(skills_match)[:2])}",
+                    'match_type': 'skills_to_goals'
+                })
+            
+            # Проверяем, кто может помочь пользователю
+            goals_match = user_goals & other_skills  # Цели пользователя совпадают с навыками другого
+            if goals_match and len(recommendations['reverse_contacts']) < 3:
+                contact_name = other_profile.contact_info.split('@')[-1] if '@' in other_profile.contact_info else other_profile.contact_info
+                recommendations['reverse_contacts'].append({
+                    'contact': contact_name,
+                    'reason': f"может помочь с {', '.join(list(goals_match)[:2])}",
+                    'match_type': 'goals_to_skills'
+                })
+            
+            # Общие интересы для networking
+            interest_match = user_interests & other_interests
+            if interest_match and len(recommendations['contact_suggestions']) < 2:
+                contact_name = other_profile.contact_info.split('@')[-1] if '@' in other_profile.contact_info else other_profile.contact_info
+                recommendations['contact_suggestions'].append({
+                    'contact': contact_name,
+                    'reason': f"общие интересы: {', '.join(list(interest_match)[:2])}",
+                    'match_type': 'shared_interests'
+                })
+        
+        # Анализ задач для предложений
+        pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").limit(5).all()
+        for task in pending_tasks:
+            if "встреча" in task.title.lower() or "звонок" in task.title.lower():
+                if profile.city and len(recommendations['task_suggestions']) < 2:
+                    recommendations['task_suggestions'].append(f"Возможно, стоит найти партнера в {profile.city} для этой встречи?")
+            elif any(skill in task.title.lower() for skill in user_skills):
+                recommendations['task_suggestions'].append("Эта задача использует твои навыки - может, делегировать часть работы?")
+        
+        return recommendations
+        
+    except Exception as e:
+        logger.error(f"Error in analyze_user_context_for_advice: {e}")
+        return {}
+    finally:
+        if close_session:
+            db_session.close()
+
+
+def post_process_response(content, user_id, db_session=None):
+    """
+    Пост-обработка ответа AI для улучшения качества:
+    - Удаление форматирования
+    - Добавление проактивных предложений контактов
+    - Улучшение естественности
+    """
+    if not content or not user_id:
+        return content
+    
+    # Удаляем форматирование
+    content = re.sub(r'\*\*(.*?)\*\*', r'\1', content)  # Убираем жирный текст
+    content = re.sub(r'\*(.*?)\*', r'\1', content)     # Убираем курсив
+    content = re.sub(r'`(.*?)`', r'\1', content)       # Убираем inline code
+    content = re.sub(r'```.*?```', '', content, flags=re.DOTALL)  # Убираем code blocks
+    content = re.sub(r'#+\s*', '', content)            # Убираем заголовки
+    
+    # Получаем рекомендации по контактам
+    advice = analyze_user_context_for_advice(user_id, db_session)
+    
+    # Добавляем проактивные предложения контактов, если ответ не слишком длинный
+    if len(content) < 300:  # Только для коротких ответов
+        additions = []
+        
+        # Предложения кого пользователь может помочь
+        if advice.get('helpful_contacts') and len(additions) < 1:
+            contact = advice['helpful_contacts'][0]
+            additions.append(f"Кстати, {contact['contact']} работает над тем, с чем ты {contact['reason']}.")
+        
+        # Предложения кто может помочь пользователю
+        elif advice.get('reverse_contacts') and len(additions) < 1:
+            contact = advice['reverse_contacts'][0]
+            additions.append(f"Может, {contact['contact']} {contact['reason']}?")
+        
+        # Общие рекомендации по задачам
+        elif advice.get('task_suggestions') and len(additions) < 1:
+            additions.append(advice['task_suggestions'][0])
+        
+        # Добавляем дополнение естественным образом
+        if additions:
+            content = content.rstrip('?!.') + '. ' + additions[0]
+    
+    return content.strip()
