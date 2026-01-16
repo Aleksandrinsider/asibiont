@@ -135,6 +135,22 @@ class Subscription(Base):
     user = relationship("User", backref="subscription")
 
 
+class PromoCode(Base):
+    __tablename__ = 'promo_codes'
+
+    id = Column(Integer, primary_key=True)
+    code = Column(String(50), unique=True, nullable=False)  # Promo code string
+    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # Tier to grant
+    duration_days = Column(Integer, default=30)  # Duration in days
+    expires_at = Column(DateTime, nullable=False)  # Expiration date
+    is_used = Column(Boolean, default=False)  # Whether the code has been used
+    used_by_user_id = Column(Integer, ForeignKey('users.id'))  # User who used it
+    used_at = Column(DateTime)  # When it was used
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    used_by_user = relationship("User", backref="used_promo_codes")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

@@ -721,6 +721,16 @@ def delegate_task(
     """Create a delegated task that requires acceptance by the recipient"""
     session = Session()
     try:
+        # Check if delegator has Bronze tier - Bronze users can only receive delegated tasks
+        delegator = session.query(User).filter_by(telegram_id=user_id).first()
+        if not delegator:
+            return "Ошибка: Пользователь не найден."
+        
+        if delegator.subscription_tier and delegator.subscription_tier.value == 'BRONZE':
+            return ("🥉 Делегирование задач доступно только на тарифах **Серебро** и **Золото**. "
+                    "На тарифе Бронза вы можете получать делегированные задачи от других пользователей, "
+                    "но не можете делегировать свои задачи. Обновите тариф для доступа к делегированию.")
+        
         # Validate reminder_time
         if not reminder_time:
             return "Для делегирования задачи требуется точная дата и время дедлайна. Пожалуйста, уточните: на какое точное время и дату поставить дедлайн? (Например: '2026-01-10 15:00' или 'завтра в 14:30')"
@@ -737,11 +747,6 @@ def delegate_task(
                     logger.info(f"[DELEGATE] Parsed to: {reminder_time}")
                 else:
                     return f"Некорректный формат времени '{reminder_time}'. Укажите точное время в формате YYYY-MM-DD HH:MM (например: 2026-01-10 15:00)"
-
-        # Find delegator
-        delegator = session.query(User).filter_by(telegram_id=user_id).first()
-        if not delegator:
-            return "Ошибка: Пользователь не найден."
 
         # Find recipient by username
         recipient_username = delegated_to_username.replace("@", "").lower()

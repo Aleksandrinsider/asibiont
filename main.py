@@ -1,5 +1,5 @@
 from handlers import router as handlers_router
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -206,6 +206,43 @@ try:
                 else:
                     logger.info("Migration: tier column already exists in subscriptions table")
 
+        # Migration for promo_codes table
+        if 'promo_codes' not in inspector.get_table_names():
+            logger.info("Creating promo_codes table")
+            if is_sqlite:
+                session.execute(text('''
+                    CREATE TABLE promo_codes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        code VARCHAR(50) UNIQUE NOT NULL,
+                        tier TEXT DEFAULT 'BRONZE',
+                        duration_days INTEGER DEFAULT 30,
+                        expires_at TIMESTAMP NOT NULL,
+                        is_used BOOLEAN DEFAULT FALSE,
+                        used_by_user_id INTEGER,
+                        used_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (used_by_user_id) REFERENCES users (id)
+                    )
+                '''))
+            else:
+                session.execute(text('''
+                    CREATE TABLE promo_codes (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(50) UNIQUE NOT NULL,
+                        tier subscription_tier_enum DEFAULT 'BRONZE',
+                        duration_days INTEGER DEFAULT 30,
+                        expires_at TIMESTAMP NOT NULL,
+                        is_used BOOLEAN DEFAULT FALSE,
+                        used_by_user_id INTEGER REFERENCES users(id),
+                        used_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                '''))
+            session.commit()
+            logger.info("Migration: promo_codes table created successfully")
+        else:
+            logger.info("Migration: promo_codes table already exists")
+
         session.close()
         logger.info("Migration session closed successfully")
     except Exception as e:
@@ -343,6 +380,34 @@ def ensure_sport_interest():
         logger.error(f"Failed to add sport interest: {e}")
 
 
+def create_test_promo_codes():
+    """Создает тестовые промокоды"""
+    try:
+        session = Session()
+
+        # Проверяем, есть ли уже тестовый промокод
+        existing_promo = session.query(PromoCode).filter_by(code='TESTBRONZE').first()
+        if existing_promo:
+            logger.info("Test promo code TESTBRONZE already exists")
+            session.close()
+            return
+
+        # Создаем тестовый промокод на бронзу на месяц, действующий год
+        expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
+        test_promo = PromoCode(
+            code='TESTBRONZE',
+            tier=SubscriptionTier.BRONZE,
+            duration_days=30,
+            expires_at=expires_at
+        )
+        session.add(test_promo)
+        session.commit()
+        logger.info("Created test promo code: TESTBRONZE (Bronze for 30 days, expires in 1 year)")
+        session.close()
+    except Exception as e:
+        logger.error(f"Failed to create test promo codes: {e}")
+
+
 # Test database connection before starting
 try:
     test_session = Session()
@@ -359,6 +424,7 @@ try:
     logger.info("Database migrations completed")
     add_test_sport_users()
     ensure_sport_interest()
+    create_test_promo_codes()
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
@@ -3002,6 +3068,77 @@ async def subscription_tiers_handler(request):
     return {}
 
 
+async def apply_promo_code_handler(request):
+    """Применяет промокод и активирует подписку"""
+    session_obj = await get_session(request)
+    user_id = session_obj.get('user_id')
+
+    if not user_id:
+        return web.json_response({'success': False, 'message': 'Не авторизован'}, status=401)
+
+    data = await request.post()
+    promo_code = data.get('promo_code', '').strip().upper()
+
+    if not promo_code:
+        return web.json_response({'success': False, 'message': 'Введите промокод'})
+
+    try:
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            session.close()
+            return web.json_response({'success': False, 'message': 'Пользователь не найден'})
+
+        # Проверяем промокод
+        promo = session.query(PromoCode).filter_by(code=promo_code).first()
+        if not promo:
+            session.close()
+            return web.json_response({'success': False, 'message': 'Неверный промокод'})
+
+        # Проверяем срок действия
+        now = datetime.now(dt_timezone.utc)
+        if promo.expires_at < now:
+            session.close()
+            return web.json_response({'success': False, 'message': 'Срок действия промокода истек'})
+
+        # Проверяем, не использован ли уже
+        if promo.is_used:
+            session.close()
+            return web.json_response({'success': False, 'message': 'Промокод уже использован'})
+
+        # Активируем подписку
+        start_date = now
+        end_date = start_date + timedelta(days=promo.duration_days)
+
+        # Ищем существующую подписку или создаем новую
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        if not subscription:
+            subscription = Subscription(user_id=user.id, status='active', tier=promo.tier, start_date=start_date, end_date=end_date)
+            session.add(subscription)
+        else:
+            subscription.status = 'active'
+            subscription.tier = promo.tier
+            subscription.start_date = start_date
+            subscription.end_date = end_date
+
+        # Помечаем промокод как использованный
+        promo.is_used = True
+        promo.used_by_user_id = user.id
+        promo.used_at = now
+
+        session.commit()
+        session.close()
+
+        return web.json_response({
+            'success': True,
+            'message': f'Промокод активирован! Подписка {promo.tier.value} на {promo.duration_days} дней до {end_date.strftime("%d.%m.%Y")}'
+        })
+
+    except Exception as e:
+        logger.error(f"Error applying promo code: {e}")
+        return web.json_response({'success': False, 'message': 'Ошибка активации промокода'}, status=500)
+
+
 async def create_payment_handler(request):
     """Создает платеж для выбранного тарифа"""
     session_obj = await get_session(request)
@@ -3055,6 +3192,7 @@ app.router.add_post('/get_task_advice', get_task_advice_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
+app.router.add_post('/apply_promo_code', apply_promo_code_handler)
 app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
