@@ -286,7 +286,16 @@ except Exception as e:
         logger.warning("Continuing with local mode despite migration issues")
 
 
-def add_test_sport_users():
+# Test functions disabled in production mode
+# def add_test_sport_users():
+#     pass
+# def ensure_sport_interest():
+#     pass
+# def create_test_promo_codes():
+#     pass
+
+
+def check_database_connection():
     """Добавляет тестовых пользователей с интересами 'спорт' если их еще нет"""
     try:
         session = Session()
@@ -449,9 +458,8 @@ except Exception as e:
 try:
     # Migrations are already run above
     logger.info("Database migrations completed")
-    add_test_sport_users()
-    ensure_sport_interest()
-    create_test_promo_codes()
+    # Production mode: Test users and promo codes disabled
+    logger.info("Production mode: Test data creation disabled")
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
