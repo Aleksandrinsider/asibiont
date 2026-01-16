@@ -192,6 +192,16 @@
                     <p>Получите доступ к закрытому сообществу ASI Biont</p>
                 </div>
 
+                <!-- Promo Code Section -->
+                <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 20px; background: #F8FAFC; margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #374151;">Есть промокод?</h3>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <input type="text" id="promo_code" placeholder="Введите промокод" style="flex: 1; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-family: inherit;" maxlength="50">
+                        <button onclick="applyPromoCode()" id="apply_promo_btn" style="padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Применить</button>
+                    </div>
+                    <div id="promo_message" style="margin-top: 8px; font-size: 13px; display: none;"></div>
+                </div>
+
                 <div class="pricing-grid">
                     <!-- Bronze -->
                     <div class="pricing-card">
@@ -229,6 +239,58 @@
             </div>
         </div>
     </div>
+
+    <script>
+        async function applyPromoCode() {
+            const promoCode = document.getElementById('promo_code').value.trim().toUpperCase();
+            const messageDiv = document.getElementById('promo_message');
+            const button = document.getElementById('apply_promo_btn');
+
+            if (!promoCode) {
+                showMessage('Введите промокод', 'error');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = 'Применение...';
+
+            try {
+                const response = await fetch('/apply_promo_code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'promo_code': promoCode
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    // Redirect to dashboard after successful activation
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    showMessage(result.message, 'error');
+                }
+            } catch (error) {
+                showMessage('Ошибка сети. Попробуйте еще раз.', 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Применить';
+            }
+        }
+
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById('promo_message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            messageDiv.style.color = type === 'success' ? '#059669' : '#DC2626';
+        }
+    </script>
 </body>
 </html>
 
