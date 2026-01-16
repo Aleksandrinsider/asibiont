@@ -137,19 +137,26 @@ def run_migrations():
                 sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
                 if 'tier' in sub_columns:
                     logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
+                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier DROP DEFAULT"))
                     session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
             
             session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
             session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
-            session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('bronze', 'silver', 'gold')"))
-            session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'bronze\''))
+            session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
+            session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
+            
+            # Update existing users data to match new enum values (after creating the enum)
+            session.execute(text("UPDATE users SET subscription_tier = CASE WHEN subscription_tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN subscription_tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN subscription_tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
             
             # Update subscriptions.tier back to enum type with correct values
             if 'subscriptions' in inspector.get_table_names():
                 sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
                 if 'tier' in sub_columns:
                     logger.info("Converting subscriptions.tier back to enum type")
+                    # Update existing data to match new enum values (after creating the enum)
+                    session.execute(text("UPDATE subscriptions SET tier = CASE WHEN tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
                     session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
+                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
             
             session.commit()
             logger.info("Migration: subscription_tier column recreated successfully")
