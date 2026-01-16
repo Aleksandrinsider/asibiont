@@ -1897,13 +1897,19 @@ async def api_partners_handler(request):
             partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
             
             # Determine if user can access this contact
-            # Bronze и Silver видят друг друга, но не видят Gold
+            # Bronze видит только Bronze
+            # Silver видит Bronze и Silver
             # Gold видит всех
             can_access = False
             required_tier = None
             
-            if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
-                # Bronze и Silver видят только Bronze и Silver, не Gold
+            if user_tier == SubscriptionTier.BRONZE:
+                # Bronze видит только Bronze
+                can_access = (partner_tier == SubscriptionTier.BRONZE)
+                if not can_access:
+                    required_tier = 'silver' if partner_tier == SubscriptionTier.SILVER else 'gold'
+            elif user_tier == SubscriptionTier.SILVER:
+                # Silver видит Bronze и Silver, но не Gold
                 can_access = (partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
                 if not can_access:
                     required_tier = 'gold'

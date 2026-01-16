@@ -90,6 +90,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
         user = None
         profile = None
         session = None
+        subscription_tier = None
         # Initialize time variables with defaults
         base_now = datetime.now(pytz.UTC)
         user_now = base_now
@@ -119,6 +120,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 user = User(telegram_id=user_id)
                 db_session.add(user)
                 db_session.commit()
+            
+            # Получаем subscription_tier
+            subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
 
             # Check subscription
             from config import FREE_ACCESS_MODE
@@ -459,7 +463,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                 current_date_str,
                 user_username,
                 mentions_str,
-                user_memory)
+                user_memory,
+                subscription_tier=subscription_tier)
             logger.info("[LEGACY] Using extended prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task

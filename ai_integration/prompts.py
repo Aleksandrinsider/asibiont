@@ -4,8 +4,24 @@ from datetime import datetime, timedelta
 import pytz
 
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None):
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None):
     """Get extended system prompt for AI"""
+    
+    # Информация о подписке
+    tier_info = ""
+    if subscription_tier:
+        tier_name = {
+            'BRONZE': 'Bronze (базовая)',
+            'SILVER': 'Silver (расширенная)',
+            'GOLD': 'Gold (премиум)'
+        }.get(subscription_tier, subscription_tier)
+        
+        tier_info = f"\n💎 ПОДПИСКА ПОЛЬЗОВАТЕЛЯ: {tier_name}"
+        
+        # Важно: не рекомендуй повышение тарифа тем, у кого уже Bronze или Silver
+        if subscription_tier in ['BRONZE', 'SILVER']:
+            tier_info += "\n⚠️ У пользователя уже есть активная подписка. НЕ предлагай и НЕ рекомендуй переход на другой тариф."
+    
     # Basic system prompt when improved_prompts_final not available
     return f"""Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности.
 
@@ -13,6 +29,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 {current_date_str} {current_time_str}
 
 👤 ПОЛЬЗОВАТЕЛЬ: @{user_username}
+{tier_info}
 
 {user_memory}
 
