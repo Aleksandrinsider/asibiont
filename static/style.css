@@ -97,11 +97,12 @@ body {
 }  
 
 .app-header {
-    width: calc(100% - 16px);
+    width: 100%;
     height: var(--header-height);
     background-color: #FFFFFF;
     color: #374151;
-    margin: 8px 8px 0 8px;
+    margin: 0;
+    padding: 0 8px;
     position: fixed;
     top: 0;
     left: 0;
