@@ -936,9 +936,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                     ai_result = await ai_response.json()
                                                     final_content = ai_result["choices"][0]["message"]["content"].strip()
                                                     logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
+                                                else:
+                                                    logger.warning(f"[AI NATURAL RESPONSE] AI returned non-200 status: {ai_response.status}")
+                                                    # Генерируем fallback ответ
+                                                    final_content = "Готово! Напоминание установлено."
                                         except Exception as e:
-                                            logger.warning(f"[AI NATURAL RESPONSE] Failed to get natural response, using original: {e}")
-                                            # Оставляем original final_content если AI не ответил
+                                            logger.warning(f"[AI NATURAL RESPONSE] Failed to get natural response: {e}")
+                                            # Генерируем fallback ответ вместо технического сообщения
+                                            final_content = "Готово! Напоминание установлено."
 
                                     # Enforcement отключен - AI должен отвечать естественно
                                     # intent_type = "list_tasks" if has_list_tasks else None
