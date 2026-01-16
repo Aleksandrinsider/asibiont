@@ -2824,14 +2824,13 @@ async def on_startup(app):
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware configured successfully")
 
-    # Set webhook - TEMPORARILY DISABLED for DNS propagation
-    # if bot and not LOCAL:
-    #     webhook_url = WEBHOOK_URL
-    #     await bot.set_webhook(webhook_url)
-    #     logger.info(f"Webhook set to: {webhook_url}")
-    # else:
-    #     logger.warning("Bot not created or local mode, skipping webhook setup")
-    logger.info("Webhook setup temporarily disabled, waiting for DNS propagation")
+    # Set webhook
+    if bot and not LOCAL:
+        webhook_url = WEBHOOK_URL
+        await bot.set_webhook(webhook_url)
+        logger.info(f"Webhook set to: {webhook_url}")
+    else:
+        logger.warning("Bot not created or local mode, skipping webhook setup")
 
     # Initialize handlers Redis
     async def init_handlers_redis(client):
