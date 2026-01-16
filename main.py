@@ -130,9 +130,13 @@ def run_migrations():
             # Migration for subscription_tier column
             if 'subscription_tier' not in user_columns:
                 logger.info("Adding subscription_tier column to users table")
-                # First create the enum type if it doesn't exist
-                session.execute(text("DO $$ BEGIN CREATE TYPE subscription_tier_enum AS ENUM ('bronze', 'silver', 'gold'); EXCEPTION WHEN duplicate_object THEN null; END $$;"))
-                session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'bronze\''))
+                # First drop the column if it exists (in case of incorrect migration)
+                session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
+                # Drop the enum type if it exists
+                session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
+                # Create the enum type with correct values (uppercase as SQLAlchemy expects)
+                session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
+                session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
                 session.commit()
                 logger.info("Migration: subscription_tier column added successfully")
             else:
