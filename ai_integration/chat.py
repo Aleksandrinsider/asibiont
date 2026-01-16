@@ -1372,7 +1372,21 @@ async def generate_proactive_message(user_id):
             db_session = Session()
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user is None:
-                return "Добавьте задачу."
+                db_session.close()
+                # Генерируем через промпт
+                try:
+                    url = "https://api.deepseek.com/v1/chat/completions"
+                    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                    msg = [{"role": "user", "content": "Приветственное сообщение. Ответь как друг."}]
+                    data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 100}
+                    async with aiohttp.ClientSession() as sess:
+                        async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                            if resp.status == 200:
+                                res = await resp.json()
+                                return res["choices"][0]["message"]["content"].strip()
+                except:
+                    pass
+                return "Привет! Чем могу помочь?"
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
@@ -1468,10 +1482,30 @@ async def generate_proactive_message(user_id):
                     return content
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
-                    return "Как дела? Может быть, есть задачи на сегодня? Давай спланируем день! 📋"
+                    # Retry через упрощённый промпт
+                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Проактивное сообщение. Ответь по промпту."}]
+                    retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
+                    async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
+                        if retry_resp.status == 200:
+                            retry_result = await retry_resp.json()
+                            return retry_result["choices"][0]["message"]["content"].strip()
+                    return "Как дела? Чем могу помочь?"
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
-        return "Привет! Как твои дела? Чем могу помочь сегодня? 😊"
+        # Крайний случай - минимальный запрос
+        try:
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+            msg = [{"role": "user", "content": "Приветственное сообщение."}]
+            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 100}
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                    if resp.status == 200:
+                        res = await resp.json()
+                        return res["choices"][0]["message"]["content"].strip()
+        except:
+            pass
+        return "Привет! Чем помочь?"
 
 
 async def generate_daily_report(user_id):
@@ -1551,10 +1585,28 @@ async def generate_daily_report(user_id):
                     return content
                 else:
                     logger.error(f"Failed to generate daily report: status {response.status}")
-                    return "Привет! Время подвести итоги дня. Как прошли дела? 📊"
+                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Ежедневный отчёт. Ответь по промпту."}]
+                    retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
+                    async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
+                        if retry_resp.status == 200:
+                            retry_result = await retry_resp.json()
+                            return retry_result["choices"][0]["message"]["content"].strip()
+                    return "Время подвести итоги дня!"
     except Exception as e:
         logger.error(f"Error in generate_daily_report: {e}")
-        return "Давай посмотрим, что сегодня сделано! Расскажи о своих успехах! 🌟"
+        try:
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+            msg = [{"role": "user", "content": "Отчёт о дне."}]
+            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 150}
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                    if resp.status == 200:
+                        res = await resp.json()
+                        return res["choices"][0]["message"]["content"].strip()
+        except:
+            pass
+        return "Как прошёл день? Расскажи!"
 
 
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
@@ -1640,10 +1692,28 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                     return content
                 else:
                     logger.error(f"Failed to generate overdue reminder: status {response.status}")
-                    return "Привет! Заметил несколько просроченных задач. Давай вместе разберемся? 🤝"
+                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Напоминание о просроченных задачах. Ответь по промпту."}]
+                    retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
+                    async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
+                        if retry_resp.status == 200:
+                            retry_result = await retry_resp.json()
+                            return retry_result["choices"][0]["message"]["content"].strip()
+                    return "Заметил просроченные задачи. Давай разберёмся?"
     except Exception as e:
         logger.error(f"Error in generate_overdue_reminder: {e}")
-        return "Есть задачи, которые ждут внимания. Может, начнем с них? 💪"
+        try:
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+            msg = [{"role": "user", "content": "Просроченные задачи."}]
+            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 150}
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                    if resp.status == 200:
+                        res = await resp.json()
+                        return res["choices"][0]["message"]["content"].strip()
+        except:
+            pass
+        return "Есть задачи, которые ждут внимания"
 
 
 # Функции для работы с задачами
