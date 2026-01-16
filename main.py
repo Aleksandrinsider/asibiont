@@ -359,57 +359,44 @@ async def login_handler(request):
 async def auth_handler(request):
     try:
         data = dict(request.query)
-        logger.info(f"[AUTH] Step 1: Auth handler called with data keys: {list(data.keys())}")
+        logger.info(f"Auth handler called with data keys: {list(data.keys())}")
 
         if check_telegram_authentication(data):
             user_id = int(data['id'])
-            logger.info(f"[AUTH] Step 2: Authentication successful for user_id: {user_id}")
+            logger.info(f"Authentication successful for user_id: {user_id}")
 
             session_db = None
             try:
-                logger.info(f"[AUTH] Step 3: Creating database session...")
                 session_db = Session()
-                logger.info(f"[AUTH] Step 4: Database session created successfully")
-                
-                logger.info(f"[AUTH] Step 5: Querying user with telegram_id: {user_id}")
                 user = session_db.query(User).filter_by(telegram_id=user_id).first()
-                logger.info(f"[AUTH] Step 6: User query completed, user exists: {user is not None}")
-                
                 if not user:
-                    logger.info(f"[AUTH] Step 7: Creating new user with telegram_id: {user_id}")
+                    logger.info(f"Creating new user with telegram_id: {user_id}")
 
                     # Определяем timezone по IP
                     ip_address = request.headers.get('X-Forwarded-For', request.remote).split(',')[0].strip()
-                    logger.info(f"[AUTH] Step 8: Detecting timezone for IP: {ip_address}")
                     timezone, city = await get_timezone_from_ip(ip_address)
-                    logger.info(f"[AUTH] Step 9: Auto-detected timezone: {timezone}, city: {city}")
+                    logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
 
                     # Get avatar from Telegram API
                     avatar_url = None
                     if 'bot' in request.app:
                         try:
-                            logger.info(f"[AUTH] Step 10: Getting avatar for user {user_id}")
                             avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-                            logger.info(f"[AUTH] Step 11: Got avatar URL: {avatar_url}")
+                            logger.info(f"Got avatar URL for new user {user_id}: {avatar_url}")
                         except Exception as e:
-                            logger.error(f"[AUTH] Step 10 ERROR: Error getting avatar: {e}")
+                            logger.error(f"Error getting avatar for new user {user_id}: {e}")
 
-                    logger.info(f"[AUTH] Step 12: Creating User object...")
                     user = User(
                         telegram_id=user_id,
                         username=data.get('username'),
                         first_name=data.get('first_name'),
                         photo_url=avatar_url,
                         timezone=timezone)
-                    logger.info(f"[AUTH] Step 13: Adding user to session...")
                     session_db.add(user)
-                    logger.info(f"[AUTH] Step 14: Committing user to database...")
                     session_db.commit()
-                    logger.info(f"[AUTH] Step 15: User committed successfully")
 
                     # Создаем профиль с городом, если определили
                     if city:
-                        logger.info(f"[AUTH] Step 16: Creating profile with city: {city}")
                         profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
                         if not profile:
                             profile = UserProfile(user_id=user.id, city=city, contact_info=f"user{user_id}")
@@ -417,9 +404,8 @@ async def auth_handler(request):
                         else:
                             profile.city = city
                         session_db.commit()
-                        logger.info(f"[AUTH] Step 17: Profile created/updated successfully")
                 else:
-                    logger.info(f"[AUTH] Step 7: Found existing user: {user.id}")
+                    logger.info(f"Found existing user: {user.id}")
                     # Update avatar from Telegram API
                     if 'bot' in request.app:
                         try:
@@ -427,40 +413,36 @@ async def auth_handler(request):
                             if avatar_url and avatar_url != user.photo_url:
                                 user.photo_url = avatar_url
                                 session_db.commit()
-                                logger.info(f"[AUTH] Updated avatar for user {user_id}")
+                                logger.info(f"Updated avatar for user {user_id}: {avatar_url}")
                         except Exception as e:
-                            logger.error(f"[AUTH] Error updating avatar: {e}")
+                            logger.error(f"Error updating avatar for user {user_id}: {e}")
 
                 # Increment login count if subscription exists
-                logger.info(f"[AUTH] Step 18: Checking subscription...")
                 subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
                 if subscription:
                     subscription.login_count += 1
                     session_db.commit()
-                    logger.info(f"[AUTH] Step 19: Subscription login count incremented")
             except Exception as e:
-                logger.error(f"[AUTH] DATABASE ERROR: {e}", exc_info=True)
+                logger.error(f"Database error in auth_handler: {e}", exc_info=True)
                 if session_db:
                     session_db.rollback()
                 return web.Response(text=f'Ошибка подключения к базе данных. Попробуйте позже.', status=500)
             finally:
                 if session_db:
                     session_db.close()
-                    logger.info(f"[AUTH] Database session closed")
 
-            logger.info(f"[AUTH] Step 20: Getting web session...")
             session = await get_session(request)
             session['user_id'] = user_id
-            logger.info(f"[AUTH] Step 21: Session set with user_id: {user_id}")
+            logger.info(f"Session set with user_id: {user_id}")
 
             response = web.HTTPFound('/dashboard')
-            logger.info(f"[AUTH] Step 22: Redirecting to /dashboard")
+            logger.info("Redirecting to /dashboard after auth")
             return response
         else:
-            logger.error(f"[AUTH] Authentication failed for data: {data}")
+            logger.error(f"Authentication failed for data: {data}")
             return web.Response(text='Authentication failed', status=401)
     except Exception as e:
-        logger.error(f"[AUTH] CRITICAL ERROR in auth_handler: {e}", exc_info=True)
+        logger.error(f"CRITICAL ERROR in auth_handler: {e}", exc_info=True)
         return web.Response(text=f'Internal server error: {str(e)}', status=500)
         return web.Response(text='Authentication failed', status=401)
 
