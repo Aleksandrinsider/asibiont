@@ -960,23 +960,42 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                             "model": "deepseek-chat",
                                             "messages": messages,
                                             "temperature": 0.7,
-                                            "max_tokens": 200
+                                            "max_tokens": 300
                                         }
                                         
-                                        try:
-                                            async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
-                                                if ai_response.status == 200:
-                                                    ai_result = await ai_response.json()
-                                                    final_content = ai_result["choices"][0]["message"]["content"].strip()
-                                                    logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
-                                                else:
-                                                    logger.warning(f"[AI NATURAL RESPONSE] AI returned non-200 status: {ai_response.status}")
-                                                    # Генерируем fallback ответ
-                                                    final_content = "Готово! Напоминание установлено."
-                                        except Exception as e:
-                                            logger.warning(f"[AI NATURAL RESPONSE] Failed to get natural response: {e}")
-                                            # Генерируем fallback ответ вместо технического сообщения
-                                            final_content = "Готово! Напоминание установлено."
+                                        max_retries = 3
+                                        for attempt in range(max_retries):
+                                            try:
+                                                async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
+                                                    if ai_response.status == 200:
+                                                        ai_result = await ai_response.json()
+                                                        final_content = ai_result["choices"][0]["message"]["content"].strip()
+                                                        logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
+                                                        break
+                                                    else:
+                                                        logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
+                                                        if attempt == max_retries - 1:
+                                                            # Последняя попытка - упрощённый запрос
+                                                            simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}\n\nОтветь по промпту."}]
+                                                            simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
+                                                            async with session_http.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
+                                                                if simple_response.status == 200:
+                                                                    simple_result = await simple_response.json()
+                                                                    final_content = simple_result["choices"][0]["message"]["content"].strip()
+                                            except Exception as e:
+                                                logger.warning(f"[AI NATURAL RESPONSE] Attempt {attempt+1} failed: {e}")
+                                                if attempt == max_retries - 1:
+                                                    # Крайний случай - минимальный запрос
+                                                    try:
+                                                        minimal_msg = [{"role": "user", "content": "Действие выполнено. Дай развёрнутый естественный ответ (2-3 абзаца)."}]
+                                                        minimal_data = {"model": "deepseek-chat", "messages": minimal_msg, "temperature": 0.7, "max_tokens": 200}
+                                                        async with session_http.post(url, headers=headers, json=minimal_data, timeout=aiohttp.ClientTimeout(total=20)) as minimal_response:
+                                                            if minimal_response.status == 200:
+                                                                minimal_result = await minimal_response.json()
+                                                                final_content = minimal_result["choices"][0]["message"]["content"].strip()
+                                                    except:
+                                                        final_content = "Выполнено"
+                                                await asyncio.sleep(0.5)  # Пауза между попытками
 
                                     # Enforcement отключен - AI должен отвечать естественно
                                     # intent_type = "list_tasks" if has_list_tasks else None
