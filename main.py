@@ -3098,9 +3098,10 @@ async def apply_promo_code_handler(request):
             session.close()
             return web.json_response({'success': False, 'message': 'Неверный промокод'})
 
-        # Проверяем срок действия
-        now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
-        if promo.expires_at < now:
+        # Проверяем срок действия - приводим обе даты к одному формату
+        now = datetime.now(dt_timezone.utc)
+        expires_at = promo.expires_at.replace(tzinfo=dt_timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
+        if expires_at < now:
             session.close()
             return web.json_response({'success': False, 'message': 'Срок действия промокода истек'})
 
