@@ -963,10 +963,11 @@
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#007bff'};
-                color: ${type === 'warning' ? '#000' : 'white'};
+                background: #FFFFFF;
+                color: #374151;
                 padding: 12px 16px;
                 border-radius: 6px;
+                border: 1px solid #D1D9E0;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                 z-index: 10000;
                 font-size: 13px;
@@ -1005,10 +1006,11 @@
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#007bff'};
-                color: ${type === 'warning' ? '#000' : 'white'};
+                background: #FFFFFF;
+                color: #374151;
                 padding: 12px 16px;
                 border-radius: 6px;
+                border: 1px solid #D1D9E0;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                 z-index: 10000;
                 font-size: 13px;
@@ -1029,20 +1031,23 @@
             linkButton.textContent = linkText;
             linkButton.style.cssText = `
                 display: inline-block;
-                background: ${type === 'warning' ? '#000' : 'rgba(255,255,255,0.3)'};
-                color: ${type === 'warning' ? '#fff' : 'white'};
+                background: #FFFFFF;
+                color: #374151;
+                border: 1px solid #D1D9E0;
                 padding: 4px 12px;
                 border-radius: 4px;
                 text-decoration: none;
                 font-size: 12px;
                 font-weight: 500;
-                transition: background 0.2s;
+                transition: all 0.2s;
             `;
             linkButton.onmouseover = () => {
-                linkButton.style.background = type === 'warning' ? '#333' : 'rgba(255,255,255,0.4)';
+                linkButton.style.background = '#F6F8FA';
+                linkButton.style.borderColor = '#374151';
             };
             linkButton.onmouseout = () => {
-                linkButton.style.background = type === 'warning' ? '#000' : 'rgba(255,255,255,0.3)';
+                linkButton.style.background = '#FFFFFF';
+                linkButton.style.borderColor = '#D1D9E0';
             };
             
             notification.appendChild(messageDiv);
