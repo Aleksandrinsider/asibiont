@@ -1526,8 +1526,8 @@ def get_partners_list(user_id=None, session=None):
         )
     )
     
-    # Bronze tier users cannot see Gold tier users
-    if user.subscription_tier and user.subscription_tier.value == 'BRONZE':
+    # Bronze and Silver tier users cannot see Gold tier users
+    if user.subscription_tier and user.subscription_tier.value in ['BRONZE', 'SILVER']:
         from models import SubscriptionTier
         profile_query = profile_query.filter(User.subscription_tier != SubscriptionTier.GOLD)
     
