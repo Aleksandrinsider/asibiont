@@ -122,7 +122,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         user_username = "user"
 
         if user_id:
-            db_session = Session()
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
 
             # Создать пользователя если не существует
