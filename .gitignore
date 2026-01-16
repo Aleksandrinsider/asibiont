@@ -24,3 +24,5 @@ test_dialogue.log
 *.swo
 .vscode/
 .idea/
+private.key
+request.csr
