@@ -2292,7 +2292,8 @@ async def api_contact_profile_handler(request):
                     'bio': getattr(profile, 'bio', None) if profile else None,
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
-                    'task_count': active_tasks
+                    'task_count': active_tasks,
+                    'subscription_tier': contact_user.subscription_tier.value if hasattr(contact_user, 'subscription_tier') and contact_user.subscription_tier else 'bronze'
                 }
             except Exception as profile_error:
                 logger.error(f"Error building profile data: {profile_error}", exc_info=True)
@@ -2312,7 +2313,8 @@ async def api_contact_profile_handler(request):
                     'bio': None,
                     'common_interests': None,
                     'average_rating': 0,
-                    'task_count': 0
+                    'task_count': 0,
+                    'subscription_tier': 'bronze'
                 }
 
             return web.json_response({'partner': profile_data})
