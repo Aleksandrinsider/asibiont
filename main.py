@@ -138,6 +138,17 @@ def run_migrations():
             session.commit()
             logger.info("Migration: subscription_tier column recreated successfully")
 
+            # Migration for tier column in subscriptions table
+            if 'subscriptions' in inspector.get_table_names():
+                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                if 'tier' not in sub_columns:
+                    logger.info("Adding tier column to subscriptions table")
+                    session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'BRONZE\''))
+                    session.commit()
+                    logger.info("Migration: tier column added to subscriptions table successfully")
+                else:
+                    logger.info("Migration: tier column already exists in subscriptions table")
+
         session.close()
     except Exception as e:
         logger.error(f"Migration failed: {e}")
