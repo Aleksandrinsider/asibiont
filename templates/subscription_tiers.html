@@ -7,79 +7,76 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2026-01-16-final">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="/static/style.css">
     <style>
-        /* Переопределяем стили для полного контроля */
         body {
-            background: #F6F8FA !important;
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+            background: #F6F8FA;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
         }
         .container {
-            background: #F6F8FA !important;
+            background: #F6F8FA;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
         }
     </style>
 </head>
 <body>
-    <div class="container" style="margin-top: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh;">
-        <div class="welcome-section" style="width: 100%; display: flex; justify-content: center;">
-            <div class="welcome-content" style="border: 1px solid #D1D9E0; max-width: 900px; padding: 40px;">
+    <div class="container">
+        <div style="width: 100%; display: flex; justify-content: center;">
+            <div style="border: 1px solid #D1D9E0; max-width: 900px; padding: 40px; background: white; border-radius: 6px;">
                 <div style="text-align: left; margin-bottom: 24px;">
                     <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">Выберите тариф</h1>
                     <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Получите доступ к закрытому сообществу ASI Biont</p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
-                    <!-- Bronze Tier -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                    <!-- Bronze -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                        <div style="margin-bottom: 16px;">
-                            <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Бронза</h2>
-                            <div style="font-size: 28px; font-weight: 700; color: #374151; margin-bottom: 4px;">3 000 ₽</div>
-                            <div style="font-size: 13px; color: #6C727F;">в месяц</div>
-                        </div>
-
+                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Бронза</h2>
+                        <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">3 000 ₽</div>
+                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
                         <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
                             AI-агент для задач, базовый поиск людей, просмотр контактов тарифа Бронза. До 50 активных задач.
                         </div>
-
-                        <button onclick="selectTier('bronze')" style="width: 100%; padding: 10px 16px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Выбрать</button>
+                        <button onclick="selectTier('bronze')" style="width: 100%; padding: 10px 16px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">Выбрать</button>
                     </div>
 
-                    <!-- Silver Tier -->
+                    <!-- Silver -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
                         <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #374151; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">ПОПУЛЯРНЫЙ</div>
-
-                        <div style="margin-bottom: 16px;">
-                            <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Серебро</h2>
-                            <div style="font-size: 28px; font-weight: 700; color: #374151; margin-bottom: 4px;">9 000 ₽</div>
-                            <div style="font-size: 13px; color: #6C727F;">в месяц</div>
-                        </div>
-
+                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Серебро</h2>
+                        <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">9 000 ₽</div>
+                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
                         <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
                             Все из Бронзы + доступ к контактам Серебро, расширенный поиск, фильтрация входящих. До 200 активных задач.
                         </div>
-
-                        <button onclick="selectTier('silver')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Выбрать</button>
+                        <button onclick="selectTier('silver')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">Выбрать</button>
                     </div>
 
-                    <!-- Gold Tier -->
+                    <!-- Gold -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                        <div style="margin-bottom: 16px;">
-                            <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Золото</h2>
-                            <div style="font-size: 28px; font-weight: 700; color: #374151; margin-bottom: 4px;">27 000 ₽</div>
-                            <div style="font-size: 13px; color: #6C727F;">в месяц</div>
-                        </div>
-
+                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Золото</h2>
+                        <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">27 000 ₽</div>
+                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
                         <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
                             Все из Серебра + доступ ко всем контактам, аналитика, экспорт данных, VIP-поддержка. Неограниченно задач.
                         </div>
-
-                        <button onclick="selectTier('gold')" style="width: 100%; padding: 10px 16px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">Выбрать</button>
+                        <button onclick="selectTier('gold')" style="width: 100%; padding: 10px 16px; background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit;">Выбрать</button>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <script>
+        function selectTier(tier) {
+            window.location.href = `/create_payment?tier=${tier}`;
+        }
+    </script>
+</body>
+</html>
