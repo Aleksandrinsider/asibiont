@@ -266,6 +266,9 @@
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
                                 <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">
                                     <p style="margin: 0; color: #374151; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
+                                    {% if subscription_tier %}
+                                    <span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier }}</span>
+                                    {% endif %}
                                 </div>
                                 
                             </div>
@@ -2106,6 +2109,9 @@
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     html += '<div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">';
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${partner.contact_info || 'неизвестен'}</p>`;
+                    if (partner.subscription_tier) {
+                        html += `<span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">${partner.subscription_tier.toUpperCase()}</span>`;
+                    }
                     html += '</div>';
                     html += '</div>';
                     
