@@ -52,11 +52,10 @@ TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "Asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
     TELEGRAM_BOT_USERNAME = "Asibiont_bot"
 
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-if not WEBHOOK_URL and not LOCAL:
-    raise ValueError("WEBHOOK_URL is required")
+# WEBHOOK_URL теперь хардкодится в main.py для Railway subdomain
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://omacfsl9.up.railway.app/webhook")
 
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://yourapp.railway.app")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "http://asibiont.ru")
 
 # Payments
 YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")

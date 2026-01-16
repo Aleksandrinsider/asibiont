@@ -2836,9 +2836,9 @@ async def on_startup(app):
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware configured successfully")
 
-    # Set webhook
+    # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
-        # Temporary: use Railway subdomain until custom domain SSL is ready
+        # Railway subdomain всегда имеет рабочий SSL сертификат
         webhook_url = "https://omacfsl9.up.railway.app/webhook"
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook set to: {webhook_url}")
