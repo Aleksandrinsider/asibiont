@@ -1816,15 +1816,19 @@ async def yookassa_webhook(request):
             subscription.start_date = datetime.now(pytz.UTC)
             
             # Update tier
+            tier_enum = SubscriptionTier.BRONZE
             if tier == 'bronze':
                 subscription.tier = SubscriptionTier.BRONZE
                 user.subscription_tier = SubscriptionTier.BRONZE
+                tier_enum = SubscriptionTier.BRONZE
             elif tier == 'silver':
                 subscription.tier = SubscriptionTier.SILVER
                 user.subscription_tier = SubscriptionTier.SILVER
+                tier_enum = SubscriptionTier.SILVER
             elif tier == 'gold':
                 subscription.tier = SubscriptionTier.GOLD
                 user.subscription_tier = SubscriptionTier.GOLD
+                tier_enum = SubscriptionTier.GOLD
 
             # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
             now = datetime.now(pytz.UTC)
@@ -1834,6 +1838,27 @@ async def yookassa_webhook(request):
                 subscription.end_date = now + timedelta(days=30)
 
             session.commit()
+            
+            # Логируем платеж в payment_history для защиты от потери данных
+            try:
+                payment_history = PaymentHistory(
+                    user_id=user.id,
+                    telegram_username=user.username,
+                    action='payment',
+                    tier=tier_enum,
+                    amount=payment['amount']['value'],
+                    payment_id=payment['id'],
+                    duration_days=30,
+                    start_date=subscription.start_date,
+                    end_date=subscription.end_date,
+                    details=json.dumps({'payment_method': payment.get('payment_method', {}).get('type'), 'status': payment.get('status')})
+                )
+                session.add(payment_history)
+                session.commit()
+                logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}")
+            except Exception as e:
+                logger.error(f"❌ Failed to log payment to history: {e}")
+                # Не падаем, платеж уже обработан
             
             from payments import get_tier_name
             tier_name = get_tier_name(tier)

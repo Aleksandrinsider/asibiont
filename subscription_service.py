@@ -1,7 +1,11 @@
-from models import Session, Subscription, User
+from models import Session, Subscription, User, PaymentHistory, SubscriptionTier
 import datetime
 from config import FREE_ACCESS_MODE
 from payments import create_payment
+import logging
+import json
+
+logger = logging.getLogger(__name__)
 
 def check_subscription(user_id):
     if FREE_ACCESS_MODE:
@@ -50,7 +54,7 @@ def cancel_subscription(user_id):
     finally:
         session.close()
 
-def activate_subscription(user_id, plan='monthly'):
+def activate_subscription(user_id, plan='monthly', tier='bronze'):
     """Активирует подписку для пользователя"""
     session = Session()
     try:
@@ -59,40 +63,85 @@ def activate_subscription(user_id, plan='monthly'):
         if not user:
             return False, "Пользователь не найден"
         
+        # Определяем tier enum
+        tier_enum = SubscriptionTier.BRONZE
+        if tier == 'silver':
+            tier_enum = SubscriptionTier.SILVER
+        elif tier == 'gold':
+            tier_enum = SubscriptionTier.GOLD
+        
         # Check if subscription already exists
         sub = session.query(Subscription).filter_by(user_id=user.id).first()
+        
+        # Calculate dates
+        start_date = datetime.datetime.now(datetime.timezone.utc)
+        duration_days = 30 if plan == 'monthly' else 365
+        end_date = start_date + datetime.timedelta(days=duration_days)
         
         if sub:
             # Update existing subscription
             sub.status = 'active'
             sub.plan = plan
-            sub.start_date = datetime.datetime.now(datetime.timezone.utc)
-            if plan == 'monthly':
-                sub.end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
-            elif plan == 'yearly':
-                sub.end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+            sub.tier = tier_enum
+            sub.start_date = start_date
+            sub.end_date = end_date
+            user.subscription_tier = tier_enum
             session.commit()
+            
+            # Log to payment_history
+            try:
+                payment_history = PaymentHistory(
+                    user_id=user.id,
+                    telegram_username=user.username,
+                    action='subscription_activated',
+                    tier=tier_enum,
+                    duration_days=duration_days,
+                    start_date=start_date,
+                    end_date=end_date,
+                    details=json.dumps({'plan': plan, 'method': 'activate_subscription'})
+                )
+                session.add(payment_history)
+                session.commit()
+                logger.info(f"💾 Subscription activation logged: user={user.username}, tier={tier}")
+            except Exception as e:
+                logger.error(f"❌ Failed to log subscription activation: {e}")
+            
             return True, f"Подписка обновлена до {sub.end_date.strftime('%d.%m.%Y')}"
         else:
             # Create new subscription
-            end_date = None
-            if plan == 'monthly':
-                end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
-            elif plan == 'yearly':
-                end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
-            
             new_sub = Subscription(
                 user_id=user.id,
                 telegram_username=user.username,
                 status='active',
                 plan=plan,
-                start_date=datetime.datetime.now(datetime.timezone.utc),
+                tier=tier_enum,
+                start_date=start_date,
                 end_date=end_date,
                 login_count=0
             )
+            user.subscription_tier = tier_enum
             session.add(new_sub)
             session.commit()
-            return True, f"Подписка активирована до {end_date.strftime('%d.%m.%Y') if end_date else 'бессрочно'}"
+            
+            # Log to payment_history
+            try:
+                payment_history = PaymentHistory(
+                    user_id=user.id,
+                    telegram_username=user.username,
+                    action='subscription_activated',
+                    tier=tier_enum,
+                    duration_days=duration_days,
+                    start_date=start_date,
+                    end_date=end_date,
+                    details=json.dumps({'plan': plan, 'method': 'activate_subscription'})
+                )
+                session.add(payment_history)
+                session.commit()
+                logger.info(f"💾 New subscription logged: user={user.username}, tier={tier}")
+            except Exception as e:
+                logger.error(f"❌ Failed to log new subscription: {e}")
+            
+            return True, f"Подписка активирована до {end_date.strftime('%d.%m.%Y')}"
             
     except Exception as e:
         session.rollback()
