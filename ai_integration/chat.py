@@ -960,14 +960,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                             "model": "deepseek-chat",
                                             "messages": messages,
                                             "temperature": 0.7,
-                                            "max_tokens": 300
+                                            "max_tokens": 400  # Увеличено для вариантов действий
                                         }
                                         
                                         final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
                                         max_retries = 3
                                         for attempt in range(max_retries):
                                             try:
-                                                async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
+                                                async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=40)) as ai_response:
                                                     if ai_response.status == 200:
                                                         ai_result = await ai_response.json()
                                                         final_content = ai_result["choices"][0]["message"]["content"].strip()
