@@ -1892,11 +1892,9 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
 
-            # Check tier access - use subscription table tier, not user.subscription_tier
-            user_subscription = session_db.query(Subscription).filter_by(user_id=user.id, status='active').first() if user else None
-            user_tier = user_subscription.tier if user_subscription else SubscriptionTier.BRONZE
-            partner_subscription = session_db.query(Subscription).filter_by(user_id=partner_user.id, status='active').first() if partner_user else None
-            partner_tier = partner_subscription.tier if partner_subscription else SubscriptionTier.BRONZE
+            # Check tier access - use user.subscription_tier for now since update script uses it
+            user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
+            partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
             
             # Determine if user can access this contact
             # Bronze и Silver видят друг друга, но не видят Gold

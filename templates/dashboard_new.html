@@ -253,7 +253,7 @@
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')">Мои</button>
                         <button class="contact-filter-btn active" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')">Делегируют мне</button>
-                        {% if subscription_tier in ['SILVER', 'GOLD'] %}
+                        {% if subscription_tier == 'GOLD' %}
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')">Делегирую я</button>
                         {% endif %}
                     </div>
@@ -1481,7 +1481,6 @@
         }
         
         function filterContacts(filterType) {
-            console.log('filterContacts called with:', filterType);
             // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
             const profileContent = document.getElementById('profile-content');
             const profileBtn = document.getElementById('profile-toggle-btn');
@@ -1527,7 +1526,6 @@
         }
         
         function renderContacts() {
-            console.log('renderContacts called, current filter:', currentContactFilter);
             const peopleList = document.getElementById('people-list');
             if (!peopleList) return;
             
