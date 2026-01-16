@@ -357,6 +357,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             intent = {"type": "conversation", "confidence": 0.5, "params": {}}
             logger.warning("[FALLBACK] improved_prompts_final.py not available, using basic intent")
 
+        # Special handling for delegation requests from frontend buttons
+        if not PROMPTS_V2_AVAILABLE and mentions and any(word in clean_message.lower() for word in ['делегировать', 'поручить', 'delegate', 'поручить']):
+            if 'список' in clean_message.lower() or 'активные' in clean_message.lower():
+                # Request to show task list for delegation
+                intent = {"type": "list_tasks", "confidence": 0.9, "params": {"for_delegation": True, "target_user": mentions[0]}}
+                logger.info(f"[DELEGATION LIST] Setting intent to list_tasks for delegation to {mentions[0]}")
+            else:
+                # Direct delegation request
+                intent = {"type": "delegate_task", "confidence": 0.9, "params": {"delegated_to_username": mentions[0]}}
+                logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}...")
+
         # Убрана специальная обработка приветствий - все через AI промпт
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
@@ -729,6 +740,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
                                             elif func_name == "list_tasks":
                                                 result = list_tasks(user_id=user_id, session=None)
+                                                # Add delegation instructions if this is for delegation
+                                                if intent.get("params", {}).get("for_delegation"):
+                                                    target_user = intent.get("params", {}).get("target_user", "")
+                                                    result += f"\n\nЧтобы делегировать задачу, скажите: 'делегировать задачу [ID или название] пользователю {target_user} дедлайн [время]'"
+                                                    result += f"\nНапример: 'делегировать задачу 1 пользователю {target_user} дедлайн завтра в 15:00'"
                                                 tool_results.append({"function": func_name, "result": result})
 
                                             elif func_name == "find_partners":
