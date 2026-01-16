@@ -12,7 +12,6 @@ venv/
 local.db
 my/
 static/
-templates/
 *.sqlite3
 test.db
 test_local.db
