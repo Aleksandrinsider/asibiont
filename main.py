@@ -1912,47 +1912,49 @@ async def api_partners_handler(request):
                 # Gold видит всех
                 can_access = True
 
-            partners_data.append(
-                {
-                    'contact_info': partner_user.username if (partner_user and partner_user.username and can_access) else None,
-                    'telegram_id': partner_user.telegram_id if partner_user else None,
-                    'photo_url': photo_url,
-                    'can_access': can_access,
-                    'required_tier': required_tier,
-                    'partner_tier': partner_tier.value if partner_tier else 'bronze',
-                    'city': getattr(
-                        p,
-                        'city',
-                        None),
-                    'common_interests': getattr(
-                        p,
-                        'common_interests',
-                        None),
-                    'common_skills': getattr(
-                        p,
-                        'common_skills',
-                        None),
-                    'common_goals': getattr(
-                        p,
-                        'common_goals',
-                        None),
-                    'common_tasks': getattr(
-                        p,
-                        'common_tasks',
-                        None),
-                    'recommendation_reason': getattr(
-                        p,
-                        'recommendation_reason',
-                        'подходящий контакт'),
-                    'average_rating': getattr(
-                        p,
-                        'average_rating',
-                        0),
-                    'rating_count': getattr(
-                        p,
-                        'rating_count',
-                        0),
-                    'type': 'recommended'})
+            # Only add contact if user can access it
+            if can_access:
+                partners_data.append(
+                    {
+                        'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
+                        'telegram_id': partner_user.telegram_id if partner_user else None,
+                        'photo_url': photo_url,
+                        'can_access': can_access,
+                        'required_tier': required_tier,
+                        'partner_tier': partner_tier.value if partner_tier else 'bronze',
+                        'city': getattr(
+                            p,
+                            'city',
+                            None),
+                        'common_interests': getattr(
+                            p,
+                            'common_interests',
+                            None),
+                        'common_skills': getattr(
+                            p,
+                            'common_skills',
+                            None),
+                        'common_goals': getattr(
+                            p,
+                            'common_goals',
+                            None),
+                        'common_tasks': getattr(
+                            p,
+                            'common_tasks',
+                            None),
+                        'recommendation_reason': getattr(
+                            p,
+                            'recommendation_reason',
+                            'подходящий контакт'),
+                        'average_rating': getattr(
+                            p,
+                            'average_rating',
+                            0),
+                        'rating_count': getattr(
+                            p,
+                            'rating_count',
+                            0),
+                        'type': 'recommended'})
 
         # Add delegating contacts
         for contact in delegating_to_me:
