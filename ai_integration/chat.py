@@ -927,8 +927,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
                                     final_content = "\n".join(natural_responses)
 
-                                    # КРИТИЧНО: AI должен сформировать ответ по единому промпту
-                                    if final_content and not has_list_tasks:
+                                    # КРИТИЧНО: AI должен сформировать ответ по единому промпту для ВСЕХ случаев
+                                    if final_content:
                                         # Получаем профиль пользователя для контекста
                                         profile_context = ""
                                         if db_session and user_id:
