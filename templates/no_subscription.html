@@ -3,11 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASI Biont - Выберите тариф</title>
+    <title>Выбор тарифа - ASI Biont</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #F6F8FA;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .pricing-container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .pricing-content {
+            border: 1px solid #D1D9E0;
+            padding: 40px;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .pricing-header {
+            text-align: left;
+            margin-bottom: 24px;
+        }
+
+        .pricing-header h1 {
+            margin: 0 0 16px 0;
+            font-size: 24px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .pricing-header p {
+            margin: 0;
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .pricing-card {
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            padding: 24px;
+            background: white;
+            position: relative;
+        }
+
+        .pricing-card.featured {
+            border: 1px solid #D1D9E0;
+        }
+
+        .featured-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #374151;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .tier-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #374151;
+            margin: 0 0 4px 0;
+        }
+
+        .tier-price {
+            font-size: 28px;
+            font-weight: 700;
+            color: #374151;
+            margin: 8px 0 4px 0;
+        }
+
+        .tier-price span {
+            font-size: 13px;
+            font-weight: 400;
+            color: #6C727F;
+        }
+
+        .tier-description {
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.6;
+            margin: 16px 0 20px 0;
+        }
+
+        .tier-button {
+            width: 100%;
+            padding: 10px 16px;
+            background: #F6F8FA;
+            color: #374151;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            font-family: inherit;
+        }
+
+        .tier-button.featured {
+            background: #374151;
+            color: white;
+            border: none;
+        }
+
+        .back-button {
+            display: block;
+            max-width: 200px;
+            margin: 24px auto 0;
+            padding: 10px 16px;
+            background: #F6F8FA;
+            color: #374151;
+            text-decoration: none;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #D1D9E0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .pricing-content {
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="pricing-container">
+            <div class="pricing-content">
+                <div class="pricing-header">
+                    <h1>Выберите тариф</h1>
+                    <p>Получите доступ к закрытому сообществу ASI Biont</p>
+                </div>
+
+                <div class="pricing-grid">
+                    <!-- Bronze -->
+                    <div class="pricing-card">
+                        <h2 class="tier-name">Бронза</h2>
+                        <div class="tier-price">3 000 ₽ <span>/ месяц</span></div>
+                        <div class="tier-description">
+                            AI-агент для задач, базовый поиск людей, просмотр контактов тарифа Бронза. До 50 активных задач.
+                        </div>
+                        <a href="/create_payment?tier=bronze" class="tier-button">Выбрать</a>
+                    </div>
+
+                    <!-- Silver -->
+                    <div class="pricing-card featured">
+                        <div class="featured-badge">ПОПУЛЯРНЫЙ</div>
+                        <h2 class="tier-name">Серебро</h2>
+                        <div class="tier-price">9 000 ₽ <span>/ месяц</span></div>
+                        <div class="tier-description">
+                            Все из Бронзы + доступ к контактам Серебро, расширенный поиск, фильтрация входящих. До 200 активных задач.
+                        </div>
+                        <a href="/create_payment?tier=silver" class="tier-button featured">Выбрать</a>
+                    </div>
+
+                    <!-- Gold -->
+                    <div class="pricing-card">
+                        <h2 class="tier-name">Золото</h2>
+                        <div class="tier-price">27 000 ₽ <span>/ месяц</span></div>
+                        <div class="tier-description">
+                            Все из Серебра + доступ ко всем контактам, аналитика, экспорт данных, VIP-поддержка. Неограниченно задач.
+                        </div>
+                        <a href="/create_payment?tier=gold" class="tier-button">Выбрать</a>
+                    </div>
+                </div>
+
+                <a href="/logout" class="back-button">Назад</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
         * {
             margin: 0;
             padding: 0;
