@@ -764,13 +764,32 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                         
                                         # Если нужно время - запрашиваем (задача НЕ создана)
                                         if result_text == "NEED_TIME" or (result_text and result_text.startswith("NEED_TIME:")):
-                                            time_request_msg = "Когда тебе напомнить об этом? Укажи время (например: через 5 минут, завтра в 10:00, в 15:30)"
-                                            if result_text.startswith("NEED_TIME:"):
-                                                # Извлекаем пользовательское сообщение если есть
-                                                custom_msg = result_text.replace("NEED_TIME:", "").strip()
-                                                if custom_msg:
-                                                    time_request_msg = custom_msg
-                                            natural_responses.append(time_request_msg)
+                                            # КРИТИЧНО: Задача НЕ создана! Отправляем контекст AI
+                                            task_not_created_context = "ВНИМАНИЕ: Задача НЕ создана! Пользователь не указал время напоминания. Спроси когда напомнить, НЕ говори что уже создал задачу."
+                                            
+                                            # Формируем естественный запрос через AI
+                                            messages.append({"role": "user", "content": original_message})
+                                            messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
+                                            messages.append({"role": "user", "content": task_not_created_context})
+                                            
+                                            data = {
+                                                "model": "deepseek-chat",
+                                                "messages": messages,
+                                                "temperature": 0.7,
+                                                "max_tokens": 150
+                                            }
+                                            
+                                            try:
+                                                async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
+                                                    if ai_response.status == 200:
+                                                        ai_result = await ai_response.json()
+                                                        time_request = ai_result["choices"][0]["message"]["content"].strip()
+                                                        natural_responses.append(time_request)
+                                                    else:
+                                                        natural_responses.append("Когда тебе напомнить об этом? Укажи время (например: через 5 минут, завтра в 10:00, в 15:30)")
+                                            except Exception as e:
+                                                logger.warning(f"[NEED_TIME AI] Failed to generate natural time request: {e}")
+                                                natural_responses.append("Когда тебе напомнить? Укажи удобное время")
                                             continue
 
                                         if "Добавлена задача" in result_text:
@@ -914,8 +933,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     # КРИТИЧНО: Отправляем результаты tool calls обратно в AI для естественного ответа
                                     # Это гарантирует что ответ будет по промпту, а не шаблонный
                                     if final_content and not has_list_tasks:
+                                        # Получаем профиль пользователя для контекста
+                                        profile_context = ""
+                                        if db_session and user_id:
+                                            try:
+                                                user = db_session.query(User).filter_by(telegram_id=user_id).first()
+                                                if user and user.profile:
+                                                    prof = user.profile
+                                                    profile_data = []
+                                                    if prof.city: profile_data.append(f"город: {prof.city}")
+                                                    if prof.company: profile_data.append(f"компания: {prof.company}")
+                                                    if prof.position: profile_data.append(f"должность: {prof.position}")
+                                                    if prof.goals: profile_data.append(f"цели: {prof.goals}")
+                                                    if prof.current_plans: profile_data.append(f"планы: {prof.current_plans}")
+                                                    if profile_data:
+                                                        profile_context = f"\n\nДАННЫЕ ПОЛЬЗОВАТЕЛЯ: {', '.join(profile_data)}"
+                                            except Exception as e:
+                                                logger.warning(f"Failed to get profile context: {e}")
+                                        
                                         # Формируем сообщение для AI с результатами действий
-                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}\n\nСформулируй ЕСТЕСТВЕННЫЙ ответ пользователю по стилю промпта:\n- Без нумерации, списков, шаблонов\n- Коротко и по делу, как живой человек\n- ОБЯЗАТЕЛЬНО предложи 2-3 альтернативных варианта дальнейших действий (учитывай контекст, возможности, ситуацию)\n- Варианты описывай свободно, не списком\n- КРИТИЧНО: Если есть RELEVANT_CONTACTS - ОБЯЗАТЕЛЬНО упомяни их как вариант решения (кто может помочь или кому можешь помочь ты)\n- Контакты упоминай естественно в контексте альтернатив: 'можешь обратиться к @username' или 'предложи помощь @username'"
+                                        tool_context_msg = f"Ты только что выполнил действия. Результаты: {final_content}{profile_context}\n\nСформулируй ЕСТЕСТВЕННЫЙ развёрнутый ответ (2-4 абзаца):\n- Без нумерации, списков, шаблонов, общих фраз\n- Учитывай ВСЕ доступные данные пользователя\n- ОБЯЗАТЕЛЬНО предложи 2-3 КОНКРЕТНЫХ варианта дальнейших действий на основе профиля, целей, ситуации\n- Варианты описывай свободно, естественно, не списком\n- Если недостаточно данных - задай наводящий вопрос для заполнения профиля\n- КРИТИЧНО: Если есть RELEVANT_CONTACTS - ОБЯЗАТЕЛЬНО упомяни их как вариант (кто может помочь)\n- Контакты упоминай естественно: 'можешь обратиться к @username' или 'предложи помощь @username'"
                                         
                                         # Добавляем контекст в messages
                                         messages.append({"role": "user", "content": original_message})
