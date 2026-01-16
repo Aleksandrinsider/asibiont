@@ -7,7 +7,467 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .pricing-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .pricing-header {
+            text-align: center;
+            margin-bottom: 48px;
+            color: white;
+        }
+
+        .pricing-header h1 {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .pricing-header p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .pricing-card {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pricing-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+
+        .pricing-card.featured {
+            border: 2px solid #667eea;
+        }
+
+        .pricing-card.featured::after {
+            content: 'Популярный';
+            position: absolute;
+            top: 20px;
+            right: -30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 40px;
+            transform: rotate(45deg);
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .tier-name {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .tier-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }
+
+        .tier-badge.bronze {
+            background: linear-gradient(135deg, #CD7F32 0%, #A0522D 100%);
+            color: white;
+        }
+
+        .tier-badge.silver {
+            background: linear-gradient(135deg, #C0C0C0 0%, #808080 100%);
+            color: white;
+        }
+
+        .tier-badge.gold {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #1F2328;
+        }
+
+        .tier-price {
+            font-size: 42px;
+            font-weight: 800;
+            color: #1F2328;
+            margin: 16px 0 8px 0;
+        }
+
+        .tier-price span {
+            font-size: 16px;
+            font-weight: 400;
+            color: #656D76;
+        }
+
+        .tier-description {
+            font-size: 14px;
+            color: #656D76;
+            margin-bottom: 24px;
+            min-height: 42px;
+            line-height: 1.5;
+        }
+
+        .tier-features {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 32px 0;
+        }
+
+        .tier-features li {
+            padding: 10px 0;
+            font-size: 14px;
+            color: #374151;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            line-height: 1.5;
+        }
+
+        .tier-features li::before {
+            content: '✓';
+            color: #667eea;
+            font-weight: 700;
+            font-size: 18px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .tier-features li strong {
+            color: #1F2328;
+            font-weight: 700;
+        }
+
+        .tier-button {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tier-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .tier-button:active {
+            transform: translateY(0);
+        }
+
+        .comparison-section {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin: 40px 0;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .comparison-section h2 {
+            font-size: 28px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            overflow: hidden;
+            border-radius: 12px;
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .comparison-table td {
+            padding: 16px;
+            border-bottom: 1px solid #E5E7EB;
+            font-size: 14px;
+        }
+
+        .comparison-table td:first-child {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .comparison-table td:not(:first-child) {
+            text-align: center;
+            color: #656D76;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table tr:hover {
+            background: #F9FAFB;
+        }
+
+        .back-button {
+            display: block;
+            max-width: 200px;
+            margin: 32px auto 0;
+            padding: 12px 24px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .back-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        @media (max-width: 768px) {
+            .pricing-header h1 {
+                font-size: 28px;
+            }
+
+            .pricing-header p {
+                font-size: 16px;
+            }
+
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .comparison-section {
+                padding: 24px;
+                overflow-x: auto;
+            }
+
+            .comparison-table {
+                font-size: 12px;
+            }
+
+            .comparison-table th,
+            .comparison-table td {
+                padding: 12px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="pricing-container">
+        <div class="pricing-header">
+            <h1>Выберите свой тариф</h1>
+            <p>Получите доступ к AI-ассистенту для управления задачами и контактами</p>
+        </div>
+
+        <div class="pricing-grid">
+            <!-- Bronze Tier -->
+            <div class="pricing-card">
+                <h2 class="tier-name">Bronze</h2>
+                <div class="tier-badge bronze">Базовый уровень</div>
+                <div class="tier-price">3 000₽ <span>/ месяц</span></div>
+                <p class="tier-description">Для личного использования и получения задач</p>
+                <ul class="tier-features">
+                    <li>AI-ассистент для управления задачами</li>
+                    <li>Неограниченные задачи и напоминания</li>
+                    <li><strong>Получение делегированных задач</strong></li>
+                    <li>Видят контакты только Bronze-уровня</li>
+                    <li>История диалогов с AI</li>
+                    <li>Базовая аналитика задач</li>
+                    <li><em>Нельзя делегировать задачи другим</em></li>
+                </ul>
+                <a href="/create_payment?tier=bronze" class="tier-button">Выбрать Bronze</a>
+            </div>
+
+            <!-- Silver Tier -->
+            <div class="pricing-card featured">
+                <h2 class="tier-name">Silver</h2>
+                <div class="tier-badge silver">Продвинутый уровень</div>
+                <div class="tier-price">9 000₽ <span>/ месяц</span></div>
+                <p class="tier-description">Для профессионалов с возможностью делегирования</p>
+                <ul class="tier-features">
+                    <li><strong>Всё из Bronze, плюс:</strong></li>
+                    <li><strong>Возможность делегировать задачи</strong></li>
+                    <li>Видят контакты Bronze + Silver уровня</li>
+                    <li>Приоритетная обработка AI</li>
+                    <li>Расширенная аналитика</li>
+                    <li>Экспорт данных</li>
+                    <li>Персонализированные рекомендации</li>
+                    <li><em>Нет доступа к Telegram контактам Gold</em></li>
+                </ul>
+                <a href="/create_payment?tier=silver" class="tier-button">Выбрать Silver</a>
+            </div>
+
+            <!-- Gold Tier -->
+            <div class="pricing-card">
+                <h2 class="tier-name">Gold</h2>
+                <div class="tier-badge gold">Премиум статус</div>
+                <div class="tier-price">27 000₽ <span>/ месяц</span></div>
+                <p class="tier-description">Премиум статус с полным доступом ко всем контактам</p>
+                <ul class="tier-features">
+                    <li><strong>Всё из Silver, плюс:</strong></li>
+                    <li><strong>Видят контакты ВСЕХ уровней</strong></li>
+                    <li><strong>Переход в Telegram любого пользователя</strong></li>
+                    <li><strong>Премиум статус в сообществе</strong></li>
+                    <li>Безлимитные делегирования</li>
+                    <li>Премиум AI-функции</li>
+                    <li>VIP поддержка 24/7</li>
+                    <li>Индивидуальные настройки</li>
+                    <li>API доступ (в разработке)</li>
+                </ul>
+                <a href="/create_payment?tier=gold" class="tier-button">Выбрать Gold</a>
+            </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="comparison-section">
+            <h2>Сравнение возможностей</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Функция</th>
+                        <th>Bronze</th>
+                        <th>Silver</th>
+                        <th>Gold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Стоимость</td>
+                        <td>3 000₽/мес</td>
+                        <td>9 000₽/мес</td>
+                        <td>27 000₽/мес</td>
+                    </tr>
+                    <tr>
+                        <td>AI-ассистент</td>
+                        <td>✓ Стандартный</td>
+                        <td>✓ Приоритетный</td>
+                        <td>✓ Премиум</td>
+                    </tr>
+                    <tr>
+                        <td>Управление задачами</td>
+                        <td>Безлимит</td>
+                        <td>Безлимит</td>
+                        <td>Безлимит</td>
+                    </tr>
+                    <tr>
+                        <td>Делегирование задач</td>
+                        <td>❌ Нельзя делегировать</td>
+                        <td>✓ Можно делегировать</td>
+                        <td>✓ Безлимит</td>
+                    </tr>
+                    <tr>
+                        <td>Получение делегаций</td>
+                        <td>✓ Да</td>
+                        <td>✓ Да</td>
+                        <td>✓ Да</td>
+                    </tr>
+                    <tr>
+                        <td>Видимые контакты</td>
+                        <td>Только Bronze</td>
+                        <td>Bronze + Silver</td>
+                        <td>Все уровни</td>
+                    </tr>
+                    <tr>
+                        <td>Переход в Telegram</td>
+                        <td>Только к Bronze</td>
+                        <td>К Bronze и Silver</td>
+                        <td>К любым пользователям</td>
+                    </tr>
+                    <tr>
+                        <td>Аналитика</td>
+                        <td>Базовая</td>
+                        <td>Расширенная</td>
+                        <td>Полная</td>
+                    </tr>
+                    <tr>
+                        <td>Поддержка</td>
+                        <td>Email</td>
+                        <td>Приоритетная</td>
+                        <td>VIP 24/7</td>
+                    </tr>
+                    <tr>
+                        <td>Премиум статус</td>
+                        <td>—</td>
+                        <td>—</td>
+                        <td>✓</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <a href="/logout" class="back-button">Назад</a>
+    </div>
+</body>
+</html>
     <style>
         .pricing-container {
             max-width: 1100px;
