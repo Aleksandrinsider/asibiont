@@ -2546,15 +2546,8 @@ async def rate_user_handler(request):
                     rated_profile.rating_count = len(all_ratings)
                     session_db.commit()
 
-            # Сохранить сообщение в историю взаимодействий
+            # Don't save to Interaction - show notification instead
             success_message = f'Оценка {rating}/10 для @{rated_username} сохранена'
-            interaction = Interaction(
-                user_id=rater.id,
-                message_type='ai',
-                content=success_message
-            )
-            session_db.add(interaction)
-            session_db.commit()
 
             return web.json_response({
                 'success': True,

@@ -35,27 +35,32 @@
             transform: scale(1.1);
         }
 
-        /* Simplified tier badges */
+        /* GitHub panel style tier badges */
         .tier-badge {
             display: inline-block;
-            padding: 2px 8px;
-            font-size: 11px;
+            padding: 0 7px;
+            font-size: 12px;
             font-weight: 500;
-            border-radius: 12px;
+            line-height: 18px;
+            border: 1px solid transparent;
+            border-radius: 2em;
             text-decoration: none;
             white-space: nowrap;
         }
         .tier-badge-bronze {
-            background-color: #FFF4E6;
-            color: #92400E;
+            color: #953800;
+            background-color: #FFF8C5;
+            border-color: rgba(31,35,40,0.15);
         }
         .tier-badge-silver {
-            background-color: #F3F4F6;
-            color: #374151;
+            color: #57606a;
+            background-color: #DDF4FF;
+            border-color: rgba(31,35,40,0.15);
         }
         .tier-badge-gold {
-            background-color: #FEF3C7;
-            color: #92400E;
+            color: #7D4E00;
+            background-color: #FFF8C5;
+            border-color: rgba(31,35,40,0.15);
         }
     </style>
 </head>
@@ -2015,10 +2020,10 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    // Сообщение будет добавлено автоматически через updateChat() из БД
+                    // Show notification instead of adding to chat
+                    showNotification(data.message, 'success');
                     closeRatingModal();
                     await updatePeople(); // Обновить список контактов
-                    await updateChat(); // Обновить чат для загрузки нового сообщения
                 } else {
                     const error = await response.json();
                     addMessage(`Ошибка: ${error.error}`, 'ai');
