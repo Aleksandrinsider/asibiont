@@ -245,7 +245,7 @@
                                 <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">
                                     <p style="margin: 0; color: #374151; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
                                     {% if subscription_tier %}
-                                    <a href="/subscription_tiers" class="tier-badge tier-badge-{{ subscription_tier.lower() }}" onclick="event.stopPropagation();">{{ subscription_tier }}</a>
+                                    <span style="color: #57606a; font-size: 13px;">{{ subscription_tier }}</span>
                                     {% endif %}
                                 </div>
                                 
@@ -466,9 +466,7 @@
         // Функция для создания единообразного значка тарифа
         function createTierBadge(tier) {
             if (!tier) return '';
-            const tierLower = tier.toLowerCase();
-            const tierClass = `tier-badge tier-badge-${tierLower}`;
-            return `<a href="/subscription_tiers" class="${tierClass}" onclick="event.stopPropagation();">${tier.toUpperCase()}</a>`;
+            return `<span style="color: #57606a; font-size: 13px;">${tier}</span>`;
         }
 
         let currentTaskFilter = 'all'; // Текущий фильтр задач

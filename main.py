@@ -1285,8 +1285,12 @@ async def api_send_message_handler(request):
                     created_at=agent_response_timestamp
                 )
                 session_db.add(interaction_agent)
-                session_db.commit()
-                logger.info("Saved AI response to database")
+                try:
+                    session_db.commit()
+                    logger.info("Saved AI response to database")
+                except Exception as e:
+                    logger.error(f"Error saving AI response: {e}", exc_info=True)
+                    session_db.rollback()
         finally:
             session_db.close()
 
