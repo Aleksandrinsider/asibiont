@@ -2495,6 +2495,7 @@ async def api_contact_profile_handler(request):
                     'interests': getattr(profile, 'interests', None) if profile else None,
                     'languages': getattr(profile, 'languages', None) if profile else None,
                     'bio': getattr(profile, 'bio', None) if profile else None,
+                    'current_plans': getattr(profile, 'current_plans', None) if profile else None,
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks,

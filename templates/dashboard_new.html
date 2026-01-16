@@ -269,6 +269,9 @@
                                 </div>
                                 
                             </div>
+                            {% if profile and profile.current_plans %}
+                            <p>Статус: {{ profile.current_plans }}</p>
+                            {% endif %}
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -2109,6 +2112,9 @@
                     html += '</div>';
                     
                     // Profile details - точно такие же поля как в основном профиле
+                    if (partner.current_plans) {
+                        html += `<p>Статус: ${partner.current_plans}</p>`;
+                    }
                     html += `<p>Город: ${partner.city || 'Не указан'}</p>`;
                     html += `<p>Компания: ${partner.company || 'Не указана'}</p>`;
                     html += `<p>Должность: ${partner.position || 'Не указана'}</p>`;
