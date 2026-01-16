@@ -51,27 +51,36 @@ except Exception as e:
         logger.warning("Continuing with local mode despite database connection issues")
 
 try:
+    logger.info("Creating database tables...")
     Base.metadata.create_all(engine)
-    logger.info("Database tables created or already exist")
+    logger.info("✅ Database tables created or already exist")
 except Exception as e:
-    logger.error(f"Failed to create database tables: {e}")
+    logger.error(f"❌ Failed to create database tables: {e}")
+    if not LOCAL:
+        raise  # Fail hard in production
+    else:
+        logger.warning("Continuing with local mode despite table creation issues")
 
-
-def run_migrations():
+logger.info("Running database migrations...")
+try:
+    # Migration code is inline below
     """Run database migrations"""
+    logger.info("Starting database migrations...")
     from sqlalchemy import text, inspect
     
     # Check database type
     is_sqlite = 'sqlite' in DATABASE_URL.lower()
+    logger.info(f"Database type: {'SQLite' if is_sqlite else 'PostgreSQL'}")
     
     try:
         session = Session()
+        logger.info("Migration session created")
         inspector = inspect(engine)
 
         if 'user_profiles' not in inspector.get_table_names():
             logger.info("user_profiles table does not exist, skipping migration")
             session.close()
-            return
+            logger.info("Migration completed (skipped - no user_profiles table)")
 
         columns = [col['name'] for col in inspector.get_columns('user_profiles')]
         if 'activity_streak' not in columns:
@@ -198,8 +207,19 @@ def run_migrations():
                     logger.info("Migration: tier column already exists in subscriptions table")
 
         session.close()
+        logger.info("Migration session closed successfully")
     except Exception as e:
         logger.error(f"Migration failed: {e}")
+        session.close()
+        raise
+
+    logger.info("✅ Database migrations completed")
+except Exception as e:
+    logger.error(f"❌ Database migrations failed: {e}")
+    if not LOCAL:
+        raise  # Fail hard in production
+    else:
+        logger.warning("Continuing with local mode despite migration issues")
 
 
 def add_test_sport_users():
@@ -335,7 +355,7 @@ except Exception as e:
     # Don't exit, let Railway restart the app
 
 try:
-    run_migrations()
+    # Migrations are already run above
     logger.info("Database migrations completed")
     add_test_sport_users()
     ensure_sport_interest()
