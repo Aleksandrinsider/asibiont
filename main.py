@@ -985,7 +985,7 @@ async def dashboard_handler(request):
             'delegating_to_me': delegating_to_me,
             'delegating_by_me': delegating_by_me,
             'subscription': subscription,
-            'subscription_tier': user.subscription_tier.value if user and user.subscription_tier else 'BRONZE',
+            'subscription_tier': subscription.tier.value if subscription and subscription.tier else 'BRONZE',
             'total_tasks': total_tasks,
             'completed_tasks': completed_tasks,
             'pending_tasks': pending_tasks,
@@ -1893,9 +1893,11 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
 
-            # Check tier access
-            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
-            partner_tier = partner_user.subscription_tier if partner_user and partner_user.subscription_tier else SubscriptionTier.BRONZE
+            # Check tier access - use subscription table tier, not user.subscription_tier
+            user_subscription = session_db.query(Subscription).filter_by(user_id=user.id, status='active').first() if user else None
+            user_tier = user_subscription.tier if user_subscription else SubscriptionTier.BRONZE
+            partner_subscription = session_db.query(Subscription).filter_by(user_id=partner_user.id, status='active').first() if partner_user else None
+            partner_tier = partner_subscription.tier if partner_subscription else SubscriptionTier.BRONZE
             
             # Determine if user can access this contact
             can_access = False
