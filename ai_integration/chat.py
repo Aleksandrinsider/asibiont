@@ -143,6 +143,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.timezone(tz_str)
                     user_now = base_now.astimezone(user_tz)
                     current_time_str = user_now.strftime("%H:%M")
+                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                     logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
                     logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
                     logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
@@ -151,6 +152,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
                     user_tz = pytz.UTC
                     user_now = base_now
                     current_time_str = user_now.strftime("%H:%M")
+                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
 
             if user and user.memory:
                 try:
