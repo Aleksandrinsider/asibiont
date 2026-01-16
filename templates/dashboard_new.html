@@ -1004,11 +1004,11 @@
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: #0969DA;
+                background: #374151;
                 color: #FFFFFF;
                 padding: 12px 16px;
                 border-radius: 6px;
-                border: 1px solid #0969DA;
+                border: 1px solid #374151;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                 z-index: 10000;
                 font-size: 13px;
@@ -1707,7 +1707,8 @@
                 const contactData = {
                     type: 'recommended',
                     html: card.innerHTML,
-                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || '',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    tier: card.dataset.tier || null,
                     element: card
                 };
                 allContacts.push(contactData);
@@ -1718,7 +1719,8 @@
                 const contactData = {
                     type: 'delegating_to_me',
                     html: card.innerHTML,
-                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || '',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    tier: card.dataset.tier || null,
                     element: card
                 };
                 allContacts.push(contactData);
@@ -1729,7 +1731,8 @@
                 const contactData = {
                     type: 'delegating_by_me',
                     html: card.innerHTML,
-                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || '',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    tier: card.dataset.tier || null,
                     element: card
                 };
                 allContacts.push(contactData);
@@ -1741,7 +1744,7 @@
                 if (currentContactFilter === 'all') {
                     element.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
-                    // Показываем только избранные контакты
+                    // Показываем избранные контакты
                     if (isFavoriteContact(contact.username)) {
                         element.style.display = 'flex';
                     } else {
@@ -2374,7 +2377,8 @@
                             const telegramUrl = 'https://t.me/' + partner.contact_info;
                             
                             if (partner.type === 'recommended' && partner.contact_info) {
-                                html += '<li class="task-item contact-recommended" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
+                                html += '<li class="task-item contact-recommended" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                 const canAccess = partner.can_access !== false;
                                 const clickHandler = canAccess ? `onclick="openContactProfileModal('${partner.contact_info}', true)"` : '';
@@ -2472,7 +2476,8 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_to_me') {
-                                html += '<li class="task-item contact-delegating-to-me" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
+                                html += '<li class="task-item contact-delegating-to-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 const canAccess = partner.can_access !== false;
                                 const clickHandler = canAccess ? `onclick="openContactProfileModal('${partner.contact_info}', true)"` : '';
                                 const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
@@ -2567,7 +2572,8 @@
                                 html += '</div>';
                                 html += '</li>';
                             } else if (partner.type === 'delegating_by_me') {
-                                html += '<li class="task-item contact-delegating-by-me" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
+                                html += '<li class="task-item contact-delegating-by-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                 const canAccess = partner.can_access !== false;
                                 const clickHandler = canAccess ? `onclick="openContactProfileModal('${partner.contact_info}', true)"` : '';
                                 const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
