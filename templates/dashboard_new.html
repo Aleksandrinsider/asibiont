@@ -103,6 +103,9 @@
                     </svg>
                     Поиск контактов
                 </button>
+                
+                <!-- Разделитель -->
+                <div style="width: 1px; height: 40px; background: #D1D9E0; margin: 0 16px;"></div>
 
                 <!-- Модальное окно поиска -->
                 <div id="search-modal" class="search-modal" onclick="closeSearchModal(event)">
@@ -142,12 +145,20 @@
                     На очереди: <span id="next-task-text"></span>
                 </div>
             </div>
+            
+            <!-- Разделитель -->
+            <div style="width: 1px; height: 40px; background: #D1D9E0; margin: 0 16px;"></div>
+            
             <div class="header-info">
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
                     <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
                     <a href="#" onclick="changeTime()" style="margin: 0; color: #374151; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">изменить</a>
                 </span>
-                <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px; padding: 4px 12px; border-radius: 6px; background: #F6F8FA;">
+                
+                <!-- Разделитель -->
+                <div style="width: 1px; height: 40px; background: #D1D9E0; margin: 0 16px;"></div>
+                
+                <div style="display: flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 6px; background: #F6F8FA;">
                     <div class="header-avatar-small">
                         {% if user_avatar_url %}
                         <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
@@ -155,7 +166,15 @@
                         <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
+                    
+                    <!-- Разделитель -->
+                    <div style="width: 1px; height: 24px; background: #D1D9E0;"></div>
+                    
                     <span style="padding: 2px 6px; background: white; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier.lower() }}</span>
+                    
+                    <!-- Разделитель -->
+                    <div style="width: 1px; height: 24px; background: #D1D9E0;"></div>
+                    
                     <button onclick="logout()" style="background: none; border: none; color: #374151; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">Выход</button>
                 </div>
             </div>

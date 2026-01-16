@@ -107,7 +107,6 @@ body {
     left: 0;
     right: 0;
     z-index: 1000;
-    border: 1px solid #D1D9E0;
     border-radius: 6px;
     display: flex;
     align-items: center;
