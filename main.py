@@ -1245,7 +1245,7 @@ async def api_send_message_handler(request):
 
             # Call AI chat
             try:
-                response = await chat(message, context=context, user_id=user_id, file_content=None)
+                response = await chat(message, context=context, user_id=user_id, file_content=None, db_session=session_db)
                 logger.info(f"AI response: {response[:100]}...")
             except Exception as e:
                 logger.error(f"Error calling AI chat: {e}", exc_info=True)

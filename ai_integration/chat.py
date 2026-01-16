@@ -44,7 +44,7 @@ enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 
 
-async def chat_with_ai(message, context=None, user_id=None, file_content=None):
+async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     logger = logging.getLogger(__name__)
 
@@ -52,6 +52,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
     if context is not None and not isinstance(context, list):
         logger.warning(f"context is not a list: {type(context)}, setting to None")
         context = None
+
+    # Use provided db_session or create new one if not provided
+    if db_session is None:
+        from models import Session
+        db_session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
 
     # Проверяем сообщение о времени и обновляем timezone
     time_message_match = re.search(r"мое\s+местное\s+время:\s*(\d{1,2}:\d{2})", message.lower())
