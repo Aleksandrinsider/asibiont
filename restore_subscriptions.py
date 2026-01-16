@@ -54,10 +54,15 @@ def restore_user_tiers():
         ).all()
         
         for subscription in active_subscriptions:
-            # Проверяем, не истекла ли подписка
-            if subscription.end_date and subscription.end_date < now:
-                logger.info(f"Подписка пользователя ID={subscription.user_id} истекла, пропускаем")
-                continue
+            # Проверяем, не истекла ли подписка (с учетом timezone)
+            if subscription.end_date:
+                end_date = subscription.end_date
+                # Если end_date offset-naive, делаем его offset-aware
+                if end_date.tzinfo is None:
+                    end_date = end_date.replace(tzinfo=timezone.utc)
+                if end_date < now:
+                    logger.info(f"Подписка пользователя ID={subscription.user_id} истекла, пропускаем")
+                    continue
             
             user = session.query(User).filter_by(id=subscription.user_id).first()
             if not user:
@@ -105,9 +110,14 @@ def check_database_integrity():
         ).all()
         
         for subscription in active_subscriptions:
-            # Пропускаем истекшие подписки
-            if subscription.end_date and subscription.end_date < now:
-                continue
+            # Пропускаем истекшие подписки (с учетом timezone)
+            if subscription.end_date:
+                end_date = subscription.end_date
+                # Если end_date offset-naive, делаем его offset-aware
+                if end_date.tzinfo is None:
+                    end_date = end_date.replace(tzinfo=timezone.utc)
+                if end_date < now:
+                    continue
                 
             user = session.query(User).filter_by(id=subscription.user_id).first()
             if user and user.subscription_tier != subscription.tier:
