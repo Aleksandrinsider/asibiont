@@ -142,6 +142,15 @@ def run_migrations():
             else:
                 logger.info("Migration: subscription_tier column already exists")
 
+            # Update existing subscription_tier values to uppercase if needed
+            try:
+                session.execute(text("UPDATE users SET subscription_tier = CASE WHEN subscription_tier = 'bronze' THEN 'BRONZE' WHEN subscription_tier = 'silver' THEN 'SILVER' WHEN subscription_tier = 'gold' THEN 'GOLD' ELSE subscription_tier END WHERE subscription_tier IN ('bronze', 'silver', 'gold')"))
+                session.commit()
+                logger.info("Migration: subscription_tier values updated to uppercase")
+            except Exception as e:
+                logger.error(f"Failed to update subscription_tier values: {e}")
+                session.rollback()
+
         session.close()
     except Exception as e:
         logger.error(f"Migration failed: {e}")
