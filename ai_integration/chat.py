@@ -764,10 +764,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                         
                                         # Если нужно время - запрашиваем (задача НЕ создана)
                                         if result_text == "NEED_TIME" or (result_text and result_text.startswith("NEED_TIME:")):
-                                            # КРИТИЧНО: Задача НЕ создана - AI должен спросить время по единому промпту
+                                            # Задача НЕ создана - передаём только факт, промпт знает что делать
                                             messages.append({"role": "user", "content": original_message})
                                             messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
-                                            messages.append({"role": "user", "content": "Задача НЕ создана - пользователь не указал время. Следуй промпту."})
+                                            messages.append({"role": "user", "content": "Задача НЕ создана - пользователь не указал время."})
                                             
                                             data = {
                                                 "model": "deepseek-chat",
@@ -947,8 +947,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                             except Exception as e:
                                                 logger.warning(f"Failed to get profile context: {e}")
                                         
-                                        # Формируем контекст для AI - единый промпт уже содержит все правила
-                                        tool_context_msg = f"Результаты действий: {final_content}{profile_context}\n\nСледуй единому промпту для ответа."
+                                        # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
+                                        tool_context_msg = f"{final_content}{profile_context}"
                                         
                                         # Добавляем контекст в messages
                                         messages.append({"role": "user", "content": original_message})
@@ -978,7 +978,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                         if attempt == max_retries - 1:
                                                             # Последняя попытка - упрощённый запрос
                                                             try:
-                                                                simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}\n\nОтветь по промпту."}]
+                                                                simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
                                                                 simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
                                                                 async with session_http.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
                                                                     if simple_response.status == 200:
@@ -1488,7 +1488,7 @@ async def generate_proactive_message(user_id):
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
                     # Retry через упрощённый промпт
-                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Проактивное сообщение. Ответь по промпту."}]
+                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Проактивное сообщение."}]
                     retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
                     async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
                         if retry_resp.status == 200:
@@ -1590,7 +1590,7 @@ async def generate_daily_report(user_id):
                     return content
                 else:
                     logger.error(f"Failed to generate daily report: status {response.status}")
-                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Ежедневный отчёт. Ответь по промпту."}]
+                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Ежедневный отчёт."}]
                     retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
                     async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
                         if retry_resp.status == 200:
@@ -1697,7 +1697,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                     return content
                 else:
                     logger.error(f"Failed to generate overdue reminder: status {response.status}")
-                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Напоминание о просроченных задачах. Ответь по промпту."}]
+                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Напоминание о просроченных задачах."}]
                     retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
                     async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
                         if retry_resp.status == 200:
