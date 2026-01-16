@@ -1,0 +1,8 @@
+# Force Railway to redeploy
+# Last updated: 2026-01-16 14:50:00
+# 
+# Recent fixes:
+# - Fixed /api/send_message error 500 (save user message before AI call)
+# - Updated production DB tiers: sportfan2=Silver, sportfan3=Gold
+# - Fixed subscription page centering
+# - Updated tier badge styles
