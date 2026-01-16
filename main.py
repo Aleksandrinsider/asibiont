@@ -831,11 +831,7 @@ async def dashboard_handler(request):
                 # Gold: unlimited (already limited to 20 in get_partners_list)
                 
         except Exception as e:
-            logger.error(f"Error getting partners: {e}")
-            partners = []
-
-        except Exception as e:
-            logger.error(f"Error building partners/delegations: {e}", exc_info=True)
+            logger.error(f"Error getting partners: {e}", exc_info=True)
             partners = []
             delegating_to_me = []
             delegating_by_me = []
