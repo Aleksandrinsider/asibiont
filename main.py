@@ -3099,7 +3099,7 @@ async def apply_promo_code_handler(request):
             return web.json_response({'success': False, 'message': 'Неверный промокод'})
 
         # Проверяем срок действия
-        now = datetime.now(dt_timezone.utc)
+        now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
         if promo.expires_at < now:
             session.close()
             return web.json_response({'success': False, 'message': 'Срок действия промокода истек'})
