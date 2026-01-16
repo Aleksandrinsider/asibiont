@@ -2838,7 +2838,8 @@ async def on_startup(app):
 
     # Set webhook
     if bot and not LOCAL:
-        webhook_url = WEBHOOK_URL
+        # Temporary: use Railway subdomain until custom domain SSL is ready
+        webhook_url = "https://omacfsl9.up.railway.app/webhook"
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook set to: {webhook_url}")
     else:
