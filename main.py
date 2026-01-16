@@ -2039,7 +2039,11 @@ async def api_partners_handler(request):
             user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
             partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
             
-            logger.info(f"User {user.username} has tier {user_tier}, partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier}")
+            # Convert to string for comparison if needed
+            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+            partner_tier_str = partner_tier.value if hasattr(partner_tier, 'value') else str(partner_tier).lower()
+            
+            logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
             
             # Determine if user can access this contact
             # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
@@ -2047,20 +2051,20 @@ async def api_partners_handler(request):
             can_access = False
             required_tier = None
             
-            if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
+            if user_tier_str in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
-                logger.info(f"User {user_tier} checking partner {partner_tier}: can_access = {can_access}")
+                can_access = (partner_tier_str in ['bronze', 'silver'])
+                logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
-            elif user_tier == SubscriptionTier.GOLD:
+            elif user_tier_str == 'gold':
                 # Gold видит всех
                 can_access = True
-                logger.info(f"User {user_tier} can access all partners")
+                logger.info(f"User {user_tier_str} can access all partners")
 
             # Only add contact if user can access it
             if can_access:
-                logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier} for user {user.username} with tier {user_tier} (can_access: {can_access})")
+                logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier_str} for user {user.username} with tier {user_tier_str} (can_access: {can_access})")
                 partners_data.append(
                     {
                         'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
@@ -2178,19 +2182,26 @@ async def api_partners_handler(request):
             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
             delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.BRONZE
             
+            # Convert to string for comparison
+            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+            delegator_tier_str = delegator_tier.value if hasattr(delegator_tier, 'value') else str(delegator_tier).lower()
+            
             can_access = False
             required_tier = None
             
-            if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
+            if user_tier_str in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (delegator_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
+                can_access = (delegator_tier_str in ['bronze', 'silver'])
+                logger.info(f"Delegator check: User {user_tier_str} checking delegator {delegator_tier_str}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
-            elif user_tier == SubscriptionTier.GOLD:
+            elif user_tier_str == 'gold':
                 can_access = True
+                logger.info(f"Delegator check: User {user_tier_str} can access all delegators")
 
             # Only add contact if user can access it
             if can_access:
+                logger.info(f"Adding delegating contact {contact['username']} with tier {delegator_tier_str} for user {user.username} with tier {user_tier_str}")
                 partners_data.append({
                     'contact_info': contact['username'] if can_access else None,
                     'telegram_id': delegator.telegram_id if delegator else None,
@@ -2286,19 +2297,26 @@ async def api_partners_handler(request):
             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
             delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.BRONZE
             
+            # Convert to string for comparison
+            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+            delegatee_tier_str = delegatee_tier.value if hasattr(delegatee_tier, 'value') else str(delegatee_tier).lower()
+            
             can_access = False
             required_tier = None
             
-            if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
+            if user_tier_str in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (delegatee_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
+                can_access = (delegatee_tier_str in ['bronze', 'silver'])
+                logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
-            elif user_tier == SubscriptionTier.GOLD:
+            elif user_tier_str == 'gold':
                 can_access = True
+                logger.info(f"Delegatee check: User {user_tier_str} can access all delegatees")
 
             # Only add contact if user can access it
             if can_access:
+                logger.info(f"Adding delegating_by_me contact {contact['username']} with tier {delegatee_tier_str} for user {user.username} with tier {user_tier_str}")
                 partners_data.append({
                     'contact_info': contact['username'] if can_access else None,
                     'telegram_id': delegatee.telegram_id if delegatee else None,
