@@ -817,8 +817,19 @@ async def dashboard_handler(request):
 
         finally:
             session_db.close()
+        
         try:
             partners = get_partners_list(user_id=user_id)
+            
+            # Apply subscription-based contact limits
+            if partners and subscription and subscription.tier:
+                tier = subscription.tier.value
+                if tier == 'BRONZE':
+                    partners = partners[:1]  # Bronze: 1 contact
+                elif tier == 'SILVER':
+                    partners = partners[:5]  # Silver: 5 contacts
+                # Gold: unlimited (already limited to 20 in get_partners_list)
+                
         except Exception as e:
             logger.error(f"Error getting partners: {e}")
             partners = []
