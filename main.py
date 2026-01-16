@@ -1227,12 +1227,21 @@ async def api_send_message_handler(request):
                 created_at=user_message_timestamp
             )
             session_db.add(interaction_user)
-            session_db.commit()
-            logger.info("Saved user message to database")
+            try:
+                session_db.commit()
+                logger.info("Saved user message to database")
+            except Exception as e:
+                logger.error(f"Error saving user message: {e}", exc_info=True)
+                session_db.rollback()
+                return web.json_response({'error': 'Failed to save message'}, status=500)
 
             # Call AI chat
-            response = await chat(user_id, message, context=context, file_content=None)
-            logger.info(f"AI response: {response[:100]}...")
+            try:
+                response = await chat(user_id, message, context=context, file_content=None)
+                logger.info(f"AI response: {response[:100]}...")
+            except Exception as e:
+                logger.error(f"Error calling AI chat: {e}", exc_info=True)
+                return web.json_response({'error': 'AI service error'}, status=500)
 
             # Check if response contains tier restriction error
             if "Делегирование задач доступно только на тарифах" in response:
