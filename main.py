@@ -2827,8 +2827,8 @@ async def on_startup(app):
     # Set webhook
     if bot and not LOCAL:
         webhook_url = WEBHOOK_URL
-        # await bot.set_webhook(webhook_url)  # Temporarily commented out due to DNS issues
-        logger.info(f"Webhook setup skipped (commented out): {webhook_url}")
+        await bot.set_webhook(webhook_url)
+        logger.info(f"Webhook set to: {webhook_url}")
     else:
         logger.warning("Bot not created or local mode, skipping webhook setup")
 
