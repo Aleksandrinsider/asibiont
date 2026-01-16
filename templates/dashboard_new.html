@@ -2117,13 +2117,12 @@
                     content.innerHTML = html;
                     modal.style.display = 'flex';
                 } else {
-                    addMessage('Не удалось загрузить профиль контакта', 'ai');
-                    lastMessageCount += 1;
+                    // Don't show error message for restricted contacts - just close modal silently
+                    console.log('Contact profile not accessible or not found');
                 }
             } catch (error) {
                 console.error('Error loading contact profile:', error);
-                addMessage('Ошибка при загрузке профиля контакта', 'ai');
-                lastMessageCount += 1;
+                // Don't show error message - fail silently
             }
         }
         

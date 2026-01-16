@@ -1297,7 +1297,12 @@ async def api_send_message_handler(request):
         return web.json_response({'response': response, 'success': True})
     except Exception as e:
         logger.error(f"Unexpected error in api_send_message_handler: {e}", exc_info=True)
-        return web.json_response({'error': 'Internal server error'}, status=500)
+        # Return detailed error for debugging
+        return web.json_response({
+            'error': 'Internal server error',
+            'details': str(e),
+            'type': type(e).__name__
+        }, status=500)
 
 
 async def clear_history_handler(request):
