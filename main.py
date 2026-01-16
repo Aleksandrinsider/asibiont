@@ -158,35 +158,40 @@ def add_test_sport_users():
                             'interests': 'спорт, бег, фитнес',
                             'city': 'Москва',
                             'company': 'Фитнес-клуб',
-                            'position': 'Тренер'},
+                            'position': 'Тренер',
+                            'subscription_tier': SubscriptionTier.BRONZE},
                            {'telegram_id': 222222,
                             'username': 'sportfan2',
                             'first_name': 'Дмитрий',
                             'interests': 'спорт, футбол, плавание',
                             'city': 'Санкт-Петербург',
                             'company': 'Спортивная школа',
-                            'position': 'Инструктор'},
+                            'position': 'Инструктор',
+                            'subscription_tier': SubscriptionTier.SILVER},
                            {'telegram_id': 333333,
                             'username': 'sportfan3',
                             'first_name': 'Михаил',
                             'interests': 'спорт, теннис, йога',
                             'city': 'Москва',
                             'company': 'Теннисный центр',
-                            'position': 'Спортсмен'},
+                            'position': 'Спортсмен',
+                            'subscription_tier': SubscriptionTier.GOLD},
                            {'telegram_id': 444444,
                             'username': 'sportfan4',
                             'first_name': 'Елена',
                             'interests': 'спорт, волейбол, танцы',
                             'city': 'Казань',
                             'company': 'Спортивный комплекс',
-                            'position': 'Администратор'},
+                            'position': 'Администратор',
+                            'subscription_tier': SubscriptionTier.BRONZE},
                            {'telegram_id': 555555,
                             'username': 'sportfan5',
                             'first_name': 'Анна',
                             'interests': 'спорт, гимнастика, пилатес',
                             'city': 'Москва',
                             'company': 'Студия пилатес',
-                            'position': 'Инструктор'}]
+                            'position': 'Инструктор',
+                            'subscription_tier': SubscriptionTier.SILVER}]
 
         # Проверяем есть ли хоть один тестовый пользователь
         test_ids = [111111, 222222, 333333, 444444, 555555]
@@ -208,7 +213,8 @@ def add_test_sport_users():
                     telegram_id=user_data['telegram_id'],
                     username=user_data['username'],
                     first_name=user_data['first_name'],
-                    timezone='Europe/Moscow'
+                    timezone='Europe/Moscow',
+                    subscription_tier=user_data['subscription_tier']
                 )
                 session.add(new_user)
                 session.flush()
