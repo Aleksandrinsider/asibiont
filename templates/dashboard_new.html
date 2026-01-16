@@ -260,10 +260,16 @@
                                     
                                     <!-- Основной аватар -->
                                     <div style="position: relative; z-index: 10;">
+                                        {% set tier_glow = '#CD7F32' %}
+                                        {% if subscription_tier.lower() == 'silver' %}
+                                            {% set tier_glow = '#C0C0C0' %}
+                                        {% elif subscription_tier.lower() == 'gold' %}
+                                            {% set tier_glow = '#FFD700' %}
+                                        {% endif %}
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; box-shadow: 0 0 12px {{ tier_glow }}, 0 0 20px {{ tier_glow }};">
                                         {% else %}
-                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white; box-shadow: 0 0 12px {{ tier_glow }}, 0 0 20px {{ tier_glow }};">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -953,6 +959,15 @@
                 const x = 60 + radius * Math.cos(angle * Math.PI / 180);
                 const y = 60 + radius * Math.sin(angle * Math.PI / 180);
                 
+                // Определяем цвет сияния по тарифу
+                const tier = (partner.subscription_tier || '').toLowerCase();
+                let glowColor = '#CD7F32'; // Bronze по умолчанию
+                if (tier === 'silver') {
+                    glowColor = '#C0C0C0';
+                } else if (tier === 'gold') {
+                    glowColor = '#FFD700';
+                }
+                
                 // Создаём аватар
                 const avatar = document.createElement('div');
                 avatar.style.position = 'absolute';
@@ -962,15 +977,21 @@
                 avatar.style.height = `${size}px`;
                 avatar.style.borderRadius = '50%';
                 avatar.style.border = '1px solid white';
-                avatar.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+                avatar.style.boxShadow = `0 0 8px ${glowColor}, 0 0 12px ${glowColor}`;
                 avatar.style.overflow = 'hidden';
                 avatar.style.cursor = 'pointer';
-                avatar.style.transition = 'transform 0.2s';
+                avatar.style.transition = 'transform 0.2s, box-shadow 0.2s';
                 avatar.title = `@${partner.contact_info || 'контакт'}`;
                 
                 // Hover эффект
-                avatar.onmouseenter = () => avatar.style.transform = 'scale(1.2)';
-                avatar.onmouseleave = () => avatar.style.transform = 'scale(1)';
+                avatar.onmouseenter = () => {
+                    avatar.style.transform = 'scale(1.2)';
+                    avatar.style.boxShadow = `0 0 12px ${glowColor}, 0 0 20px ${glowColor}`;
+                };
+                avatar.onmouseleave = () => {
+                    avatar.style.transform = 'scale(1)';
+                    avatar.style.boxShadow = `0 0 8px ${glowColor}, 0 0 12px ${glowColor}`;
+                };
                 
                 // Клик открывает профиль
                 avatar.onclick = () => showContactProfile(partner.contact_info);
