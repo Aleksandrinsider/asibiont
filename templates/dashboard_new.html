@@ -37,6 +37,27 @@
     </style>
 </head>
 <body>
+    <!-- Header -->
+    <div class="app-header">
+        <div class="header-content">
+            <div class="header-left">
+                <span style="font-size: 18px; font-weight: 600; color: #374151;">ASI Biont</span>
+            </div>
+            <div class="header-center">
+                <div class="header-info">
+                    {% if logged_in %}
+                    <span class="user-name">{{ telegram_username or 'Пользователь' }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="header-right" style="display: flex; justify-content: flex-end;">
+                {% if logged_in %}
+                <a href="/logout" class="logout-button">Выйти</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="container" style="margin-top: 0; {% if not logged_in %}display: flex; align-items: center; justify-content: center; min-height: 100vh;{% endif %}">
         {% if not logged_in %}
         <div class="welcome-section" style="width: 100%; display: flex; justify-content: center;">
