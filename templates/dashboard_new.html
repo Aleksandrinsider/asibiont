@@ -266,9 +266,6 @@
                                 <p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">{{ user.first_name or 'Пользователь' }}</p>
                                 <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">
                                     <p style="margin: 0; color: #374151; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
-                                    {% if subscription_tier %}
-                                    <a href="/subscription_tiers" class="tier-badge tier-badge-{{ subscription_tier.lower() }}" onclick="event.stopPropagation();">{{ subscription_tier }}</a>
-                                    {% endif %}
                                 </div>
                                 
                             </div>
@@ -2108,9 +2105,6 @@
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     html += '<div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">';
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${partner.contact_info || 'неизвестен'}</p>`;
-                    if (partner.subscription_tier) {
-                        html += createTierBadge(partner.subscription_tier);
-                    }
                     html += '</div>';
                     html += '</div>';
                     

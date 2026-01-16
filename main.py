@@ -751,6 +751,9 @@ async def dashboard_handler(request):
                 interactions = []
 
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+            
+            # Store subscription tier before closing session
+            user_subscription_tier = subscription.tier if subscription and subscription.tier else None
 
             # Получить контакты по делегированию
             delegating_to_me = []  # Люди, которые делегировали мне задачи
@@ -822,8 +825,8 @@ async def dashboard_handler(request):
             partners = get_partners_list(user_id=user_id)
             
             # Apply subscription-based contact limits
-            if partners and subscription and subscription.tier:
-                tier = subscription.tier.value
+            if partners and user_subscription_tier:
+                tier = user_subscription_tier.value
                 if tier == 'BRONZE':
                     partners = partners[:1]  # Bronze: 1 contact
                 elif tier == 'SILVER':
