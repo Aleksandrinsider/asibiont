@@ -1309,6 +1309,58 @@ async def clear_redis_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def admin_users_handler(request):
+    """Admin endpoint to view all users in database"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+
+    session_db = Session()
+    try:
+        users = session_db.query(User).all()
+        users_data = []
+        for user in users:
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+            
+            user_data = {
+                'id': user.id,
+                'telegram_id': user.telegram_id,
+                'username': user.username,
+                'first_name': user.first_name,
+                'subscription_tier': user.subscription_tier.value if user.subscription_tier else None,
+                'timezone': user.timezone,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'photo_url': user.photo_url,
+                'profile': {
+                    'city': profile.city if profile else None,
+                    'company': profile.company if profile else None,
+                    'position': profile.position if profile else None,
+                    'interests': profile.interests if profile else None,
+                    'average_rating': profile.average_rating if profile else 0,
+                    'rating_count': profile.rating_count if profile else 0
+                } if profile else None,
+                'subscription': {
+                    'status': subscription.status if subscription else None,
+                    'tier': subscription.tier.value if subscription and subscription.tier else None,
+                    'start_date': subscription.start_date.isoformat() if subscription and subscription.start_date else None,
+                    'end_date': subscription.end_date.isoformat() if subscription and subscription.end_date else None
+                } if subscription else None
+            }
+            users_data.append(user_data)
+        
+        return web.json_response({
+            'total_users': len(users_data),
+            'users': users_data
+        })
+    except Exception as e:
+        logger.error(f"Error getting users: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+
 async def direct_login_handler(request):
     """Direct login disabled in production"""
     return web.json_response({'status': 'disabled'}, status=403)
@@ -2903,6 +2955,7 @@ app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
+app.router.add_get('/admin/users', admin_users_handler)
 app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
