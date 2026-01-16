@@ -4,6 +4,11 @@
 """
 import os
 import sys
+
+# Remove LOCAL variable to force production mode
+if 'LOCAL' in os.environ:
+    del os.environ['LOCAL']
+
 sys.path.append('.')
 
 from models import Session, User, SubscriptionTier
@@ -20,7 +25,7 @@ def check_user_tiers():
         for user in users:
             tier = user.subscription_tier.value if user.subscription_tier else 'NONE'
             tier_counts[tier] = tier_counts.get(tier, 0) + 1
-            print(f"{user.username}: {tier}")
+            print(f"{user.username} (ID: {user.telegram_id}): {tier}")
 
         print()
         print("Распределение по тарифам:")
@@ -32,9 +37,13 @@ def check_user_tiers():
 
 if __name__ == "__main__":
     # Определяем тип БД
-    if os.getenv('LOCAL') == '1':
-        print("Проверка локальной БД (SQLite)")
+    db_url = os.getenv('DATABASE_URL', '')
+    if 'sqlite' in db_url.lower() or not db_url:
+        print("❌ ОШИБКА: Используйте DATABASE_URL для подключения к production БД")
+        sys.exit(1)
     else:
-        print("Проверка production БД (PostgreSQL)")
+        print(f"✅ Проверка production БД (PostgreSQL)")
+        print(f"Host: {db_url.split('@')[1].split('/')[0] if '@' in db_url else 'unknown'}")
+        print("="*60)
 
     check_user_tiers()
