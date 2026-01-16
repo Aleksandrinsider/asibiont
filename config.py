@@ -18,8 +18,12 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is required")
+if LOCAL:
+    # Use SQLite for local development
+    DATABASE_URL = "sqlite:///test_local.db"
+    print("Using local SQLite database: test_local.db")
+elif not DATABASE_URL:
+    raise ValueError("DATABASE_URL is required for production")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v3.2")  # Updated to latest version

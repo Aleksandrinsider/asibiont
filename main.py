@@ -3,7 +3,7 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
@@ -35,6 +35,21 @@ warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+logger.info("Database Connection")
+logger.info("Attempting to connect to the database...")
+
+try:
+    # Test database connection
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    logger.info("✅ Database connection successful")
+except Exception as e:
+    logger.error(f"❌ Database connection failed: {e}")
+    if not LOCAL:
+        raise  # Fail hard in production
+    else:
+        logger.warning("Continuing with local mode despite database connection issues")
+
 try:
     Base.metadata.create_all(engine)
     logger.info("Database tables created or already exist")
@@ -45,6 +60,10 @@ except Exception as e:
 def run_migrations():
     """Run database migrations"""
     from sqlalchemy import text, inspect
+    
+    # Check database type
+    is_sqlite = 'sqlite' in DATABASE_URL.lower()
+    
     try:
         session = Session()
         inspector = inspect(engine)
@@ -129,44 +148,50 @@ def run_migrations():
                 logger.info("Migration: invalid_chat column already exists")
 
             # Migration for subscription_tier column
-            # Migration for subscription_tier column - always recreate to fix enum
-            logger.info("Recreating subscription_tier column to fix enum values")
-            
-            # First, change dependent columns to text to allow dropping the enum type
-            if 'subscriptions' in inspector.get_table_names():
-                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-                if 'tier' in sub_columns:
-                    logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
-                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier DROP DEFAULT"))
-                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
-            
-            session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
-            session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
-            session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
-            session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
-            
-            # Update existing users data to match new enum values (after creating the enum)
-            session.execute(text("UPDATE users SET subscription_tier = CASE WHEN subscription_tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN subscription_tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN subscription_tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
-            
-            # Update subscriptions.tier back to enum type with correct values
-            if 'subscriptions' in inspector.get_table_names():
-                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-                if 'tier' in sub_columns:
-                    logger.info("Converting subscriptions.tier back to enum type")
-                    # Update existing data to match new enum values (after creating the enum)
-                    session.execute(text("UPDATE subscriptions SET tier = CASE WHEN tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
-                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
-                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
-            
-            session.commit()
-            logger.info("Migration: subscription_tier column recreated successfully")
+            if is_sqlite:
+                logger.info("Skipping subscription_tier enum migration for SQLite")
+            else:
+                # Migration for subscription_tier column - always recreate to fix enum
+                logger.info("Recreating subscription_tier column to fix enum values")
+                
+                # First, change dependent columns to text to allow dropping the enum type
+                if 'subscriptions' in inspector.get_table_names():
+                    sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                    if 'tier' in sub_columns:
+                        logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
+                        session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier DROP DEFAULT"))
+                        session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
+                
+                session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
+                session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
+                session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
+                session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
+                
+                # Update existing users data to match new enum values (after creating the enum)
+                session.execute(text("UPDATE users SET subscription_tier = CASE WHEN subscription_tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN subscription_tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN subscription_tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
+                
+                # Update subscriptions.tier back to enum type with correct values
+                if 'subscriptions' in inspector.get_table_names():
+                    sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                    if 'tier' in sub_columns:
+                        logger.info("Converting subscriptions.tier back to enum type")
+                        # Update existing data to match new enum values (after creating the enum)
+                        session.execute(text("UPDATE subscriptions SET tier = CASE WHEN tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
+                        session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
+                        session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
+                
+                session.commit()
+                logger.info("Migration: subscription_tier column recreated successfully")
 
             # Migration for tier column in subscriptions table
             if 'subscriptions' in inspector.get_table_names():
                 sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
                 if 'tier' not in sub_columns:
                     logger.info("Adding tier column to subscriptions table")
-                    session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'bronze\''))
+                    if is_sqlite:
+                        session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier TEXT DEFAULT \'BRONZE\''))
+                    else:
+                        session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'BRONZE\''))
                     session.commit()
                     logger.info("Migration: tier column added to subscriptions table successfully")
                 else:

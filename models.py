@@ -141,13 +141,21 @@ if db_url and db_url.startswith('postgresql://'):
     db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
 
 # Increase connection pool size to handle more concurrent requests
+connect_args = {}
+if db_url and db_url.startswith('postgresql'):
+    connect_args = {
+        "connect_timeout": 10,  # 10 seconds timeout for PostgreSQL
+        "options": "-c statement_timeout=10000"  # 10 seconds statement timeout
+    }
+
 engine = create_engine(
     db_url,
     pool_size=20,           # Increased from default 5
     max_overflow=30,        # Increased from default 10
     pool_timeout=60,        # Increased from default 30
     pool_recycle=3600,      # Recycle connections after 1 hour
-    pool_pre_ping=True      # Check connections before using
+    pool_pre_ping=True,     # Check connections before using
+    connect_args=connect_args
 )
 try:
     Base.metadata.create_all(engine)
