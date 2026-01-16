@@ -151,6 +151,26 @@ class PromoCode(Base):
     used_by_user = relationship("User", backref="used_promo_codes")
 
 
+class PaymentHistory(Base):
+    """История всех изменений подписок и платежей для защиты от потери данных"""
+    __tablename__ = 'payment_history'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    telegram_username = Column(String(100))
+    action = Column(String(50), nullable=False)  # payment, tier_change, subscription_activated, promo_used, etc.
+    tier = Column(Enum(SubscriptionTier), nullable=False)  # Tier at the time of action
+    amount = Column(String(20))  # Payment amount if applicable
+    payment_id = Column(String(100))  # External payment system ID (Yookassa, etc.)
+    duration_days = Column(Integer)  # Duration of subscription
+    start_date = Column(DateTime)  # Subscription start date
+    end_date = Column(DateTime)  # Subscription end date
+    details = Column(Text)  # JSON with additional details
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="payment_history")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

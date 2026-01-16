@@ -1,5 +1,5 @@
 from handlers import router as handlers_router
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -286,6 +286,20 @@ except Exception as e:
         raise  # Fail hard in production
     else:
         logger.warning("Continuing with local mode despite migration issues")
+
+# Восстанавливаем тарифы пользователей из активных подписок
+logger.info("Проверка и восстановление тарифов пользователей...")
+try:
+    from restore_subscriptions import restore_user_tiers, check_database_integrity
+    inconsistencies = check_database_integrity()
+    if inconsistencies:
+        restored = restore_user_tiers()
+        logger.info(f"✅ Восстановлено тарифов пользователей: {restored}")
+    else:
+        logger.info("✓ Все тарифы пользователей корректны")
+except Exception as e:
+    logger.error(f"⚠️ Ошибка при восстановлении тарифов: {e}")
+    # Не падаем, продолжаем работу
 
 
 # Test functions disabled in production mode
