@@ -62,15 +62,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         close_session = False
 
     try:
-
-    # Проверяем сообщение о времени и обновляем timezone
-    time_message_match = re.search(r"мое\s+местное\s+время:\s*(\d{1,2}:\d{2})", message.lower())
-    if time_message_match:
-        user_time_str = time_message_match.group(1)
-        detected_timezone = determine_timezone_from_time(user_time_str, user_id)
-        if detected_timezone:
-            logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
-            update_profile(timezone=detected_timezone, user_id=user_id)
+        # Проверяем сообщение о времени и обновляем timezone
+        time_message_match = re.search(r"мое\s+местное\s+время:\s*(\d{1,2}:\d{2})", message.lower())
+        if time_message_match:
+            user_time_str = time_message_match.group(1)
+            detected_timezone = determine_timezone_from_time(user_time_str, user_id)
+            if detected_timezone:
+                logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
+                update_profile(timezone=detected_timezone, user_id=user_id, db_session=db_session)
 
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
