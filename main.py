@@ -131,10 +131,26 @@ def run_migrations():
             # Migration for subscription_tier column
             # Migration for subscription_tier column - always recreate to fix enum
             logger.info("Recreating subscription_tier column to fix enum values")
+            
+            # First, change dependent columns to text to allow dropping the enum type
+            if 'subscriptions' in inspector.get_table_names():
+                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                if 'tier' in sub_columns:
+                    logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
+                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
+            
             session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
             session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
-            session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
-            session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
+            session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('bronze', 'silver', 'gold')"))
+            session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'bronze\''))
+            
+            # Update subscriptions.tier back to enum type with correct values
+            if 'subscriptions' in inspector.get_table_names():
+                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                if 'tier' in sub_columns:
+                    logger.info("Converting subscriptions.tier back to enum type")
+                    session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
+            
             session.commit()
             logger.info("Migration: subscription_tier column recreated successfully")
 
@@ -143,7 +159,7 @@ def run_migrations():
                 sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
                 if 'tier' not in sub_columns:
                     logger.info("Adding tier column to subscriptions table")
-                    session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'BRONZE\''))
+                    session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'bronze\''))
                     session.commit()
                     logger.info("Migration: tier column added to subscriptions table successfully")
                 else:
@@ -848,6 +864,7 @@ async def dashboard_handler(request):
             'delegating_to_me': delegating_to_me,
             'delegating_by_me': delegating_by_me,
             'subscription': subscription,
+            'subscription_tier': user.subscription_tier.value if user and user.subscription_tier else 'BRONZE',
             'total_tasks': total_tasks,
             'completed_tasks': completed_tasks,
             'pending_tasks': pending_tasks,
