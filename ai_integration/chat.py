@@ -368,7 +368,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None):
             
             # Текущая ситуация с задачами
             tasks_info = context_analysis['tasks']
-            user_memory += f"\n📊 ЗАДАЧИ (выполнено {tasks_info['completion_rate_percent']}%):\n"
+            user_memory += f"\n📊 ЗАДАЧИ (выполнено {int(tasks_info['completion_rate'] * 100)}%):\n"
             
             if tasks_info['overdue'] > 0:
                 user_memory += f"  🔴 ПРОСРОЧЕНО: {tasks_info['overdue']} задач\n"

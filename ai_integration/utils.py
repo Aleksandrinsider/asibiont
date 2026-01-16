@@ -261,14 +261,6 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
     # Высокая уверенность AI уже обработал
     ai_confidence = 0.8  # AI уже проанализировал запрос
 
-    # Перепроверка метода: проверяем, правда ли AI создал tool calls
-    from improved_prompts_final import improved_classify_intent
-    intent = improved_classify_intent(message, mentions_str)
-
-    # Если это просто дружеское общение - fallback не нужен
-    if intent["type"] == "conversation":
-        return fallback_actions
-
     return fallback_actions
 
 

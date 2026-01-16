@@ -3266,6 +3266,7 @@ if __name__ == "__main__":
         logger.info("Running in local mode with polling")
         async def run_polling():
             try:
+                await bot.delete_webhook()
                 await dp.start_polling(bot)
             except Exception as e:
                 logger.error(f"Error in polling: {e}")
