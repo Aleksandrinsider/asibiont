@@ -853,8 +853,8 @@
                     const chatMessages = document.getElementById('chat-messages');
                     chatMessages.innerHTML = '';
                     lastMessageCount = 0;
-                    addMessage('История чата очищена', 'ai');
-                    lastMessageCount += 1; // Обновляем счётчик для сообщения
+                    // Show notification instead of adding to chat
+                    showNotification('История чата очищена', 'success');
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
                     setTimeout(async () => {
                         try {
@@ -870,12 +870,10 @@
                     }, 500);
                 } else {
                     const data = await response.json();
-                    addMessage(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'ai');
-                    lastMessageCount += 1; // Обновляем счётчик для сообщения об ошибке
+                    showNotification(`Ошибка при очистке: ${data.error || 'Неизвестная ошибка'}`, 'error');
                 }
             } catch (error) {
-                addMessage('Ошибка: ' + error.message, 'ai');
-                lastMessageCount += 1; // Обновляем счётчик для сообщения об ошибке
+                showNotification('Ошибка: ' + error.message, 'error');
             }
         }
 
@@ -948,11 +946,14 @@
                         showNotification(errorData.message || 'Недостаточно прав для делегирования', 'error');
                     }
                 } else {
-                    showNotification('Ошибка при отправке запроса', 'error');
+                    // Log detailed error
+                    const errorText = await response.text();
+                    console.error('Delegation error:', response.status, errorText);
+                    showNotification(`Ошибка ${response.status}: ${errorText.substring(0, 100)}`, 'error');
                 }
             } catch (error) {
                 console.error('Error delegating to contact:', error);
-                showNotification('Ошибка при отправке запроса', 'error');
+                showNotification(`Ошибка при отправке: ${error.message}`, 'error');
             }
         }
 
@@ -3373,7 +3374,7 @@
     </script>
     <!-- Version indicator -->
     <div style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 5px 10px; border-radius: 5px; font-size: 11px; z-index: 9999;">
-        v20260116-b24a2a6
+        v20260116-07744ba
     </div>
 </body>
 </html>
