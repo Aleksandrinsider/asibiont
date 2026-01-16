@@ -1742,12 +1742,12 @@ async def logging_middleware(request, handler):
 
 
 @web.middleware
-async def redirect_to_www_middleware(request, handler):
-    """Redirect non-www domain to www subdomain"""
+async def redirect_to_root_middleware(request, handler):
+    """Redirect www subdomain to root domain"""
     host = request.host
-    if host.startswith('asibiont.ru') and not host.startswith('www.'):
-        new_url = f"https://www.{host}{request.path_qs}"
-        logger.info(f"Redirecting from {host} to www.{host}")
+    if host.startswith('www.asibiont.ru'):
+        new_url = f"https://asibiont.ru{request.path_qs}"
+        logger.info(f"Redirecting from {host} to asibiont.ru")
         return web.HTTPMovedPermanently(new_url)
     return await handler(request)
 
@@ -1762,7 +1762,7 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
-app.middlewares.append(redirect_to_www_middleware)
+app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
