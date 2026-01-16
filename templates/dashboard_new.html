@@ -252,8 +252,8 @@
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" onclick="filterContacts('favorite')">Мои</button>
                         <button class="contact-filter-btn active" onclick="filterContacts('recommended')">Рекомендуемые</button>
-                        {% if subscription_tier and subscription_tier != 'BRONZE' %}
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_to_me')">Делегируют мне</button>
+                        {% if subscription_tier == 'GOLD' %}
                         <button class="contact-filter-btn" onclick="filterContacts('delegating_by_me')">Делегирую я</button>
                         {% endif %}
                     </div>
@@ -337,8 +337,8 @@
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')">Личные задачи</button>
-                        {% if subscription_tier and subscription_tier != 'BRONZE' %}
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
+                        {% if subscription_tier == 'GOLD' %}
                         <button class="task-filter-btn" data-filter="assigned-by-me" onclick="filterTasks('assigned-by-me')">Назначенные мной</button>
                         {% endif %}
                         <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
