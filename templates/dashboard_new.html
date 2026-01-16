@@ -2126,14 +2126,12 @@
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${partner.contact_info || 'неизвестен'}</p>`;
                     
-                    // Тариф под ником
-                    if (partner.subscription_tier) {
-                        html += `<div style="margin-top: 4px; margin-bottom: 8px;"><span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">${partner.subscription_tier.toLowerCase()}</span></div>`;
-                    } else {
-                        html += '<div style="margin-bottom: 8px;"></div>';
-                    }
-                    
                     html += '</div>';
+                    
+                    // Тариф в виде обычного текста
+                    if (partner.subscription_tier) {
+                        html += `<p>Тариф: ${partner.subscription_tier.toLowerCase()}</p>`;
+                    }
                     
                     // Profile details - точно такие же поля как в основном профиле
                     html += `<p>Город: ${partner.city || 'Не указан'}</p>`;
