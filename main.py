@@ -43,11 +43,13 @@ try:
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
     logger.info("✅ Database connection successful")
-    
+
     # Initialize database tables
     init_db()
 except Exception as e:
     logger.error(f"❌ Database connection failed: {e}")
+    logger.error("Application may not work correctly without database connection")
+    # Don't exit, let the app start anyway for webhook setup
     if not LOCAL:
         raise  # Fail hard in production
     else:
@@ -1311,6 +1313,8 @@ async def api_send_message_handler(request):
             'details': str(e),
             'type': type(e).__name__
         }, status=500)
+    finally:
+        session_db.close()
 
 
 async def clear_history_handler(request):

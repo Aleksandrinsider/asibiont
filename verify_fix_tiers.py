@@ -17,9 +17,9 @@ from models import Session, User, SubscriptionTier
 def check_and_fix():
     session = Session()
     try:
-        print("=" * 60)
-        print("ПРОВЕРКА ТАРИФОВ В PRODUCTION БД")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("ПРОВЕРКА ТАРИФОВ В PRODUCTION БД")
+        logger.info("=" * 60)
         
         # Все пользователи
         users = session.query(User).all()
@@ -28,12 +28,12 @@ def check_and_fix():
         print("\nТекущие тарифы:")
         for user in users:
             tier = user.subscription_tier.value if user.subscription_tier else 'NONE'
-            print(f"  {user.username} (ID: {user.telegram_id}): {tier}")
+            logger.info(f"  {user.username} (ID: {user.telegram_id}): {tier}")
         
         # Исправляем тарифы
-        print("\n" + "=" * 60)
-        print("ИСПРАВЛЕНИЕ ТАРИФОВ")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("ИСПРАВЛЕНИЕ ТАРИФОВ")
+        logger.info("=" * 60)
         
         updates = [
             (111111, SubscriptionTier.BRONZE, 'sportfan1'),
@@ -49,25 +49,25 @@ def check_and_fix():
             if user:
                 old_tier = user.subscription_tier.value if user.subscription_tier else 'NONE'
                 user.subscription_tier = tier
-                print(f"✅ {username}: {old_tier} → {tier.value}")
+                logger.info(f"✅ {username}: {old_tier} → {tier.value}")
             else:
-                print(f"❌ {username} не найден")
+                logger.error(f"❌ {username} не найден")
         
         session.commit()
-        print("\n" + "=" * 60)
-        print("ПРОВЕРКА ПОСЛЕ ОБНОВЛЕНИЯ")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("ПРОВЕРКА ПОСЛЕ ОБНОВЛЕНИЯ")
+        logger.info("=" * 60)
         
         for telegram_id, tier, username in updates:
             user = session.query(User).filter_by(telegram_id=telegram_id).first()
             if user:
                 current = user.subscription_tier.value if user.subscription_tier else 'NONE'
                 status = "✅" if current == tier.value else "❌"
-                print(f"{status} {username}: {current} (ожидается {tier.value})")
+                logger.info(f"{status} {username}: {current} (ожидается {tier.value})")
         
-        print("\n" + "=" * 60)
-        print("ГОТОВО!")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("ГОТОВО!")
+        logger.info("=" * 60)
     finally:
         session.close()
 

@@ -19,11 +19,11 @@ def update_test_users_tiers():
         # Check DATABASE_URL
         db_url = os.getenv('DATABASE_URL', '')
         if 'sqlite' in db_url.lower() or not db_url:
-            print("❌ ОШИБКА: Используйте DATABASE_URL для подключения к production БД")
+            logger.error("❌ ОШИБКА: Используйте DATABASE_URL для подключения к production БД")
             sys.exit(1)
         
-        print(f"✅ Подключение к production БД (PostgreSQL)")
-        print(f"Host: {db_url.split('@')[1].split('/')[0] if '@' in db_url else 'unknown'}")
+        logger.info(f"✅ Подключение к production БД (PostgreSQL)")
+        logger.info(f"Host: {db_url.split('@')[1].split('/')[0] if '@' in db_url else 'unknown'}")
         print("="*60)
         
         session = Session()

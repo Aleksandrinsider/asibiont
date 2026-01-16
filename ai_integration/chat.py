@@ -71,13 +71,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
                 update_profile(timezone=detected_timezone, user_id=user_id, db_session=db_session)
 
-    # Сохраняем оригинальное сообщение ДО очистки
-    original_message = message
-    # Extract mentions before cleaning message
-    mentions = re.findall(r"@[\w]+", message)
-    mentions_str = ", ".join(mentions) if mentions else "нет"
-    # Clean message from mentions for processing
-    clean_message = re.sub(r"@[\w]+", "", message).strip()
+        # Сохраняем оригинальное сообщение ДО очистки
+        original_message = message
+        # Extract mentions before cleaning message
+        mentions = re.findall(r"@[\w]+", message)
+        mentions_str = ", ".join(mentions) if mentions else "нет"
+        # Clean message from mentions for processing
+        clean_message = re.sub(r"@[\w]+", "", message).strip()
     context_len = (
         len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
     )
