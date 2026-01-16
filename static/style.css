@@ -1629,37 +1629,26 @@ details[open] .details-content {
     display: none;
 }
 
-/* Contact filter buttons */
+/* Contact filter buttons - same style as task filters */
 .contact-filter-btn {
-    display: inline-block;
-    padding: 8px 16px;
-    background-color: #F6F8FA;
+    padding: 4px 8px;
+    background: none;
     color: #374151;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
+    border: none;
+    border-radius: 0;
     cursor: pointer;
+    font-size: 13px;
+    font-weight: 400;
     transition: all 0.2s;
-    text-decoration: none;
-    margin-right: 4px;
 }
 
 .contact-filter-btn:hover {
-    background-color: #E6E9EC;
-    border-color: #374151;
-    color: #374151;
+    background-color: #F6F8FA;
 }
 
 .contact-filter-btn.active {
-    background-color: #068487;
-    border-color: #068487;
-    color: #FFFFFF;
-}
-
-.contact-filter-btn.active:hover {
-    background-color: #057a7c;
-    border-color: #057a7c;
+    background-color: #F6F8FA;
+    color: #374151;
 }
 
 
