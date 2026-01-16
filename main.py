@@ -2002,6 +2002,8 @@ async def api_partners_handler(request):
             user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
             partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
             
+            logger.info(f"User {user.username} has tier {user_tier}, partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier}")
+            
             # Determine if user can access this contact
             # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
             # Gold видит всех (Bronze, Silver, Gold)
@@ -2019,6 +2021,7 @@ async def api_partners_handler(request):
 
             # Only add contact if user can access it
             if can_access:
+                logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier} for user {user.username} with tier {user_tier} (can_access: {can_access})")
                 partners_data.append(
                     {
                         'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
@@ -2328,6 +2331,7 @@ async def api_partners_handler(request):
         # Закрываем сессию перед возвратом ответа
         session_db.close()
 
+        logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({'partners': partners_data})
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)

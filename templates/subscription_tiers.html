@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=1.4">
+    <link rel="stylesheet" href="/static/style.css?v=1.5">
     <style>
         body {
             background: #FFFFFF;
@@ -22,12 +22,25 @@
             justify-content: center;
             min-height: 100vh;
         }
+        .pricing-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .pricing-card {
+            border: 1px solid #D1D9E0;
+            padding: 40px;
+            background: white;
+            border-radius: 6px;
+            margin: 0 auto;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div style="width: 100%; max-width: 900px; margin: 0 auto; padding: 20px;">
-            <div style="border: 1px solid #D1D9E0; padding: 40px; background: white; border-radius: 6px;">
+        <div class="pricing-container">
+            <div class="pricing-card">
                 <div style="text-align: left; margin-bottom: 24px;">
                     <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">Выберите тариф</h1>
                     <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Получите доступ к закрытому сообществу ASI Biont</p>
@@ -80,7 +93,7 @@
                 </div>
 
             </div>
-
+        </div>
     <script>
         async function applyPromoCode() {
             const promoCode = document.getElementById('promo_code').value.trim().toUpperCase();
