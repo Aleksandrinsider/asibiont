@@ -1716,6 +1716,90 @@ async def admin_users_handler(request):
         session_db.close()
 
 
+async def check_sportfan3_handler(request):
+    """Check and fix @sportfan3 subscription"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+
+    session_db = Session()
+    try:
+        logger.info("=== Проверка подписки @sportfan3 ===")
+        
+        # Найдем пользователя
+        user = session_db.query(User).filter(User.username == 'sportfan3').first()
+        if not user:
+            return web.json_response({'error': 'User sportfan3 not found'}, status=404)
+            
+        result = {
+            'user_id': user.id,
+            'username': user.username,
+            'current_tier': user.subscription_tier.value if user.subscription_tier else None
+        }
+        
+        # Проверим активные подписки
+        subscriptions = session_db.query(Subscription).filter(
+            Subscription.user_id == user.id,
+            Subscription.active == True
+        ).all()
+        result['active_subscriptions'] = len(subscriptions)
+        result['subscriptions'] = []
+        for sub in subscriptions:
+            result['subscriptions'].append({
+                'id': sub.id,
+                'tier': sub.tier.value if sub.tier else None,
+                'active': sub.active,
+                'start_date': sub.start_date.isoformat() if sub.start_date else None,
+                'end_date': sub.end_date.isoformat() if sub.end_date else None
+            })
+        
+        # Проверим payment_history
+        payments = session_db.query(PaymentHistory).filter(
+            PaymentHistory.user_id == user.id
+        ).order_by(PaymentHistory.created_at.desc()).all()
+        result['payment_history_count'] = len(payments)
+        result['payments'] = []
+        for payment in payments:
+            result['payments'].append({
+                'id': payment.id,
+                'tier': payment.tier,
+                'action': payment.action,
+                'start_date': payment.start_date.isoformat() if payment.start_date else None,
+                'end_date': payment.end_date.isoformat() if payment.end_date else None,
+                'created_at': payment.created_at.isoformat() if payment.created_at else None
+            })
+            
+        # Проверим нужно ли восстановление
+        now = datetime.now(dt_timezone.utc)
+        has_active_gold = any(
+            p.tier == 'gold' and p.end_date and p.end_date > now 
+            for p in payments if p.action in ['subscription_activated', 'subscription_upgraded']
+        )
+        
+        result['has_active_gold_payment'] = has_active_gold
+        result['needs_fix'] = has_active_gold and user.subscription_tier != SubscriptionTier.GOLD
+        
+        if result['needs_fix']:
+            logger.info(f"❌ НАЙДЕНА ПРОБЛЕМА: Пользователь должен иметь GOLD, но имеет {user.subscription_tier}")
+            # Восстанавливаем подписку
+            user.subscription_tier = SubscriptionTier.GOLD
+            session_db.commit()
+            result['fixed'] = True
+            result['new_tier'] = 'gold'
+            logger.info("✅ Подписка восстановлена!")
+        else:
+            result['fixed'] = False
+            
+        return web.json_response(result)
+        
+    except Exception as e:
+        logger.error(f"Error checking sportfan3 subscription: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+
 async def direct_login_handler(request):
     """Direct login disabled in production"""
     return web.json_response({'status': 'disabled'}, status=403)
@@ -3443,6 +3527,7 @@ app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
 app.router.add_get('/admin/users', admin_users_handler)
+app.router.add_get('/check_sportfan3', check_sportfan3_handler)
 app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
