@@ -1897,14 +1897,13 @@ async def api_partners_handler(request):
             partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
             
             # Determine if user can access this contact
-            # Bronze и Silver видят друг друга (Bronze и Silver)
+            # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
             # Gold видит всех (Bronze, Silver, Gold)
-            # Только Gold может видеть Gold контакты
             can_access = False
             required_tier = None
             
             if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
-                # Bronze и Silver видят только Bronze и Silver, не Gold
+                # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
                 if not can_access:
                     required_tier = 'gold'
@@ -2035,7 +2034,7 @@ async def api_partners_handler(request):
             required_tier = None
             
             if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
-                # Bronze и Silver видят только Bronze и Silver, не Gold
+                # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (delegator_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
                 if not can_access:
                     required_tier = 'gold'
@@ -2143,7 +2142,7 @@ async def api_partners_handler(request):
             required_tier = None
             
             if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
-                # Bronze и Silver видят только Bronze и Silver, не Gold
+                # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (delegatee_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
                 if not can_access:
                     required_tier = 'gold'
