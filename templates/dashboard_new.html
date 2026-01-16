@@ -267,12 +267,11 @@
                                 <div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">
                                     <p style="margin: 0; color: #374151; font-size: 13px;">@{{ user.username or 'неизвестен' }}</p>
                                     {% if subscription_tier %}
-                                    <span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier }}</span>
+                                    <span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">{{ subscription_tier.lower() }}</span>
                                     {% endif %}
                                 </div>
                                 
                             </div>
-                            <p>Статус: {{ profile.current_plans or 'Не указан' if profile else 'Не указан' }}</p>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -491,7 +490,7 @@
             if (!tier) return '';
             const tierLower = tier.toLowerCase();
             const tierClass = `tier-badge tier-badge-${tierLower}`;
-            return `<a href="/subscription_tiers" class="${tierClass}" onclick="event.stopPropagation();">${tier.toUpperCase()}</a>`;
+            return `<a href="/subscription_tiers" class="${tierClass}" onclick="event.stopPropagation();">${tierLower}</a>`;
         }
 
         let currentTaskFilter = 'all'; // Текущий фильтр задач
@@ -2110,13 +2109,12 @@
                     html += '<div style="display: flex; align-items: center; gap: 6px; justify-content: center; margin-bottom: 8px;">';
                     html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${partner.contact_info || 'неизвестен'}</p>`;
                     if (partner.subscription_tier) {
-                        html += `<span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">${partner.subscription_tier.toUpperCase()}</span>`;
+                        html += `<span style="padding: 2px 6px; background: #F6F8FA; border-radius: 4px; font-size: 11px; color: #59636E; border: 1px solid #D1D9E0;">${partner.subscription_tier.toLowerCase()}</span>`;
                     }
                     html += '</div>';
                     html += '</div>';
                     
                     // Profile details - точно такие же поля как в основном профиле
-                    html += `<p>Статус: ${partner.current_plans || 'Не указан'}</p>`;
                     html += `<p>Город: ${partner.city || 'Не указан'}</p>`;
                     html += `<p>Компания: ${partner.company || 'Не указана'}</p>`;
                     html += `<p>Должность: ${partner.position || 'Не указана'}</p>`;
