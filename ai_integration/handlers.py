@@ -1511,7 +1511,8 @@ def get_partners_list(user_id=None, session=None):
             delegated_usernames.add(task.delegated_to_username.replace("@", "").lower())
 
     # Get all profiles with filled data
-    all_profiles = (
+    # Apply subscription-based filtering
+    profile_query = (
         session.query(UserProfile)
         .join(User, UserProfile.user_id == User.id)
         .filter(
@@ -1523,8 +1524,14 @@ def get_partners_list(user_id=None, session=None):
             | (UserProfile.bio.isnot(None))
             | (UserProfile.languages.isnot(None)),
         )
-        .all()
     )
+    
+    # Bronze tier users cannot see Gold tier users
+    if user.subscription_tier and user.subscription_tier.value == 'BRONZE':
+        from models import SubscriptionTier
+        profile_query = profile_query.filter(User.subscription_tier != SubscriptionTier.GOLD)
+    
+    all_profiles = profile_query.all()
 
     logger.info(f"[PARTNERS] Found {len(all_profiles)} profiles with data")
 

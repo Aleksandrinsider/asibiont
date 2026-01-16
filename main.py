@@ -1142,14 +1142,13 @@ async def chat_handler(request):
                 response = f"Ошибка: {str(e)}"
 
             # Save context back to Redis with timestamp
-            from datetime import datetime, timezone
             context.append({
                 "user": message,
                 "agent": response,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(dt_timezone.utc).isoformat()
             })
             # Keep only messages from last 24 hours
-            cutoff_time = datetime.now(timezone.utc).timestamp() - 24 * 3600
+            cutoff_time = datetime.now(dt_timezone.utc).timestamp() - 24 * 3600
             context = [msg for msg in context if datetime.fromisoformat(
                 msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
             # Limit to last 50 messages to prevent excessive storage
