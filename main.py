@@ -128,28 +128,14 @@ def run_migrations():
                 logger.info("Migration: invalid_chat column already exists")
 
             # Migration for subscription_tier column
-            if 'subscription_tier' not in user_columns:
-                logger.info("Adding subscription_tier column to users table")
-                # First drop the column if it exists (in case of incorrect migration)
-                session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
-                # Drop the enum type if it exists
-                session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
-                # Create the enum type with correct values (uppercase as SQLAlchemy expects)
-                session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
-                session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
-                session.commit()
-                logger.info("Migration: subscription_tier column added successfully")
-            else:
-                logger.info("Migration: subscription_tier column already exists")
-
-            # Update existing subscription_tier values to uppercase if needed
-            try:
-                session.execute(text("UPDATE users SET subscription_tier = CASE WHEN subscription_tier = 'bronze' THEN 'BRONZE' WHEN subscription_tier = 'silver' THEN 'SILVER' WHEN subscription_tier = 'gold' THEN 'GOLD' ELSE subscription_tier END WHERE subscription_tier IN ('bronze', 'silver', 'gold')"))
-                session.commit()
-                logger.info("Migration: subscription_tier values updated to uppercase")
-            except Exception as e:
-                logger.error(f"Failed to update subscription_tier values: {e}")
-                session.rollback()
+            # Migration for subscription_tier column - always recreate to fix enum
+            logger.info("Recreating subscription_tier column to fix enum values")
+            session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
+            session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
+            session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
+            session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
+            session.commit()
+            logger.info("Migration: subscription_tier column recreated successfully")
 
         session.close()
     except Exception as e:
