@@ -1157,6 +1157,100 @@ async def chat_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_send_message_handler(request):
+    """API endpoint for sending messages from frontend (delegation, task actions)"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        logger.info(f"API send_message handler called, session user_id: {user_id}")
+
+        if not user_id:
+            logger.warning("No user_id in session for api_send_message")
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+
+        data = await request.json()
+        message = data.get('message', '')
+        logger.info(f"API Message received: {message}")
+
+        # Load context from Redis
+        context = []
+        if redis_client:
+            try:
+                context_data = await redis_client.get(f"context:{user_id}")
+                if context_data:
+                    full_context = json.loads(context_data.decode('utf-8'))
+                    context = full_context[-20:]
+            except Exception as e:
+                logger.error(f"Error loading context from Redis: {e}")
+
+        # Import chat function
+        from ai_integration.chat import chat
+
+        # Get user from database
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Call AI chat
+            response = await chat(user_id, message, context=context, file_content=None)
+            logger.info(f"AI response: {response[:100]}...")
+
+            # Check if response contains tier restriction error
+            if "Делегирование задач доступно только на тарифах" in response:
+                return web.json_response({
+                    'error': 'tier_restriction',
+                    'message': '🥉 Делегирование задач доступно только на тарифах Серебро и Золото',
+                    'tier': 'BRONZE',
+                    'upgrade_url': '/subscription_tiers'
+                }, status=403)
+
+            # Save context back to Redis with timestamp
+            from datetime import datetime, timezone
+            context.append({
+                "user": message,
+                "agent": response,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            # Keep only messages from last 24 hours
+            cutoff_time = datetime.now(timezone.utc).timestamp() - 24 * 3600
+            context = [msg for msg in context if datetime.fromisoformat(
+                msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
+            
+            # Limit to last 50 messages
+            if len(context) > 50:
+                context = context[-50:]
+                
+            if redis_client:
+                try:
+                    await redis_client.setex(f"context:{user_id}", 24 * 3600, json.dumps(context).encode('utf-8'))
+                    logger.info(f"Context saved to Redis with {len(context)} messages")
+                except Exception as e:
+                    logger.error(f"Error saving context: {e}")
+
+            # Save to database
+            if user:
+                agent_response_timestamp = datetime.now(dt_timezone.utc)
+                interaction_agent = Interaction(
+                    user_id=user.id,
+                    message_type='ai',
+                    content=response,
+                    created_at=agent_response_timestamp
+                )
+                session_db.add(interaction_agent)
+                session_db.commit()
+                logger.info("Saved AI response to database")
+        finally:
+            session_db.close()
+
+        return web.json_response({'response': response, 'success': True})
+    except Exception as e:
+        logger.error(f"Unexpected error in api_send_message_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def clear_history_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
@@ -3184,6 +3278,7 @@ app.router.add_get('/dashboard', dashboard_handler)
 app.router.add_get('/tasks', tasks_handler)
 app.router.add_get('/profile', profile_handler)
 app.router.add_post('/chat', chat_handler)
+app.router.add_post('/api/send_message', api_send_message_handler)
 app.router.add_post('/clear_history', clear_history_handler)
 
 app.router.add_post('/clear_user_tasks', clear_user_tasks_handler)
