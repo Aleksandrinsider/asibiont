@@ -963,6 +963,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                             "max_tokens": 300
                                         }
                                         
+                                        final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
                                         max_retries = 3
                                         for attempt in range(max_retries):
                                             try:
@@ -976,12 +977,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                         logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
                                                         if attempt == max_retries - 1:
                                                             # Последняя попытка - упрощённый запрос
-                                                            simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}\n\nОтветь по промпту."}]
-                                                            simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
-                                                            async with session_http.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
-                                                                if simple_response.status == 200:
-                                                                    simple_result = await simple_response.json()
-                                                                    final_content = simple_result["choices"][0]["message"]["content"].strip()
+                                                            try:
+                                                                simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}\n\nОтветь по промпту."}]
+                                                                simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
+                                                                async with session_http.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
+                                                                    if simple_response.status == 200:
+                                                                        simple_result = await simple_response.json()
+                                                                        final_content = simple_result["choices"][0]["message"]["content"].strip()
+                                                            except Exception as simple_error:
+                                                                logger.error(f"Simple retry failed: {simple_error}")
                                             except Exception as e:
                                                 logger.warning(f"[AI NATURAL RESPONSE] Attempt {attempt+1} failed: {e}")
                                                 if attempt == max_retries - 1:
@@ -993,9 +997,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                             if minimal_response.status == 200:
                                                                 minimal_result = await minimal_response.json()
                                                                 final_content = minimal_result["choices"][0]["message"]["content"].strip()
-                                                    except:
-                                                        final_content = "Выполнено"
-                                                await asyncio.sleep(0.5)  # Пауза между попытками
+                                                    except Exception as minimal_error:
+                                                        logger.error(f"Minimal retry failed: {minimal_error}")
+                                                else:
+                                                    await asyncio.sleep(0.5)  # Пауза между попытками
 
                                     # Enforcement отключен - AI должен отвечать естественно
                                     # intent_type = "list_tasks" if has_list_tasks else None
