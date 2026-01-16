@@ -2042,28 +2042,30 @@ async def api_partners_handler(request):
             elif user_tier == SubscriptionTier.GOLD:
                 can_access = True
 
-            partners_data.append({
-                'contact_info': contact['username'] if can_access else None,
-                'telegram_id': delegator.telegram_id if delegator else None,
-                'can_access': can_access,
-                'required_tier': required_tier,
-                'partner_tier': delegator_tier.value if delegator_tier else 'bronze',
-                'photo_url': photo_url,
-                'first_name': contact['first_name'],
-                'position': contact.get('position'),
-                'interests': contact.get('interests'),
-                'city': contact.get('city'),
-                'company': contact.get('company'),
-                'common_interests': common_interests,
-                'common_skills': common_skills,
-                'common_goals': common_goals,
-                'common_tasks': common_tasks,
-                'average_rating': delegator_profile.average_rating if delegator_profile else 0,
-                'rating_count': delegator_profile.rating_count if delegator_profile else 0,
-                'reason': contact['reason'],
-                'task_count': contact.get('task_count', 0),
-                'type': 'delegating_to_me'
-            })
+            # Only add contact if user can access it
+            if can_access:
+                partners_data.append({
+                    'contact_info': contact['username'] if can_access else None,
+                    'telegram_id': delegator.telegram_id if delegator else None,
+                    'can_access': can_access,
+                    'required_tier': required_tier,
+                    'partner_tier': delegator_tier.value if delegator_tier else 'bronze',
+                    'photo_url': photo_url,
+                    'first_name': contact['first_name'],
+                    'position': contact.get('position'),
+                    'interests': contact.get('interests'),
+                    'city': contact.get('city'),
+                    'company': contact.get('company'),
+                    'common_interests': common_interests,
+                    'common_skills': common_skills,
+                    'common_goals': common_goals,
+                    'common_tasks': common_tasks,
+                    'average_rating': delegator_profile.average_rating if delegator_profile else 0,
+                    'rating_count': delegator_profile.rating_count if delegator_profile else 0,
+                    'reason': contact['reason'],
+                    'task_count': contact.get('task_count', 0),
+                    'type': 'delegating_to_me'
+                })
 
         for contact in delegating_by_me:
             # Получить профиль делегата для расчета общих интересов/навыков/целей
@@ -2148,28 +2150,30 @@ async def api_partners_handler(request):
             elif user_tier == SubscriptionTier.GOLD:
                 can_access = True
 
-            partners_data.append({
-                'contact_info': contact['username'] if can_access else None,
-                'telegram_id': delegatee.telegram_id if delegatee else None,
-                'can_access': can_access,
-                'required_tier': required_tier,
-                'partner_tier': delegatee_tier.value if delegatee_tier else 'bronze',
-                'photo_url': photo_url,
-                'first_name': contact['first_name'],
-                'position': contact.get('position'),
-                'interests': contact.get('interests'),
-                'city': contact.get('city'),
-                'company': contact.get('company'),
-                'common_interests': common_interests,
-                'common_skills': common_skills,
-                'common_goals': common_goals,
-                'common_tasks': common_tasks,
-                'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
-                'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
-                'reason': contact['reason'],
-                'task_count': contact.get('task_count', 0),
-                'type': 'delegating_by_me'
-            })
+            # Only add contact if user can access it
+            if can_access:
+                partners_data.append({
+                    'contact_info': contact['username'] if can_access else None,
+                    'telegram_id': delegatee.telegram_id if delegatee else None,
+                    'can_access': can_access,
+                    'required_tier': required_tier,
+                    'partner_tier': delegatee_tier.value if delegatee_tier else 'bronze',
+                    'photo_url': photo_url,
+                    'first_name': contact['first_name'],
+                    'position': contact.get('position'),
+                    'interests': contact.get('interests'),
+                    'city': contact.get('city'),
+                    'company': contact.get('company'),
+                    'common_interests': common_interests,
+                    'common_skills': common_skills,
+                    'common_goals': common_goals,
+                    'common_tasks': common_tasks,
+                    'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
+                    'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
+                    'reason': contact['reason'],
+                    'task_count': contact.get('task_count', 0),
+                    'type': 'delegating_by_me'
+                })
 
         # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
