@@ -2013,11 +2013,13 @@ async def api_partners_handler(request):
             if user_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER]:
                 # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (partner_tier in [SubscriptionTier.BRONZE, SubscriptionTier.SILVER])
+                logger.info(f"User {user_tier} checking partner {partner_tier}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
             elif user_tier == SubscriptionTier.GOLD:
                 # Gold видит всех
                 can_access = True
+                logger.info(f"User {user_tier} can access all partners")
 
             # Only add contact if user can access it
             if can_access:
