@@ -37,6 +37,7 @@
     </style>
 </head>
 <body>
+    {% if logged_in %}
     <div class="app-header">
         <div class="header-content">
             <div class="header-left">
@@ -46,7 +47,6 @@
                 </a>
                 
                 <!-- Поиск контактов -->
-                {% if logged_in %}
                 <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
@@ -84,7 +84,6 @@
                         </div>
                     </div>
                 </div>
-                {% endif %}
             </div>
             <div class="header-center">
                 <!-- Информация о следующей задаче -->
@@ -94,7 +93,6 @@
                 </div>
             </div>
             <div class="header-info">
-                {% if logged_in %}
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
                     <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
                     <a href="#" onclick="changeTime()" style="margin: 0; color: #374151; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">изменить</a>
@@ -109,10 +107,10 @@
                     </div>
                     <button onclick="logout()" style="background: none; border: none; color: #374151; font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; transition: color 0.2s;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">Выход</button>
                 </div>
-                {% endif %}
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div class="container" {% if not logged_in %}style="margin-top: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh;"{% endif %}>
         {% if not logged_in %}
