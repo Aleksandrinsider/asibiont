@@ -1,5 +1,5 @@
 from handlers import router as handlers_router
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -43,6 +43,9 @@ try:
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
     logger.info("✅ Database connection successful")
+    
+    # Initialize database tables
+    init_db()
 except Exception as e:
     logger.error(f"❌ Database connection failed: {e}")
     if not LOCAL:

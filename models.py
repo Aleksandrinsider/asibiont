@@ -173,12 +173,15 @@ engine = create_engine(
     pool_pre_ping=True,     # Check connections before using
     connect_args=connect_args
 )
-try:
-    Base.metadata.create_all(engine)
-    logger.info("Database tables created successfully")
-except Exception as e:
-    logger.error(f"Failed to create database tables: {e}")
-    raise
+
+def init_db():
+    """Initialize database tables. Call this after ensuring DB is accessible."""
+    try:
+        Base.metadata.create_all(engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+        raise
 
 Session = sessionmaker(bind=engine)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
