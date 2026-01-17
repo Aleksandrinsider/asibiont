@@ -710,8 +710,8 @@ async def dashboard_handler(request):
                     subscription.end_date if subscription else None}")
 
             if not subscription or subscription.status != 'active':
-                logger.info("No active subscription, redirecting to subscription_tiers")
-                return web.HTTPFound('/subscription_tiers')
+                logger.info("No active subscription, showing no_subscription page")
+                return aiohttp_jinja2.render_template('no_subscription.html', request, {})
 
             tasks = session_db.query(Task).filter_by(user_id=user.id).all()
             logger.info(f"Found {len(tasks)} tasks for user {user.id} (telegram_id: {user.telegram_id})")
