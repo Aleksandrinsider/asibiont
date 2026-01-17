@@ -18,7 +18,9 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
+if LOCAL:
+    DATABASE_URL = "sqlite:///local.db"  # Use SQLite for local development
+elif not DATABASE_URL:
     raise ValueError("DATABASE_URL is required in .env file")
 
 # AI Model Configuration

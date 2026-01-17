@@ -508,6 +508,67 @@ try:
     finally:
         if 'session_db' in locals():
             session_db.close()
+    
+    # Create test users with different tiers and sport interests
+    try:
+        session_db = Session()
+        # Check if test users already exist
+        existing_test_users = session_db.query(User).filter(User.telegram_id.in_([1001, 1002, 1003, 1004, 1005])).count()
+        if existing_test_users == 0:
+            logger.info("Creating test users with different subscription tiers")
+            
+            test_users_data = [
+                {'telegram_id': 1001, 'tier': 'bronze', 'name': 'Test User Bronze'},
+                {'telegram_id': 1002, 'tier': 'silver', 'name': 'Test User Silver'},
+                {'telegram_id': 1003, 'tier': 'gold', 'name': 'Test User Gold'},
+                {'telegram_id': 1004, 'tier': 'bronze', 'name': 'Test User Bronze 2'},
+                {'telegram_id': 1005, 'tier': 'silver', 'name': 'Test User Silver 2'},
+            ]
+            
+            from datetime import datetime, timedelta
+            now = datetime.now()
+            
+            for user_data in test_users_data:
+                # Create user
+                user = User(
+                    telegram_id=user_data['telegram_id'],
+                    first_name=user_data['name'],
+                    created_at=now
+                )
+                session_db.add(user)
+                session_db.flush()  # Get user.id
+                
+                # Create profile with sport interests
+                profile = UserProfile(
+                    user_id=user.id,
+                    interests='спорт, фитнес, здоровый образ жизни',
+                    city='Москва',
+                    contact_info=f'user{user_data["telegram_id"]}@test.com'
+                )
+                session_db.add(profile)
+                
+                # Create active subscription
+                subscription = Subscription(
+                    user_id=user.id,
+                    status='active',
+                    tier=user_data['tier'],
+                    start_date=now,
+                    end_date=now + timedelta(days=30)
+                )
+                session_db.add(subscription)
+                
+                logger.info(f"Created test user {user_data['telegram_id']} with {user_data['tier']} tier")
+            
+            session_db.commit()
+            logger.info("Test users created successfully")
+        else:
+            logger.info("Test users already exist, skipping creation")
+    except Exception as e:
+        logger.error(f"Error creating test users: {e}")
+        session_db.rollback()
+    finally:
+        if 'session_db' in locals():
+            session_db.close()
             
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
