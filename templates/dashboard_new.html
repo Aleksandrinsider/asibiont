@@ -161,13 +161,13 @@
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px;">
                     <div class="header-avatar-small">
                         {% if user_avatar_url %}
-                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
                         {% else %}
-                        <div style="width: 48px; height: 48px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
                     
-                    <button onclick="logout()" style="padding: 8px 16px; height: 32px; background: #F6F8FA; border: 1px solid #1F2328; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#E8EAED'; this.style.borderColor='#374151';" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';">Выход</button>
+                    <button onclick="logout()" style="padding: 8px 16px; height: 32px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0';">Выход</button>
                 </div>
             </div>
         </div>
