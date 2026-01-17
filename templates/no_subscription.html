@@ -57,13 +57,24 @@
             }
         }
         .pricing-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            display: flex;
+            flex-wrap: wrap;
             gap: 16px;
+            justify-content: center;
+        }
+        .pricing-item {
+            flex: 1 1 300px;
+            max-width: 300px;
+            min-width: 250px;
         }
         @media (max-width: 768px) {
             .pricing-grid {
-                grid-template-columns: 1fr;
+                flex-direction: column;
+                align-items: center;
+            }
+            .pricing-item {
+                width: 100%;
+                max-width: none;
             }
         }
     </style>
@@ -78,7 +89,7 @@
 
                 <div class="pricing-grid">
                     <!-- Bronze -->
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <div class="pricing-item" style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                         <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Bronze</h2>
                         <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">3 000 ₽</div>
                         <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
@@ -89,7 +100,7 @@
                     </div>
 
                     <!-- Silver -->
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
+                    <div class="pricing-item" style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
                         <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #374151; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">ПОПУЛЯРНЫЙ</div>
                         <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Silver</h2>
                         <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">9 000 ₽</div>
@@ -101,7 +112,7 @@
                     </div>
 
                     <!-- Gold -->
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
+                    <div class="pricing-item" style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                         <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Gold</h2>
                         <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">27 000 ₽</div>
                         <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
