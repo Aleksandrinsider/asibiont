@@ -1,5 +1,5 @@
 from yookassa import Configuration, Payment
-from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_WEBHOOK_URL
+from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_WEBHOOK_URL, WEB_APP_URL
 
 Configuration.configure(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
 
@@ -32,7 +32,7 @@ def create_payment(amount, description, user_id, tier='bronze'):
         },
         "confirmation": {
             "type": "redirect",
-            "return_url": "https://asibiont.ru/dashboard"
+            "return_url": f"{WEB_APP_URL}/dashboard"
         },
         "capture": True,
         "description": description,
