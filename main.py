@@ -271,6 +271,18 @@ try:
             logger.info("Migration: promo_codes table created successfully")
         else:
             logger.info("Migration: promo_codes table already exists")
+            # Add missing columns if they don't exist
+            inspector = inspect(engine)
+            columns = [col['name'] for col in inspector.get_columns('promo_codes')]
+            if 'discount_percent' not in columns:
+                logger.info("Adding discount_percent column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN discount_percent INTEGER DEFAULT 0"))
+            if 'max_uses' not in columns:
+                logger.info("Adding max_uses column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN max_uses INTEGER"))
+            if 'used_count' not in columns:
+                logger.info("Adding used_count column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0"))
 
         session.close()
         logger.info("Migration session closed successfully")
@@ -482,6 +494,7 @@ try:
                 discount_percent=100,  # 100% discount = free
                 tier='bronze',
                 max_uses=None,  # Unlimited uses
+                duration_days=30,
                 expires_at=expiry_date,
                 created_at=datetime.now()
             )
@@ -3475,10 +3488,10 @@ async def apply_promo_code_handler(request):
             session.close()
             return web.json_response({'success': False, 'message': 'Срок действия промокода истек'})
 
-        # Проверяем, не использован ли уже
-        if promo.is_used:
+        # Проверяем лимит использований
+        if promo.max_uses is not None and promo.used_count >= promo.max_uses:
             session.close()
-            return web.json_response({'success': False, 'message': 'Промокод уже использован'})
+            return web.json_response({'success': False, 'message': 'Промокод достиг лимита использований'})
 
         # Активируем подписку
         start_date = now
@@ -3495,8 +3508,10 @@ async def apply_promo_code_handler(request):
             subscription.start_date = start_date
             subscription.end_date = end_date
 
-        # Помечаем промокод как использованный
-        promo.is_used = True
+        # Обновляем счетчик использований
+        promo.used_count += 1
+        if promo.max_uses is None or promo.used_count >= promo.max_uses:
+            promo.is_used = True
         promo.used_by_user_id = user.id
         promo.used_at = now
 

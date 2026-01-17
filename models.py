@@ -141,11 +141,14 @@ class PromoCode(Base):
     id = Column(Integer, primary_key=True)
     code = Column(String(50), unique=True, nullable=False)  # Promo code string
     tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # Tier to grant
+    discount_percent = Column(Integer, default=0)  # Discount percentage (0-100)
+    max_uses = Column(Integer, nullable=True)  # Maximum uses (None = unlimited)
     duration_days = Column(Integer, default=30)  # Duration in days
     expires_at = Column(DateTime, nullable=False)  # Expiration date
-    is_used = Column(Boolean, default=False)  # Whether the code has been used
-    used_by_user_id = Column(Integer, ForeignKey('users.id'))  # User who used it
-    used_at = Column(DateTime)  # When it was used
+    is_used = Column(Boolean, default=False)  # Whether the code has been used (for single-use codes)
+    used_count = Column(Integer, default=0)  # Number of times used
+    used_by_user_id = Column(Integer, ForeignKey('users.id'))  # User who used it (for single-use)
+    used_at = Column(DateTime)  # When it was used (for single-use)
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     used_by_user = relationship("User", backref="used_promo_codes")
