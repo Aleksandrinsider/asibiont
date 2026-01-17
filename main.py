@@ -530,8 +530,29 @@ async def health_handler(request):
 
 
 async def login_handler(request):
-    # Redirect to dashboard for unified experience
-    return web.HTTPFound('/dashboard')
+    """Страница авторизации"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    
+    # Если пользователь уже залогинен, редиректим на dashboard
+    if user_id:
+        try:
+            user_id = int(user_id)
+            return web.HTTPFound('/dashboard')
+        except (ValueError, TypeError):
+            pass
+    
+    # Показываем страницу авторизации
+    bot_user = TELEGRAM_BOT_USERNAME.replace(
+        '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
+    return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+        'logged_in': False,
+        'bot_username': bot_user,
+        'current_date': '',
+        'current_time': '',
+        'formatted_end_date': None,
+        'timestamp': 1736780011
+    })
 
 
 async def auth_handler(request):
