@@ -1451,11 +1451,20 @@ async def generate_proactive_message(user_id):
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
+        # Контекстный промпт для проактивного сообщения
+        proactive_context = "Проактивное сообщение"
+        if tasks_info:
+            proactive_context = f"У пользователя есть задачи{tasks_info}. Проанализируй их и предложи конкретные действия или мотивацию для их выполнения."
+        elif plans_info:
+            proactive_context = f"У пользователя нет активных задач, но есть релевантные планы других{plans_info}. Предложи полезные связи или возможности."
+        else:
+            proactive_context = "У пользователя нет задач на ближайший час и нет релевантных планов других. Предложи создать полезную задачу или проверь, не забыл ли он что-то важное на сегодня."
+        
         messages = [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": "У пользователя нет задач на ближайший час. Создай позитивное проактивное сообщение.",
+                "content": proactive_context,
             },
         ]
 

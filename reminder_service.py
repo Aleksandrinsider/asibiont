@@ -568,13 +568,22 @@ class ReminderService:
                 if now_utc <= reminder_time < next_60_min_utc:
                     tasks_in_60_min += 1
             
-            # Если есть задачи с reminder_time в ближайшие 60 минут, не отправлять проактивное сообщение
+            # Адаптивная логика проактивных сообщений
+            total_pending_tasks = len(pending_tasks)
+            
+            # 1. Если есть задачи в ближайший час - не отправлять (пользователь активен)
             if tasks_in_60_min > 0:
                 await self._reschedule_proactive_check(user_id, has_tasks=True)
                 return
             
-            if tasks_in_60_min == 0:
-                # Нет задач на ближайший час - отправить проактивное сообщение, чтобы вернуть пользователя к активности
+            # 2. Если есть задачи, но не в ближайший час - отправить мотивирующее сообщение
+            if total_pending_tasks > 0 and tasks_in_60_min == 0:
+                await self.send_proactive_message(user_id)
+                await self._reschedule_proactive_check(user_id, has_tasks=True)
+                return
+            
+            # 3. Если совсем нет задач - отправить проактивное предложение создать задачу
+            if total_pending_tasks == 0:
                 await self.send_proactive_message(user_id)
                 await self._reschedule_proactive_check(user_id, has_tasks=False)
         finally:
