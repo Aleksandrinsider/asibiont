@@ -3535,36 +3535,31 @@ async def apply_promo_code_handler(request):
     if not promo_code:
         return web.json_response({'success': False, 'message': 'Введите промокод'})
 
+    session = Session()
     try:
-        session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            session.close()
             return web.json_response({'success': False, 'message': 'Пользователь не найден'})
 
         # Проверяем промокод
         promo = session.query(PromoCode).filter_by(code=promo_code).first()
         if not promo:
-            session.close()
             return web.json_response({'success': False, 'message': 'Неверный промокод'})
 
         # Проверяем срок действия - приводим обе даты к одному формату
         now = datetime.now(dt_timezone.utc)
         expires_at = promo.expires_at.replace(tzinfo=dt_timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
         if expires_at < now:
-            session.close()
             return web.json_response({'success': False, 'message': 'Срок действия промокода истек'})
 
         # Проверяем лимит использований
         if promo.max_uses is not None and promo.used_count >= promo.max_uses:
-            session.close()
             return web.json_response({'success': False, 'message': 'Промокод достиг лимита использований'})
 
         # Проверяем, использовал ли уже этот пользователь этот промокод
         import json
-        used_by_users = json.loads(promo.used_by_users) if promo.used_by_users else []
+        used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id in used_by_users:
-            session.close()
             return web.json_response({'success': False, 'message': 'Вы уже использовали этот промокод'})
 
         # Активируем подписку
@@ -3589,7 +3584,7 @@ async def apply_promo_code_handler(request):
         
         # Добавляем пользователя в список использовавших
         import json
-        used_by_users = json.loads(promo.used_by_users) if promo.used_by_users else []
+        used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id not in used_by_users:
             used_by_users.append(user.id)
         promo.used_by_users = json.dumps(used_by_users)
@@ -3599,16 +3594,22 @@ async def apply_promo_code_handler(request):
         promo.used_at = now
 
         session.commit()
-        session.close()
-
+        
+        # Сохраняем значения до закрытия сессии
+        tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
+        duration = promo.duration_days
+        
         return web.json_response({
             'success': True,
-            'message': f'Промокод активирован! Подписка {promo.tier.value} на {promo.duration_days} дней до {end_date.strftime("%d.%m.%Y")}'
+            'message': f'Промокод активирован! Подписка {tier_name} на {duration} дней до {end_date.strftime("%d.%m.%Y")}'
         })
 
     except Exception as e:
         logger.error(f"Error applying promo code: {e}")
+        session.rollback()
         return web.json_response({'success': False, 'message': 'Ошибка активации промокода'}, status=500)
+    finally:
+        session.close()
 
 
 async def create_payment_handler(request):
