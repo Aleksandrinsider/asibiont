@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Select Plan - ASI Biont</title>
+    <title>Выбор тарифа - ASI Biont</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -24,15 +24,31 @@
             justify-content: center;
             padding: 20px;
         }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('/static/asibiont.svg');
+            background-size: 45%;
+            background-position: calc(100% - 50px) center;
+            background-repeat: no-repeat;
+            opacity: 0.08;
+            z-index: -1;
+            pointer-events: none;
+        }
         .pricing-container {
             width: 100%;
             max-width: 900px;
             margin: 0 auto;
         }
         .pricing-card {
-            border: 1px solid #D1D9E0;
+            border: 1px solid rgba(209, 217, 224, 0.2);
             padding: 24px;
-            background: white;
+            background: transparent;
+            backdrop-filter: blur(3px);
             border-radius: 6px;
         }
         @media (min-width: 768px) {
@@ -98,7 +114,7 @@
 
                 <!-- Back Button -->
                 <div style="text-align: center; margin-top: 24px;">
-                    <button onclick="window.location.href='https://asibiont.ru'" style="padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Назад</button>
+                    <button onclick="window.location.href='/'" style="padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Назад</button>
                 </div>
 
             </div>
