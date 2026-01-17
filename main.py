@@ -287,19 +287,7 @@ except Exception as e:
     else:
         logger.warning("Continuing with local mode despite migration issues")
 
-# Восстанавливаем тарифы пользователей из активных подписок
-logger.info("Проверка и восстановление тарифов пользователей...")
-try:
-    from restore_subscriptions import restore_user_tiers, check_database_integrity
-    inconsistencies = check_database_integrity()
-    if inconsistencies:
-        restored = restore_user_tiers()
-        logger.info(f"✅ Восстановлено тарифов пользователей: {restored}")
-    else:
-        logger.info("✓ Все тарифы пользователей корректны")
-except Exception as e:
-    logger.error(f"⚠️ Ошибка при восстановлении тарифов: {e}")
-    # Не падаем, продолжаем работу
+# Subscription restoration removed for production
 
 
 # Test functions disabled in production mode

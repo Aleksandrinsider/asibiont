@@ -5,7 +5,7 @@ from datetime import datetime
 load_dotenv()
 
 # App settings first
-PORT = int(os.getenv("PORT", 8000))
+PORT = int(os.getenv("PORT", 8080))
 LOCAL = os.getenv("LOCAL", "False").lower() in ("true", "1", "yes")  # Allow override for local testing
 FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
 USE_OPTIMIZED_PROMPT = os.getenv("USE_OPTIMIZED_PROMPT", "True").lower() in ("true", "1", "yes")
@@ -22,7 +22,7 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL is required in .env file")
 
 # AI Model Configuration
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v3.2")  # Updated to latest version
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")  # V3.2 reasoning model for agents
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 if not DEEPSEEK_API_KEY:
     raise ValueError("DEEPSEEK_API_KEY is required")
