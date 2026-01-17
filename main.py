@@ -534,6 +534,12 @@ async def login_handler(request):
     session = await get_session(request)
     user_id = session.get('user_id')
     
+    # Check for logout parameter
+    if request.query.get('logout') == '1':
+        session.pop('user_id', None)
+        session.pop('history_cleared_timestamp', None)
+        user_id = None
+    
     # Если пользователь уже залогинен, редиректим на dashboard
     if user_id:
         try:
