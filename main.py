@@ -3553,7 +3553,7 @@ app.router.add_get('/admin/users', admin_users_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
-app.router.add_post('/yookassa/webhook', yookassa_webhook)
+app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
