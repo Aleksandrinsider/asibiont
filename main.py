@@ -469,6 +469,33 @@ try:
     logger.info("Database migrations completed")
     # Production mode: Test users and promo codes disabled
     logger.info("Production mode: Test data creation disabled")
+    
+    # Create special promo code for Bronze tier
+    try:
+        session_db = Session()
+        existing_promo = session_db.query(PromoCode).filter_by(code='BRONZE2026').first()
+        if not existing_promo:
+            from datetime import datetime
+            expiry_date = datetime(2026, 2, 1)  # 1 февраля 2026
+            promo = PromoCode(
+                code='BRONZE2026',
+                discount_percent=100,  # 100% discount = free
+                tier='bronze',
+                max_uses=None,  # Unlimited uses
+                expires_at=expiry_date,
+                created_at=datetime.now()
+            )
+            session_db.add(promo)
+            session_db.commit()
+            logger.info("Created unlimited Bronze promo code BRONZE2026 expiring 2026-02-01")
+        else:
+            logger.info("Bronze promo code BRONZE2026 already exists")
+    except Exception as e:
+        logger.error(f"Error creating promo code: {e}")
+    finally:
+        if 'session_db' in locals():
+            session_db.close()
+            
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
