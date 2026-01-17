@@ -3493,6 +3493,7 @@ async def create_payment_handler(request):
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/', login_handler)
+app.router.add_get('/admin/index.html', lambda r: web.HTTPFound('/dashboard'))  # Redirect old admin URL
 app.router.add_get('/tg_auth', auth_handler)
 app.router.add_get('/telegram_auth', auth_handler)  # Keep old route for compatibility
 app.router.add_get('/logout', logout_handler)
