@@ -437,33 +437,33 @@ def ensure_sport_interest():
         logger.error(f"Failed to add sport interest: {e}")
 
 
-def create_test_promo_codes():
-    """Создает тестовые промокоды"""
-    try:
-        session = Session()
+# def create_test_promo_codes():
+#     # DOCSTRING: Создает тестовые промокоды
+#     try:
+#         session = Session()
 
-        # Проверяем, есть ли уже тестовый промокод
-        existing_promo = session.query(PromoCode).filter_by(code='TESTBRONZE').first()
-        if existing_promo:
-            logger.info("Test promo code TESTBRONZE already exists")
-            session.close()
-            return
+#         # Проверяем, есть ли уже тестовый промокод
+#         existing_promo = session.query(PromoCode).filter_by(code='TESTBRONZE').first()
+#         if existing_promo:
+#             logger.info("Test promo code TESTBRONZE already exists")
+#             session.close()
+#             return
 
-        # Создаем тестовый промокод на бронзу на месяц, действующий год
-        expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
-        test_promo = PromoCode(
-            code='TESTBRONZE',
-            tier=SubscriptionTier.BRONZE,
-            duration_days=30,
-            expires_at=expires_at
-        )
-        session.add(test_promo)
-        session.commit()
-        logger.info("Created test promo code: TESTBRONZE (Bronze for 30 days, expires in 1 year)")
-        session.close()
-    except Exception as e:
-        logger.error(f"Failed to create test promo codes: {e}")
-\"\"\"
+#         # Создаем тестовый промокод на бронзу на месяц, действующий год
+#         expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
+#         test_promo = PromoCode(
+#             code='TESTBRONZE',
+#             tier=SubscriptionTier.BRONZE,
+#             duration_days=30,
+#             expires_at=expires_at
+#         )
+#         session.add(test_promo)
+#         session.commit()
+#         logger.info("Created test promo code: TESTBRONZE (Bronze for 30 days, expires in 1 year)")
+#         session.close()
+#     except Exception as e:
+#         logger.error(f"Failed to create test promo codes: {e}")
+# # """
 
 # Test database connection before starting
 try:
@@ -2829,7 +2829,7 @@ async def hide_contact_handler(request):
 
 
 async def get_user_rating_handler(request):
-    """Get current user's rating for another user"""
+    """Get current user rating for another user"""
     try:
         session_req = await get_session(request)
         user_id = session_req.get('user_id')
