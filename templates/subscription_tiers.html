@@ -45,10 +45,7 @@
 <body>
     <div class="pricing-container">
         <div class="pricing-card">
-                <div style="text-align: right; margin-bottom: 24px;">
-                    <button onclick="window.location.href='/dashboard'" style="margin-bottom: 16px; padding: 8px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">← Back</button>
-                </div>
-                <div style="text-align: left; margin-bottom: 24px;">
+                <div style="text-align: center; margin-bottom: 24px;">
                     <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">Choose your plan</h1>
                     <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Get access to the ASI Biont private community</p>
                 </div>
@@ -91,12 +88,17 @@
 
                 <!-- Promo Code Section -->
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 20px; background: #F8FAFC; margin-top: 24px;">
-                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #374151;">Have a promo code?</h3>
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #374151;">Есть промокод?</h3>
                     <div style="display: flex; gap: 12px; align-items: center;">
-                        <input type="text" id="promo_code" placeholder="Enter promo code" style="flex: 1; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-family: inherit; outline: none;" maxlength="50">
-                        <button onclick="applyPromoCode()" id="apply_promo_btn" style="padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Apply</button>
+                        <input type="text" id="promo_code" placeholder="Введите промокод" style="flex: 1; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-family: inherit; outline: none;" maxlength="50">
+                        <button onclick="applyPromoCode()" id="apply_promo_btn" style="padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Применить</button>
                     </div>
                     <div id="promo_message" style="margin-top: 8px; font-size: 13px; display: none;"></div>
+                </div>
+
+                <!-- Back Button -->
+                <div style="text-align: center; margin-top: 24px;">
+                    <button onclick="window.location.href='/dashboard'" style="padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Назад</button>
                 </div>
 
             </div>
