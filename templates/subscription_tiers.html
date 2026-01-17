@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Выбор тарифа - ASI Biont</title>
+    <title>Select Plan - ASI Biont</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -46,55 +46,55 @@
     <div class="pricing-container">
         <div class="pricing-card">
                 <div style="text-align: right; margin-bottom: 24px;">
-                    <button onclick="window.location.href='/dashboard'" style="margin-bottom: 16px; padding: 8px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">← Назад</button>
+                    <button onclick="window.location.href='/dashboard'" style="margin-bottom: 16px; padding: 8px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">← Back</button>
                 </div>
                 <div style="text-align: left; margin-bottom: 24px;">
-                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">Выберите тариф</h1>
-                    <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Получите доступ к закрытому сообществу ASI Biont</p>
+                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">Choose your plan</h1>
+                    <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Get access to the ASI Biont private community</p>
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
                     <!-- Bronze -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Бронза</h2>
+                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Bronze</h2>
                         <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">3 000 ₽</div>
-                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
+                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">per month</div>
                         <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
-                            Для всех. AI-агент управляет вашими задачами, напоминает о важном, помогает находить единомышленников в вашем городе.
+                            For everyone. AI agent manages your tasks, reminds you of important things, helps find like-minded people in your city.
                         </div>
-                        <button onclick="selectTier('bronze')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Выбрать</button>
+                        <button onclick="selectTier('bronze')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Select</button>
                     </div>
 
                     <!-- Silver -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white; position: relative;">
-                        <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #374151; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">ПОПУЛЯРНЫЙ</div>
-                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Серебро</h2>
+                        <div style="position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: #374151; color: white; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600;">POPULAR</div>
+                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Silver</h2>
                         <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">9 000 ₽</div>
-                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
+                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">per month</div>
                         <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
-                            Для тех, кто ставит задачи другим. Делегируйте, управляйте проектами, видите больше контактов, получайте приоритет в сообществе.
+                            For those who assign tasks to others. Delegate, manage projects, see more contacts, get priority in the community.
                         </div>
-                        <button onclick="selectTier('silver')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Выбрать</button>
+                        <button onclick="selectTier('silver')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Select</button>
                     </div>
 
                     <!-- Gold -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
-                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Золото</h2>
+                        <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Gold</h2>
                         <div style="font-size: 28px; font-weight: 700; color: #374151; margin: 8px 0 4px 0;">27 000 ₽</div>
-                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">в месяц</div>
+                        <div style="font-size: 13px; color: #6C727F; margin-bottom: 20px;">per month</div>
                         <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
-                            Для тех, кто стремится к элитным связям и взаимной видимости на высшем уровне. Полный доступ ко всем контактам, премиум-статус, VIP-поддержка.
+                            For those who strive for elite connections and mutual visibility at the highest level. Full access to all contacts, premium status, VIP support.
                         </div>
-                        <button onclick="selectTier('gold')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Выбрать</button>
+                        <button onclick="selectTier('gold')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Select</button>
                     </div>
                 </div>
 
                 <!-- Promo Code Section -->
                 <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 20px; background: #F8FAFC; margin-top: 24px;">
-                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #374151;">Есть промокод?</h3>
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #374151;">Have a promo code?</h3>
                     <div style="display: flex; gap: 12px; align-items: center;">
-                        <input type="text" id="promo_code" placeholder="Введите промокод" style="flex: 1; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-family: inherit; outline: none;" maxlength="50">
-                        <button onclick="applyPromoCode()" id="apply_promo_btn" style="padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Применить</button>
+                        <input type="text" id="promo_code" placeholder="Enter promo code" style="flex: 1; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-family: inherit; outline: none;" maxlength="50">
+                        <button onclick="applyPromoCode()" id="apply_promo_btn" style="padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Apply</button>
                     </div>
                     <div id="promo_message" style="margin-top: 8px; font-size: 13px; display: none;"></div>
                 </div>
@@ -108,12 +108,12 @@
             const button = document.getElementById('apply_promo_btn');
 
             if (!promoCode) {
-                showMessage('Введите промокод', 'error');
+                showMessage('Please enter a promo code', 'error');
                 return;
             }
 
             button.disabled = true;
-            button.textContent = 'Применение...';
+            button.textContent = 'Applying...';
 
             try {
                 const response = await fetch('/apply_promo_code', {
@@ -138,10 +138,10 @@
                     showMessage(result.message, 'error');
                 }
             } catch (error) {
-                showMessage('Ошибка сети. Попробуйте еще раз.', 'error');
+                showMessage('Network error. Please try again.', 'error');
             } finally {
                 button.disabled = false;
-                button.textContent = 'Применить';
+                button.textContent = 'Apply';
             }
         }
 
