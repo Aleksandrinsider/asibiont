@@ -310,9 +310,12 @@ except Exception as e:
 # def create_test_promo_codes():
 #     pass
 
-
+# IMPORTANT: Test users creation disabled to prevent @sportfan3 recreation
+# The function below created test users including @sportfan3 (GOLD tier)
+# which caused issues in production. It's now completely disabled.
+"""
 def check_database_connection():
-    """Добавляет тестовых пользователей с интересами 'спорт' если их еще нет"""
+    \"\"\"Добавляет тестовых пользователей с интересами 'спорт' если их еще нет\"\"\"
     try:
         session = Session()
 
@@ -404,10 +407,12 @@ def check_database_connection():
         session.close()
     except Exception as e:
         logger.error(f"Failed to add test sport users: {e}", exc_info=True)
+\"\"\"
 
-
+# All test functions below are disabled in production
+\"\"\"
 def ensure_sport_interest():
-    """Добавляет 'спорт' к интересам всех пользователей если его нет"""
+    \"\"\"Добавляет 'спорт' к интересам всех пользователей если его нет\"\"\"
     try:
         session = Session()
         profiles = session.query(UserProfile).all()
@@ -458,7 +463,7 @@ def create_test_promo_codes():
         session.close()
     except Exception as e:
         logger.error(f"Failed to create test promo codes: {e}")
-
+\"\"\"
 
 # Test database connection before starting
 try:
@@ -3527,7 +3532,7 @@ app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/clear_redis', clear_redis_handler)
 app.router.add_get('/admin/users', admin_users_handler)
-app.router.add_get('/check_sportfan3', check_sportfan3_handler)
+# app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
 app.router.add_post('/yookassa-webhook', yookassa_webhook)
