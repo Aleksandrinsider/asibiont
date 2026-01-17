@@ -10,9 +10,9 @@ Base = declarative_base()
 
 
 class SubscriptionTier(enum.Enum):
-    BRONZE = 'bronze'  # 3000 RUB/month
-    SILVER = 'silver'  # 9000 RUB/month
-    GOLD = 'gold'      # 27000 RUB/month
+    BRONZE = 'BRONZE'  # 3000 RUB/month
+    SILVER = 'SILVER'  # 9000 RUB/month
+    GOLD = 'GOLD'      # 27000 RUB/month
 
 
 class User(Base):

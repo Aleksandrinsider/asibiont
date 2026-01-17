@@ -286,6 +286,9 @@ try:
             if 'used_by_users' not in columns:
                 logger.info("Adding used_by_users column to promo_codes")
                 session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
+            
+            # Commit the column additions
+            session.commit()
 
         session.close()
         logger.info("Migration session closed successfully")
@@ -495,7 +498,7 @@ try:
             promo = PromoCode(
                 code='BRONZEFREE26',
                 discount_percent=100,  # 100% discount = free
-                tier='bronze',
+                tier='BRONZE',
                 max_uses=None,  # Unlimited uses
                 duration_days=30,
                 expires_at=expiry_date,
@@ -521,11 +524,11 @@ try:
             logger.info("Creating test users with different subscription tiers")
             
             test_users_data = [
-                {'telegram_id': 1001, 'tier': 'bronze', 'name': 'Test User Bronze'},
-                {'telegram_id': 1002, 'tier': 'silver', 'name': 'Test User Silver'},
-                {'telegram_id': 1003, 'tier': 'gold', 'name': 'Test User Gold'},
-                {'telegram_id': 1004, 'tier': 'bronze', 'name': 'Test User Bronze 2'},
-                {'telegram_id': 1005, 'tier': 'silver', 'name': 'Test User Silver 2'},
+                {'telegram_id': 1001, 'tier': 'BRONZE', 'name': 'Test User Bronze'},
+                {'telegram_id': 1002, 'tier': 'SILVER', 'name': 'Test User Silver'},
+                {'telegram_id': 1003, 'tier': 'GOLD', 'name': 'Test User Gold'},
+                {'telegram_id': 1004, 'tier': 'BRONZE', 'name': 'Test User Bronze 2'},
+                {'telegram_id': 1005, 'tier': 'SILVER', 'name': 'Test User Silver 2'},
             ]
             
             from datetime import datetime, timedelta
