@@ -2966,7 +2966,7 @@ async def on_startup(app):
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
         # Railway subdomain всегда имеет рабочий SSL сертификат
-        webhook_url = "https://omacfsl9.up.railway.app/webhook"
+        webhook_url = "https://task-production-1d10.up.railway.app/webhook"
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook set to: {webhook_url}")
     else:

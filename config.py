@@ -51,7 +51,7 @@ if not TELEGRAM_BOT_USERNAME:
 # WEBHOOK_URL теперь хардкодится в main.py для Railway subdomain
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://task-production-1d10.up.railway.app/webhook")
 
-WEB_APP_URL = os.getenv("WEB_APP_URL", "http://asibiont.ru")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://asibiont.ru")
 
 # Payments
 YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")
