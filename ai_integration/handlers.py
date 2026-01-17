@@ -55,7 +55,15 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             if close_session:
                 session.close()
             logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
-            return "NEED_TIME: У каждой задачи должно быть время напоминания. Когда напомнить?"
+            # Генерируем запрос времени через AI
+            try:
+                from ai_integration.chat import generate_ai_response
+                prompt = f"Пользователь создал задачу '{title}', но не указал время. Запроси время в короткой форме."
+                ai_message = await generate_ai_response(telegram_id, prompt, session=None)
+                return f"NEED_TIME: {ai_message}"
+            except Exception:
+                pass
+            return "NEED_TIME: Когда напомнить? ⏰"
         
         task = Task(user_id=user.id, title=title, description=encrypt_data(description))
         if reminder_time:
@@ -733,7 +741,15 @@ def delegate_task(
         
         # Validate reminder_time
         if not reminder_time:
-            return "Для делегирования задачи требуется точная дата и время дедлайна. Пожалуйста, уточните: на какое точное время и дату поставить дедлайн? (Например: '2026-01-10 15:00' или 'завтра в 14:30')"
+            # Генерируем запрос deadline через AI
+            try:
+                from ai_integration.chat import generate_ai_response
+                prompt = f"Пользователь хочет делегировать задачу '{title}', но не указал deadline. Попроси уточнить дату и время deadline."
+                ai_message = await generate_ai_response(telegram_id, prompt, session=None)
+                return ai_message
+            except Exception:
+                pass
+            return "Для делегирования требуется deadline ⏰ Когда нужно выполнить?"
 
         # Validate reminder_time format
         if reminder_time:
@@ -1279,7 +1295,15 @@ def list_tasks(user_id=None, session=None):
         tasks = query.all()
 
         if not tasks:
-            return "У вас нет активных задач. Добавьте первую задачу - просто напишите что нужно сделать!"
+            # Генерируем приглашение к созданию задачи через AI
+            try:
+                from ai_integration.chat import generate_ai_response
+                prompt = "У пользователя нет активных задач. Создай короткое приглашение к созданию первой задачи."
+                ai_message = await generate_ai_response(telegram_id, prompt, session=None)
+                return ai_message
+            except Exception:
+                pass
+            return "Нет активных задач 📋 Создадим первую?"
 
         # Format detailed list
         active_tasks = [t for t in tasks if t.status != "completed"]
@@ -1315,7 +1339,15 @@ def list_tasks(user_id=None, session=None):
 
         # Format brief response
         if not active_tasks:
-            return "Нет активных задач. Что планируете?"
+            # Генерируем сообщение об отсутствии задач через AI
+            try:
+                from ai_integration.chat import generate_ai_response
+                prompt = "У пользователя нет активных задач. Создай короткий вопрос о планах."
+                ai_message = await generate_ai_response(telegram_id, prompt, session=None)
+                return ai_message
+            except Exception:
+                pass
+            return "Нет активных задач 📋"
 
         result = f"У вас {len(active_tasks)} {'задача' if len(active_tasks) == 1 else 'задач'}\n\n"
 

@@ -138,7 +138,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 subscription = db_session.query(Subscription).filter_by(user_id=user.id, status="active").first()
                 if not subscription:
                     db_session.close()
-                    return "У вас нет активной подписки. Для использования AI-ассистента активируйте подписку в Telegram боте @asibiont_bot. После активации подписки я смогу помогать вам с управлением задачами!"
+                    # Генерируем сообщение о подписке через AI
+                    try:
+                        url = "https://api.deepseek.com/v1/chat/completions"
+                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "У пользователя нет активной подписки. Сообщи об этом и предложи активировать подписку в @asibiont_bot."}]
+                        data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 80}
+                        async with aiohttp.ClientSession() as sess:
+                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    result = await resp.json()
+                                    return result["choices"][0]["message"]["content"].strip()
+                    except Exception:
+                        pass
+                    return "Для использования требуется активная подписка 💳 Активируйте её в @asibiont_bot"
 
             # Get user current time FIRST before using it
             base_now = datetime.now(pytz.UTC)
@@ -1378,8 +1391,20 @@ async def generate_proactive_message(user_id):
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user is None:
                 db_session.close()
-                # Если пользователь не найден - вернуть простое приветствие
-                return "Привет! Чем могу помочь?"
+                # Если пользователь не найден - генерируем приветствие через AI
+                try:
+                    url = "https://api.deepseek.com/v1/chat/completions"
+                    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                    msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Новый пользователь. Создай короткое приветствие."}]
+                    data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
+                    async with aiohttp.ClientSession() as sess:
+                        async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                return result["choices"][0]["message"]["content"].strip()
+                except Exception:
+                    pass
+                return "Привет! 👋"
             if user and user.memory:
                 try:
                     decrypted = decrypt_data(user.memory)
@@ -1495,18 +1520,25 @@ async def generate_proactive_message(user_id):
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Крайний случай - используем контекстное сообщение на основе доступной информации
+        # Крайний случай - генерируем через AI с минимальным промптом
         try:
+            url = "https://api.deepseek.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+            context = "Ошибка генерации."
             if tasks_info:
-                fallback_context = f"У тебя есть задачи{tasks_info}. Когда планируешь начать?"
+                context = f"У пользователя есть задачи{tasks_info}. Создай короткий вопрос о задачах."
             elif user_memory:
-                fallback_context = "Как дела? Помнишь, мы обсуждали твои планы. Есть прогресс?"
-            else:
-                fallback_context = "Как дела? Может, создадим полезную задачу на сегодня?"
-            return fallback_context
-        except:
+                context = "У пользователя есть история общения. Создай короткий вопрос о прогрессе."
+            msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": context}]
+            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.8, "max_tokens": 60}
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        return result["choices"][0]["message"]["content"].strip()
+        except Exception:
             pass
-        return "Привет! Чем помочь?"
+        return "Привет! 👋"
 
 
 async def generate_daily_report(user_id):
@@ -1592,14 +1624,27 @@ async def generate_daily_report(user_id):
                         if retry_resp.status == 200:
                             retry_result = await retry_resp.json()
                             return retry_result["choices"][0]["message"]["content"].strip()
-                    return "Время подвести итоги дня!"
+                    # Генерируем fallback через AI
+                    try:
+                        url = "https://api.deepseek.com/v1/chat/completions"
+                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Время подвести итоги дня. Создай короткое напоминание."}]
+                        data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.8, "max_tokens": 50}
+                        async with aiohttp.ClientSession() as sess:
+                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    result = await resp.json()
+                                    return result["choices"][0]["message"]["content"].strip()
+                    except Exception:
+                        pass
+                    return "Время подвести итоги! 🌙"
     except Exception as e:
         logger.error(f"Error in generate_daily_report: {e}")
         try:
             url = "https://api.deepseek.com/v1/chat/completions"
             headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-            msg = [{"role": "user", "content": "Отчёт о дне."}]
-            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 150}
+            msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Отчёт о дне. Создай короткий вопрос о дне."}]
+            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.8, "max_tokens": 50}
             async with aiohttp.ClientSession() as sess:
                 async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                     if resp.status == 200:
@@ -1607,7 +1652,7 @@ async def generate_daily_report(user_id):
                         return res["choices"][0]["message"]["content"].strip()
         except:
             pass
-        return "Как прошёл день? Расскажи!"
+        return "Как прошёл день? 🌆"
 
 
 async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
@@ -1699,14 +1744,27 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                         if retry_resp.status == 200:
                             retry_result = await retry_resp.json()
                             return retry_result["choices"][0]["message"]["content"].strip()
-                    return "Заметил просроченные задачи. Давай разберёмся?"
+                    # Генерируем сообщение через AI с контекстом просроченных задач
+                    try:
+                        url = "https://api.deepseek.com/v1/chat/completions"
+                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Просроченные задачи пользователя: {overdue_info}. Создай короткое напоминание."}]
+                        data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.8, "max_tokens": 80}
+                        async with aiohttp.ClientSession() as sess:
+                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    result = await resp.json()
+                                    return result["choices"][0]["message"]["content"].strip()
+                    except Exception:
+                        pass
+                    return "Заметил просроченные задачи 📌"
     except Exception as e:
         logger.error(f"Error in generate_overdue_reminder: {e}")
         try:
             url = "https://api.deepseek.com/v1/chat/completions"
             headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-            msg = [{"role": "user", "content": "Просроченные задачи."}]
-            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 150}
+            msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Просроченные задачи. Напомни коротко."}]
+            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.8, "max_tokens": 50}
             async with aiohttp.ClientSession() as sess:
                 async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                     if resp.status == 200:
@@ -1714,7 +1772,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                         return res["choices"][0]["message"]["content"].strip()
         except:
             pass
-        return "Есть задачи, которые ждут внимания"
+        return "Задачи ждут внимания 📌"
 
 
 # Функции для работы с задачами
