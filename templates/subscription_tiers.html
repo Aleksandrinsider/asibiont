@@ -178,13 +178,8 @@
         }
 
         function goBack() {
-            // Try to go back in history first
-            if (window.history.length > 1) {
-                window.history.back();
-            } else {
-                // If no history, redirect to dashboard
-                window.location.href = '/dashboard';
-            }
+            // Redirect to home page
+            window.location.href = '/';
         }
     </script>
     </div>
