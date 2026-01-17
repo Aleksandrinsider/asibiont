@@ -1,6 +1,7 @@
 from yookassa import Configuration, Payment
 from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_WEBHOOK_URL, WEB_APP_URL
 
+print(f"Yookassa config: SHOP_ID={YOOKASSA_SHOP_ID}, SECRET_KEY starts with {YOOKASSA_SECRET_KEY[:10] if YOOKASSA_SECRET_KEY else 'None'}...")
 Configuration.configure(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
 
 # Pricing for subscription tiers (RUB/month)
