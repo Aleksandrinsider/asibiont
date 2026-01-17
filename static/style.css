@@ -96,6 +96,14 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }  
 
+/* Мобильная прокрутка */
+@media (max-width: 768px) {
+    body {
+        overflow: auto;
+        overflow-x: hidden;
+    }
+}
+
 .app-header {
     width: 100%;
     height: var(--header-height);
