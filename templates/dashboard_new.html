@@ -90,14 +90,14 @@
     {% if logged_in %}
     <div class="app-header">
         <div class="header-content">
-            <div class="header-left">
+            <div class="header-left" style="display: flex; align-items: center; gap: 4px;">
                 <!-- Логотип -->
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo" style="display: flex; align-items: center; text-decoration: none; margin-left: 10px;">
                     <span style="font-weight: 600; color: #374151;">ASI Biont</span>
                 </a>
                 
                 <!-- Поиск контактов -->
-                <button class="contact-search-desktop" onclick="showSearchModal()" style="margin-left: 20px; padding: 6px 12px; height: 24px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
+                <button class="contact-search-desktop" onclick="showSearchModal()" style="padding: 6px 12px; height: 24px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 4px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"></path>
                     </svg>
@@ -111,7 +111,7 @@
                 {% elif subscription_tier.lower() == 'gold' %}
                     {% set tier_color = '#FFD700' %}
                 {% endif %}
-                <span style="margin-left: 12px; padding: 6px 12px; height: 24px; background: #FFFFFF; border: 1px solid {{ tier_color }}; border-radius: 4px; font-size: 12px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;">{{ subscription_tier.lower() }}</span>
+                <span style="padding: 6px 12px; height: 24px; background: #FFFFFF; border: 1px solid {{ tier_color }}; border-radius: 4px; font-size: 12px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;">{{ subscription_tier.lower() }}</span>
 
                 <!-- Модальное окно поиска -->
                 <div id="search-modal" class="search-modal" onclick="closeSearchModal(event)">
@@ -158,7 +158,7 @@
                     <a href="#" onclick="changeTime()" style="margin: 0; color: #374151; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">изменить</a>
                 </span>
                 
-                <div style="display: flex; align-items: center; gap: 8px; margin-left: 16px;">
+                <div style="display: flex; align-items: center; gap: 4px; margin-left: 12px;">
                     <div class="header-avatar-small">
                         {% if user_avatar_url %}
                         <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover; border: 1px solid #D1D9E0;">
