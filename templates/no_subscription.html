@@ -56,6 +56,16 @@
                 padding: 40px;
             }
         }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        @media (max-width: 768px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -66,7 +76,7 @@
                     <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Получите доступ к закрытому сообществу ASI Biont</p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                <div class="pricing-grid">
                     <!-- Bronze -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                         <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Bronze</h2>
