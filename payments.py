@@ -25,23 +25,27 @@ def create_payment(amount, description, user_id, tier='bronze'):
         user_id: User ID for metadata
         tier: Subscription tier (bronze, silver, gold)
     """
-    payment = Payment.create({
-        "amount": {
-            "value": str(amount),
-            "currency": "RUB"
-        },
-        "confirmation": {
-            "type": "redirect",
-            "return_url": f"{WEB_APP_URL}/dashboard"
-        },
-        "capture": True,
-        "description": description,
-        "metadata": {
-            "user_id": user_id,
-            "tier": tier
-        }
-    })
-    return payment.confirmation.confirmation_url
+    try:
+        payment = Payment.create({
+            "amount": {
+                "value": str(amount),
+                "currency": "RUB"
+            },
+            "confirmation": {
+                "type": "redirect",
+                "return_url": f"{WEB_APP_URL}/dashboard"
+            },
+            "capture": True,
+            "description": description,
+            "metadata": {
+                "user_id": user_id,
+                "tier": tier
+            }
+        })
+        return payment.confirmation.confirmation_url
+    except Exception as e:
+        print(f"Yookassa error: {e}")
+        raise
 
 def get_tier_price(tier):
     """Get price for subscription tier"""
