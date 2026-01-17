@@ -283,6 +283,9 @@ try:
             if 'used_count' not in columns:
                 logger.info("Adding used_count column to promo_codes")
                 session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0"))
+            if 'used_by_users' not in columns:
+                logger.info("Adding used_by_users column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
 
         session.close()
         logger.info("Migration session closed successfully")
@@ -3554,6 +3557,13 @@ async def apply_promo_code_handler(request):
             session.close()
             return web.json_response({'success': False, 'message': 'Промокод достиг лимита использований'})
 
+        # Проверяем, использовал ли уже этот пользователь этот промокод
+        import json
+        used_by_users = json.loads(promo.used_by_users) if promo.used_by_users else []
+        if user.id in used_by_users:
+            session.close()
+            return web.json_response({'success': False, 'message': 'Вы уже использовали этот промокод'})
+
         # Активируем подписку
         start_date = now
         end_date = start_date + timedelta(days=promo.duration_days)
@@ -3573,6 +3583,15 @@ async def apply_promo_code_handler(request):
         promo.used_count += 1
         if promo.max_uses is None or promo.used_count >= promo.max_uses:
             promo.is_used = True
+        
+        # Добавляем пользователя в список использовавших
+        import json
+        used_by_users = json.loads(promo.used_by_users) if promo.used_by_users else []
+        if user.id not in used_by_users:
+            used_by_users.append(user.id)
+        promo.used_by_users = json.dumps(used_by_users)
+        
+        # Устаревшие поля для совместимости
         promo.used_by_user_id = user.id
         promo.used_at = now
 
