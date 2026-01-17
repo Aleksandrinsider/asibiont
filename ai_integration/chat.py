@@ -1378,19 +1378,7 @@ async def generate_proactive_message(user_id):
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
             if user is None:
                 db_session.close()
-                # Генерируем через промпт
-                try:
-                    url = "https://api.deepseek.com/v1/chat/completions"
-                    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-                    msg = [{"role": "user", "content": "Приветственное сообщение. Ответь как друг."}]
-                    data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 100}
-                    async with aiohttp.ClientSession() as sess:
-                        async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
-                            if resp.status == 200:
-                                res = await resp.json()
-                                return res["choices"][0]["message"]["content"].strip()
-                except:
-                    pass
+                # Если пользователь не найден - вернуть простое приветствие
                 return "Привет! Чем могу помочь?"
             if user and user.memory:
                 try:
@@ -1506,17 +1494,16 @@ async def generate_proactive_message(user_id):
                     return "Как дела? Чем могу помочь?"
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
-        # Крайний случай - минимальный запрос
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        # Крайний случай - используем контекстное сообщение на основе доступной информации
         try:
-            url = "https://api.deepseek.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-            msg = [{"role": "user", "content": "Приветственное сообщение."}]
-            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.7, "max_tokens": 100}
-            async with aiohttp.ClientSession() as sess:
-                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
-                    if resp.status == 200:
-                        res = await resp.json()
-                        return res["choices"][0]["message"]["content"].strip()
+            if tasks_info:
+                fallback_context = f"У тебя есть задачи{tasks_info}. Когда планируешь начать?"
+            elif user_memory:
+                fallback_context = "Как дела? Помнишь, мы обсуждали твои планы. Есть прогресс?"
+            else:
+                fallback_context = "Как дела? Может, создадим полезную задачу на сегодня?"
+            return fallback_context
         except:
             pass
         return "Привет! Чем помочь?"
