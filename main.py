@@ -3485,25 +3485,34 @@ async def create_payment_handler(request):
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
+    logger.info(f"Create payment handler called with user_id: {user_id}")
+
     if not user_id:
-        return web.Response(text='Unauthorized', status=401)
+        logger.warning("No user_id in session, redirecting to login")
+        return web.HTTPFound('/')
 
     tier = request.query.get('tier', 'bronze')
+    logger.info(f"Creating payment for tier: {tier}")
+
     if tier not in ['bronze', 'silver', 'gold']:
         tier = 'bronze'
 
     try:
         from payments import create_payment, get_tier_price, get_tier_name
-        
+
         amount = get_tier_price(tier)
         tier_name = get_tier_name(tier)
-        
+
+        logger.info(f"Creating payment: amount={amount}, tier={tier}, user_id={user_id}")
+
         payment_url = create_payment(
             amount=str(amount),
             description=f"Подписка ASI Biont - {tier_name} на 30 дней",
             user_id=user_id,
             tier=tier
         )
+
+        logger.info(f"Payment URL created: {payment_url}")
         return web.HTTPFound(payment_url)
     except Exception as e:
         logger.error(f"Error creating payment: {e}")

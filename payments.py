@@ -32,7 +32,7 @@ def create_payment(amount, description, user_id, tier='bronze'):
         },
         "confirmation": {
             "type": "redirect",
-            "return_url": "https://your-return-url.com"  # Заменить
+            "return_url": "https://asibiont.ru/dashboard"
         },
         "capture": True,
         "description": description,
