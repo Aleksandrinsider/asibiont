@@ -114,7 +114,7 @@
 
                 <!-- Back Button -->
                 <div style="text-align: center; margin-top: 24px;">
-                    <a href="https://asibiont.ru/?t=back" style="display: inline-block; padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s; text-decoration: none;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Назад</a>
+                    <button onclick="goBack()" style="padding: 10px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#374151'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Назад</button>
                 </div>
 
             </div>
@@ -172,6 +172,16 @@
 
         function selectTier(tier) {
             window.location.href = `/create_payment?tier=${tier}`;
+        }
+
+        function goBack() {
+            // Try to go back in history first
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                // If no history, redirect to home page
+                window.location.href = 'https://asibiont.ru/?t=back';
+            }
         }
     </script>
     </div>
