@@ -1001,7 +1001,7 @@ async def dashboard_handler(request):
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
             
             # Store subscription tier before closing session
-            user_subscription_tier = subscription.tier if subscription and subscription.tier else None
+            user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.BRONZE
 
             # Получить контакты по делегированию
             delegating_to_me = []  # Люди, которые делегировали мне задачи
@@ -1289,7 +1289,7 @@ async def dashboard_handler(request):
             import random
             user_avatar_url += f"?r={random.randint(100000, 999999)}"
 
-        logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {subscription.tier.value if subscription and subscription.tier else 'BRONZE'}")
+        logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {user_subscription_tier.value if user_subscription_tier else 'BRONZE'}")
 
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
@@ -1302,7 +1302,7 @@ async def dashboard_handler(request):
             'delegating_by_me': delegating_by_me,
             'delegating_both': delegating_both,
             'subscription': subscription,
-            'subscription_tier': subscription.tier.value if subscription and subscription.tier else 'BRONZE',
+            'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE',
             'total_tasks': total_tasks,
             'completed_tasks': completed_tasks,
             'pending_tasks': pending_tasks,
