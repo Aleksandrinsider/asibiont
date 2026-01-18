@@ -19,7 +19,9 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 # Database
 DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
 if LOCAL:
-    DATABASE_URL = "sqlite:///local.db"  # Use SQLite for local development
+    import os
+    db_path = os.path.join(os.path.dirname(__file__), "local.db")
+    DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 elif not DATABASE_URL:
     raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
 

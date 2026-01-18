@@ -523,6 +523,26 @@ try:
             logger.info("Created unlimited Bronze promo code BRONZEFREE26 expiring 2026-02-01")
         else:
             logger.info("Bronze promo code BRONZEFREE26 already exists")
+
+        # Create special promo code for Silver tier
+        existing_silver_promo = session_db.query(PromoCode).filter_by(code='SILVERTEST').first()
+        if not existing_silver_promo:
+            from datetime import datetime
+            expiry_date = datetime(2026, 12, 31)  # 31 декабря 2026
+            silver_promo = PromoCode(
+                code='SILVERTEST',
+                discount_percent=100,  # 100% discount = free
+                tier='SILVER',
+                max_uses=None,  # Unlimited uses
+                duration_days=30,
+                expires_at=expiry_date,
+                created_at=datetime.now()
+            )
+            session_db.add(silver_promo)
+            session_db.commit()
+            logger.info("Created unlimited Silver promo code SILVERTEST expiring 2026-12-31")
+        else:
+            logger.info("Silver promo code SILVERTEST already exists")
     except Exception as e:
         logger.error(f"Error creating promo code: {e}")
     finally:
@@ -839,6 +859,17 @@ async def dashboard_handler(request):
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
 
+        # Check for telegram_id in query parameters (for local testing)
+        if not user_id:
+            telegram_id_param = request.query.get('telegram_id')
+            if telegram_id_param:
+                try:
+                    user_id = int(telegram_id_param)
+                    session['user_id'] = user_id
+                    logger.info(f"Set user_id from query parameter: {user_id}")
+                except ValueError:
+                    logger.error(f"Invalid telegram_id in query: {telegram_id_param}")
+
         # Преобразуем в int если нужно
         try:
             user_id = int(user_id)
@@ -881,11 +912,23 @@ async def dashboard_handler(request):
 
             # Проверить подписку
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+            
+            # Проверить и обновить статус истекших подписок
+            if subscription and subscription.status == 'active' and subscription.end_date:
+                now = datetime.now(pytz.UTC)
+                if subscription.end_date.tzinfo is None:
+                    subscription.end_date = subscription.end_date.replace(tzinfo=pytz.UTC)
+                if subscription.end_date < now:
+                    subscription.status = 'expired'
+                    session_db.commit()
+                    logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
+            
             logger.info(
                 f"Subscription found: {
                     subscription.id if subscription else None}, status: {
                     subscription.status if subscription else None}, end_date: {
-                    subscription.end_date if subscription else None}")
+                    subscription.end_date if subscription else None}, tier: {
+                    subscription.tier if subscription else None}")
 
             if not subscription or subscription.status != 'active':
                 logger.info("No active subscription, redirecting to subscription_tiers")
@@ -1227,6 +1270,8 @@ async def dashboard_handler(request):
         if user_avatar_url:
             import random
             user_avatar_url += f"?r={random.randint(100000, 999999)}"
+
+        logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {subscription.tier.value if subscription and subscription.tier else 'BRONZE'}")
 
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
@@ -3855,11 +3900,14 @@ async def apply_promo_code_handler(request):
         if not subscription:
             subscription = Subscription(user_id=user.id, telegram_username=user.username, status='active', tier=promo.tier, start_date=start_date, end_date=end_date)
             session.add(subscription)
+            logger.info(f"Created new subscription for user {user.id} with tier {promo.tier}")
         else:
+            old_tier = subscription.tier
             subscription.status = 'active'
             subscription.tier = promo.tier
             subscription.start_date = start_date
             subscription.end_date = end_date
+            logger.info(f"Updated existing subscription for user {user.id}: tier {old_tier} -> {promo.tier}")
 
         # Обновляем счетчик использований
         promo.used_count += 1
@@ -3878,6 +3926,7 @@ async def apply_promo_code_handler(request):
         promo.used_at = now
 
         session.commit()
+        logger.info(f"Promo code {promo_code} activated for user {user.id}, subscription created/updated with tier {subscription.tier}")
         
         # Сохраняем значения до закрытия сессии
         tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
