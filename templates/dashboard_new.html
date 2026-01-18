@@ -2673,7 +2673,6 @@
                                     uniquePartners[username] = partner;
                                 }
                             }
-                            }
                         });
                         
                         let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
@@ -3004,7 +3003,6 @@
                         html += '</ul>';
                         peopleList.innerHTML = html;
                         // После обновления контактов применяем текущий фильтр
-                        renderContacts();
                         
                         // Сохраняем данные для орбиты аватаров
                         cachedPartnersData = data.partners;
