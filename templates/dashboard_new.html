@@ -324,9 +324,6 @@
                             <p style="margin-bottom: 20px;">Подписка: информация загружается...</p>
                             {% endif %}
                         </div>
-                        {% else %}
-                        <p style="margin: 0; color: #374151; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>
-                        {% endif %}
                     </div>
                 </div>
 
@@ -2951,20 +2948,7 @@
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
-                    } else {
-                        let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
-                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>';
-                        const svgRotation = (localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null) ? 'rotate(-90deg)' : 'rotate(0deg)';
-                        html += '<button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">';
-                        html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s; transform: ' + svgRotation + ';"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>';
-                        html += '</button>';
-                        html += '</div>';
-                        const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
-                        const displayStyle = isCollapsed ? 'none' : 'block';
-                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 15px;">';
-                        html += '<p style="margin: 0; color: #374151; font-size: 13px;">Ваш профиль еще не настроен.<br>Напишите в чат, чтобы заполнить информацию о себе и начать пользоваться всеми функциями.</p>';
-                        html += '</div>';
-                        contextSection.innerHTML = html;
+                    }
                     }
                     }
                 }
