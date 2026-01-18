@@ -573,6 +573,7 @@ try:
                 user = User(
                     telegram_id=user_data['telegram_id'],
                     first_name=user_data['name'],
+                    subscription_tier=user_data['tier'],  # Set subscription tier
                     created_at=now
                 )
                 session_db.add(user)
