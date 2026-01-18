@@ -171,8 +171,7 @@
             
             <div class="header-info">
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
-                    <a href="#" onclick="changeTime()" style="margin: 0; color: #374151; font-size: 13px; text-decoration: none;" onmouseover="this.style.color='#374151'" onmouseout="this.style.color='#1F2328'">изменить</a>
-                    <span id="header-time-display">{{ current_time }} · {{ current_date }}</span>
+                    <span id="header-time-display" onclick="changeTime()" style="cursor: pointer; font-weight: 500;">{{ current_time }} · {{ current_date }}</span>
                 </span>
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; margin-right: 30px;">
