@@ -1705,10 +1705,10 @@
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
                 // Назначенные мне - задачи делегированные мне, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - делегирована от @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - Делегирована от @'));
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // Назначенные мной - задачи делегированные другим, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - делегирована на @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - Делегирована на @'));
             } else if (currentTaskFilter === 'overdue') {
                 // С отставанием - просроченные задачи
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true);
@@ -1952,16 +1952,16 @@
             let delegationInfo = '';
             
             // Проверяем делегирование "от"
-            const fromMatch = task.title.match(/^(.+?) - делегирована от (@\w+)$/);
+            const fromMatch = task.title.match(/^(.+?) - Делегирована от (@\w+)$/);
             if (fromMatch) {
                 cleanTitle = fromMatch[1];
-                delegationInfo = 'делегирована от ' + fromMatch[2];
+                delegationInfo = 'Делегирована от ' + fromMatch[2];
             } else {
                 // Проверяем делегирование "на"
-                const toMatch = task.title.match(/^(.+?) - делегирована на (@\w+)$/);
+                const toMatch = task.title.match(/^(.+?) - Делегирована на (@\w+)$/);
                 if (toMatch) {
                     cleanTitle = toMatch[1];
-                    delegationInfo = 'делегирована на ' + toMatch[2];
+                    delegationInfo = 'Делегирована на ' + toMatch[2];
                 }
             }
             
