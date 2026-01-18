@@ -8,6 +8,7 @@ from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 from redis.asyncio import Redis
+import os
 from sqlalchemy import text, or_
 import re
 import jinja2
@@ -3321,10 +3322,24 @@ async def on_startup(app):
 
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
-        # Railway subdomain всегда имеет рабочий SSL сертификат
-        webhook_url = "https://task-production-1d10.up.railway.app/webhook"
-        await bot.set_webhook(webhook_url)
-        logger.info(f"Webhook set to: {webhook_url}")
+        # Get webhook URL from environment variable or construct from Railway variables
+        webhook_url = os.getenv('WEBHOOK_URL')
+        if not webhook_url:
+            # Try to construct from Railway environment variables
+            railway_project_id = os.getenv('RAILWAY_PROJECT_ID')
+            if railway_project_id:
+                webhook_url = f"https://{railway_project_id}.up.railway.app/webhook"
+            else:
+                # Fallback to hardcoded but log warning
+                webhook_url = "https://task-production-1d10.up.railway.app/webhook"
+                logger.warning("WEBHOOK_URL not set and RAILWAY_PROJECT_ID not found, using hardcoded URL")
+        
+        try:
+            await bot.set_webhook(webhook_url)
+            logger.info(f"Webhook set to: {webhook_url}")
+        except Exception as e:
+            logger.error(f"Failed to set webhook to {webhook_url}: {e}")
+            logger.warning("Continuing without webhook setup - bot may not receive updates")
     else:
         logger.warning("Bot not created or local mode, skipping webhook setup")
 
