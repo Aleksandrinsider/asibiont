@@ -1471,179 +1471,208 @@ async def generate_result_check(user_id, task_title):
 
 
 async def generate_proactive_message(user_id):
-    """Генерирует проактивное сообщение, если нет задач на ближайший час"""
+    """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI"""
     try:
-        # Получить память пользователя, планы других и текущие задачи
+        # Используем тот же подход, что и в chat_with_ai
+        from ai_integration.utils import redis_client
+        import json
+
+        # Получить контекст чата из Redis
+        context = []
+        if redis_client:
+            try:
+                context_data = await redis_client.get(f"context:{user_id}")
+                if context_data:
+                    context = json.loads(context_data.decode('utf-8'))
+                    logger.info(f"Loaded context for proactive message: {len(context)} messages")
+            except Exception as e:
+                logger.error(f"Error loading context for proactive: {e}")
+                context = []
+
+        # Получить данные пользователя (как в chat_with_ai)
         user_memory = ""
-        plans_info = ""
-        tasks_info = ""
+        profile = None
+        user = None
+        subscription_tier = None
+        months = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+        ]
+
         if user_id:
             db_session = Session()
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            if user is None:
-                db_session.close()
-                # Если пользователь не найден - генерируем приветствие через AI
-                try:
-                    url = "https://api.deepseek.com/v1/chat/completions"
-                    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-                    msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Новый пользователь. Создай короткое приветствие."}]
-                    data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
-                    async with aiohttp.ClientSession() as sess:
-                        async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                            if resp.status == 200:
-                                result = await resp.json()
-                                return result["choices"][0]["message"]["content"].strip()
-                except Exception:
-                    pass
-                return "Привет! 👋"
-            if user and user.memory:
-                try:
-                    decrypted = decrypt_data(user.memory)
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
-                except (Exception,):
-                    user_memory = ""
-            # Получить профиль пользователя
-            user_profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
-            if user_profile and user_profile.interests:
-                # Найти планы других пользователей, совпадающие с интересами
-                profiles = db_session.query(UserProfile).filter(UserProfile.user_id != user.id).all()
-                tips = []
-                for p in profiles:
-                    if p.current_plans and p.contact_info != f"user{user_id}":
-                        for interest in user_profile.interests.split(","):
-                            interest_words = interest.strip().lower().split()
-                            if any(word in p.current_plans.lower() for word in interest_words):
-                                tips.append(
-                                    f"@{p.contact_info} сегодня {p.current_plans.split(',')[0]} - может быть интересно с твоими интересами в {interest.strip()}."
-                                )
-                                break
-                if tips:
-                    plans_info = "\nПланы людей: " + " ".join(tips[:2])
-            # Получить текущие задачи
-            tasks = db_session.query(Task).filter_by(user_id=user.id).all()
-            pending_tasks = [t.title for t in tasks if t.status in ["pending", "in_progress"]]
-            if pending_tasks:
-                tasks_info = f"\nТекущие невыполненные задачи: {', '.join(pending_tasks[:3])}"
+
+            if user:
+                # Получаем subscription_tier
+                subscription_tier = user.subscription_tier.value if user.subscription_tier else None
+
+                # Получаем время пользователя
+                base_now = datetime.now(pytz.UTC)
+                user_now = base_now
+                current_time_str = user_now.strftime("%H:%M")
+                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                user_tz = pytz.UTC
+
+                if user.timezone:
+                    try:
+                        user_tz = pytz.timezone(user.timezone)
+                        user_now = base_now.astimezone(user_tz)
+                        current_time_str = user_now.strftime("%H:%M")
+                        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                    except Exception as e:
+                        logger.error(f"Error setting user timezone: {e}")
+
+                # Получаем память пользователя
+                if user.memory:
+                    try:
+                        decrypted = decrypt_data(user.memory)
+                        user_memory = f"\nИнформация о пользователе: {decrypted}"
+                    except Exception:
+                        user_memory = ""
+
+                # Получаем профиль
+                profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile:
+                    profile_info = []
+                    if profile.city:
+                        profile_info.append(f"Город: {profile.city}")
+                    if profile.company:
+                        profile_info.append(f"Компания: {profile.company}")
+                    if profile.position:
+                        profile_info.append(f"Должность: {profile.position}")
+                    if profile.languages:
+                        profile_info.append(f"Языки: {profile.languages}")
+                    if profile.skills:
+                        profile_info.append(f"Навыки: {profile.skills}")
+                    if profile.interests:
+                        profile_info.append(f"Интересы: {profile.interests}")
+                    if profile.goals:
+                        profile_info.append(f"Цели: {profile.goals}")
+
+                    if profile_info:
+                        user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+
+                    # Определяем незаполненные поля
+                    empty_fields = []
+                    if not profile.city:
+                        empty_fields.append("город")
+                    if not profile.company:
+                        empty_fields.append("компания")
+                    if not profile.position:
+                        empty_fields.append("должность")
+                    if not profile.skills:
+                        empty_fields.append("навыки")
+                    if not profile.interests:
+                        empty_fields.append("интересы")
+                    if not profile.goals:
+                        empty_fields.append("цели")
+                    if not profile.languages:
+                        empty_fields.append("языки")
+
+                    if empty_fields:
+                        fields_list = ', '.join(empty_fields[:3])
+                        user_memory += f"\n⚠️ НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво)!"
+
+                # Добавляем информацию о задачах
+                tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
+                if tasks_summary > 0:
+                    user_memory += f"\nСводка: всего активных задач {tasks_summary}"
+
+                overdue_tasks = (
+                    db_session.query(Task)
+                    .filter(Task.user_id == user.id, Task.reminder_time < user_now, Task.status == "pending")
+                    .limit(5)
+                    .all()
+                )
+                if overdue_tasks:
+                    overdue_titles = [f"{t.title}" for t in overdue_tasks]
+                    user_memory += f"\nПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
+
             db_session.close()
 
-        # Используем единый унифицированный промпт для всех AI-сообщений
-        from datetime import datetime
-        import pytz
-        user_now = datetime.now(pytz.UTC)
-        current_time_str = user_now.strftime("%H:%M")
-        user_username = "пользователь"
+        # Формируем system_prompt ТОЧНО как в chat_with_ai
+        user_username = f"@{user.username}" if user and user.username else "@unknown"
         mentions_str = ""
 
-        base_prompt = get_optimized_prompt_final(
-            user_now,
-            current_time_str,
-            user_username,
-            mentions_str,
-            user_memory +
-            plans_info +
-            tasks_info)
+        # Извлекаем последние ответы агента для предотвращения повторов
+        last_responses = []
+        if context and isinstance(context, list):
+            for item in context[-3:]:
+                if "agent" in item:
+                    response_text = item["agent"][:40].strip()
+                    if response_text and response_text not in last_responses:
+                        last_responses.append(response_text)
+        last_responses = last_responses[-2:]
 
-        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
-        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
-        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
-        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
-        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
-        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
-        system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+        if PROMPTS_V2_AVAILABLE:
+            system_prompt = get_optimized_prompt_final(
+                user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, last_responses
+            )
+            logger.info("[PROACTIVE] Using optimized prompt system")
+        else:
+            system_prompt = get_extended_system_prompt(
+                user_now,
+                current_time_str,
+                current_date_str,
+                user_username,
+                mentions_str,
+                user_memory,
+                subscription_tier=subscription_tier)
+            logger.info("[PROACTIVE] Using extended prompt system")
+
+        # Создаем messages как в обычном чате, но с проактивным контекстом
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Добавляем последние сообщения из контекста
+        if context and isinstance(context, list):
+            for item in context[-6:]:  # Берем последние 6 сообщений для контекста
+                if "user" in item:
+                    messages.append({"role": "user", "content": item["user"]})
+                if "agent" in item:
+                    messages.append({"role": "assistant", "content": item["agent"]})
+
+        # Проактивный контекст - AI сам решит, что сказать на основе ситуации
+        proactive_prompt = "ПРОАКТИВНОЕ СООБЩЕНИЕ: У тебя есть возможность написать пользователю первым. Проанализируй его текущую ситуацию, задачи, профиль и предыдущие сообщения. Напиши естественное, персонализированное сообщение, которое будет полезным именно сейчас."
+
+        messages.append({"role": "user", "content": proactive_prompt})
+
+        # Используем те же параметры, что и для обычных сообщений
+        temperature = 0.8  # Немного выше для разнообразия
+        top_p = 0.95
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+        data = {
+            "model": "deepseek-chat",
+            "messages": messages,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": 300
+        }
 
-        # Контекстный промпт для проактивного сообщения
-        proactive_context = "Проактивное сообщение"
-        if tasks_info:
-            proactive_context = f"У пользователя есть задачи{tasks_info}. Проанализируй их и предложи конкретные действия или мотивацию для их выполнения."
-        elif plans_info:
-            proactive_context = f"У пользователя нет активных задач, но есть релевантные планы других{plans_info}. Предложи полезные связи или возможности."
-        else:
-            proactive_context = "У пользователя нет задач на ближайший час и нет релевантных планов других. Предложи создать полезную задачу или проверь, не забыл ли он что-то важное на сегодня."
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": proactive_context,
-            },
-        ]
-
-        data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
-            ) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
-                    # Заменяем плейсхолдеры на реальные значения
-                    content = replace_placeholders(
-                        content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
-                    )
+                    content = replace_placeholders(content, user_now, current_time_str)
                     content = clean_technical_details(content)
-                    # Проактивные сообщения уже вовлекающие, но можно усилить
-                    content = enrich_response_with_engagement(content, user_id, "")
 
-                    # Проверяем и принуждаем соблюдение промпта
-                    is_compliant, issues = validate_response_compliance(content, "proactive")
-                    if not is_compliant:
-                        logger.warning(f"[COMPLIANCE] Proactive message response not compliant: {issues}")
-                        # Принуждаем исправление - функция временно отключена
-                        # content = await enforce_prompt_compliance(
-                        #     content, "proactive", user_id, None, system_prompt, messages, url, headers
-                        # )
+                    # Пост-обработка как в обычных ответах
+                    content = post_process_response(content, user_id, None)
 
+                    logger.info(f"[PROACTIVE] Generated dynamic message: {content[:100]}...")
                     return content
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
-                    # Retry через упрощённый промпт
-                    retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Проактивное сообщение."}]
-                    retry_data = {"model": "deepseek-chat", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
-                    async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
-                        if retry_resp.status == 200:
-                            retry_result = await retry_resp.json()
-                            return retry_result["choices"][0]["message"]["content"].strip()
-                    return "Как дела? Чем могу помочь?"
+                    # Fallback к простому сообщению
+                    return "Привет! Как дела? Есть чем могу помочь?"
+
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        # Крайний случай - генерируем через AI с минимальным промптом
-        try:
-            url = "https://api.deepseek.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-            context = "Ошибка генерации."
-            if tasks_info:
-                context = f"У пользователя есть задачи{tasks_info}. Создай короткий вопрос о задачах."
-            elif user_memory:
-                context = "У пользователя есть история общения. Создай короткий вопрос о прогрессе."
-            msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": context}]
-            data = {"model": "deepseek-chat", "messages": msg, "temperature": 0.8, "max_tokens": 60}
-            async with aiohttp.ClientSession() as sess:
-                async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        result = await resp.json()
-                        return result["choices"][0]["message"]["content"].strip()
-        except Exception:
-            pass
-        # Более разнообразные fallback сообщения вместо повторяющегося "Привет! 👋"
-        import random
-        fallback_messages = [
-            "Как твои дела сегодня?",
-            "Чем занимаешься?",
-            "Есть что-нибудь интересное?",
-            "Как настроение?",
-            "Что нового?",
-            "Чем могу помочь?",
-            "Как продвигаются дела?",
-            "Что планируешь сегодня?",
-            "Есть вопросы или нужна помощь?",
-            "Как успехи?"
-        ]
-        return random.choice(fallback_messages)
+        return "Привет! Чем занимаешься сегодня?"
 
 
 async def generate_daily_report(user_id):
