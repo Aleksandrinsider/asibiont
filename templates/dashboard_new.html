@@ -123,7 +123,39 @@
             });
             
             // Перерендерим контакты с новым фильтром
-            renderContacts();
+            applyContactFilter();
+        }
+
+        function applyContactFilter() {
+            const peopleList = document.getElementById('people-list');
+            if (!peopleList) return;
+            
+            const allCards = peopleList.querySelectorAll('.task-item');
+            allCards.forEach(card => {
+                let type = null;
+                if (card.classList.contains('contact-recommended')) {
+                    type = 'recommended';
+                } else if (card.classList.contains('contact-delegating-to-me')) {
+                    type = 'delegating_to_me';
+                } else if (card.classList.contains('contact-delegating-by-me')) {
+                    type = 'delegating_by_me';
+                } else if (card.classList.contains('contact-favorite')) {
+                    type = 'favorite';
+                }
+                
+                if (currentContactFilter === 'all') {
+                    card.style.display = 'flex';
+                } else if (currentContactFilter === 'favorite') {
+                    // Для favorite проверяем, есть ли в избранных
+                    const username = card.dataset.username;
+                    const isFavorite = cachedFavorites && cachedFavorites.includes(username);
+                    card.style.display = isFavorite ? 'flex' : 'none';
+                } else if (type === currentContactFilter) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
         }
 
         // Global variables
