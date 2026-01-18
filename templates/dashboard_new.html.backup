@@ -715,14 +715,14 @@
         
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
-
+            console.log('checkAuth called with status:', response.status);
             if (response.status === 401 || response.status === 403) {
-
+                console.log('Session expired or unauthorized');
                 // Перезагрузить страницу только если мы не на странице логина
                 const isLoggedIn = document.querySelector('.main-layout') !== null;
-
+                console.log('isLoggedIn check:', isLoggedIn);
                 if (isLoggedIn) {
-
+                    console.log('Redirecting to login page');
                     window.location.reload();
                 }
                 return false;
@@ -731,7 +731,7 @@
         }
         
         function addMessage(text, sender, timestamp) {
-
+            console.log(`[ADD MESSAGE] Adding message from ${sender}: ${text.substring(0, 50)}...`);
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
@@ -778,17 +778,17 @@
         }
         
         async function loadChatHistory() {
-
+            console.log('[CHAT HISTORY] Starting to load chat history');
             try {
                 const response = await safeFetch('/api/interactions');
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-
+                    console.log(`[CHAT HISTORY] Loaded ${data.interactions ? data.interactions.length : 0} interactions`);
                     const messages = document.getElementById('chat-messages');
                     // Clear existing messages except welcome
                     const welcomeMessage = messages.querySelector('.message.ai');
-
+                    console.log('[CHAT HISTORY] Clearing messages, welcome message found:', !!welcomeMessage);
                     messages.innerHTML = '';
                     if (welcomeMessage) {
                         messages.appendChild(welcomeMessage);
@@ -797,14 +797,14 @@
                     // Add history messages
                     if (data.interactions) {
                         data.interactions.forEach((interaction, index) => {
-
+                            console.log(`[CHAT HISTORY] Adding message ${index + 1}/${data.interactions.length}: ${interaction.message_type} - ${interaction.content.substring(0, 50)}...`);
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                     }
                     
                     // Update lastMessageCount
                     lastMessageCount = data.interactions ? data.interactions.length : 0;
-
+                    console.log(`[CHAT HISTORY] Updated lastMessageCount to ${lastMessageCount}`);
                 }
             } catch (error) {
                 console.error('Failed to load chat history:', error);
@@ -844,7 +844,7 @@
                 return; // Prevent multiple sends
             }
             window.sendingMessage = true;
-
+            console.log('[WEB CHAT] Starting message send');
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -891,10 +891,10 @@
                 if (response.ok) {
                     if (data.duplicate) {
                         // Duplicate message, don't add to chat
-
+                        console.log('[WEB CHAT] Duplicate message detected, skipping');
                         return;
                     }
-
+                    console.log('[WEB CHAT] Adding AI response to chat');
                     addMessage(data.response, 'ai');
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
@@ -915,12 +915,12 @@
                             await updateTasks();
                             await updateProfile();
                             await updatePeople();
-
+                            console.log('Tasks updated after message');
                             // Повторное обновление через 1 секунду
                             setTimeout(async () => {
                                 try {
                                     await updateTasks();
-
+                                    console.log('Tasks updated again after message');
                                 } catch (e) {
                                     console.error('Error in delayed update:', e);
                                 }
@@ -929,7 +929,7 @@
                             setTimeout(async () => {
                                 try {
                                     await updateTasks();
-
+                                    console.log('Tasks updated third time after message');
                                 } catch (e) {
                                     console.error('Error in third delayed update:', e);
                                 }
@@ -998,7 +998,7 @@
                 if (response.ok) {
                     if (data.duplicate) {
                         // Duplicate message, don't add to chat
-
+                        console.log('[WEB CHAT] Duplicate message detected in time change, skipping');
                         return;
                     }
                     addMessage(data.response, 'ai');
@@ -1074,56 +1074,21 @@
 
         // Favorite contacts management
         function getFavoriteContacts() {
-            // This function is kept for backward compatibility but now uses server storage
-            // The actual favorites are loaded with partners
-            return [];
+            const favorites = localStorage.getItem('favoriteContacts');
+            return favorites ? JSON.parse(favorites) : [];
         }
 
-        async function getFavoriteContactsFromServer() {
-            try {
-                const response = await fetch('/api/favorite_contacts', {
-                    credentials: 'include'
-                });
-                if (!await checkAuth(response)) return [];
-                if (response.ok) {
-                    const data = await response.json();
-                    return data.favorites || [];
-                }
-            } catch (error) {
-                console.error('Error loading favorites:', error);
-            }
-            return [];
+        function saveFavoriteContacts(favorites) {
+            localStorage.setItem('favoriteContacts', JSON.stringify(favorites));
         }
 
-        async function saveFavoriteContactsToServer(favorites) {
-            try {
-                const response = await fetch('/api/favorite_contacts', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ favorites: favorites }),
-                    credentials: 'include'
-                });
-                if (!await checkAuth(response)) return false;
-                return response.ok;
-            } catch (error) {
-                console.error('Error saving favorites:', error);
-                return false;
-            }
+        function isFavoriteContact(username) {
+            const favorites = getFavoriteContacts();
+            return favorites.includes(username);
         }
 
-        let cachedFavorites = null;
-
-        async function isFavoriteContact(username) {
-            if (cachedFavorites === null) {
-                cachedFavorites = await getFavoriteContactsFromServer();
-            }
-            return cachedFavorites.includes(username);
-        }
-
-        async function toggleFavoriteContact(username) {
-            let favorites = await getFavoriteContactsFromServer();
+        function toggleFavoriteContact(username) {
+            let favorites = getFavoriteContacts();
             const index = favorites.indexOf(username);
             
             if (index > -1) {
@@ -1134,14 +1099,11 @@
                 favorites.push(username);
             }
             
-            const success = await saveFavoriteContactsToServer(favorites);
-            if (success) {
-                // Update cache
-                cachedFavorites = favorites;
-                // Force reload contacts to update heart icons
-                cachedPartnersData = null;
-                updatePeople();
-            }
+            saveFavoriteContacts(favorites);
+            
+            // Force reload contacts to update heart icons
+            cachedPartnersData = null;
+            updatePeople();
         }
 
         async function delegateToContact(username) {
@@ -1189,41 +1151,6 @@
                 }
             } catch (error) {
                 console.error('Error delegating to contact:', error);
-                showNotification(`Ошибка при отправке: ${error.message}`, 'error');
-            }
-        }
-
-        async function cancelDelegationToContact(username) {
-            try {
-                // Отправляем сообщение агенту о желании отменить делегирование этому контакту
-                const response = await fetch('/api/send_message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        message: `Показать список задач, делегированных пользователю @${username}, для возможной отмены делегирования.`
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    // Обновляем чат для отображения ответа
-                    await updateChat();
-                    // Прокручиваем чат вниз к новым сообщениям
-                    const chatMessages = document.getElementById('chat-messages');
-                    if (chatMessages) {
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                    }
-                } else {
-                    // Log detailed error
-                    const errorText = await response.text();
-                    console.error('Cancel delegation error:', response.status, errorText);
-                    showNotification(`Ошибка ${response.status}: ${errorText.substring(0, 100)}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error canceling delegation to contact:', error);
                 showNotification(`Ошибка при отправке: ${error.message}`, 'error');
             }
         }
@@ -1344,7 +1271,7 @@
             }, 5000);
         }
 
-        async function displaySearchResults(contacts) {
+        function displaySearchResults(contacts) {
             const resultsDiv = document.getElementById('modal-search-results');
             
             if (!contacts || contacts.length === 0) {
@@ -1352,12 +1279,9 @@
                 return;
             }
             
-            // Получаем избранные контакты
-            const favoriteContacts = await getFavoriteContactsFromServer();
-            
             let html = '<div style="display: grid; gap: 6px;">';
             contacts.forEach(contact => {
-                const isFavorite = favoriteContacts.includes(contact.username);
+                const isFavorite = isFavoriteContact(contact.username);
                 const photoUrl = contact.photo_url;
                 const rating = contact.average_rating || 0;
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
@@ -1893,18 +1817,6 @@
                 allContacts.push(contactData);
             });
             
-            const favoriteCards = peopleList.querySelectorAll('.contact-favorite');
-            favoriteCards.forEach(card => {
-                const contactData = {
-                    type: 'favorite',
-                    html: card.innerHTML,
-                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
-                    tier: card.dataset.tier || null,
-                    element: card
-                };
-                allContacts.push(contactData);
-            });
-            
             // Применяем фильтр: показываем только соответствующие типу
             allContacts.forEach(contact => {
                 const element = contact.element;
@@ -1912,7 +1824,7 @@
                     element.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
                     // Показываем избранные контакты
-                    if (contact.type === 'favorite') {
+                    if (isFavoriteContact(contact.username)) {
                         element.style.display = 'flex';
                     } else {
                         element.style.display = 'none';
@@ -2351,7 +2263,7 @@
                     modal.style.display = 'flex';
                 } else {
                     // Don't show error message for restricted contacts - just close modal silently
-
+                    console.log('Contact profile not accessible or not found');
                 }
             } catch (error) {
                 console.error('Error loading contact profile:', error);
@@ -2407,13 +2319,15 @@
             const isLoggedIn = document.querySelector('.main-layout') !== null;
             
             if (!isLoggedIn) {
-
+                console.log('User not logged in, skipping data load');
                 return;
             }
             
             // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
             
-            // История чата загружается в loadInitialMessages
+            // Загрузить историю чата
+            console.log('[PAGE LOAD] Calling loadChatHistory');
+            loadChatHistory();
             
             // Инициализировать задачи и контакты при загрузке страницы
             {% if tasks %}
@@ -2517,9 +2431,6 @@
         
         async function updatePeople() {
             try {
-                // Получаем избранные контакты заранее
-                const favoriteContacts = await getFavoriteContactsFromServer();
-                
                 const response = await fetch('/api/partners', {
                     credentials: 'include',
                     headers: {
@@ -2634,7 +2545,7 @@
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
-                                const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                const isFavorite = isFavoriteContact(partner.contact_info);
                                 const starSvg = isFavorite 
                                     ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                     : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
@@ -2740,7 +2651,7 @@
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
-                                const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                const isFavorite = isFavoriteContact(partner.contact_info);
                                 const starSvg = isFavorite 
                                     ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                     : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
@@ -2847,7 +2758,7 @@
                                 }
                                 html += '</div>';
                                 html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
-                                const isFavorite = favoriteContacts.includes(partner.contact_info);
+                                const isFavorite = isFavoriteContact(partner.contact_info);
                                 const starSvg = isFavorite 
                                     ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                     : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
@@ -2855,14 +2766,14 @@
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                 html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="Избранное">' + starSvg + '</button>';
                                 
-                                // Cancel delegation button with Bronze tier check
+                                // Delegate button with Bronze tier check
                                 const isBronze = userSubscriptionTier === 'BRONZE';
 
                                 const delegateClass = isBronze ? 'quick-action disabled' : 'quick-action';
-                                const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Отменить делегирование';
-                                const delegateOnclick = isBronze ? '' : 'cancelDelegationToContact(\'' + contactInfoEscaped + '\')';
+                                const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Делегировать';
+                                const delegateOnclick = isBronze ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
                                 const delegateDisabled = isBronze ? ' disabled' : '';
-                                html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" title="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M2.75 2.5h10.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5Z"></path></svg></button>';
+                                html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" title="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                 
                                 html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                 html += '</div>';
@@ -2878,7 +2789,7 @@
                         cachedPartnersData = data.partners;
                         
                         // Обновляем визуализацию окружения
-                        await updateCircleContacts(data.partners);
+                        updateCircleContacts(data.partners);
                     } else {
                         peopleList.innerHTML = '';
                     }
@@ -2888,18 +2799,15 @@
             }
         }
         
-        async function updateCircleContacts(partners) {
+        function updateCircleContacts(partners) {
             const orbitContainer = document.getElementById('circle-contacts-orbit');
             const countContainer = document.getElementById('favorite-contacts-count');
             if (!orbitContainer) return;
             
-            // Получаем избранные контакты
-            const favoriteContacts = await getFavoriteContactsFromServer();
-            
             // Фильтруем контакты: берем избранные
             const myContacts = partners ? partners.filter(p => {
                 const username = p.contact_info ? p.contact_info.replace('@', '') : '';
-                return favoriteContacts.includes(username);
+                return isFavoriteContact(username);
             }) : [];
             
             if (myContacts.length === 0) {
@@ -3089,7 +2997,7 @@
                         
                         // Не перезаписываем профиль, если данные подписки еще не загружены
                         if (!data.formatted_end_date && hasProfileData) {
-
+                            console.log('Skipping profile update: subscription data not loaded yet');
                             return;
                         }
                         
@@ -3276,7 +3184,7 @@
             
             recognition.onstart = function() {
                 isRecording = true;
-
+                console.log('Голосовое распознавание запущено');
                 // Изменить стиль кнопки - цвет как у лого ASI Biont
                 voiceButton.style.backgroundColor = '#068487';
                 voiceButton.style.color = '#ffffff';
@@ -3292,7 +3200,7 @@
             
             recognition.onresult = function(event) {
                 const transcript = event.results[0][0].transcript;
-
+                console.log('Распознанный текст:', transcript);
                 
                 // Вставить текст в поле ввода
                 const messageInput = document.getElementById('message-input');
@@ -3309,7 +3217,7 @@
             };
             
             recognition.onend = function() {
-
+                console.log('Голосовое распознавание завершено');
                 resetVoiceButton();
             };
             
@@ -3566,11 +3474,11 @@
                                 if (!target || !(target instanceof Element)) return;
                                 
                                 if (!currentMenu || !(currentMenu instanceof Element) || typeof currentMenu.contains !== 'function') {
-
+                                    console.log('currentMenu invalid:', currentMenu);
                                     return;
                                 }
                                 if (!currentToggle || !(currentToggle instanceof Element) || typeof currentToggle.contains !== 'function') {
-
+                                    console.log('currentToggle invalid:', currentToggle);
                                     return;
                                 }
                                 

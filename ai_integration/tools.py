@@ -148,6 +148,18 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "cancel_delegation",
+            "description": "Отменить делегирование задачи. Задача вернется к инициатору без делегирования.",
+            "parameters": {
+                "type": "object",
+                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "edit_task",
             "description": "Изменить название, описание или время напоминания задачи",
             "parameters": {

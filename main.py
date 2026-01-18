@@ -2719,6 +2719,73 @@ async def api_partners_handler(request):
 
             return (same_city, rating_group, rating_value)
 
+        # Add favorite contacts
+        if profile and profile.favorite_contacts:
+            try:
+                favorite_usernames = json.loads(profile.favorite_contacts)
+                for username in favorite_usernames:
+                    # Check if already in partners_data
+                    if not any(p.get('contact_info') == username for p in partners_data):
+                        # Find user by username
+                        favorite_user = session_db.query(User).filter(User.username.ilike(username.replace('@', ''))).first()
+                        if favorite_user:
+                            favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
+                            
+                            # Check tier access
+                            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
+                            favorite_tier = favorite_user.subscription_tier if favorite_user.subscription_tier else SubscriptionTier.BRONZE
+                            
+                            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+                            favorite_tier_str = favorite_tier.value if hasattr(favorite_tier, 'value') else str(favorite_tier).lower()
+                            
+                            can_access = False
+                            required_tier = None
+                            
+                            if user_tier_str.lower() in ['bronze', 'silver']:
+                                can_access = (favorite_tier_str.lower() in ['bronze', 'silver'])
+                                if not can_access:
+                                    required_tier = 'gold'
+                            elif user_tier_str.lower() == 'gold':
+                                can_access = True
+                            
+                            if can_access:
+                                # Update avatar from Telegram if available
+                                photo_url = favorite_user.photo_url if favorite_user.photo_url else None
+                                if favorite_user.telegram_id and 'bot' in request.app:
+                                    try:
+                                        updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id)
+                                        if updated_avatar and updated_avatar != favorite_user.photo_url:
+                                            favorite_user.photo_url = updated_avatar
+                                            session_db.commit()
+                                            photo_url = updated_avatar
+                                    except Exception as e:
+                                        logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
+                                
+                                partners_data.append({
+                                    'contact_info': favorite_user.username,
+                                    'telegram_id': favorite_user.telegram_id,
+                                    'photo_url': photo_url,
+                                    'can_access': can_access,
+                                    'required_tier': required_tier,
+                                    'subscription_tier': favorite_tier.value if favorite_tier else 'bronze',
+                                    'first_name': favorite_user.first_name,
+                                    'position': favorite_profile.position if favorite_profile else None,
+                                    'interests': favorite_profile.interests if favorite_profile else None,
+                                    'city': favorite_profile.city if favorite_profile else None,
+                                    'company': favorite_profile.company if favorite_profile else None,
+                                    'common_interests': None,  # Will be calculated later if needed
+                                    'common_skills': None,
+                                    'common_goals': None,
+                                    'common_tasks': None,
+                                    'average_rating': favorite_profile.average_rating if favorite_profile else 0,
+                                    'rating_count': favorite_profile.rating_count if favorite_profile else 0,
+                                    'reason': 'избранный контакт',
+                                    'task_count': 0,
+                                    'type': 'favorite'
+                                })
+            except json.JSONDecodeError:
+                pass
+
         partners_data.sort(key=sort_key)
 
         # Закрываем сессию перед возвратом ответа
@@ -2831,6 +2898,61 @@ async def api_contact_profile_handler(request):
 
     except Exception as e:
         logger.error(f"Unexpected error in api_contact_profile_handler: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_favorite_contacts_handler(request):
+    """Get or update favorite contacts"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            if not profile:
+                profile = UserProfile(user_id=user.id)
+                session_db.add(profile)
+                session_db.commit()
+
+            if request.method == 'GET':
+                # Return favorite contacts
+                favorites = []
+                if profile.favorite_contacts:
+                    try:
+                        favorites = json.loads(profile.favorite_contacts)
+                    except json.JSONDecodeError:
+                        favorites = []
+                return web.json_response({'favorites': favorites})
+
+            elif request.method == 'POST':
+                # Update favorite contacts
+                data = await request.json()
+                favorites = data.get('favorites', [])
+                
+                if not isinstance(favorites, list):
+                    return web.json_response({'error': 'Favorites must be a list'}, status=400)
+                
+                # Validate that all favorites are strings
+                if not all(isinstance(f, str) for f in favorites):
+                    return web.json_response({'error': 'All favorites must be strings'}, status=400)
+                
+                profile.favorite_contacts = json.dumps(favorites)
+                session_db.commit()
+                
+                return web.json_response({'success': True})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Unexpected error in api_favorite_contacts_handler: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
@@ -3785,6 +3907,8 @@ app.router.add_post('/webhook/yookassa', yookassa_webhook)
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_get('/api/contact_profile', api_contact_profile_handler)
+app.router.add_get('/api/favorite_contacts', api_favorite_contacts_handler)
+app.router.add_post('/api/favorite_contacts', api_favorite_contacts_handler)
 app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)

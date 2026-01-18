@@ -1142,6 +1142,45 @@ def get_delegation_progress(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
+def cancel_delegation(task_id, user_id=None):
+    """Cancel delegation of a task, returning it to the initiator"""
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            session.close()
+            return "Ошибка: Пользователь не найден."
+
+        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+        if not task:
+            session.close()
+            return "Задача не найдена."
+
+        if not task.delegated_to_username:
+            session.close()
+            return "Эта задача не делегирована."
+
+        # Check if task is already completed or in progress
+        if task.delegation_status == "accepted" and task.status == "completed":
+            session.close()
+            return "Нельзя отменить делегирование выполненной задачи."
+
+        # Cancel delegation
+        task_title = task.title
+        task.delegated_to_username = None
+        task.delegation_status = None
+        task.delegated_by = None
+        task.delegation_details = None
+
+        session.commit()
+        session.close()
+
+        return f"Делегирование задачи '{task_title}' отменено. Задача возвращена вам."
+    except Exception as e:
+        session.close()
+        return f"Ошибка при отмене делегирования: {str(e)}"
+
+
 def edit_task(
         task_id=None,
         task_title=None,

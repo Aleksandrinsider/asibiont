@@ -629,7 +629,7 @@ def clean_technical_details(text):
     # Удаляем названия функций (с скобками и без)
     before = text
     text = re.sub(
-        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)(\s*\(\s*\))?",
+        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|cancel_delegation|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)(\s*\(\s*\))?",
         "",
         text,
         flags=re.IGNORECASE,

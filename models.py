@@ -99,6 +99,7 @@ class UserProfile(Base):
     updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     average_rating = Column(Integer, default=0)  # Average rating from other users (0-10)
     rating_count = Column(Integer, default=0)  # Number of ratings received
+    favorite_contacts = Column(Text)  # JSON array of favorite contact usernames
 
     user = relationship("User", backref="profile")
 
