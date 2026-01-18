@@ -6,7 +6,7 @@
 - ✅ Создан файл `static/robots.txt`
 - ✅ Разрешена индексация основных страниц
 - ✅ Установлен crawl-delay для уважительного сканирования
-- ✅ Указан путь к sitemap.xml
+- ✅ Указан путь к sitemap.xml: `https://asibiont.ru/sitemap.xml`
 
 ### 2. Sitemap.xml
 - ✅ Создан файл `static/sitemap.xml`
