@@ -400,7 +400,7 @@
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
-                            {% if profile.average_rating is defined and profile.average_rating > 0 %}
+                            {% if profile.average_rating and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
                             <p>Рекомендация: нет рекомендаций</p>
@@ -417,7 +417,7 @@
                 </div>
                 {% endif %}
 
-                <div class="people-section">
+                <div class="people-section{% if subscription_tier == 'BRONZE' %} disabled-section{% endif %}">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                     </div>
@@ -430,6 +430,9 @@
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
                     </div>
+                    {% if subscription_tier == 'BRONZE' %}
+                    <div class="disabled-overlay" onclick="alert('Просмотр контактов доступен на тарифах Серебро и Золото')"></div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -500,7 +503,7 @@
                 
 
                 <!-- Блок списка задач -->
-                <div class="tasks-section-wrapper">
+                <div class="tasks-section-wrapper{% if subscription_tier == 'BRONZE' %} disabled-section{% endif %}">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                     </div>
@@ -517,6 +520,9 @@
                             <!-- Задачи будут сгруппированы по срокам -->
                         </div>
                     </div>
+                    {% if subscription_tier == 'BRONZE' %}
+                    <div class="disabled-overlay" onclick="alert('Просмотр задач доступен на тарифах Серебро и Золото')"></div>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
