@@ -2915,12 +2915,12 @@
                             // Обновляем только если URL изменился или элемент пустой
                             const currentImg = headerAvatarSmall.querySelector('img');
                             if (!currentImg || !currentImg.src.includes(data.user_avatar_url.split('?')[0])) {
-                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 46px; height: 46px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">`;
+                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 46px; height: 46px; border-radius: 6px; object-fit: cover;">`;
                             }
                         } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.first_name)) {
                             // Показываем инициал только если элемент пустой и нет аватара
                             const initial = (data.profile.username || data.first_name || 'U').charAt(0).toUpperCase();
-                            headerAvatarSmall.innerHTML = `<div style="width: 46px; height: 46px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
+                            headerAvatarSmall.innerHTML = `<div style="width: 46px; height: 46px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px;">${initial}</div>`;
                         }
                     }
                     
