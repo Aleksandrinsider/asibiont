@@ -4064,6 +4064,9 @@ async def apply_promo_code_handler(request):
             subscription.end_date = end_date
             logger.info(f"Updated existing subscription for user {user.id}: tier {old_tier} -> {promo.tier}")
 
+        # Обновляем user.subscription_tier для синхронизации
+        user.subscription_tier = promo.tier
+
         # Обновляем счетчик использований
         promo.used_count += 1
         if promo.max_uses is None or promo.used_count >= promo.max_uses:
