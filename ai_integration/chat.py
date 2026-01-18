@@ -633,7 +633,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             if user.username:
                 delegated_tasks = (
                     db_session.query(Task)
-                    .filter(Task.delegated_to_username.ilike(user.username), Task.delegation_status == "pending")
+                    .filter(Task.delegated_to_username.ilike(user.username.replace('@', '')), Task.delegation_status == "pending")
                     .all()
                 )
                 if delegated_tasks:

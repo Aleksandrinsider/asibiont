@@ -960,7 +960,7 @@ async def dashboard_handler(request):
             try:
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
                 delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_to_username.ilike(user.username),
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
 
@@ -2212,7 +2212,7 @@ async def api_partners_handler(request):
             try:
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
                 delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_to_username.ilike(user.username),
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
 
