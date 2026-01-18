@@ -674,7 +674,12 @@ async def get_user_avatar_url(bot, user_id):
         else:
             logger.info(f"User {user_id} has no profile photos")
     except Exception as e:
-        logger.error(f"Error getting user avatar for {user_id}: {e}")
+        error_str = str(e).lower()
+        if "user not found" in error_str or "bad request" in error_str:
+            # Для тестовых пользователей или несуществующих пользователей не логируем ошибку
+            logger.debug(f"User {user_id} not found or has no avatar (expected for test users)")
+        else:
+            logger.error(f"Error getting user avatar for {user_id}: {e}")
     return None
 
 
