@@ -1294,26 +1294,34 @@ async def generate_reminder(user_id, task_title):
         import pytz
         user_now = datetime.now(pytz.UTC)
         current_time_str = user_now.strftime("%H:%M")
-        user_username = "пользователь"  # Можно получить из базы если нужно
+        current_date_str = user_now.strftime("%Y-%m-%d")
+        user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(
+            user_now,
+            current_time_str,
+            current_date_str,
+            user_username,
+            mentions_str,
+            user_memory)
 
-        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
-        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
-        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
-        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
-        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
-        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
+        # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:
+        system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
+        system_prompt += "Будь мотивирующим и поддерживающим\n"
+        system_prompt += "Давай конкретные практические советы\n"
+        system_prompt += "Учитывай время дня и контекст пользователя\n"
+        system_prompt += "Предлагай 2-3 варианта подхода к задаче\n"
         system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+        system_prompt += "Завершай вопросом для продолжения диалога\n"
+        system_prompt += "Учитывай информацию из памяти пользователя\n"
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Напомни о задаче: {task_title}"},
+            {"role": "user", "content": f"Сгенерируй персонализированное напоминание о задаче '{task_title}'. Учитывай контекст пользователя, давай практические советы, будь мотивирующим и заверши вопросом."},
         ]
 
         data = {"model": "deepseek-reasoner", "messages": messages}
@@ -1372,14 +1380,15 @@ async def generate_result_check(user_id, task_title):
             mentions_str,
             user_memory)
 
-        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
-        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
-        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
-        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
-        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
-        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
-        system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+        # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ ПРОВЕРКИ РЕЗУЛЬТАТОВ:
+        system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ ПРОВЕРКИ РЕЗУЛЬТАТОВ ЗАДАЧ:\n"
+        system_prompt += "Уточни результат выполнения задачи\n"
+        system_prompt += "Спроси о времени, затраченном на выполнение\n"
+        system_prompt += "Интересуйся сложностями и уроками\n"
+        system_prompt += "Предлагай улучшения для будущих задач\n"
+        system_prompt += "Будь поддерживающим и анализируй прогресс\n"
+        system_prompt += "2-4 предложения, живое общение\n"
+        system_prompt += "Завершай вопросом для продолжения диалога\n"
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}

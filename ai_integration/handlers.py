@@ -2,7 +2,7 @@
 
 import logging
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pytz
 from models import Session, Task, User, UserProfile, Interaction
 from sqlalchemy import or_
@@ -292,6 +292,17 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
         session.commit()
+
+        # Schedule result check - уточнение результата выполнения через 1 час
+        result_check_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        try:
+            from main import reminder_service
+            if reminder_service:
+                reminder_service.schedule_result_check(
+                    task_id=task.id, result_check_time=result_check_time, user_id=user.telegram_id, task_title=task.title
+                )
+        except Exception as e:
+            logging.warning(f"Could not schedule result check for task {task.id}: {e}")
 
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
