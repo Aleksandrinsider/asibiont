@@ -1673,7 +1673,13 @@
             
             // Кнопки действий (включая меню оверлей)
             html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
-            if (task.status !== 'completed') {
+            
+            // Проверяем статус делегирования
+            if (task.delegation_status === 'pending') {
+                // Делегированная задача, ожидающая принятия
+                html += '<button onclick="acceptDelegatedTask(' + task.id + ')" class="quick-action" title="Принять" style="background: #238636;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="rejectDelegatedTask(' + task.id + ')" class="quick-action" title="Отклонить" style="background: #d73a49;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+            } else if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
                 html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 5v6l4-3-4-3z"/></svg></button>';
@@ -2132,6 +2138,58 @@
             } catch (error) {
                 console.error('Error completing task:', error);
                 showNotification('Ошибка при выполнении задачи', 'error');
+            }
+        }
+        
+        async function acceptDelegatedTask(taskId) {
+            try {
+                // Отправляем сообщение агенту о принятии задачи
+                const response = await fetch('/api/send_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: `Прими делегированную задачу с ID ${taskId}.`
+                    }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    showNotification('Задача принята', 'success');
+                    // Обновить задачи и чат
+                    await updateTasks();
+                    await updateChat();
+                } else {
+                    showNotification('Ошибка при принятии задачи', 'error');
+                }
+            } catch (error) {
+                console.error('Error accepting task:', error);
+                showNotification('Ошибка при принятии задачи', 'error');
+            }
+        }
+        
+        async function rejectDelegatedTask(taskId) {
+            try {
+                // Отправляем сообщение агенту об отклонении задачи
+                const response = await fetch('/api/send_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: `Отклони делегированную задачу с ID ${taskId}.`
+                    }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    showNotification('Задача отклонена', 'success');
+                    // Обновить задачи и чат
+                    await updateTasks();
+                    await updateChat();
+                } else {
+                    showNotification('Ошибка при отклонении задачи', 'error');
+                }
+            } catch (error) {
+                console.error('Error rejecting task:', error);
+                showNotification('Ошибка при отклонении задачи', 'error');
             }
         }
         

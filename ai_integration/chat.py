@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 add_task = handlers.add_task
 complete_task = handlers.complete_task
+accept_delegated_task = handlers.accept_delegated_task
+reject_delegated_task = handlers.reject_delegated_task
 list_tasks = handlers.list_tasks
 find_partners = handlers.find_partners
 update_profile = handlers.update_profile
@@ -98,6 +100,22 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 result = complete_task(
                     task_id=args.get("task_id"),
                     task_title=task_title,
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "accept_delegated_task":
+                result = accept_delegated_task(
+                    task_id=args.get("task_id"),
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "reject_delegated_task":
+                result = reject_delegated_task(
+                    task_id=args.get("task_id"),
                     user_id=user_id,
                     session=None,
                 )

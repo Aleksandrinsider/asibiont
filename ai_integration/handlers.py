@@ -274,7 +274,10 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
         task = (
             session.query(Task)
             .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username.replace('@', '')))
+                or_(
+                    and_(Task.id == task_id_int, Task.user_id == user.id),
+                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike(user.username.replace('@', '')), Task.delegation_status == "accepted")
+                )
             )
             .first()
         )
