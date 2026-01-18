@@ -980,25 +980,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                         max_retries = 3
                                         for attempt in range(max_retries):
                                             try:
-                                                async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=40)) as ai_response:
-                                                    if ai_response.status == 200:
-                                                        ai_result = await ai_response.json()
-                                                        final_content = ai_result["choices"][0]["message"]["content"].strip()
-                                                        logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
-                                                        break
-                                                    else:
-                                                        logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
-                                                        if attempt == max_retries - 1:
-                                                            # Последняя попытка - упрощённый запрос
-                                                            try:
-                                                                simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
-                                                                simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
-                                                                async with session_http.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
-                                                                    if simple_response.status == 200:
-                                                                        simple_result = await simple_response.json()
-                                                                        final_content = simple_result["choices"][0]["message"]["content"].strip()
-                                                            except Exception as simple_error:
-                                                                logger.error(f"Simple retry failed: {simple_error}")
+                                                async with aiohttp.ClientSession() as ai_session:
+                                                    async with ai_session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=40)) as ai_response:
+                                                        if ai_response.status == 200:
+                                                            ai_result = await ai_response.json()
+                                                            final_content = ai_result["choices"][0]["message"]["content"].strip()
+                                                            logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
+                                                            break
+                                                        else:
+                                                            logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
+                                                            if attempt == max_retries - 1:
+                                                                # Последняя попытка - упрощённый запрос
+                                                                try:
+                                                                    simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
+                                                                    simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
+                                                                    async with aiohttp.ClientSession() as simple_session:
+                                                                        async with simple_session.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
+                                                                            if simple_response.status == 200:
+                                                                                simple_result = await simple_response.json()
+                                                                                final_content = simple_result["choices"][0]["message"]["content"].strip()
+                                                                except Exception as simple_error:
+                                                                    logger.error(f"Simple retry failed: {simple_error}")
                                             except Exception as e:
                                                 logger.warning(f"[AI NATURAL RESPONSE] Attempt {attempt+1} failed: {e}")
                                                 if attempt == max_retries - 1:
@@ -1006,21 +1008,55 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                     try:
                                                         minimal_msg = [{"role": "user", "content": "Действие выполнено. Дай развёрнутый естественный ответ (2-3 абзаца)."}]
                                                         minimal_data = {"model": "deepseek-chat", "messages": minimal_msg, "temperature": 0.7, "max_tokens": 200}
-                                                        async with session_http.post(url, headers=headers, json=minimal_data, timeout=aiohttp.ClientTimeout(total=20)) as minimal_response:
-                                                            if minimal_response.status == 200:
-                                                                minimal_result = await minimal_response.json()
-                                                                final_content = minimal_result["choices"][0]["message"]["content"].strip()
+                                                        async with aiohttp.ClientSession() as minimal_session:
+                                                            async with minimal_session.post(url, headers=headers, json=minimal_data, timeout=aiohttp.ClientTimeout(total=20)) as minimal_response:
+                                                                if minimal_response.status == 200:
+                                                                    minimal_result = await minimal_response.json()
+                                                                    final_content = minimal_result["choices"][0]["message"]["content"].strip()
                                                     except Exception as minimal_error:
                                                         logger.error(f"Minimal retry failed: {minimal_error}")
                                                 else:
                                                     await asyncio.sleep(0.5)  # Пауза между попытками
 
-                                    # Enforcement отключен - AI должен отвечать естественно
-                                    # intent_type = "list_tasks" if has_list_tasks else None
-                                    # final_content = await enforce_prompt_compliance(
-                                    #     final_content, intent_type, user_id, context,
-                                    #     system_prompt, messages, url, headers
-                                    # )
+                                    # Проверяем качество финального ответа после tool calls
+                                    if not final_content or len(final_content.strip()) < 10:
+                                        logger.warning(f"[TOOL RESPONSE] Final content too short or empty: '{final_content}', using fallback")
+                                        # Создаем fallback ответ на основе результатов tool calls
+                                        fallback_parts = []
+                                        for action in tool_results:
+                                            result_text = action["result"]
+                                            func_name = action["function"]
+                                            
+                                            if "Добавлена задача" in result_text:
+                                                match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
+                                                if match:
+                                                    title = match.group(1)
+                                                    task_id = match.group(2)
+                                                    fallback_parts.append(f"✅ Задача '{title}' создана (ID: {task_id})")
+                                                    if "с напоминанием на" in result_text:
+                                                        match_time = re.search(r"с напоминанием на ([^)]+)", result_text)
+                                                        if match_time:
+                                                            time_str = match_time.group(1)
+                                                            fallback_parts.append(f"🔔 Напоминание установлено на {time_str}")
+                                            elif "Завершена задача" in result_text:
+                                                match = re.search(r"Завершена задача '([^']+)'", result_text)
+                                                if match:
+                                                    title = match.group(1)
+                                                    fallback_parts.append(f"✅ Задача '{title}' отмечена как выполненная")
+                                            elif "Удалены все задачи" in result_text:
+                                                fallback_parts.append("🗑️ Все задачи удалены")
+                                            elif "Задача" in result_text and "делегирована" in result_text:
+                                                fallback_parts.append("📤 Задача делегирована")
+                                            else:
+                                                fallback_parts.append(result_text)
+                                        
+                                        if fallback_parts:
+                                            final_content = "\n".join(fallback_parts)
+                                        else:
+                                            final_content = "Действие выполнено успешно!"
+
+                                    # Пост-обработка для улучшения качества ответа
+                                    final_content = post_process_response(final_content, user_id, db_session)
 
                                     logger.info(
                                         f"[TOOL CALLS] Processed {
