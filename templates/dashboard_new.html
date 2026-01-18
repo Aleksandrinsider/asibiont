@@ -2418,7 +2418,13 @@
                                 
                                 // Show username or tier requirement
                                 if (canAccess) {
-                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                    let nameStyle = 'cursor: pointer; color: #374151;';
+                                    if (partner.subscription_tier === 'SILVER') {
+                                        nameStyle += 'font-weight: bold;';
+                                    } else if (partner.subscription_tier === 'GOLD') {
+                                        nameStyle += 'font-weight: bold; color: #D7AC0C;';
+                                    }
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="' + nameStyle + '">@' + partner.contact_info + '</div>';
                                 } else {
                                     const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                     const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -2518,7 +2524,13 @@
                                 
                                 // Show username or tier requirement
                                 if (canAccess) {
-                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                    let nameStyle = 'cursor: pointer; color: #374151;';
+                                    if (partner.subscription_tier === 'SILVER') {
+                                        nameStyle += 'font-weight: bold;';
+                                    } else if (partner.subscription_tier === 'GOLD') {
+                                        nameStyle += 'font-weight: bold; color: #D7AC0C;';
+                                    }
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="' + nameStyle + '">@' + partner.contact_info + '</div>';
                                 } else {
                                     const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                     const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -2620,7 +2632,13 @@
                                 
                                 // Show username or tier requirement
                                 if (canAccess) {
-                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="cursor: pointer; color: #374151;">@' + partner.contact_info + '</div>';
+                                    let nameStyle = 'cursor: pointer; color: #374151;';
+                                    if (partner.subscription_tier === 'SILVER') {
+                                        nameStyle += 'font-weight: bold;';
+                                    } else if (partner.subscription_tier === 'GOLD') {
+                                        nameStyle += 'font-weight: bold; color: #D7AC0C;';
+                                    }
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="' + nameStyle + '">@' + partner.contact_info + '</div>';
                                 } else {
                                     const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                     const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
