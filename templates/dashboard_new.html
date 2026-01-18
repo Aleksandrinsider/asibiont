@@ -178,9 +178,9 @@
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; margin-right: 30px;">
                     <div class="header-avatar-small">
                         {% if user_avatar_url %}
-                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
+                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 40px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">
                         {% else %}
-                        <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                        <div style="width: 40px; height: 40px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
                     </div>
                     
