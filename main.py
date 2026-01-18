@@ -1989,8 +1989,24 @@ async def check_sportfan3_handler(request):
 
 
 async def direct_login_handler(request):
-    """Direct login disabled in production"""
-    return web.json_response({'status': 'disabled'}, status=403)
+    """Direct login for local testing"""
+    from config import LOCAL
+    if not LOCAL:
+        return web.json_response({'status': 'disabled'}, status=403)
+    
+    # For local testing, allow direct login with user_id parameter
+    user_id = request.query.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'user_id parameter required'}, status=400)
+    
+    try:
+        user_id = int(user_id)
+    except (ValueError, TypeError):
+        return web.json_response({'error': 'Invalid user_id'}, status=400)
+    
+    session = await get_session(request)
+    session['user_id'] = user_id
+    return web.json_response({'status': 'logged_in', 'user_id': user_id})
 
 
 try:
