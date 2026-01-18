@@ -7,6 +7,91 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>ASI Biont - Дашборд</title>
+    <script>
+        // Global functions defined early for HTML onclick handlers
+        function toggleProfileSection() {
+            const content = document.getElementById('profile-content');
+            const button = document.getElementById('profile-toggle-btn');
+            const svg = button ? button.querySelector('svg') : null;
+            const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
+            if (!content) return; // nothing to toggle
+            
+            const isCollapsed = (content.style.display || '') === 'none';
+            if (isCollapsed) {
+                content.style.display = 'block';
+                if (svg) svg.style.transform = 'rotate(0deg)';
+                if (peopleSection) {
+                    peopleSection.style.flex = '';
+                    peopleSection.style.minHeight = '';
+                    peopleSection.style.marginBottom = '';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
+                }
+                localStorage.setItem('profileCollapsed', 'false');
+            } else {
+                content.style.display = 'none';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
+                if (peopleSection) {
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                    peopleSection.style.marginBottom = '40px';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
+                }
+                localStorage.setItem('profileCollapsed', 'true');
+            }
+        }
+
+        function filterContacts(filterType) {
+            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
+            const profileContent = document.getElementById('profile-content');
+            const profileBtn = document.getElementById('profile-toggle-btn');
+            const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
+            const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
+            
+            if (profileContent && profileContent.style.display !== 'none') {
+                profileContent.style.display = 'none';
+                if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
+                localStorage.setItem('profileCollapsed', 'true');
+                
+                // Разворачиваем список контактов
+                if (peopleSection) {
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
+                }
+            }
+            
+            // Если фильтр уже активен, только сворачиваем профиль
+            if (currentContactFilter === filterType) {
+                return;
+            }
+            
+            currentContactFilter = filterType;
+            
+            // Обновляем стили кнопок фильтров контактов
+            document.querySelectorAll('.contact-filter-btn').forEach(btn => {
+                if (btn.getAttribute('data-filter') === filterType) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Перерендерим контакты с новым фильтром
+            renderContacts();
+        }
+
+        // Global variables
+        let currentTaskFilter = 'all';
+        let currentContactFilter = 'favorite';
+    </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
@@ -523,52 +608,6 @@
             return `<a href="/subscription_tiers" class="${tierClass}" onclick="event.stopPropagation();">${tierLower}</a>`;
         }
 
-        let currentTaskFilter = 'all'; // Текущий фильтр задач
-        let currentContactFilter = 'favorite'; // Текущий фильтр контактов - по умолчанию "Мои"
-        
-        function filterContacts(filterType) {
-            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
-            const profileContent = document.getElementById('profile-content');
-            const profileBtn = document.getElementById('profile-toggle-btn');
-            const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
-            const peopleSection = document.querySelector('.people-section');
-            const peopleList = document.querySelector('.people-list');
-            
-            if (profileContent && profileContent.style.display !== 'none') {
-                profileContent.style.display = 'none';
-                if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
-                localStorage.setItem('profileCollapsed', 'true');
-                
-                // Разворачиваем список контактов
-                if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto';
-                    peopleSection.style.minHeight = '0';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
-                }
-            }
-            
-            // Если фильтр уже активен, только сворачиваем профиль
-            if (currentContactFilter === filterType) {
-                return;
-            }
-            
-            currentContactFilter = filterType;
-            
-            // Обновляем стили кнопок фильтров контактов
-            document.querySelectorAll('.contact-filter-btn').forEach(btn => {
-                if (btn.getAttribute('data-filter') === filterType) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-            
-            // Перерендерим контакты с новым фильтром
-            renderContacts();
-        }
-        
         // Функция склонения слова "задача"
         function pluralizeTask(count) {
             const lastDigit = count % 10;
@@ -1300,42 +1339,6 @@
                 closeSearchModal({target: document.getElementById('search-modal')});
             }
         });
-
-        function toggleProfileSection() {
-            const content = document.getElementById('profile-content');
-            const button = document.getElementById('profile-toggle-btn');
-            const svg = button ? button.querySelector('svg') : null;
-            const peopleSection = document.querySelector('.people-section');
-            const peopleList = document.querySelector('.people-list');
-            if (!content) return; // nothing to toggle
-            
-            const isCollapsed = (content.style.display || '') === 'none';
-            if (isCollapsed) {
-                content.style.display = 'block';
-                if (svg) svg.style.transform = 'rotate(0deg)';
-                if (peopleSection) {
-                    peopleSection.style.flex = '';
-                    peopleSection.style.minHeight = '';
-                    peopleSection.style.marginBottom = '';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
-                }
-                localStorage.setItem('profileCollapsed', 'false');
-            } else {
-                content.style.display = 'none';
-                if (svg) svg.style.transform = 'rotate(-90deg)';
-                if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto';
-                    peopleSection.style.minHeight = '0';
-                    peopleSection.style.marginBottom = '40px';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
-                }
-                localStorage.setItem('profileCollapsed', 'true');
-            }
-        }
 
         function toggleStatsSection() {
             const content = document.getElementById('stats-content');
@@ -2953,6 +2956,7 @@
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
+                    }
                     }
                 }
             } catch (error) {
