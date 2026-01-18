@@ -506,49 +506,16 @@ class ReminderService:
         finally:
             db.close()
     def schedule_proactive_checks(self):
-        """Планирование проактивных проверок с динамическим интервалом"""
+        """Планирование чекпоинтов для задач по принципу 1/3-2/3 времени вместо периодических проверок"""
         from models import Session
         from models import User
-        from apscheduler.triggers.interval import IntervalTrigger
         
         db = Session()
         try:
             users = db.query(User).all()
-            logger.info(f"Scheduling proactive checks for {len(users)} users")
+            logger.info(f"Scheduling task checkpoints for {len(users)} users")
             for user in users:
-                job_id = f"proactive_check_{user.telegram_id}"
-                
-                # Проверяем, существует ли уже такой джоб
-                if self.scheduler.get_job(job_id):
-                    logger.debug(f"Proactive check job {job_id} already exists, skipping")
-                    continue
-                
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                
-                # Вычисляем параметры cron триггера на основе интервала
-                interval = PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
-                if interval >= 60:
-                    hour_step = interval // 60
-                    minute = '0'
-                    hour = f'10-21/{hour_step}' if hour_step > 1 else '10-21'
-                else:
-                    minute = f'*/{interval}'
-                    hour = '10-21'
-                
-                # Планируем проактивные проверки с интервалом без задач (по умолчанию)
-                # Use jobstore-safe wrapper for proactive checks
-                self.scheduler.add_job(
-                    _check_and_send_proactive_job,
-                    trigger="cron",
-                    minute=minute,
-                    hour=hour,
-                    timezone=user_tz,
-                    args=[user.telegram_id],
-                    id=job_id,
-                    replace_existing=True,
-                    misfire_grace_time=30
-                )
-                logger.debug(f"Scheduled proactive check for user {user.telegram_id} with {PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES}min interval")
+                self.schedule_task_checkpoints(user.telegram_id)
         finally:
             db.close()
 
@@ -612,9 +579,6 @@ class ReminderService:
             
             # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
             tasks_in_60_min = 0
-            urgent_tasks = []  # Задачи, где осталось менее 1/3 времени
-            moderate_tasks = []  # Задачи, где осталось 1/3-2/3 времени
-            
             for task in pending_tasks:
                 # Сделать reminder_time aware с UTC, если он naive
                 reminder_time = task.reminder_time
@@ -623,47 +587,121 @@ class ReminderService:
                 
                 if now_utc <= reminder_time < next_60_min_utc:
                     tasks_in_60_min += 1
-                
-                # Применяем принцип 1/3-2/3 для определения urgency
-                time_until_reminder = reminder_time - now_utc
-                if time_until_reminder.total_seconds() > 0:
-                    # Вычисляем, сколько времени прошло от создания задачи до reminder_time
-                    # Для простоты используем время до reminder_time как общий срок
-                    total_time = time_until_reminder.total_seconds()
-                    
-                    # Если осталось менее 1/3 времени - urgent (нужен интенсивный контроль)
-                    if time_until_reminder.total_seconds() < total_time / 3:
-                        urgent_tasks.append(task)
-                    # Если осталось 1/3-2/3 времени - moderate (нужен умеренный контроль)  
-                    elif time_until_reminder.total_seconds() < (total_time * 2) / 3:
-                        moderate_tasks.append(task)
             
-            # Адаптивная логика проактивных сообщений с принципом 1/3-2/3
+            # Новая логика: чекпоинты на 1/3, 2/3 и просроченные задачи
             total_pending_tasks = len(pending_tasks)
-            has_urgent_tasks = len(urgent_tasks) > 0
-            has_moderate_tasks = len(moderate_tasks) > 0
             
             # 1. Если есть задачи в ближайший час - не отправлять (пользователь активен)
             if tasks_in_60_min > 0:
-                await self._reschedule_proactive_check(user_id, has_tasks=True, urgent=has_urgent_tasks)
                 return
             
-            # 2. Если есть urgent задачи (осталось <1/3 времени) - отправить мотивирующее сообщение чаще
-            if has_urgent_tasks:
+            # 2. Проверить, есть ли просроченные задачи (3/3 - overdue)
+            overdue_tasks = []
+            for task in pending_tasks:
+                reminder_time = task.reminder_time
+                if reminder_time.tzinfo is None:
+                    reminder_time = pytz.UTC.localize(reminder_time)
+                
+                if reminder_time < now_utc:
+                    overdue_tasks.append(task)
+            
+            if overdue_tasks:
+                # Есть просроченные задачи - отправить напоминание
                 await self.send_proactive_message(user_id)
-                await self._reschedule_proactive_check(user_id, has_tasks=True, urgent=True)
                 return
             
-            # 3. Если есть moderate задачи (1/3-2/3 времени) - отправить сообщение с обычной частотой
-            if has_moderate_tasks or (total_pending_tasks > 0 and not has_urgent_tasks):
+            # 3. Если есть задачи, но не просроченные - отправить обычное проактивное сообщение
+            if total_pending_tasks > 0:
                 await self.send_proactive_message(user_id)
-                await self._reschedule_proactive_check(user_id, has_tasks=True, urgent=False)
                 return
             
-            # 4. Если совсем нет задач - отправить проактивное предложение создать задачу
+            # 4. Если совсем нет задач - отправить предложение создать задачу (не чаще раза в час)
             if total_pending_tasks == 0:
                 await self.send_proactive_message(user_id)
-                await self._reschedule_proactive_check(user_id, has_tasks=False, urgent=False)
+        finally:
+            db.close()
+
+    def schedule_task_checkpoints(self, user_id: int):
+        """Планирование чекпоинтов для задач пользователя по принципу 1/3-2/3 времени
+        
+        Аналогично делегированным задачам, но для всех задач пользователя:
+        - 1/3 времени до reminder_time: первый чекпоинт
+        - 2/3 времени до reminder_time: второй чекпоинт  
+        - После reminder_time: финальный чекпоинт (просрочено)
+        """
+        from models import Session
+        from models import Task, User
+        
+        db = Session()
+        try:
+            user = db.query(User).filter(User.telegram_id == user_id).first()
+            if not user:
+                return
+            
+            # Получить все pending задачи с reminder_time
+            pending_tasks = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'pending',
+                Task.reminder_time.isnot(None)
+            ).all()
+            
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            current_time = datetime.now(pytz.UTC)
+            
+            for task in pending_tasks:
+                # Сделать reminder_time aware с UTC
+                reminder_time = task.reminder_time
+                if reminder_time.tzinfo is None:
+                    reminder_time = pytz.UTC.localize(reminder_time)
+                
+                # Пропустить задачи, которые уже просрочены более чем на день
+                if reminder_time < current_time - timedelta(days=1):
+                    continue
+                
+                # Рассчитать чекпоинты по принципу 1/3-2/3
+                time_until_reminder = reminder_time - current_time
+                if time_until_reminder.total_seconds() <= 0:
+                    # Задача просрочена - чекпоинт через 1 час (не чаще раза в час)
+                    checkpoint_time = current_time + timedelta(hours=1)
+                else:
+                    # Задача не просрочена - чекпоинты на 1/3 и 2/3
+                    checkpoint_time = current_time + (time_until_reminder * 1 / 3)
+                
+                # Планировать чекпоинт, если он в будущем
+                if checkpoint_time > current_time:
+                    job_id = f"task_checkpoint_{task.id}_{user.telegram_id}"
+                    
+                    # Удалить существующий джоб для этой задачи
+                    if self.scheduler.get_job(job_id):
+                        self.scheduler.remove_job(job_id)
+                    
+                    # Запланировать новый чекпоинт
+                    self.scheduler.add_job(
+                        _check_and_send_proactive_job,
+                        trigger="date",
+                        run_date=checkpoint_time,
+                        args=[user.telegram_id],
+                        id=job_id,
+                        replace_existing=True,
+                        misfire_grace_time=300  # 5 минут на опоздание
+                    )
+                    
+                    logger.debug(f"Scheduled task checkpoint for task {task.id} at {checkpoint_time} (user {user.telegram_id})")
+            
+            # Также запланировать общий чекпоинт для случаев без задач (раз в час)
+            no_tasks_job_id = f"no_tasks_checkpoint_{user.telegram_id}"
+            if not self.scheduler.get_job(no_tasks_job_id):
+                next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+                self.scheduler.add_job(
+                    _check_and_send_proactive_job,
+                    trigger="date", 
+                    run_date=next_hour,
+                    args=[user.telegram_id],
+                    id=no_tasks_job_id,
+                    replace_existing=True
+                )
+                logger.debug(f"Scheduled no-tasks checkpoint for user {user.telegram_id} at {next_hour}")
+                
         finally:
             db.close()
 
