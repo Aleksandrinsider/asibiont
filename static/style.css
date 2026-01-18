@@ -1835,22 +1835,4 @@ details[open] .details-content {
 .disabled-btn, .disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    position: relative;
-}
-
-.disabled-btn::after, .disabled::after {
-    content: "🔒";
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    font-size: 14px;
-    color: #6b7280;
-    background: white;
-    border-radius: 50%;
-    width: 18px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
