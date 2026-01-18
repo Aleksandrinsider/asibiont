@@ -1345,6 +1345,7 @@ def post_process_response(content, user_id, db_session=None):
     content = re.sub(r'`(.*?)`', r'\1', content)       # Убираем inline code
     content = re.sub(r'```.*?```', '', content, flags=re.DOTALL)  # Убираем code blocks
     content = re.sub(r'#+\s*', '', content)            # Убираем заголовки
+    content = content.replace('🚫', '')                # Убираем запрещающий знак
     
     # Получаем рекомендации по контактам
     advice = analyze_user_context_for_advice(user_id, db_session)
