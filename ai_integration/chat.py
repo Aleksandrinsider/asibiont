@@ -97,7 +97,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             elif func_name == "complete_task":
                 task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
-                result = complete_task(
+                result = await complete_task(
                     task_id=args.get("task_id"),
                     task_title=task_title,
                     user_id=user_id,

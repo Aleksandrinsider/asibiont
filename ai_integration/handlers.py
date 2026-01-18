@@ -248,7 +248,7 @@ def delete_all_tasks(user_id=None, session=None):
         return f"Ошибка удаления задач: {str(e)}"
 
 
-def complete_task(task_id=None, task_title=None, user_id=None, session=None):
+async def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     """Mark task as completed"""
     if session is None:
         session = Session()
@@ -321,6 +321,29 @@ def complete_task(task_id=None, task_title=None, user_id=None, session=None):
                 ) / profile.completed_tasks
             session.commit()
         result = f"Завершена задача '{task.title}'."
+
+        # Добавляем запрос на уточнение результатов для всех задач
+        result += f"\n\n💬 Расскажите, пожалуйста, о результатах выполнения задачи '{task.title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
+
+        # Если задача была делегирована этому пользователю, отправляем отчет делегировавшему
+        if task.delegated_to_username and task.delegation_status == "accepted":
+            # Проверяем, является ли текущий пользователь получателем делегированной задачи
+            if task.delegated_to_username.replace('@', '').lower() == user.username.replace('@', '').lower():
+                # Находим пользователя, который делегировал задачу
+                delegator = session.query(User).filter_by(id=task.user_id).first()
+                if delegator:
+                    # Отправляем сообщение делегировавшему пользователю
+                    try:
+                        from main import bot
+                        if bot:
+                            report_message = f"👤 @{user.username} выполнил(а) делегированную задачу:\n📋 '{task.title}'\n\n💬 Пожалуйста, уточните результаты выполнения задачи."
+                            await bot.send_message(chat_id=delegator.telegram_id, text=report_message)
+                            logging.info(f"Sent completion report to delegator {delegator.username} for task {task.id}")
+                    except Exception as e:
+                        logging.error(f"Failed to send completion report to delegator: {e}")
+
+                    # Для делегированных задач добавляем дополнительный запрос
+                    result += f" Это также поможет @{delegator.username} оценить качество выполненной работы."
 
         # Save to interaction history
         interaction = Interaction(user_id=user.id, message_type="ai", content=result)

@@ -2118,12 +2118,16 @@
         
         async function completeTask(taskId) {
             try {
+                // Получаем название задачи из DOM
+                const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+                const taskTitle = taskElement ? taskElement.querySelector('.task-title').textContent : `задача ${taskId}`;
+
                 // Отправляем сообщение агенту о выполнении задачи
                 const response = await fetch('/api/send_message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        message: `Отметь задачу с ID ${taskId} как выполненную.`
+                        message: `Отметь задачу "${taskTitle}" как выполненную.`
                     }),
                     credentials: 'include'
                 });

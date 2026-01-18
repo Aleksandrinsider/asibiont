@@ -1669,7 +1669,7 @@ async def complete_task_handler(request):
 
     from ai_integration import complete_task
     try:
-        result = complete_task(task_id=task_id, user_id=user_id)
+        result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} completed by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
