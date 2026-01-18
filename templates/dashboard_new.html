@@ -261,8 +261,9 @@
             
             <div class="header-info">
                 <span id="header-info" style="white-space: nowrap; display: flex; align-items: center; gap: 8px; color: #374151; font-size: 13px;">
-                    <span onclick="changeTime()" style="cursor: pointer; font-weight: 500;">{{ current_time }}</span>
-                    <span>· {{ current_date }}</span>
+                    <span id="header-time" onclick="changeTime()" style="cursor: pointer; font-weight: 500;">{{ current_time }}</span>
+                    <span>·</span>
+                    <span id="header-date">{{ current_date }}</span>
                 </span>
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; margin-right: 30px;">
@@ -943,19 +944,8 @@
                     // Обновить профиль и время сразу
                     await updateProfile();
                     // Принудительно обновляем время в шапке через небольшую задержку
-                    setTimeout(async () => {
-                        await updateProfile();
-                        // Дополнительно обновляем время в шапке напрямую
-                        const now = new Date();
-                        const headerTimeDisplay = document.getElementById('header-time-display');
-                        if (headerTimeDisplay) {
-                            const hours = now.getHours().toString().padStart(2, '0');
-                            const minutes = now.getMinutes().toString().padStart(2, '0');
-                            const timeStr = `${hours}:${minutes}`;
-                            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-                            const dateStr = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
-                            headerTimeDisplay.textContent = `${timeStr} · ${dateStr}`;
-                        }
+                    setTimeout(() => {
+                        updateHeaderTime();
                     }, 1000);
                     // Синхронизировать счетчик через API
                     setTimeout(async () => {
@@ -2326,9 +2316,13 @@
             const timeString = `${hours}:${minutes}`;
             const dateString = `${day} ${month} ${year} г.`;
             
-            const headerTimeDisplay = document.getElementById('header-time-display');
-            if (headerTimeDisplay) {
-                headerTimeDisplay.textContent = `${timeString} · ${dateString}`;
+            const headerTime = document.getElementById('header-time');
+            const headerDate = document.getElementById('header-date');
+            if (headerTime) {
+                headerTime.textContent = timeString;
+            }
+            if (headerDate) {
+                headerDate.textContent = dateString;
             }
         }
         
