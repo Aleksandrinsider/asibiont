@@ -1087,7 +1087,7 @@ async def dashboard_handler(request):
         base_now = datetime.now(pytz.UTC)
         user_now = base_now.astimezone(user_tz)
 
-        current_time = str(int(datetime.now().timestamp()) + 23)
+        current_time = user_now.strftime('%H:%M')
 
         months = [
             'января',
