@@ -8,7 +8,7 @@ from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 from redis.asyncio import Redis
-from sqlalchemy import text
+from sqlalchemy import text, or_
 import re
 import jinja2
 import aiohttp_jinja2
@@ -1583,7 +1583,6 @@ async def clear_user_tasks_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
 
         # Count tasks before deletion
-        from sqlalchemy import or_
         task_count = session_db.query(Task).filter(
             or_(
                 Task.user_id == user.id,
@@ -1632,7 +1631,6 @@ async def clear_single_task_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
 
         # Ищем задачу либо среди своих, либо среди делегированных мне
-        from sqlalchemy import or_
         task = session_db.query(Task).filter(
             Task.id == task_id,
             or_(
@@ -2244,7 +2242,6 @@ async def api_partners_handler(request):
 
             try:
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
-                from sqlalchemy import or_
                 username_clean = user.username.replace('@', '') if user.username else ''
                 delegated_tasks = session_db.query(Task).filter(
                     or_(
@@ -3357,7 +3354,6 @@ async def api_tasks_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
 
         # Get tasks created by me OR delegated to me
-        from sqlalchemy import or_
         tasks = session_db.query(Task).filter(
             or_(
                 Task.user_id == user.id,
