@@ -552,60 +552,70 @@ try:
     # Create test users with different tiers and sport interests
     try:
         session_db = Session()
-        # Check if test users already exist
-        existing_test_users = session_db.query(User).filter(User.telegram_id.in_([1001, 1002, 1003, 1004, 1005])).count()
-        if existing_test_users == 0:
-            logger.info("Creating test users with different subscription tiers")
-            
-            test_users_data = [
-                {'telegram_id': 1001, 'tier': 'BRONZE', 'name': 'Test User Bronze'},
-                {'telegram_id': 1002, 'tier': 'SILVER', 'name': 'Test User Silver'},
-                {'telegram_id': 1003, 'tier': 'GOLD', 'name': 'Test User Gold'},
-                {'telegram_id': 1004, 'tier': 'BRONZE', 'name': 'Test User Bronze 2'},
-                {'telegram_id': 1005, 'tier': 'SILVER', 'name': 'Test User Silver 2'},
-            ]
-            
-            from datetime import datetime, timedelta
-            now = datetime.now()
-            
-            for user_data in test_users_data:
-                # Create user
-                user = User(
-                    telegram_id=user_data['telegram_id'],
-                    first_name=user_data['name'],
-                    subscription_tier=user_data['tier'],  # Set subscription tier
-                    created_at=now
-                )
-                session_db.add(user)
-                session_db.flush()  # Get user.id
+        logger.info("Creating test users with different subscription tiers")
+        
+        test_users_data = [
+            {'telegram_id': 1001, 'tier': 'BRONZE', 'name': 'Test User Bronze'},
+            {'telegram_id': 1002, 'tier': 'SILVER', 'name': 'Test User Silver'},
+            {'telegram_id': 1003, 'tier': 'GOLD', 'name': 'Test User Gold'},
+            {'telegram_id': 1004, 'tier': 'BRONZE', 'name': 'Test User Bronze 2'},
+            {'telegram_id': 1005, 'tier': 'SILVER', 'name': 'Test User Silver 2'},
+            {'telegram_id': 1006, 'tier': 'SILVER', 'name': 'Test User Silver 3'},
+            {'telegram_id': 1007, 'tier': 'GOLD', 'name': 'Test User Gold 2'},
+            {'telegram_id': 1008, 'tier': 'SILVER', 'name': 'Test User Silver 4'},
+            {'telegram_id': 1009, 'tier': 'GOLD', 'name': 'Test User Gold 3'},
+        ]
+        
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        
+        added_count = 0
+        for user_data in test_users_data:
+            # Check if user already exists
+            existing_user = session_db.query(User).filter(User.telegram_id == user_data['telegram_id']).first()
+            if existing_user:
+                logger.info(f"Test user {user_data['telegram_id']} already exists")
+                continue
                 
-                # Create profile with sport interests
-                profile = UserProfile(
-                    user_id=user.id,
-                    interests='спорт, фитнес, здоровый образ жизни',
-                    city='Москва',
-                    contact_info=f'user{user_data["telegram_id"]}@test.com'
-                )
-                session_db.add(profile)
-                
-                # Create active subscription
-                subscription = Subscription(
-                    user_id=user.id,
-                    telegram_id=user.telegram_id,
-                    telegram_username=user.username,
-                    status='active',
-                    tier=user_data['tier'],
-                    start_date=now,
-                    end_date=now + timedelta(days=30)
-                )
-                session_db.add(subscription)
-                
-                logger.info(f"Created test user {user_data['telegram_id']} with {user_data['tier']} tier")
+            # Create user
+            user = User(
+                telegram_id=user_data['telegram_id'],
+                first_name=user_data['name'],
+                subscription_tier=user_data['tier'],  # Set subscription tier
+                created_at=now
+            )
+            session_db.add(user)
+            session_db.flush()  # Get user.id
             
+            # Create profile with sport interests
+            profile = UserProfile(
+                user_id=user.id,
+                interests='спорт, фитнес, здоровый образ жизни',
+                city='Москва',
+                contact_info=f'user{user_data["telegram_id"]}@test.com'
+            )
+            session_db.add(profile)
+            
+            # Create active subscription
+            subscription = Subscription(
+                user_id=user.id,
+                telegram_id=user.telegram_id,
+                telegram_username=user.username,
+                status='active',
+                tier=user_data['tier'],
+                start_date=now,
+                end_date=now + timedelta(days=30)
+            )
+            session_db.add(subscription)
+            
+            logger.info(f"Created test user {user_data['telegram_id']} with {user_data['tier']} tier")
+            added_count += 1
+        
+        if added_count > 0:
             session_db.commit()
-            logger.info("Test users created successfully")
+            logger.info(f"Successfully added {added_count} test users")
         else:
-            logger.info("Test users already exist, skipping creation")
+            logger.info("All test users already exist")
     except Exception as e:
         logger.error(f"Error creating test users: {e}")
         session_db.rollback()
