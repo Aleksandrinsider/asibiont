@@ -157,7 +157,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     return result_msg
 
 
-def delete_task(task_id=None, task_title=None, user_id=None, session=None):
+def delete_task(task_id=None, task_title=None, user_id=None, reason="", session=None):
     """Delete a specific task by ID or title"""
     if session is None:
         session = Session()
@@ -187,6 +187,14 @@ def delete_task(task_id=None, task_title=None, user_id=None, session=None):
             if close_session:
                 session.close()
             return "Задача не найдена."
+
+        # Сохраняем информацию о удалении для аналитики
+        deletion_info = f"Задача '{task.title}' удалена. Причина: {reason}"
+        
+        # Если причина связана с ошибками или дубликатами, можем использовать для улучшения
+        if reason and any(keyword in reason.lower() for keyword in ['ошибк', 'дублир', 'актуальн']):
+            # Можно добавить логику для анализа паттернов удаления задач
+            pass
 
         # Delete the task
         session.delete(task)

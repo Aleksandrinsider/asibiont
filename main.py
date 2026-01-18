@@ -1730,13 +1730,14 @@ async def delete_task_handler(request):
 
     data = await request.json()
     task_id = data.get('task_id')
+    reason = data.get('reason', '')
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
 
     from ai_integration import delete_task
     try:
-        result = delete_task(task_id=task_id, user_id=user_id)
-        logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
+        result = delete_task(task_id=task_id, user_id=user_id, reason=reason)
+        logger.info(f"Task {task_id} deleted by user {user_id} for reason: {reason}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error deleting task {task_id}: {e}")

@@ -1682,9 +1682,9 @@
             } else if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
-                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 5v6l4-3-4-3z"/></svg></button>';
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1.293l-4.146-4.147a.5.5 0 0 1 .708-.708L8 3.293V3z"/><path d="M8 4.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H6a.5.5 0 0 1 0-1h1.5V5a.5.5 0 0 1 .5-.5z"/></svg></button>';
             }
-            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
+            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn" title="Удалить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
             html += '</div>';
             
             return html;
@@ -2009,7 +2009,7 @@
             if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
-                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 5v6l4-3-4-3z"/></svg></button>';
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1.293l-4.146-4.147a.5.5 0 0 1 .708-.708L8 3.293V3z"/><path d="M8 4.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5H6a.5.5 0 0 1 0-1h1.5V5a.5.5 0 0 1 .5-.5z"/></svg></button>';
             }
             html += '<button onclick="clearSingleTask(' + task.id + ')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
             html += '</div>';
@@ -2118,27 +2118,22 @@
         
         async function completeTask(taskId) {
             try {
-                // Получаем название задачи из DOM
-                const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
-                const taskTitle = taskElement ? taskElement.querySelector('.task-title').textContent : `задача ${taskId}`;
-
-                // Отправляем сообщение агенту о выполнении задачи
-                const response = await fetch('/api/send_message', {
+                const response = await fetch('/complete_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: `Отметь задачу "${taskTitle}" как выполненную.`
-                    }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
-                    showNotification('Задача отмечена как выполненная', 'success');
+                    const data = await response.json();
+                    showNotification('Задача выполнена!', 'success');
                     // Обновить задачи и чат
                     await updateTasks();
                     await updateChat();
                 } else {
-                    showNotification('Ошибка при выполнении задачи', 'error');
+                    const error = await response.json();
+                    showNotification(`Ошибка при выполнении задачи: ${error.error}`, 'error');
                 }
             } catch (error) {
                 console.error('Error completing task:', error);
@@ -2221,7 +2216,19 @@
         }
         
         async function deleteTask(taskId) {
-            if (!confirm('Вы уверены, что хотите удалить эту задачу?')) {
+            // Получаем название задачи
+            const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+            const taskTitle = taskElement ? taskElement.querySelector('.task-title').textContent : `задача ${taskId}`;
+            
+            // Создаем модальное окно для причины удаления
+            const reason = prompt(`Почему вы хотите удалить задачу "${taskTitle}"?\n\nВозможные причины:\n• Задача больше не актуальна\n• Задача была создана по ошибке\n• Задача дублируется\n• Другая причина (опишите)`, '');
+            
+            if (reason === null) {
+                return; // Пользователь отменил
+            }
+            
+            if (reason.trim() === '') {
+                alert('Пожалуйста, укажите причину удаления задачи.');
                 return;
             }
             
@@ -2229,13 +2236,29 @@
                 const response = await fetch('/delete_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId }),
+                    body: JSON.stringify({ task_id: taskId, reason: reason.trim() }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
                     showNotification('Задача удалена', 'success');
+                    
+                    // Если причина связана с улучшением системы, предложим помощь
+                    const lowerReason = reason.toLowerCase();
+                    if (lowerReason.includes('ошибк') || lowerReason.includes('дублир') || lowerReason.includes('актуальн')) {
+                        setTimeout(() => {
+                            if (confirm('Хотите, чтобы я помог вам создать новую задачу или улучшить существующие?')) {
+                                // Фокус на поле ввода сообщения
+                                const messageInput = document.getElementById('message-input');
+                                if (messageInput) {
+                                    messageInput.focus();
+                                    messageInput.placeholder = 'Расскажите, какую задачу создать или как улучшить существующие...';
+                                }
+                            }
+                        }, 1000);
+                    }
+                    
                     await updateTasks();
                     await updateChat();
                 } else {
