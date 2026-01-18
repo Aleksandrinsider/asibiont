@@ -961,7 +961,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                 logger.warning(f"Failed to get profile context: {e}")
                                         
                                         # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
-                                        tool_context_msg = f"{final_content}{profile_context}"
+                                        tool_context_msg = f"СТРОГО СОБЛЮДАЙ: показывай ТОЛЬКО реальные задачи из предоставленных данных, НЕ выдумывай и НЕ придумывай задачи!\n\n{final_content}{profile_context}"
                                         
                                         # Добавляем контекст в messages
                                         messages.append({"role": "user", "content": original_message})
