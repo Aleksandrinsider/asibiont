@@ -1929,8 +1929,9 @@
                 if (currentContactFilter === 'all') {
                     element.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
-                    // Показываем избранные контакты
-                    if (contact.type === 'favorite') {
+                    // Показываем избранные контакты - проверяем по списку избранных
+                    const isFavorite = cachedFavorites && cachedFavorites.includes(contact.username);
+                    if (isFavorite) {
                         element.style.display = 'flex';
                     } else {
                         element.style.display = 'none';
