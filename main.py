@@ -585,10 +585,49 @@ redis_client = None
 
 async def get_timezone_from_ip(ip_address):
     """Определяет timezone по IP адресу через ipapi.co"""
+    # Маппинг английских названий городов на русские
+    city_mapping = {
+        'Moscow': 'Москва',
+        'Saint Petersburg': 'Санкт-Петербург',
+        'Kazan': 'Казань',
+        'Novosibirsk': 'Новосибирск',
+        'Yekaterinburg': 'Екатеринбург',
+        'Nizhny Novgorod': 'Нижний Новгород',
+        'Chelyabinsk': 'Челябинск',
+        'Omsk': 'Омск',
+        'Samara': 'Самара',
+        'Rostov-on-Don': 'Ростов-на-Дону',
+        'Ufa': 'Уфа',
+        'Krasnoyarsk': 'Красноярск',
+        'Voronezh': 'Воронеж',
+        'Perm': 'Пермь',
+        'Volgograd': 'Волгоград',
+        'Krasnodar': 'Краснодар',
+        'Saratov': 'Саратов',
+        'Tyumen': 'Тюмень',
+        'Tolyatti': 'Тольятти',
+        'Izhevsk': 'Ижевск',
+        'Barnaul': 'Барнаул',
+        'Ulyanovsk': 'Ульяновск',
+        'Irkutsk': 'Иркутск',
+        'Khabarovsk': 'Хабаровск',
+        'Vladivostok': 'Владивосток',
+        'Yaroslavl': 'Ярославль',
+        'Vladimir': 'Владимир',
+        'Ivanovo': 'Иваново',
+        'Bryansk': 'Брянск',
+        'Smolensk': 'Смоленск',
+        'Kaluga': 'Калуга',
+        'Tula': 'Тула',
+        'Ryazan': 'Рязань',
+        'Moscow Oblast': 'Московская область',
+        'Leningrad Oblast': 'Ленинградская область'
+    }
+    
     try:
         # Игнорируем локальные IP
         if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
-            return 'Europe/Moscow', 'Moscow'  # По умолчанию для локальных
+            return 'Europe/Moscow', 'Москва'  # По умолчанию для локальных
 
         async with aiohttp.ClientSession() as session:
             async with session.get(f'https://ipapi.co/{ip_address}/json/', timeout=aiohttp.ClientTimeout(total=3)) as response:
@@ -596,6 +635,11 @@ async def get_timezone_from_ip(ip_address):
                     data = await response.json()
                     timezone = data.get('timezone')
                     city = data.get('city')
+                    
+                    # Преобразуем английское название города в русское, если есть в маппинге
+                    if city and city in city_mapping:
+                        city = city_mapping[city]
+                    
                     logger.info(f"Detected timezone: {timezone}, city: {city} for IP: {ip_address}")
                     return timezone if timezone else 'UTC', city
     except Exception as e:
