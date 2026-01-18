@@ -1084,9 +1084,11 @@
                 const response = await fetch('/api/favorite_contacts', {
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return [];
+                // if (!await checkAuth(response)) return [];
+                console.log('getFavoriteContactsFromServer response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('getFavoriteContactsFromServer data:', data);
                     return data.favorites || [];
                 }
             } catch (error) {
@@ -1114,6 +1116,16 @@
         }
 
         let cachedFavorites = null;
+        
+        // Initialize cachedFavorites
+        (async () => {
+            try {
+                cachedFavorites = await getFavoriteContactsFromServer();
+                console.log('Initialized cachedFavorites:', cachedFavorites);
+            } catch (error) {
+                console.error('Error initializing cachedFavorites:', error);
+            }
+        })();
 
         async function isFavoriteContact(username) {
             if (cachedFavorites === null) {
@@ -2484,9 +2496,11 @@
                     },
                     cache: 'no-store'
                 });
-                if (!await checkAuth(response)) return;
+                // if (!await checkAuth(response)) return;
+                console.log('updateTasks response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('updateTasks data:', data);
                     renderTaskGroups(data.tasks);
                 }
             } catch (error) {
@@ -2517,8 +2531,10 @@
         
         async function updatePeople() {
             try {
+                console.log('Starting updatePeople');
                 // Получаем избранные контакты заранее
-                const favoriteContacts = await getFavoriteContactsFromServer();
+                const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
+                console.log('Loaded favoriteContacts:', favoriteContacts);
                 
                 const response = await fetch('/api/partners', {
                     credentials: 'include',
@@ -2528,7 +2544,8 @@
                     },
                     cache: 'no-store'
                 });
-                if (!await checkAuth(response)) return;
+                // if (!await checkAuth(response)) return;
+                console.log('updatePeople response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
                     const peopleList = document.getElementById('people-list');
@@ -2692,6 +2709,7 @@
                                 if (partner.task_count) {
                                     html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">делегируют мне ' + partner.task_count + ' ' + pluralizeTask(partner.task_count) + '</span></div>';
                                 }
+                                console.log('Delegating_to_me: Checking favorite for', partner.contact_info, 'in', favoriteContacts);
                                 // Город на отдельной строке
                                 if (partner.city) {
                                     html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
