@@ -2842,6 +2842,7 @@
                     // Check if profile data actually changed
                     const currentProfileKey = JSON.stringify({
                         username: data.profile?.username,
+                        first_name: data.first_name,
                         city: data.profile?.city,
                         company: data.profile?.company,
                         position: data.profile?.position,
@@ -2883,9 +2884,9 @@
                             if (!currentImg || !currentImg.src.includes(data.user_avatar_url.split('?')[0])) {
                                 headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0;">`;
                             }
-                        } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.profile.first_name)) {
+                        } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.first_name)) {
                             // Показываем инициал только если элемент пустой и нет аватара
-                            const initial = (data.profile.username || data.profile.first_name || 'U').charAt(0).toUpperCase();
+                            const initial = (data.profile.username || data.first_name || 'U').charAt(0).toUpperCase();
                             headerAvatarSmall.innerHTML = `<div style="width: 36px; height: 36px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0;">${initial}</div>`;
                         }
                     }
@@ -2922,10 +2923,10 @@
                         if (data.user_avatar_url) {
                             html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
                         } else {
-                            const initial = (data.profile.username || data.profile.first_name || 'U')[0].toUpperCase();
+                            const initial = (data.profile.username || data.first_name || 'U')[0].toUpperCase();
                             html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
                         }
-                        html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.profile.first_name || 'Пользователь') + '</p>';
+                        html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || 'Пользователь') + '</p>';
                         html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
                         html += '</div>';
                         html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';

@@ -3514,7 +3514,7 @@ async def api_profile_handler(request):
             logger.error(f"Error getting cached profile: {e}")
 
     if cached_profile:
-        return web.json_response({'profile': cached_profile})
+        return web.json_response(cached_profile)
 
     # Get fresh data from database
     session_db = Session()
@@ -3539,15 +3539,61 @@ async def api_profile_handler(request):
             'rating_count': profile.rating_count if profile else 0
         }
 
+        # Get subscription and user data for additional fields
+        subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
+
+        # Calculate current time and date in user's timezone
+        user_tz = pytz.UTC
+        if user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+            except pytz.exceptions.UnknownTimeZoneError:
+                user_tz = pytz.UTC
+
+        base_now = datetime.now(pytz.UTC)
+        user_now = base_now.astimezone(user_tz)
+
+        months = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+        ]
+        current_time = user_now.strftime('%H:%M')
+        current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+
+        # Format subscription end date
+        formatted_end_date = None
+        if subscription and subscription.end_date:
+            end_dt = subscription.end_date
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=pytz.UTC)
+            end_local = end_dt.astimezone(user_tz if user.timezone else pytz.UTC)
+            formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
+
+        # Get user avatar URL
+        user_avatar_url = user.photo_url if user.photo_url else None
+        if user_avatar_url:
+            import random
+            user_avatar_url += f"?r={random.randint(100000, 999999)}"
+
+        # Add additional data to response
+        response_data = {
+            'profile': profile_data,
+            'current_time': current_time,
+            'current_date': current_date,
+            'formatted_end_date': formatted_end_date,
+            'user_avatar_url': user_avatar_url,
+            'first_name': user.first_name
+        }
+
         # Cache the profile data for 1 hour
         if redis_client:
             try:
-                await redis_client.setex(cache_key, 3600, json.dumps(profile_data).encode('utf-8'))
+                await redis_client.setex(cache_key, 3600, json.dumps(response_data).encode('utf-8'))
                 logger.info(f"Cached profile data for user {user_id}")
             except Exception as e:
                 logger.error(f"Error caching profile: {e}")
 
-        return web.json_response({'profile': profile_data})
+        return web.json_response(response_data)
     except Exception as e:
         logger.error(f"Error fetching profile: {e}")
         return web.json_response({'error': str(e)}, status=500)
