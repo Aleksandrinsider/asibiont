@@ -1692,10 +1692,7 @@
         
         function renderTaskGroups(tasks) {
             // Сохраняем все задачи с сервера
-            if (tasks !== allTasksData) {
-                allTasksFromServer = tasks;
-                currentPage = 1;
-            }
+            allTasksFromServer = tasks;
             
             // Применяем фильтр
             let filteredTasks = allTasksFromServer;
