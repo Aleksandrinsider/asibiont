@@ -1070,24 +1070,6 @@ async def dashboard_handler(request):
                 delegating_to_me = []
                 delegating_by_me = []
 
-            # Создаем список контактов с взаимным делегированием
-            delegating_both = []
-            delegating_to_me_usernames = {contact['username'] for contact in delegating_to_me}
-            for contact in delegating_by_me:
-                if contact['username'] in delegating_to_me_usernames:
-                    # Находим соответствующий контакт из delegating_to_me
-                    to_me_contact = next((c for c in delegating_to_me if c['username'] == contact['username']), None)
-                    if to_me_contact:
-                        delegating_both.append({
-                            'id': contact['id'],
-                            'username': contact['username'],
-                            'first_name': contact['first_name'],
-                            'reason': f'взаимное делегирование',
-                            'tasks': contact['tasks'] + to_me_contact['tasks'],  # Объединяем задачи
-                            'task_count_to_me': to_me_contact['task_count'],
-                            'task_count_by_me': contact['task_count']
-                        })
-
         finally:
             session_db.close()
         
@@ -1300,7 +1282,6 @@ async def dashboard_handler(request):
             'partners': partners,
             'delegating_to_me': delegating_to_me,
             'delegating_by_me': delegating_by_me,
-            'delegating_both': delegating_both,
             'subscription': subscription,
             'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE',
             'total_tasks': total_tasks,
@@ -2794,141 +2775,7 @@ async def api_partners_handler(request):
                     'type': 'delegating_by_me'
                 })
 
-        # Создаем список контактов с взаимным делегированием
-        delegating_both = []
-        delegating_to_me_usernames = {contact['username'] for contact in delegating_to_me}
-        for contact in delegating_by_me:
-            if contact['username'] in delegating_to_me_usernames:
-                # Находим соответствующий контакт из delegating_to_me
-                to_me_contact = next((c for c in delegating_to_me if c['username'] == contact['username']), None)
-                if to_me_contact:
-                    delegating_both.append({
-                        'id': contact['id'],
-                        'username': contact['username'],
-                        'first_name': contact['first_name'],
-                        'position': contact.get('position'),
-                        'interests': contact.get('interests'),
-                        'city': contact.get('city'),
-                        'company': contact.get('company'),
-                        'task_count_to_me': to_me_contact['task_count'],
-                        'task_count_by_me': contact['task_count'],
-                        'reason': f'взаимное делегирование'
-                    })
-
-        # Добавляем контакты с взаимным делегированием
-        for contact in delegating_both:
-            # Получить профиль для расчета общих интересов/навыков/целей
-            both_profile = session_db.query(UserProfile).filter_by(
-                user_id=contact['id']).first() if 'id' in contact else None
-            both_user = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
-
-            common_interests = None
-            common_skills = None
-            common_goals = None
-
-            if profile and both_profile:
-                # Common interests
-                if both_profile.interests and profile.interests:
-                    user_interests = set(i.strip().lower() for i in profile.interests.split(','))
-                    partner_interests = set(i.strip().lower() for i in both_profile.interests.split(','))
-                    common = user_interests & partner_interests
-                    common_interests = ', '.join(common) if common else None
-
-                # Common skills
-                if both_profile.skills and profile.skills:
-                    user_skills = set(s.strip().lower() for s in profile.skills.split(','))
-                    partner_skills = set(s.strip().lower() for s in both_profile.skills.split(','))
-                    common_sk = user_skills & partner_skills
-                    common_skills = ', '.join(common_sk) if common_sk else None
-
-                # Common goals
-                if both_profile.goals and profile.goals:
-                    user_goals = set(g.strip().lower() for g in profile.goals.split(','))
-                    partner_goals = set(g.strip().lower() for g in both_profile.goals.split(','))
-                    common_g = user_goals & partner_goals
-                    common_goals = ', '.join(common_g) if common_g else None
-
-            # Common tasks for delegating_both
-            common_tasks = None
-            if profile and both_profile:
-                # Get user's tasks
-                user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-                user_task_titles = set()
-                for task in user_tasks:
-                    if task.title:
-                        user_task_titles.add(task.title.lower().strip())
-
-                # Get both user's tasks
-                both_tasks = session_db.query(Task).filter_by(user_id=both_user.id).all()
-                both_task_titles = set()
-                for task in both_tasks:
-                    if task.title:
-                        both_task_titles.add(task.title.lower().strip())
-
-                common_task_titles = user_task_titles & both_task_titles
-                common_tasks = ', '.join(
-                    list(common_task_titles)[
-                        :5]) if common_task_titles else None  # Limit to 5 common tasks
-
-            # Update avatar from Telegram if available
-            photo_url = both_user.photo_url if both_user and both_user.photo_url else None
-            if both_user and both_user.telegram_id and 'bot' in request.app:
-                try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], both_user.telegram_id)
-                    if updated_avatar and updated_avatar != both_user.photo_url:
-                        both_user.photo_url = updated_avatar
-                        session_db.commit()
-                        photo_url = updated_avatar
-                except Exception as e:
-                    logger.error(f"Error updating both avatar for {both_user.telegram_id}: {e}")
-
-            # Check tier access
-            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
-            both_tier = both_user.subscription_tier if both_user and both_user.subscription_tier else SubscriptionTier.BRONZE
-            
-            # Convert to string for comparison
-            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-            both_tier_str = both_tier.value if hasattr(both_tier, 'value') else str(both_tier).lower()
-            
-            can_access = False
-            required_tier = None
-            
-            if user_tier_str.lower() in ['bronze', 'silver']:
-                # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (both_tier_str.lower() in ['bronze', 'silver'])
-                logger.info(f"Both check: User {user_tier_str} checking both {both_tier_str}: can_access = {can_access}")
-                if not can_access:
-                    required_tier = 'gold'
-            elif user_tier_str.lower() == 'gold':
-                can_access = True
-                logger.info(f"Both check: User {user_tier_str} can access all both")
-
-            # Only add contact if user can access it
-            if can_access:
-                logger.info(f"Adding delegating_both contact {contact['username']} with tier {both_tier_str} for user {user.username} with tier {user_tier_str}")
-                partners_data.append({
-                    'contact_info': contact['username'] if can_access else None,
-                    'telegram_id': both_user.telegram_id if both_user else None,
-                    'can_access': can_access,
-                    'required_tier': required_tier,
-                    'subscription_tier': both_tier.value if both_tier else 'bronze',
-                    'photo_url': photo_url,
-                    'first_name': contact['first_name'],
-                    'position': contact.get('position'),
-                    'interests': contact.get('interests'),
-                    'city': contact.get('city'),
-                    'company': contact.get('company'),
-                    'common_interests': common_interests,
-                    'common_skills': common_skills,
-                    'common_goals': common_goals,
-                    'common_tasks': common_tasks,
-                    'average_rating': both_profile.average_rating if both_profile else 0,
-                    'rating_count': both_profile.rating_count if both_profile else 0,
-                    'reason': contact['reason'],
-                    'task_count_to_me': contact.get('task_count_to_me', 0),
-                    'task_count_by_me': contact.get('task_count_by_me', 0),
-                    'type': 'delegating_both'
-                })
+        # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
 
         # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
