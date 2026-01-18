@@ -1798,10 +1798,10 @@ details[open] .details-content {
 .disabled-btn:hover::after {
     content: '🚫';
     position: absolute;
-    top: 50%;
+    top: -15px;
     left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 12px;
+    transform: translateX(-50%);
+    font-size: 14px;
     color: #dc2626;
     pointer-events: none;
     z-index: 100;
