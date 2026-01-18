@@ -2143,10 +2143,10 @@
                     }
                     
                     if (partner.photo_url) {
-                        html += `<img src="${partner.photo_url}" style="width: 74px; height: 74px; border-radius: 50%; object-fit: cover; border: 2px solid white; margin-bottom: 8px;">`;
+                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 74px; height: 74px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid white; margin: 0 auto 8px auto;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid white; margin: 0 auto 8px auto;">${initial}</div>`;
                     }
                     
                     // Имя и ник под аватаром
@@ -2915,12 +2915,12 @@
                             // Обновляем только если URL изменился или элемент пустой
                             const currentImg = headerAvatarSmall.querySelector('img');
                             if (!currentImg || !currentImg.src.includes(data.user_avatar_url.split('?')[0])) {
-                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 46px; height: 46px; border-radius: 6px; object-fit: cover;">`;
+                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 56px; height: 56px; border-radius: 6px; object-fit: cover;">`;
                             }
                         } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.first_name)) {
                             // Показываем инициал только если элемент пустой и нет аватара
                             const initial = (data.profile.username || data.first_name || 'U').charAt(0).toUpperCase();
-                            headerAvatarSmall.innerHTML = `<div style="width: 46px; height: 46px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px;">${initial}</div>`;
+                            headerAvatarSmall.innerHTML = `<div style="width: 56px; height: 56px; border-radius: 6px; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px;">${initial}</div>`;
                         }
                     }
                     
