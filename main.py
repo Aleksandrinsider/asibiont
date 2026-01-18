@@ -2209,9 +2209,16 @@ async def api_partners_handler(request):
 
             # Filter partners
             if hidden_contacts:
-                partners = [
-                    p for p in partners if p.contact_info and p.contact_info.replace(
-                        '@', '').lower() not in hidden_contacts]
+                filtered_partners = []
+                for p in partners:
+                    partner_user = session_db.query(User).filter_by(id=p.user_id).first()
+                    if partner_user and partner_user.username:
+                        username_clean = partner_user.username.replace('@', '').lower()
+                        if username_clean not in hidden_contacts:
+                            filtered_partners.append(p)
+                    else:
+                        filtered_partners.append(p)  # Include if no username
+                partners = filtered_partners
 
             # Don't filter by tier - everyone sees everyone
             # But we'll add tier info to determine access on frontend
