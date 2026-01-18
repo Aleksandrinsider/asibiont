@@ -923,12 +923,29 @@ async def dashboard_handler(request):
                     session_db.commit()
                     logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
             
+            # Синхронизировать тариф пользователя с активной подпиской
+            if subscription and subscription.status == 'active' and subscription.tier:
+                sub_tier = subscription.tier.value if hasattr(subscription.tier, 'value') else str(subscription.tier).upper()
+                user_tier = user.subscription_tier.value if user.subscription_tier else None
+                
+                if sub_tier != user_tier:
+                    logger.info(f"Syncing user tier: {user_tier} -> {sub_tier}")
+                    if sub_tier == 'BRONZE':
+                        user.subscription_tier = SubscriptionTier.BRONZE
+                    elif sub_tier == 'SILVER':
+                        user.subscription_tier = SubscriptionTier.SILVER
+                    elif sub_tier == 'GOLD':
+                        user.subscription_tier = SubscriptionTier.GOLD
+                    session_db.commit()
+                    logger.info(f"User {user.username} tier synced to {sub_tier}")
+            
             logger.info(
                 f"Subscription found: {
                     subscription.id if subscription else None}, status: {
                     subscription.status if subscription else None}, end_date: {
                     subscription.end_date if subscription else None}, tier: {
-                    subscription.tier if subscription else None}")
+                    subscription.tier if subscription else None}, user_tier: {
+                    user.subscription_tier.value if user.subscription_tier else None}")
 
             if not subscription or subscription.status != 'active':
                 logger.info("No active subscription, redirecting to subscription_tiers")
