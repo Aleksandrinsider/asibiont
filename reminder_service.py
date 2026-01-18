@@ -578,7 +578,7 @@ class ReminderService:
             # Проверить, находится ли текущее время в периоде запрета (22:00 - 10:00)
             if PROACTIVE_NO_SEND_START_HOUR <= current_hour or current_hour < PROACTIVE_NO_SEND_END_HOUR:
                 # Время запрета, перепланировать следующий чек с правильным интервалом
-                await self._reschedule_proactive_check(user_id, has_tasks=False)  # Без задач, так как не проверяли
+                await self._reschedule_proactive_check(user_id, has_tasks=False, urgent=False)  # Без задач, так как не проверяли
                 return
             
             # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
@@ -612,6 +612,9 @@ class ReminderService:
             
             # Проверить, есть ли задачи с reminder_time в ближайшие 60 минут
             tasks_in_60_min = 0
+            urgent_tasks = []  # Задачи, где осталось менее 1/3 времени
+            moderate_tasks = []  # Задачи, где осталось 1/3-2/3 времени
+            
             for task in pending_tasks:
                 # Сделать reminder_time aware с UTC, если он naive
                 reminder_time = task.reminder_time
@@ -620,30 +623,58 @@ class ReminderService:
                 
                 if now_utc <= reminder_time < next_60_min_utc:
                     tasks_in_60_min += 1
+                
+                # Применяем принцип 1/3-2/3 для определения urgency
+                time_until_reminder = reminder_time - now_utc
+                if time_until_reminder.total_seconds() > 0:
+                    # Вычисляем, сколько времени прошло от создания задачи до reminder_time
+                    # Для простоты используем время до reminder_time как общий срок
+                    total_time = time_until_reminder.total_seconds()
+                    
+                    # Если осталось менее 1/3 времени - urgent (нужен интенсивный контроль)
+                    if time_until_reminder.total_seconds() < total_time / 3:
+                        urgent_tasks.append(task)
+                    # Если осталось 1/3-2/3 времени - moderate (нужен умеренный контроль)  
+                    elif time_until_reminder.total_seconds() < (total_time * 2) / 3:
+                        moderate_tasks.append(task)
             
-            # Адаптивная логика проактивных сообщений
+            # Адаптивная логика проактивных сообщений с принципом 1/3-2/3
             total_pending_tasks = len(pending_tasks)
+            has_urgent_tasks = len(urgent_tasks) > 0
+            has_moderate_tasks = len(moderate_tasks) > 0
             
             # 1. Если есть задачи в ближайший час - не отправлять (пользователь активен)
             if tasks_in_60_min > 0:
-                await self._reschedule_proactive_check(user_id, has_tasks=True)
+                await self._reschedule_proactive_check(user_id, has_tasks=True, urgent=has_urgent_tasks)
                 return
             
-            # 2. Если есть задачи, но не в ближайший час - отправить мотивирующее сообщение
-            if total_pending_tasks > 0 and tasks_in_60_min == 0:
+            # 2. Если есть urgent задачи (осталось <1/3 времени) - отправить мотивирующее сообщение чаще
+            if has_urgent_tasks:
                 await self.send_proactive_message(user_id)
-                await self._reschedule_proactive_check(user_id, has_tasks=True)
+                await self._reschedule_proactive_check(user_id, has_tasks=True, urgent=True)
                 return
             
-            # 3. Если совсем нет задач - отправить проактивное предложение создать задачу
+            # 3. Если есть moderate задачи (1/3-2/3 времени) - отправить сообщение с обычной частотой
+            if has_moderate_tasks or (total_pending_tasks > 0 and not has_urgent_tasks):
+                await self.send_proactive_message(user_id)
+                await self._reschedule_proactive_check(user_id, has_tasks=True, urgent=False)
+                return
+            
+            # 4. Если совсем нет задач - отправить проактивное предложение создать задачу
             if total_pending_tasks == 0:
                 await self.send_proactive_message(user_id)
-                await self._reschedule_proactive_check(user_id, has_tasks=False)
+                await self._reschedule_proactive_check(user_id, has_tasks=False, urgent=False)
         finally:
             db.close()
 
-    async def _reschedule_proactive_check(self, user_id: int, has_tasks: bool):
-        """Перепланирование следующей проактивной проверки с правильным интервалом"""
+    async def _reschedule_proactive_check(self, user_id: int, has_tasks: bool, urgent: bool = False):
+        """Перепланирование следующей проактивной проверки с правильным интервалом
+        
+        Args:
+            user_id: ID пользователя
+            has_tasks: Есть ли задачи у пользователя
+            urgent: Задачи в urgent состоянии (осталось <1/3 времени до дедлайна)
+        """
         from models import Session
         from models import User
         
@@ -656,8 +687,16 @@ class ReminderService:
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             job_id = f"proactive_{user.telegram_id}"
             
-            # Выбрать интервал в зависимости от наличия задач
-            interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES if has_tasks else PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
+            # Выбрать интервал в зависимости от наличия задач и urgency
+            if urgent:
+                # Urgent задачи - более частые проверки (каждые 15 минут)
+                interval_minutes = 15
+            elif has_tasks:
+                # Обычные задачи - стандартный интервал
+                interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES
+            else:
+                # Нет задач - более редкие проверки
+                interval_minutes = PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
             
             # Вычисляем параметры cron триггера на основе интервала
             if interval_minutes >= 60:
@@ -679,7 +718,7 @@ class ReminderService:
                 id=job_id,
                 replace_existing=True
             )
-            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} with {interval_minutes}min interval (has_tasks={has_tasks})")
+            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} with {interval_minutes}min interval (has_tasks={has_tasks}, urgent={urgent})")
         finally:
             db.close()
 
