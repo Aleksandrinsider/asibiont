@@ -1629,7 +1629,21 @@ async def generate_proactive_message(user_id):
                         return result["choices"][0]["message"]["content"].strip()
         except Exception:
             pass
-        return "Привет! 👋"
+        # Более разнообразные fallback сообщения вместо повторяющегося "Привет! 👋"
+        import random
+        fallback_messages = [
+            "Как твои дела сегодня?",
+            "Чем занимаешься?",
+            "Есть что-нибудь интересное?",
+            "Как настроение?",
+            "Что нового?",
+            "Чем могу помочь?",
+            "Как продвигаются дела?",
+            "Что планируешь сегодня?",
+            "Есть вопросы или нужна помощь?",
+            "Как успехи?"
+        ]
+        return random.choice(fallback_messages)
 
 
 async def generate_daily_report(user_id):

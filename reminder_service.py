@@ -213,6 +213,28 @@ class ReminderService:
                     )
                     logger.info(f"✅ Result check sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     result_check_sent_successfully = True
+                    
+                    # Сохранить result check в историю чата (Redis)
+                    try:
+                        import json
+                        from config import redis_client
+                        if redis_client:
+                            context_data = await redis_client.get(f"context:{user_id}")
+                            if context_data:
+                                context = json.loads(context_data.decode('utf-8'))
+                            else:
+                                context = []
+                            
+                            # Добавляем result check как сообщение от AI
+                            context.append({"user": "", "agent": result_text})
+                            if len(context) > 10:
+                                context = context[-10:]
+                            
+                            await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                            logger.info(f"Saved result check to chat context for user {user_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to save result check to context: {e}")
+                        
                 except Exception as send_error:
                     logger.error(f"❌ Failed to send Telegram message to user {user_id}: {type(send_error).__name__}: {send_error}")
                     logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -298,7 +320,28 @@ class ReminderService:
             reminder_text = await self.generate_reminder(user_id, task_title)
             logger.info(f"Reminder text generated: {reminder_text[:100]}...")
             
-            # Сохранить напоминание в историю чата
+            # Сохранить напоминание в историю чата (Redis)
+            try:
+                import json
+                from config import redis_client
+                if redis_client:
+                    context_data = await redis_client.get(f"context:{user_id}")
+                    if context_data:
+                        context = json.loads(context_data.decode('utf-8'))
+                    else:
+                        context = []
+                    
+                    # Добавляем напоминание как сообщение от AI
+                    context.append({"user": "", "agent": reminder_text})
+                    if len(context) > 10:
+                        context = context[-10:]
+                    
+                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                    logger.info(f"Saved reminder to chat context for user {user_id}")
+            except Exception as e:
+                logger.error(f"Failed to save reminder to context: {e}")
+            
+            # Сохранить напоминание в таблицу Interaction
             db = Session()
             try:
                 # Найти user.id по telegram_id
@@ -754,6 +797,41 @@ class ReminderService:
             try:
                 proactive_text = await self.generate_proactive_message(user_id)
                 
+                # Сохранить проактивное сообщение в историю чата (Redis)
+                try:
+                    import json
+                    from config import redis_client
+                    if redis_client:
+                        context_data = await redis_client.get(f"context:{user_id}")
+                        if context_data:
+                            context = json.loads(context_data.decode('utf-8'))
+                        else:
+                            context = []
+                        
+                        # Добавляем проактивное сообщение как сообщение от AI
+                        context.append({"user": "", "agent": proactive_text})
+                        if len(context) > 10:
+                            context = context[-10:]
+                        
+                        await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                        logger.info(f"Saved proactive message to chat context for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save proactive message to context: {e}")
+                
+                # Сохранить проактивное сообщение в таблицу Interaction
+                try:
+                    interaction = Interaction(
+                        user_id=user.id,
+                        message_type="ai",
+                        content=proactive_text
+                    )
+                    db.add(interaction)
+                    db.commit()
+                    logger.info(f"Saved proactive message to interaction history for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save proactive message to interactions: {e}")
+                    db.rollback()
+                
                 if self.bot:
                     await self.bot.send_message(
                         chat_id=user_id,
@@ -805,6 +883,27 @@ class ReminderService:
             # Генерируем текст напоминания с учётом эскалации
             max_reminders = max(task.overdue_reminders_sent for task in overdue_tasks)
             overdue_text = await self.generate_overdue_reminder(user_id, overdue_tasks, escalation_level=max_reminders)
+            
+            # Сохранить overdue reminder в историю чата (Redis)
+            try:
+                import json
+                from config import redis_client
+                if redis_client:
+                    context_data = await redis_client.get(f"context:{user_id}")
+                    if context_data:
+                        context = json.loads(context_data.decode('utf-8'))
+                    else:
+                        context = []
+                    
+                    # Добавляем overdue reminder как сообщение от AI
+                    context.append({"user": "", "agent": overdue_text})
+                    if len(context) > 10:
+                        context = context[-10:]
+                    
+                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                    logger.info(f"Saved overdue reminder to chat context for user {user_id}")
+            except Exception as e:
+                logger.error(f"Failed to save overdue reminder to context: {e}")
             
             if self.bot:
                 await self.bot.send_message(
@@ -902,6 +1001,27 @@ class ReminderService:
                             text=message
                         )
                         logger.info(f"Sent progress request to recipient {recipient_id} for task {task_id}")
+                        
+                        # Сохранить progress request в историю чата получателя (Redis)
+                        try:
+                            import json
+                            from config import redis_client
+                            if redis_client:
+                                context_data = await redis_client.get(f"context:{recipient_id}")
+                                if context_data:
+                                    context = json.loads(context_data.decode('utf-8'))
+                                else:
+                                    context = []
+                                
+                                # Добавляем progress request как сообщение от AI
+                                context.append({"user": "", "agent": message})
+                                if len(context) > 10:
+                                    context = context[-10:]
+                                
+                                await redis_client.set(f"context:{recipient_id}", json.dumps(context).encode('utf-8'))
+                                logger.info(f"Saved progress request to chat context for recipient {recipient_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to save progress request to recipient context: {e}")
 
                         # Also notify delegator about the progress check
                         try:
@@ -911,6 +1031,26 @@ class ReminderService:
                                 text=delegator_message
                             )
                             logger.info(f"Notified delegator {delegator_id} about progress request for task {task_id}")
+                            
+                            # Сохранить уведомление delegator'у в историю чата (Redis)
+                            try:
+                                if redis_client:
+                                    context_data = await redis_client.get(f"context:{delegator_id}")
+                                    if context_data:
+                                        context = json.loads(context_data.decode('utf-8'))
+                                    else:
+                                        context = []
+                                    
+                                    # Добавляем уведомление как сообщение от AI
+                                    context.append({"user": "", "agent": delegator_message})
+                                    if len(context) > 10:
+                                        context = context[-10:]
+                                    
+                                    await redis_client.set(f"context:{delegator_id}", json.dumps(context).encode('utf-8'))
+                                    logger.info(f"Saved delegator notification to chat context for delegator {delegator_id}")
+                            except Exception as e:
+                                logger.error(f"Failed to save delegator notification to context: {e}")
+                                
                         except Exception as e:
                             logger.error(f"Failed to notify delegator: {e}")
 
