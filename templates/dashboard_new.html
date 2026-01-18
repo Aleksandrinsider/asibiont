@@ -731,6 +731,7 @@
         }
         
         function addMessage(text, sender, timestamp) {
+            console.log(`[ADD MESSAGE] Adding message from ${sender}: ${text.substring(0, 50)}...`);
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
@@ -777,26 +778,33 @@
         }
         
         async function loadChatHistory() {
+            console.log('[CHAT HISTORY] Starting to load chat history');
             try {
                 const response = await safeFetch('/api/interactions');
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
+                    console.log(`[CHAT HISTORY] Loaded ${data.interactions ? data.interactions.length : 0} interactions`);
                     const messages = document.getElementById('chat-messages');
                     // Clear existing messages except welcome
                     const welcomeMessage = messages.querySelector('.message.ai');
+                    console.log('[CHAT HISTORY] Clearing messages, welcome message found:', !!welcomeMessage);
                     messages.innerHTML = '';
                     if (welcomeMessage) {
                         messages.appendChild(welcomeMessage);
                     }
                     
                     // Add history messages
-                    data.interactions.forEach(interaction => {
-                        addMessage(interaction.content, interaction.message_type, interaction.created_at);
-                    });
+                    if (data.interactions) {
+                        data.interactions.forEach((interaction, index) => {
+                            console.log(`[CHAT HISTORY] Adding message ${index + 1}/${data.interactions.length}: ${interaction.message_type} - ${interaction.content.substring(0, 50)}...`);
+                            addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                        });
+                    }
                     
                     // Update lastMessageCount
-                    lastMessageCount = data.interactions.length;
+                    lastMessageCount = data.interactions ? data.interactions.length : 0;
+                    console.log(`[CHAT HISTORY] Updated lastMessageCount to ${lastMessageCount}`);
                 }
             } catch (error) {
                 console.error('Failed to load chat history:', error);
@@ -2318,6 +2326,7 @@
             // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
             
             // Загрузить историю чата
+            console.log('[PAGE LOAD] Calling loadChatHistory');
             loadChatHistory();
             
             // Инициализировать задачи и контакты при загрузке страницы
