@@ -789,7 +789,7 @@ class ReminderService:
             
             # Перепланировать джоб с новым интервалом
             self.scheduler.add_job(
-                self.check_and_send_proactive,
+                _check_and_send_proactive_job,
                 trigger="cron",
                 minute=minute,
                 hour=hour,
