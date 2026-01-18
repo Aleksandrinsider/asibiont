@@ -877,6 +877,11 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
+                    if (data.duplicate) {
+                        // Duplicate message, don't add to chat
+                        console.log('Duplicate message detected, skipping');
+                        return;
+                    }
                     addMessage(data.response, 'ai');
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
@@ -978,6 +983,11 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
+                    if (data.duplicate) {
+                        // Duplicate message, don't add to chat
+                        console.log('Duplicate message detected, skipping');
+                        return;
+                    }
                     addMessage(data.response, 'ai');
                     // Обновить профиль и время сразу
                     await updateProfile();

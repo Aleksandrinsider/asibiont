@@ -1298,12 +1298,8 @@ async def chat_handler(request):
                 is_duplicate = await redis_client.exists(message_key)
                 if is_duplicate:
                     logger.warning(f"[WEB DUPLICATE] Message from user {user_id} IGNORED (already processed)")
-                    # Return cached response instead
-                    cached_response = await redis_client.get(f"{message_key}:response")
-                    if cached_response:
-                        return web.json_response({'response': cached_response.decode('utf-8')})
-                    # If no cached response, allow processing but log it
-                    logger.warning("[WEB DUPLICATE] No cached response found, allowing reprocess")
+                    # Return duplicate flag instead of cached response to prevent frontend from adding duplicate message
+                    return web.json_response({'duplicate': True, 'message': 'Message already processed'})
             except Exception as e:
                 logger.error(f"Error checking duplicate: {e}")
 
