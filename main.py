@@ -123,6 +123,19 @@ try:
         else:
             logger.info("Migration: languages column already exists")
 
+        # Migration for favorite_contacts column
+        if 'favorite_contacts' not in columns:
+            try:
+                logger.info("Adding favorite_contacts column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN favorite_contacts TEXT'))
+                session.commit()
+                logger.info("Migration: favorite_contacts column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add favorite_contacts column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: favorite_contacts column already exists")
+
         # Migration for subscriptions table
         if 'subscriptions' in inspector.get_table_names():
             sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
