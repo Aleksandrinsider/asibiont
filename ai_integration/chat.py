@@ -381,6 +381,42 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent = {"type": "delegate_task", "confidence": 0.9, "params": {"delegated_to_username": mentions[0]}}
                 logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}...")
 
+        # Special handling for delete task requests
+        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['удали', 'удалить', 'delete', 'remove', 'сними', 'отмени']):
+            if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+                intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[DELETE TASK DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
+
+        # Special handling for add task requests
+        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'add', 'create']):
+            if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+                intent = {"type": "add_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
+
+        # Special handling for complete task requests
+        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['заверши', 'выполни', 'complete', 'finish', 'done']):
+            if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+                intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
+
+        # Special handling for list tasks requests
+        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['покажи', 'список', 'list', 'show']):
+            if any(word in clean_message.lower() for word in ['задачи', 'задач', 'tasks']):
+                intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+                logger.info(f"[LIST TASKS DETECTED] Setting intent to list_tasks for message: {clean_message[:50]}...")
+
+        # Special handling for update profile requests
+        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['обнови', 'измени', 'добавь', 'update', 'change', 'add']):
+            if any(word in clean_message.lower() for word in ['профиль', 'профиле', 'profile']):
+                intent = {"type": "update_profile", "confidence": 0.9, "params": {}}
+                logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
+
+        # Special handling for profile information sharing
+        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']):
+            if any(word in clean_message.lower() for word in ['директор', 'менеджер', 'разработчик', 'компания', 'фирма', 'director', 'manager', 'developer', 'company']):
+                intent = {"type": "profile_info", "confidence": 0.8, "params": {}}
+                logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
+
         # Убрана специальная обработка приветствий - все через AI промпт
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
@@ -531,6 +567,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Для задач нужна точность
             temperature = 0.6
             top_p = 1.0
+        elif intent_type == 'profile_info':
+            # Для информации о профиле нужна максимальная точность
+            temperature = 0.1
+            top_p = 1.0
         else:
             # По умолчанию
             temperature = 0.7
@@ -541,7 +581,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
-            "model": "deepseek-chat",
+            "model": "deepseek-v3.2",
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": tool_choice,
@@ -551,6 +591,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
         # Retry loop for API call
         max_retries = 2
+        message_response = {"content": ""}  # Initialize with default
+        tool_calls = []  # Initialize tool_calls
         for attempt in range(max_retries + 1):
             try:
                 async with aiohttp.ClientSession() as session:
@@ -809,7 +851,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                 task_id = int(match.group(2))
 
                                                 # Получаем рекомендации и релевантные контакты из базы данных
-                                                session_db = Session()
+                                                from models import Session as SessionModel
+                                                session_db = SessionModel()
                                                 try:
                                                     task = session_db.query(Task).filter_by(id=task_id).first()
                                                     recommendations = []
