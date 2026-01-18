@@ -122,7 +122,9 @@ class Subscription(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True)
+    telegram_id = Column(Integer, nullable=False)  # Telegram ID for quick access
     telegram_username = Column(String(100))  # Telegram username for identification
+    username = Column(String(255))  # Username for quick access
     status = Column(String(50), default='inactive')  # active, inactive, expired
     plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
     tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # Subscription tier

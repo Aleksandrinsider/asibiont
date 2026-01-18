@@ -22,11 +22,7 @@ engine = create_engine(
     max_overflow=0,
     pool_timeout=60,
     pool_recycle=3600,
-    pool_pre_ping=True,
-    connect_args={
-        "connect_timeout": 30,
-        "options": "-c statement_timeout=30000"
-    }
+    pool_pre_ping=True
 )
 Session = sessionmaker(bind=engine)
 

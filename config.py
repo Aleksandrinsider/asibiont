@@ -17,11 +17,11 @@ else:
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
 if LOCAL:
     DATABASE_URL = "sqlite:///local.db"  # Use SQLite for local development
 elif not DATABASE_URL:
-    raise ValueError("DATABASE_URL is required in .env file")
+    raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")  # V3.2 reasoning model for agents

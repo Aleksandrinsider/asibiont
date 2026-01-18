@@ -85,6 +85,8 @@ def activate_subscription(user_id, plan='monthly', tier='bronze'):
             sub.tier = tier_enum
             sub.start_date = start_date
             sub.end_date = end_date
+            sub.telegram_id = user.telegram_id  # Update telegram_id
+            sub.username = user.username  # Update username
             user.subscription_tier = tier_enum
             session.commit()
             
@@ -111,7 +113,9 @@ def activate_subscription(user_id, plan='monthly', tier='bronze'):
             # Create new subscription
             new_sub = Subscription(
                 user_id=user.id,
+                telegram_id=user.telegram_id,  # Add telegram_id
                 telegram_username=user.username,
+                username=user.username,  # Add username
                 status='active',
                 plan=plan,
                 tier=tier_enum,
