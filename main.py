@@ -999,8 +999,12 @@ async def dashboard_handler(request):
                 for task in my_delegated_tasks:
                     if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
                         delegatee_usernames.add(task.delegated_to_username)
-                        delegatee = session_db.query(User).filter(User.username.ilike(
-                            task.delegated_to_username.replace('@', ''))).first()
+                        delegatee = session_db.query(User).filter(
+                            or_(
+                                User.username.ilike(task.delegated_to_username.replace('@', '')),
+                                User.username.ilike(f'@{task.delegated_to_username.replace("@", "")}')
+                            )
+                        ).first()
                         if delegatee and delegatee.id != user.id:
                             delegatee_tasks = [
                                 t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
@@ -2239,8 +2243,13 @@ async def api_partners_handler(request):
 
             try:
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
+                from sqlalchemy import or_
+                username_clean = user.username.replace('@', '') if user.username else ''
                 delegated_tasks = session_db.query(Task).filter(
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    or_(
+                        Task.delegated_to_username.ilike(username_clean),
+                        Task.delegated_to_username.ilike(f'@{username_clean}')
+                    ),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
 
@@ -2275,8 +2284,12 @@ async def api_partners_handler(request):
                 for task in my_delegated_tasks:
                     if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
                         delegatee_usernames.add(task.delegated_to_username)
-                        delegatee = session_db.query(User).filter(User.username.ilike(
-                            task.delegated_to_username.replace('@', ''))).first()
+                        delegatee = session_db.query(User).filter(
+                            or_(
+                                User.username.ilike(task.delegated_to_username.replace('@', '')),
+                                User.username.ilike(f'@{task.delegated_to_username.replace("@", "")}')
+                            )
+                        ).first()
                         if delegatee and delegatee.id != user.id:
                             delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first()
                             task_titles = [
