@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Contacts</title>
+    <style>
+        .contact-recommended { background: #e3f2fd; }
+        .contact-delegating-to-me { background: #f3e5f5; }
+        .contact-delegating-by-me { background: #e8f5e8; }
+        .task-item { padding: 10px; margin: 5px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test Contacts Display</h1>
+    <div id="people-list"></div>
+
+    <script>
+        // Test data similar to what API returns
+        const testData = {
+            partners: [
+                {
+                    contact_info: 'test_silver',
+                    type: 'delegating_to_me',
+                    task_count: 1,
+                    subscription_tier: 'SILVER'
+                },
+                {
+                    contact_info: 'test_gold',
+                    type: 'delegating_to_me',
+                    task_count: 1,
+                    subscription_tier: 'GOLD'
+                },
+                {
+                    contact_info: 'test_silver',
+                    type: 'delegating_by_me',
+                    task_count: 1,
+                    subscription_tier: 'SILVER'
+                }
+            ]
+        };
+
+        function updatePeople() {
+            console.log('updatePeople: Starting...');
+            console.log('updatePeople: Data:', testData);
+
+            const data = testData;
+            const peopleList = document.getElementById('people-list');
+
+            if (data.partners && data.partners.length > 0) {
+                let html = '<ul>';
+
+                data.partners.forEach(partner => {
+                    console.log('Processing partner:', partner);
+
+                    if (partner.type === 'recommended') {
+                        // Recommended contacts
+                        html += '<li class="task-item contact-recommended">';
+                        html += '<div>@' + partner.contact_info + ' (recommended)</div>';
+                        html += '</li>';
+                    } else if (partner.type === 'delegating_to_me') {
+                        // Contacts delegating to me
+                        const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
+                        html += '<li class="task-item contact-delegating-to-me" data-username="' + partner.contact_info + '"' + tierAttr + '>';
+                        html += '<div>@' + partner.contact_info + ' (делегирует мне';
+                        if (partner.task_count) {
+                            html += ' ' + partner.task_count + ' задач';
+                        }
+                        html += ')</div>';
+                        html += '</li>';
+                    } else if (partner.type === 'delegating_by_me') {
+                        // Contacts I delegate to
+                        const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
+                        html += '<li class="task-item contact-delegating-by-me" data-username="' + partner.contact_info + '"' + tierAttr + '>';
+                        html += '<div>@' + partner.contact_info + ' (я делегирую';
+                        if (partner.task_count) {
+                            html += ' ' + partner.task_count + ' задач';
+                        }
+                        html += ')</div>';
+                        html += '</li>';
+                    }
+                });
+
+                html += '</ul>';
+                console.log('Generated HTML:', html);
+                peopleList.innerHTML = html;
+            } else {
+                peopleList.innerHTML = '<p>No contacts found</p>';
+            }
+        }
+
+        // Run test
+        updatePeople();
+    </script>
+</body>
+</html>

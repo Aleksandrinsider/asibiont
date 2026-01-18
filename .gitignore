@@ -11,7 +11,6 @@ venv/
 .DS_Store
 local.db
 my/
-static/
 *.sqlite3
 test.db
 test_local.db

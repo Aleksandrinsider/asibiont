@@ -522,6 +522,49 @@
         let currentTaskFilter = 'all'; // Текущий фильтр задач
         let currentContactFilter = 'favorite'; // Текущий фильтр контактов - по умолчанию "Мои"
         
+        function filterContacts(filterType) {
+            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
+            const profileContent = document.getElementById('profile-content');
+            const profileBtn = document.getElementById('profile-toggle-btn');
+            const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
+            const peopleSection = document.querySelector('.people-section');
+            const peopleList = document.querySelector('.people-list');
+            
+            if (profileContent && profileContent.style.display !== 'none') {
+                profileContent.style.display = 'none';
+                if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
+                localStorage.setItem('profileCollapsed', 'true');
+                
+                // Разворачиваем список контактов
+                if (peopleSection) {
+                    peopleSection.style.flex = '1 1 auto';
+                    peopleSection.style.minHeight = '0';
+                }
+                if (peopleList) {
+                    peopleList.style.maxHeight = '';
+                }
+            }
+            
+            // Если фильтр уже активен, только сворачиваем профиль
+            if (currentContactFilter === filterType) {
+                return;
+            }
+            
+            currentContactFilter = filterType;
+            
+            // Обновляем стили кнопок фильтров контактов
+            document.querySelectorAll('.contact-filter-btn').forEach(btn => {
+                if (btn.getAttribute('data-filter') === filterType) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Перерендерим контакты с новым фильтром
+            renderContacts();
+        }
+        
         // Функция склонения слова "задача"
         function pluralizeTask(count) {
             const lastDigit = count % 10;
@@ -1661,49 +1704,6 @@
             
             // Перерендерим задачи с новым фильтром
             renderTaskGroups(allTasksFromServer);
-        }
-        
-        function filterContacts(filterType) {
-            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
-            const profileContent = document.getElementById('profile-content');
-            const profileBtn = document.getElementById('profile-toggle-btn');
-            const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
-            const peopleSection = document.querySelector('.people-section');
-            const peopleList = document.querySelector('.people-list');
-            
-            if (profileContent && profileContent.style.display !== 'none') {
-                profileContent.style.display = 'none';
-                if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
-                localStorage.setItem('profileCollapsed', 'true');
-                
-                // Разворачиваем список контактов
-                if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto';
-                    peopleSection.style.minHeight = '0';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
-                }
-            }
-            
-            // Если фильтр уже активен, только сворачиваем профиль
-            if (currentContactFilter === filterType) {
-                return;
-            }
-            
-            currentContactFilter = filterType;
-            
-            // Обновляем стили кнопок фильтров контактов
-            document.querySelectorAll('.contact-filter-btn').forEach(btn => {
-                if (btn.getAttribute('data-filter') === filterType) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-            
-            // Перерендерим контакты с новым фильтром
-            renderContacts();
         }
         
         function renderContacts() {
@@ -2949,8 +2949,6 @@
                         html += '</div>';
                         html += '</div>';
                         contextSection.innerHTML = html;
-                    }
-                    }
                     }
                 }
             } catch (error) {
