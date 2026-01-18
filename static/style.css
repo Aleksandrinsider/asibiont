@@ -1819,4 +1819,5 @@ details[open] .details-content {
     position: relative;
     z-index: 11;
     pointer-events: auto;
+    filter: blur(0.5px);
 }
