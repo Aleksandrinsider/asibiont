@@ -688,7 +688,7 @@ details[open] .details-content {
     font-size: 13px;
     line-height: 1.6;
     color: #374151;
-    text-align: left;
+    text-align: justify;
 }
 
 .message.ai {
@@ -706,7 +706,7 @@ details[open] .details-content {
     font-size: 13px;
     color: #374151;
     line-height: 1.6;
-    text-align: left;
+    text-align: justify;
 }
 
 .message-text {

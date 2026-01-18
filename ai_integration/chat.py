@@ -27,7 +27,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
 add_task = handlers.add_task
 complete_task = handlers.complete_task
 list_tasks = handlers.list_tasks
@@ -42,6 +41,380 @@ create_subscription_payment = handlers.create_subscription_payment
 brainstorm_ideas = handlers.brainstorm_ideas
 enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
+
+
+async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False):
+    """Обрабатывает tool calls и возвращает естественный ответ"""
+    if not tool_calls:
+        return None
+        
+    # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
+    corrected_tool_calls = post_process_tool_calls(intent, tool_calls, message)
+    if corrected_tool_calls:
+        tool_calls = corrected_tool_calls
+
+    # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
+    if is_advice_question:
+        return None
+        
+    # Обработка tool calls
+    tool_results = []
+    for tool_call in tool_calls:
+        try:
+            func_name = tool_call["function"]["name"]
+            args = json.loads(tool_call["function"]["arguments"])
+            logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
+
+            if func_name == "add_task":
+                logger.info(
+                    f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
+                
+                # СТРОГАЯ проверка наличия времени
+                reminder_time = args.get("reminder_time")
+                if not reminder_time or '@unknown' in str(reminder_time):
+                    reminder_time = intent.get("params", {}).get("reminder_time")
+                
+                # Валидация reminder_time
+                has_time = intent.get("params", {}).get("has_time", False)
+                logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
+                
+                # БЛОКИРУЕМ создание задач без времени
+                if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
+                    logger.warning(f"[ADD TASK] BLOCKED - no valid reminder_time provided")
+                    tool_results.append({"function": func_name, "result": "NEED_TIME"})
+                else:
+                    # Вызываем add_task только с валидным временем
+                    result = add_task(
+                        title=args.get("title", args.get("task_title", "Задача")),
+                        description=args.get("description", ""),
+                        reminder_time=reminder_time,
+                        user_id=user_id,
+                        session=None,
+                    )
+                    tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "complete_task":
+                task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
+                result = complete_task(
+                    task_id=args.get("task_id"),
+                    task_title=task_title,
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "list_tasks":
+                result = list_tasks(user_id=user_id, session=None)
+                # Add delegation instructions if this is for delegation
+                if intent.get("params", {}).get("for_delegation"):
+                    target_user = intent.get("params", {}).get("target_user", "")
+                    result += f"\n\nЧтобы делегировать задачу, скажите: 'делегировать задачу [ID или название] пользователю {target_user} дедлайн [время]'"
+                    result += f"\nНапример: 'делегировать задачу 1 пользователю {target_user} дедлайн завтра в 15:00'"
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "find_partners":
+                result = find_partners(user_id=user_id, session=None)
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "update_profile":
+                result = update_profile(
+                    city=args.get("city"),
+                    company=args.get("company"),
+                    position=args.get("position"),
+                    interests=args.get("interests"),
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "delegate_task":
+                result = delegate_task(
+                    title=args.get("title"),
+                    delegated_to_username=args.get("delegated_to_username"),
+                    reminder_time=args.get("reminder_time"),
+                    user_id=user_id,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "delete_all_tasks":
+                result = delete_all_tasks(user_id=user_id, session=None)
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "delete_task":
+                result = delete_task(
+                    task_id=args.get("task_id"),
+                    task_title=args.get("task_title"),
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "edit_task":
+                result = edit_task(
+                    task_id=args.get("task_id"),
+                    title=args.get("title"),
+                    description=args.get("description"),
+                    reminder_time=args.get("reminder_time"),
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "check_subscription_status":
+                result = check_subscription_status(user_id=user_id, session=None)
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "create_subscription_payment":
+                result = create_subscription_payment(
+                    tier=args.get("tier"),
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "brainstorm_ideas":
+                result = brainstorm_ideas(
+                    topic=args.get("topic"),
+                    context=args.get("context"),
+                    user_id=user_id,
+                    session=None,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "enrich_task_list_with_insights":
+                result = enrich_task_list_with_insights(user_id=user_id, session=None)
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "get_partners_list":
+                result = get_partners_list(user_id=user_id, session=None)
+                tool_results.append({"function": func_name, "result": result})
+
+            else:
+                logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
+                tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})
+
+        except Exception as e:
+            logger.error(f"[TOOL CALL] Error executing {func_name}: {e}")
+            tool_results.append(
+                {"function": func_name, "result": f"Ошибка выполнения: {str(e)}"}
+            )
+
+    # Генерируем естественный ответ на основе результатов tool calls
+    if tool_results:
+        natural_responses = []
+        has_list_tasks = False
+        list_tasks_result = None
+
+        for action in tool_results:
+            result_text = action["result"]
+            func_name = action["function"]
+
+            # Проверяем, есть ли list_tasks в результатах
+            if func_name == "list_tasks":
+                has_list_tasks = True
+                list_tasks_result = result_text
+            
+            # Если нужно время - запрашиваем (задача НЕ создана)
+            if result_text == "NEED_TIME" or (result_text and result_text.startswith("NEED_TIME:")):
+                # Задача НЕ создана - передаём только факт, промпт знает что делать
+                messages = [{"role": "user", "content": original_message}]
+                messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
+                messages.append({"role": "user", "content": "Задача НЕ создана - пользователь не указал время."})
+                
+                data = {
+                                                "model": "deepseek-reasoner",
+                    "temperature": 0.7,
+                    "max_tokens": 150
+                }
+                
+                try:
+                    async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
+                        if ai_response.status == 200:
+                            ai_result = await ai_response.json()
+                            time_request = ai_result["choices"][0]["message"]["content"].strip()
+                            natural_responses.append(time_request)
+                        else:
+                            natural_responses.append("Когда тебе напомнить об этом? Укажи время")
+                except Exception as e:
+                    logger.warning(f"[NEED_TIME AI] Failed: {e}")
+                    natural_responses.append("Когда тебе напомнить? Укажи удобное время")
+                continue
+
+            if "Добавлена задача" in result_text:
+                match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
+                if match:
+                    title = match.group(1)
+                    task_id = match.group(2)
+                    natural_responses.append(f"Задача '{title}' создана с ID {task_id}")
+                else:
+                    natural_responses.append("Задача создана успешно")
+
+            elif "Задача выполнена" in result_text or "отмечена как выполненная" in result_text:
+                natural_responses.append("Задача выполнена")
+
+            elif "Найдены партнеры:" in result_text or "партнеры найдены" in result_text.lower():
+                natural_responses.append(result_text)
+
+            elif "Профиль обновлен" in result_text:
+                # Парсим детали обновления и передаем AI только факты
+                if "added_interests:" in result_text:
+                    match = re.search(r"added_interests:([^;]+)", result_text)
+                    if match:
+                        items = match.group(1).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: added_interests={items}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: type=interests")
+
+                elif "removed_interests:" in result_text:
+                    match = re.search(r"removed_interests:([^;]+)", result_text)
+                    if match:
+                        items = match.group(1).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: removed_interests={items}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: removed=interests")
+
+                elif "changed_city:" in result_text:
+                    match = re.search(r"changed_city:([^->]+)->([^;]+)", result_text)
+                    if match:
+                        old_city = match.group(1).strip()
+                        new_city = match.group(2).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: city={old_city}->{new_city}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: type=city")
+
+                elif "changed_company:" in result_text:
+                    match = re.search(r"changed_company:([^->]+)->([^;]+)", result_text)
+                    if match:
+                        new_company = match.group(2).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: company={new_company}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: type=company")
+
+                elif "added_skills:" in result_text:
+                    match = re.search(r"added_skills:([^;]+)", result_text)
+                    if match:
+                        items = match.group(1).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: added_skills={items}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: type=skills")
+
+                elif "added_goals:" in result_text:
+                    match = re.search(r"added_goals:([^;]+)", result_text)
+                    if match:
+                        items = match.group(1).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: added_goals={items}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: type=goals")
+
+                else:
+                    natural_responses.append("Профиль обновлен")
+
+            elif "Все задачи удалены" in result_text:
+                natural_responses.append("Все задачи удалены")
+
+            elif "Задача удалена" in result_text:
+                natural_responses.append("Задача удалена")
+
+            elif "Задача обновлена" in result_text:
+                natural_responses.append("Задача обновлена")
+
+            elif "Статус подписки:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "Платеж создан" in result_text:
+                natural_responses.append("Платеж создан, следуйте инструкциям для оплаты")
+
+            elif "Идеи сгенерированы" in result_text or "мозговой штурм" in result_text.lower():
+                natural_responses.append(result_text)
+
+            elif "Задачи с инсайтами:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "Список партнеров:" in result_text:
+                natural_responses.append(result_text)
+
+            else:
+                # Для неизвестных результатов передаем как есть
+                natural_responses.append(result_text)
+
+        # Формируем финальный контент для AI
+        if natural_responses:
+            final_content = " | ".join(natural_responses)
+            
+            # Добавляем контекст профиля для list_tasks
+            profile_context = ""
+            if has_list_tasks and list_tasks_result:
+                try:
+                    db_session_local = Session()
+                    prof = db_session_local.query(UserProfile).filter_by(user_id=user_id).first()
+                    if prof:
+                        profile_data = []
+                        if prof.city: profile_data.append(f"город: {prof.city}")
+                        if prof.company: profile_data.append(f"компания: {prof.company}")
+                        if prof.position: profile_data.append(f"должность: {prof.position}")
+                        if prof.interests: profile_data.append(f"интересы: {prof.interests}")
+                        if prof.skills: profile_data.append(f"навыки: {prof.skills}")
+                        if prof.goals: profile_data.append(f"цели: {prof.goals}")
+                        if prof.current_plans: profile_data.append(f"планы: {prof.current_plans}")
+                        if profile_data:
+                            profile_context = f"\n\nДАННЫЕ ПОЛЬЗОВАТЕЛЯ: {', '.join(profile_data)}"
+                    db_session_local.close()
+                except Exception as e:
+                    logger.warning(f"Failed to get profile context: {e}")
+            
+            # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
+            tool_context_msg = f"СТРОГО СОБЛЮДАЙ: показывай ТОЛЬКО реальные задачи из предоставленных данных, НЕ выдумывай и НЕ придумывай задачи!\n\n{final_content}{profile_context}"
+            
+            # Добавляем контекст в messages
+            messages = [{"role": "user", "content": original_message}]
+            messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
+            messages.append({"role": "user", "content": tool_context_msg})
+            
+            # Запрашиваем естественный ответ от AI
+            data = {
+                                            "model": "deepseek-chat",
+                "max_tokens": 400  # Увеличено для вариантов действий
+            }
+            
+            final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    async with aiohttp.ClientSession() as ai_session:
+                        async with ai_session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=40)) as ai_response:
+                            if ai_response.status == 200:
+                                ai_result = await ai_response.json()
+                                final_content = ai_result["choices"][0]["message"]["content"].strip()
+                                logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
+                                break
+                            else:
+                                logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
+                                if attempt == max_retries - 1:
+                                    # Последняя попытка - упрощённый запрос
+                                    try:
+                                        simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
+                                        simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
+                                        async with aiohttp.ClientSession() as simple_session:
+                                            async with simple_session.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
+                                                if simple_response.status == 200:
+                                                    simple_result = await simple_response.json()
+                                                    final_content = simple_result["choices"][0]["message"]["content"].strip()
+                                    except Exception as simple_error:
+                                        logger.error(f"Simple retry failed: {simple_error}")
+                except Exception as e:
+                    logger.warning(f"[AI NATURAL RESPONSE] Attempt {attempt+1} failed: {e}")
+                    if attempt == max_retries - 1:
+                        # Крайний случай - минимальный запрос
+                        final_content = "Действие выполнено успешно"
+            
+            # Пост-обработка для улучшения качества ответа
+            final_content = post_process_response(final_content, user_id, db_session)
+
+            logger.info(
+                f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response")
+            return final_content
+    
+    return None
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None):
@@ -581,7 +954,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
-            "model": "deepseek-v3.2",
+            "model": "deepseek-chat",
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": tool_choice,
@@ -605,27 +978,32 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             tool_calls = []
                             try:
                                 result = await response.json()
-                                message_response = result["choices"][0]["message"]
-                                content = message_response.get("content", "")
-                                # Фильтровать сырые tool calls
-                                content = re.sub(r"<\|.*?\|>", "", content).strip()
-                                content = re.sub(
-                                    r"<｜DSML｜function_calls>.*?</｜DSML｜function_calls>",
-                                    "",
-                                    content,
-                                    flags=re.DOTALL,
-                                ).strip()
-                                # Удаляем JSON блоки с tool_calls если они попали в текст
-                                content = re.sub(
-                                    r'```json\s*\{.*?"tool_calls".*?\}\s*```', "", content, flags=re.DOTALL
-                                ).strip()
-                                content = re.sub(r'\{.*?"tool_calls".*?\}', "", content, flags=re.DOTALL).strip()
-                                content = re.sub(
-                                    r'\{.*?"name":\s*"".*?"arguments".*?\}', "", content, flags=re.DOTALL
-                                ).strip()
+                                if "choices" in result and result["choices"]:
+                                    message_response = result["choices"][0]["message"]
+                                    content = message_response.get("content", "")
+                                    # Фильтровать сырые tool calls
+                                    content = re.sub(r"<\|.*?\|>", "", content).strip()
+                                    content = re.sub(
+                                        r"<｜DSML｜function_calls>.*?</｜DSML｜function_calls>",
+                                        "",
+                                        content,
+                                        flags=re.DOTALL,
+                                    ).strip()
+                                    # Удаляем JSON блоки с tool_calls если они попали в текст
+                                    content = re.sub(
+                                        r'```json\s*\{.*?"tool_calls".*?\}\s*```', "", content, flags=re.DOTALL
+                                    ).strip()
+                                    content = re.sub(r'\{.*?"tool_calls".*?\}', "", content, flags=re.DOTALL).strip()
+                                    content = re.sub(
+                                        r'\{.*?"name":\s*"".*?"arguments".*?\}', "", content, flags=re.DOTALL
+                                    ).strip()
 
-                                # Проверяем tool_calls в API response
-                                tool_calls = message_response.get("tool_calls")
+                                    # Проверяем tool_calls в API response
+                                    tool_calls = message_response.get("tool_calls")
+                                else:
+                                    logger.error(f"No choices in API response: {result}")
+                                    content = "Извините, произошла ошибка при обработке запроса."
+                                    tool_calls = []
                             except Exception as e:
                                 logger.error(f"Error parsing API response: {e}")
                                 if attempt < max_retries:
@@ -661,453 +1039,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     pass
 
                             if tool_calls:
-
-                                # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
-                                corrected_tool_calls = post_process_tool_calls(intent, tool_calls, message)
-                                if corrected_tool_calls:
-                                    tool_calls = corrected_tool_calls
-
-                                # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
-                                if is_advice_question:
-                                    tool_calls = None
-                                else:
-                                    # Обработка tool calls
-                                    tool_results = []
-                                    for tool_call in tool_calls:
-                                        try:
-                                            func_name = tool_call["function"]["name"]
-                                            args = json.loads(tool_call["function"]["arguments"])
-                                            logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
-
-                                            if func_name == "add_task":
-                                                logger.info(
-                                                    f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
-                                                
-                                                # СТРОГАЯ проверка наличия времени
-                                                reminder_time = args.get("reminder_time")
-                                                if not reminder_time or '@unknown' in str(reminder_time):
-                                                    reminder_time = intent.get("params", {}).get("reminder_time")
-                                                
-                                                # Валидация reminder_time
-                                                has_time = intent.get("params", {}).get("has_time", False)
-                                                logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
-                                                
-                                                # БЛОКИРУЕМ создание задач без времени
-                                                if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
-                                                    logger.warning(f"[ADD TASK] BLOCKED - no valid reminder_time provided")
-                                                    tool_results.append({"function": func_name, "result": "NEED_TIME"})
-                                                else:
-                                                    # Вызываем add_task только с валидным временем
-                                                    result = add_task(
-                                                        title=args.get("title", args.get("task_title", "Задача")),
-                                                        description=args.get("description", ""),
-                                                        reminder_time=reminder_time,
-                                                        user_id=user_id,
-                                                        session=None,
-                                                    )
-                                                    tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "complete_task":
-                                                task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
-                                                result = complete_task(
-                                                    task_id=args.get("task_id"),
-                                                    task_title=task_title,
-                                                    user_id=user_id,
-                                                    session=None,
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "list_tasks":
-                                                result = list_tasks(user_id=user_id, session=None)
-                                                # Add delegation instructions if this is for delegation
-                                                if intent.get("params", {}).get("for_delegation"):
-                                                    target_user = intent.get("params", {}).get("target_user", "")
-                                                    result += f"\n\nЧтобы делегировать задачу, скажите: 'делегировать задачу [ID или название] пользователю {target_user} дедлайн [время]'"
-                                                    result += f"\nНапример: 'делегировать задачу 1 пользователю {target_user} дедлайн завтра в 15:00'"
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "find_partners":
-                                                result = find_partners(user_id=user_id, session=None)
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "update_profile":
-                                                result = update_profile(
-                                                    city=args.get("city"),
-                                                    company=args.get("company"),
-                                                    position=args.get("position"),
-                                                    interests=args.get("interests"),
-                                                    user_id=user_id,
-                                                    session=None,
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "delegate_task":
-                                                result = delegate_task(
-                                                    title=args.get("title"),
-                                                    delegated_to_username=args.get("delegated_to_username"),
-                                                    reminder_time=args.get("reminder_time"),
-                                                    user_id=user_id,
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "delete_all_tasks":
-                                                result = delete_all_tasks(user_id=user_id, session=None)
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "delete_task":
-                                                result = delete_task(
-                                                    task_id=args.get("task_id"),
-                                                    task_title=args.get("task_title"),
-                                                    user_id=user_id,
-                                                    session=None,
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "edit_task":
-                                                result = edit_task(
-                                                    task_id=args.get("task_id"),
-                                                    title=args.get("title"),
-                                                    description=args.get("description"),
-                                                    reminder_time=args.get("reminder_time"),
-                                                    user_id=user_id,
-                                                    session=None,
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "check_subscription_status":
-                                                result = check_subscription_status(user_id=user_id)
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "create_subscription_payment":
-                                                result = create_subscription_payment(user_id=user_id)
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            elif func_name == "brainstorm_ideas":
-                                                result = brainstorm_ideas(
-                                                    topic=args.get("topic"),
-                                                    num_ideas=args.get("num_ideas", 5),
-                                                    user_id=user_id
-                                                )
-                                                tool_results.append({"function": func_name, "result": result})
-
-                                            else:
-                                                logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
-                                                tool_results.append(
-                                                    {"function": func_name, "result": f"Неизвестная функция: {func_name}"}
-                                                )
-
-                                        except Exception as e:
-                                            logger.error(f"[TOOL CALL] Error executing {func_name}: {e}")
-                                            tool_results.append(
-                                                {"function": func_name, "result": f"Ошибка выполнения: {str(e)}"}
-                                            )
-
-                                # Генерируем естественный ответ на основе результатов tool calls
-                                if tool_results:
-                                    natural_responses = []
-                                    has_list_tasks = False
-                                    list_tasks_result = None
-
-                                    for action in tool_results:
-                                        result_text = action["result"]
-                                        func_name = action["function"]
-
-                                        # Проверяем, есть ли list_tasks в результатах
-                                        if func_name == "list_tasks":
-                                            has_list_tasks = True
-                                            list_tasks_result = result_text
-                                        
-                                        # Если нужно время - запрашиваем (задача НЕ создана)
-                                        if result_text == "NEED_TIME" or (result_text and result_text.startswith("NEED_TIME:")):
-                                            # Задача НЕ создана - передаём только факт, промпт знает что делать
-                                            messages.append({"role": "user", "content": original_message})
-                                            messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
-                                            messages.append({"role": "user", "content": "Задача НЕ создана - пользователь не указал время."})
-                                            
-                                            data = {
-                                                "model": "deepseek-chat",
-                                                "messages": messages,
-                                                "temperature": 0.7,
-                                                "max_tokens": 150
-                                            }
-                                            
-                                            try:
-                                                async with session_http.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as ai_response:
-                                                    if ai_response.status == 200:
-                                                        ai_result = await ai_response.json()
-                                                        time_request = ai_result["choices"][0]["message"]["content"].strip()
-                                                        natural_responses.append(time_request)
-                                                    else:
-                                                        natural_responses.append("Когда тебе напомнить об этом? Укажи время")
-                                            except Exception as e:
-                                                logger.warning(f"[NEED_TIME AI] Failed: {e}")
-                                                natural_responses.append("Когда тебе напомнить? Укажи удобное время")
-                                            continue
-
-                                        if "Добавлена задача" in result_text:
-                                            match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
-                                            if match:
-                                                title = match.group(1)
-                                                task_id = int(match.group(2))
-
-                                                # Получаем рекомендации и релевантные контакты из базы данных
-                                                from models import Session as SessionModel
-                                                session_db = SessionModel()
-                                                try:
-                                                    task = session_db.query(Task).filter_by(id=task_id).first()
-                                                    recommendations = []
-                                                    if task and task.recommendations:
-                                                        try:
-                                                            recommendations = json.loads(task.recommendations)
-                                                        except Exception as e:
-                                                            logger.warning(f"Could not parse recommendations: {e}")
-                                                            pass
-
-                                                    # КРИТИЧНО: Автоматически находим релевантные контакты для задачи
-                                                    relevant_contacts = []
-                                                    partners_result = find_partners(user_id=user_id, session=session_db)
-                                                    if partners_result and "Нашёл подходящих" in partners_result:
-                                                        # Извлекаем @username из результата
-                                                        import re as re_module
-                                                        usernames = re_module.findall(r'@(\w+)', partners_result)
-                                                        relevant_contacts = usernames[:2]  # Максимум 2 контакта
-                                                    
-                                                    # ИСПРАВЛЕНО: Передаем контекст для AI с контактами
-                                                    context_parts = [f"TASK_CREATED: title='{title}', id={task_id}"]
-                                                    if relevant_contacts:
-                                                        context_parts.append(f"RELEVANT_CONTACTS: {', '.join(['@' + u for u in relevant_contacts])}")
-                                                    
-                                                    natural_responses.append(" | ".join(context_parts))
-                                                finally:
-                                                    session_db.close()
-                                            else:
-                                                natural_responses.append(result_text)
-
-                                        elif "Завершена задача" in result_text:
-                                            match = re.search(r"Завершена задача '([^']+)'", result_text)
-                                            if match:
-                                                title = match.group(1)
-                                                # Передаем контекст для AI генерации естественного ответа
-                                                natural_responses.append(f"TASK_COMPLETED: title='{title}'")
-                                            else:
-                                                natural_responses.append(result_text)
-
-                                        elif "Задачи:" in result_text:
-                                            # Для list_tasks добавляем умный анализ вместо простого вывода
-                                            natural = enrich_task_list_with_insights(result_text, user_id)
-                                            natural_responses.append(natural)
-
-                                        elif (
-                                            "Найдены партнеры:" in result_text
-                                            or "партнеры найдены" in result_text.lower()
-                                        ):
-                                            natural_responses.append(result_text)
-
-                                        elif "Профиль обновлен" in result_text:
-                                            # Парсим детали обновления и передаем AI только факты
-                                            if "added_interests:" in result_text:
-                                                match = re.search(r"added_interests:([^;]+)", result_text)
-                                                if match:
-                                                    items = match.group(1).strip()
-                                                    natural_responses.append(f"PROFILE_UPDATED: added_interests={items}")
-                                                else:
-                                                    natural_responses.append("PROFILE_UPDATED: type=interests")
-
-                                            elif "removed_interests:" in result_text:
-                                                match = re.search(r"removed_interests:([^;]+)", result_text)
-                                                if match:
-                                                    items = match.group(1).strip()
-                                                    natural_responses.append(f"PROFILE_UPDATED: removed_interests={items}")
-                                                else:
-                                                    natural_responses.append("PROFILE_UPDATED: removed=interests")
-
-                                            elif "changed_city:" in result_text:
-                                                match = re.search(r"changed_city:([^->]+)->([^;]+)", result_text)
-                                                if match:
-                                                    old_city = match.group(1).strip()
-                                                    new_city = match.group(2).strip()
-                                                    natural_responses.append(f"PROFILE_UPDATED: city={old_city}->{new_city}")
-                                                else:
-                                                    natural_responses.append("PROFILE_UPDATED: type=city")
-
-                                            elif "changed_company:" in result_text:
-                                                match = re.search(r"changed_company:([^->]+)->([^;]+)", result_text)
-                                                if match:
-                                                    new_company = match.group(2).strip()
-                                                    natural_responses.append(f"PROFILE_UPDATED: company={new_company}")
-                                                else:
-                                                    natural_responses.append("PROFILE_UPDATED: type=company")
-
-                                            elif "added_skills:" in result_text:
-                                                match = re.search(r"added_skills:([^;]+)", result_text)
-                                                if match:
-                                                    items = match.group(1).strip()
-                                                    natural_responses.append(f"PROFILE_UPDATED: added_skills={items}")
-                                                else:
-                                                    natural_responses.append("PROFILE_UPDATED: type=skills")
-
-                                            elif "added_goals:" in result_text:
-                                                match = re.search(r"added_goals:([^;]+)", result_text)
-                                                if match:
-                                                    items = match.group(1).strip()
-                                                    natural_responses.append(f"PROFILE_UPDATED: added_goals={items}")
-                                                else:
-                                                    natural_responses.append("PROFILE_UPDATED: type=goals")
-
-                                            else:
-                                                # Общий случай
-                                                natural_responses.append("PROFILE_UPDATED: general")
-
-                                        elif "Задача" in result_text and "делегирована" in result_text:
-                                            natural_responses.append("TASK_DELEGATED")
-
-                                        elif "Удалены все задачи" in result_text:
-                                            natural_responses.append("ALL_TASKS_DELETED")
-
-                                        elif "Задача" in result_text and "удалена" in result_text:
-                                            match = re.search(r"Задача '([^']+)' удалена", result_text)
-                                            if match:
-                                                title = match.group(1)
-                                                natural_responses.append(f"TASK_DELETED: title='{title}'")
-                                            else:
-                                                natural_responses.append(result_text)
-
-                                        elif "Идеи для темы" in result_text:
-                                            natural = f"{result_text}\n\nНадеюсь, эти идеи помогут! Если нужно углубить какую-то или сгенерировать больше вариантов - дай знать."
-                                            natural_responses.append(natural)
-
-                                        else:
-                                            natural_responses.append(result_text)
-
-                                    # Для list_tasks анализ уже добавлен выше
-
-                                    final_content = "\n".join(natural_responses)
-
-                                    # КРИТИЧНО: AI должен сформировать ответ по единому промпту для ВСЕХ случаев
-                                    if final_content:
-                                        # Получаем профиль пользователя для контекста
-                                        profile_context = ""
-                                        if db_session and user_id:
-                                            try:
-                                                user = db_session.query(User).filter_by(telegram_id=user_id).first()
-                                                if user and user.profile:
-                                                    prof = user.profile
-                                                    profile_data = []
-                                                    if prof.city: profile_data.append(f"город: {prof.city}")
-                                                    if prof.company: profile_data.append(f"компания: {prof.company}")
-                                                    if prof.position: profile_data.append(f"должность: {prof.position}")
-                                                    if prof.goals: profile_data.append(f"цели: {prof.goals}")
-                                                    if prof.current_plans: profile_data.append(f"планы: {prof.current_plans}")
-                                                    if profile_data:
-                                                        profile_context = f"\n\nДАННЫЕ ПОЛЬЗОВАТЕЛЯ: {', '.join(profile_data)}"
-                                            except Exception as e:
-                                                logger.warning(f"Failed to get profile context: {e}")
-                                        
-                                        # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
-                                        tool_context_msg = f"СТРОГО СОБЛЮДАЙ: показывай ТОЛЬКО реальные задачи из предоставленных данных, НЕ выдумывай и НЕ придумывай задачи!\n\n{final_content}{profile_context}"
-                                        
-                                        # Добавляем контекст в messages
-                                        messages.append({"role": "user", "content": original_message})
-                                        messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
-                                        messages.append({"role": "user", "content": tool_context_msg})
-                                        
-                                        # Запрашиваем естественный ответ от AI
-                                        data = {
-                                            "model": "deepseek-chat",
-                                            "messages": messages,
-                                            "temperature": 0.7,
-                                            "max_tokens": 400  # Увеличено для вариантов действий
-                                        }
-                                        
-                                        final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
-                                        max_retries = 3
-                                        for attempt in range(max_retries):
-                                            try:
-                                                async with aiohttp.ClientSession() as ai_session:
-                                                    async with ai_session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=40)) as ai_response:
-                                                        if ai_response.status == 200:
-                                                            ai_result = await ai_response.json()
-                                                            final_content = ai_result["choices"][0]["message"]["content"].strip()
-                                                            logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
-                                                            break
-                                                        else:
-                                                            logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
-                                                            if attempt == max_retries - 1:
-                                                                # Последняя попытка - упрощённый запрос
-                                                                try:
-                                                                    simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
-                                                                    simple_data = {"model": "deepseek-chat", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
-                                                                    async with aiohttp.ClientSession() as simple_session:
-                                                                        async with simple_session.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
-                                                                            if simple_response.status == 200:
-                                                                                simple_result = await simple_response.json()
-                                                                                final_content = simple_result["choices"][0]["message"]["content"].strip()
-                                                                except Exception as simple_error:
-                                                                    logger.error(f"Simple retry failed: {simple_error}")
-                                            except Exception as e:
-                                                logger.warning(f"[AI NATURAL RESPONSE] Attempt {attempt+1} failed: {e}")
-                                                if attempt == max_retries - 1:
-                                                    # Крайний случай - минимальный запрос
-                                                    try:
-                                                        minimal_msg = [{"role": "user", "content": "Действие выполнено. Дай развёрнутый естественный ответ (2-3 абзаца)."}]
-                                                        minimal_data = {"model": "deepseek-chat", "messages": minimal_msg, "temperature": 0.7, "max_tokens": 200}
-                                                        async with aiohttp.ClientSession() as minimal_session:
-                                                            async with minimal_session.post(url, headers=headers, json=minimal_data, timeout=aiohttp.ClientTimeout(total=20)) as minimal_response:
-                                                                if minimal_response.status == 200:
-                                                                    minimal_result = await minimal_response.json()
-                                                                    final_content = minimal_result["choices"][0]["message"]["content"].strip()
-                                                    except Exception as minimal_error:
-                                                        logger.error(f"Minimal retry failed: {minimal_error}")
-                                                else:
-                                                    await asyncio.sleep(0.5)  # Пауза между попытками
-
-                                    # Проверяем качество финального ответа после tool calls
-                                    if not final_content or len(final_content.strip()) < 10:
-                                        logger.warning(f"[TOOL RESPONSE] Final content too short or empty: '{final_content}', using fallback")
-                                        # Создаем fallback ответ на основе результатов tool calls
-                                        fallback_parts = []
-                                        for action in tool_results:
-                                            result_text = action["result"]
-                                            func_name = action["function"]
-                                            
-                                            if "Добавлена задача" in result_text:
-                                                match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
-                                                if match:
-                                                    title = match.group(1)
-                                                    task_id = match.group(2)
-                                                    fallback_parts.append(f"✅ Задача '{title}' создана (ID: {task_id})")
-                                                    if "с напоминанием на" in result_text:
-                                                        match_time = re.search(r"с напоминанием на ([^)]+)", result_text)
-                                                        if match_time:
-                                                            time_str = match_time.group(1)
-                                                            fallback_parts.append(f"🔔 Напоминание установлено на {time_str}")
-                                            elif "Завершена задача" in result_text:
-                                                match = re.search(r"Завершена задача '([^']+)'", result_text)
-                                                if match:
-                                                    title = match.group(1)
-                                                    fallback_parts.append(f"✅ Задача '{title}' отмечена как выполненная")
-                                            elif "Удалены все задачи" in result_text:
-                                                fallback_parts.append("🗑️ Все задачи удалены")
-                                            elif "Задача" in result_text and "делегирована" in result_text:
-                                                fallback_parts.append("📤 Задача делегирована")
-                                            else:
-                                                fallback_parts.append(result_text)
-                                        
-                                        if fallback_parts:
-                                            final_content = "\n".join(fallback_parts)
-                                        else:
-                                            final_content = "Действие выполнено успешно!"
-
-                                    # Пост-обработка для улучшения качества ответа
-                                    final_content = post_process_response(final_content, user_id, db_session)
-
-                                    logger.info(
-                                        f"[TOOL CALLS] Processed {
-                                            len(tool_results)} tool calls, returning natural response")
-                                    return final_content
-                            else:
+                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question)
+                                if result:
+                                    return result
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
-                                pass
+
 
                     # Все запросы обрабатывает AI, без принудительных триггеров
                     logger.info("[AI ONLY] All requests handled by AI without forced triggers")
@@ -1247,18 +1183,38 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                         "model": "deepseek-reasoner",
                                         "messages": retry_messages,
                                         "temperature": 0.3,
+                                        "tools": TOOLS,
+                                        "tool_choice": "auto",
                                     },
                                     timeout=aiohttp.ClientTimeout(total=120),
                                 ) as retry_response:
-                                    retry_result = await retry_response.json()
-                                    retry_content = retry_result["choices"][0]["message"]["content"]
-                                    retry_content = replace_placeholders(retry_content, user_now, current_time_str)
-                                    content = retry_content.strip()
-                                    logger.info(f"[RETRY] Got retry content: '{content[:100]}...'")
-                                    if retry_content and len(retry_content.strip()) >= 3:
-                                        content = retry_content
+                                    if retry_response.status == 200:
+                                        retry_result = await retry_response.json()
+                                        if "choices" in retry_result and retry_result["choices"]:
+                                            retry_message = retry_result["choices"][0]["message"]
+                                            retry_content = retry_message.get("content", "")
+                                            retry_tool_calls = retry_message.get("tool_calls")
+                                            
+                                            # Если в retry есть tool_calls, обрабатываем их
+                                            if retry_tool_calls:
+                                                logger.info(f"[RETRY] Found {len(retry_tool_calls)} tool calls in retry response")
+                                                tool_calls = retry_tool_calls
+                                                # Переходим к обработке tool_calls вместо обычного ответа
+                                                content = retry_content.strip() if retry_content else ""
+                                            else:
+                                                retry_content = replace_placeholders(retry_content, user_now, current_time_str)
+                                                content = retry_content.strip()
+                                                logger.info(f"[RETRY] Got retry content: '{content[:100]}...'")
+                                        else:
+                                            logger.error(f"[RETRY] No choices in retry response: {retry_result}")
+                                            content = "Извините, произошла ошибка при обработке запроса."
                                     else:
-                                        content = "Хорошо, продолжим работу!"
+                                        logger.error(f"[RETRY] Retry request failed with status {retry_response.status}")
+                                        content = "Извините, произошла ошибка при обработке запроса."
+                                        if retry_content and len(retry_content.strip()) >= 3:
+                                            content = retry_content
+                                        else:
+                                            content = "Хорошо, продолжим работу!"
                         else:
                             logger.info(f"[RECOVERED] Using original content: '{content[:100]}...'")
 
@@ -1266,33 +1222,46 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     if not content:
                         content = "Хорошо, продолжим работу!"
 
-                    # ИЗБЫТОЧНЫЕ ОБРАБОТКИ УБРАНЫ:
-                    # - enrich_response_with_engagement (AI сам задает вопросы через промпт)
-                    # - validate_response_compliance (ничего не делает, enforce отключен)
-                    # - clean_technical_details (только для сгенерированных ответов, не для основного AI)
+                    # Проверяем tool_calls после retry
+                    if tool_calls:
+                        logger.info(f"[TOOL CALLS] Processing {len(tool_calls)} tool calls after retry")
+                        result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question)
+                        if result:
+                            return result
+                    else:
+                        # Обрабатываем обычный ответ AI без tool calls
+                        logger.info("[TOOL CALLS] No tool calls found, processing as regular response")
 
-                    # Метрики качества ответа
-                    response_quality = {
-                        'length': len(content),
-                        'has_questions': '?' in content,
-                        'has_tools': bool(tool_calls),
-                        'intent_type': intent.get('type', 'unknown'),
-                        'user_id': user_id
-                    }
-                    logger.info(f"[RESPONSE QUALITY] {response_quality}")
+                        # ИЗБЫТОЧНЫЕ ОБРАБОТКИ УБРАНЫ:
+                        # - enrich_response_with_engagement (AI сам задает вопросы через промпт)
+                        # - validate_response_compliance (ничего не делает, enforce отключен)
+                        # - clean_technical_details (только для сгенерированных ответов, не для основного AI)
 
-                    # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
-                    if not content or len(content.strip()) < 10:
-                        logger.warning("[FALLBACK] Empty or too short response, using fallback")
-                        content = improved_fallback(intent, tool_calls, content, message, user_id)
+                        # Метрики качества ответа
+                        response_quality = {
+                            'length': len(content),
+                            'has_questions': '?' in content,
+                            'has_tools': bool(tool_calls),
+                            'intent_type': intent.get('type', 'unknown'),
+                            'user_id': user_id
+                        }
+                        logger.info(f"[RESPONSE QUALITY] {response_quality}")
 
-                    # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
-                    # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
+                        # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
+                        if not content or len(content.strip()) < 10:
+                            logger.warning("[FALLBACK] Empty or too short response, using fallback")
+                            if PROMPTS_V2_AVAILABLE:
+                                content = improved_fallback(intent, tool_calls, content, message, user_id)
+                            else:
+                                content = smart_fallback_handler(message, "", user_id, content)
 
-                    # Пост-обработка для улучшения качества ответа
-                    content = post_process_response(content, user_id, db_session)
+                        # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
+                        # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
 
-                    return content
+                        # Пост-обработка для улучшения качества ответа
+                        content = post_process_response(content, user_id, db_session)
+
+                        return content
 
             except Exception as e:
                 logger.error(f"Error in chat_with_ai: {e}")

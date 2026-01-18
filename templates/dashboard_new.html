@@ -715,14 +715,14 @@
         
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
-            console.log('checkAuth called with status:', response.status);
+
             if (response.status === 401 || response.status === 403) {
-                console.log('Session expired or unauthorized');
+
                 // Перезагрузить страницу только если мы не на странице логина
                 const isLoggedIn = document.querySelector('.main-layout') !== null;
-                console.log('isLoggedIn check:', isLoggedIn);
+
                 if (isLoggedIn) {
-                    console.log('Redirecting to login page');
+
                     window.location.reload();
                 }
                 return false;
@@ -731,7 +731,7 @@
         }
         
         function addMessage(text, sender, timestamp) {
-            console.log(`[ADD MESSAGE] Adding message from ${sender}: ${text.substring(0, 50)}...`);
+
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
@@ -778,17 +778,17 @@
         }
         
         async function loadChatHistory() {
-            console.log('[CHAT HISTORY] Starting to load chat history');
+
             try {
                 const response = await safeFetch('/api/interactions');
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    console.log(`[CHAT HISTORY] Loaded ${data.interactions ? data.interactions.length : 0} interactions`);
+
                     const messages = document.getElementById('chat-messages');
                     // Clear existing messages except welcome
                     const welcomeMessage = messages.querySelector('.message.ai');
-                    console.log('[CHAT HISTORY] Clearing messages, welcome message found:', !!welcomeMessage);
+
                     messages.innerHTML = '';
                     if (welcomeMessage) {
                         messages.appendChild(welcomeMessage);
@@ -797,14 +797,14 @@
                     // Add history messages
                     if (data.interactions) {
                         data.interactions.forEach((interaction, index) => {
-                            console.log(`[CHAT HISTORY] Adding message ${index + 1}/${data.interactions.length}: ${interaction.message_type} - ${interaction.content.substring(0, 50)}...`);
+
                             addMessage(interaction.content, interaction.message_type, interaction.created_at);
                         });
                     }
                     
                     // Update lastMessageCount
                     lastMessageCount = data.interactions ? data.interactions.length : 0;
-                    console.log(`[CHAT HISTORY] Updated lastMessageCount to ${lastMessageCount}`);
+
                 }
             } catch (error) {
                 console.error('Failed to load chat history:', error);
@@ -844,7 +844,7 @@
                 return; // Prevent multiple sends
             }
             window.sendingMessage = true;
-            console.log('[WEB CHAT] Starting message send');
+
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -891,10 +891,10 @@
                 if (response.ok) {
                     if (data.duplicate) {
                         // Duplicate message, don't add to chat
-                        console.log('[WEB CHAT] Duplicate message detected, skipping');
+
                         return;
                     }
-                    console.log('[WEB CHAT] Adding AI response to chat');
+
                     addMessage(data.response, 'ai');
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
@@ -915,12 +915,12 @@
                             await updateTasks();
                             await updateProfile();
                             await updatePeople();
-                            console.log('Tasks updated after message');
+
                             // Повторное обновление через 1 секунду
                             setTimeout(async () => {
                                 try {
                                     await updateTasks();
-                                    console.log('Tasks updated again after message');
+
                                 } catch (e) {
                                     console.error('Error in delayed update:', e);
                                 }
@@ -929,7 +929,7 @@
                             setTimeout(async () => {
                                 try {
                                     await updateTasks();
-                                    console.log('Tasks updated third time after message');
+
                                 } catch (e) {
                                     console.error('Error in third delayed update:', e);
                                 }
@@ -998,7 +998,7 @@
                 if (response.ok) {
                     if (data.duplicate) {
                         // Duplicate message, don't add to chat
-                        console.log('[WEB CHAT] Duplicate message detected in time change, skipping');
+
                         return;
                     }
                     addMessage(data.response, 'ai');
@@ -2263,7 +2263,7 @@
                     modal.style.display = 'flex';
                 } else {
                     // Don't show error message for restricted contacts - just close modal silently
-                    console.log('Contact profile not accessible or not found');
+
                 }
             } catch (error) {
                 console.error('Error loading contact profile:', error);
@@ -2319,14 +2319,14 @@
             const isLoggedIn = document.querySelector('.main-layout') !== null;
             
             if (!isLoggedIn) {
-                console.log('User not logged in, skipping data load');
+
                 return;
             }
             
             // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
             
             // Загрузить историю чата
-            console.log('[PAGE LOAD] Calling loadChatHistory');
+
             loadChatHistory();
             
             // Инициализировать задачи и контакты при загрузке страницы
@@ -2997,7 +2997,7 @@
                         
                         // Не перезаписываем профиль, если данные подписки еще не загружены
                         if (!data.formatted_end_date && hasProfileData) {
-                            console.log('Skipping profile update: subscription data not loaded yet');
+
                             return;
                         }
                         
@@ -3184,7 +3184,7 @@
             
             recognition.onstart = function() {
                 isRecording = true;
-                console.log('Голосовое распознавание запущено');
+
                 // Изменить стиль кнопки - цвет как у лого ASI Biont
                 voiceButton.style.backgroundColor = '#068487';
                 voiceButton.style.color = '#ffffff';
@@ -3200,7 +3200,7 @@
             
             recognition.onresult = function(event) {
                 const transcript = event.results[0][0].transcript;
-                console.log('Распознанный текст:', transcript);
+
                 
                 // Вставить текст в поле ввода
                 const messageInput = document.getElementById('message-input');
@@ -3217,7 +3217,7 @@
             };
             
             recognition.onend = function() {
-                console.log('Голосовое распознавание завершено');
+
                 resetVoiceButton();
             };
             
@@ -3474,11 +3474,11 @@
                                 if (!target || !(target instanceof Element)) return;
                                 
                                 if (!currentMenu || !(currentMenu instanceof Element) || typeof currentMenu.contains !== 'function') {
-                                    console.log('currentMenu invalid:', currentMenu);
+
                                     return;
                                 }
                                 if (!currentToggle || !(currentToggle instanceof Element) || typeof currentToggle.contains !== 'function') {
-                                    console.log('currentToggle invalid:', currentToggle);
+
                                     return;
                                 }
                                 
