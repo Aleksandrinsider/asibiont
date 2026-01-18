@@ -1084,7 +1084,7 @@
                 const response = await fetch('/api/favorite_contacts', {
                     credentials: 'include'
                 });
-                // if (!await checkAuth(response)) return [];
+                if (!await checkAuth(response)) return [];
                 console.log('getFavoriteContactsFromServer response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
@@ -2496,7 +2496,7 @@
                     },
                     cache: 'no-store'
                 });
-                // if (!await checkAuth(response)) return;
+                if (!await checkAuth(response)) return;
                 console.log('updateTasks response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
@@ -2544,7 +2544,7 @@
                     },
                     cache: 'no-store'
                 });
-                // if (!await checkAuth(response)) return;
+                if (!await checkAuth(response)) return;
                 console.log('updatePeople response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
