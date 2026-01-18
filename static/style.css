@@ -1796,39 +1796,6 @@ details[open] .details-content {
     position: relative;
 }
 
-.disabled-btn::after {
-    content: '🚫';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 12px;
-    color: #dc2626;
-    pointer-events: none;
-}
-
-.disabled-delegate::after {
-    content: '🚫';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 10px;
-    color: #dc2626;
-    pointer-events: none;
-}
-
-.quick-action[style*="opacity: 0.4"]::after {
-    content: '🚫';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 10px;
-    color: #dc2626;
-    pointer-events: none;
-}
-
 /* Disabled sections for Bronze tier */
 .disabled-section {
     opacity: 0.4;
