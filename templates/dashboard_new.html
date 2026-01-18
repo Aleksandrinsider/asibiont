@@ -3042,41 +3042,6 @@
                     } else {
                         peopleList.innerHTML = '';
                     }
-                        // Partners are already sorted by server: first by city (same city first), then by rating
-                        // No need to re-sort here
-                        
-                        // Дедупликация партнеров по username - оставляем только первый тип для каждого пользователя
-                        const uniquePartners = {};
-                        data.partners.forEach(partner => {
-                            const username = partner.contact_info;
-                            if (!uniquePartners[username]) {
-                                uniquePartners[username] = partner;
-                            } else {
-                                // Если пользователь уже есть, комбинируем типы
-                                const existing = uniquePartners[username];
-                                if (existing.type === 'recommended' && partner.type !== 'recommended') {
-                                    // Оставляем recommended, если есть
-                                } else if (existing.type !== 'recommended' && partner.type === 'recommended') {
-                                    uniquePartners[username] = partner;
-                                }
-                            }
-                        });
-                        
-                        html += '</ul>';
-                        peopleList.innerHTML = html;
-                        // После обновления контактов применяем текущий фильтр
-                        
-                        // Сохраняем данные для орбиты аватаров
-                        cachedPartnersData = data.partners;
-                        
-                        // Обновляем визуализацию окружения
-                        await updateCircleContacts(data.partners);
-                        
-                        // Применяем текущий фильтр после обновления контактов
-                        applyContactFilter();
-                    } else {
-                        peopleList.innerHTML = '';
-                    }
                 }
             } catch (error) {
                 console.error('Error updating people:', error);
