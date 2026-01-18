@@ -1776,3 +1776,10 @@ details[open] .details-content {
     color: #92400E;
     border-color: #FDE68A;
 }
+/ *   D i s a b l e d   f i l t e r   b u t t o n s   f o r   B r o n z e   t i e r   * / 
+ . d i s a b l e d - b t n   { 
+         o p a c i t y :   0 . 5 ; 
+         c u r s o r :   n o t - a l l o w e d ; 
+         p o i n t e r - e v e n t s :   a u t o ;   / *   A l l o w   h o v e r   f o r   t o o l t i p   * / 
+ }  
+ 
