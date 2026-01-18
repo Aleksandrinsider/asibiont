@@ -1,0 +1,23 @@
+User-agent: *
+Allow: /
+Allow: /static/
+Allow: /subscription-tiers
+Disallow: /admin/
+Disallow: /api/
+Disallow: /health
+
+# Allow all major search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Yandex
+Allow: /
+
+# Crawl delay for respectful crawling
+Crawl-delay: 1
+
+# Sitemap location
+Sitemap: https://yourdomain.com/sitemap.xml
