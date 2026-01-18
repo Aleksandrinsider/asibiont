@@ -2339,13 +2339,13 @@ async def api_partners_handler(request):
             can_access = False
             required_tier = None
             
-            if user_tier_str in ['bronze', 'silver']:
+            if user_tier_str.lower() in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (partner_tier_str in ['bronze', 'silver'])
+                can_access = (partner_tier_str.lower() in ['bronze', 'silver'])
                 logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
-            elif user_tier_str == 'gold':
+            elif user_tier_str.lower() == 'gold':
                 # Gold видит всех
                 can_access = True
                 logger.info(f"User {user_tier_str} can access all partners")
@@ -2360,7 +2360,7 @@ async def api_partners_handler(request):
                         'photo_url': photo_url,
                         'can_access': can_access,
                         'required_tier': required_tier,
-                        'partner_tier': partner_tier.value if partner_tier else 'bronze',
+                        'subscription_tier': partner_tier.value if partner_tier else 'bronze',
                         'city': getattr(
                             p,
                             'city',
@@ -2477,13 +2477,13 @@ async def api_partners_handler(request):
             can_access = False
             required_tier = None
             
-            if user_tier_str in ['bronze', 'silver']:
+            if user_tier_str.lower() in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (delegator_tier_str in ['bronze', 'silver'])
+                can_access = (delegator_tier_str.lower() in ['bronze', 'silver'])
                 logger.info(f"Delegator check: User {user_tier_str} checking delegator {delegator_tier_str}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
-            elif user_tier_str == 'gold':
+            elif user_tier_str.lower() == 'gold':
                 can_access = True
                 logger.info(f"Delegator check: User {user_tier_str} can access all delegators")
 
@@ -2495,7 +2495,7 @@ async def api_partners_handler(request):
                     'telegram_id': delegator.telegram_id if delegator else None,
                     'can_access': can_access,
                     'required_tier': required_tier,
-                    'partner_tier': delegator_tier.value if delegator_tier else 'bronze',
+                    'subscription_tier': delegator_tier.value if delegator_tier else 'bronze',
                     'photo_url': photo_url,
                     'first_name': contact['first_name'],
                     'position': contact.get('position'),
@@ -2592,13 +2592,13 @@ async def api_partners_handler(request):
             can_access = False
             required_tier = None
             
-            if user_tier_str in ['bronze', 'silver']:
+            if user_tier_str.lower() in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (delegatee_tier_str in ['bronze', 'silver'])
+                can_access = (delegatee_tier_str.lower() in ['bronze', 'silver'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
                 if not can_access:
                     required_tier = 'gold'
-            elif user_tier_str == 'gold':
+            elif user_tier_str.lower() == 'gold':
                 can_access = True
                 logger.info(f"Delegatee check: User {user_tier_str} can access all delegatees")
 
@@ -2610,7 +2610,7 @@ async def api_partners_handler(request):
                     'telegram_id': delegatee.telegram_id if delegatee else None,
                     'can_access': can_access,
                     'required_tier': required_tier,
-                    'partner_tier': delegatee_tier.value if delegatee_tier else 'bronze',
+                    'subscription_tier': delegatee_tier.value if delegatee_tier else 'bronze',
                     'photo_url': photo_url,
                     'first_name': contact['first_name'],
                     'position': contact.get('position'),
@@ -3744,7 +3744,7 @@ logger.info("App created successfully")
 
 if __name__ == "__main__":
     from config import LOCAL
-    if LOCAL:
+    if LOCAL and False:  # Disabled polling for now
         # Local mode: run polling
         logger.info("Running in local mode with polling")
         async def run_polling():
@@ -3755,7 +3755,7 @@ if __name__ == "__main__":
                 logger.error(f"Error in polling: {e}")
         asyncio.run(run_polling())
     else:
-        # Production mode: run web server
+        # Production mode or local web mode: run web server
         try:
             port = PORT
             host = '0.0.0.0'

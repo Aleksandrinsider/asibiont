@@ -3007,6 +3007,8 @@
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
+                        const currentMessageCount = data.interactions.length;
+                        
                         if (lastMessageCount === 0) {
                             // Первая загрузка - очищаем и показываем все сообщения
                             const chatMessages = document.getElementById('chat-messages');
@@ -3024,7 +3026,23 @@
                                     displayedMessageIds.add(msgId);
                                 }
                             });
-                            lastMessageCount = data.interactions.length;
+                            lastMessageCount = currentMessageCount;
+                        } else if (currentMessageCount > lastMessageCount) {
+                            // Есть новые сообщения - добавляем только их
+                            const sortedInteractions = data.interactions
+                                .sort((a, b) => a.id - b.id);
+                            
+                            // Находим новые сообщения (с ID больше последнего отображенного)
+                            const maxDisplayedId = Math.max(...Array.from(displayedMessageIds));
+                            
+                            sortedInteractions.forEach((interaction) => {
+                                const msgId = interaction.id;
+                                if (msgId > maxDisplayedId && !displayedMessageIds.has(msgId)) {
+                                    addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                                    displayedMessageIds.add(msgId);
+                                }
+                            });
+                            lastMessageCount = currentMessageCount;
                         }
                     }
                 }
