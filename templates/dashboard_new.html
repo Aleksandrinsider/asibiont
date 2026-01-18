@@ -831,8 +831,12 @@
         }
 
         async function sendChatMessage() {
-            if (window.sendingMessage) return; // Prevent multiple sends
+            if (window.sendingMessage) {
+                console.warn('[WEB CHAT] Duplicate send attempt blocked');
+                return; // Prevent multiple sends
+            }
             window.sendingMessage = true;
+            console.log('[WEB CHAT] Starting message send');
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -879,9 +883,10 @@
                 if (response.ok) {
                     if (data.duplicate) {
                         // Duplicate message, don't add to chat
-                        console.log('Duplicate message detected, skipping');
+                        console.log('[WEB CHAT] Duplicate message detected, skipping');
                         return;
                     }
+                    console.log('[WEB CHAT] Adding AI response to chat');
                     addMessage(data.response, 'ai');
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
@@ -985,7 +990,7 @@
                 if (response.ok) {
                     if (data.duplicate) {
                         // Duplicate message, don't add to chat
-                        console.log('Duplicate message detected, skipping');
+                        console.log('[WEB CHAT] Duplicate message detected in time change, skipping');
                         return;
                     }
                     addMessage(data.response, 'ai');
