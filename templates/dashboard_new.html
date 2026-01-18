@@ -2298,9 +2298,9 @@
             currentContactFilter = null; // Сбрасываем, чтобы filterContacts сработал
             filterContacts('recommended');
             
-            // Обновлять время в шапке каждые 10 секунд
+            // Обновлять время в шапке каждые 5 секунд
             updateHeaderTime();
-            setInterval(updateHeaderTime, 10000);
+            setInterval(updateHeaderTime, 5000);
             
             // Обновлять счетчик времени каждые 10 секунд (оптимизировано)
             setInterval(() => {
