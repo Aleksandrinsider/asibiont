@@ -10,6 +10,7 @@ import pytz
 import logging
 import json
 from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_NO_SEND_END_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
+from ai_integration import check_delegation_deadlines
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,14 @@ async def _check_and_send_overdue_reminder_job(user_id: int):
         logger.error("REMINDER_SERVICE not initialized; cannot check overdue")
 
 
+async def _send_delegation_check_job(task_id: int, delegator_id: int, recipient_id: int, check_type: str = "progress_request"):
+    """Jobstore-safe wrapper for delegation check"""
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_delegation_check(task_id, delegator_id, recipient_id, check_type)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot send delegation check")
+
+
 
 class ReminderService:
     def __init__(self, bot: Bot, ai_service=None):
@@ -98,6 +107,7 @@ class ReminderService:
         self.schedule_daily_reports()
         self.schedule_proactive_checks()
         self.schedule_overdue_checks()
+        self.schedule_delegation_checks()
 
     def schedule_existing_reminders(self):
         import logging
@@ -808,4 +818,140 @@ class ReminderService:
             logging.error(f"Failed to send overdue reminder to user {user_id}: {e}")
         finally:
             db.close()
+
+    def schedule_delegation_check(self, task_id: int, check_time: datetime, delegator_id: int, recipient_id: int, task_title: str, check_type: str = "progress_request"):
+        """Schedule delegation progress check"""
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # Конвертируем naive datetime в aware с UTC
+        if check_time.tzinfo is None:
+            check_time = pytz.UTC.localize(check_time)
+
+        logger.info(f"Scheduling delegation check for task {task_id}, type: {check_type}, delegator {delegator_id}, recipient {recipient_id}, time: {check_time}")
+
+        # Проверяем, запущен ли scheduler
+        if not self.scheduler.running:
+            return
+
+        job_id = f"delegation_check_{task_id}_{check_type}_{int(check_time.timestamp())}"
+        trigger = DateTrigger(run_date=check_time, timezone=pytz.UTC)
+
+        # Use jobstore-safe module-level wrapper
+        self.scheduler.add_job(
+            _send_delegation_check_job,
+            trigger=trigger,
+            args=[task_id, delegator_id, recipient_id, check_type],
+            id=job_id,
+            replace_existing=True
+        )
+        logger.info(f"Delegation check scheduled for {check_time}")
+
+    async def send_delegation_check(self, task_id: int, delegator_id: int, recipient_id: int, check_type: str = "progress_request"):
+        """Send delegation progress check/reminder"""
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        logger.info(f"=== STARTING DELEGATION CHECK for task {task_id}, type: {check_type} ===")
+
+        from models import Session, Task
+        from ai_integration.handlers import check_delegation_deadlines, generate_progress_request
+        from ai_integration import chat_with_ai
+        import asyncio
+
+        db = Session()
+        try:
+            task = db.query(Task).filter_by(id=task_id).first()
+            if not task:
+                logger.warning(f"Task {task_id} not found for delegation check")
+                return
+
+            # Check if task is still delegated and not completed
+            if task.delegation_status != "accepted" or task.status == "completed":
+                logger.info(f"Task {task_id} no longer needs delegation check (status: {task.delegation_status}, task status: {task.status})")
+                return
+
+            if check_type == "progress_request":
+                # Request progress update from recipient
+                try:
+                    current_time = datetime.now(timezone.utc)
+                    time_until_deadline = task.reminder_time - current_time
+                    hours_remaining = int(time_until_deadline.total_seconds() / 3600)
+
+                    if hours_remaining > 24:
+                        time_desc = f"{hours_remaining // 24} дней"
+                    else:
+                        time_desc = f"{hours_remaining} часов"
+
+                    # Generate AI-powered progress request
+                    progress_request = await generate_progress_request(
+                        task.title,
+                        "delegator",  # We'll get the actual username from DB
+                        time_desc,
+                        recipient_id
+                    )
+
+                    if progress_request:
+                        message = f"📊 {progress_request}\n\nЗадача: {task.title}"
+                    else:
+                        message = f"🤔 Как продвигается задача '{task.title}'?\n\nОсталось времени: {time_desc}\n\nПожалуйста, обнови статус выполнения."
+
+                    if self.bot:
+                        await self.bot.send_message(
+                            chat_id=recipient_id,
+                            text=message
+                        )
+                        logger.info(f"Sent progress request to recipient {recipient_id} for task {task_id}")
+
+                        # Also notify delegator about the progress check
+                        try:
+                            delegator_message = f"📋 Отправлен запрос о прогрессе по задаче '{task.title}'\n\nОжидаем ответа от исполнителя."
+                            await self.bot.send_message(
+                                chat_id=delegator_id,
+                                text=delegator_message
+                            )
+                            logger.info(f"Notified delegator {delegator_id} about progress request for task {task_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to notify delegator: {e}")
+
+                except Exception as e:
+                    logger.error(f"Failed to send progress request: {e}")
+
+            elif check_type == "overdue_reminder":
+                # Handle overdue tasks (existing logic)
+                logger.info(f"Running overdue check for task {task_id}")
+                check_delegation_deadlines()
+
+            else:
+                logger.warning(f"Unknown check_type: {check_type} for task {task_id}")
+
+        except Exception as e:
+            logger.error(f"❌ Critical error in send_delegation_check for task {task_id}: {type(e).__name__}: {e}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+        finally:
+            db.close()
+
+    def schedule_delegation_checks(self):
+        """Schedule periodic delegation deadline checks"""
+        from apscheduler.triggers.interval import IntervalTrigger
+        import logging
+        logger = logging.getLogger(__name__)
+
+        job_id = "delegation_deadline_check"
+
+        # Проверяем, существует ли уже такой джоб
+        if self.scheduler.get_job(job_id):
+            logger.debug(f"Delegation check job {job_id} already exists, skipping")
+            return
+
+        # Schedule daily delegation deadline checks at 9 AM UTC
+        self.scheduler.add_job(
+            check_delegation_deadlines,
+            trigger="cron",
+            hour=9,
+            minute=0,
+            id=job_id,
+            replace_existing=True
+        )
+        logger.info("Scheduled daily delegation deadline checks at 9:00 UTC")
 

@@ -11,7 +11,7 @@ from .handlers import (
     edit_task, delete_task, set_priority, get_task_details,
     find_partners, update_profile, suggest_alternatives, delete_all_tasks,
     create_subscription_payment, check_subscription_status, brainstorm_ideas,
-    cancel_subscription, get_partners_list, enrich_task_list_with_insights
+    cancel_subscription, get_partners_list, enrich_task_list_with_insights, check_delegation_deadlines
 )
 from .utils import set_redis_client
 
@@ -50,5 +50,6 @@ __all__ = [
     'cancel_subscription',
     'get_partners_list',
     'enrich_task_list_with_insights',
+    'check_delegation_deadlines',
     'set_redis_client',
 ]

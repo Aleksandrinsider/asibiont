@@ -833,18 +833,43 @@ def delegate_task(
         try:
             from main import bot
             if bot:
-                message = f"Новое предложение задачи от @{delegator.username}:\n\n"
-                message += f"Задача: {title}\n"
-                if description:
-                    message += f"Описание: {description}\n"
-                if reminder_time:
-                    message += f"Дедлайн: {reminder_time}\n"
-                if delegation_details:
-                    message += f"Детали: {delegation_details}\n"
-                message += f"\nНапишите боту 'принять задачу {task_id}' для подтверждения или 'отклонить задачу {task_id}' для отказа."
+                # Generate AI-powered personalized notification
+                import asyncio
+                notification_text = asyncio.run(generate_delegation_notification(
+                    delegator.username,
+                    recipient_username,
+                    title,
+                    description,
+                    reminder_time,
+                    delegation_details,
+                    recipient.telegram_id
+                ))
+
+                if notification_text:
+                    message = notification_text
+                else:
+                    # Fallback to template if AI generation fails
+                    message = f"Новое предложение задачи от @{delegator.username}:\n\n"
+                    message += f"Задача: {title}\n"
+                    if description:
+                        message += f"Описание: {description}\n"
+                    if reminder_time:
+                        message += f"Дедлайн: {reminder_time}\n"
+                    if delegation_details:
+                        message += f"Детали: {delegation_details}\n"
+                    message += f"\nНапишите боту 'принять задачу {task_id}' для подтверждения или 'отклонить задачу {task_id}' для отказа."
 
                 import asyncio
                 asyncio.create_task(bot.send_message(recipient.telegram_id, message))
+
+                # Schedule automatic monitoring for task execution
+                schedule_delegation_monitoring(
+                    task_id=task_id,
+                    delegator_id=delegator.telegram_id,
+                    recipient_id=recipient.telegram_id,
+                    deadline=task.reminder_time
+                )
+
         except Exception as e:
             logging.error(f"Failed to send delegation notification: {e}")
 
@@ -1804,3 +1829,246 @@ def update_profile(
         return f"Профиль обновлен: {'; '.join(updates_made)}"
     else:
         return "Профиль не изменен."
+
+
+async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
+    """Generate personalized delegation notification using AI"""
+    import aiohttp
+    from config import DEEPSEEK_API_KEY
+    from .prompts import get_optimized_system_prompt
+    from .utils import clean_technical_details
+
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+
+        system_prompt = get_optimized_system_prompt()
+
+        prompt = f"""Создай персонализированное и мотивирующее уведомление о делегированной задаче.
+
+КОНТЕКСТ:
+- Отправитель: @{delegator_username}
+- Получатель: @{recipient_username}
+- Задача: {task_title}
+- Описание: {task_description or 'Не указано'}
+- Дедлайн: {deadline or 'Не указан'}
+- Детали делегирования: {delegation_details or 'Не указаны'}
+
+ТРЕБОВАНИЯ К УВЕДОМЛЕНИЮ:
+1. Будь дружелюбным и мотивирующим
+2. Подчеркни важность задачи для команды/проекта
+3. Упомяни дедлайн если он есть
+4. Добавь призыв к действию (принять/отклонить)
+5. Сделай сообщение персонализированным
+6. Не более 300 символов
+
+ФОРМАТ ОТВЕТА:
+Верни только текст уведомления, без дополнительных комментариев."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+
+        data = {"model": "deepseek-chat", "messages": messages, "temperature": 0.8, "max_tokens": 200}
+
+        async with aiohttp.ClientSession() as aio_session:
+            async with aio_session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    content = clean_technical_details(content)
+                    return content.strip()
+                else:
+                    logger.error(f"AI notification generation failed: {response.status}")
+                    return None
+
+    except Exception as e:
+        logger.error(f"Error generating delegation notification: {e}")
+        return None
+
+
+async def generate_progress_request(task_title, delegator_username, time_remaining, user_id):
+    """Generate AI-powered progress request for delegated task"""
+    import aiohttp
+    from config import DEEPSEEK_API_KEY
+    from .prompts import get_optimized_system_prompt
+    from .utils import clean_technical_details
+
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+
+        system_prompt = get_optimized_system_prompt()
+
+        prompt = f"""Создай запрос о прогрессе выполнения делегированной задачи.
+
+КОНТЕКСТ:
+- Задача: {task_title}
+- Отправитель: @{delegator_username}
+- Осталось времени: {time_remaining}
+
+ТРЕБОВАНИЯ К ЗАПРОСУ:
+1. Будь вежливым и не навязчивым
+2. Спроси о текущем прогрессе (в процентах или описательно)
+3. Уточни, есть ли сложности или нужна помощь
+4. Напомни об оставшемся времени
+5. Не более 200 символов
+
+ФОРМАТ ОТВЕТА:
+Верни только текст запроса."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+
+        data = {"model": "deepseek-chat", "messages": messages, "temperature": 0.7, "max_tokens": 150}
+
+        async with aiohttp.ClientSession() as aio_session:
+            async with aio_session.post(
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    content = clean_technical_details(content)
+                    return content.strip()
+                else:
+                    logger.error(f"AI progress request generation failed: {response.status}")
+                    return None
+
+    except Exception as e:
+        logger.error(f"Error generating progress request: {e}")
+        return None
+
+
+def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline):
+    """Schedule delegation monitoring with three progress checkpoints for all tasks"""
+    try:
+        from main import reminder_service
+        if not reminder_service:
+            logger.warning("Reminder service not available for delegation monitoring")
+            return
+
+        if not deadline:
+            logger.info(f"No deadline for task {task_id}, skipping monitoring")
+            return
+
+        current_time = datetime.now(timezone.utc)
+        time_until_deadline = deadline - current_time
+
+        # Convert to hours for easier calculation
+        hours_until_deadline = time_until_deadline.total_seconds() / 3600
+
+        logger.info(f"Task {task_id} has {hours_until_deadline:.1f} hours until deadline")
+
+        # For ALL tasks: schedule three checkpoints
+        # 1. First checkpoint at 1/3 of the deadline
+        # 2. Second checkpoint at 2/3 of the deadline
+        # 3. Final overdue check 1 day after deadline
+
+        check_times = [
+            current_time + (time_until_deadline * 1 / 3),  # 1/3 point
+            current_time + (time_until_deadline * 2 / 3),  # 2/3 point
+        ]
+
+        for i, check_time in enumerate(check_times, 1):
+            if check_time > current_time:
+                logger.info(f"Scheduling progress check {i}/2 for task {task_id} at {check_time}")
+
+                reminder_service.schedule_delegation_check(
+                    task_id=task_id,
+                    check_time=check_time,
+                    delegator_id=delegator_id,
+                    recipient_id=recipient_id,
+                    task_title="Делегированная задача",
+                    check_type="progress_request"
+                )
+
+        # Always schedule final overdue check 1 day after deadline
+        overdue_check = deadline + timedelta(days=1)
+        if overdue_check > current_time:
+            reminder_service.schedule_delegation_check(
+                task_id=task_id,
+                check_time=overdue_check,
+                delegator_id=delegator_id,
+                recipient_id=recipient_id,
+                task_title="Делегированная задача",
+                check_type="overdue_reminder"
+            )
+            logger.info(f"Scheduled overdue check for task {task_id} at {overdue_check}")
+
+        logger.info(f"Scheduled three-checkpoint delegation monitoring for task {task_id}")
+    except Exception as e:
+        logger.error(f"Failed to schedule delegation monitoring for task {task_id}: {e}")
+
+
+def check_delegation_deadlines():
+    """Check for overdue delegated tasks and send reminders"""
+    session = Session()
+    try:
+        current_time = datetime.now(timezone.utc)
+
+        # Find accepted delegated tasks that are overdue
+        overdue_tasks = session.query(Task).filter(
+            Task.delegation_status == "accepted",
+            Task.status != "completed",
+            Task.reminder_time < current_time
+        ).all()
+
+        for task in overdue_tasks:
+            try:
+                # Calculate days overdue
+                days_overdue = (current_time - task.reminder_time).days
+
+                # Get delegator and recipient info
+                delegator = session.query(User).filter_by(id=task.user_id).first()
+                recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
+
+                if delegator and recipient:
+                    # Generate AI-powered reminder
+                    import asyncio
+                    reminder_text = asyncio.run(generate_progress_reminder(
+                        task.title,
+                        delegator.username,
+                        days_overdue,
+                        recipient.telegram_id
+                    ))
+
+                    if reminder_text:
+                        # Send reminder to recipient
+                        from main import bot
+                        if bot:
+                            try:
+                                asyncio.run(bot.send_message(
+                                    recipient.telegram_id,
+                                    f"🔔 Напоминание о делегированной задаче:\n\n{reminder_text}\n\nЗадача: {task.title}"
+                                ))
+                                logger.info(f"Sent overdue reminder for task {task.id} to @{recipient.username}")
+                            except Exception as e:
+                                logger.error(f"Failed to send reminder to recipient: {e}")
+
+                        # Notify delegator about overdue task
+                        try:
+                            asyncio.run(bot.send_message(
+                                delegator.telegram_id,
+                                f"⚠️ Делегированная задача просрочена!\n\n"
+                                f"Задача: {task.title}\n"
+                                f"Исполнитель: @{recipient.username}\n"
+                                f"Просрочена на: {days_overdue} дней\n\n"
+                                f"Рекомендую связаться с исполнителем для уточнения статуса."
+                            ))
+                            logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
+                        except Exception as e:
+                            logger.error(f"Failed to notify delegator: {e}")
+
+            except Exception as e:
+                logger.error(f"Error processing overdue task {task.id}: {e}")
+
+        session.close()
+    except Exception as e:
+        logger.error(f"Error in check_delegation_deadlines: {e}")
+        session.close()

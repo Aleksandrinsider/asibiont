@@ -1113,6 +1113,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     logger.info("[AI ONLY] All requests handled by AI without forced triggers")
 
                     # SMART FALLBACK: Проверяем, нужно ли применить умный fallback (use improved version if available)
+                    # Определяем content заранее для использования в fallback
+                    original_content = message_response.get("content", "")
+                    content = original_content
+                    content = replace_placeholders(content, user_now, current_time_str)
+
                     try:
                         if PROMPTS_V2_AVAILABLE:
                             fallback_result = improved_fallback(
@@ -1208,8 +1213,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     # Если forced calls не сработали, обрабатываем обычный ответ AI
                     # Обрабатываем обычный ответ AI без tool calls
                     logger.info("[TOOL CALLS] Tool calls completed, 0 results. Generating natural response...")
-                    original_content = message_response.get("content", "")
-                    content = original_content
 
                     # Для обычных ответов ТОЛЬКО заменяем плейсхолдеры, без дополнительной очистки
                     content = replace_placeholders(content, user_now, current_time_str)

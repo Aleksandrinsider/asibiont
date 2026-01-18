@@ -1347,6 +1347,32 @@ def post_process_response(content, user_id, db_session=None):
     content = re.sub(r'#+\s*', '', content)            # Убираем заголовки
     content = content.replace('🚫', '')                # Убираем запрещающий знак
     
+    # СТРОГО ЗАПРЕЩЕННЫЕ ЭЛЕМЕНТЫ ФОРМАТИРОВАНИЯ (требования проекта)
+    # Удаляем маркеры списков в начале строк
+    content = re.sub(r'^\s*[-*•]\s+', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^\s*\d+\.\s+', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^\s*[a-zA-Z]\.\s+', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^\s*\(\d+\)\s+', '', content, flags=re.MULTILINE)
+    
+    # Удаляем маркеры списков в середине текста (после переносов строк)
+    content = re.sub(r'\n\s*[-*•]\s*', '\n', content)
+    content = re.sub(r'\n\s*\d+\.\s*', '\n', content)
+    content = re.sub(r'\n\s*[a-zA-Z]\.\s*', '\n', content)
+    content = re.sub(r'\n\s*\(\d+\)\s*', '\n', content)
+    
+    # Преобразуем перечисления через "или" в естественный текст
+    content = re.sub(r'(\w+)\s*или\s*(\w+)\s*или\s*(\w+)', r'\1, \2 или \3', content)
+    content = re.sub(r'(\w+)\s*или\s*(\w+)', r'\1 или \2', content)
+    
+    # Удаляем все конструкции типа "Что хочешь сделать: задача или партнер" - заменяем на естественный текст
+    # Ищем паттерн: слово + двоеточие + текст с "или" + вопросительный или точка
+    content = re.sub(r'(\w+.*?):\s*([^.?]*?или[^.?]*?)\?', r'Можешь \2?', content, flags=re.IGNORECASE)
+    content = re.sub(r'(\w+.*?):\s*([^.?]*?или[^.?]*?)\.', r'Можешь \2.', content, flags=re.IGNORECASE)
+    
+    # Удаляем оставшиеся двоеточия с любыми перечислениями
+    content = re.sub(r':\s*([^.]*?или[^.]*?)\?', r' \1?', content)
+    content = re.sub(r':\s*([^.]*?или[^.]*?)\.', r' \1.', content)
+    
     # Получаем рекомендации по контактам
     advice = analyze_user_context_for_advice(user_id, db_session)
     
