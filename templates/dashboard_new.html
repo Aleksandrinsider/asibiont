@@ -2715,10 +2715,9 @@
                                     html += '<li class="task-item contact-recommended" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
-                                    
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
@@ -2821,10 +2820,9 @@
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     html += '<li class="task-item contact-delegating-to-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
-                                    
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
@@ -2928,10 +2926,9 @@
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     html += '<li class="task-item contact-delegating-by-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
-                                    
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
