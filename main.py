@@ -74,7 +74,7 @@ try:
     from sqlalchemy import text, inspect
     
     # Check database type
-    is_sqlite = 'sqlite' in DATABASE_URL.lower()
+    is_sqlite = 'sqlite' in str(engine.url).lower()
     logger.info(f"Database type: {'SQLite' if is_sqlite else 'PostgreSQL'}")
     
     try:
@@ -569,6 +569,7 @@ try:
                 # Create active subscription
                 subscription = Subscription(
                     user_id=user.id,
+                    telegram_id=user.telegram_id,
                     telegram_username=user.username,
                     status='active',
                     tier=user_data['tier'],
