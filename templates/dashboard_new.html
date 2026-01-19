@@ -285,7 +285,7 @@
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
     {% if logged_in %}
-    <div class="app-header">
+    <div class="app-header" style="margin-bottom: 0;">
         <div class="header-content">
             <div class="header-left" style="display: flex; align-items: center; gap: 8px;">
                 <!-- Логотип -->
@@ -443,7 +443,7 @@
             <!-- Левая колонка - Люди -->
             <div class="left-column">
                 <div class="context-section" id="profile-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>
                         <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
@@ -451,7 +451,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="profile-content" class="profile-content" style="display: none; margin-bottom: 15px;">
+                    <div id="profile-content" class="profile-content" style="display: none;">
                     <script>
                         // Немедленно устанавливаем правильное состояние профиля (до полной загрузки страницы)
                         (function() {
@@ -520,7 +520,7 @@
                 {% endif %}
 
                 <div class="people-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
@@ -583,7 +583,7 @@
             <div class="right-column">
                 <!-- Блок статистики -->
                 <div class="task-stats-block">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Статистика</h3>
                         <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
@@ -610,7 +610,7 @@
 
                 <!-- Блок списка задач -->
                 <div class="tasks-section-wrapper">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
