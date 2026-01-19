@@ -198,12 +198,8 @@
                     // Для blocked показываем только заблокированные контакты
                     card.style.display = type === 'blocked' ? 'flex' : 'none';
                 } else if (currentContactFilter === 'delegating_to_me' || currentContactFilter === 'delegating_by_me') {
-                    // Для делегирования показываем все контакты с recommended классом и фильтруем по тексту
-                    if (card.classList.contains('contact-recommended')) {
-                        card.style.display = 'flex';
-                    } else {
-                        card.style.display = 'none';
-                    }
+                    // Для делегирования показываем контакты соответствующего типа
+                    card.style.display = type === currentContactFilter ? 'flex' : 'none';
                 } else if (currentContactFilter === 'recommended') {
                     // Для recommended показываем только recommended контакты
                     card.style.display = type === 'recommended' ? 'flex' : 'none';

@@ -240,9 +240,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 messages.append({"role": "user", "content": "Задача НЕ создана - пользователь не указал время."})
                 
                 data = {
-                                                "model": "deepseek-reasoner",
+                    "model": "deepseek-reasoner",
+                    "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 150
+                    "max_tokens": 300
                 }
                 
                 try:
@@ -393,7 +394,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 "model": "deepseek-reasoner",
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 400  # Увеличено для вариантов действий
+                "max_tokens": 600  # Увеличено для полных ответов с временем
             }
             
             final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
@@ -413,7 +414,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                                     # Последняя попытка - упрощённый запрос
                                     try:
                                         simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
-                                        simple_data = {"model": "deepseek-reasoner", "messages": simple_msg, "temperature": 0.7, "max_tokens": 300}
+                                        simple_data = {"model": "deepseek-reasoner", "messages": simple_msg, "temperature": 0.7, "max_tokens": 500}
                                         async with aiohttp.ClientSession() as simple_session:
                                             async with simple_session.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
                                                 if simple_response.status == 200:
