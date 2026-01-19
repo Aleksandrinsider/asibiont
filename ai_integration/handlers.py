@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone, timedelta
 import pytz
 from models import Session, Task, User, UserProfile, Interaction
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 
 from .memory import encrypt_data, decrypt_data
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
