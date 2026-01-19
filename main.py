@@ -2361,6 +2361,9 @@ async def api_partners_handler(request):
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                logger.error(f"User not found for telegram_id: {user_id}")
+                return web.json_response({'error': 'User not found'}, status=404)
 
             # Get hidden contacts from memory
             hidden_contacts = set()
@@ -3077,9 +3080,6 @@ async def api_partners_handler(request):
 
         partners_data = filtered_partners_data
         partners_data.sort(key=sort_key)
-
-        # Закрываем сессию перед возвратом ответа
-        session_db.close()
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({'partners': partners_data})
