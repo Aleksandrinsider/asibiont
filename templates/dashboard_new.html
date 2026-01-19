@@ -2174,7 +2174,8 @@
             
             // Если есть делегирование, показываем отдельной строкой
             if (delegationInfo) {
-                html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + delegationInfo + '</span></div>';
+                const clickableDelegationInfo = delegationInfo.replace(/(@\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; font-weight: 500; cursor: pointer;">$1</a>');
+                html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + clickableDelegationInfo + '</span></div>';
             }
             
             // Показываем описание задачи, если оно есть и это не устаревший текст делегирования
