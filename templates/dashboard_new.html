@@ -176,7 +176,7 @@
 
         // Global variables
         let currentTaskFilter = 'all';
-        let currentContactFilter = 'all';
+        let currentContactFilter = 'recommended';
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
@@ -525,7 +525,7 @@
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" title="Показать контакты, добавленные в избранное">Мои</button>
-                        <button class="contact-filter-btn active" data-filter="all" onclick="filterContacts('all')" title="Показать все доступные контакты">Все</button>
+                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" title="Показать рекомендованные контакты">Рекомендуемые</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" title="Показать контакты, которые делегируют вам задачи">Делегирует мне</button>
                         <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled title="Функция доступна на других тарифах"{% endif %} title="Показать контакты, которым вы делегировали задачи">Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
