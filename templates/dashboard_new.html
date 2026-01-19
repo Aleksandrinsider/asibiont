@@ -3551,7 +3551,6 @@
                         skills: data.profile?.skills,
                         interests: data.profile?.interests,
                         languages: data.profile?.languages,
-                        bio: data.profile?.bio,
                         formatted_end_date: data.formatted_end_date,
                         user_avatar_url: data.user_avatar_url ? data.user_avatar_url.split('?')[0] : null
                     });
@@ -3599,7 +3598,7 @@
                         if (!contextSection) return; // Элемент не найден
                         
                         // Check if profile has meaningful data (not just username)
-                        const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests || data.profile.languages || data.profile.bio || data.profile.username);
+                        const hasProfileData = data.profile && (data.profile.city || data.profile.company || data.profile.position || data.profile.goals || data.profile.skills || data.profile.interests || data.profile.languages || data.profile.username);
                         
                         // Не перезаписываем профиль, если данные подписки еще не загружены
                         if (!data.formatted_end_date && hasProfileData) {
@@ -3640,7 +3639,6 @@
                         html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
                         html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
-                        html += '<p>Режим активности: ' + (data.profile.bio || 'Не указано') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
