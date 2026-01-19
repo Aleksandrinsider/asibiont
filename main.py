@@ -4377,7 +4377,7 @@ logger.info("App created successfully")
 
 if __name__ == "__main__":
     from config import LOCAL
-    if LOCAL and False:  # Disabled polling for now
+    if LOCAL:  # Enabled polling for local testing
         # Local mode: run polling
         logger.info("Running in local mode with polling")
         async def run_polling():
