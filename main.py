@@ -4,6 +4,7 @@ from ai_integration import chat_with_ai, get_partners_list, set_redis_client, de
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
+from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import get_session
 import aiohttp_session
 from redis.asyncio import Redis
@@ -3621,10 +3622,16 @@ async def on_startup(app):
         # In local mode, use dict for Redis
         redis_client = None
         logger.info("Using local mode without Redis")
+        storage = SimpleCookieStorage()
     else:
         # Use the Redis client from config.py
         redis_client = config_redis_client
         logger.info("Redis client initialized from config")
+        storage = RedisStorage(redis_client)
+
+    # Setup session middleware
+    aiohttp_session.setup(app, storage)
+    logger.info("Session middleware set up")
 
     # Передаём redis_client в ai_integration
     set_redis_client(redis_client)
