@@ -1792,13 +1792,11 @@ async def clear_single_task_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
 
         # Ищем задачу либо среди своих, либо среди делегированных мне
-        task = session_db.query(Task).filter(
-            Task.id == task_id,
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
-        ).first()
+        query_conditions = [Task.id == task_id, Task.user_id == user.id]
+        if user.username:
+            query_conditions.append(Task.delegated_to_username.ilike(user.username))
+        
+        task = session_db.query(Task).filter(or_(*query_conditions)).first()
         logger.info(f"Task found: {task is not None}")
         if not task:
             return web.json_response({'error': 'Task not found'}, status=404)
