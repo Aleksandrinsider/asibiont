@@ -628,6 +628,61 @@ try:
                 logger.info(f"Created test user {user_data['telegram_id']} with {user_data['tier']} tier")
                 added_count += 1
             
+            # Create test tasks for delegation testing
+            if added_count > 0:
+                # Create tasks delegated to user 1001 from other users
+                user_1001 = session_db.query(User).filter_by(telegram_id=1001).first()
+                user_1002 = session_db.query(User).filter_by(telegram_id=1002).first()
+                user_1003 = session_db.query(User).filter_by(telegram_id=1003).first()
+                
+                if user_1001 and user_1002:
+                    # Task from user 1002 delegated to user 1001
+                    task1 = Task(
+                        user_id=user_1002.id,
+                        title="Подготовить презентацию для клиента",
+                        description="Создать презентацию о наших услугах",
+                        status="pending",
+                        priority="medium",
+                        created_at=now,
+                        updated_at=now,
+                        delegated_to_username=user_1001.username,
+                        delegation_status="accepted"
+                    )
+                    session_db.add(task1)
+                    logger.info("Created delegated task from user 1002 to user 1001")
+                
+                if user_1001 and user_1003:
+                    # Task from user 1003 delegated to user 1001
+                    task2 = Task(
+                        user_id=user_1003.id,
+                        title="Проверить код на ошибки",
+                        description="Ревью кода для нового модуля",
+                        status="pending",
+                        priority="high",
+                        created_at=now,
+                        updated_at=now,
+                        delegated_to_username=user_1001.username,
+                        delegation_status="accepted"
+                    )
+                    session_db.add(task2)
+                    logger.info("Created delegated task from user 1003 to user 1001")
+                
+                # Create task delegated by user 1001 to user 1002
+                if user_1001 and user_1002:
+                    task3 = Task(
+                        user_id=user_1001.id,
+                        title="Организовать встречу с командой",
+                        description="Запланировать еженедельную встречу",
+                        status="pending",
+                        priority="low",
+                        created_at=now,
+                        updated_at=now,
+                        delegated_to_username=user_1002.username,
+                        delegation_status="accepted"
+                    )
+                    session_db.add(task3)
+                    logger.info("Created delegated task from user 1001 to user 1002")
+            
             if added_count > 0:
                 session_db.commit()
                 logger.info(f"Successfully added {added_count} test users")
