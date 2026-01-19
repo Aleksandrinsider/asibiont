@@ -1845,10 +1845,10 @@ details[open] .details-content {
 
 /* Reduce bottom margin for profile and stats sections */
 .context-section {
-    margin-bottom: 10px !important;
+    margin-bottom: 0px !important;
 }
 
 .task-stats-block {
-    margin-bottom: 10px !important;
+    margin-bottom: 0px !important;
 }
 
