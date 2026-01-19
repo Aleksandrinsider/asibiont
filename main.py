@@ -2786,6 +2786,7 @@ async def api_partners_handler(request):
             # Only add contact if user can access it
             if can_access:
                 logger.info(f"Adding delegating contact {contact['username']} with tier {delegator_tier_str} for user {user.username} with tier {user_tier_str}")
+                delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first() if delegator else None
                 partners_data.append({
                     'contact_info': contact['username'] if can_access else None,
                     'telegram_id': delegator.telegram_id if delegator else None,
@@ -2802,8 +2803,8 @@ async def api_partners_handler(request):
                     'common_skills': common_skills,
                     'common_goals': common_goals,
                     'common_tasks': common_tasks,
-                    'average_rating': delegator.average_rating if delegator else 0,
-                    'rating_count': delegator.rating_count if delegator else 0,
+                    'average_rating': delegator_profile.average_rating if delegator_profile else 0,
+                    'rating_count': delegator_profile.rating_count if delegator_profile else 0,
                     'reason': contact['reason'],
                     'task_count': contact.get('task_count', 0),
                     'type': 'delegating_to_me'
@@ -2907,6 +2908,7 @@ async def api_partners_handler(request):
             # Only add contact if user can access it
             if can_access:
                 logger.info(f"Adding delegating_by_me contact {contact['username']} with tier {delegatee_tier_str} for user {user.username} with tier {user_tier_str}")
+                delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first() if delegatee else None
                 partners_data.append({
                     'contact_info': contact['username'] if can_access else None,
                     'telegram_id': delegatee.telegram_id if delegatee else None,
@@ -2923,8 +2925,8 @@ async def api_partners_handler(request):
                     'common_skills': common_skills,
                     'common_goals': common_goals,
                     'common_tasks': common_tasks,
-                    'average_rating': delegatee.average_rating if delegatee else 0,
-                    'rating_count': delegatee.rating_count if delegatee else 0,
+                    'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
+                    'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
                     'reason': contact['reason'],
                     'task_count': contact.get('task_count', 0),
                     'type': 'delegating_by_me'
