@@ -1843,3 +1843,12 @@ details[open] .details-content {
     white-space: pre-wrap;
 }
 
+/* Reduce bottom margin for profile and stats sections */
+.context-section {
+    margin-bottom: 10px !important;
+}
+
+.task-stats-block {
+    margin-bottom: 10px !important;
+}
+
