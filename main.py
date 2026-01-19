@@ -15,8 +15,8 @@ import jinja2
 import aiohttp_jinja2
 from aiohttp import web
 import aiohttp
-# from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-# from aiogram import Bot, Dispatcher
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram import Bot, Dispatcher
 import asyncio
 import logging
 import pytz
@@ -2157,6 +2157,9 @@ app = web.Application()
 # Add bot to app
 if bot:
     app['bot'] = bot
+    dp = Dispatcher()
+    dp.include_router(handlers_router)
+    app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
 # Middleware to add CSP headers and disable cache for static files
 
