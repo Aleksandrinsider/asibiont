@@ -2649,11 +2649,11 @@ async def api_partners_handler(request):
                             'recommendation_reason',
                             'подходящий контакт'),
                         'average_rating': getattr(
-                            p,
+                            partner_user,
                             'average_rating',
                             0),
                         'rating_count': getattr(
-                            p,
+                            partner_user,
                             'rating_count',
                             0),
                         'type': 'recommended'})
@@ -2769,8 +2769,8 @@ async def api_partners_handler(request):
                     'common_skills': common_skills,
                     'common_goals': common_goals,
                     'common_tasks': common_tasks,
-                    'average_rating': delegator_profile.average_rating if delegator_profile else 0,
-                    'rating_count': delegator_profile.rating_count if delegator_profile else 0,
+                    'average_rating': delegator.average_rating if delegator else 0,
+                    'rating_count': delegator.rating_count if delegator else 0,
                     'reason': contact['reason'],
                     'task_count': contact.get('task_count', 0),
                     'type': 'delegating_to_me'
@@ -2884,8 +2884,8 @@ async def api_partners_handler(request):
                     'common_skills': common_skills,
                     'common_goals': common_goals,
                     'common_tasks': common_tasks,
-                    'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
-                    'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
+                    'average_rating': delegatee.average_rating if delegatee else 0,
+                    'rating_count': delegatee.rating_count if delegatee else 0,
                     'reason': contact['reason'],
                     'task_count': contact.get('task_count', 0),
                     'type': 'delegating_by_me'
