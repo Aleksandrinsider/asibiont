@@ -2898,7 +2898,7 @@
                 console.log('Starting updatePeople');
                 // Получаем избранные контакты заранее
                 const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
-                console.log('Loaded favoriteContacts:', favoriteContacts);
+                // console.log('Loaded favoriteContacts:', favoriteContacts);
                 
                 // Получаем заблокированные контакты
                 const blockedResponse = await fetch('/api/blocked_contacts', {
