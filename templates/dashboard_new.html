@@ -2887,7 +2887,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'font-weight: bold; color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="' + nameStyle + '">@' + partner.contact_info + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -2995,7 +2995,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'font-weight: bold; color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="' + nameStyle + '">@' + partner.contact_info + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -3081,7 +3081,8 @@
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     html += '<li class="task-item contact-delegating-by-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     
@@ -3103,7 +3104,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'font-weight: bold; color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="' + nameStyle + '">@' + partner.contact_info + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
