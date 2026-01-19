@@ -2351,15 +2351,15 @@ async def api_partners_handler(request):
             return web.json_response({'error': 'Not logged in'}, status=401)
 
         try:
-            partners = get_partners_list(user_id=user_id)
-            logger.info(f"Got {len(partners)} partners from get_partners_list")
-        except Exception as e:
-            logger.error(f"Error getting partners: {e}")
-            partners = []
+            try:
+                partners = get_partners_list(user_id=user_id)
+                logger.info(f"Got {len(partners)} partners from get_partners_list")
+            except Exception as e:
+                logger.error(f"Error getting partners: {e}")
+                partners = []
 
-        # Filter hidden contacts
-        session_db = Session()
-        try:
+            # Filter hidden contacts
+            session_db = Session()
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 logger.error(f"User not found for telegram_id: {user_id}")
@@ -2401,16 +2401,10 @@ async def api_partners_handler(request):
             # Don't filter by tier - everyone sees everyone
             # But we'll add tier info to determine access on frontend
 
-            try:
-                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-                interactions = session_db.query(Interaction).filter_by(
-                    user_id=user.id).order_by(
-                    Interaction.created_at).all() if user else []
-
-            except Exception as e:
-                logger.error(f"Error getting user profile and interactions: {e}")
-                profile = None
-                interactions = []
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+            interactions = session_db.query(Interaction).filter_by(
+                user_id=user.id).order_by(
+                Interaction.created_at).all() if user else []
 
             # Получить контакты по делегированию
             delegating_to_me = []  # Люди, которые делегировали мне задачи
@@ -3090,15 +3084,13 @@ async def api_partners_handler(request):
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({'partners': partners_data})
     except Exception as e:
-        logger.error(f"Error processing partners data: {e}", exc_info=True)
-        return web.json_response({'partners': []}, status=200)
-    except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
-        return web.json_response({'error': 'Internal server error'}, status=500)
+        return web.json_response({'partners': []}, status=200)
     finally:
         # На случай ранних ошибок закрываем сессию, если она еще открыта
         try:
-            session_db.close()
+            if 'session_db' in locals():
+                session_db.close()
         except Exception:
             pass
 
