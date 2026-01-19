@@ -9,7 +9,7 @@ from aiohttp_session import get_session
 import aiohttp_session
 from redis.asyncio import Redis
 import os
-from sqlalchemy import text, or_
+from sqlalchemy import text, or_, and_
 import re
 import jinja2
 import aiohttp_jinja2
@@ -3682,12 +3682,11 @@ async def api_tasks_handler(request):
             return web.json_response({'error': 'User not found'}, status=404)
 
         # Get tasks created by me OR delegated to me
-        tasks = session_db.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                Task.delegated_to_username.ilike(user.username)
-            )
-        ).all()
+        query_conditions = [Task.user_id == user.id]
+        if user.username:
+            query_conditions.append(Task.delegated_to_username.ilike(user.username))
+        
+        tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
 
         # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
@@ -3714,8 +3713,8 @@ async def api_tasks_handler(request):
                 title = re.sub(r' - [Дд]елегирована (от|на) @\w+$', '', title)
 
                 # Check if task is delegated TO me or BY me
-                if task.delegated_to_username.lower() == user.username.lower(
-                ) or task.delegated_to_username.lower() == f"@{user.username.lower()}":
+                if user.username and (task.delegated_to_username.lower() == user.username.lower(
+                ) or task.delegated_to_username.lower() == f"@{user.username.lower()}"):
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.user_id).first()
                     if creator:
@@ -3880,8 +3879,13 @@ async def api_interactions_handler(request):
         interactions_data = []
         for interaction in filtered_interactions:
             # Convert UTC time to user timezone
-            created_at_utc = interaction.created_at.replace(
-                tzinfo=pytz.UTC) if interaction.created_at.tzinfo is None else interaction.created_at
+            created_at_utc = interaction.created_at
+            if created_at_utc.tzinfo is None:
+                created_at_utc = pytz.UTC.localize(created_at_utc)
+            elif hasattr(created_at_utc.tzinfo, 'zone'):  # pytz timezone
+                pass  # already pytz
+            else:  # datetime.timezone
+                created_at_utc = created_at_utc.replace(tzinfo=pytz.UTC)
             created_at_local = created_at_utc.astimezone(user_tz)
 
             interactions_data.append({
