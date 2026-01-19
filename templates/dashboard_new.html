@@ -588,7 +588,7 @@
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Мои</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
-                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled data-tooltip="Функция доступна на других тарифах"{% endif %}>Делегирую я</button>
+                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %}>Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
                     </div>
                     <div class="people-list" id="people-list">
@@ -695,7 +695,7 @@
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')">Личные задачи</button>
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
-                        <button class="task-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled data-tooltip="Функция доступна на других тарифах"{% endif %}>Назначенные мной</button>
+                        <button class="task-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %}>Назначенные мной</button>
                         <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
                         <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Выполненные</button>
                     </div>
