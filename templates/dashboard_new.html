@@ -325,6 +325,46 @@
         .contact-delegating-by-me { background: #e8f5e8; }
         .contact-delegating-both { background: #f0f0ff; }
 
+        /* Button styles for tasks and contacts */
+        .quick-action {
+            background: #F6F8FA !important;
+            border: 1px solid #D1D9E0;
+            border-radius: 4px;
+            padding: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .quick-action:hover:not(.disabled) {
+            background: #E8ECEF !important;
+            border-color: #374151;
+        }
+        
+        .quick-action.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .delete-btn {
+            background: #F6F8FA !important;
+            border: 1px solid #D1D9E0;
+            border-radius: 4px;
+            padding: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .delete-btn:hover {
+            background: #FFE8E8 !important;
+            border-color: #d73a49;
+        }
+
         /* Custom tooltips removed - no data-tooltip attributes in use */
     </style>
 </head>
@@ -2214,7 +2254,7 @@
             if (delegationInfo) {
                 const clickableDelegationInfo = delegationInfo.replace(/(@\w+)/g, (match, p1) => {
                     const usernameWithoutAt = p1.substring(1);
-                    return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; font-weight: 500; cursor: pointer;">' + p1 + '</a>';
+                    return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
                 html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + clickableDelegationInfo + '</span></div>';
             }
@@ -3049,7 +3089,7 @@
                                     html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(contactInfoEscaped)}, true)"` : '';
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
@@ -3067,15 +3107,15 @@
                                     if (canAccess) {
                                         let nameStyle = 'cursor: pointer; color: #374151;';
                                         if (partner.subscription_tier === 'SILVER') {
-                                            nameStyle += 'font-weight: bold;';
+                                            nameStyle += '';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle += 'font-weight: bold; color: #D7AC0C;';
+                                            nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
-                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">?? Требуется тариф ' + requiredTierName + '</div>';
+                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
                                     // Количество делегированных задач сразу под ником
@@ -3157,7 +3197,7 @@
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     html += '<li class="task-item contact-delegating-to-me" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(contactInfoEscaped)}, true)"` : '';
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
@@ -3175,15 +3215,15 @@
                                     if (canAccess) {
                                         let nameStyle = 'cursor: pointer; color: #374151;';
                                         if (partner.subscription_tier === 'SILVER') {
-                                            nameStyle += 'font-weight: bold;';
+                                            nameStyle += '';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle += 'font-weight: bold; color: #D7AC0C;';
+                                            nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
-                                        const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
+                                        const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
-                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">?? Требуется тариф ' + requiredTierName + '</div>';
+                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
                                     // Количество делегированных задач сразу под ником
@@ -3264,7 +3304,7 @@
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     html += '<li class="task-item contact-delegating-by-me" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(contactInfoEscaped)}, true)"` : '';
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     
                                     if (partner.photo_url) {
@@ -3281,15 +3321,15 @@
                                     if (canAccess) {
                                         let nameStyle = 'cursor: pointer; color: #374151;';
                                         if (partner.subscription_tier === 'SILVER') {
-                                            nameStyle += 'font-weight: bold;';
+                                            nameStyle += '';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle += 'font-weight: bold; color: #D7AC0C;';
+                                            nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
-                                        const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
+                                        const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
-                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">?? Требуется тариф ' + requiredTierName + '</div>';
+                                        html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
                                     // Количество делегированных задач сразу под ником
