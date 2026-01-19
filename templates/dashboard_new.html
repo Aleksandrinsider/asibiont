@@ -2786,25 +2786,7 @@
             }
         }
 
-        let cachedPartnersData = null;
-        let cachedFavorites = null;
-        let cachedBlocked = null;
-        
-        async function getFavoriteContactsFromServer() {
-            try {
-                const response = await fetch('/api/favorite_contacts', {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    cachedFavorites = data.favorites || [];
-                    return cachedFavorites;
-                }
-            } catch (error) {
-                console.error('Error getting favorite contacts:', error);
-            }
-            return [];
-        }
+        // Initial update only for logged in users
         
         async function updatePeople() {
             try {
