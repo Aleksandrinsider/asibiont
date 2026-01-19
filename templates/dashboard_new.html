@@ -2280,7 +2280,7 @@
             const totalSkipped = allTasks.filter(t => t.status === 'skipped').length;
             
             if (todayStatsEl) {
-                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">С отставанием: ${totalOverdue}</span> · Выполнено: ${totalCompleted} · Пропущено: ${totalSkipped}</span>`;
+                todayStatsEl.innerHTML = `<span>В работе: ${totalInProgress} · <span style="color: #d73a49;">С отставанием: ${totalOverdue}</span> · Выполнено: ${totalCompleted}</span>`;
             }
             
             // Обновить визуализацию задач по дням недели
