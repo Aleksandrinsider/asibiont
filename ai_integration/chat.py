@@ -1655,7 +1655,7 @@ async def generate_proactive_message(user_id):
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
-            "max_tokens": 150
+            "max_tokens": 500
         }
 
         async with aiohttp.ClientSession() as session:
