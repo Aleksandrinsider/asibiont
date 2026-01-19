@@ -871,6 +871,7 @@
         }
         
         function addMessage(text, sender, timestamp) {
+            console.log('[WEB CHAT] addMessage called with:', { text: text.substring(0, 50) + '...', sender, timestamp });
 
             const messages = document.getElementById('chat-messages');
             if (!messages) {
@@ -1001,6 +1002,7 @@
                 return; // Prevent multiple sends
             }
             window.sendingMessage = true;
+            window.lastMessageSent = Date.now(); // Mark when message was sent
 
             console.log('[WEB CHAT] Starting message send process');
 
@@ -1015,7 +1017,8 @@
                 return;
             }
 
-            // Add user message first
+            // Add user message immediately
+            console.log('[WEB CHAT] Adding user message to chat:', message);
             if (message) {
                 addMessage(message, 'user');
             }
@@ -1024,7 +1027,7 @@
             }
             input.value = '';
             fileInput.value = '';
-            lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
+            // Note: We don't increment lastMessageCount here to avoid conflicts with updateChat
 
             // Show loading animation after user message
             showTypingIndicator();
@@ -1050,13 +1053,21 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
+                    console.log('[WEB CHAT] Received response from server:', data);
                     if (data.duplicate) {
+                        console.log('[WEB CHAT] Duplicate message detected, skipping');
                         // Duplicate message, don't add to chat
 
                         return;
                     }
 
+                    console.log('[WEB CHAT] Adding AI response to chat');
                     addMessage(data.response, 'ai');
+                    // Mark this message as displayed to prevent duplication by updateChat
+                    if (data.message_id) {
+                        displayedMessageIds.add(data.message_id);
+                        console.log('[WEB CHAT] Marked message ID as displayed:', data.message_id);
+                    }
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
                         try {
@@ -3727,6 +3738,12 @@
                             });
                             lastMessageCount = currentMessageCount;
                         } else if (currentMessageCount > lastMessageCount) {
+                            // Check if message was sent recently (within last 10 seconds) to avoid duplication
+                            const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
+                            if (timeSinceLastSend < 10000) {
+                                console.log('updateChat: Skipping new messages check - message sent recently (' + timeSinceLastSend + 'ms ago)');
+                                return;
+                            }
                             console.log('updateChat: New messages detected, count increased from', lastMessageCount, 'to', currentMessageCount);
                             // Есть новые сообщения - добавляем только их
                             const sortedInteractions = data.interactions
