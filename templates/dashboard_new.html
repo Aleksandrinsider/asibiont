@@ -166,8 +166,16 @@
                 } else if (currentContactFilter === 'blocked') {
                     // Для blocked показываем только заблокированные контакты
                     card.style.display = type === 'blocked' ? 'flex' : 'none';
-                } else if (type === currentContactFilter) {
-                    card.style.display = 'flex';
+                } else if (currentContactFilter === 'delegating_to_me' || currentContactFilter === 'delegating_by_me') {
+                    // Для делегирования показываем все контакты с recommended классом и фильтруем по тексту
+                    if (card.classList.contains('contact-recommended')) {
+                        card.style.display = 'flex';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                } else if (currentContactFilter === 'recommended') {
+                    // Для recommended показываем только recommended контакты
+                    card.style.display = type === 'recommended' ? 'flex' : 'none';
                 } else {
                     card.style.display = 'none';
                 }
@@ -558,8 +566,7 @@
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                                <path d="M0 2.5A2.5 2.5 0 0 1 2.5 0h11A2.5 2.5 0 0 1 16 2.5v7a2.5 2.5 0 0 1-2.5 2.5H9v2.5a.5.5 0 0 1-.854.354L6.5 12H2.5A2.5 2.5 0 0 1 0 9.5v-7zM2.5 1A1.5 1.5 0 0 0 1 2.5v7A1.5 1.5 0 0 0 2.5 11H7v1.5l2-2H13.5A1.5 1.5 0 0 0 15 9.5v-7A1.5 1.5 0 0 0 13.5 1h-11z"/>
-                                <path d="M5 4a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                                <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v8.5C0 12.216.784 13 1.75 13h1.5v2.5a.75.75 0 0 0 1.28.53l3.06-3.03h7.16c.966 0 1.75-.784 1.75-1.75v-8.5A1.75 1.75 0 0 0 14.25 1H1.75Z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Чат с ИИ</h3>
                         </div>
@@ -640,8 +647,7 @@
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9zM3.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-9z"/>
-                                <path d="M5 5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+                                <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm7 0a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 0 1.5h-.75A.75.75 0 0 1 9.5 1.75ZM4.75 4a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5ZM4 7.75A.75.75 0 0 1 4.75 7h2a.75.75 0 0 1 0 1.5h-2A.75.75 0 0 1 4 7.75Zm11.774 3.537a.75.75 0 0 1-.04 1.06l-2.516 2.45a.75.75 0 0 1-1.054-.02l-1.233-1.234a.75.75 0 1 1 1.061-1.06l.696.695 1.992-1.939a.75.75 0 0 1 1.06.04Z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
@@ -3109,7 +3115,7 @@
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
+                                    html += '<button onclick="blockContact('\' + contactInfoEscaped + '\')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3217,7 +3223,7 @@
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
+                                    html += '<button onclick="blockContact('\' + contactInfoEscaped + '\')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3325,7 +3331,7 @@
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
+                                    html += '<button onclick="blockContact('\' + contactInfoEscaped + '\')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#d73a49"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
