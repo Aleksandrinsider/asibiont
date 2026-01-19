@@ -231,7 +231,7 @@ try:
                     session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
                     
                     # Update existing users data to match new enum values (after creating the enum)
-                    session.execute(text("UPDATE users SET subscription_tier = CASE WHEN subscription_tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN subscription_tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN subscription_tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
+                    session.execute(text("UPDATE users SET subscription_tier = CASE WHEN LOWER(subscription_tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
                     
                     # Update subscriptions.tier back to enum type with correct values
                     if 'subscriptions' in inspector.get_table_names():
@@ -239,7 +239,7 @@ try:
                         if 'tier' in sub_columns:
                             logger.info("Converting subscriptions.tier back to enum type")
                             # Update existing data to match new enum values (after creating the enum)
-                            session.execute(text("UPDATE subscriptions SET tier = CASE WHEN tier::text = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN tier::text = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN tier::text = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
+                            session.execute(text("UPDATE subscriptions SET tier = CASE WHEN LOWER(tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
                             session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
                             session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
                     
