@@ -1802,7 +1802,7 @@ async def restore_task_handler(request):
 
     from ai_integration import restore_task
     try:
-        result = restore_task(task_id=task_id, user_id=user_id)
+        result = await restore_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} restored by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1824,7 +1824,7 @@ async def skip_task_handler(request):
 
     from ai_integration import skip_task
     try:
-        result = skip_task(task_id=task_id, user_id=user_id)
+        result = await skip_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} skipped by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1847,7 +1847,7 @@ async def delete_task_handler(request):
 
     from ai_integration import delete_task
     try:
-        result = delete_task(task_id=task_id, user_id=user_id, reason=reason)
+        result = await delete_task(task_id=task_id, user_id=user_id, reason=reason)
         logger.info(f"Task {task_id} deleted by user {user_id} for reason: {reason}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1870,7 +1870,7 @@ async def reschedule_task_handler(request):
 
     from ai_integration import reschedule_task
     try:
-        result = reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
+        result = await reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
         logger.info(f"Task {task_id} rescheduled by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1892,7 +1892,7 @@ async def get_task_advice_handler(request):
 
     from ai_integration import get_task_advice
     try:
-        result = get_task_advice(task_id=task_id, user_id=user_id)
+        result = await get_task_advice(task_id=task_id, user_id=user_id)
         logger.info(f"Task advice requested for task {task_id} by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:

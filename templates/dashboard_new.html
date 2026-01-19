@@ -122,8 +122,13 @@
                 }
             });
             
-            // Перерендерим контакты с новым фильтром
-            applyContactFilter();
+            // Если фильтр заблокированные, обновляем список контактов
+            if (filterType === 'blocked') {
+                updatePeople();
+            } else {
+                // Перерендерим контакты с новым фильтром
+                applyContactFilter();
+            }
         }
 
         function applyContactFilter() {
@@ -153,10 +158,8 @@
                     const isFavorite = cachedFavorites && cachedFavorites.includes(username);
                     card.style.display = isFavorite ? 'flex' : 'none';
                 } else if (currentContactFilter === 'blocked') {
-                    // Для blocked проверяем, есть ли в заблокированных
-                    const username = card.dataset.username;
-                    const isBlocked = cachedBlocked && cachedBlocked.includes(username);
-                    card.style.display = isBlocked ? 'flex' : 'none';
+                    // Для blocked показываем только заблокированные контакты
+                    card.style.display = type === 'blocked' ? 'flex' : 'none';
                 } else if (type === currentContactFilter) {
                     card.style.display = 'flex';
                 } else {
@@ -523,37 +526,6 @@
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
-                    </div>
-                    <div id="blocked-contacts">
-                        {% for contact in blocked_contacts %}
-                        <li class="task-item contact-blocked" data-username="{{ contact.username }}" style="display: flex; margin-bottom: 8px; align-items: center;">
-                            {% if contact.photo_url %}
-                            <div style="margin-right: 12px; flex-shrink: 0;">
-                                <img src="{{ contact.photo_url }}" onclick="openContactProfileModal('{{ contact.username }}', true)" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />
-                            </div>
-                            {% else %}
-                            <div style="margin-right: 12px; flex-shrink: 0;">
-                                <div onclick="openContactProfileModal('{{ contact.username }}', true)" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>
-                            </div>
-                            {% endif %}
-                            <div style="flex: 1;">
-                                <div class="task-title" onclick="openContactProfileModal('{{ contact.username }}', true)" style="cursor: pointer; color: #374151;">@{{ contact.username }}</div>
-                                <div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">{{ contact.reason }}</span></div>
-                            </div>
-                            <div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">
-                                <button onclick="unblockContact('{{ contact.username }}')" class="quick-action" title="Разблокировать">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                                        <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/>
-                                    </svg>
-                                </button>
-                                <button onclick="openRatingModal('{{ contact.username }}')" class="quick-action" title="Рекомендовать">
-                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
-                                        <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                        </li>
-                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -2473,36 +2445,81 @@
             document.getElementById('rating-value').textContent = value;
         }
         
-        async function submitRating() {
-            if (!currentRatingUsername) return;
-            
+        async function unblockContact(username) {
             try {
-                const rating = parseInt(document.getElementById('rating-slider').value);
-                
-                const response = await fetch('/api/rate_user', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: currentRatingUsername, rating: rating }),
+                const response = await fetch('/api/blocked_contacts', {
+                    method: 'GET',
                     credentials: 'include'
                 });
-                
                 if (!await checkAuth(response)) return;
-                
                 if (response.ok) {
                     const data = await response.json();
-                    // Show notification instead of adding to chat
-                    showNotification(data.message, 'success');
-                    closeRatingModal();
-                    await updatePeople(); // Обновить список контактов
-                } else {
-                    const error = await response.json();
-                    addMessage(`Ошибка: ${error.error}`, 'ai');
-                    lastMessageCount += 1; // Только для локальных сообщений об ошибках
+                    const blocked = data.blocked || [];
+                    
+                    // Remove username from blocked list
+                    const updatedBlocked = blocked.filter(u => u !== username);
+                    
+                    // Update blocked contacts
+                    const updateResponse = await fetch('/api/blocked_contacts', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ blocked: updatedBlocked }),
+                        credentials: 'include'
+                    });
+                    
+                    if (!await checkAuth(updateResponse)) return;
+                    
+                    if (updateResponse.ok) {
+                        showNotification(`Контакт @${username} разблокирован`, 'success');
+                        await updatePeople(); // Refresh contacts list
+                    } else {
+                        const error = await updateResponse.json();
+                        showNotification(`Ошибка: ${error.error || 'Не удалось разблокировать контакт'}`, 'error');
+                    }
                 }
             } catch (error) {
-                console.error('Error submitting rating:', error);
-                addMessage('Ошибка при отправке рейтинга', 'ai');
-                lastMessageCount += 1;
+                console.error('Error unblocking contact:', error);
+                showNotification('Ошибка при разблокировке контакта', 'error');
+            }
+        }
+
+        async function blockContact(username) {
+            try {
+                const response = await fetch('/api/blocked_contacts', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    const blocked = data.blocked || [];
+                    
+                    // Add username to blocked list if not already there
+                    if (!blocked.includes(username)) {
+                        blocked.push(username);
+                        
+                        // Update blocked contacts
+                        const updateResponse = await fetch('/api/blocked_contacts', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ blocked: blocked }),
+                            credentials: 'include'
+                        });
+                        
+                        if (!await checkAuth(updateResponse)) return;
+                        
+                        if (updateResponse.ok) {
+                            showNotification(`Контакт @${username} заблокирован`, 'success');
+                            await updatePeople(); // Refresh contacts list
+                        } else {
+                            const error = await updateResponse.json();
+                            showNotification(`Ошибка: ${error.error || 'Не удалось заблокировать контакт'}`, 'error');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error blocking contact:', error);
+                showNotification('Ошибка при блокировке контакта', 'error');
             }
         }
         
@@ -2770,6 +2787,24 @@
         }
 
         let cachedPartnersData = null;
+        let cachedFavorites = null;
+        let cachedBlocked = null;
+        
+        async function getFavoriteContactsFromServer() {
+            try {
+                const response = await fetch('/api/favorite_contacts', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    cachedFavorites = data.favorites || [];
+                    return cachedFavorites;
+                }
+            } catch (error) {
+                console.error('Error getting favorite contacts:', error);
+            }
+            return [];
+        }
         
         async function updatePeople() {
             try {
@@ -2777,6 +2812,18 @@
                 // Получаем избранные контакты заранее
                 const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
                 console.log('Loaded favoriteContacts:', favoriteContacts);
+                
+                // Получаем заблокированные контакты
+                const blockedResponse = await fetch('/api/blocked_contacts', {
+                    credentials: 'include'
+                });
+                let blockedContacts = [];
+                if (blockedResponse.ok) {
+                    const blockedData = await blockedResponse.json();
+                    blockedContacts = blockedData.blocked || [];
+                    cachedBlocked = blockedContacts;
+                }
+                console.log('Loaded blockedContacts:', blockedContacts);
                 
                 const response = await fetch('/api/partners', {
                     credentials: 'include',
@@ -2817,6 +2864,13 @@
                                     } else if (existing.type !== 'recommended' && partner.type === 'recommended') {
                                         uniquePartners[username] = partner;
                                     }
+                                }
+                            });
+                            
+                            // Исключаем заблокированные контакты из списка партнеров
+                            Object.keys(uniquePartners).forEach(username => {
+                                if (blockedContacts.includes(username)) {
+                                    delete uniquePartners[username];
                                 }
                             });
                             
@@ -3153,6 +3207,33 @@
                                     html += '</li>';
                                 }
                             });
+                            
+                            });
+                            
+                            // Add blocked contacts if we have them
+                            if (blockedContacts && blockedContacts.length > 0) {
+                                blockedContacts.forEach(username => {
+                                    const contactInfoEscaped = username.replace(/'/g, "\\'").replace(/`/g, "\\`");
+                                    html += '<li class="task-item contact-blocked" data-username="' + username + '" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    
+                                    // Placeholder avatar for blocked contacts
+                                    html += '<div style="margin-right: 12px; flex-shrink: 0;">';
+                                    html += '<div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
+                                    html += '</div>';
+                                    
+                                    html += '<div style="flex: 1;">';
+                                    html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\', true)" style="cursor: pointer; color: #374151;">@' + username + '</div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Заблокирован</span></div>';
+                                    html += '</div>';
+                                    
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
+                                    html += '<button onclick="unblockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Разблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,8 7,12 13,4"/></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/></svg></button>';
+                                    html += '</div>';
+                                    html += '</li>';
+                                });
+                            }
+                            
                             html += '</ul>';
                             peopleList.innerHTML = html;
                         }

@@ -157,7 +157,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     return result_msg
 
 
-def delete_task(task_id=None, task_title=None, user_id=None, reason="", session=None):
+async def delete_task(task_id=None, task_title=None, user_id=None, reason="", session=None):
     """Delete a specific task by ID or title"""
     if session is None:
         session = Session()
@@ -365,7 +365,7 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
     return result
 
 
-def skip_task(task_id=None, task_title=None, user_id=None, session=None):
+async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
     """Mark task as skipped"""
     if session is None:
         session = Session()
@@ -428,7 +428,7 @@ def skip_task(task_id=None, task_title=None, user_id=None, session=None):
     return result
 
 
-def restore_task(task_id=None, task_title=None, user_id=None, session=None):
+async def restore_task(task_id=None, task_title=None, user_id=None, session=None):
     """Restore task to pending status"""
     logger.info(f"[RESTORE_TASK] Called with task_id={task_id}, task_title={task_title}, user_id={user_id}")
     if session is None:
@@ -476,7 +476,7 @@ def restore_task(task_id=None, task_title=None, user_id=None, session=None):
 
         # Update profile analytics (decrement completed tasks)
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile and profile.completed_tasks and profile.completed_tasks > 0:
+        if profile and profile.completed_tasks is not None and profile.completed_tasks > 0:
             profile.completed_tasks -= 1
             # Recalculate average if needed, but for simplicity, just decrement
             session.commit()
@@ -495,7 +495,7 @@ def restore_task(task_id=None, task_title=None, user_id=None, session=None):
     return result
 
 
-def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
+async def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
     """Reschedule task to a new date"""
     if session is None:
         session = Session()
@@ -558,7 +558,7 @@ def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
     return result
 
 
-def get_task_advice(task_id=None, user_id=None, session=None):
+async def get_task_advice(task_id=None, user_id=None, session=None):
     """Get AI advice for a task"""
     import asyncio
 
