@@ -2571,8 +2571,9 @@
                     
                     // Имя и ник под аватаром
                     const fullName = partner.first_name || 'Пользователь';
+                    const contactInfoEscaped = (partner.contact_info || 'неизвестен').replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
-                    html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${partner.contact_info || 'неизвестен'}</p>`;
+                    html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
                     
                     html += '</div>';
                     
@@ -2614,7 +2615,8 @@
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
-                    html += `<button onclick="writeToContact('${partner.contact_info}')" class="rating-submit-btn">Написать</button>`;
+                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
                     html += '<button onclick="closeContactProfileModal()" class="rating-cancel-btn">В избранное</button>';
                     html += '</div>';
                     
@@ -2862,10 +2864,10 @@
                                 
                                 if (partner.type === 'recommended' && partner.contact_info) {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-recommended" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     
@@ -2971,9 +2973,9 @@
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_to_me') {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-delegating-to-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    html += '<li class="task-item contact-delegating-to-me" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`");
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     
@@ -3079,10 +3081,10 @@
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_by_me') {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-delegating-by-me" data-username="' + partner.contact_info + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
-                                    const canAccess = partner.can_access !== false;
                                     const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    html += '<li class="task-item contact-delegating-by-me" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     
