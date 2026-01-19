@@ -72,6 +72,14 @@ async def _check_and_send_overdue_reminder_job(user_id: int):
         logger.error("REMINDER_SERVICE not initialized; cannot check overdue")
 
 
+async def _send_task_checkpoint_job(user_id: int, checkpoint_type: str = "general"):
+    """Jobstore-safe wrapper for task checkpoint messages"""
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_task_checkpoint_message(user_id, checkpoint_type)
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot send task checkpoint message")
+
+
 async def _send_delegation_check_job(task_id: int, delegator_id: int, recipient_id: int, check_type: str = "progress_request"):
     """Jobstore-safe wrapper for delegation check"""
     if REMINDER_SERVICE:
@@ -519,6 +527,86 @@ class ReminderService:
         finally:
             db.close()
 
+    async def send_task_checkpoint_message(self, user_id: int, checkpoint_type: str = "general"):
+        """Отправка сообщения для чекпоинта задачи (1/3, 2/3, overdue)"""
+        from subscription_service import check_subscription
+        
+        # Проверить подписку
+        if not check_subscription(user_id):
+            return
+        
+        db = Session()
+        try:
+            user = db.query(User).filter(User.telegram_id == user_id).first()
+            if not user:
+                return
+            
+            # Проверить последнее взаимодействие - если было в последние 15 минут, не отправлять
+            last_interaction = db.query(Interaction).filter(
+                Interaction.user_id == user.id
+            ).order_by(Interaction.created_at.desc()).first()
+            
+            if last_interaction:
+                time_since_last = datetime.now(pytz.UTC) - last_interaction.created_at.replace(tzinfo=pytz.UTC)
+                if time_since_last < timedelta(minutes=LAST_INTERACTION_THRESHOLD_MINUTES):
+                    return
+            
+            # Проверить режим "не беспокоить"
+            if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
+                return
+            
+            # Отправить чекпоинт-сообщение
+            try:
+                proactive_text = await self.generate_proactive_message(user_id)
+                
+                # Сохранить в историю чата (Redis)
+                try:
+                    import json
+                    from ai_integration.utils import redis_client
+                    if redis_client:
+                        context_data = await redis_client.get(f"context:{user_id}")
+                        if context_data:
+                            context = json.loads(context_data.decode('utf-8'))
+                        else:
+                            context = []
+                        
+                        context.append({"user": "", "agent": proactive_text})
+                        if len(context) > 10:
+                            context = context[-10:]
+                        
+                        await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
+                        logger.info(f"Saved checkpoint message to chat context for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save checkpoint message to context: {e}")
+                
+                # Сохранить в таблицу Interaction
+                try:
+                    interaction = Interaction(
+                        user_id=user.id,
+                        message_type="ai",
+                        content=proactive_text
+                    )
+                    db.add(interaction)
+                    db.commit()
+                    logger.info(f"Saved checkpoint message to interaction history for user {user_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save checkpoint message to interactions: {e}")
+                    db.rollback()
+                
+                if self.bot:
+                    await self.bot.send_message(
+                        chat_id=user_id,
+                        text=proactive_text
+                    )
+                    logger.info(f"Sent checkpoint message to user {user_id}")
+                else:
+                    logger.info(f"[CHECKPOINT] To user {user_id}: {proactive_text}")
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to send checkpoint message to user {user_id}: {e}")
+        finally:
+            db.close()
+
     async def check_and_send_proactive(self, user_id: int):
         """Проверка и отправка проактивного сообщения, если нет задач на ближайший час"""
         from models import Session
@@ -591,7 +679,7 @@ class ReminderService:
             # Проверить, не было ли уже отправлено проактивное сообщение в ближайший час
             recent_proactive = db.query(Interaction).filter(
                 Interaction.user_id == user.id,
-                Interaction.message_type == 'proactive',  # Предполагаем, что есть поле message_type
+                Interaction.message_type == 'ai',  # Изменено с 'proactive' на 'ai'
                 Interaction.created_at >= now_utc - timedelta(hours=1)
             ).first()
             
@@ -700,10 +788,10 @@ class ReminderService:
                             
                             # Запланировать чекпоинт
                             self.scheduler.add_job(
-                                _check_and_send_proactive_job,
+                                _send_task_checkpoint_job,
                                 trigger="date",
                                 run_date=check_time,
-                                args=[user.telegram_id],
+                                args=[user.telegram_id, check_type],
                                 id=job_id,
                                 replace_existing=True,
                                 misfire_grace_time=300,  # 5 минут на опоздание
@@ -724,10 +812,10 @@ class ReminderService:
                             
                             # Запланировать чекпоинт
                             self.scheduler.add_job(
-                                _check_and_send_proactive_job,
+                                _send_task_checkpoint_job,
                                 trigger="date",
                                 run_date=check_time,
-                                args=[user.telegram_id],
+                                args=[user.telegram_id, "pre_deadline"],
                                 id=job_id,
                                 replace_existing=True,
                                 misfire_grace_time=300,
