@@ -18,9 +18,8 @@ import asyncio
 import logging
 import pytz
 
-# Import handlers only if not in local mode
-if not LOCAL:
-    from handlers import router as handlers_router
+# Import handlers
+from handlers import router as handlers_router
 import hashlib
 import hmac
 import json
@@ -30,10 +29,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Conditional aiogram imports for production only
-if not LOCAL:
-    from aiogram.webhook.aiohttp_server import SimpleRequestHandler
-    from aiogram import Bot, Dispatcher
+# Aiogram imports
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+from aiogram import Bot, Dispatcher
 
 # Скрываем некритичные предупреждения
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
@@ -1840,7 +1838,7 @@ async def complete_task_handler(request):
 
     from ai_integration import complete_task
     try:
-        result = await complete_task(task_id=task_id, user_id=user_id)
+        result = complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} completed by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1862,7 +1860,7 @@ async def restore_task_handler(request):
 
     from ai_integration import restore_task
     try:
-        result = await restore_task(task_id=task_id, user_id=user_id)
+        result = restore_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} restored by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1884,7 +1882,7 @@ async def skip_task_handler(request):
 
     from ai_integration import skip_task
     try:
-        result = await skip_task(task_id=task_id, user_id=user_id)
+        result = skip_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} skipped by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1907,7 +1905,7 @@ async def delete_task_handler(request):
 
     from ai_integration import delete_task
     try:
-        result = await delete_task(task_id=task_id, user_id=user_id, reason=reason)
+        result = delete_task(task_id=task_id, user_id=user_id, reason=reason)
         logger.info(f"Task {task_id} deleted by user {user_id} for reason: {reason}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1930,7 +1928,7 @@ async def reschedule_task_handler(request):
 
     from ai_integration import reschedule_task
     try:
-        result = await reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
+        result = reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
         logger.info(f"Task {task_id} rescheduled by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1952,7 +1950,7 @@ async def get_task_advice_handler(request):
 
     from ai_integration import get_task_advice
     try:
-        result = await get_task_advice(task_id=task_id, user_id=user_id)
+        result = get_task_advice(task_id=task_id, user_id=user_id)
         logger.info(f"Task advice requested for task {task_id} by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -2191,15 +2189,12 @@ async def direct_login_handler(request):
 
 
 try:
-    if TELEGRAM_TOKEN and not LOCAL:
+    if TELEGRAM_TOKEN:
         bot = Bot(token=TELEGRAM_TOKEN)
         logger.info("Bot created successfully")
     else:
         bot = None
-        if LOCAL:
-            logger.info("Bot not created (local mode)")
-        else:
-            logger.info("Bot not created (no token)")
+        logger.info("Bot not created (no token)")
 except Exception as e:
     logger.error(f"Failed to create bot: {e}", exc_info=True)
     bot = None
@@ -2221,8 +2216,7 @@ app = web.Application()
 if bot:
     app['bot'] = bot
     dp = Dispatcher()
-    if not LOCAL:
-        dp.include_router(handlers_router)
+    dp.include_router(handlers_router)
     if not LOCAL:
         app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
@@ -3876,6 +3870,8 @@ async def api_interactions_handler(request):
         interactions = session_db.query(Interaction).filter_by(
             user_id=user.id).order_by(
             Interaction.created_at.asc()).all()
+        
+        logger.info(f"Found {len(interactions)} total interactions for user {user.id}")
 
         # Get history cleared timestamp from Redis
         history_cleared_timestamp = 0
@@ -3889,6 +3885,8 @@ async def api_interactions_handler(request):
             i for i in interactions
             if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() > history_cleared_timestamp
         ]
+        
+        logger.info(f"After filtering: {len(filtered_interactions)} interactions")
 
         # Get user timezone
         user_tz = pytz.UTC
@@ -3912,6 +3910,7 @@ async def api_interactions_handler(request):
                 'created_at': created_at_local.isoformat()
             })
 
+        logger.info(f"Returning {len(interactions_data)} interactions to frontend")
         return web.json_response({'interactions': interactions_data})
     except Exception as e:
         logger.error(f"Error fetching interactions: {e}")
@@ -4377,16 +4376,45 @@ logger.info("App created successfully")
 
 if __name__ == "__main__":
     from config import LOCAL
-    if LOCAL:  # Enabled polling for local testing
-        # Local mode: run polling
-        logger.info("Running in local mode with polling")
-        async def run_polling():
+    if LOCAL:  # Enabled web server for local testing
+        logger.info("Running in local mode with web server only")
+        # Production mode or local web mode: run web server
+        try:
+            port = PORT
+            host = '0.0.0.0'
+            logger.info(f"Starting web server on {host}:{port}")
+
+            # Use asyncio AppRunner
+            logger.info("Using asyncio AppRunner")
             try:
-                await bot.delete_webhook()
-                await dp.start_polling(bot)
-            except Exception as e:
-                logger.error(f"Error in polling: {e}")
-        asyncio.run(run_polling())
+                async def run_server():
+                    runner = web.AppRunner(app)
+                    await runner.setup()
+                    site = web.TCPSite(runner, host, port)
+                    await site.start()
+                    logger.info(f"Server started on {host}:{port}")
+                    logger.info(f"Health check endpoint: http://{host}:{port}/health")
+                    logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
+                    logger.info("Server is ready to accept connections")
+
+                    # Keep the server running
+                    try:
+                        # Keep server running indefinitely
+                        while True:
+                            await asyncio.sleep(3600)
+                    except KeyboardInterrupt:
+                        logger.info("Shutting down server...")
+                    finally:
+                        await runner.cleanup()
+                        logger.info("Server shut down")
+
+                asyncio.run(run_server())
+            except Exception as serve_error:
+                logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
+                raise
+        except Exception as e:
+            logger.error(f"Failed to start application: {e}", exc_info=True)
+            raise
     else:
         # Production mode or local web mode: run web server
         try:

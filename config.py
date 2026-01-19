@@ -7,7 +7,7 @@ load_dotenv()
 # App settings first
 PORT = int(os.getenv("PORT", 8080))
 LOCAL = os.getenv("LOCAL", "False").lower() in ("true", "1", "yes")  # Allow override for local testing
-FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")
+FREE_ACCESS_MODE = LOCAL or os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")  # Free access in local mode
 USE_OPTIMIZED_PROMPT = os.getenv("USE_OPTIMIZED_PROMPT", "True").lower() in ("true", "1", "yes")
 CURRENT_DATE_STR = os.getenv("CURRENT_DATE")
 if CURRENT_DATE_STR:
@@ -17,13 +17,14 @@ else:
 ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
-DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
 if LOCAL:
     import os
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
-elif not DATABASE_URL:
-    raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
+else:
+    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")  # V3.2 reasoning model for agents
@@ -42,6 +43,13 @@ AI_TEMPERATURE_HIGH = float(os.getenv("AI_TEMPERATURE_HIGH", "0.7"))  # For crea
 REDIS_URL = os.getenv("REDIS_URL")
 if not REDIS_URL and not LOCAL:
     raise ValueError("REDIS_URL is required in production mode")
+
+# Redis client
+if REDIS_URL:
+    import redis.asyncio as redis
+    redis_client = redis.from_url(REDIS_URL)
+else:
+    redis_client = None
 
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")

@@ -700,7 +700,8 @@ class ReminderService:
                                 args=[user.telegram_id],
                                 id=job_id,
                                 replace_existing=True,
-                                misfire_grace_time=300  # 5 минут на опоздание
+                                misfire_grace_time=300,  # 5 минут на опоздание
+                                max_instances=1
                             )
                             
                             logger.debug(f"Scheduled task checkpoint {i}/2 for task {task.id} at {check_time} (user {user.telegram_id})")
@@ -725,7 +726,8 @@ class ReminderService:
                         args=[user.telegram_id],
                         id=job_id,
                         replace_existing=True,
-                        misfire_grace_time=300
+                        misfire_grace_time=300,
+                        max_instances=1
                     )
                     
                     logger.debug(f"Scheduled overdue checkpoint for task {task.id} at {checkpoint_time} (user {user.telegram_id})")
@@ -740,7 +742,8 @@ class ReminderService:
                     run_date=next_hour,
                     args=[user.telegram_id],
                     id=no_tasks_job_id,
-                    replace_existing=True
+                    replace_existing=True,
+                    max_instances=1
                 )
                 logger.debug(f"Scheduled no-tasks checkpoint for user {user.telegram_id} at {next_hour}")
                 
@@ -796,7 +799,8 @@ class ReminderService:
                 timezone=user_tz,
                 args=[user.telegram_id],
                 id=job_id,
-                replace_existing=True
+                replace_existing=True,
+                max_instances=1
             )
             logger.debug(f"Rescheduled proactive check for user {user.telegram_id} with {interval_minutes}min interval (has_tasks={has_tasks}, urgent={urgent})")
         finally:

@@ -646,8 +646,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 user_memory += f"\nСводка: всего активных задач {tasks_summary}"
 
             if overdue_tasks:
-                overdue_titles = [f"{t.title}" for t in overdue_tasks]
-                user_memory += f"\nПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_titles)} - предложи помощь!"
+                overdue_info = []
+                for t in overdue_tasks:
+                    # Ensure both datetimes are timezone-aware for comparison
+                    reminder_time = t.reminder_time
+                    if reminder_time.tzinfo is None:
+                        reminder_time = pytz.UTC.localize(reminder_time)
+                    overdue_hours = int((user_now - reminder_time).total_seconds() / 3600)
+                    overdue_info.append(f"'{t.title}' (просрочена на {overdue_hours}ч)")
+                user_memory += f"\nПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_info)}. ДАЙ ЭФФЕКТИВНЫЕ РЕШЕНИЯ: анализируй причины, предлагай конкретные действия, используй профиль пользователя, задавай вопросы если данных мало!"
 
             # Add delegated tasks info
             if user.username:
