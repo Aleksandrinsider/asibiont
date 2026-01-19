@@ -973,7 +973,7 @@
         }
 
         function handleKeyPress(event) {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !window.sendingMessage) {
                 sendChatMessage();
             }
         }
@@ -1002,6 +1002,8 @@
             }
             window.sendingMessage = true;
 
+            console.log('[WEB CHAT] Starting message send process');
+
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -1013,10 +1015,7 @@
                 return;
             }
 
-            // Show loading animation immediately after button press
-            showTypingIndicator();
-
-            // Add user message
+            // Add user message first
             if (message) {
                 addMessage(message, 'user');
             }
@@ -1026,6 +1025,9 @@
             input.value = '';
             fileInput.value = '';
             lastMessageCount += 1; // Увеличиваем счетчик для сообщения пользователя
+
+            // Show loading animation after user message
+            showTypingIndicator();
 
             try {
                 const controller = new AbortController();
@@ -1105,6 +1107,7 @@
                 addMessage('Ошибка: ' + error.message, 'ai');
             } finally {
                 window.sendingMessage = false;
+                console.log('[WEB CHAT] Message send process completed');
             }
         }
 
