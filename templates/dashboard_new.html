@@ -2909,7 +2909,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -2929,7 +2929,7 @@
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="4" x2="8" y2="12"/><line x1="4" y1="8" x2="12" y2="8"/></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3018,7 +3018,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -3038,7 +3038,7 @@
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="4" x2="8" y2="12"/><line x1="4" y1="8" x2="12" y2="8"/></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3127,7 +3127,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -3147,7 +3147,7 @@
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="4" x2="8" y2="12"/><line x1="4" y1="8" x2="12" y2="8"/></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
