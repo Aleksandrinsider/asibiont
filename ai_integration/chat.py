@@ -474,10 +474,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
     )
     logger.info(
-        f"chat_with_ai called with message: {
-            clean_message[
-                :50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {
-            file_content is not None}")
+        f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}")
     logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
 
     if not DEEPSEEK_API_KEY:
@@ -865,13 +862,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 last_task_data = await redis_client.get(f"last_task_id:{user_id}")
                 if last_task_data:
                     task_info = json.loads(last_task_data.decode("utf-8"))
-                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={
-                        task_info['id']}, название='{
-                        task_info['title']}', время='{
-                        task_info.get(
-                            'reminder_time',
-                            '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={
-                        task_info['id']}, ...)!"
+                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={task_info['id']}, название='{task_info['title']}', время='{task_info.get('reminder_time', '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={task_info['id']}, ...)!"
                     logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: {task_info}")
             except Exception as e:
                 logger.error(f"Error loading last_task_id from Redis: {e}")
@@ -1854,8 +1845,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         messages = [
             {
                 "role": "system", "content": system_prompt}, {
-                "role": "user", "content": f"Напомни о просроченных задачах: {
-                    ', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.", }, ]
+                "role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.", }, ]
 
         data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:

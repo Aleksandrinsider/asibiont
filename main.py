@@ -1026,12 +1026,7 @@ async def dashboard_handler(request):
                     logger.info(f"User {user.username} tier synced to {sub_tier}")
 
             logger.info(
-                f"Subscription found: {
-                    subscription.id if subscription else None}, status: {
-                    subscription.status if subscription else None}, end_date: {
-                    subscription.end_date if subscription else None}, tier: {
-                    subscription.tier if subscription else None}, user_tier: {
-                    user.subscription_tier.value if user.subscription_tier else None}")
+                f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}, tier: {subscription.tier if subscription else None}, user_tier: {user.subscription_tier.value if user.subscription_tier else None}")
 
             if not subscription or subscription.status != 'active':
                 logger.info("No active subscription, redirecting to subscription_tiers")
@@ -1084,10 +1079,7 @@ async def dashboard_handler(request):
                                 interaction_ts = i.created_at.timestamp()
 
                             logger.info(
-                                f"Interaction ID {
-                                    i.id}: created_at={
-                                    i.created_at}, timestamp={interaction_ts}, clear_timestamp={history_cleared_timestamp}, include={
-                                    interaction_ts > history_cleared_timestamp}")
+                                f"Interaction ID {i.id}: created_at={i.created_at}, timestamp={interaction_ts}, clear_timestamp={history_cleared_timestamp}, include={interaction_ts > history_cleared_timestamp}")
 
                             if interaction_ts > history_cleared_timestamp:
                                 filtered_interactions.append(i)
@@ -1097,9 +1089,7 @@ async def dashboard_handler(request):
 
                     interactions = filtered_interactions
                     logger.info(
-                        f"Filtered {
-                            len(interactions)} interactions from {
-                            len(all_interactions)} total after timestamp {history_cleared_timestamp}")
+                        f"Filtered {len(interactions)} interactions from {len(all_interactions)} total after timestamp {history_cleared_timestamp}")
                 else:
                     interactions = all_interactions
                     logger.info(f"Loaded {len(interactions)} interactions (no filtering)")
@@ -2357,8 +2347,7 @@ async def api_partners_handler(request):
         session_req = await get_session(request)
         user_id = session_req.get('user_id')
         logger.info(
-            f"API partners handler called, session: {
-                dict(session_req) if session_req else 'None'}, user_id: {user_id}")
+            f"API partners handler called, session: {dict(session_req) if session_req else 'None'}, user_id: {user_id}")
         if not user_id:
             logger.error("No user_id in session for partners API")
             return web.json_response({'error': 'Not logged in'}, status=401)
@@ -3578,8 +3567,7 @@ async def api_reminders_handler(request):
     session_req = await get_session(request)
     user_id = session_req.get('user_id')
     logger.info(
-        f"API reminders handler called, session: {
-            dict(session_req) if session_req else 'None'}, user_id: {user_id}")
+        f"API reminders handler called, session: {dict(session_req) if session_req else 'None'}, user_id: {user_id}")
     if not user_id:
         logger.error("No user_id in session for reminders API")
         return web.json_response({'error': 'Not logged in'}, status=401)

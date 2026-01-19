@@ -714,8 +714,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
             interaction = Interaction(
                 user_id=user.id,
                 message_type="ai",
-                content=f"Анализ задачи '{
-                    task.title}':\n\n{analysis_result}")
+                content=f"Анализ задачи '{task.title}':\n\n{analysis_result}")
             session.add(interaction)
             session.commit()
 
@@ -897,16 +896,19 @@ def delegate_task(
                 import asyncio
                 asyncio.create_task(bot.send_message(recipient.telegram_id, message))
 
-                # Schedule automatic monitoring for task execution
-                schedule_delegation_monitoring(
-                    task_id=task_id,
-                    delegator_id=delegator.telegram_id,
-                    recipient_id=recipient.telegram_id,
-                    deadline=task.reminder_time
-                )
-
         except Exception as e:
             logging.error(f"Failed to send delegation notification: {e}")
+
+        # Schedule automatic monitoring for task execution (outside try block to ensure it runs)
+        try:
+            schedule_delegation_monitoring(
+                task_id=task_id,
+                delegator_id=delegator.telegram_id,
+                recipient_id=recipient.telegram_id,
+                deadline=task.reminder_time
+            )
+        except Exception as e:
+            logging.error(f"Failed to schedule delegation monitoring: {e}")
 
         session.close()
         return f"Предложение задачи отправлено @{recipient_username}. Ожидается подтверждение."
@@ -2032,6 +2034,11 @@ def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline
             return
 
         current_time = datetime.now(timezone.utc)
+        
+        # Ensure deadline is timezone-aware
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        
         time_until_deadline = deadline - current_time
 
         # Convert to hours for easier calculation

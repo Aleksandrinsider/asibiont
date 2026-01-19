@@ -421,8 +421,7 @@ async def process_text_message(user_id, text, message, state):
         if response and response.strip():
             try:
                 logger.info(
-                    f"[SENDING] Sending response to user {user_id}, chat {
-                        message.chat.id}, message_id={message_id}")
+                    f"[SENDING] Sending response to user {user_id}, chat {message.chat.id}, message_id={message_id}")
                 await message.bot.send_message(message.chat.id, response.strip())
                 logger.info(f"[SENT OK] Response sent successfully to user {user_id}")
             except Exception as e:
