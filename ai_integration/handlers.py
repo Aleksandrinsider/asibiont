@@ -430,6 +430,7 @@ def skip_task(task_id=None, task_title=None, user_id=None, session=None):
 
 def restore_task(task_id=None, task_title=None, user_id=None, session=None):
     """Restore task to pending status"""
+    logger.info(f"[RESTORE_TASK] Called with task_id={task_id}, task_title={task_title}, user_id={user_id}")
     if session is None:
         session = Session()
         close_session = True
