@@ -547,6 +547,12 @@
                         <div class="message ai">
                             <p>?? Добро пожаловать! Войдите для общения с AI.</p>
                             <button onclick="login()">Войти</button>
+                            <div style="margin-top: 10px; font-size: 12px; color: #6B7280;">
+                                Локальное тестирование:
+                                <button onclick="testLogin(1001)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1001 (Bronze)</button>
+                                <button onclick="testLogin(1002)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1002 (Silver)</button>
+                                <button onclick="testLogin(1003)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1003 (Gold)</button>
+                            </div>
                         </div>
                         {% endif %}
                     </div>
@@ -889,6 +895,23 @@
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
                 sendChatMessage();
+            }
+        }
+
+        async function testLogin(userId) {
+            try {
+                const response = await fetch(`/login?user_id=${userId}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Ошибка входа');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Ошибка входа');
             }
         }
 
