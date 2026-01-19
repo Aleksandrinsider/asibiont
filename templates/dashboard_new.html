@@ -141,6 +141,8 @@
                     type = 'delegating_by_me';
                 } else if (card.classList.contains('contact-favorite')) {
                     type = 'favorite';
+                } else if (card.classList.contains('contact-blocked')) {
+                    type = 'blocked';
                 }
                 
                 if (currentContactFilter === 'all') {
@@ -150,6 +152,11 @@
                     const username = card.dataset.username;
                     const isFavorite = cachedFavorites && cachedFavorites.includes(username);
                     card.style.display = isFavorite ? 'flex' : 'none';
+                } else if (currentContactFilter === 'blocked') {
+                    // Для blocked проверяем, есть ли в заблокированных
+                    const username = card.dataset.username;
+                    const isBlocked = cachedBlocked && cachedBlocked.includes(username);
+                    card.style.display = isBlocked ? 'flex' : 'none';
                 } else if (type === currentContactFilter) {
                     card.style.display = 'flex';
                 } else {
@@ -512,9 +519,41 @@
                         <button class="contact-filter-btn" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
                         <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled title="Функция доступна на других тарифах"{% endif %}>Делегирую я</button>
+                        <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
+                    </div>
+                    <div id="blocked-contacts">
+                        {% for contact in blocked_contacts %}
+                        <li class="task-item contact-blocked" data-username="{{ contact.username }}" style="display: flex; margin-bottom: 8px; align-items: center;">
+                            {% if contact.photo_url %}
+                            <div style="margin-right: 12px; flex-shrink: 0;">
+                                <img src="{{ contact.photo_url }}" onclick="openContactProfileModal('{{ contact.username }}', true)" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />
+                            </div>
+                            {% else %}
+                            <div style="margin-right: 12px; flex-shrink: 0;">
+                                <div onclick="openContactProfileModal('{{ contact.username }}', true)" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>
+                            </div>
+                            {% endif %}
+                            <div style="flex: 1;">
+                                <div class="task-title" onclick="openContactProfileModal('{{ contact.username }}', true)" style="cursor: pointer; color: #374151;">@{{ contact.username }}</div>
+                                <div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">{{ contact.reason }}</span></div>
+                            </div>
+                            <div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">
+                                <button onclick="unblockContact('{{ contact.username }}')" class="quick-action" title="Разблокировать">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                                        <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/>
+                                    </svg>
+                                </button>
+                                <button onclick="openRatingModal('{{ contact.username }}')" class="quick-action" title="Рекомендовать">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
+                                        <path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </li>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
@@ -1134,6 +1173,24 @@
             return [];
         }
 
+        async function getBlockedContactsFromServer() {
+            try {
+                const response = await fetch('/api/blocked_contacts', {
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return [];
+                console.log('getBlockedContactsFromServer response status:', response.status);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('getBlockedContactsFromServer data:', data);
+                    return data.blocked || [];
+                }
+            } catch (error) {
+                console.error('Error loading blocked:', error);
+            }
+            return [];
+        }
+
         async function saveFavoriteContactsToServer(favorites) {
             try {
                 const response = await fetch('/api/favorite_contacts', {
@@ -1152,7 +1209,26 @@
             }
         }
 
+        async function saveBlockedContactsToServer(blocked) {
+            try {
+                const response = await fetch('/api/blocked_contacts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ blocked: blocked }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return false;
+                return response.ok;
+            } catch (error) {
+                console.error('Error saving blocked:', error);
+                return false;
+            }
+        }
+
         let cachedFavorites = null;
+        let cachedBlocked = null;
         
         // Initialize cachedFavorites
         (async () => {
@@ -1161,6 +1237,12 @@
                 console.log('Initialized cachedFavorites:', cachedFavorites);
             } catch (error) {
                 console.error('Error initializing cachedFavorites:', error);
+            }
+            try {
+                cachedBlocked = await getBlockedContactsFromServer();
+                console.log('Initialized cachedBlocked:', cachedBlocked);
+            } catch (error) {
+                console.error('Error initializing cachedBlocked:', error);
             }
         })();
 
@@ -1190,6 +1272,33 @@
                 // Force reload contacts to update heart icons
                 cachedPartnersData = null;
                 updatePeople();
+            }
+        }
+
+        async function blockContact(username) {
+            let blocked = await getBlockedContactsFromServer();
+            if (!blocked.includes(username)) {
+                blocked.push(username);
+                const success = await saveBlockedContactsToServer(blocked);
+                if (success) {
+                    cachedBlocked = blocked;
+                    cachedPartnersData = null;
+                    updatePeople();
+                }
+            }
+        }
+
+        async function unblockContact(username) {
+            let blocked = await getBlockedContactsFromServer();
+            const index = blocked.indexOf(username);
+            if (index > -1) {
+                blocked.splice(index, 1);
+                const success = await saveBlockedContactsToServer(blocked);
+                if (success) {
+                    cachedBlocked = blocked;
+                    cachedPartnersData = null;
+                    updatePeople();
+                }
             }
         }
 
@@ -1443,7 +1552,7 @@
                                 ${isFavorite 
                                     ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                     : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'}
-                                <span>Избранное</span>
+                                <span>В избранное</span>
                             </button>
                             <button onclick="window.open('https://t.me/${contact.username}', '_blank')"
                                     style="padding: 8px 16px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 400; transition: all 0.2s; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px;"
@@ -1957,6 +2066,18 @@
                 allContacts.push(contactData);
             });
             
+            const blockedCards = peopleList.querySelectorAll('.contact-blocked');
+            blockedCards.forEach(card => {
+                const contactData = {
+                    type: 'blocked',
+                    html: card.innerHTML,
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    tier: card.dataset.tier || null,
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
             // Дедупликация контактов по username - оставляем только первый из каждой группы типов
             const uniqueContacts = {};
             allContacts.forEach(contact => {
@@ -2262,16 +2383,9 @@
             const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
             const taskTitle = taskElement ? taskElement.querySelector('.task-title').textContent : `задача ${taskId}`;
             
-            // Создаем модальное окно для причины удаления
-            const reason = prompt(`Почему вы хотите удалить задачу "${taskTitle}"?\n\nВозможные причины:\n• Задача больше не актуальна\n• Задача была создана по ошибке\n• Задача дублируется\n• Другая причина (опишите)`, '');
-            
-            if (reason === null) {
+            // Подтверждение удаления
+            if (!confirm(`Вы уверены, что хотите удалить задачу "${taskTitle}"?`)) {
                 return; // Пользователь отменил
-            }
-            
-            if (reason.trim() === '') {
-                alert('Пожалуйста, укажите причину удаления задачи.');
-                return;
             }
             
             try {

@@ -137,6 +137,19 @@ try:
         else:
             logger.info("Migration: favorite_contacts column already exists")
 
+        # Migration for blocked_contacts column
+        if 'blocked_contacts' not in columns:
+            try:
+                logger.info("Adding blocked_contacts column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN blocked_contacts TEXT'))
+                session.commit()
+                logger.info("Migration: blocked_contacts column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add blocked_contacts column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: blocked_contacts column already exists")
+
         # Migration for subscriptions table
         if 'subscriptions' in inspector.get_table_names():
             sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
@@ -1101,6 +1114,26 @@ async def dashboard_handler(request):
                 delegating_to_me = []
                 delegating_by_me = []
 
+            # Получить заблокированные контакты
+            blocked_contacts = []
+            try:
+                if profile and profile.blocked_contacts:
+                    blocked_usernames = json.loads(profile.blocked_contacts)
+                    for username in blocked_usernames:
+                        blocked_user = session_db.query(User).filter(User.username.ilike(username.replace('@', ''))).first()
+                        if blocked_user and blocked_user.id != user.id:
+                            blocked_profile = session_db.query(UserProfile).filter_by(user_id=blocked_user.id).first()
+                            blocked_contacts.append({
+                                'id': blocked_user.id,
+                                'username': blocked_user.username,
+                                'first_name': blocked_user.first_name,
+                                'photo_url': blocked_user.photo_url,
+                                'reason': 'заблокированный контакт'
+                            })
+            except Exception as e:
+                logger.error(f"Error getting blocked contacts: {e}")
+                blocked_contacts = []
+
         finally:
             session_db.close()
         
@@ -1313,6 +1346,7 @@ async def dashboard_handler(request):
             'partners': partners,
             'delegating_to_me': delegating_to_me,
             'delegating_by_me': delegating_by_me,
+            'blocked_contacts': blocked_contacts,
             'subscription': subscription,
             'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE',
             'total_tasks': total_tasks,
@@ -3088,6 +3122,61 @@ async def api_favorite_contacts_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_blocked_contacts_handler(request):
+    """Get or update blocked contacts"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            if not profile:
+                profile = UserProfile(user_id=user.id)
+                session_db.add(profile)
+                session_db.commit()
+
+            if request.method == 'GET':
+                # Return blocked contacts
+                blocked = []
+                if profile.blocked_contacts:
+                    try:
+                        blocked = json.loads(profile.blocked_contacts)
+                    except json.JSONDecodeError:
+                        blocked = []
+                return web.json_response({'blocked': blocked})
+
+            elif request.method == 'POST':
+                # Update blocked contacts
+                data = await request.json()
+                blocked = data.get('blocked', [])
+                
+                if not isinstance(blocked, list):
+                    return web.json_response({'error': 'Blocked must be a list'}, status=400)
+                
+                # Validate that all blocked are strings
+                if not all(isinstance(b, str) for b in blocked):
+                    return web.json_response({'error': 'All blocked must be strings'}, status=400)
+                
+                profile.blocked_contacts = json.dumps(blocked)
+                session_db.commit()
+                
+                return web.json_response({'success': True})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Unexpected error in api_blocked_contacts_handler: {e}")
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def rate_user_handler(request):
     """Rate another user (1-10 scale)"""
     try:
@@ -4061,6 +4150,8 @@ app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_get('/api/contact_profile', api_contact_profile_handler)
 app.router.add_get('/api/favorite_contacts', api_favorite_contacts_handler)
 app.router.add_post('/api/favorite_contacts', api_favorite_contacts_handler)
+app.router.add_get('/api/blocked_contacts', api_blocked_contacts_handler)
+app.router.add_post('/api/blocked_contacts', api_blocked_contacts_handler)
 app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
