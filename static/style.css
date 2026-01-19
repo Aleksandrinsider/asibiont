@@ -299,7 +299,7 @@ body {
     grid-template-columns: 1fr 1.5fr 1fr; /* Center column 50% wider than side columns */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
-    gap: 8px;
+    gap: 4px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
@@ -324,7 +324,7 @@ body {
     height: 100%;
     padding: 10px 10px;
     min-height: 0;
-    margin-top: -15px;
+    margin-top: 0;
     padding-bottom: 10px;
     -webkit-overflow-scrolling: touch;
     padding-right: 6px;
@@ -344,7 +344,7 @@ body {
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
     padding: 12px;
-    margin-top: -15px;
+    margin-top: 0;
     margin-bottom: 3px;
     flex: 1;
     display: flex;
