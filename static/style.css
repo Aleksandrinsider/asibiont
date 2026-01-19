@@ -1885,3 +1885,44 @@ details[open] .details-content {
     z-index: 1000;
 }
 
+/* Quick action buttons for tasks */
+.quick-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: #F6F8FA;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #374151;
+}
+
+.quick-action:hover {
+    background: #E1E4E8;
+}
+
+.quick-action:active {
+    background: #D1D5DB;
+}
+
+.quick-action svg {
+    width: 16px;
+    height: 16px;
+}
+
+.delete-btn {
+    background: #FEF2F2 !important;
+    color: #DC2626 !important;
+}
+
+.delete-btn:hover {
+    background: #FEE2E2 !important;
+}
+
+.delete-btn:active {
+    background: #FECACA !important;
+}
+

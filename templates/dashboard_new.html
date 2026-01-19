@@ -551,7 +551,7 @@
                 <div class="chat-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                                 <path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm-1 13.41V9.24a.75.75 0 0 1 1.5 0v4.17c-2.88-.29-5.17-2.58-5.46-5.46H6.24a.75.75 0 0 1 0 1.5H1.59c.29 2.88 2.58 5.17 5.46 5.46zM9.76 6.24H13.41c-.29-2.88-2.58-5.17-5.46-5.46V6.24a.75.75 0 0 1-1.5 0V1.59c2.88.29 5.17 2.58 5.46 5.46z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Чат с ИИ</h3>
@@ -600,7 +600,7 @@
                 <div class="task-stats-block">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                                 <path d="M1.5 1.5A.5.5 0 0 0 1 2v4.8a2.5 2.5 0 0 0 2.5 2.5h9.793l-3.347 3.346a.5.5 0 0 0 .708.708l4.2-4.2a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 8.3H3.5A1.5 1.5 0 0 1 2 6.8V2a.5.5 0 0 0-.5-.5z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Статистика</h3>
@@ -632,7 +632,7 @@
                 <div class="tasks-section-wrapper">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                                 <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-9zM3.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-9z"/>
                                 <path d="M5 5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
                             </svg>
@@ -1851,14 +1851,14 @@
             // Проверяем статус делегирования
             if (task.delegation_status === 'pending') {
                 // Делегированная задача, ожидающая принятия
-                html += '<button onclick="acceptDelegatedTask(' + task.id + ')" class="quick-action" data-title="Принять" style="background: #238636;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
-                html += '<button onclick="rejectDelegatedTask(' + task.id + ')" class="quick-action" data-title="Отклонить" style="background: #d73a49;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                html += '<button onclick="acceptDelegatedTask(' + task.id + ')" class="quick-action" title="Принять" style="background: #238636;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="rejectDelegatedTask(' + task.id + ')" class="quick-action" title="Отклонить" style="background: #d73a49;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" data-title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
-                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" data-title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v-5"/></svg></button>';
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v-5"/></svg></button>';
             }
-            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn" data-title="Удалить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
+            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn" title="Удалить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
             html += '</div>';
             
             return html;
