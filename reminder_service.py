@@ -941,7 +941,7 @@ class ReminderService:
                 try:
                     interaction = Interaction(
                         user_id=user.id,
-                        message_type="proactive",  # Отмечаем как проактивное сообщение
+                        message_type="ai",  # Изменено с "proactive" на "ai" для правильного форматирования
                         content=proactive_text
                     )
                     db.add(interaction)
