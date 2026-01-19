@@ -45,8 +45,8 @@ if not REDIS_URL and not LOCAL:
 
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN is required")
+if not TELEGRAM_TOKEN and not LOCAL:
+    raise ValueError("TELEGRAM_TOKEN is required in production mode")
 
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "Asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
