@@ -383,14 +383,16 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
             tool_context_msg = f"СТРОГО СОБЛЮДАЙ: показывай ТОЛЬКО реальные задачи из предоставленных данных, НЕ выдумывай и НЕ придумывай задачи!\n\n{final_content}{profile_context}"
             
-            # Добавляем контекст в messages
-            messages = [{"role": "user", "content": original_message}]
-            messages.append({"role": "assistant", "content": "", "tool_calls": tool_calls})
+            # Добавляем контекст в messages - УБИРАЕМ tool_calls из messages, так как они невалидны для API
+            messages = [{"role": "system", "content": system_prompt}]
+            messages.append({"role": "user", "content": original_message})
             messages.append({"role": "user", "content": tool_context_msg})
             
             # Запрашиваем естественный ответ от AI
             data = {
-                                            "model": "deepseek-chat",
+                "model": "deepseek-chat",
+                "messages": messages,
+                "temperature": 0.7,
                 "max_tokens": 400  # Увеличено для вариантов действий
             }
             
@@ -426,7 +428,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         final_content = "Действие выполнено успешно"
             
             # Пост-обработка для улучшения качества ответа
-            final_content = post_process_response(final_content, user_id, db_session)
+            final_content = post_process_response(final_content)
 
             logger.info(
                 f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response")
@@ -1072,6 +1074,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     content = original_content
                     content = replace_placeholders(content, user_now, current_time_str)
 
+                    # Пост-обработка: удаляем запрещенные форматы и элементы
+                    content = post_process_response(content)
+
                     try:
                         if PROMPTS_V2_AVAILABLE:
                             fallback_result = improved_fallback(
@@ -1158,7 +1163,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # )
 
                             # Пост-обработка для улучшения качества ответа
-                            final_content = post_process_response(final_content, user_id, db_session)
+                            final_content = post_process_response(final_content)
 
                             return final_content
                     except Exception as e:
@@ -1277,7 +1282,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
 
                         # Пост-обработка для улучшения качества ответа
-                        content = post_process_response(content, user_id, db_session)
+                        content = post_process_response(content)
 
                         return content
 
@@ -1653,7 +1658,7 @@ async def generate_proactive_message(user_id):
                     content = clean_technical_details(content)
 
                     # Пост-обработка как в обычных ответах
-                    content = post_process_response(content, user_id, None)
+                    content = post_process_response(content)
 
                     logger.info(f"[PROACTIVE] Generated dynamic message: {content[:100]}...")
                     return content

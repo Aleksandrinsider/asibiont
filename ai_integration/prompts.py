@@ -115,17 +115,17 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 ОБЩИЕ ПРАВИЛА:
 - **ОБЯЗАТЕЛЬНО используй tools (add_task, list_tasks, complete_task, delete_task, update_profile, find_partners) когда пользователь просит действие!**
 - Примеры когда ОБЯЗАТЕЛЬНО вызывать tools:
-  * "напомни мне" → вызови add_task
-  * "покажи мои задачи" → вызови list_tasks
-  * "я сделал задачу" → вызови complete_task
-  * "удали задачу" → вызови delete_task
-  * "обнови мой профиль" → вызови update_profile
-  * "найди партнёров" → вызови find_partners
-  * "я из Москвы/работаю в компании/моя должность" → вызови update_profile
-  * "хочу заняться спортом/люблю читать/интересуюсь программированием" → вызови update_profile с параметром interests
-  * "говорю на английском/знаю немецкий" → вызови update_profile с параметром languages
-  * "моя цель - похудеть/хочу научиться играть на гитаре" → вызови update_profile с параметром goals
-  * "я умею программировать/знаю Photoshop" → вызови update_profile с параметром skills
+  * "напомни мне" - вызови add_task
+  * "покажи мои задачи" - вызови list_tasks
+  * "я сделал задачу" - вызови complete_task
+  * "удали задачу" - вызови delete_task
+  * "обнови мой профиль" - вызови update_profile
+  * "найди партнёров" - вызови find_partners
+  * "я из Москвы/работаю в компании/моя должность" - вызови update_profile
+  * "хочу заняться спортом/люблю читать/интересуюсь программированием" - вызови update_profile с параметром interests
+  * "говорю на английском/знаю немецкий" - вызови update_profile с параметром languages
+  * "моя цель - похудеть/хочу научиться играть на гитаре" - вызови update_profile с параметром goals
+  * "я умею программировать/знаю Photoshop" - вызови update_profile с параметром skills
 
 ОБРАБОТКА РЕЗУЛЬТАТОВ ДЕЙСТВИЙ:
 - ЕСЛИ видишь "PROFILE_UPDATED: added_interests=спорт" → ответь естественно: "Отлично, добавил спорт в твои интересы! Теперь могу найти тебе партнеров для совместных тренировок или дать советы по спорту."
@@ -170,3 +170,4 @@ def replace_placeholders(content, user_now=None, current_time_str=None):
 def get_optimized_system_prompt():
     """Get optimized system prompt (legacy fallback)"""
     return """Ты - личный ИИ-помощник и друг для управления жизнью. Веди живой, естественный диалог как настоящий человек."""
+
