@@ -2953,6 +2953,37 @@ async def api_partners_handler(request):
             except json.JSONDecodeError:
                 pass
 
+        # Filter out blocked contacts
+        user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+        blocked_by_me = set()
+        if user_profile and user_profile.blocked_contacts:
+            try:
+                blocked_by_me = set(json.loads(user_profile.blocked_contacts))
+            except json.JSONDecodeError:
+                pass
+
+        # Also check who blocked the current user
+        blocked_me = set()
+        all_profiles = session_db.query(UserProfile).filter(UserProfile.blocked_contacts.isnot(None)).all()
+        for profile in all_profiles:
+            try:
+                blocked_list = json.loads(profile.blocked_contacts)
+                if user.username and user.username in blocked_list:
+                    blocker_user = session_db.query(User).filter_by(id=profile.user_id).first()
+                    if blocker_user and blocker_user.username:
+                        blocked_me.add(blocker_user.username)
+            except json.JSONDecodeError:
+                continue
+
+        # Filter partners_data
+        filtered_partners_data = []
+        for partner in partners_data:
+            partner_username = partner.get('contact_info', '').replace('@', '')
+            if partner_username in blocked_by_me or partner_username in blocked_me:
+                continue  # Skip blocked contacts
+            filtered_partners_data.append(partner)
+
+        partners_data = filtered_partners_data
         partners_data.sort(key=sort_key)
 
         # Закрываем сессию перед возвратом ответа
