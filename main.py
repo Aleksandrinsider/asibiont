@@ -15,8 +15,6 @@ import jinja2
 import aiohttp_jinja2
 from aiohttp import web
 import aiohttp
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram import Bot, Dispatcher
 import asyncio
 import logging
 import pytz
@@ -28,6 +26,11 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Conditional aiogram imports for production only
+if not LOCAL:
+    from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+    from aiogram import Bot, Dispatcher
 
 # Скрываем некритичные предупреждения
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
@@ -2131,12 +2134,15 @@ async def direct_login_handler(request):
 
 
 try:
-    if TELEGRAM_TOKEN:
+    if TELEGRAM_TOKEN and not LOCAL:
         bot = Bot(token=TELEGRAM_TOKEN)
         logger.info("Bot created successfully")
     else:
         bot = None
-        logger.info("Bot not created (no token)")
+        if LOCAL:
+            logger.info("Bot not created (local mode)")
+        else:
+            logger.info("Bot not created (no token)")
 except Exception as e:
     logger.error(f"Failed to create bot: {e}", exc_info=True)
     bot = None
@@ -2159,7 +2165,8 @@ if bot:
     app['bot'] = bot
     dp = Dispatcher()
     dp.include_router(handlers_router)
-    app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
+    if not LOCAL:
+        app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
 # Middleware to add CSP headers and disable cache for static files
 
