@@ -1865,6 +1865,7 @@
         }
         
         function renderTaskGroups(tasks) {
+            console.log('renderTaskGroups called with tasks:', tasks ? tasks.length : 0);
             // Сохраняем все задачи с сервера только если это новые данные с сервера
             // (больше чем сохраненные или если это первый раз)
             if (tasks.length > allTasksFromServer.length || allTasksFromServer.length === 0) {
@@ -2027,6 +2028,7 @@
         }
         
         function filterTasks(filterType) {
+            console.log('filterTasks called with:', filterType);
             currentTaskFilter = filterType;
             currentPage = 1; // Сброс страницы при смене фильтра
             
@@ -2313,6 +2315,7 @@
         }
         
         async function completeTask(taskId) {
+            console.log('completeTask called with taskId:', taskId);
             try {
                 const response = await fetch('/complete_task', {
                     method: 'POST',
@@ -2847,6 +2850,7 @@
         }
         
         async function updateTasks() {
+            console.log('updateTasks called');
             try {
                 const response = await fetch('/api/tasks?t=' + Date.now(), {
                     credentials: 'include',
