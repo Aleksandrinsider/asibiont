@@ -2401,10 +2401,16 @@ async def api_partners_handler(request):
             # Don't filter by tier - everyone sees everyone
             # But we'll add tier info to determine access on frontend
 
-            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
-            interactions = session_db.query(Interaction).filter_by(
-                user_id=user.id).order_by(
-                Interaction.created_at).all() if user else []
+            try:
+                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
+                interactions = session_db.query(Interaction).filter_by(
+                    user_id=user.id).order_by(
+                    Interaction.created_at).all() if user else []
+
+            except Exception as e:
+                logger.error(f"Error getting user profile and interactions: {e}")
+                profile = None
+                interactions = []
 
             # Получить контакты по делегированию
             delegating_to_me = []  # Люди, которые делегировали мне задачи
@@ -3083,6 +3089,9 @@ async def api_partners_handler(request):
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({'partners': partners_data})
+    except Exception as e:
+        logger.error(f"Error processing partners data: {e}", exc_info=True)
+        return web.json_response({'partners': []}, status=200)
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
