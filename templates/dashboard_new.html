@@ -285,8 +285,8 @@
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
     {% if logged_in %}
-    <div class="app-header">
-        <div class="header-content">
+    <div class="app-header" style="margin-bottom: 0; padding-bottom: 0;">
+        <div class="header-content" style="padding-bottom: 0;">
             <div class="header-left" style="display: flex; align-items: center; gap: 8px;">
                 <!-- Логотип -->
                 <a href="https://t.me/Asibiont_bot" target="_blank" class="logo" style="display: flex; align-items: center; text-decoration: none; margin-left: 15px;">
@@ -439,7 +439,7 @@
             </div>
         </div>
         {% else %}
-        <div class="main-layout" style="margin-top: 0; padding-top: 0;">
+        <div class="main-layout" style="margin-top: -20px; padding-top: 0;">
             <!-- Левая колонка - Люди -->
             <div class="left-column">
                 <div class="context-section" id="profile-section">
