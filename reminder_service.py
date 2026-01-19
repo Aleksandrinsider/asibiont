@@ -633,12 +633,15 @@ class ReminderService:
             db.close()
 
     def schedule_task_checkpoints(self, user_id: int):
-        """Планирование чекпоинтов для задач пользователя по принципу 1/3-2/3 времени
+        """Планирование чекпоинтов для задач пользователя по принципу 1/3-2/3-3/3 ПОСЛЕ ПРОСРОЧКИ
         
-        Аналогично делегированным задачам:
-        - 1/3 времени до reminder_time: первый чекпоинт
-        - 2/3 времени до reminder_time: второй чекпоинт  
-        - Через 1 час после reminder_time: чекпоинт для просроченных задач
+        Для просроченных задач:
+        - 1/3 estimated_duration после просрочки: первый чекпоинт
+        - 2/3 estimated_duration после просрочки: второй чекпоинт  
+        - 3/3 estimated_duration после просрочки: третий чекпоинт (финальный)
+        
+        Для задач с приближающимся дедлайном:
+        - 1/3 времени до reminder_time: предварительный чекпоинт
         """
         from models import Session
         from models import Task, User
@@ -669,30 +672,33 @@ class ReminderService:
                 if reminder_time < current_time - timedelta(days=1):
                     continue
                 
-                # Рассчитать чекпоинты по принципу 1/3-2/3 от времени до reminder_time
                 time_until_reminder = reminder_time - current_time
                 
                 if time_until_reminder.total_seconds() <= 0:
-                    # Задача просрочена - чекпоинт через 1 час после reminder_time
-                    checkpoint_time = reminder_time + timedelta(hours=1)
-                    checkpoint_type = "overdue"
-                else:
-                    # Задача не просрочена - чекпоинты на 1/3 и 2/3 времени до reminder_time
-                    check_times = [
-                        current_time + (time_until_reminder * 1 / 3),  # 1/3 point
-                        current_time + (time_until_reminder * 2 / 3),  # 2/3 point
+                    # Задача просрочена - чекпоинты на 1/3, 2/3, 3/3 estimated_duration ПОСЛЕ просрочки
+                    overdue_duration = task.estimated_duration or 60  # по умолчанию 1 час
+                    
+                    # Рассчитываем чекпоинты относительно reminder_time
+                    checkpoint_1 = reminder_time + timedelta(minutes=overdue_duration // 3)  # 1/3
+                    checkpoint_2 = reminder_time + timedelta(minutes=(overdue_duration * 2) // 3)  # 2/3  
+                    checkpoint_3 = reminder_time + timedelta(minutes=overdue_duration)  # 3/3
+                    
+                    # Планируем все три чекпоинта, если они в будущем
+                    checkpoints = [
+                        (checkpoint_1, "overdue_1_3"),
+                        (checkpoint_2, "overdue_2_3"), 
+                        (checkpoint_3, "overdue_3_3")
                     ]
                     
-                    # Планировать оба чекпоинта
-                    for i, check_time in enumerate(check_times, 1):
+                    for check_time, check_type in checkpoints:
                         if check_time > current_time:
-                            job_id = f"task_checkpoint_{task.id}_{i}_{user.telegram_id}"
+                            job_id = f"task_overdue_{task.id}_{check_type}_{user.telegram_id}"
                             
-                            # Удалить существующий джоб для этой задачи и чекпоинта
+                            # Удалить существующий джоб
                             if self.scheduler.get_job(job_id):
                                 self.scheduler.remove_job(job_id)
                             
-                            # Запланировать новый чекпоинт
+                            # Запланировать чекпоинт
                             self.scheduler.add_job(
                                 _check_and_send_proactive_job,
                                 trigger="date",
@@ -704,33 +710,31 @@ class ReminderService:
                                 max_instances=1
                             )
                             
-                            logger.debug(f"Scheduled task checkpoint {i}/2 for task {task.id} at {check_time} (user {user.telegram_id})")
-                    
-                    # Для просроченных задач - чекпоинт через 1 час после reminder_time
-                    checkpoint_time = reminder_time + timedelta(hours=1)
-                    checkpoint_type = "overdue"
-                
-                # Планировать чекпоинт для просроченных задач
-                if checkpoint_time > current_time:
-                    job_id = f"task_overdue_{task.id}_{user.telegram_id}"
-                    
-                    # Удалить существующий джоб
-                    if self.scheduler.get_job(job_id):
-                        self.scheduler.remove_job(job_id)
-                    
-                    # Запланировать чекпоинт для просроченных задач
-                    self.scheduler.add_job(
-                        _check_and_send_proactive_job,
-                        trigger="date",
-                        run_date=checkpoint_time,
-                        args=[user.telegram_id],
-                        id=job_id,
-                        replace_existing=True,
-                        misfire_grace_time=300,
-                        max_instances=1
-                    )
-                    
-                    logger.debug(f"Scheduled overdue checkpoint for task {task.id} at {checkpoint_time} (user {user.telegram_id})")
+                            logger.debug(f"Scheduled overdue checkpoint {check_type} for task {task.id} at {check_time} (user {user.telegram_id})")
+                else:
+                    # Задача не просрочена - чекпоинт на 1/3 времени до reminder_time
+                    if time_until_reminder.total_seconds() > 0:
+                        check_time = current_time + (time_until_reminder * 1 / 3)
+                        if check_time > current_time:
+                            job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
+                            
+                            # Удалить существующий джоб
+                            if self.scheduler.get_job(job_id):
+                                self.scheduler.remove_job(job_id)
+                            
+                            # Запланировать чекпоинт
+                            self.scheduler.add_job(
+                                _check_and_send_proactive_job,
+                                trigger="date",
+                                run_date=check_time,
+                                args=[user.telegram_id],
+                                id=job_id,
+                                replace_existing=True,
+                                misfire_grace_time=300,
+                                max_instances=1
+                            )
+                            
+                            logger.debug(f"Scheduled pre-deadline checkpoint for task {task.id} at {check_time} (user {user.telegram_id})")
             
             # Также запланировать общий чекпоинт для случаев без задач (раз в час)
             no_tasks_job_id = f"no_tasks_checkpoint_{user.telegram_id}"
