@@ -947,8 +947,9 @@ async def dashboard_handler(request):
                     subscription.end_date = subscription.end_date.replace(tzinfo=pytz.UTC)
                 if subscription.end_date < now:
                     subscription.status = 'expired'
+                    user.subscription_tier = SubscriptionTier.BRONZE  # Сбросить тариф на бронзу при истечении
                     session_db.commit()
-                    logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
+                    logger.info(f"Subscription {subscription.id} expired, status set to 'expired', user tier reset to BRONZE")
             
             # Синхронизировать тариф пользователя с активной подпиской
             if subscription and subscription.status == 'active' and subscription.tier:
