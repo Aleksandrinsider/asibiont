@@ -299,7 +299,7 @@ body {
     grid-template-columns: 1fr 1.5fr 1fr; /* Center column 50% wider than side columns */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
-    gap: -15px;
+    gap: 0px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
@@ -430,7 +430,7 @@ body {
     border: 1px solid #D1D9E0;
     border-radius: 8px;
     box-shadow: 0 6px 18px rgba(31,35,40,0.08);
-    padding: 8px;
+    padding: 0px;
 }
 
 .dropdown-menu .dropdown-item {
