@@ -2260,7 +2260,7 @@
             if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" data-tooltip="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
-                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" data-tooltip="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12.5 8c0-3.04-2.46-5.5-5.5-5.5S1.5 4.96 1.5 8 3.96 13.5 7 13.5c1.52 0 2.9-.61 3.89-1.61l-1.06-1.06c-.78.78-1.87 1.27-3.83 1.27-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5h-2.5l3.5 3.5L15.5 8H12.5z"/></svg></button>';
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" data-tooltip="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12V4m0 0L4 8m4-4 4 4"/></svg></button>';
             }
             html += '<button onclick="clearSingleTask(' + task.id + ')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
             html += '</div>';
