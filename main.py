@@ -2,7 +2,7 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
@@ -21,24 +21,6 @@ import pytz
 # Import handlers only if not in local mode
 if not LOCAL:
     from handlers import router as handlers_router
-from reminder_service import ReminderService
-from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
-from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
-from aiohttp_session import SimpleCookieStorage
-from aiohttp_session import get_session
-import aiohttp_session
-from redis.asyncio import Redis
-import os
-from sqlalchemy import text, or_
-import re
-import jinja2
-import aiohttp_jinja2
-from aiohttp import web
-import aiohttp
-import asyncio
-import logging
-import pytz
 import hashlib
 import hmac
 import json
@@ -50,7 +32,7 @@ load_dotenv()
 
 # Conditional aiogram imports for production only
 if not LOCAL:
-    from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+    from aiogram.webhook.aiohttp_server import SimpleRequestHandler
     from aiogram import Bot, Dispatcher
 
 # Скрываем некритичные предупреждения
@@ -97,11 +79,11 @@ try:
     """Run database migrations"""
     logger.info("Starting database migrations...")
     from sqlalchemy import text, inspect
-    
+
     # Check database type
     is_sqlite = 'sqlite' in str(engine.url).lower()
     logger.info(f"Database type: {'SQLite' if is_sqlite else 'PostgreSQL'}")
-    
+
     try:
         session = Session()
         logger.info("Migration session created")
@@ -219,7 +201,7 @@ try:
                 # Check if subscription_tier column exists and has correct type
                 user_columns = [col['name'] for col in inspector.get_columns('users')]
                 recreate_needed = False
-                
+
                 if 'subscription_tier' in user_columns:
                     # Check column type
                     column_info = next((col for col in inspector.get_columns('users') if col['name'] == 'subscription_tier'), None)
@@ -236,11 +218,11 @@ try:
                 else:
                     recreate_needed = True
                     logger.info("subscription_tier column does not exist, creating")
-                
+
                 if recreate_needed:
                     # Migration for subscription_tier column - recreate only if needed
                     logger.info("Recreating subscription_tier column to fix enum values")
-                    
+
                     # First, change dependent columns to text to allow dropping the enum type
                     if 'subscriptions' in inspector.get_table_names():
                         sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
@@ -248,15 +230,15 @@ try:
                             logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
                             session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier DROP DEFAULT"))
                             session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
-                    
+
                     session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
                     session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
                     session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
                     session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
-                    
+
                     # Update existing users data to match new enum values (after creating the enum)
                     session.execute(text("UPDATE users SET subscription_tier = CASE WHEN LOWER(subscription_tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
-                    
+
                     # Update subscriptions.tier back to enum type with correct values
                     if 'subscriptions' in inspector.get_table_names():
                         sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
@@ -266,7 +248,7 @@ try:
                             session.execute(text("UPDATE subscriptions SET tier = CASE WHEN LOWER(tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
                             session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
                             session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
-                    
+
                     session.commit()
                     logger.info("Migration: subscription_tier column recreated successfully")
                 else:
@@ -337,7 +319,7 @@ try:
             if 'used_by_users' not in columns:
                 logger.info("Adding used_by_users column to promo_codes")
                 session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
-            
+
             # Commit the column additions
             session.commit()
 
@@ -538,13 +520,12 @@ try:
     logger.info("Database migrations completed")
     # Production mode: Test users and promo codes disabled
     logger.info("Production mode: Test data creation disabled")
-    
+
     # Create special promo code for Bronze tier
     try:
         session_db = Session()
         existing_promo = session_db.query(PromoCode).filter_by(code='BRONZEFREE26').first()
         if not existing_promo:
-            from datetime import datetime
             expiry_date = datetime(2026, 2, 1)  # 1 февраля 2026
             promo = PromoCode(
                 code='BRONZEFREE26',
@@ -585,13 +566,13 @@ try:
     finally:
         if 'session_db' in locals():
             session_db.close()
-    
+
     # Create test users with different tiers and sport interests (only in local mode)
     if os.getenv('LOCAL') == '1':
         try:
             session_db = Session()
             logger.info("Creating test users with different subscription tiers")
-            
+
             test_users_data = [
                 {'telegram_id': 1001, 'tier': 'BRONZE', 'name': 'Test User Bronze'},
                 {'telegram_id': 1002, 'tier': 'SILVER', 'name': 'Test User Silver'},
@@ -603,10 +584,9 @@ try:
                 {'telegram_id': 1008, 'tier': 'SILVER', 'name': 'Test User Silver 4'},
                 {'telegram_id': 1009, 'tier': 'GOLD', 'name': 'Test User Gold 3'},
             ]
-            
-            from datetime import datetime, timedelta
+
             now = datetime.now()
-            
+
             added_count = 0
             for user_data in test_users_data:
                 # Check if user already exists
@@ -614,7 +594,7 @@ try:
                 if existing_user:
                     logger.info(f"Test user {user_data['telegram_id']} already exists")
                     continue
-                    
+
                 # Create user
                 user = User(
                     telegram_id=user_data['telegram_id'],
@@ -624,7 +604,7 @@ try:
                 )
                 session_db.add(user)
                 session_db.flush()  # Get user.id
-                
+
                 # Create profile with sport interests
                 profile = UserProfile(
                     user_id=user.id,
@@ -633,7 +613,7 @@ try:
                     contact_info=f'user{user_data["telegram_id"]}@test.com'
                 )
                 session_db.add(profile)
-                
+
                 # Create active subscription
                 subscription = Subscription(
                     user_id=user.id,
@@ -645,17 +625,17 @@ try:
                     end_date=now + timedelta(days=30)
                 )
                 session_db.add(subscription)
-                
+
                 logger.info(f"Created test user {user_data['telegram_id']} with {user_data['tier']} tier")
                 added_count += 1
-            
+
             # Create test tasks for delegation testing
             if added_count > 0:
                 # Create tasks delegated to user 1001 from other users
                 user_1001 = session_db.query(User).filter_by(telegram_id=1001).first()
                 user_1002 = session_db.query(User).filter_by(telegram_id=1002).first()
                 user_1003 = session_db.query(User).filter_by(telegram_id=1003).first()
-                
+
                 if user_1001 and user_1002:
                     # Task from user 1002 delegated to user 1001
                     task1 = Task(
@@ -671,7 +651,7 @@ try:
                     )
                     session_db.add(task1)
                     logger.info("Created delegated task from user 1002 to user 1001")
-                
+
                 if user_1001 and user_1003:
                     # Task from user 1003 delegated to user 1001
                     task2 = Task(
@@ -687,7 +667,7 @@ try:
                     )
                     session_db.add(task2)
                     logger.info("Created delegated task from user 1003 to user 1001")
-                
+
                 # Create task delegated by user 1001 to user 1002
                 if user_1001 and user_1002:
                     task3 = Task(
@@ -703,7 +683,7 @@ try:
                     )
                     session_db.add(task3)
                     logger.info("Created delegated task from user 1001 to user 1002")
-            
+
             if added_count > 0:
                 session_db.commit()
                 logger.info(f"Successfully added {added_count} test users")
@@ -717,7 +697,7 @@ try:
                 session_db.close()
     else:
         logger.info("Skipping test user creation (not in local mode)")
-            
+
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
@@ -764,7 +744,7 @@ async def get_timezone_from_ip(ip_address):
         'Moscow Oblast': 'Московская область',
         'Leningrad Oblast': 'Ленинградская область'
     }
-    
+
     try:
         # Игнорируем локальные IP
         if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
@@ -776,11 +756,11 @@ async def get_timezone_from_ip(ip_address):
                     data = await response.json()
                     timezone = data.get('timezone')
                     city = data.get('city')
-                    
+
                     # Преобразуем английское название города в русское, если есть в маппинге
                     if city and city in city_mapping:
                         city = city_mapping[city]
-                    
+
                     logger.info(f"Detected timezone: {timezone}, city: {city} for IP: {ip_address}")
                     return timezone if timezone else 'UTC', city
     except Exception as e:
@@ -831,13 +811,13 @@ async def login_handler(request):
     """Страница авторизации"""
     session = await get_session(request)
     user_id = session.get('user_id')
-    
+
     # Check for logout parameter
     if request.query.get('logout') == '1':
         session.pop('user_id', None)
         session.pop('history_cleared_timestamp', None)
         user_id = None
-    
+
     # Если пользователь уже залогинен, редиректим на dashboard
     if user_id:
         try:
@@ -845,7 +825,7 @@ async def login_handler(request):
             return web.HTTPFound('/dashboard')
         except (ValueError, TypeError):
             pass
-    
+
     # Показываем страницу авторизации
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
@@ -1018,7 +998,7 @@ async def dashboard_handler(request):
 
             # Проверить подписку
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-            
+
             # Проверить и обновить статус истекших подписок
             if subscription and subscription.status == 'active' and subscription.end_date:
                 now = datetime.now(pytz.UTC)
@@ -1029,12 +1009,12 @@ async def dashboard_handler(request):
                     # user.subscription_tier = SubscriptionTier.BRONZE  # Сбросить тариф на бронзу при истечении - убрано по просьбе пользователя
                     session_db.commit()
                     logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
-            
+
             # Синхронизировать тариф пользователя с активной подпиской
             if subscription and subscription.status == 'active' and subscription.tier:
                 sub_tier = subscription.tier.value if hasattr(subscription.tier, 'value') else str(subscription.tier).upper()
                 user_tier = user.subscription_tier.value if user.subscription_tier else None
-                
+
                 if sub_tier != user_tier:
                     logger.info(f"Syncing user tier: {user_tier} -> {sub_tier}")
                     if sub_tier == 'BRONZE':
@@ -1045,7 +1025,7 @@ async def dashboard_handler(request):
                         user.subscription_tier = SubscriptionTier.GOLD
                     session_db.commit()
                     logger.info(f"User {user.username} tier synced to {sub_tier}")
-            
+
             logger.info(
                 f"Subscription found: {
                     subscription.id if subscription else None}, status: {
@@ -1123,7 +1103,7 @@ async def dashboard_handler(request):
                 interactions = []
 
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
-            
+
             # Store subscription tier before closing session
             user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.BRONZE
 
@@ -1146,8 +1126,7 @@ async def dashboard_handler(request):
                         if delegator and delegator.id != user.id:
                             delegator_tasks = [t for t in delegated_tasks if t.user_id == delegator.id]
                             task_count = len(delegator_tasks)
-                            task_titles = [t.title[:30] +
-                                           '...' if len(t.title) > 30 else t.title for t in delegator_tasks[:3]]
+                            task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegator_tasks[:3]]
                             delegating_to_me.append({
                                 'id': delegator.id,
                                 'username': delegator.username,
@@ -1178,8 +1157,7 @@ async def dashboard_handler(request):
                             delegatee_tasks = [
                                 t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
                             task_count = len(delegatee_tasks)
-                            task_titles = [t.title[:30] +
-                                           '...' if len(t.title) > 30 else t.title for t in delegatee_tasks[:3]]
+                            task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegatee_tasks[:3]]
                             delegating_by_me.append({
                                 'id': delegatee.id,
                                 'username': delegatee.username,
@@ -1202,7 +1180,6 @@ async def dashboard_handler(request):
                     for username in blocked_usernames:
                         blocked_user = session_db.query(User).filter(User.username.ilike(username.replace('@', ''))).first()
                         if blocked_user and blocked_user.id != user.id:
-                            blocked_profile = session_db.query(UserProfile).filter_by(user_id=blocked_user.id).first()
                             blocked_contacts.append({
                                 'id': blocked_user.id,
                                 'username': blocked_user.username,
@@ -1216,10 +1193,10 @@ async def dashboard_handler(request):
 
         finally:
             session_db.close()
-        
+
         try:
             partners = get_partners_list(user_id=user_id)
-            
+
             # Apply subscription-based contact limits
             if partners and user_subscription_tier:
                 tier = user_subscription_tier.value
@@ -1228,7 +1205,7 @@ async def dashboard_handler(request):
                 elif tier == 'SILVER':
                     partners = partners[:5]  # Silver: 5 contacts
                 # Gold: unlimited (already limited to 20 in get_partners_list)
-                
+
         except Exception as e:
             logger.error(f"Error getting partners: {e}", exc_info=True)
             partners = []
@@ -1680,16 +1657,16 @@ async def api_send_message_handler(request):
                 "agent": response,
                 "timestamp": datetime.now(dt_timezone.utc).isoformat()
             })
-            
+
             # Keep only messages from last 24 hours
             cutoff_time = datetime.now(dt_timezone.utc).timestamp() - 24 * 3600
             context = [msg for msg in context if datetime.fromisoformat(
                 msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
-            
+
             # Limit to last 50 messages
             if len(context) > 50:
                 context = context[-50:]
-                
+
             if redis_client:
                 try:
                     await redis_client.setex(f"context:{user_id}", 24 * 3600, json.dumps(context).encode('utf-8'))
@@ -2066,7 +2043,7 @@ async def admin_users_handler(request):
         for user in users:
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-            
+
             user_data = {
                 'id': user.id,
                 'telegram_id': user.telegram_id,
@@ -2092,7 +2069,7 @@ async def admin_users_handler(request):
                 } if subscription else None
             }
             users_data.append(user_data)
-        
+
         return web.json_response({
             'total_users': len(users_data),
             'users': users_data
@@ -2114,18 +2091,18 @@ async def check_sportfan3_handler(request):
     session_db = Session()
     try:
         logger.info("=== Проверка подписки @sportfan3 ===")
-        
+
         # Найдем пользователя
         user = session_db.query(User).filter(User.username == 'sportfan3').first()
         if not user:
             return web.json_response({'error': 'User sportfan3 not found'}, status=404)
-            
+
         result = {
             'user_id': user.id,
             'username': user.username,
             'current_tier': user.subscription_tier.value if user.subscription_tier else None
         }
-        
+
         # Проверим активные подписки
         subscriptions = session_db.query(Subscription).filter(
             Subscription.user_id == user.id,
@@ -2141,7 +2118,7 @@ async def check_sportfan3_handler(request):
                 'start_date': sub.start_date.isoformat() if sub.start_date else None,
                 'end_date': sub.end_date.isoformat() if sub.end_date else None
             })
-        
+
         # Проверим payment_history
         payments = session_db.query(PaymentHistory).filter(
             PaymentHistory.user_id == user.id
@@ -2157,17 +2134,17 @@ async def check_sportfan3_handler(request):
                 'end_date': payment.end_date.isoformat() if payment.end_date else None,
                 'created_at': payment.created_at.isoformat() if payment.created_at else None
             })
-            
+
         # Проверим нужно ли восстановление
         now = datetime.now(dt_timezone.utc)
         has_active_gold = any(
             p.tier == 'gold' and p.end_date and p.end_date > now 
             for p in payments if p.action in ['subscription_activated', 'subscription_upgraded']
         )
-        
+
         result['has_active_gold_payment'] = has_active_gold
         result['needs_fix'] = has_active_gold and user.subscription_tier != SubscriptionTier.GOLD
-        
+
         if result['needs_fix']:
             logger.info(f"❌ НАЙДЕНА ПРОБЛЕМА: Пользователь должен иметь GOLD, но имеет {user.subscription_tier}")
             # Восстанавливаем подписку
@@ -2178,9 +2155,9 @@ async def check_sportfan3_handler(request):
             logger.info("✅ Подписка восстановлена!")
         else:
             result['fixed'] = False
-            
+
         return web.json_response(result)
-        
+
     except Exception as e:
         logger.error(f"Error checking sportfan3 subscription: {e}")
         return web.json_response({'error': str(e)}, status=500)
@@ -2193,17 +2170,17 @@ async def direct_login_handler(request):
     from config import LOCAL
     if not LOCAL:
         return web.json_response({'status': 'disabled'}, status=403)
-    
+
     # For local testing, allow direct login with user_id parameter
     user_id = request.query.get('user_id')
     if not user_id:
         return web.json_response({'error': 'user_id parameter required'}, status=400)
-    
+
     try:
         user_id = int(user_id)
     except (ValueError, TypeError):
         return web.json_response({'error': 'Invalid user_id'}, status=400)
-    
+
     session = await get_session(request)
     session['user_id'] = user_id
     return web.json_response({'status': 'logged_in', 'user_id': user_id})
@@ -2295,7 +2272,7 @@ async def yookassa_webhook(request):
         payment = data['object']
         user_id = payment['metadata']['user_id']
         tier = payment['metadata'].get('tier', 'bronze')  # Get tier from payment metadata
-        
+
         session = Session()
         user = session.query(User).filter_by(telegram_id=int(user_id)).first()
         if user:
@@ -2310,7 +2287,7 @@ async def yookassa_webhook(request):
 
             subscription.status = 'active'
             subscription.start_date = datetime.now(pytz.UTC)
-            
+
             # Update tier
             tier_enum = SubscriptionTier.BRONZE
             if tier == 'bronze':
@@ -2334,7 +2311,7 @@ async def yookassa_webhook(request):
                 subscription.end_date = now + timedelta(days=30)
 
             session.commit()
-            
+
             # Логируем платеж в payment_history для защиты от потери данных
             try:
                 payment_history = PaymentHistory(
@@ -2355,7 +2332,7 @@ async def yookassa_webhook(request):
             except Exception as e:
                 logger.error(f"❌ Failed to log payment to history: {e}")
                 # Не падаем, платеж уже обработан
-            
+
             from payments import get_tier_name
             tier_name = get_tier_name(tier)
             await bot.send_message(int(user_id), f"Подписка {tier_name} активирована! Теперь у вас доступ ко всем премиум-функциям.")
@@ -2626,19 +2603,19 @@ async def api_partners_handler(request):
             # Check tier access - use user.subscription_tier for now since update script uses it
             user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
             partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
-            
+
             # Convert to string for comparison if needed
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             partner_tier_str = partner_tier.value if hasattr(partner_tier, 'value') else str(partner_tier).lower()
-            
+
             logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
-            
+
             # Determine if user can access this contact
             # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
             # Gold видит всех (Bronze, Silver, Gold)
             can_access = False
             required_tier = None
-            
+
             if user_tier_str.lower() in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (partner_tier_str.lower() in ['bronze', 'silver'])
@@ -2769,14 +2746,14 @@ async def api_partners_handler(request):
             # Check tier access
             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
             delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.BRONZE
-            
+
             # Convert to string for comparison
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             delegator_tier_str = delegator_tier.value if hasattr(delegator_tier, 'value') else str(delegator_tier).lower()
-            
+
             can_access = False
             required_tier = None
-            
+
             if user_tier_str.lower() in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (delegator_tier_str.lower() in ['bronze', 'silver'])
@@ -2884,14 +2861,14 @@ async def api_partners_handler(request):
             # Check tier access
             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
             delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.BRONZE
-            
+
             # Convert to string for comparison
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             delegatee_tier_str = delegatee_tier.value if hasattr(delegatee_tier, 'value') else str(delegatee_tier).lower()
-            
+
             can_access = False
             required_tier = None
-            
+
             if user_tier_str.lower() in ['bronze', 'silver']:
                 # Bronze и Silver видят только Bronze и Silver контакты
                 can_access = (delegatee_tier_str.lower() in ['bronze', 'silver'])
@@ -2984,24 +2961,24 @@ async def api_partners_handler(request):
                         favorite_user = session_db.query(User).filter(User.username.ilike(username.replace('@', ''))).first()
                         if favorite_user:
                             favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
-                            
+
                             # Check tier access
                             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
                             favorite_tier = favorite_user.subscription_tier if favorite_user.subscription_tier else SubscriptionTier.BRONZE
-                            
+
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
                             favorite_tier_str = favorite_tier.value if hasattr(favorite_tier, 'value') else str(favorite_tier).lower()
-                            
+
                             can_access = False
                             required_tier = None
-                            
+
                             if user_tier_str.lower() in ['bronze', 'silver']:
                                 can_access = (favorite_tier_str.lower() in ['bronze', 'silver'])
                                 if not can_access:
                                     required_tier = 'gold'
                             elif user_tier_str.lower() == 'gold':
                                 can_access = True
-                            
+
                             if can_access:
                                 # Update avatar from Telegram if available
                                 photo_url = favorite_user.photo_url if favorite_user.photo_url else None
@@ -3014,7 +2991,7 @@ async def api_partners_handler(request):
                                             photo_url = updated_avatar
                                     except Exception as e:
                                         logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
-                                
+
                                 partners_data.append({
                                     'contact_info': favorite_user.username,
                                     'telegram_id': favorite_user.telegram_id,
@@ -3220,17 +3197,17 @@ async def api_favorite_contacts_handler(request):
                 # Update favorite contacts
                 data = await request.json()
                 favorites = data.get('favorites', [])
-                
+
                 if not isinstance(favorites, list):
                     return web.json_response({'error': 'Favorites must be a list'}, status=400)
-                
+
                 # Validate that all favorites are strings
                 if not all(isinstance(f, str) for f in favorites):
                     return web.json_response({'error': 'All favorites must be strings'}, status=400)
-                
+
                 profile.favorite_contacts = json.dumps(favorites)
                 session_db.commit()
-                
+
                 return web.json_response({'success': True})
 
         finally:
@@ -3275,17 +3252,17 @@ async def api_blocked_contacts_handler(request):
                 # Update blocked contacts
                 data = await request.json()
                 blocked = data.get('blocked', [])
-                
+
                 if not isinstance(blocked, list):
                     return web.json_response({'error': 'Blocked must be a list'}, status=400)
-                
+
                 # Validate that all blocked are strings
                 if not all(isinstance(b, str) for b in blocked):
                     return web.json_response({'error': 'All blocked must be strings'}, status=400)
-                
+
                 profile.blocked_contacts = json.dumps(blocked)
                 session_db.commit()
-                
+
                 return web.json_response({'success': True})
 
         finally:
@@ -3690,7 +3667,7 @@ async def on_startup(app):
                 # Fallback to hardcoded but log warning
                 webhook_url = "https://task-production-1d10.up.railway.app/webhook"
                 logger.warning("WEBHOOK_URL not set and RAILWAY_PROJECT_ID not found, using hardcoded URL")
-        
+
         try:
             await bot.set_webhook(webhook_url)
             logger.info(f"Webhook set to: {webhook_url}")
@@ -4227,25 +4204,25 @@ async def apply_promo_code_handler(request):
         promo.used_count += 1
         if promo.max_uses is None or promo.used_count >= promo.max_uses:
             promo.is_used = True
-        
+
         # Добавляем пользователя в список использовавших
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id not in used_by_users:
             used_by_users.append(user.id)
         promo.used_by_users = json.dumps(used_by_users)
-        
+
         # Устаревшие поля для совместимости
         promo.used_by_user_id = user.id
         promo.used_at = now
 
         session.commit()
         logger.info(f"Promo code {promo_code} activated for user {user.id}, subscription created/updated with tier {subscription.tier}")
-        
+
         # Сохраняем значения до закрытия сессии
         tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
         duration = promo.duration_days
-        
+
         return web.json_response({
             'success': True,
             'message': f'Промокод активирован! Подписка {tier_name} на {duration} дней до {end_date.strftime("%d.%m.%Y")}'
