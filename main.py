@@ -834,7 +834,7 @@ async def login_handler(request):
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
-        'timestamp': 1736780011
+        'timestamp': 1768857743
     })
 
 
@@ -975,7 +975,7 @@ async def dashboard_handler(request):
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
-                'timestamp': 1736780011
+                'timestamp': 1768857743
             })
 
         # Получить задачи пользователя
@@ -990,7 +990,7 @@ async def dashboard_handler(request):
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
-                    'timestamp': 1736780011
+                    'timestamp': 1768857743
                 })
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
@@ -1407,7 +1407,7 @@ async def dashboard_handler(request):
             'current_time': current_time,
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': 1736780011,
+            'timestamp': 1768857743,
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
             'user_avatar_url': user_avatar_url
         })
@@ -1420,7 +1420,7 @@ async def dashboard_handler(request):
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
-            'timestamp': 1736780011
+            'timestamp': 1768857743
         })
 
 
