@@ -1838,7 +1838,7 @@ async def complete_task_handler(request):
 
     from ai_integration import complete_task
     try:
-        result = complete_task(task_id=task_id, user_id=user_id)
+        result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} completed by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1860,7 +1860,7 @@ async def restore_task_handler(request):
 
     from ai_integration import restore_task
     try:
-        result = restore_task(task_id=task_id, user_id=user_id)
+        result = await restore_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} restored by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1882,7 +1882,7 @@ async def skip_task_handler(request):
 
     from ai_integration import skip_task
     try:
-        result = skip_task(task_id=task_id, user_id=user_id)
+        result = await skip_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} skipped by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1905,7 +1905,7 @@ async def delete_task_handler(request):
 
     from ai_integration import delete_task
     try:
-        result = delete_task(task_id=task_id, user_id=user_id, reason=reason)
+        result = await delete_task(task_id=task_id, user_id=user_id, reason=reason)
         logger.info(f"Task {task_id} deleted by user {user_id} for reason: {reason}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1928,7 +1928,7 @@ async def reschedule_task_handler(request):
 
     from ai_integration import reschedule_task
     try:
-        result = reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
+        result = await reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
         logger.info(f"Task {task_id} rescheduled by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -1950,7 +1950,7 @@ async def get_task_advice_handler(request):
 
     from ai_integration import get_task_advice
     try:
-        result = get_task_advice(task_id=task_id, user_id=user_id)
+        result = await get_task_advice(task_id=task_id, user_id=user_id)
         logger.info(f"Task advice requested for task {task_id} by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
@@ -3615,42 +3615,28 @@ async def api_reminders_handler(request):
 
 
 async def on_startup(app):
-    from config import REDIS_URL, LOCAL
+    from config import REDIS_URL, LOCAL, redis_client as config_redis_client
     global redis_client
     if LOCAL:
         # In local mode, use dict for Redis
         redis_client = None
         logger.info("Using local mode without Redis")
     else:
-        try:
-            redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
-            logger.info("Redis client initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize Redis: {e}")
-            redis_client = None
+        # Use the Redis client from config.py
+        redis_client = config_redis_client
+        logger.info("Redis client initialized from config")
 
     # Передаём redis_client в ai_integration
     set_redis_client(redis_client)
     logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
 
-    # Configure session cookie options
-    # Note: Use secure=False for Railway as it uses internal HTTP behind proxy
-    session_options = {
-        'secure': False,  # Railway uses internal HTTP
-        'httponly': True,
-        'samesite': 'Lax',
-        'domain': None,  # Let browser set domain automatically
-        'max_age': 86400,  # 24 hours
-        'path': '/'
-    }
 
-    # Initialize session storage
-    # Use SimpleCookieStorage
-    storage = SimpleCookieStorage(cookie_name='session', **session_options)
-    logger.info(f"Session storage initialized with SimpleCookieStorage, options: {session_options}")
-
-    aiohttp_session.setup(app, storage)
-    logger.info("Session middleware configured successfully")
+async def on_shutdown(app):
+    """Закрываем Redis клиент при завершении приложения"""
+    global redis_client
+    if redis_client:
+        await redis_client.close()
+        logger.info("Redis client closed")
 
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
@@ -4360,6 +4346,7 @@ async def start_reminder_service(app):
 
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
+app.on_shutdown.append(on_shutdown)
 
 if bot:
     # webhook_requests_handler = SimpleRequestHandler(

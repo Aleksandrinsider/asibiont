@@ -217,7 +217,7 @@ class ReminderService:
                     # Сохранить result check в историю чата (Redis)
                     try:
                         import json
-                        from config import redis_client
+                        from ai_integration.utils import redis_client
                         if redis_client:
                             context_data = await redis_client.get(f"context:{user_id}")
                             if context_data:
@@ -323,7 +323,7 @@ class ReminderService:
             # Сохранить напоминание в историю чата (Redis)
             try:
                 import json
-                from config import redis_client
+                from ai_integration.utils import redis_client
                 if redis_client:
                     context_data = await redis_client.get(f"context:{user_id}")
                     if context_data:
@@ -923,7 +923,7 @@ class ReminderService:
                 # Сохранить проактивное сообщение в историю чата (Redis)
                 try:
                     import json
-                    from config import redis_client
+                    from ai_integration.utils import redis_client
                     if redis_client:
                         context_data = await redis_client.get(f"context:{user_id}")
                         if context_data:
@@ -1010,7 +1010,7 @@ class ReminderService:
             # Сохранить overdue reminder в историю чата (Redis)
             try:
                 import json
-                from config import redis_client
+                from ai_integration.utils import redis_client
                 if redis_client:
                     context_data = await redis_client.get(f"context:{user_id}")
                     if context_data:
@@ -1128,7 +1128,7 @@ class ReminderService:
                         # Сохранить progress request в историю чата получателя (Redis)
                         try:
                             import json
-                            from config import redis_client
+                            from ai_integration.utils import redis_client
                             if redis_client:
                                 context_data = await redis_client.get(f"context:{recipient_id}")
                                 if context_data:
