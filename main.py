@@ -2576,107 +2576,111 @@ async def api_partners_handler(request):
 
         partners_data = []
         for p in partners:
-            if not hasattr(p, 'user_id') or p.user_id is None:
-                continue  # Skip partners without user_id
-            # Получаем telegram_id пользователя из базы
-            partner_user = session_db.query(User).filter_by(
-                id=p.user_id).first() if hasattr(
-                p, 'user_id') and p.user_id is not None else None
+            try:
+                if not hasattr(p, 'user_id') or p.user_id is None:
+                    continue  # Skip partners without user_id
+                # Получаем telegram_id пользователя из базы
+                partner_user = session_db.query(User).filter_by(
+                    id=p.user_id).first() if hasattr(
+                    p, 'user_id') and p.user_id is not None else None
 
-            # Skip if partner user not found
-            if not partner_user:
-                logger.warning(f"Partner user not found for profile user_id: {p.user_id}")
+                # Skip if partner user not found
+                if not partner_user:
+                    logger.warning(f"Partner user not found for profile user_id: {p.user_id}")
+                    continue
+
+                # Update avatar from Telegram if available
+                photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
+                if partner_user and partner_user.telegram_id and 'bot' in request.app:
+                    try:
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], partner_user.telegram_id)
+                        if updated_avatar and updated_avatar != partner_user.photo_url:
+                            partner_user.photo_url = updated_avatar
+                            session_db.commit()
+                            photo_url = updated_avatar
+                    except Exception as e:
+                        logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
+
+                # Check tier access - use user.subscription_tier for now since update script uses it
+                user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
+                partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
+
+                # Ensure tiers are proper enum values
+                if not hasattr(user_tier, 'value'):
+                    user_tier = SubscriptionTier.BRONZE
+                if not hasattr(partner_tier, 'value'):
+                    partner_tier = SubscriptionTier.BRONZE
+
+                # Convert to string for comparison if needed
+                user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+                partner_tier_str = partner_tier.value if hasattr(partner_tier, 'value') else str(partner_tier).lower()
+
+                logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
+
+                # Determine if user can access this contact
+                # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
+                # Gold видит всех (Bronze, Silver, Gold)
+                can_access = False
+                required_tier = None
+
+                if user_tier_str.lower() in ['bronze', 'silver']:
+                    # Bronze и Silver видят только Bronze и Silver контакты
+                    can_access = (partner_tier_str.lower() in ['bronze', 'silver'])
+                    logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
+                    if not can_access:
+                        required_tier = 'gold'
+                elif user_tier_str.lower() == 'gold':
+                    # Gold видит всех
+                    can_access = True
+                    logger.info(f"User {user_tier_str} can access all partners")
+
+                # Only add contact if user can access it
+                if can_access and partner_user:
+                    logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier_str} for user {user.username} with tier {user_tier_str} (can_access: {can_access})")
+                    partners_data.append(
+                        {
+                            'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
+                            'telegram_id': partner_user.telegram_id if partner_user else None,
+                            'photo_url': photo_url,
+                            'can_access': can_access,
+                            'required_tier': required_tier,
+                            'subscription_tier': partner_tier.value if partner_tier and hasattr(partner_tier, 'value') else 'bronze',
+                            'city': getattr(
+                                p,
+                                'city',
+                                None),
+                            'common_interests': getattr(
+                                p,
+                                'common_interests',
+                                None),
+                            'common_skills': getattr(
+                                p,
+                                'common_skills',
+                                None),
+                            'common_goals': getattr(
+                                p,
+                                'common_goals',
+                                None),
+                            'common_tasks': getattr(
+                                p,
+                                'common_tasks',
+                                None),
+                            'recommendation_reason': getattr(
+                                p,
+                                'recommendation_reason',
+                                'подходящий контакт'),
+                            'average_rating': getattr(
+                                partner_user,
+                                'average_rating',
+                                0),
+                            'rating_count': getattr(
+                                partner_user,
+                                'rating_count',
+                                0),
+                            'type': 'recommended'})
+            except Exception as e:
+                logger.error(f"Error processing partner {getattr(p, 'user_id', 'unknown')}: {e}", exc_info=True)
                 continue
-
-            # Update avatar from Telegram if available
-            photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
-            if partner_user and partner_user.telegram_id and 'bot' in request.app:
-                try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], partner_user.telegram_id)
-                    if updated_avatar and updated_avatar != partner_user.photo_url:
-                        partner_user.photo_url = updated_avatar
-                        session_db.commit()
-                        photo_url = updated_avatar
-                except Exception as e:
-                    logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
-
-            # Check tier access - use user.subscription_tier for now since update script uses it
-            user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
-            partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
-
-            # Ensure tiers are proper enum values
-            if not hasattr(user_tier, 'value'):
-                user_tier = SubscriptionTier.BRONZE
-            if not hasattr(partner_tier, 'value'):
-                partner_tier = SubscriptionTier.BRONZE
-
-            # Convert to string for comparison if needed
-            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-            partner_tier_str = partner_tier.value if hasattr(partner_tier, 'value') else str(partner_tier).lower()
-
-            logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
-
-            # Determine if user can access this contact
-            # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
-            # Gold видит всех (Bronze, Silver, Gold)
-            can_access = False
-            required_tier = None
-
-            if user_tier_str.lower() in ['bronze', 'silver']:
-                # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (partner_tier_str.lower() in ['bronze', 'silver'])
-                logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
-                if not can_access:
-                    required_tier = 'gold'
-            elif user_tier_str.lower() == 'gold':
-                # Gold видит всех
-                can_access = True
-                logger.info(f"User {user_tier_str} can access all partners")
-
-            # Only add contact if user can access it
-            if can_access and partner_user:
-                logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier_str} for user {user.username} with tier {user_tier_str} (can_access: {can_access})")
-                partners_data.append(
-                    {
-                        'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
-                        'telegram_id': partner_user.telegram_id if partner_user else None,
-                        'photo_url': photo_url,
-                        'can_access': can_access,
-                        'required_tier': required_tier,
-                        'subscription_tier': partner_tier.value if partner_tier else 'bronze',
-                        'city': getattr(
-                            p,
-                            'city',
-                            None),
-                        'common_interests': getattr(
-                            p,
-                            'common_interests',
-                            None),
-                        'common_skills': getattr(
-                            p,
-                            'common_skills',
-                            None),
-                        'common_goals': getattr(
-                            p,
-                            'common_goals',
-                            None),
-                        'common_tasks': getattr(
-                            p,
-                            'common_tasks',
-                            None),
-                        'recommendation_reason': getattr(
-                            p,
-                            'recommendation_reason',
-                            'подходящий контакт'),
-                        'average_rating': getattr(
-                            partner_user,
-                            'average_rating',
-                            0),
-                        'rating_count': getattr(
-                            partner_user,
-                            'rating_count',
-                            0),
-                        'type': 'recommended'})
 
         # Add delegating contacts
         for contact in delegating_to_me:
