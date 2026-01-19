@@ -281,6 +281,51 @@
         .contact-delegating-to-me { background: #f3e5f5; }
         .contact-delegating-by-me { background: #e8f5e8; }
         .contact-delegating-both { background: #f0f0ff; }
+
+        /* Custom tooltips */
+        [data-tooltip] {
+            position: relative;
+        }
+
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #374151;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            white-space: nowrap;
+            z-index: 1000;
+            margin-bottom: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            animation: fadeInTooltip 0.2s ease forwards;
+        }
+
+        [data-tooltip]:hover::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #374151;
+            margin-bottom: -4px;
+            z-index: 1000;
+            opacity: 0;
+            animation: fadeInTooltip 0.2s ease forwards;
+        }
+
+        @keyframes fadeInTooltip {
+            to {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
@@ -537,7 +582,7 @@
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Мои</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
-                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled title="Функция доступна на других тарифах"{% endif %}>Делегирую я</button>
+                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled data-tooltip="Функция доступна на других тарифах"{% endif %}>Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
                     </div>
                     <div class="people-list" id="people-list">
@@ -644,7 +689,7 @@
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')">Личные задачи</button>
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
-                        <button class="task-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled title="Функция доступна на других тарифах"{% endif %}>Назначенные мной</button>
+                        <button class="task-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled data-tooltip="Функция доступна на других тарифах"{% endif %}>Назначенные мной</button>
                         <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
                         <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Выполненные</button>
                     </div>
@@ -1859,14 +1904,14 @@
             // Проверяем статус делегирования
             if (task.delegation_status === 'pending') {
                 // Делегированная задача, ожидающая принятия
-                html += '<button onclick="acceptDelegatedTask(' + task.id + ')" class="quick-action" title="Принять" style="background: #238636;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
-                html += '<button onclick="rejectDelegatedTask(' + task.id + ')" class="quick-action" title="Отклонить" style="background: #d73a49;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                html += '<button onclick="acceptDelegatedTask(' + task.id + ')" class="quick-action" data-tooltip="Принять" style="background: #238636;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="rejectDelegatedTask(' + task.id + ')" class="quick-action" data-tooltip="Отклонить" style="background: #d73a49;"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" data-tooltip="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
-                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v3h3"/><path d="M9 1L3 7l6 6"/></svg></button>';
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" data-tooltip="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v3h3"/><path d="M9 1L3 7l6 6"/></svg></button>';
             }
-            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn" title="Удалить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
+            html += '<button onclick="deleteTask(' + task.id + ')" class="delete-btn" data-tooltip="Удалить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
             html += '</div>';
             
             return html;
@@ -2210,9 +2255,9 @@
             html += '</div>';
             html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
             if (task.status !== 'completed') {
-                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" data-tooltip="Выполнить"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
-                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v3h3"/><path d="M9 1L3 7l6 6"/></svg></button>';
+                html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" data-tooltip="Восстановить"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7v3h3"/><path d="M9 1L3 7l6 6"/></svg></button>';
             }
             html += '<button onclick="clearSingleTask(' + task.id + ')" class="delete-btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>';
             html += '</div>';
@@ -3075,7 +3120,7 @@
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="В избранное">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" data-tooltip="В избранное">' + starSvg + '</button>';
                                     
                                     // Delegate button with Bronze tier check
                                     const isBronze = userSubscriptionTier === 'BRONZE';
@@ -3084,12 +3129,12 @@
                                     const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Делегировать';
                                     const delegateOnclick = isBronze ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
                                     const delegateDisabled = isBronze ? ' disabled' : '';
-                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" title="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
+                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" data-tooltip="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
-                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3183,7 +3228,7 @@
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="В избранное">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" data-tooltip="В избранное">' + starSvg + '</button>';
                                     
                                     // Delegate button with Bronze tier check
                                     const isBronze = userSubscriptionTier === 'BRONZE';
@@ -3192,12 +3237,12 @@
                                     const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Делегировать';
                                     const delegateOnclick = isBronze ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
                                     const delegateDisabled = isBronze ? ' disabled' : '';
-                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" title="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
+                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" data-tooltip="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
-                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3291,7 +3336,7 @@
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
                                         : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>';
                                     const heartColor = isFavorite ? 'color: #068487;' : '';
-                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="В избранное">' + starSvg + '</button>';
+                                    html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" data-tooltip="В избранное">' + starSvg + '</button>';
                                     
                                     // Delegate button with Bronze tier check
                                     const isBronze = userSubscriptionTier === 'BRONZE';
@@ -3300,12 +3345,12 @@
                                     const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Делегировать';
                                     const delegateOnclick = isBronze ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
                                     const delegateDisabled = isBronze ? ' disabled' : '';
-                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" title="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
+                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '" data-tooltip="' + delegateTitle + '"' + delegateDisabled + '><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
-                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Заблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3329,8 +3374,8 @@
                                     html += '</div>';
                                     
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
-                                    html += '<button onclick="unblockContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Разблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,8 7,12 13,4"/></svg></button>';
-                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/></svg></button>';
+                                    html += '<button onclick="unblockContact(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Разблокировать"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3,8 7,12 13,4"/></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" data-tooltip="Рекомендовать"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"/></svg></button>';
                                     html += '</div>';
                                     html += '</li>';
                                 });
@@ -3392,11 +3437,11 @@
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
-                    html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="flex-shrink: 0; text-decoration: none;">
+                    html += `<a href="${telegramUrl}" target="_blank" data-tooltip="@${contact.contact_info}" style="flex-shrink: 0; text-decoration: none;">
                         <img src="${contact.photo_url}" style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; object-fit: cover; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">
                     </a>`;
                 } else {
-                    html += `<a href="${telegramUrl}" target="_blank" title="@${contact.contact_info}" style="flex-shrink: 0; text-decoration: none;">
+                    html += `<a href="${telegramUrl}" target="_blank" data-tooltip="@${contact.contact_info}" style="flex-shrink: 0; text-decoration: none;">
                         <div style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; background: linear-gradient(135deg, #6C757D 0%, #495057 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: ${Math.floor(avatarSize * 0.4)}px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">${initial}</div>
                     </a>`;
                 }
