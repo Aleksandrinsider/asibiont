@@ -1839,8 +1839,11 @@
         }
         
         function renderTaskGroups(tasks) {
-            // Сохраняем все задачи с сервера
-            allTasksFromServer = tasks;
+            // Сохраняем все задачи с сервера только если это новые данные с сервера
+            // (больше чем сохраненные или если это первый раз)
+            if (tasks.length > allTasksFromServer.length || allTasksFromServer.length === 0) {
+                allTasksFromServer = tasks;
+            }
             
             // Применяем фильтр
             let filteredTasks = allTasksFromServer;
@@ -1924,11 +1927,12 @@
         function previousPage() {
             if (currentPage > 1) {
                 currentPage--;
-                renderTaskGroups(allTasksData);
+                renderTaskGroups(allTasksFromServer);
             }
         }
         
         function nextPage() {
+            // Используем текущие отфильтрованные задачи для подсчета страниц
             const groups = groupTasksByDue(allTasksData);
             const groupOrder = ['overdue', 'today', 'tomorrow', 'later', 'nodate'];
             let allSortedTasks = [];
@@ -1943,7 +1947,7 @@
             
             if (currentPage < totalPages) {
                 currentPage++;
-                renderTaskGroups(allTasksData);
+                renderTaskGroups(allTasksFromServer);
             }
         }
         
@@ -2757,7 +2761,7 @@
             
             // Инициализировать задачи и контакты при загрузке страницы
             {% if tasks %}
-            updateStats(initialTasks);
+            renderTaskGroups(initialTasks);
             {% endif %}
             updateTasks();
             updatePeople();
