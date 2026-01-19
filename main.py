@@ -1,5 +1,26 @@
-from handlers import router as handlers_router
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, init_db
+from reminder_service import ReminderService
+from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
+from datetime import datetime, timedelta, timezone as dt_timezone
+from config import TELEGRAM_TOKEN, WEBHOOK_URL, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
+from aiohttp_session import SimpleCookieStorage
+from aiohttp_session import get_session
+import aiohttp_session
+from redis.asyncio import Redis
+import os
+from sqlalchemy import text, or_
+import re
+import jinja2
+import aiohttp_jinja2
+from aiohttp import web
+import aiohttp
+import asyncio
+import logging
+import pytz
+
+# Import handlers only if not in local mode
+if not LOCAL:
+    from handlers import router as handlers_router
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -2219,7 +2240,8 @@ app = web.Application()
 if bot:
     app['bot'] = bot
     dp = Dispatcher()
-    dp.include_router(handlers_router)
+    if not LOCAL:
+        dp.include_router(handlers_router)
     if not LOCAL:
         app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
@@ -3476,6 +3498,76 @@ async def get_user_rating_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def set_user_rating_handler(request):
+    """Set user rating for another user"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        rated_username = data.get('username')
+        rating = data.get('rating')
+
+        if not rated_username or rating is None:
+            return web.json_response({'error': 'Missing username or rating'}, status=400)
+
+        try:
+            rating = int(rating)
+            if rating < 1 or rating > 10:
+                return web.json_response({'error': 'Rating must be between 1 and 10'}, status=400)
+        except ValueError:
+            return web.json_response({'error': 'Invalid rating value'}, status=400)
+
+        session_db = Session()
+        try:
+            rater = session_db.query(User).filter_by(telegram_id=user_id).first()
+            rated_user = session_db.query(User).filter(User.username.ilike(rated_username.replace('@', ''))).first()
+
+            if not rater or not rated_user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            if rater.id == rated_user.id:
+                return web.json_response({'error': 'Cannot rate yourself'}, status=400)
+
+            # Check if rating already exists
+            existing_rating = session_db.query(UserRating).filter_by(
+                rater_user_id=rater.id,
+                rated_user_id=rated_user.id
+            ).first()
+
+            if existing_rating:
+                existing_rating.rating = rating
+            else:
+                new_rating = UserRating(
+                    rater_user_id=rater.id,
+                    rated_user_id=rated_user.id,
+                    rating=rating
+                )
+                session_db.add(new_rating)
+
+            # Update average rating for rated user
+            all_ratings = session_db.query(UserRating).filter_by(rated_user_id=rated_user.id).all()
+            if all_ratings:
+                avg_rating = sum(r.rating for r in all_ratings) / len(all_ratings)
+                rated_user.average_rating = round(avg_rating)
+                rated_user.rating_count = len(all_ratings)
+            else:
+                rated_user.average_rating = 0
+                rated_user.rating_count = 0
+
+            session_db.commit()
+            return web.json_response({'success': True, 'message': 'Rating submitted'})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error setting rating: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id"""
     telegram_id = request.match_info.get('telegram_id')
@@ -4252,6 +4344,7 @@ app.router.add_post('/api/blocked_contacts', api_blocked_contacts_handler)
 app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
+app.router.add_post('/api/set_user_rating', set_user_rating_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)

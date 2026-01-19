@@ -2475,6 +2475,43 @@
             document.getElementById('rating-value').textContent = value;
         }
         
+        async function submitRating() {
+            if (!currentRatingUsername) {
+                showNotification('Ошибка: не выбран контакт', 'error');
+                return;
+            }
+            
+            const rating = parseInt(document.getElementById('rating-slider').value);
+            
+            try {
+                const response = await fetch('/api/set_user_rating', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: currentRatingUsername,
+                        rating: rating
+                    }),
+                    credentials: 'include'
+                });
+                
+                if (!await checkAuth(response)) return;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showNotification('Рекомендация отправлена!', 'success');
+                    closeRatingModal();
+                    // Обновить контакты, чтобы отразить новый рейтинг
+                    await updatePeople();
+                } else {
+                    const error = await response.json();
+                    showNotification(`Ошибка: ${error.error || 'Не удалось отправить рекомендацию'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error submitting rating:', error);
+                showNotification('Ошибка при отправке рекомендации', 'error');
+            }
+        }
+        
         async function unblockContact(username) {
             try {
                 const response = await fetch('/api/blocked_contacts', {
