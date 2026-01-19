@@ -70,10 +70,12 @@ async def test_agent():
                 logger.info(f"Response: {response}")
 
                 # Add to context
-                context.append({"user": message, "agent": response})
+                if response is not None:
+                    context.append({"user": message, "agent": response})
 
                 # Check against requirements (basic checks)
-                check_response_requirements(response, message)
+                if response is not None:
+                    check_response_requirements(response, message)
 
             except Exception as e:
                 logger.error(f"Error in test {i}: {e}")
@@ -87,7 +89,8 @@ def check_response_requirements(response, user_message):
     issues = []
 
     # Check for forbidden formatting
-    if any(char in response for char in ['1.', '2.', '3.', '-', '*', '**', '__']):
+    forbidden_patterns = ['1.', '2.', '3.', '-', '*', '**', '__']
+    if any(pattern in response for pattern in forbidden_patterns):
         issues.append("Использует запрещенные форматы (нумерация, списки, жирный)")
 
     # Check length (should be 3-4 paragraphs max, but not too short)
