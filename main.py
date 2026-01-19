@@ -1038,7 +1038,12 @@ async def dashboard_handler(request):
                 logger.info("No active subscription, redirecting to subscription_tiers")
                 return web.HTTPFound('/subscription_tiers')
 
-            tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+            tasks = session_db.query(Task).filter(
+                or_(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.ilike(user.username)
+                )
+            ).all()
             logger.info(f"Found {len(tasks)} tasks for user {user.id} (telegram_id: {user.telegram_id})")
             for task in tasks:
                 logger.info(f"Task {task.id}: {task.title} (user_id: {task.user_id})")
