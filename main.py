@@ -3685,6 +3685,7 @@ async def api_tasks_handler(request):
             query_conditions.append(Task.delegated_to_username.ilike(user.username))
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
+        logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
         # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
