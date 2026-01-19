@@ -1078,6 +1078,10 @@ class ReminderService:
                 Task.due_date < now
             ).all()
             
+            logger.info(f"[OVERDUE_CHECK] User {user_id}: Found {len(overdue_tasks)} overdue tasks")
+            for task in overdue_tasks:
+                logger.info(f"[OVERDUE_CHECK] Task: {task.title}, due_date: {task.due_date}, status: {task.status}")
+            
             if overdue_tasks:
                 # Есть просроченные задачи - отправляем напоминание
                 await self.send_overdue_reminder(user_id, overdue_tasks)
@@ -1087,17 +1091,35 @@ class ReminderService:
     async def send_overdue_reminder(self, user_id: int, overdue_tasks: list):
         """Отправка напоминания о просроченных задачах с эскалацией"""
         from models import Session, Task
+        from datetime import datetime
         
         db = Session()
         try:
-            # Обновляем счётчики напоминаний для просроченных задач
+            now = datetime.utcnow()
+            
+            # Перепроверяем просроченные задачи на момент отправки
+            current_overdue_tasks = []
             for task in overdue_tasks:
+                fresh_task = db.query(Task).filter_by(id=task.id).first()
+                if fresh_task and fresh_task.status in ['pending', 'in_progress'] and fresh_task.due_date and fresh_task.due_date < now:
+                    current_overdue_tasks.append(fresh_task)
+            
+            if not current_overdue_tasks:
+                logger.info(f"[OVERDUE_SEND] No current overdue tasks for user {user_id}, skipping reminder")
+                return
+            
+            logger.info(f"[OVERDUE_SEND] Sending reminder for {len(current_overdue_tasks)} tasks to user {user_id}")
+            for task in current_overdue_tasks:
+                logger.info(f"[OVERDUE_SEND] Task: {task.title}")
+            
+            # Обновляем счётчики напоминаний для просроченных задач
+            for task in current_overdue_tasks:
                 task.overdue_reminders_sent = (task.overdue_reminders_sent or 0) + 1
             db.commit()
             
             # Генерируем текст напоминания с учётом эскалации
-            max_reminders = max(task.overdue_reminders_sent for task in overdue_tasks)
-            overdue_text = await self.generate_overdue_reminder(user_id, overdue_tasks, escalation_level=max_reminders)
+            max_reminders = max(task.overdue_reminders_sent for task in current_overdue_tasks)
+            overdue_text = await self.generate_overdue_reminder(user_id, current_overdue_tasks, escalation_level=max_reminders)
             
             # Сохранить overdue reminder в историю чата (Redis)
             try:

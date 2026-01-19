@@ -4,11 +4,14 @@ import os
 sys.path.append(os.path.dirname(__file__))
 
 from ai_integration.chat import chat_with_ai
-from models import Session, User, Task, UserProfile, Subscription
+from models import Session, User, Task, UserProfile, Subscription, init_db
 from datetime import datetime, timedelta
 import pytz
 
 async def test_ai_response():
+    # Инициализируем базу данных
+    init_db()
+    
     # Создаем тестового пользователя с просроченной задачей
     session = Session()
 

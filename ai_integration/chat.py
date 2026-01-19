@@ -1822,10 +1822,11 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         import pytz
         user_now = datetime.now(pytz.UTC)
         current_time_str = user_now.strftime("%H:%M")
+        current_date_str = user_now.strftime("%Y-%m-%d")
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory)
+        base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory) if PROMPTS_V2_AVAILABLE else get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
 
         # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
         system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
@@ -1850,7 +1851,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         messages = [
             {
                 "role": "system", "content": system_prompt}, {
-                "role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи варианты решения.", }, ]
+                "role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи конкретные шаги решения.", }, ]
 
         data = {"model": "deepseek-reasoner", "messages": messages}
         async with aiohttp.ClientSession() as session:

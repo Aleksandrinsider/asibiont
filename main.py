@@ -2352,6 +2352,7 @@ async def api_partners_handler(request):
 
         try:
             partners = get_partners_list(user_id=user_id)
+            logger.info(f"Got {len(partners)} partners from get_partners_list")
         except Exception as e:
             logger.error(f"Error getting partners: {e}")
             partners = []
@@ -2382,13 +2383,16 @@ async def api_partners_handler(request):
             if hidden_contacts:
                 filtered_partners = []
                 for p in partners:
-                    partner_user = session_db.query(User).filter_by(id=p.user_id).first()
-                    if partner_user and partner_user.username:
-                        username_clean = partner_user.username.replace('@', '').lower()
-                        if username_clean not in hidden_contacts:
-                            filtered_partners.append(p)
+                    if hasattr(p, 'user_id') and p.user_id is not None:
+                        partner_user = session_db.query(User).filter_by(id=p.user_id).first()
+                        if partner_user and partner_user.username:
+                            username_clean = partner_user.username.replace('@', '').lower()
+                            if username_clean not in hidden_contacts:
+                                filtered_partners.append(p)
+                        else:
+                            filtered_partners.append(p)  # Include if no username
                     else:
-                        filtered_partners.append(p)  # Include if no username
+                        filtered_partners.append(p)  # Include if no user_id
                 partners = filtered_partners
 
             # Don't filter by tier - everyone sees everyone
@@ -2552,16 +2556,19 @@ async def api_partners_handler(request):
                         user_task_titles.add(task.title.lower().strip())
 
                 # Get partner's tasks
-                partner_user = session_db.query(User).filter_by(id=p.user_id).first()
-                if partner_user:
-                    partner_tasks = session_db.query(Task).filter_by(user_id=partner_user.id).all()
-                    partner_task_titles = set()
-                    for task in partner_tasks:
-                        if task.title:
-                            partner_task_titles.add(task.title.lower().strip())
+                if hasattr(p, 'user_id') and p.user_id is not None:
+                    partner_user = session_db.query(User).filter_by(id=p.user_id).first()
+                    if partner_user:
+                        partner_tasks = session_db.query(Task).filter_by(user_id=partner_user.id).all()
+                        partner_task_titles = set()
+                        for task in partner_tasks:
+                            if task.title:
+                                partner_task_titles.add(task.title.lower().strip())
 
-                    common_task_titles = user_task_titles & partner_task_titles
-                    p.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
+                        common_task_titles = user_task_titles & partner_task_titles
+                        p.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
+                    else:
+                        p.common_tasks = None
                 else:
                     p.common_tasks = None
             else:
@@ -2569,10 +2576,12 @@ async def api_partners_handler(request):
 
         partners_data = []
         for p in partners:
+            if not hasattr(p, 'user_id') or p.user_id is None:
+                continue  # Skip partners without user_id
             # Получаем telegram_id пользователя из базы
             partner_user = session_db.query(User).filter_by(
                 id=p.user_id).first() if hasattr(
-                p, 'user_id') and p.user_id else None
+                p, 'user_id') and p.user_id is not None else None
 
             # Update avatar from Telegram if available
             photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
@@ -2614,7 +2623,7 @@ async def api_partners_handler(request):
                 logger.info(f"User {user_tier_str} can access all partners")
 
             # Only add contact if user can access it
-            if can_access:
+            if can_access and partner_user:
                 logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier_str} for user {user.username} with tier {user_tier_str} (can_access: {can_access})")
                 partners_data.append(
                     {
