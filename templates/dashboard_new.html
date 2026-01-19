@@ -2182,8 +2182,10 @@
         }
         
         function updateStats(tasks) {
-            const completed = tasks.filter(t => t.status === 'completed').length;
-            const total = tasks.length;
+            // Используем все задачи для статистики, независимо от фильтра
+            const allTasks = allTasksFromServer.length > 0 ? allTasksFromServer : tasks;
+            const completed = allTasks.filter(t => t.status === 'completed').length;
+            const total = allTasks.length;
             const percent = total > 0 ? (completed / total * 100) : 0;
             
             // Подсчет задач на сегодня и завтра
@@ -2196,7 +2198,7 @@
             
             // Функция для подсчета задач по дате
             function getTasksByDate(targetDate) {
-                return tasks.filter(t => {
+                return allTasks.filter(t => {
                     if (!t.reminder_time) return false;
                     const taskDate = new Date(t.reminder_time);
                     const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
@@ -2214,7 +2216,7 @@
             
             const todayTasks = getTasksByDate(today);
             const tomorrowTasks = getTasksByDate(tomorrow);
-            const laterTasks = tasks.filter(t => {
+            const laterTasks = allTasks.filter(t => {
                 if (!t.reminder_time) return false;
                 const taskDate = new Date(t.reminder_time);
                 const taskDay = new Date(taskDate.getFullYear(), taskDate.getMonth(), taskDate.getDate());
@@ -2227,7 +2229,7 @@
             
             // Найти ближайшее напоминание
             const nowTimestamp = Date.now(); // UTC milliseconds
-            const upcomingTasks = tasks.filter(t => t.reminder_time && t.status !== 'completed' && t.status !== 'skipped')
+            const upcomingTasks = allTasks.filter(t => t.reminder_time && t.status !== 'completed' && t.status !== 'skipped')
                 .map(t => ({...t, date: new Date(t.reminder_time)}))
                 .filter(t => t.date.getTime() > nowTimestamp) // Сравниваем UTC milliseconds
                 .sort((a, b) => a.date - b.date);
