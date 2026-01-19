@@ -2615,7 +2615,6 @@
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
-                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                     html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
                     html += '<button onclick="closeContactProfileModal()" class="rating-cancel-btn">В избранное</button>';
                     html += '</div>';
