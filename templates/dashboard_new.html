@@ -83,7 +83,7 @@
             }
         }
 
-        function filterContacts(filterType) {
+        async function filterContacts(filterType) {
             // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
             const profileContent = document.getElementById('profile-content');
             const profileBtn = document.getElementById('profile-toggle-btn');
@@ -127,15 +127,21 @@
                 updatePeople();
             } else {
                 // Перерендерим контакты с новым фильтром
-                applyContactFilter();
+                await applyContactFilter();
             }
         }
 
-        function applyContactFilter() {
+        async function applyContactFilter() {
             const peopleList = document.getElementById('people-list');
             if (!peopleList) return;
             
             const allCards = peopleList.querySelectorAll('.task-item');
+            
+            // Для favorite фильтра нужно загрузить избранные контакты, если они не загружены
+            if (currentContactFilter === 'favorite' && !cachedFavorites) {
+                cachedFavorites = await getFavoriteContactsFromServer();
+            }
+            
             allCards.forEach(card => {
                 let type = null;
                 if (card.classList.contains('contact-recommended')) {
@@ -170,7 +176,7 @@
 
         // Global variables
         let currentTaskFilter = 'all';
-        let currentContactFilter = 'favorite';
+        let currentContactFilter = 'recommended';
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
@@ -518,8 +524,8 @@
                         <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="contact-filter-btn active" data-filter="favorite" onclick="filterContacts('favorite')">Мои</button>
-                        <button class="contact-filter-btn" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
+                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Мои</button>
+                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
                         <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled title="Функция доступна на других тарифах"{% endif %}>Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
@@ -2706,7 +2712,7 @@
             // Инициализировать фильтр контактов - показать рекомендуемые по умолчанию
             // Принудительно применяем фильтр при загрузке
             currentContactFilter = null; // Сбрасываем, чтобы filterContacts сработал
-            filterContacts('recommended');
+            filterContacts('recommended').catch(console.error);
             
             // Обновлять время в шапке каждые 5 секунд
             updateHeaderTime();
@@ -2977,6 +2983,7 @@
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
+                                    const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
                                     if (partner.photo_url) {

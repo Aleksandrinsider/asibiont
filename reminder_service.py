@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from aiogram import Bot
+# from aiogram import Bot
 from models import Session
 from models import Task, User
 from config import DATABASE_URL
@@ -82,7 +82,7 @@ async def _send_delegation_check_job(task_id: int, delegator_id: int, recipient_
 
 
 class ReminderService:
-    def __init__(self, bot: Bot, ai_service=None):
+    def __init__(self, bot=None, ai_service=None):
         self.bot = bot
         # Import AI functions directly
         from ai_integration import generate_reminder, generate_result_check, generate_daily_report, generate_proactive_message, generate_overdue_reminder

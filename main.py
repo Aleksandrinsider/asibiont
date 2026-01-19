@@ -15,8 +15,8 @@ import jinja2
 import aiohttp_jinja2
 from aiohttp import web
 import aiohttp
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram import Bot, Dispatcher
+# from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+# from aiogram import Bot, Dispatcher
 import asyncio
 import logging
 import pytz
@@ -4195,15 +4195,15 @@ app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 
 # Setup for production
-dp = Dispatcher()
+# dp = Dispatcher()
 
 # Include router from handlers
-dp.include_router(handlers_router)
+# dp.include_router(handlers_router)
 
 # Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
-reminder_service = ReminderService(bot=bot)
+reminder_service = ReminderService(bot=bot if not LOCAL else None)
 logger.info("ReminderService initialized")
 
 # Start ReminderService on app startup
@@ -4224,14 +4224,15 @@ app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
 
 if bot:
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-    )
-    webhook_requests_handler.register(app, path="/webhook")
-    setup_application(app, dp, bot=bot)
+    # webhook_requests_handler = SimpleRequestHandler(
+    #     dispatcher=dp,
+    #     bot=bot,
+    # )
+    # webhook_requests_handler.register(app, path="/webhook")
+    # setup_application(app, dp, bot=bot)
+    logger.info("Bot created, but webhook setup disabled for local mode")
 else:
-    logger.warning("Bot not created, skipping webhook setup")
+    logger.warning("Bot not created or local mode, skipping webhook setup")
 
 logger.info("App created successfully")
 
