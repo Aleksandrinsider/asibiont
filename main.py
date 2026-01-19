@@ -2583,6 +2583,11 @@ async def api_partners_handler(request):
                 id=p.user_id).first() if hasattr(
                 p, 'user_id') and p.user_id is not None else None
 
+            # Skip if partner user not found
+            if not partner_user:
+                logger.warning(f"Partner user not found for profile user_id: {p.user_id}")
+                continue
+
             # Update avatar from Telegram if available
             photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
             if partner_user and partner_user.telegram_id and 'bot' in request.app:
@@ -2598,6 +2603,12 @@ async def api_partners_handler(request):
             # Check tier access - use user.subscription_tier for now since update script uses it
             user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
             partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
+
+            # Ensure tiers are proper enum values
+            if not hasattr(user_tier, 'value'):
+                user_tier = SubscriptionTier.BRONZE
+            if not hasattr(partner_tier, 'value'):
+                partner_tier = SubscriptionTier.BRONZE
 
             # Convert to string for comparison if needed
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
@@ -2742,6 +2753,12 @@ async def api_partners_handler(request):
             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
             delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.BRONZE
 
+            # Ensure tiers are proper enum values
+            if not hasattr(user_tier, 'value'):
+                user_tier = SubscriptionTier.BRONZE
+            if not hasattr(delegator_tier, 'value'):
+                delegator_tier = SubscriptionTier.BRONZE
+
             # Convert to string for comparison
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             delegator_tier_str = delegator_tier.value if hasattr(delegator_tier, 'value') else str(delegator_tier).lower()
@@ -2857,6 +2874,12 @@ async def api_partners_handler(request):
             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
             delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.BRONZE
 
+            # Ensure tiers are proper enum values
+            if not hasattr(user_tier, 'value'):
+                user_tier = SubscriptionTier.BRONZE
+            if not hasattr(delegatee_tier, 'value'):
+                delegatee_tier = SubscriptionTier.BRONZE
+
             # Convert to string for comparison
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             delegatee_tier_str = delegatee_tier.value if hasattr(delegatee_tier, 'value') else str(delegatee_tier).lower()
@@ -2960,6 +2983,12 @@ async def api_partners_handler(request):
                             # Check tier access
                             user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
                             favorite_tier = favorite_user.subscription_tier if favorite_user.subscription_tier else SubscriptionTier.BRONZE
+
+                            # Ensure tiers are proper enum values
+                            if not hasattr(user_tier, 'value'):
+                                user_tier = SubscriptionTier.BRONZE
+                            if not hasattr(favorite_tier, 'value'):
+                                favorite_tier = SubscriptionTier.BRONZE
 
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
                             favorite_tier_str = favorite_tier.value if hasattr(favorite_tier, 'value') else str(favorite_tier).lower()
