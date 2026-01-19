@@ -2356,6 +2356,7 @@
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
             if (progressEl) progressEl.style.width = percent + '%';
+            console.log('Updated DOM: completedEl =', completedEl ? completedEl.textContent : 'null', 'totalEl =', totalEl ? totalEl.textContent : 'null');
             
             // Общая статистика по всем задачам (включая завершенные из allTasksFromServer)
             const totalInProgress = allTasks.filter(t => (t.status === 'pending' || t.status === 'in_progress') && !t.overdue).length;
