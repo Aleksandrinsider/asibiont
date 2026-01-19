@@ -1081,33 +1081,16 @@
                             lastMessageCount += 2;
                         }
                     }, 500);
-                    // Обновить список задач с задержкой для синхронизации с бэкендом
+                    // Обновить список задач, профиль и контакты после отправки сообщения
                     setTimeout(async () => {
                         try {
                             await updateTasks();
                             await updateProfile();
                             await updatePeople();
-
-                            // Повторное обновление через 1 секунду
-                            setTimeout(async () => {
-                                try {
-                                    await updateTasks();
-
-                                } catch (e) {
-                                    console.error('Error in delayed update:', e);
-                                }
-                            }, 1000);
-                            // И еще одно через 3 секунды на случай медленной БД
-                            setTimeout(async () => {
-                                try {
-                                    await updateTasks();
-
-                                } catch (e) {
-                                    console.error('Error in third delayed update:', e);
-                                }
-                            }, 3000);
                         } catch (e) {
                             console.error('Error updating after message:', e);
+                        }
+                    }, 500);
                         }
                     }, 1000);
                 } else {
@@ -1772,6 +1755,9 @@
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
         let lastMessageCount = 0;
         const displayedMessageIds = new Set(); // Для отслеживания уже показанных сообщений
+        let lastTasksUpdate = 0;
+        let lastPeopleUpdate = 0;
+        let lastProfileUpdate = 0;
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -2933,6 +2919,14 @@
         }
         
         async function updateTasks() {
+            // Prevent too frequent updates (similar to updateChat)
+            const now = Date.now();
+            if (now - lastTasksUpdate < 1000) { // Minimum 1 second between updates
+                console.log('updateTasks: too frequent, skipping');
+                return;
+            }
+            lastTasksUpdate = now;
+            
             console.log('updateTasks called');
             try {
                 const response = await fetch('/api/tasks?t=' + Date.now(), {
@@ -2977,6 +2971,14 @@
         // Initial update only for logged in users
         
         async function updatePeople() {
+            // Prevent too frequent updates
+            const now = Date.now();
+            if (now - lastPeopleUpdate < 1000) { // Minimum 1 second between updates
+                console.log('updatePeople: too frequent, skipping');
+                return;
+            }
+            lastPeopleUpdate = now;
+            
             try {
                 console.log('Starting updatePeople');
                 // Получаем избранные контакты заранее
@@ -3541,6 +3543,14 @@
         let lastProfileData = null;
 
         async function updateProfile() {
+            // Prevent too frequent updates
+            const now = Date.now();
+            if (now - lastProfileUpdate < 1000) { // Minimum 1 second between updates
+                console.log('updateProfile: too frequent, skipping');
+                return;
+            }
+            lastProfileUpdate = now;
+            
             try {
                 const response = await fetch('/api/profile', {
                     credentials: 'include',
