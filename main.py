@@ -3833,9 +3833,10 @@ async def api_delegations_handler(request):
                 user_tz = pytz.UTC
 
         # Tasks delegated TO me
+        # Search for both @username and username formats
+        username_variants = [f"@{user.username}", user.username]
         incoming = session_db.query(Task).filter(
-            Task.delegated_to_username.ilike(user.username),
-            Task.delegation_status == 'pending'
+            Task.delegated_to_username.in_(username_variants)
         ).all()
         incoming_data = []
         for task in incoming:
