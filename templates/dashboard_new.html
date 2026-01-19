@@ -2270,7 +2270,6 @@
             if (progressEl) progressEl.style.width = percent + '%';
             
             // Общая статистика по всем задачам (включая завершенные из allTasksFromServer)
-            const allTasks = allTasksFromServer.length > 0 ? allTasksFromServer : tasks;
             const totalInProgress = allTasks.filter(t => t.status === 'pending' && !t.overdue).length;
             const totalOverdue = allTasks.filter(t => t.overdue === true).length;
             const totalCompleted = allTasks.filter(t => t.status === 'completed').length;
