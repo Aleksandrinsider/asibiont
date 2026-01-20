@@ -184,6 +184,14 @@ db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):
     db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
 
+# Import psycopg2 to ensure the driver is available
+try:
+    import psycopg2
+    psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
+    psycopg2.extensions.register_type(psycopg2.extensions.UNICODEARRAY)
+except ImportError:
+    pass  # psycopg2 not available, perhaps using SQLite
+
 # Increase connection pool size to handle more concurrent requests
 connect_args = {}
 if db_url and db_url.startswith('postgresql'):
