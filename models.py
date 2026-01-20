@@ -45,6 +45,7 @@ class Task(Base):
     description = Column(Text)
     due_date = Column(DateTime)
     status = Column(String(50), default='pending')  # pending, completed, etc.
+    priority = Column(String(20), default='medium')  # high, medium, low
     reminder_time = Column(DateTime)
     reminder_sent = Column(Boolean, default=False)
     result_check_sent = Column(Boolean, default=False)
