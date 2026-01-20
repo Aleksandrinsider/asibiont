@@ -1273,7 +1273,10 @@
                 const response = await fetch('/api/favorite_contacts', {
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return [];
+                if (response.status === 401) {
+                    console.warn('Not authorized to load favorites yet, will retry later');
+                    return [];
+                }
                 console.log('getFavoriteContactsFromServer response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
@@ -1291,7 +1294,10 @@
                 const response = await fetch('/api/blocked_contacts', {
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return [];
+                if (response.status === 401) {
+                    console.warn('Not authorized to load blocked contacts yet, will retry later');
+                    return [];
+                }
                 console.log('getBlockedContactsFromServer response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
@@ -1344,21 +1350,24 @@
         let cachedBlocked = null;
         let cachedPartnersData = null;
         
-        // Initialize cachedFavorites
-        (async () => {
+        // Initialize cachedFavorites and cachedBlocked after page load
+        // Use setTimeout to ensure session is established
+        setTimeout(async () => {
             try {
                 cachedFavorites = await getFavoriteContactsFromServer();
                 console.log('Initialized cachedFavorites:', cachedFavorites);
             } catch (error) {
                 console.error('Error initializing cachedFavorites:', error);
+                cachedFavorites = [];
             }
             try {
                 cachedBlocked = await getBlockedContactsFromServer();
                 console.log('Initialized cachedBlocked:', cachedBlocked);
             } catch (error) {
                 console.error('Error initializing cachedBlocked:', error);
+                cachedBlocked = [];
             }
-        })();
+        }, 1000);
 
         async function isFavoriteContact(username) {
             if (cachedFavorites === null) {
