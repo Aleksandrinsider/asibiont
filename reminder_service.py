@@ -325,7 +325,7 @@ class ReminderService:
                 db.close()
 
             logger.info(f"Generating reminder text for task {task_id}...")
-            reminder_text = await self.generate_reminder(user_id, task_title)
+            reminder_text = await self.generate_reminder(user_id, task_title, task_id)
             logger.info(f"Reminder text generated: {reminder_text[:100]}...")
             
             # Сохранить напоминание в историю чата (Redis)

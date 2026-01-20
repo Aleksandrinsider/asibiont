@@ -1289,21 +1289,57 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         return f"Ошибка: {str(e)} [v2]"
 
 
-async def generate_reminder(user_id, task_title):
-    """Генерирует текст напоминания о задаче"""
+async def generate_reminder(user_id, task_title, task_id=None):
+    """Генерирует текст напоминания о задаче с полным контекстом"""
     try:
-        # Получить память пользователя
-        user_memory = ""
-        if user_id:
-            db_session = Session()
-            user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            if user and user.memory:
-                try:
-                    decrypted = decrypt_data(user.memory)
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
-                except (Exception,):
-                    user_memory = ""
+        # Получить полную информацию о задаче и пользователе
+        db_session = Session()
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        
+        if not user:
             db_session.close()
+            return f"Привет! Напоминаю о задаче: {task_title}. Время начать!"
+        
+        # Получить задачу для дополнительного контекста
+        task = None
+        task_context = ""
+        if task_id:
+            task = db_session.query(Task).filter_by(id=task_id).first()
+            if task:
+                # Добавляем контекст о делегировании
+                if task.delegated_to_username:
+                    delegator = db_session.query(User).filter_by(id=task.user_id).first()
+                    delegator_name = f"@{delegator.username}" if delegator and delegator.username else "другой пользователь"
+                    task_context += f"\nЭто делегированная задача от {delegator_name}."
+                
+                # Описание задачи
+                if task.description:
+                    try:
+                        desc = decrypt_data(task.description)
+                        if desc:
+                            task_context += f"\nДетали: {desc}"
+                    except:
+                        pass
+        
+        # Получить память и профиль пользователя
+        user_memory = ""
+        profile_context = ""
+        if user.memory:
+            try:
+                decrypted = decrypt_data(user.memory)
+                user_memory = f"\nИнформация о пользователе: {decrypted}"
+            except:
+                pass
+        
+        # Получить профиль для контекста
+        profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile:
+            if profile.current_plans:
+                profile_context += f"\nТекущие планы пользователя: {profile.current_plans}"
+            if profile.goals:
+                profile_context += f"\nЦели: {profile.goals}"
+        
+        db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
@@ -1311,7 +1347,7 @@ async def generate_reminder(user_id, task_title):
         user_now = datetime.now(pytz.UTC)
         current_time_str = user_now.strftime("%H:%M")
         current_date_str = user_now.strftime("%Y-%m-%d")
-        user_username = "пользователь"
+        user_username = user.username if user.username else "пользователь"
         mentions_str = ""
 
         base_prompt = get_extended_system_prompt(
@@ -1324,26 +1360,37 @@ async def generate_reminder(user_id, task_title):
 
         # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:
         system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
-        system_prompt += "Будь мотивирующим и поддерживающим\n"
-        system_prompt += "Давай конкретные практические советы\n"
-        system_prompt += "Учитывай время дня и контекст пользователя\n"
-        system_prompt += "Предлагай 2-3 варианта подхода к задаче\n"
-        system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Завершай вопросом для продолжения диалога\n"
-        system_prompt += "Учитывай информацию из памяти пользователя\n"
+        system_prompt += "- Будь мотивирующим, энергичным и поддерживающим\n"
+        system_prompt += "- Давай 2-3 КОНКРЕТНЫХ практических совета как выполнить задачу эффективнее\n"
+        system_prompt += "- Учитывай время дня и контекст пользователя (планы, цели, интересы)\n"
+        system_prompt += "- Если задача делегированная - напомни о важности выполнения для команды\n"
+        system_prompt += "- 3-5 предложений, живое общение, персонализация\n"
+        system_prompt += "- Завершай мотивирующим вопросом или призывом к действию\n"
+        system_prompt += "- Используй эмодзи уместно (1-2 штуки максимум)\n"
+        system_prompt += "- НЕ используй шаблоны типа 'Все получится!' - будь оригинальным\n"
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
+        user_prompt = f"Сгенерируй персонализированное напоминание о задаче: '{task_title}'."
+        if task_context:
+            user_prompt += f"\n{task_context}"
+        if profile_context:
+            user_prompt += f"\n{profile_context}"
+        user_prompt += "\n\nДай конкретные практические советы, мотивируй, учитывай контекст пользователя."
+
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Сгенерируй персонализированное напоминание о задаче '{task_title}'. Учитывай контекст пользователя, давай практические советы, будь мотивирующим и заверши вопросом."},
+            {"role": "user", "content": user_prompt},
         ]
 
-        data = {"model": DEEPSEEK_MODEL, "messages": messages}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.8, "max_tokens": 300}
+        
+        logger.info(f"[REMINDER] Generating AI reminder for task_id={task_id}, user={user_id}")
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -1353,14 +1400,18 @@ async def generate_reminder(user_id, task_title):
                         content, datetime.now(pytz.UTC), datetime.now(pytz.UTC).strftime("%H:%M")
                     )
                     content = clean_technical_details(content)
-
+                    
+                    logger.info(f"[REMINDER] AI generated: {content[:100]}...")
                     return content
                 else:
-                    logger.error(f"Failed to generate reminder: status {response.status}")
-                    return f"Привет! Напоминаю о задаче: {task_title}. Как продвигается?"
+                    error_text = await response.text()
+                    logger.error(f"Failed to generate reminder: status {response.status}, error: {error_text}")
+                    # Более качественный fallback
+                    return f"Привет! ⏰ Напоминаю о задаче: {task_title}\n\nПора начинать! Как планируешь подойти к выполнению?"
     except Exception as e:
-        logger.error(f"Error in generate_reminder: {e}")
-        return f"Пора заняться задачей: {task_title}. Все получится! 💪"
+        logger.error(f"Error in generate_reminder: {e}", exc_info=True)
+        # Более качественный fallback с контекстом
+        return f"Привет! ⏰ Напоминаю о задаче: {task_title}\n\nВремя приступить к выполнению. Готов начать?"
 
 
 async def generate_result_check(user_id, task_title):

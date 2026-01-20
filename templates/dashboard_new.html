@@ -801,7 +801,9 @@
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                                 
                             </div>
-                            <p>Город: {{ profile.city or 'Не указан' }}</p>
+                            <p>Город: {{ profile.city or 'Не указан' }} 
+                                <button onclick="detectUserLocation()" style="background: none; border: none; cursor: pointer; padding: 0; color: #068487; font-size: 12px; text-decoration: underline; margin-left: 8px;" title="Определить автоматически по геолокации">📍 определить</button>
+                            </p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
                             <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
@@ -3857,6 +3859,88 @@
 
         // Global variable to store last profile data
         let lastProfileData = null;
+
+        async function detectUserLocation() {
+            try {
+                if (!navigator.geolocation) {
+                    showNotification('Геолокация не поддерживается вашим браузером', 'error');
+                    return;
+                }
+
+                showNotification('Определяю ваше местоположение...', 'info');
+
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        
+                        // Используем Nominatim OpenStreetMap для обратной геокодировки
+                        try {
+                            const response = await fetch(
+                                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=ru`,
+                                {
+                                    headers: {
+                                        'User-Agent': 'ASI-Biont-App'
+                                    }
+                                }
+                            );
+                            
+                            if (response.ok) {
+                                const data = await response.json();
+                                const city = data.address.city || data.address.town || data.address.village || data.address.state;
+                                
+                                if (city) {
+                                    // Отправляем сообщение агенту для обновления профиля
+                                    const updateResponse = await fetch('/api/send_message', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            message: `Обнови мой город на ${city}`
+                                        }),
+                                        credentials: 'include'
+                                    });
+                                    
+                                    if (updateResponse.ok) {
+                                        showNotification(`Город определён: ${city}`, 'success');
+                                        // Обновляем профиль и чат
+                                        await updateProfile();
+                                        await updateChat();
+                                    } else {
+                                        showNotification('Ошибка при обновлении города', 'error');
+                                    }
+                                } else {
+                                    showNotification('Не удалось определить город', 'error');
+                                }
+                            } else {
+                                showNotification('Ошибка геокодирования', 'error');
+                            }
+                        } catch (error) {
+                            console.error('Geocoding error:', error);
+                            showNotification('Ошибка при определении города', 'error');
+                        }
+                    },
+                    (error) => {
+                        let message = 'Ошибка при получении геолокации';
+                        if (error.code === 1) {
+                            message = 'Доступ к геолокации запрещён. Разрешите доступ в настройках браузера.';
+                        } else if (error.code === 2) {
+                            message = 'Местоположение недоступно';
+                        } else if (error.code === 3) {
+                            message = 'Таймаут при определении местоположения';
+                        }
+                        showNotification(message, 'error');
+                    },
+                    {
+                        enableHighAccuracy: false,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } catch (error) {
+                console.error('Location detection error:', error);
+                showNotification('Ошибка при определении местоположения', 'error');
+            }
+        }
 
         async function updateProfile() {
             // Prevent too frequent updates
