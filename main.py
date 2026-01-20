@@ -368,6 +368,15 @@ try:
                 logger.info("Migration: skipped_reason column added successfully")
             else:
                 logger.info("Migration: skipped_reason column already exists")
+            
+            # Migration for updated_at column
+            if 'updated_at' not in task_columns:
+                logger.info("Adding updated_at column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN updated_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: updated_at column added successfully")
+            else:
+                logger.info("Migration: updated_at column already exists")
 
         # Migration for login_count column in subscriptions table
         if 'subscriptions' in inspector.get_table_names():
