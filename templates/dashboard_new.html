@@ -2633,8 +2633,8 @@
                     const data = await response.json();
                     showNotification('Рекомендация отправлена!', 'success');
                     closeRatingModal();
-                    // Обновить контакты, чтобы отразить новый рейтинг
-                    await updatePeople();
+                    // Обновить контакты, чтобы отразить новый рейтинг (принудительно)
+                    await updatePeople(true);
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error || 'Не удалось отправить рекомендацию'}`, 'error');
@@ -3005,10 +3005,10 @@
 
         // Initial update only for logged in users
         
-        async function updatePeople() {
-            // Prevent too frequent updates
+        async function updatePeople(force = false) {
+            // Prevent too frequent updates (except when forced)
             const now = Date.now();
-            if (now - lastPeopleUpdate < 1000) { // Minimum 1 second between updates
+            if (!force && now - lastPeopleUpdate < 1000) { // Minimum 1 second between updates
                 console.log('updatePeople: too frequent, skipping');
                 return;
             }
@@ -3047,9 +3047,9 @@
                     const peopleList = document.getElementById('people-list');
                     if (!peopleList) return;
                     
-                    // Check if data changed to avoid unnecessary redraws
+                    // Check if data changed to avoid unnecessary redraws (unless forced)
                     const newDataString = JSON.stringify(data.partners);
-                    const dataChanged = cachedPartnersData !== newDataString;
+                    const dataChanged = force || cachedPartnersData !== newDataString;
                     cachedPartnersData = newDataString;
                     
                     if (data.partners && data.partners.length > 0) {
