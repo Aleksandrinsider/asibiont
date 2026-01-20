@@ -215,16 +215,21 @@ if db_url and db_url.startswith('postgresql'):
         "keepalives_count": 5
     }
 
-engine = create_engine(
-    db_url,
-    pool_size=20,           # Reduced for Railway limits
-    max_overflow=10,        # Reduced for Railway limits
-    pool_timeout=30,        # Timeout waiting for connection from pool
-    pool_recycle=1800,      # Recycle connections after 30 minutes
-    pool_pre_ping=True,     # Check connections before using
-    connect_args=connect_args,
-    echo=False              # Disable SQL logging for performance
-)
+try:
+    engine = create_engine(
+        db_url,
+        pool_size=20,           # Reduced for Railway limits
+        max_overflow=10,        # Reduced for Railway limits
+        pool_timeout=30,        # Timeout waiting for connection from pool
+        pool_recycle=1800,      # Recycle connections after 30 minutes
+        pool_pre_ping=True,     # Check connections before using
+        connect_args=connect_args,
+        echo=False              # Disable SQL logging for performance
+    )
+except Exception as e:
+    logger.error(f"Failed to create engine with db_url: {db_url}")
+    logger.error(f"Error: {e}")
+    raise
 
 def init_db():
     """Initialize database tables. Call this after ensuring DB is accessible."""
