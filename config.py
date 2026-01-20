@@ -22,7 +22,7 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
+    DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
     if not DATABASE_URL:
         # Fallback for Railway - use SQLite if no PostgreSQL configured
         import os
