@@ -189,6 +189,31 @@ async def delete_task(task_id=None, task_title=None, user_id=None, reason="", se
                 session.close()
             return "Задача не найдена."
 
+        # Check if task is delegated and notify delegator
+        is_delegated_to_me = (task.delegated_to_username and 
+                               user.username and 
+                               task.delegated_to_username.lower() == user.username.lower())
+        
+        delegator_notification_sent = False
+        if is_delegated_to_me and task.delegated_by:
+            # Get delegator info
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            if delegator:
+                try:
+                    from main import bot
+                    if bot:
+                        notification = f"⚠️ @{user.username} удалил(а) делегированную задачу: '{task.title}'\n"
+                        if reason:
+                            notification += f"Причина: {reason}"
+                        else:
+                            notification += "Причина не указана."
+                        
+                        import asyncio
+                        asyncio.create_task(bot.send_message(delegator.telegram_id, notification))
+                        delegator_notification_sent = True
+                except Exception as e:
+                    logger.error(f"Failed to notify delegator about task deletion: {e}")
+
         # Сохраняем информацию о удалении для аналитики
         deletion_info = f"Задача '{task.title}' удалена. Причина: {reason}"
         
@@ -209,7 +234,11 @@ async def delete_task(task_id=None, task_title=None, user_id=None, reason="", se
 
         if close_session:
             session.close()
-        return f"Задача '{task.title}' удалена."
+        
+        result_message = f"Задача '{task.title}' удалена."
+        if is_delegated_to_me and delegator_notification_sent:
+            result_message += " Делегатор уведомлен."
+        return result_message
 
     except Exception as e:
         if close_session:
@@ -1510,7 +1539,21 @@ def list_tasks(user_id=None, session=None):
         if delegated_to_me:
             result += "\nДелегированные мне:\n"
             for task in delegated_to_me[:5]:
-                result += f"- {task.title} (от @{task.delegated_by if hasattr(task, 'delegated_by') else 'неизвестно'})\n"
+                # Get delegator info
+                delegator_info = "неизвестно"
+                if task.delegated_by:
+                    delegator = session.query(User).filter_by(id=task.delegated_by).first()
+                    if delegator and delegator.username:
+                        delegator_info = f"@{delegator.username}"
+                
+                # Add status indicator
+                status_text = ""
+                if task.delegation_status == "pending":
+                    status_text = " [ОЖИДАЕТ ПРИНЯТИЯ]"
+                elif task.delegation_status == "accepted":
+                    status_text = " [ПРИНЯТО]"
+                
+                result += f"- {task.title} (от {delegator_info}){status_text}\n"
 
         # Brief recommendation
         if overdue_count > 0:
