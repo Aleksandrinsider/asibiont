@@ -47,7 +47,7 @@ if not REDIS_URL and not LOCAL:
 # Redis client
 if REDIS_URL:
     import redis.asyncio as redis
-    redis_client = redis.from_url(REDIS_URL, max_connections=5)  # Limit connections to avoid hitting limits
+    redis_client = redis.from_url(REDIS_URL)  # Use default connection settings
 else:
     redis_client = None
 
