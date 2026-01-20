@@ -3098,7 +3098,11 @@
             renderTaskGroups(initialTasks);
             {% endif %}
             updateTasks();
-            updatePeople();
+            
+            // Задержка перед загрузкой контактов, чтобы сессия успела установиться
+            setTimeout(() => {
+                updatePeople();
+            }, 500);
             
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
