@@ -3218,6 +3218,12 @@
         // Initial update only for logged in users
         
         async function updatePeople(force = false) {
+            // Проверить, залогинен ли пользователь
+            const isLoggedIn = document.querySelector('.main-layout') !== null;
+            if (!isLoggedIn) {
+                return;
+            }
+            
             // Prevent too frequent updates (except when forced)
             const now = Date.now();
             if (!force && now - lastPeopleUpdate < 1000) { // Minimum 1 second between updates
