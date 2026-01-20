@@ -250,51 +250,82 @@
             width: 100%;
             max-width: 1600px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            gap: 40px;
+            gap: 60px;
             position: relative;
             margin: 0 auto;
+            padding: 40px 20px;
         }
         
         .login-messages-sidebar {
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            width: 280px;
+            gap: 16px;
+            width: 300px;
             flex-shrink: 0;
         }
         
         .login-message-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 12px;
-            padding: 16px 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            font-size: 14px;
-            line-height: 1.5;
-            color: #374151;
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            padding: 12px 14px;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #59636E;
             position: relative;
             animation: fadeInUp 0.6s ease-out backwards;
-            border-left: 3px solid #0969DA;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: all 0.2s;
         }
         
-        .login-message-card:before {
-            content: '"';
-            position: absolute;
-            top: 8px;
-            left: 12px;
-            font-size: 32px;
-            color: #0969DA;
-            opacity: 0.3;
-            font-family: Georgia, serif;
+        .login-message-card:hover {
+            border-color: #959DA5;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
         }
         
-        .login-message-card.right {
-            border-left-color: #8250df;
+        /* Разное позиционирование для эффекта "в разнобой" */
+        .login-messages-sidebar.left .login-message-card:nth-child(1) { 
+            margin-left: 0;
+            animation-delay: 0.1s; 
+        }
+        .login-messages-sidebar.left .login-message-card:nth-child(2) { 
+            margin-left: 20px;
+            animation-delay: 0.3s; 
+        }
+        .login-messages-sidebar.left .login-message-card:nth-child(3) { 
+            margin-left: 10px;
+            animation-delay: 0.5s; 
+        }
+        .login-messages-sidebar.left .login-message-card:nth-child(4) { 
+            margin-left: 30px;
+            animation-delay: 0.7s; 
+        }
+        .login-messages-sidebar.left .login-message-card:nth-child(5) { 
+            margin-left: 15px;
+            animation-delay: 0.9s; 
         }
         
-        .login-message-card.right:before {
-            color: #8250df;
+        .login-messages-sidebar.right .login-message-card:nth-child(1) { 
+            margin-right: 20px;
+            animation-delay: 0.2s; 
+        }
+        .login-messages-sidebar.right .login-message-card:nth-child(2) { 
+            margin-right: 0;
+            animation-delay: 0.4s; 
+        }
+        .login-messages-sidebar.right .login-message-card:nth-child(3) { 
+            margin-right: 25px;
+            animation-delay: 0.6s; 
+        }
+        .login-messages-sidebar.right .login-message-card:nth-child(4) { 
+            margin-right: 10px;
+            animation-delay: 0.8s; 
+        }
+        .login-messages-sidebar.right .login-message-card:nth-child(5) { 
+            margin-right: 15px;
+            animation-delay: 1.0s; 
         }
         
         @keyframes fadeInUp {
@@ -307,17 +338,6 @@
                 transform: translateY(0);
             }
         }
-        
-        .login-messages-sidebar.left .login-message-card:nth-child(1) { animation-delay: 0.1s; }
-        .login-messages-sidebar.left .login-message-card:nth-child(2) { animation-delay: 0.3s; }
-        .login-messages-sidebar.left .login-message-card:nth-child(3) { animation-delay: 0.5s; }
-        .login-messages-sidebar.left .login-message-card:nth-child(4) { animation-delay: 0.7s; }
-        .login-messages-sidebar.left .login-message-card:nth-child(5) { animation-delay: 0.9s; }
-        .login-messages-sidebar.right .login-message-card:nth-child(1) { animation-delay: 0.2s; }
-        .login-messages-sidebar.right .login-message-card:nth-child(2) { animation-delay: 0.4s; }
-        .login-messages-sidebar.right .login-message-card:nth-child(3) { animation-delay: 0.6s; }
-        .login-messages-sidebar.right .login-message-card:nth-child(4) { animation-delay: 0.8s; }
-        .login-messages-sidebar.right .login-message-card:nth-child(5) { animation-delay: 1.0s; }
         
         @media (max-width: 1400px) {
             .login-messages-sidebar {
