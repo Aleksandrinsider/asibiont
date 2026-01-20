@@ -318,6 +318,13 @@ try:
             if 'used_by_users' not in columns:
                 logger.info("Adding used_by_users column to promo_codes")
                 session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
+            if 'used_by_user_id' not in columns:
+                logger.info("Adding used_by_user_id column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_user_id INTEGER"))
+            if 'used_at' not in columns:
+                logger.info("Adding used_at column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
+            session.commit()
 
             # Commit the column additions
             session.commit()

@@ -20,11 +20,6 @@ from .utils import (
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 
-try:
-    from improved_prompts_final import improved_classify_intent, get_optimized_prompt_final, PROMPTS_V2_AVAILABLE, improved_fallback, ai_classify_intent
-except ImportError:
-    PROMPTS_V2_AVAILABLE = False
-
 logger = logging.getLogger(__name__)
 
 add_task = handlers.add_task
@@ -759,17 +754,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # Classify user intent (use AI-powered version)
-        if PROMPTS_V2_AVAILABLE:
-            intent = await ai_classify_intent(clean_message, mentions_str, DEEPSEEK_API_KEY)
-            logger.info(f"[AI INTENT] User intent: {intent['type']} (confidence: {intent['confidence']})")
-        else:
-            # Fallback to basic intent if improved_prompts_final.py not available
-            intent = {"type": "conversation", "confidence": 0.5, "params": {}}
-            logger.warning("[FALLBACK] improved_prompts_final.py not available, using basic intent")
+        # Use basic intent classification
+        intent = {"type": "conversation", "confidence": 0.5, "params": {}}
+        logger.info("[INTENT] Using basic intent classification")
 
         # Special handling for delegation requests from frontend buttons
-        if not PROMPTS_V2_AVAILABLE and mentions and any(word in clean_message.lower() for word in ['делегировать', 'поручить', 'delegate', 'поручить']):
+        if mentions and any(word in clean_message.lower() for word in ['делегировать', 'поручить', 'delegate', 'поручить']):
             if 'список' in clean_message.lower() or 'активные' in clean_message.lower():
                 # Request to show task list for delegation
                 intent = {"type": "list_tasks", "confidence": 0.9, "params": {"for_delegation": True, "target_user": mentions[0]}}
@@ -780,37 +770,37 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}...")
 
         # Special handling for delete task requests
-        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['удали', 'удалить', 'delete', 'remove', 'сними', 'отмени']):
+        if any(word in clean_message.lower() for word in ['удали', 'удалить', 'delete', 'remove', 'сними', 'отмени']):
             if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
                 intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
                 logger.info(f"[DELETE TASK DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
 
         # Special handling for add task requests
-        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'add', 'create']):
+        if any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'add', 'create']):
             if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
                 intent = {"type": "add_task", "confidence": 0.9, "params": {}}
                 logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
 
         # Special handling for complete task requests
-        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['заверши', 'выполни', 'complete', 'finish', 'done']):
+        if any(word in clean_message.lower() for word in ['заверши', 'выполни', 'complete', 'finish', 'done']):
             if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
                 intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
                 logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
 
         # Special handling for list tasks requests
-        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['покажи', 'список', 'list', 'show']):
+        if any(word in clean_message.lower() for word in ['покажи', 'список', 'list', 'show']):
             if any(word in clean_message.lower() for word in ['задачи', 'задач', 'tasks']):
                 intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
                 logger.info(f"[LIST TASKS DETECTED] Setting intent to list_tasks for message: {clean_message[:50]}...")
 
         # Special handling for update profile requests
-        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['обнови', 'измени', 'добавь', 'update', 'change', 'add']):
+        if any(word in clean_message.lower() for word in ['обнови', 'измени', 'добавь', 'update', 'change', 'add']):
             if any(word in clean_message.lower() for word in ['профиль', 'профиле', 'profile']):
                 intent = {"type": "update_profile", "confidence": 0.9, "params": {}}
                 logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
 
         # Special handling for profile information sharing
-        if not PROMPTS_V2_AVAILABLE and any(word in clean_message.lower() for word in ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']):
+        if any(word in clean_message.lower() for word in ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']):
             if any(word in clean_message.lower() for word in ['директор', 'менеджер', 'разработчик', 'компания', 'фирма', 'director', 'manager', 'developer', 'company']):
                 intent = {"type": "profile_info", "confidence": 0.8, "params": {}}
                 logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
@@ -840,21 +830,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Ограничиваем до 2 последних
         last_responses = last_responses[-2:]
 
-        if PROMPTS_V2_AVAILABLE:
-            system_prompt = get_optimized_prompt_final(
-                user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, last_responses
-            )
-            logger.info("[PROMPTS V2] Using optimized prompt system")
-        else:
-            system_prompt = get_extended_system_prompt(
-                user_now,
-                current_time_str,
-                current_date_str,
-                user_username,
-                mentions_str,
-                user_memory,
-                subscription_tier=subscription_tier)
-            logger.info("[LEGACY] Using extended prompt system")
+        system_prompt = get_extended_system_prompt(
+            user_now,
+            current_time_str,
+            current_date_str,
+            user_username,
+            mentions_str,
+            user_memory,
+            subscription_tier=subscription_tier)
+        logger.info("[PROMPTS] Using extended prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -1077,15 +1061,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     content = post_process_response(content)
 
                     try:
-                        if PROMPTS_V2_AVAILABLE:
-                            fallback_result = improved_fallback(
-                                intent, tool_calls if 'tool_calls' in locals() else None,
-                                content, original_message, user_id
-                            )
-                            logger.info(f"[PROMPTS V2] Fallback actions: {len(fallback_result)}")
-                        else:
-                            fallback_result = smart_fallback_handler(original_message, mentions_str, user_id, content)
-                            logger.info(f"[LEGACY] Fallback actions: {len(fallback_result)}")
+                        fallback_result = smart_fallback_handler(original_message, content, user_id, intent)
+                        logger.info(f"[FALLBACK] Fallback actions completed")
                         logger.debug(
                             f"[FALLBACK] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
                         )
@@ -1272,10 +1249,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
                         if not content or len(content.strip()) < 10:
                             logger.warning("[FALLBACK] Empty or too short response, using fallback")
-                            if PROMPTS_V2_AVAILABLE:
-                                content = improved_fallback(intent, tool_calls, content, message, user_id)
-                            else:
-                                content = smart_fallback_handler(message, "", user_id, content)
+                            content = smart_fallback_handler(message, "", user_id, content)
 
                         # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
                         # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
@@ -1601,21 +1575,15 @@ async def generate_proactive_message(user_id):
                         last_responses.append(response_text)
         last_responses = last_responses[-2:]
 
-        if PROMPTS_V2_AVAILABLE:
-            system_prompt = get_optimized_prompt_final(
-                user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, last_responses
-            )
-            logger.info("[PROACTIVE] Using optimized prompt system")
-        else:
-            system_prompt = get_extended_system_prompt(
-                user_now,
-                current_time_str,
-                current_date_str,
-                user_username,
-                mentions_str,
-                user_memory,
-                subscription_tier=subscription_tier)
-            logger.info("[PROACTIVE] Using extended prompt system")
+        system_prompt = get_extended_system_prompt(
+            user_now,
+            current_time_str,
+            current_date_str,
+            user_username,
+            mentions_str,
+            user_memory,
+            subscription_tier=subscription_tier)
+        logger.info("[PROACTIVE] Using extended prompt system")
 
         # Создаем messages как в обычном чате, но с проактивным контекстом
         messages = [{"role": "system", "content": system_prompt}]
@@ -1827,7 +1795,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory) if PROMPTS_V2_AVAILABLE else get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
 
         # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
         system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
