@@ -1022,14 +1022,14 @@
     <div id="contact-profile-modal" class="rating-modal">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3>Профиль контакта</h3>
+                <h3 style="text-align: center; flex: 1; margin: 0;">Профиль контакта</h3>
                 <button onclick="closeContactProfileModal()" class="rating-close-btn">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
                     </svg>
                 </button>
             </div>
-            <div class="rating-modal-body" id="contact-profile-content">
+            <div class="rating-modal-body" id="contact-profile-content" style="text-align: center;">
                 <!-- Profile content will be loaded here -->
             </div>
         </div>
@@ -3071,11 +3071,6 @@
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
                     html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
-                    html += '<button onclick="closeContactProfileModal()" class="rating-cancel-btn" style="display: flex; align-items: center; gap: 6px;">';
-                    html += '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">';
-                    html += '<path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.293-.42.379-.63.481-.246.13-.496.246-.711.364a.75.75 0 0 1-.874-.22c-.175-.293-.43-.563-.757-.82-.162-.13-.324-.27-.47-.414a.75.75 0 0 1-.262-.625c0-.204.08-.378.231-.536.075-.08.168-.157.287-.229.252-.15.5-.3.732-.45.303-.192.465-.34.618-.466.245-.192.504-.412.75-.683C11.5 6.766 12.5 5.25 12.5 5.25c0-2.31-1.863-4-5.5-4z"/>';
-                    html += '</svg>';
-                    html += 'В избранное</button>';
                     html += '</div>';
                     
                     content.innerHTML = html;
