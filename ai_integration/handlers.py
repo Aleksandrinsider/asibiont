@@ -1851,6 +1851,10 @@ def update_profile(
     session=None,
 ):
     """Update user profile"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[UPDATE_PROFILE] Called with: skills={skills}, interests={interests}, goals={goals}, city={city}, user_id={user_id}")
+    
     if session is None:
         session = Session()
         close_session = True
@@ -1908,6 +1912,7 @@ def update_profile(
     if interests is not None:
         new_value, action, _ = update_list_field(profile.interests, interests, "interests")
         profile.interests = new_value
+        logger.info(f"[UPDATE_PROFILE] Interests updated: old={profile.interests}, new={new_value}, action={action}")
         if action:
             updates_made.append(action)
 
