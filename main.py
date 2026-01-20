@@ -723,6 +723,25 @@ def check_telegram_authentication(data):
         return False
 
 
+def render_template(template_name, context=None):
+    """Simple template rendering function"""
+    import os
+    template_path = os.path.join(os.path.dirname(__file__), 'templates', template_name)
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            html = f.read()
+        
+        if context:
+            for key, value in context.items():
+                placeholder = f'{{{key}}}'
+                html = html.replace(placeholder, str(value) if value is not None else '')
+        
+        return html
+    except Exception as e:
+        logger.error(f"Error rendering template {template_name}: {e}")
+        return f"<html><body><h1>Error loading page</h1><p>{str(e)}</p></body></html>"
+
+
 async def health_handler(request):
     """Health check endpoint for Railway"""
     return web.Response(text='OK', status=200)
@@ -748,9 +767,14 @@ async def login_handler(request):
             pass
 
     # Показываем страницу авторизации
-    bot_user = TELEGRAM_BOT_USERNAME.replace(
-        '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
-    return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
+    bot_username = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
+    auth_url = f"{WEB_APP_URL}/tg_auth" if WEB_APP_URL else "/tg_auth"
+    
+    html = render_template('index.html', {
+        'BOT_USERNAME': bot_username,
+        'AUTH_URL': auth_url
+    })
+    return web.Response(text=html, content_type='text/html')
 
 
 async def auth_handler(request):
@@ -882,19 +906,19 @@ async def dashboard_handler(request):
             logged_in = bool(user_id)
 
         if not logged_in:
-            # Show login page in dashboard
+            # Redirect to login page
             bot_user = TELEGRAM_BOT_USERNAME.replace(
                 '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
-            logger.info(f"Rendering login page with bot_username: {bot_user}, original: {TELEGRAM_BOT_USERNAME}")
-            return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
+            logger.info(f"User not logged in, redirecting to login page")
+            return web.HTTPFound('/')
 
         # Получить задачи пользователя
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
-                bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-                return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
+                logger.warning(f"User with telegram_id {user_id} not found")
+                return web.HTTPFound('/')
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
 
@@ -1292,16 +1316,41 @@ async def dashboard_handler(request):
 
         logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {user_subscription_tier.value if user_subscription_tier else 'BRONZE'}")
 
-        return web.json_response({
-            'logged_in': True,
-            'message': 'Web interface disabled. Please use Telegram bot.',
-            'user_id': user.telegram_id,
-            'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE'
+        # Calculate statistics
+        total_tasks = len(tasks)
+        completed_tasks = sum(1 for t in tasks if t.status == 'completed' or getattr(t, 'completed', False))
+        active_tasks = sum(1 for t in tasks if t.status in ['pending', 'in_progress'])
+        completion_rate = int((completed_tasks / total_tasks * 100)) if total_tasks > 0 else 0
+        
+        # Get subscription info
+        subscription_tier_name = user_subscription_tier.value.capitalize() if user_subscription_tier else 'Bronze'
+        subscription_expires = subscription.end_date.strftime('%d.%m.%Y') if subscription and subscription.end_date else 'Не активна'
+        
+        # User info
+        user_first_name = user.first_name or user.username or 'Пользователь'
+        user_name = f"{user.first_name or ''} {user.username or ''}" .strip() or f"User {user_id}"
+        user_initials = ''.join([n[0].upper() for n in user_name.split()[:2]]) if user_name else 'U'
+        user_photo_url = user.photo_url or ''
+        
+        bot_username = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
+        
+        html = render_template('dashboard_new.html', {
+            'USER_FIRST_NAME': user_first_name,
+            'USER_NAME': user_name,
+            'USER_INITIALS': user_initials,
+            'USER_PHOTO_URL': user_photo_url,
+            'BOT_USERNAME': bot_username,
+            'TOTAL_TASKS': total_tasks,
+            'COMPLETED_TASKS': completed_tasks,
+            'ACTIVE_TASKS': active_tasks,
+            'COMPLETION_RATE': completion_rate,
+            'SUBSCRIPTION_TIER': subscription_tier_name,
+            'SUBSCRIPTION_EXPIRES': subscription_expires
         })
+        return web.Response(text=html, content_type='text/html')
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
-        bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-        return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
+        return web.HTTPFound('/')
 
 
 async def tasks_handler(request):
@@ -4048,7 +4097,26 @@ async def extend_subscription_handler(request):
 # @aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
     """Страница выбора тарифа подписки"""
-    return web.Response(text='Web interface disabled. Please use Telegram bot for subscription management.', content_type='text/html')
+    session_obj = await get_session(request)
+    user_id = session_obj.get('user_id')
+    
+    # Get current tier if user is logged in
+    current_tier = ''
+    if user_id:
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if user and user.subscription_tier:
+                current_tier = user.subscription_tier.value
+        except Exception as e:
+            logger.error(f"Error getting subscription tier: {e}")
+        finally:
+            session_db.close()
+    
+    html = render_template('subscription_tiers.html', {
+        'CURRENT_TIER': current_tier
+    })
+    return web.Response(text=html, content_type='text/html')
 
 
 async def apply_promo_code_handler(request):

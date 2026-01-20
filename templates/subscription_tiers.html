@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asibiont - Тарифы</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        .header {
+            background: white;
+            border-bottom: 1px solid #e1e8ed;
+            padding: 20px 40px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .page-title {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .page-subtitle {
+            text-align: center;
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 40px;
+        }
+        .tiers {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        .tier-card {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+        }
+        .tier-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+        }
+        .tier-card.featured {
+            border: 3px solid #667eea;
+            position: relative;
+        }
+        .tier-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .tier-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .tier-price {
+            font-size: 48px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .tier-period {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .tier-features {
+            list-style: none;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        .tier-features li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            color: #555;
+        }
+        .tier-features li:last-child {
+            border-bottom: none;
+        }
+        .tier-features li::before {
+            content: "✓";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .subscribe-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .subscribe-btn:hover {
+            background: #5568d3;
+        }
+        .subscribe-btn.current {
+            background: #4CAF50;
+            cursor: default;
+        }
+        .back-link {
+            display: inline-block;
+            color: #667eea;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">🤖 Asibiont</div>
+    </div>
+
+    <div class="container">
+        <a href="/dashboard" class="back-link">← Назад к панели управления</a>
+        
+        <h1 class="page-title">Выберите тариф</h1>
+        <p class="page-subtitle">Получите доступ ко всем возможностям AI-ассистента</p>
+
+        <div class="tiers">
+            <div class="tier-card">
+                <div class="tier-name">🥉 Bronze</div>
+                <div class="tier-price">199₽</div>
+                <div class="tier-period">в месяц</div>
+                <ul class="tier-features">
+                    <li>До 50 задач в месяц</li>
+                    <li>Базовые напоминания</li>
+                    <li>AI-помощник</li>
+                    <li>Базовая аналитика</li>
+                </ul>
+                <button class="subscribe-btn" onclick="subscribe('bronze', 199)">Подключить Bronze</button>
+            </div>
+
+            <div class="tier-card featured">
+                <div class="tier-badge">Популярный</div>
+                <div class="tier-name">🥈 Silver</div>
+                <div class="tier-price">399₽</div>
+                <div class="tier-period">в месяц</div>
+                <ul class="tier-features">
+                    <li>До 200 задач в месяц</li>
+                    <li>Умные напоминания</li>
+                    <li>Продвинутый AI</li>
+                    <li>Делегирование задач</li>
+                    <li>Расширенная аналитика</li>
+                </ul>
+                <button class="subscribe-btn" onclick="subscribe('silver', 399)">Подключить Silver</button>
+            </div>
+
+            <div class="tier-card">
+                <div class="tier-name">🥇 Gold</div>
+                <div class="tier-price">799₽</div>
+                <div class="tier-period">в месяц</div>
+                <ul class="tier-features">
+                    <li>Безлимитные задачи</li>
+                    <li>Приоритетная поддержка</li>
+                    <li>Премиум AI-функции</li>
+                    <li>Командная работа</li>
+                    <li>Детальная аналитика</li>
+                    <li>Экспорт данных</li>
+                </ul>
+                <button class="subscribe-btn" onclick="subscribe('gold', 799)">Подключить Gold</button>
+            </div>
+        </div>
+
+        <div style="text-align: center; color: #666; margin-top: 40px;">
+            <p>Все платежи обрабатываются через безопасную систему ЮKassa</p>
+        </div>
+    </div>
+
+    <script>
+        function subscribe(tier, price) {
+            if (confirm(`Подключить тариф ${tier.toUpperCase()} за ${price}₽/месяц?`)) {
+                window.location.href = `/create_payment?tier=${tier}&amount=${price}`;
+            }
+        }
+
+        // Highlight current subscription
+        const currentTier = '{CURRENT_TIER}';
+        if (currentTier && currentTier !== 'None' && currentTier !== '') {
+            const buttons = document.querySelectorAll('.subscribe-btn');
+            buttons.forEach(btn => {
+                if (btn.textContent.toLowerCase().includes(currentTier.toLowerCase())) {
+                    btn.textContent = '✓ Текущий тариф';
+                    btn.classList.add('current');
+                    btn.disabled = true;
+                }
+            });
+        }
+    </script>
+</body>
+</html>
