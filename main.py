@@ -332,6 +332,15 @@ try:
                 logger.info("Migration: completed column added successfully")
             else:
                 logger.info("Migration: completed column already exists")
+            
+            # Migration for completed_at column
+            if 'completed_at' not in task_columns:
+                logger.info("Adding completed_at column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN completed_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: completed_at column added successfully")
+            else:
+                logger.info("Migration: completed_at column already exists")
 
         # Migration for login_count column in subscriptions table
         if 'subscriptions' in inspector.get_table_names():
