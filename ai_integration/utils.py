@@ -1471,6 +1471,9 @@ def post_process_response(content):
     # Заголовки: # ## ###
     content = re.sub(r'^#+\s*', '', content, flags=re.MULTILINE)
 
+    # Исправляем ошибки с временем типа "в 23:Пока" -> "в 23:03"
+    content = re.sub(r'(\d{1,2}:\d{1,2})([А-Яа-я])', r'\1 \2', content)
+
     # Удаляем пустые строки и лишние пробелы
     content = re.sub(r'\n\s*\n', '\n\n', content)
     content = content.strip()
