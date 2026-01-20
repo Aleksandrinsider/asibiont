@@ -24,7 +24,11 @@ if LOCAL:
 else:
     DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
     if not DATABASE_URL:
-        raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
+        # Fallback for Railway - use SQLite if no PostgreSQL configured
+        import os
+        db_path = os.path.join(os.path.dirname(__file__), "railway.db")
+        DATABASE_URL = f"sqlite:///{db_path}"
+        print("WARNING: No PostgreSQL configured, using SQLite fallback")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
