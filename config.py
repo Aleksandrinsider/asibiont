@@ -22,18 +22,7 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    # Log what we're getting from environment
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    
-    db_public = os.getenv("DATABASE_PUBLIC_URL")
-    db_private = os.getenv("DATABASE_URL")
-    
-    logger.info(f"DATABASE_PUBLIC_URL exists: {db_public is not None}, value: {db_public[:20] if db_public else 'None'}...")
-    logger.info(f"DATABASE_URL exists: {db_private is not None}, value: {db_private[:20] if db_private else 'None'}...")
-    
-    DATABASE_URL = db_public or db_private
+    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
     if not DATABASE_URL:
         raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
 
