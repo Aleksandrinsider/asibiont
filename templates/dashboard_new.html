@@ -238,15 +238,95 @@
             height: 100%;
             background-image: url('/static/asibiont.svg');
             background-size: 45%;
-
-        .container {
-            position: relative;
-        }
             background-position: calc(100% - 50px) center;
             background-repeat: no-repeat;
             opacity: 0.08;
             z-index: -1;
             pointer-events: none;
+        }
+        
+        /* Стили для сообщений-болей на странице авторизации */
+        .login-page-wrapper {
+            width: 100%;
+            max-width: 1600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            position: relative;
+            margin: 0 auto;
+        }
+        
+        .login-messages-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 280px;
+            flex-shrink: 0;
+        }
+        
+        .login-message-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            font-size: 14px;
+            line-height: 1.5;
+            color: #374151;
+            position: relative;
+            animation: fadeInUp 0.6s ease-out backwards;
+            border-left: 3px solid #0969DA;
+        }
+        
+        .login-message-card:before {
+            content: '"';
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            font-size: 32px;
+            color: #0969DA;
+            opacity: 0.3;
+            font-family: Georgia, serif;
+        }
+        
+        .login-message-card.right {
+            border-left-color: #8250df;
+        }
+        
+        .login-message-card.right:before {
+            color: #8250df;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .login-messages-sidebar.left .login-message-card:nth-child(1) { animation-delay: 0.1s; }
+        .login-messages-sidebar.left .login-message-card:nth-child(2) { animation-delay: 0.3s; }
+        .login-messages-sidebar.left .login-message-card:nth-child(3) { animation-delay: 0.5s; }
+        .login-messages-sidebar.left .login-message-card:nth-child(4) { animation-delay: 0.7s; }
+        .login-messages-sidebar.left .login-message-card:nth-child(5) { animation-delay: 0.9s; }
+        .login-messages-sidebar.right .login-message-card:nth-child(1) { animation-delay: 0.2s; }
+        .login-messages-sidebar.right .login-message-card:nth-child(2) { animation-delay: 0.4s; }
+        .login-messages-sidebar.right .login-message-card:nth-child(3) { animation-delay: 0.6s; }
+        .login-messages-sidebar.right .login-message-card:nth-child(4) { animation-delay: 0.8s; }
+        .login-messages-sidebar.right .login-message-card:nth-child(5) { animation-delay: 1.0s; }
+        
+        @media (max-width: 1400px) {
+            .login-messages-sidebar {
+                display: none;
+            }
+        }
+        
+        .container {
+            position: relative;
         }
         
         @keyframes pulse {
@@ -467,62 +547,103 @@
 
     <div class="container" {% if not logged_in %}style="margin-top: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh;"{% endif %}>
         {% if not logged_in %}
-        <div class="welcome-section" style="width: 100%; display: flex; justify-content: center;">
-            <div class="welcome-content" style="border: 1px solid rgba(209, 217, 224, 0.2); border-radius: 6px; background: transparent; backdrop-filter: blur(3px); max-width: 900px; padding: 40px;">
-                <div style="text-align: left; margin-bottom: 24px;">
-                    <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">ASI Biont</h1>
-                    <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; line-height: 1.5;">Инновационная платформа от лаборатории искусственного интеллекта ASI Biont для поиска единомышленников через ваши дела. Система анализирует текущие задачи и цели, используя искусственный интеллект для глубокого понимания ваших интересов и приоритетов. Автоматически находит людей в вашем городе с похожими задачами и целями, сравнивая профили и обеспечивая релевантные связи для совместной работы и общения. Мгновенно реагирует на ситуацию и предлагает подходящих вам людей в бизнес-проект, спортивную тренировку или просто прогулку в кино.</p>
-                    <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; line-height: 1.5;">Умный AI-агент запоминает контекст жизни, связывает задачи, понимает голосовые сообщения и предлагает оптимальные шаги с умными напоминаниями. Панель управления объединяет все: задачи, людей, историю взаимодействий и статистику. Следите за дедлайнами и делегируйте через чат с AI.</p>
-                    <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Ваши данные под надежной защитой: end-to-end шифрование, поиск людей по ключевым словам без раскрытия реальных задач. Полный контроль конфиденциальности и доступа к вашей информации.</p>
+        <div class="login-page-wrapper">
+            <!-- Левая колонка с сообщениями -->
+            <div class="login-messages-sidebar left">
+                <div class="login-message-card">
+                    Хочу привести форму в порядок, но не знаю с чего начать
                 </div>
-                
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 24px;">
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                        <span style="color: #374151; font-size: 14px;">🔍 Поиск единомышленников по задачам</span>
+                <div class="login-message-card">
+                    Срочно ищу программистов и дизайнеров в стартап
+                </div>
+                <div class="login-message-card">
+                    Постоянно забываю про важные встречи и дедлайны
+                </div>
+                <div class="login-message-card">
+                    Переехал в новый город, не знаю где найти друзей
+                </div>
+                <div class="login-message-card">
+                    Нужен партнер для запуска бизнеса, но не знаю где искать
+                </div>
+            </div>
+            
+            <!-- Центральный контент -->
+            <div class="welcome-section" style="width: 100%; max-width: 900px; display: flex; justify-content: center;">
+                <div class="welcome-content" style="border: 1px solid rgba(209, 217, 224, 0.2); border-radius: 6px; background: transparent; backdrop-filter: blur(3px); max-width: 900px; padding: 40px;">
+                    <div style="text-align: left; margin-bottom: 24px;">
+                        <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">ASI Biont</h1>
+                        <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; line-height: 1.5;">Инновационная платформа от лаборатории искусственного интеллекта ASI Biont для поиска единомышленников через ваши дела. Система анализирует текущие задачи и цели, используя искусственный интеллект для глубокого понимания ваших интересов и приоритетов. Автоматически находит людей в вашем городе с похожими задачами и целями, сравнивая профили и обеспечивая релевантные связи для совместной работы и общения. Мгновенно реагирует на ситуацию и предлагает подходящих вам людей в бизнес-проект, спортивную тренировку или просто прогулку в кино.</p>
+                        <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; line-height: 1.5;">Умный AI-агент запоминает контекст жизни, связывает задачи, понимает голосовые сообщения и предлагает оптимальные шаги с умными напоминаниями. Панель управления объединяет все: задачи, людей, историю взаимодействий и статистику. Следите за дедлайнами и делегируйте через чат с AI.</p>
+                        <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Ваши данные под надежной защитой: end-to-end шифрование, поиск людей по ключевым словам без раскрытия реальных задач. Полный контроль конфиденциальности и доступа к вашей информации.</p>
                     </div>
                     
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                        <span style="color: #374151; font-size: 14px;">🤝 AI-анализ совместимости для построения связей</span>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 24px;">
+                        <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
+                            <span style="color: #374151; font-size: 14px;">🔍 Поиск единомышленников по задачам</span>
+                        </div>
+                        
+                        <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
+                            <span style="color: #374151; font-size: 14px;">🤝 AI-анализ совместимости для построения связей</span>
+                        </div>
+                        
+                        <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
+                            <span style="color: #374151; font-size: 14px;">🔒 Защита и контроль приватности</span>
+                        </div>
+
+                        <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
+                            <span style="color: #374151; font-size: 14px;">⏰ Умные напоминания о дедлайнах</span>
+                        </div>
+
+                        <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
+                            <span style="color: #374151; font-size: 14px;">🎤 Голосовые сообщения и AI-чат</span>
+                        </div>
+
+                        <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
+                            <span style="color: #374151; font-size: 14px;">📊 История взаимодействий и статистика</span>
+                        </div>
                     </div>
                     
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                        <span style="color: #374151; font-size: 14px;">🔒 Защита и контроль приватности</span>
+                    <div style="text-align: center;">
+                        <p style="margin: 0 0 16px 0; color: #374151; font-size: 14px;">Войдите через Telegram</p>
+                        <div style="display: flex; justify-content: center;">
+                            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                                    data-telegram-login="{{ bot_username }}" 
+                                    data-size="large" 
+                                    data-onauth="onTelegramAuth(user)" 
+                                    data-request-access="write"></script>
+                        </div>
                     </div>
-
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                        <span style="color: #374151; font-size: 14px;">⏰ Умные напоминания о дедлайнах</span>
-                    </div>
-
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                        <span style="color: #374151; font-size: 14px;">🎤 Голосовые сообщения и AI-чат</span>
-                    </div>
-
-                    <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                        <span style="color: #374151; font-size: 14px;">📊 История взаимодействий и статистика</span>
-                    </div>
-                </div>
-                
-                <div style="text-align: center;">
-                    <p style="margin: 0 0 16px 0; color: #374151; font-size: 14px;">Войдите через Telegram</p>
-                    <div style="display: flex; justify-content: center;">
-                        <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                                data-telegram-login="{{ bot_username }}" 
-                                data-size="large" 
-                                data-onauth="onTelegramAuth(user)" 
-                                data-request-access="write"></script>
-                    </div>
-                </div>
-                <script type="text/javascript">
-                    function onTelegramAuth(user) {
-                        // Build query string from user data
-                        const params = new URLSearchParams();
-                        for (const key in user) {
-                            params.append(key, user[key]);
+                    <script type="text/javascript">
+                        function onTelegramAuth(user) {
+                            // Build query string from user data
+                            const params = new URLSearchParams();
+                            for (const key in user) {
+                                params.append(key, user[key]);
+                            }
+                            // Redirect to auth handler with user data
+                            window.location.href = '/tg_auth?' + params.toString();
                         }
-                        // Redirect to auth handler with user data
-                        window.location.href = '/tg_auth?' + params.toString();
-                    }
-                </script>
+                    </script>
+                </div>
+            </div>
+            
+            <!-- Правая колонка с сообщениями -->
+            <div class="login-messages-sidebar right">
+                <div class="login-message-card right">
+                    Не с кем сходить вечером в кино или на тренировку
+                </div>
+                <div class="login-message-card right">
+                    Задач много, но всё время откладываю их на потом
+                </div>
+                <div class="login-message-card right">
+                    Ищу ментора в маркетинге, но нет связей в этой сфере
+                </div>
+                <div class="login-message-card right">
+                    Хочу делегировать задачи, но боюсь потерять контроль
+                </div>
+                <div class="login-message-card right">
+                    Нужен соосновать для проекта с похожими ценностями
+                </div>
             </div>
         </div>
         {% else %}
