@@ -196,18 +196,23 @@ except ImportError:
 connect_args = {}
 if db_url and db_url.startswith('postgresql'):
     connect_args = {
-        "connect_timeout": 10,  # 10 seconds timeout for PostgreSQL
-        "options": "-c statement_timeout=10000"  # 10 seconds statement timeout
+        "connect_timeout": 30,  # 30 seconds timeout for PostgreSQL (increased)
+        "options": "-c statement_timeout=30000",  # 30 seconds statement timeout
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5
     }
 
 engine = create_engine(
     db_url,
-    pool_size=50,           # Increased from 20
-    max_overflow=50,        # Increased from 30
-    pool_timeout=60,        # Increased from default 30
-    pool_recycle=3600,      # Recycle connections after 1 hour
+    pool_size=20,           # Reduced for Railway limits
+    max_overflow=10,        # Reduced for Railway limits
+    pool_timeout=30,        # Timeout waiting for connection from pool
+    pool_recycle=1800,      # Recycle connections after 30 minutes
     pool_pre_ping=True,     # Check connections before using
-    connect_args=connect_args
+    connect_args=connect_args,
+    echo=False              # Disable SQL logging for performance
 )
 
 def init_db():
