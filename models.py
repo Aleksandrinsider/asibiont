@@ -45,6 +45,8 @@ class Task(Base):
     description = Column(Text)
     due_date = Column(DateTime)
     status = Column(String(50), default='pending')  # pending, completed, etc.
+    completed = Column(Boolean, default=False)  # Task completion status
+    completed_at = Column(DateTime, nullable=True)  # When task was marked as completed
     priority = Column(String(20), default='medium')  # high, medium, low
     reminder_time = Column(DateTime)
     reminder_sent = Column(Boolean, default=False)
@@ -56,10 +58,13 @@ class Task(Base):
     delegation_details = Column(Text)  # Additional details about delegation
     completion_notes = Column(Text)  # Notes about task completion/result
     actual_completion_time = Column(DateTime)  # When task was actually completed
+    skipped = Column(Boolean, default=False)  # Task was skipped/cancelled
+    skipped_at = Column(DateTime, nullable=True)  # When task was skipped
     skipped_reason = Column(String(255))  # Reason if task was skipped/cancelled
     overdue_reminders_sent = Column(Integer, default=0)  # Number of overdue reminders sent
     recommendations = Column(Text)  # JSON array of AI-generated recommendations
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), onupdate=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])
 
@@ -153,11 +158,9 @@ class PromoCode(Base):
     is_used = Column(Boolean, default=False)  # Whether the code has been used (for single-use codes)
     used_count = Column(Integer, default=0)  # Number of times used
     used_by_users = Column(Text, default='[]')  # JSON list of user IDs who used this code
-    used_by_user_id = Column(Integer, ForeignKey('users.id'))  # User who used it (for single-use) - deprecated
-    used_at = Column(DateTime)  # When it was used (for single-use) - deprecated
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
-    used_by_user = relationship("User", backref="used_promo_codes")
+    # No relationship needed for used_by_users since it's stored as JSON
 
 
 class PaymentHistory(Base):

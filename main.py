@@ -11,8 +11,8 @@ from redis.asyncio import Redis
 import os
 from sqlalchemy import text, or_, and_
 import re
-import jinja2
-import aiohttp_jinja2
+# import jinja2
+# import aiohttp_jinja2
 from aiohttp import web
 import aiohttp
 import asyncio
@@ -358,170 +358,7 @@ except Exception as e:
 # Subscription restoration removed for production
 
 
-# Test functions disabled in production mode
-# def add_test_sport_users():
-#     pass
-# def ensure_sport_interest():
-#     pass
-# def create_test_promo_codes():
-#     pass
-
-# IMPORTANT: Test users creation disabled to prevent @sportfan3 recreation
-# The function below created test users including @sportfan3 (GOLD tier)
-# which caused issues in production. It's now completely disabled.
-"""
-def check_database_connection():
-    \"\"\"Добавляет тестовых пользователей с интересами 'спорт' если их еще нет\"\"\"
-    try:
-        session = Session()
-
-        test_users_data = [{'telegram_id': 111111,
-                            'username': 'sportfan1',
-                            'first_name': 'Алексей',
-                            'interests': 'спорт, бег, фитнес',
-                            'city': 'Москва',
-                            'company': 'Фитнес-клуб',
-                            'position': 'Тренер',
-                            'subscription_tier': SubscriptionTier.BRONZE},
-                           {'telegram_id': 222222,
-                            'username': 'sportfan2',
-                            'first_name': 'Дмитрий',
-                            'interests': 'спорт, футбол, плавание',
-                            'city': 'Санкт-Петербург',
-                            'company': 'Спортивная школа',
-                            'position': 'Инструктор',
-                            'subscription_tier': SubscriptionTier.SILVER},
-                           {'telegram_id': 333333,
-                            'username': 'sportfan3',
-                            'first_name': 'Михаил',
-                            'interests': 'спорт, теннис, йога',
-                            'city': 'Москва',
-                            'company': 'Теннисный центр',
-                            'position': 'Спортсмен',
-                            'subscription_tier': SubscriptionTier.GOLD},
-                           {'telegram_id': 444444,
-                            'username': 'sportfan4',
-                            'first_name': 'Елена',
-                            'interests': 'спорт, волейбол, танцы',
-                            'city': 'Казань',
-                            'company': 'Спортивный комплекс',
-                            'position': 'Администратор',
-                            'subscription_tier': SubscriptionTier.BRONZE},
-                           {'telegram_id': 555555,
-                            'username': 'sportfan5',
-                            'first_name': 'Анна',
-                            'interests': 'спорт, гимнастика, пилатес',
-                            'city': 'Москва',
-                            'company': 'Студия пилатес',
-                            'position': 'Инструктор',
-                            'subscription_tier': SubscriptionTier.SILVER}]
-
-        # Проверяем есть ли хоть один тестовый пользователь
-        test_ids = [111111, 222222, 333333, 444444, 555555]
-        existing_count = session.query(User).filter(User.telegram_id.in_(test_ids)).count()
-
-        if existing_count == len(test_ids):
-            logger.info(f"All {len(test_ids)} test sport users already exist")
-            session.close()
-            return
-
-        logger.info(f"Found {existing_count}/{len(test_ids)} test users, adding missing ones...")
-
-        added_count = 0
-        for user_data in test_users_data:
-            existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
-            if not existing_user:
-                # Создаем пользователя
-                new_user = User(
-                    telegram_id=user_data['telegram_id'],
-                    username=user_data['username'],
-                    first_name=user_data['first_name'],
-                    timezone='Europe/Moscow',
-                    subscription_tier=user_data['subscription_tier']
-                )
-                session.add(new_user)
-                session.flush()
-
-                # Создаем профиль
-                profile = UserProfile(
-                    user_id=new_user.id,
-                    interests=user_data['interests'],
-                    city=user_data['city'],
-                    company=user_data['company'],
-                    position=user_data['position'],
-                    average_rating=4.5,
-                    rating_count=10
-                )
-                session.add(profile)
-                added_count += 1
-                logger.info(f"Added test user: {user_data['username']} (telegram_id: {user_data['telegram_id']})")
-            else:
-                logger.info(f"Test user {user_data['username']} already exists")
-
-        session.commit()
-        logger.info(f"Successfully added {added_count} test sport users")
-        session.close()
-    except Exception as e:
-        logger.error(f"Failed to add test sport users: {e}", exc_info=True)
-\"\"\"
-
-# All test functions below are disabled in production
-\"\"\"
-def ensure_sport_interest():
-    \"\"\"Добавляет 'спорт' к интересам всех пользователей если его нет\"\"\"
-    try:
-        session = Session()
-        profiles = session.query(UserProfile).all()
-        updated = 0
-        for profile in profiles:
-            if profile.interests:
-                interests_lower = profile.interests.lower()
-                if 'спорт' not in interests_lower:
-                    profile.interests = profile.interests + ', спорт'
-                    updated += 1
-            else:
-                profile.interests = 'спорт'
-                updated += 1
-
-        if updated > 0:
-            session.commit()
-            logger.info(f"Added 'спорт' interest to {updated} user profiles")
-        else:
-            logger.info("All users already have 'спорт' interest")
-        session.close()
-    except Exception as e:
-        logger.error(f"Failed to add sport interest: {e}")
-
-
-# def create_test_promo_codes():
-#     # DOCSTRING: Создает тестовые промокоды
-#     try:
-#         session = Session()
-
-#         # Проверяем, есть ли уже тестовый промокод
-#         existing_promo = session.query(PromoCode).filter_by(code='TESTBRONZE').first()
-#         if existing_promo:
-#             logger.info("Test promo code TESTBRONZE already exists")
-#             session.close()
-#             return
-
-#         # Создаем тестовый промокод на бронзу на месяц, действующий год
-#         expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
-#         test_promo = PromoCode(
-#             code='TESTBRONZE',
-#             tier=SubscriptionTier.BRONZE,
-#             duration_days=30,
-#             expires_at=expires_at
-#         )
-#         session.add(test_promo)
-#         session.commit()
-#         logger.info("Created test promo code: TESTBRONZE (Bronze for 30 days, expires in 1 year)")
-#         session.close()
-#     except Exception as e:
-#         logger.error(f"Failed to create test promo codes: {e}")
-# # """
-
-# Test database connection before starting
+# Database connection test before starting
 try:
     test_session = Session()
     test_session.execute(text('SELECT 1'))
@@ -660,9 +497,7 @@ try:
                         title="Подготовить презентацию для клиента",
                         description="Создать презентацию о наших услугах",
                         status="pending",
-                        priority="medium",
                         created_at=now,
-                        updated_at=now,
                         delegated_to_username=user_1001.username,
                         delegation_status="accepted"
                     )
@@ -676,9 +511,7 @@ try:
                         title="Проверить код на ошибки",
                         description="Ревью кода для нового модуля",
                         status="pending",
-                        priority="high",
                         created_at=now,
-                        updated_at=now,
                         delegated_to_username=user_1001.username,
                         delegation_status="accepted"
                     )
@@ -692,9 +525,7 @@ try:
                         title="Организовать встречу с командой",
                         description="Запланировать еженедельную встречу",
                         status="pending",
-                        priority="low",
                         created_at=now,
-                        updated_at=now,
                         delegated_to_username=user_1002.username,
                         delegation_status="accepted"
                     )
@@ -863,14 +694,7 @@ async def login_handler(request):
     # Показываем страницу авторизации
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
-    return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-        'logged_in': False,
-        'bot_username': bot_user,
-        'current_date': '',
-        'current_time': '',
-        'formatted_end_date': None,
-        'timestamp': 1768857743
-    })
+    return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
 
 
 async def auth_handler(request):
@@ -972,7 +796,7 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
-@aiohttp_jinja2.template('dashboard_new.html')
+# @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     logger.info(f"Dashboard handler called for path: {request.path}")
     session = await get_session(request)
@@ -1006,14 +830,7 @@ async def dashboard_handler(request):
             bot_user = TELEGRAM_BOT_USERNAME.replace(
                 '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
             logger.info(f"Rendering login page with bot_username: {bot_user}, original: {TELEGRAM_BOT_USERNAME}")
-            return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-                'logged_in': False,
-                'bot_username': bot_user,
-                'current_date': '',
-                'current_time': '',
-                'formatted_end_date': None,
-                'timestamp': 1768857743
-            })
+            return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
 
         # Получить задачи пользователя
         session_db = Session()
@@ -1021,14 +838,7 @@ async def dashboard_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-                return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-                    'logged_in': False,
-                    'bot_username': bot_user,
-                    'current_date': '',
-                    'current_time': '',
-                    'formatted_end_date': None,
-                    'timestamp': 1768857743
-                })
+                return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
 
@@ -1426,41 +1236,16 @@ async def dashboard_handler(request):
 
         logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {user_subscription_tier.value if user_subscription_tier else 'BRONZE'}")
 
-        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+        return web.json_response({
             'logged_in': True,
-            'tasks': tasks_dict,
-            'user': user,
-            'profile': profile,
-            'interactions': interactions,
-            'partners': partners,
-            'delegating_to_me': delegating_to_me,
-            'delegating_by_me': delegating_by_me,
-            'blocked_contacts': blocked_contacts,
-            'subscription': subscription,
-            'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE',
-            'total_tasks': total_tasks,
-            'completed_tasks': completed_tasks,
-            'pending_tasks': pending_tasks,
-            'skipped_tasks': skipped_tasks,
-            'current_date': current_date,
-            'current_time': current_time,
-            'formatted_end_date': formatted_end_date,
-            'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': 1768857743,
-            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-            'user_avatar_url': user_avatar_url
+            'message': 'Web interface disabled. Please use Telegram bot.',
+            'user_id': user.telegram_id,
+            'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE'
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
         bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-            'logged_in': False,
-            'bot_username': bot_user,
-            'current_date': '',
-            'current_time': '',
-            'formatted_end_date': None,
-            'timestamp': 1768857743
-        })
+        return web.Response(text=f'Web interface disabled. Please use Telegram bot @{bot_user}', content_type='text/html')
 
 
 async def tasks_handler(request):
@@ -2289,7 +2074,7 @@ app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+# aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 
 
 async def yookassa_webhook(request):
@@ -3709,14 +3494,6 @@ async def on_startup(app):
     set_redis_client(redis_client)
     logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
 
-
-async def on_shutdown(app):
-    """Закрываем Redis клиент при завершении приложения"""
-    global redis_client
-    if redis_client:
-        await redis_client.close()
-        logger.info("Redis client closed")
-
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
         # Get webhook URL from environment variable or construct from Railway variables
@@ -3748,7 +3525,13 @@ async def on_shutdown(app):
     await init_handlers_redis(redis_client)
     logger.info("Handlers Redis initialized")
 
-    # ReminderService will be started later in start_reminder_service
+
+async def on_shutdown(app):
+    """Закрываем Redis клиент при завершении приложения"""
+    global redis_client
+    if redis_client:
+        await redis_client.close()
+        logger.info("Redis client closed")
 
 
 async def api_tasks_handler(request):
@@ -4206,10 +3989,10 @@ async def extend_subscription_handler(request):
     return web.HTTPFound('/subscription_tiers')
 
 
-@aiohttp_jinja2.template('subscription_tiers.html')
+# @aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
     """Страница выбора тарифа подписки"""
-    return {}
+    return web.Response(text='Web interface disabled. Please use Telegram bot for subscription management.', content_type='text/html')
 
 
 async def apply_promo_code_handler(request):
@@ -4382,7 +4165,7 @@ app.router.add_get('/clear_redis', clear_redis_handler)
 app.router.add_get('/admin/users', admin_users_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
-app.router.add_static('/static', 'static')
+# app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
@@ -4477,13 +4260,31 @@ if __name__ == "__main__":
                         # Keep server running indefinitely
                         while True:
                             await asyncio.sleep(3600)
-                    except KeyboardInterrupt:
+                    except (KeyboardInterrupt, asyncio.CancelledError):
                         logger.info("Shutting down server...")
+                    except Exception as e:
+                        logger.error(f"Server error: {e}", exc_info=True)
                     finally:
-                        await runner.cleanup()
+                        logger.info("Cleaning up...")
+                        try:
+                            await runner.cleanup()
+                        except Exception as cleanup_error:
+                            logger.error(f"Error during cleanup: {cleanup_error}")
                         logger.info("Server shut down")
 
-                asyncio.run(run_server())
+                # Create and use new event loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(run_server())
+                except KeyboardInterrupt:
+                    logger.info("Received interrupt signal")
+                finally:
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    loop.close()
             except Exception as serve_error:
                 logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
                 raise
@@ -4515,13 +4316,31 @@ if __name__ == "__main__":
                         # Keep server running indefinitely
                         while True:
                             await asyncio.sleep(3600)
-                    except KeyboardInterrupt:
+                    except (KeyboardInterrupt, asyncio.CancelledError):
                         logger.info("Shutting down server...")
+                    except Exception as e:
+                        logger.error(f"Server error: {e}", exc_info=True)
                     finally:
-                        await runner.cleanup()
+                        logger.info("Cleaning up...")
+                        try:
+                            await runner.cleanup()
+                        except Exception as cleanup_error:
+                            logger.error(f"Error during cleanup: {cleanup_error}")
                         logger.info("Server shut down")
 
-                asyncio.run(run_server())
+                # Create and use new event loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(run_server())
+                except KeyboardInterrupt:
+                    logger.info("Received interrupt signal")
+                finally:
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    loop.close()
             except Exception as serve_error:
                 logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
                 raise

@@ -7,6 +7,8 @@ import traceback
 from datetime import datetime, timezone, timedelta
 import re
 import pytz
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
@@ -18,6 +20,12 @@ from .utils import (
     redis_client, post_process_response
 )
 from .prompts import get_extended_system_prompt
+try:
+    from .prompts_v2 import get_extended_system_prompt_v2
+    PROMPTS_V2_AVAILABLE = True
+except ImportError:
+    PROMPTS_V2_AVAILABLE = False
+    
 from .tools import TOOLS
 
 try:
@@ -146,7 +154,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "delegate_task":
-                result = delegate_task(
+                result = await delegate_task(
                     title=args.get("title"),
                     delegated_to_username=args.get("delegated_to_username"),
                     reminder_time=args.get("reminder_time"),
@@ -511,6 +519,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         user_username = "user"
 
         if user_id:
+            # Sync query (Session is not async)
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
 
             # Создать пользователя если не существует
@@ -526,7 +535,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             from config import FREE_ACCESS_MODE
 
             if not FREE_ACCESS_MODE:
-                subscription = db_session.query(Subscription).filter_by(user_id=user.id, status="active").first()
+                subscription = db_session.query(Subscription).filter_by(
+                    user_id=user.id,
+                    status="active"
+                ).first()
                 if not subscription:
                     db_session.close()
                     # Генерируем сообщение о подписке через AI
@@ -632,13 +644,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Это критично для предотвращения выдумывания задач
 
             # НО добавляем КРАТКУЮ сводку для контекста
-            tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
-            overdue_tasks = (
-                db_session.query(Task)
-                .filter(Task.user_id == user.id, Task.reminder_time < user_now, Task.status == "pending")
-                .limit(5)
-                .all()
-            )
+            tasks_summary = db_session.query(Task).filter_by(
+                user_id=user.id, status="pending"
+            ).count()
+            
+            overdue_tasks = db_session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.reminder_time < user_now,
+                Task.status == "pending"
+            ).limit(5).all()
 
             if tasks_summary > 0:
                 user_memory += f"\nСводка: всего активных задач {tasks_summary}"
@@ -656,28 +670,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Add delegated tasks info
             if user.username:
-                delegated_tasks = (
-                    db_session.query(Task)
-                    .filter(Task.delegated_to_username.ilike(user.username.replace('@', '')), Task.delegation_status == "pending")
-                    .all()
-                )
+                delegated_tasks = db_session.query(Task).filter(
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegation_status == "pending"
+                ).all()
                 if delegated_tasks:
-                    delegated_info = [
-                        f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := db_session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}"
-                        for t in delegated_tasks[:3]
-                    ]
+                    delegated_info = []
+                    for t in delegated_tasks[:3]:
+                        creator = db_session.query(User).filter_by(id=t.user_id).first()
+                        creator_name = creator.username if creator else 'unknown'
+                        delegated_info.append(f"Задача '{t.title}' (ID: {t.id}) от @{creator_name}")
                     user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"
 
             # Add info about tasks delegated BY user
-            my_delegated_tasks = (
-                db_session.query(Task)
-                .filter(
-                    Task.user_id == user.id,
-                    Task.delegated_to_username.isnot(None),
-                    Task.delegation_status.in_(["pending", "accepted"]),
-                )
-                .all()
-            )
+            my_delegated_tasks = db_session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.delegated_to_username.isnot(None),
+                Task.delegation_status.in_(["pending", "accepted"])
+            ).all()
             if my_delegated_tasks:
                 my_delegated_info = [
                     f"Задача '{t.title}' поручена @{t.delegated_to_username} (статус: {t.delegation_status})"
@@ -687,6 +697,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Add partners/contacts info
             try:
+                # Note: get_partners_list is sync, running in async context
                 partners = get_partners_list(user_id=user_id, session=db_session)
                 if partners:
                     # partners - это список объектов UserProfile
@@ -728,7 +739,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         task_id = pending_data.get("task_id")
                         task_title = pending_data.get("task_title")
                         # Сохранить ответ пользователя как completion_notes
-                        task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+                        task = db_session.query(Task).filter_by(
+                            id=task_id, user_id=user.id
+                        ).first()
                         if task:
                             task.completion_notes = original_message  # Сохраняем полный ответ пользователя
                             db_session.commit()
@@ -742,7 +755,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         task_id = pending_data.get("task_id")
                         task_title = pending_data.get("task_title")
                         # Обработать ответ пользователя о пропуске задачи
-                        task = db_session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
+                        task = db_session.query(Task).filter_by(
+                            id=task_id, user_id=user.id
+                        ).first()
                         if task:
                             if "да" in original_message.lower() or "пропустить" in original_message.lower():
                                 skip_response = f"Задача '{task_title}' отмечена как пропущенная. Могу предложить альтернативы или создать новую задачу."
@@ -751,7 +766,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 keep_response = f"Хорошо, оставляем задачу '{task_title}' активной. Чем могу помочь?"
                                 return keep_response
                         user.pending_action = None
-                        db_session.commit()
+                        await db_session.commit()
                 except (json.JSONDecodeError, KeyError) as e:
                     logger.error(f"Error processing pending_action: {e}")
                     user.pending_action = None
@@ -846,15 +861,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             )
             logger.info("[PROMPTS V2] Using optimized prompt system")
         else:
-            system_prompt = get_extended_system_prompt(
-                user_now,
-                current_time_str,
-                current_date_str,
-                user_username,
-                mentions_str,
-                user_memory,
-                subscription_tier=subscription_tier)
-            logger.info("[LEGACY] Using extended prompt system")
+            # Use improved prompts v2 if available
+            if PROMPTS_V2_AVAILABLE:
+                system_prompt = get_extended_system_prompt_v2(
+                    user_now,
+                    current_time_str,
+                    current_date_str,
+                    user_username,
+                    mentions_str,
+                    user_memory,
+                    subscription_tier=subscription_tier)
+                logger.info("[PROMPTS V2] Using improved prompt system v2")
+            else:
+                system_prompt = get_extended_system_prompt(
+                    user_now,
+                    current_time_str,
+                    current_date_str,
+                    user_username,
+                    mentions_str,
+                    user_memory,
+                    subscription_tier=subscription_tier)
+                logger.info("[LEGACY] Using extended prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -1316,28 +1343,32 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
 
 async def generate_reminder(user_id, task_title):
-    """Генерирует текст напоминания о задаче"""
+    """Генерирует умное персонализированное напоминание о задаче"""
     try:
-        # Получить память пользователя
+        # Получить расширенный контекст пользователя
         user_memory = ""
+        user_username = "друг"
+        current_hour = datetime.now().hour
+        
         if user_id:
             db_session = Session()
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            if user and user.memory:
-                try:
-                    decrypted = decrypt_data(user.memory)
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
-                except (Exception,):
-                    user_memory = ""
+            if user:
+                user_username = user.username or "друг"
+                if user.memory:
+                    try:
+                        decrypted = decrypt_data(user.memory)
+                        user_memory = f"\nКонтекст пользователя: {decrypted}"
+                    except (Exception,):
+                        pass
             db_session.close()
 
-        # Используем единый унифицированный промпт для всех AI-сообщений
+        # Используем единый промпт с расширенными возможностями
         from datetime import datetime
         import pytz
         user_now = datetime.now(pytz.UTC)
         current_time_str = user_now.strftime("%H:%M")
         current_date_str = user_now.strftime("%Y-%m-%d")
-        user_username = "пользователь"
         mentions_str = ""
 
         base_prompt = get_extended_system_prompt(
@@ -1348,22 +1379,24 @@ async def generate_reminder(user_id, task_title):
             mentions_str,
             user_memory)
 
-        # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:
-        system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
-        system_prompt += "Будь мотивирующим и поддерживающим\n"
-        system_prompt += "Давай конкретные практические советы\n"
-        system_prompt += "Учитывай время дня и контекст пользователя\n"
-        system_prompt += "Предлагай 2-3 варианта подхода к задаче\n"
-        system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Завершай вопросом для продолжения диалога\n"
-        system_prompt += "Учитывай информацию из памяти пользователя\n"
+        # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ УМНЫХ НАПОМИНАНИЙ:
+        system_prompt = f"{base_prompt}\n\n🔔 ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
+        system_prompt += "Напоминание - не просто 'Пора сделать задачу', а УМНАЯ МОТИВАЦИЯ:\n"
+        system_prompt += "- Учитывай время дня: утро (бодрый старт), день (рабочий ритм), вечер (завершение)\n"
+        system_prompt += "- Дай КОНКРЕТНЫЙ совет КАК начать (первое действие, 5-10 минут)\n"
+        system_prompt += "- Предложи 2-3 подхода к выполнению с учетом контекста пользователя\n"
+        system_prompt += "- Используй информацию из памяти для персонализации\n"
+        system_prompt += f"- Сейчас {current_hour} часов - адаптируй энергетику сообщения\n"
+        system_prompt += "- 3-4 предложения максимум, естественно как от друга\n"
+        system_prompt += "- Заверши активирующим вопросом или призывом к действию\n"
+        system_prompt += "- Если видишь паттерны (откладывает, забывает) - деликатно подсвети\n"
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Сгенерируй персонализированное напоминание о задаче '{task_title}'. Учитывай контекст пользователя, давай практические советы, будь мотивирующим и заверши вопросом."},
+            {"role": "user", "content": f"Создай умное мотивирующее напоминание о задаче '{task_title}'. Учитывай весь контекст пользователя, время суток, дай конкретный практический совет как начать, предложи варианты подхода. Будь как мудрый друг, а не как холодный будильник."},
         ]
 
         data = {"model": DEEPSEEK_MODEL, "messages": messages}
@@ -1607,9 +1640,22 @@ async def generate_proactive_message(user_id):
             )
             logger.info("[PROACTIVE] Using optimized prompt system")
         else:
-            system_prompt = get_extended_system_prompt(
-                user_now,
-                current_time_str,
+            # Try improved v2 prompts
+            try:
+                from .prompts_v2 import get_extended_system_prompt_v2
+                system_prompt = get_extended_system_prompt_v2(
+                    user_now,
+                    current_time_str,
+                    current_date_str,
+                    user_username,
+                    mentions_str,
+                    user_memory,
+                    subscription_tier=subscription_tier)
+                logger.info("[PROACTIVE] Using improved v2 prompts")
+            except ImportError:
+                system_prompt = get_extended_system_prompt(
+                    user_now,
+                    current_time_str,
                 current_date_str,
                 user_username,
                 mentions_str,
