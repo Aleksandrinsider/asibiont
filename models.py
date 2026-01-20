@@ -184,6 +184,16 @@ class PaymentHistory(Base):
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):
     db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+elif db_url and db_url.startswith('postgres://'):
+    db_url = db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+
+# Log masked DATABASE_URL for debugging
+import re
+if db_url:
+    masked_url = re.sub(r'://([^:]+):([^@]+)@', r'://***:***@', db_url)
+    logger.info(f"Using DATABASE_URL: {masked_url}")
+else:
+    logger.error("DATABASE_URL is empty or None")
 
 # Import psycopg2 to ensure the driver is available
 try:
