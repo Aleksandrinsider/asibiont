@@ -508,6 +508,22 @@
             pointer-events: none;
         }
 
+        /* Мигающая точка для задач, ожидающих принятия */
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .pending-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #D7AC0C;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+
         /* Custom tooltips removed - no data-tooltip attributes in use */
     </style>
 </head>
@@ -2106,8 +2122,12 @@
         function renderTaskItem(task) {
             let html = '<div class="task-content">';
             
-            // Название задачи
-            html += '<div class="task-title">' + task.title + '</div>';
+            // Название задачи с мигающей точкой для pending задач
+            html += '<div class="task-title">';
+            if (task.delegation_status === 'pending') {
+                html += '<span class="pending-indicator"></span>';
+            }
+            html += task.title + '</div>';
             
             // Время и статус
             let timeStr = '';
