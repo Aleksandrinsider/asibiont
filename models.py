@@ -218,12 +218,6 @@ if db_url and db_url.startswith('postgresql'):
 try:
     engine = create_engine(
         db_url,
-        pool_size=20,           # Reduced for Railway limits
-        max_overflow=10,        # Reduced for Railway limits
-        pool_timeout=30,        # Timeout waiting for connection from pool
-        pool_recycle=1800,      # Recycle connections after 30 minutes
-        pool_pre_ping=True,     # Check connections before using
-        connect_args=connect_args,
         echo=False              # Disable SQL logging for performance
     )
 except Exception as e:
