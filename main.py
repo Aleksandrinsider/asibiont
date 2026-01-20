@@ -2,7 +2,7 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL, WEB_APP_URL
 from aiohttp_session import SimpleCookieStorage
 from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import get_session
