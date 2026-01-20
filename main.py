@@ -322,6 +322,24 @@ try:
             # Commit the column additions
             session.commit()
 
+        # Migration for login_count column in subscriptions table
+        if 'subscriptions' in inspector.get_table_names():
+            sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+            if 'login_count' not in sub_columns:
+                logger.info("Adding login_count column to subscriptions table")
+                session.execute(text('ALTER TABLE subscriptions ADD COLUMN login_count INTEGER DEFAULT 0'))
+                session.commit()
+                logger.info("Migration: login_count column added successfully")
+            else:
+                logger.info("Migration: login_count column already exists")
+                # Fix NULL values in existing records
+                try:
+                    session.execute(text('UPDATE subscriptions SET login_count = 0 WHERE login_count IS NULL'))
+                    session.commit()
+                    logger.info("Migration: Fixed NULL login_count values")
+                except Exception as e:
+                    logger.error(f"Failed to fix NULL login_count values: {e}")
+
         session.close()
         logger.info("Migration session closed successfully")
     except Exception as e:
@@ -919,6 +937,8 @@ async def auth_handler(request):
                 # Increment login count if subscription exists
                 subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
                 if subscription:
+                    if subscription.login_count is None:
+                        subscription.login_count = 0
                     subscription.login_count += 1
                     session_db.commit()
             except Exception as e:
