@@ -271,10 +271,10 @@
             background: #FFFFFF;
             border: 1px solid #D1D9E0;
             border-radius: 6px;
-            padding: 12px 14px;
-            font-size: 13px;
-            line-height: 1.4;
-            color: #59636E;
+            padding: 14px 16px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #374151;
             position: relative;
             animation: fadeInUp 0.6s ease-out backwards;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -285,31 +285,8 @@
             border-color: #959DA5;
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
             background-color: #F9FAFB;
-            transform: translateY(-1px);
         }
         
-        /* Speech bubble triangle */
-        .login-message-card::after {
-            content: '';
-            position: absolute;
-            width: 0;
-            height: 0;
-            border: 6px solid transparent;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        
-        .login-messages-sidebar.left .login-message-card::after {
-            right: -12px;
-            border-left-color: #FFFFFF;
-            border-right: 0;
-        }
-        
-        .login-messages-sidebar.right .login-message-card::after {
-            left: -12px;
-            border-right-color: #FFFFFF;
-            border-left: 0;
-        }
         
         /* Разное позиционирование для эффекта "в разнобой" */
         .login-messages-sidebar.left .login-message-card:nth-child(1) { 
@@ -631,7 +608,9 @@
                         </div>
                         
                         <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
-                            <span style="color: #374151; font-size: 14px;">🤝 AI-анализ совместимости для построения связей</span>
+                            <span style="color: #374151; font-size: 14px;"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="vertical-align: middle; margin-right: 6px;">
+                                <path d="M5.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.49 3.49 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Z"/>
+                            </svg>Анализ совместимости для построения связей</span>
                         </div>
                         
                         <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
@@ -648,7 +627,7 @@
 
                         <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 14px 16px; background: white; text-align: left;">
                             <span style="color: #374151; font-size: 14px;"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151" style="vertical-align: middle; margin-right: 6px;">
-                                <path d="M3.5 3.75C3.5 2.784 4.284 2 5.25 2h5.5c.966 0 1.75.784 1.75 1.75v3.5A1.75 1.75 0 0 1 10.75 9h-5.5A1.75 1.75 0 0 1 3.5 7.25Zm1.75-.25a.25.25 0 0 0-.25.25v3.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-3.5a.25.25 0 0 0-.25-.25ZM1.5 8.66v4.59A1.75 1.75 0 0 0 3.25 15h9.5a1.75 1.75 0 0 0 1.75-1.75V8.66a.75.75 0 0 1 1.5 0v4.59A3.25 3.25 0 0 1 12.75 16.5h-9.5A3.25 3.25 0 0 1 0 13.25V8.66a.75.75 0 0 1 1.5 0ZM7.25 11.75a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5Z"/>
+                                <path d="M3.5 6.5A3.5 3.5 0 0 1 7 3v5a3.5 3.5 0 0 1-3.5 3.5h-1A1.5 1.5 0 0 1 1 10V8a1.5 1.5 0 0 1 1.5-1.5Zm-1 4.5h1A2 2 0 0 0 5.5 9V3a2 2 0 1 0-4 0v6a.5.5 0 0 0 .5.5Zm6.5 1.75a.75.75 0 0 1 1.5 0 5 5 0 0 1-4.5 4.975V16h3.25a.75.75 0 0 1 0 1.5h-8a.75.75 0 0 1 0-1.5H5v-1.775A5.001 5.001 0 0 1 .5 9.25a.75.75 0 0 1 1.5 0 3.5 3.5 0 0 0 7 0Z"/>
                             </svg>Голосовые сообщения и AI-чат</span>
                         </div>
 
