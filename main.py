@@ -2650,6 +2650,9 @@ async def api_partners_handler(request):
 
                 # Only add contact if user can access it
                 if can_access and partner_user:
+                    # Get partner's profile for rating info
+                    partner_profile = session_db.query(UserProfile).filter_by(user_id=partner_user.id).first()
+                    
                     logger.info(f"Adding recommended contact {partner_user.username if partner_user else 'unknown'} with tier {partner_tier_str} for user {user.username} with tier {user_tier_str} (can_access: {can_access})")
                     partners_data.append(
                         {
@@ -2683,14 +2686,8 @@ async def api_partners_handler(request):
                                 p,
                                 'recommendation_reason',
                                 'подходящий контакт'),
-                            'average_rating': getattr(
-                                partner_user,
-                                'average_rating',
-                                0),
-                            'rating_count': getattr(
-                                partner_user,
-                                'rating_count',
-                                0),
+                            'average_rating': partner_profile.average_rating if partner_profile else 0,
+                            'rating_count': partner_profile.rating_count if partner_profile else 0,
                             'type': 'recommended'})
             except Exception as e:
                 logger.error(f"Error processing partner {getattr(p, 'user_id', 'unknown')}: {e}", exc_info=True)
