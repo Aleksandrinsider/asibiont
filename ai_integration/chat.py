@@ -20,12 +20,6 @@ from .utils import (
     redis_client, post_process_response
 )
 from .prompts import get_extended_system_prompt
-try:
-    from .prompts_v2 import get_extended_system_prompt_v2
-    PROMPTS_V2_AVAILABLE = True
-except ImportError:
-    PROMPTS_V2_AVAILABLE = False
-    
 from .tools import TOOLS
 
 try:
@@ -861,27 +855,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             )
             logger.info("[PROMPTS V2] Using optimized prompt system")
         else:
-            # Use improved prompts v2 if available
-            if PROMPTS_V2_AVAILABLE:
-                system_prompt = get_extended_system_prompt_v2(
-                    user_now,
-                    current_time_str,
-                    current_date_str,
-                    user_username,
-                    mentions_str,
-                    user_memory,
-                    subscription_tier=subscription_tier)
-                logger.info("[PROMPTS V2] Using improved prompt system v2")
-            else:
-                system_prompt = get_extended_system_prompt(
-                    user_now,
-                    current_time_str,
-                    current_date_str,
-                    user_username,
-                    mentions_str,
-                    user_memory,
-                    subscription_tier=subscription_tier)
-                logger.info("[LEGACY] Using extended prompt system")
+            # Use improved prompts
+            system_prompt = get_extended_system_prompt(
+                user_now,
+                current_time_str,
+                current_date_str,
+                user_username,
+                mentions_str,
+                user_memory,
+                subscription_tier=subscription_tier)
+            logger.info("[PROMPTS] Using improved prompt system")
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -1640,28 +1623,15 @@ async def generate_proactive_message(user_id):
             )
             logger.info("[PROACTIVE] Using optimized prompt system")
         else:
-            # Try improved v2 prompts
-            try:
-                from .prompts_v2 import get_extended_system_prompt_v2
-                system_prompt = get_extended_system_prompt_v2(
-                    user_now,
-                    current_time_str,
-                    current_date_str,
-                    user_username,
-                    mentions_str,
-                    user_memory,
-                    subscription_tier=subscription_tier)
-                logger.info("[PROACTIVE] Using improved v2 prompts")
-            except ImportError:
-                system_prompt = get_extended_system_prompt(
-                    user_now,
-                    current_time_str,
+            system_prompt = get_extended_system_prompt(
+                user_now,
+                current_time_str,
                 current_date_str,
                 user_username,
                 mentions_str,
                 user_memory,
                 subscription_tier=subscription_tier)
-            logger.info("[PROACTIVE] Using extended prompt system")
+            logger.info("[PROACTIVE] Using improved prompt system")
 
         # Создаем messages как в обычном чате, но с проактивным контекстом
         messages = [{"role": "system", "content": system_prompt}]
