@@ -22,14 +22,9 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    # Prefer DATABASE_PUBLIC_URL for external access, fallback to DATABASE_URL for Railway internal
     DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
     if not DATABASE_URL:
-        # Fallback for Railway - use SQLite if no PostgreSQL configured
-        import os
-        db_path = os.path.join(os.path.dirname(__file__), "railway.db")
-        DATABASE_URL = f"sqlite:///{db_path}"
-        print("WARNING: No PostgreSQL configured, using SQLite fallback")
+        raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
@@ -52,7 +47,7 @@ if not REDIS_URL and not LOCAL:
 # Redis client
 if REDIS_URL:
     import redis.asyncio as redis
-    redis_client = redis.from_url(REDIS_URL)  # Use default connection settings
+    redis_client = redis.from_url(REDIS_URL, max_connections=5)  # Limit connections to avoid hitting limits
 else:
     redis_client = None
 

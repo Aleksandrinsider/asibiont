@@ -10,11 +10,8 @@ venv/
 .env.local
 .DS_Store
 local.db
-my
 my/
 *.sqlite3
-*.db
-!.gitkeep
 test.db
 test_local.db
 test_comprehensive.db

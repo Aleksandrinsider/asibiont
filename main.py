@@ -2,7 +2,7 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL, WEB_APP_URL
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
 from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import get_session
@@ -322,80 +322,6 @@ try:
             # Commit the column additions
             session.commit()
 
-        # Migration for completed column in tasks table
-        if 'tasks' in inspector.get_table_names():
-            task_columns = [col['name'] for col in inspector.get_columns('tasks')]
-            if 'completed' not in task_columns:
-                logger.info("Adding completed column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN completed BOOLEAN DEFAULT FALSE'))
-                session.commit()
-                logger.info("Migration: completed column added successfully")
-            else:
-                logger.info("Migration: completed column already exists")
-            
-            # Migration for completed_at column
-            if 'completed_at' not in task_columns:
-                logger.info("Adding completed_at column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN completed_at TIMESTAMP'))
-                session.commit()
-                logger.info("Migration: completed_at column added successfully")
-            else:
-                logger.info("Migration: completed_at column already exists")
-            
-            # Migration for skipped column
-            if 'skipped' not in task_columns:
-                logger.info("Adding skipped column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN skipped BOOLEAN DEFAULT FALSE'))
-                session.commit()
-                logger.info("Migration: skipped column added successfully")
-            else:
-                logger.info("Migration: skipped column already exists")
-            
-            # Migration for skipped_at column
-            if 'skipped_at' not in task_columns:
-                logger.info("Adding skipped_at column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN skipped_at TIMESTAMP'))
-                session.commit()
-                logger.info("Migration: skipped_at column added successfully")
-            else:
-                logger.info("Migration: skipped_at column already exists")
-            
-            # Migration for skipped_reason column
-            if 'skipped_reason' not in task_columns:
-                logger.info("Adding skipped_reason column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN skipped_reason VARCHAR(255)'))
-                session.commit()
-                logger.info("Migration: skipped_reason column added successfully")
-            else:
-                logger.info("Migration: skipped_reason column already exists")
-            
-            # Migration for updated_at column
-            if 'updated_at' not in task_columns:
-                logger.info("Adding updated_at column to tasks table")
-                session.execute(text('ALTER TABLE tasks ADD COLUMN updated_at TIMESTAMP'))
-                session.commit()
-                logger.info("Migration: updated_at column added successfully")
-            else:
-                logger.info("Migration: updated_at column already exists")
-
-        # Migration for login_count column in subscriptions table
-        if 'subscriptions' in inspector.get_table_names():
-            sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-            if 'login_count' not in sub_columns:
-                logger.info("Adding login_count column to subscriptions table")
-                session.execute(text('ALTER TABLE subscriptions ADD COLUMN login_count INTEGER DEFAULT 0'))
-                session.commit()
-                logger.info("Migration: login_count column added successfully")
-            else:
-                logger.info("Migration: login_count column already exists")
-                # Fix NULL values in existing records
-                try:
-                    session.execute(text('UPDATE subscriptions SET login_count = 0 WHERE login_count IS NULL'))
-                    session.commit()
-                    logger.info("Migration: Fixed NULL login_count values")
-                except Exception as e:
-                    logger.error(f"Failed to fix NULL login_count values: {e}")
-
         session.close()
         logger.info("Migration session closed successfully")
     except Exception as e:
@@ -414,7 +340,170 @@ except Exception as e:
 # Subscription restoration removed for production
 
 
-# Database connection test before starting
+# Test functions disabled in production mode
+# def add_test_sport_users():
+#     pass
+# def ensure_sport_interest():
+#     pass
+# def create_test_promo_codes():
+#     pass
+
+# IMPORTANT: Test users creation disabled to prevent @sportfan3 recreation
+# The function below created test users including @sportfan3 (GOLD tier)
+# which caused issues in production. It's now completely disabled.
+"""
+def check_database_connection():
+    \"\"\"Добавляет тестовых пользователей с интересами 'спорт' если их еще нет\"\"\"
+    try:
+        session = Session()
+
+        test_users_data = [{'telegram_id': 111111,
+                            'username': 'sportfan1',
+                            'first_name': 'Алексей',
+                            'interests': 'спорт, бег, фитнес',
+                            'city': 'Москва',
+                            'company': 'Фитнес-клуб',
+                            'position': 'Тренер',
+                            'subscription_tier': SubscriptionTier.BRONZE},
+                           {'telegram_id': 222222,
+                            'username': 'sportfan2',
+                            'first_name': 'Дмитрий',
+                            'interests': 'спорт, футбол, плавание',
+                            'city': 'Санкт-Петербург',
+                            'company': 'Спортивная школа',
+                            'position': 'Инструктор',
+                            'subscription_tier': SubscriptionTier.SILVER},
+                           {'telegram_id': 333333,
+                            'username': 'sportfan3',
+                            'first_name': 'Михаил',
+                            'interests': 'спорт, теннис, йога',
+                            'city': 'Москва',
+                            'company': 'Теннисный центр',
+                            'position': 'Спортсмен',
+                            'subscription_tier': SubscriptionTier.GOLD},
+                           {'telegram_id': 444444,
+                            'username': 'sportfan4',
+                            'first_name': 'Елена',
+                            'interests': 'спорт, волейбол, танцы',
+                            'city': 'Казань',
+                            'company': 'Спортивный комплекс',
+                            'position': 'Администратор',
+                            'subscription_tier': SubscriptionTier.BRONZE},
+                           {'telegram_id': 555555,
+                            'username': 'sportfan5',
+                            'first_name': 'Анна',
+                            'interests': 'спорт, гимнастика, пилатес',
+                            'city': 'Москва',
+                            'company': 'Студия пилатес',
+                            'position': 'Инструктор',
+                            'subscription_tier': SubscriptionTier.SILVER}]
+
+        # Проверяем есть ли хоть один тестовый пользователь
+        test_ids = [111111, 222222, 333333, 444444, 555555]
+        existing_count = session.query(User).filter(User.telegram_id.in_(test_ids)).count()
+
+        if existing_count == len(test_ids):
+            logger.info(f"All {len(test_ids)} test sport users already exist")
+            session.close()
+            return
+
+        logger.info(f"Found {existing_count}/{len(test_ids)} test users, adding missing ones...")
+
+        added_count = 0
+        for user_data in test_users_data:
+            existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
+            if not existing_user:
+                # Создаем пользователя
+                new_user = User(
+                    telegram_id=user_data['telegram_id'],
+                    username=user_data['username'],
+                    first_name=user_data['first_name'],
+                    timezone='Europe/Moscow',
+                    subscription_tier=user_data['subscription_tier']
+                )
+                session.add(new_user)
+                session.flush()
+
+                # Создаем профиль
+                profile = UserProfile(
+                    user_id=new_user.id,
+                    interests=user_data['interests'],
+                    city=user_data['city'],
+                    company=user_data['company'],
+                    position=user_data['position'],
+                    average_rating=4.5,
+                    rating_count=10
+                )
+                session.add(profile)
+                added_count += 1
+                logger.info(f"Added test user: {user_data['username']} (telegram_id: {user_data['telegram_id']})")
+            else:
+                logger.info(f"Test user {user_data['username']} already exists")
+
+        session.commit()
+        logger.info(f"Successfully added {added_count} test sport users")
+        session.close()
+    except Exception as e:
+        logger.error(f"Failed to add test sport users: {e}", exc_info=True)
+\"\"\"
+
+# All test functions below are disabled in production
+\"\"\"
+def ensure_sport_interest():
+    \"\"\"Добавляет 'спорт' к интересам всех пользователей если его нет\"\"\"
+    try:
+        session = Session()
+        profiles = session.query(UserProfile).all()
+        updated = 0
+        for profile in profiles:
+            if profile.interests:
+                interests_lower = profile.interests.lower()
+                if 'спорт' not in interests_lower:
+                    profile.interests = profile.interests + ', спорт'
+                    updated += 1
+            else:
+                profile.interests = 'спорт'
+                updated += 1
+
+        if updated > 0:
+            session.commit()
+            logger.info(f"Added 'спорт' interest to {updated} user profiles")
+        else:
+            logger.info("All users already have 'спорт' interest")
+        session.close()
+    except Exception as e:
+        logger.error(f"Failed to add sport interest: {e}")
+
+
+# def create_test_promo_codes():
+#     # DOCSTRING: Создает тестовые промокоды
+#     try:
+#         session = Session()
+
+#         # Проверяем, есть ли уже тестовый промокод
+#         existing_promo = session.query(PromoCode).filter_by(code='TESTBRONZE').first()
+#         if existing_promo:
+#             logger.info("Test promo code TESTBRONZE already exists")
+#             session.close()
+#             return
+
+#         # Создаем тестовый промокод на бронзу на месяц, действующий год
+#         expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
+#         test_promo = PromoCode(
+#             code='TESTBRONZE',
+#             tier=SubscriptionTier.BRONZE,
+#             duration_days=30,
+#             expires_at=expires_at
+#         )
+#         session.add(test_promo)
+#         session.commit()
+#         logger.info("Created test promo code: TESTBRONZE (Bronze for 30 days, expires in 1 year)")
+#         session.close()
+#     except Exception as e:
+#         logger.error(f"Failed to create test promo codes: {e}")
+# # """
+
+# Test database connection before starting
 try:
     test_session = Session()
     test_session.execute(text('SELECT 1'))
@@ -553,7 +642,9 @@ try:
                         title="Подготовить презентацию для клиента",
                         description="Создать презентацию о наших услугах",
                         status="pending",
+                        priority="medium",
                         created_at=now,
+                        updated_at=now,
                         delegated_to_username=user_1001.username,
                         delegation_status="accepted"
                     )
@@ -567,7 +658,9 @@ try:
                         title="Проверить код на ошибки",
                         description="Ревью кода для нового модуля",
                         status="pending",
+                        priority="high",
                         created_at=now,
+                        updated_at=now,
                         delegated_to_username=user_1001.username,
                         delegation_status="accepted"
                     )
@@ -581,7 +674,9 @@ try:
                         title="Организовать встречу с командой",
                         description="Запланировать еженедельную встречу",
                         status="pending",
+                        priority="low",
                         created_at=now,
+                        updated_at=now,
                         delegated_to_username=user_1002.username,
                         delegation_status="accepted"
                     )
@@ -697,30 +792,13 @@ async def get_user_avatar_url(bot, user_id):
 
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
-    try:
-        if 'hash' not in data:
-            logger.error("No hash in Telegram auth data")
-            return False
-            
-        token = TELEGRAM_TOKEN
-        if not token:
-            logger.error("TELEGRAM_TOKEN not set")
-            return False
-            
-        if token.startswith('bot'):
-            token = token[3:]  # Remove 'bot' prefix
-        secret_key = hashlib.sha256(token.encode()).digest()
-        data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
-        hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        
-        is_valid = hash_computed == data.get('hash')
-        if not is_valid:
-            logger.warning(f"Telegram auth hash mismatch. Expected: {hash_computed[:10]}..., got: {data.get('hash', '')[:10]}...")
-        
-        return is_valid
-    except Exception as e:
-        logger.error(f"Error in check_telegram_authentication: {e}", exc_info=True)
-        return False
+    token = TELEGRAM_TOKEN
+    if token.startswith('bot'):
+        token = token[3:]  # Remove 'bot' prefix
+    secret_key = hashlib.sha256(token.encode()).digest()
+    data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
+    hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    return hash_computed == data.get('hash')
 
 
 async def health_handler(request):
@@ -728,7 +806,6 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 
-@aiohttp_jinja2.template('index.html')
 async def login_handler(request):
     """Страница авторизации"""
     session = await get_session(request)
@@ -749,13 +826,16 @@ async def login_handler(request):
             pass
 
     # Показываем страницу авторизации
-    bot_username = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
-    auth_url = f"{WEB_APP_URL}/tg_auth" if WEB_APP_URL else "/tg_auth"
-    
-    return {
-        'BOT_USERNAME': bot_username,
-        'AUTH_URL': auth_url
-    }
+    bot_user = TELEGRAM_BOT_USERNAME.replace(
+        '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
+    return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+        'logged_in': False,
+        'bot_username': bot_user,
+        'current_date': '',
+        'current_time': '',
+        'formatted_end_date': None,
+        'timestamp': 1768857743
+    })
 
 
 async def auth_handler(request):
@@ -822,8 +902,6 @@ async def auth_handler(request):
                 # Increment login count if subscription exists
                 subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
                 if subscription:
-                    if subscription.login_count is None:
-                        subscription.login_count = 0
                     subscription.login_count += 1
                     session_db.commit()
             except Exception as e:
@@ -857,7 +935,7 @@ async def logout_handler(request):
     return web.HTTPFound('/')
 
 
-# @aiohttp_jinja2.template('dashboard_new.html')
+@aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     logger.info(f"Dashboard handler called for path: {request.path}")
     session = await get_session(request)
@@ -887,19 +965,33 @@ async def dashboard_handler(request):
             logged_in = bool(user_id)
 
         if not logged_in:
-            # Redirect to login page
+            # Show login page in dashboard
             bot_user = TELEGRAM_BOT_USERNAME.replace(
                 '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
-            logger.info(f"User not logged in, redirecting to login page")
-            return web.HTTPFound('/')
+            logger.info(f"Rendering login page with bot_username: {bot_user}, original: {TELEGRAM_BOT_USERNAME}")
+            return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+                'logged_in': False,
+                'bot_username': bot_user,
+                'current_date': '',
+                'current_time': '',
+                'formatted_end_date': None,
+                'timestamp': 1768857743
+            })
 
         # Получить задачи пользователя
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
-                logger.warning(f"User with telegram_id {user_id} not found")
-                return web.HTTPFound('/')
+                bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
+                return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+                    'logged_in': False,
+                    'bot_username': bot_user,
+                    'current_date': '',
+                    'current_time': '',
+                    'formatted_end_date': None,
+                    'timestamp': 1768857743
+                })
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
 
@@ -1297,40 +1389,41 @@ async def dashboard_handler(request):
 
         logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {user_subscription_tier.value if user_subscription_tier else 'BRONZE'}")
 
-        # Calculate statistics
-        total_tasks = len(tasks)
-        completed_tasks = sum(1 for t in tasks if t.status == 'completed' or getattr(t, 'completed', False))
-        active_tasks = sum(1 for t in tasks if t.status in ['pending', 'in_progress'])
-        completion_rate = int((completed_tasks / total_tasks * 100)) if total_tasks > 0 else 0
-        
-        # Get subscription info
-        subscription_tier_name = user_subscription_tier.value.capitalize() if user_subscription_tier else 'Bronze'
-        subscription_expires = subscription.end_date.strftime('%d.%m.%Y') if subscription and subscription.end_date else 'Не активна'
-        
-        # User info
-        user_first_name = user.first_name or user.username or 'Пользователь'
-        user_name = f"{user.first_name or ''} {user.username or ''}" .strip() or f"User {user_id}"
-        user_initials = ''.join([n[0].upper() for n in user_name.split()[:2]]) if user_name else 'U'
-        user_photo_url = user.photo_url or ''
-        
-        bot_username = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
-        
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-            'USER_FIRST_NAME': user_first_name,
-            'USER_NAME': user_name,
-            'USER_INITIALS': user_initials,
-            'USER_PHOTO_URL': user_photo_url,
-            'BOT_USERNAME': bot_username,
-            'TOTAL_TASKS': total_tasks,
-            'COMPLETED_TASKS': completed_tasks,
-            'ACTIVE_TASKS': active_tasks,
-            'COMPLETION_RATE': completion_rate,
-            'SUBSCRIPTION_TIER': subscription_tier_name,
-            'SUBSCRIPTION_EXPIRES': subscription_expires
+            'logged_in': True,
+            'tasks': tasks_dict,
+            'user': user,
+            'profile': profile,
+            'interactions': interactions,
+            'partners': partners,
+            'delegating_to_me': delegating_to_me,
+            'delegating_by_me': delegating_by_me,
+            'blocked_contacts': blocked_contacts,
+            'subscription': subscription,
+            'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE',
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'pending_tasks': pending_tasks,
+            'skipped_tasks': skipped_tasks,
+            'current_date': current_date,
+            'current_time': current_time,
+            'formatted_end_date': formatted_end_date,
+            'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
+            'timestamp': 1768857743,
+            'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
+            'user_avatar_url': user_avatar_url
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
-        return web.HTTPFound('/')
+        bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
+        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+            'logged_in': False,
+            'bot_username': bot_user,
+            'current_date': '',
+            'current_time': '',
+            'formatted_end_date': None,
+            'timestamp': 1768857743
+        })
 
 
 async def tasks_handler(request):
@@ -3579,6 +3672,14 @@ async def on_startup(app):
     set_redis_client(redis_client)
     logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
 
+
+async def on_shutdown(app):
+    """Закрываем Redis клиент при завершении приложения"""
+    global redis_client
+    if redis_client:
+        await redis_client.close()
+        logger.info("Redis client closed")
+
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
         # Get webhook URL from environment variable or construct from Railway variables
@@ -3610,13 +3711,7 @@ async def on_startup(app):
     await init_handlers_redis(redis_client)
     logger.info("Handlers Redis initialized")
 
-
-async def on_shutdown(app):
-    """Закрываем Redis клиент при завершении приложения"""
-    global redis_client
-    if redis_client:
-        await redis_client.close()
-        logger.info("Redis client closed")
+    # ReminderService will be started later in start_reminder_service
 
 
 async def api_tasks_handler(request):
@@ -4074,28 +4169,10 @@ async def extend_subscription_handler(request):
     return web.HTTPFound('/subscription_tiers')
 
 
-# @aiohttp_jinja2.template('subscription_tiers.html')
+@aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
     """Страница выбора тарифа подписки"""
-    session_obj = await get_session(request)
-    user_id = session_obj.get('user_id')
-    
-    # Get current tier if user is logged in
-    current_tier = ''
-    if user_id:
-        session_db = Session()
-        try:
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
-            if user and user.subscription_tier:
-                current_tier = user.subscription_tier.value
-        except Exception as e:
-            logger.error(f"Error getting subscription tier: {e}")
-        finally:
-            session_db.close()
-    
-    return {
-        'CURRENT_TIER': current_tier
-    }
+    return {}
 
 
 async def apply_promo_code_handler(request):
@@ -4319,19 +4396,16 @@ app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
-if bot and not LOCAL:
-    from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-    )
-    webhook_requests_handler.register(app, path="/webhook")
-    setup_application(app, dp, bot=bot)
-    logger.info("Webhook configured for production mode")
-elif bot:
+if bot:
+    # webhook_requests_handler = SimpleRequestHandler(
+    #     dispatcher=dp,
+    #     bot=bot,
+    # )
+    # webhook_requests_handler.register(app, path="/webhook")
+    # setup_application(app, dp, bot=bot)
     logger.info("Bot created, but webhook setup disabled for local mode")
 else:
-    logger.warning("Bot not created, skipping webhook setup")
+    logger.warning("Bot not created or local mode, skipping webhook setup")
 
 logger.info("App created successfully")
 
@@ -4363,31 +4437,13 @@ if __name__ == "__main__":
                         # Keep server running indefinitely
                         while True:
                             await asyncio.sleep(3600)
-                    except (KeyboardInterrupt, asyncio.CancelledError):
+                    except KeyboardInterrupt:
                         logger.info("Shutting down server...")
-                    except Exception as e:
-                        logger.error(f"Server error: {e}", exc_info=True)
                     finally:
-                        logger.info("Cleaning up...")
-                        try:
-                            await runner.cleanup()
-                        except Exception as cleanup_error:
-                            logger.error(f"Error during cleanup: {cleanup_error}")
+                        await runner.cleanup()
                         logger.info("Server shut down")
 
-                # Create and use new event loop
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(run_server())
-                except KeyboardInterrupt:
-                    logger.info("Received interrupt signal")
-                finally:
-                    pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    loop.close()
+                asyncio.run(run_server())
             except Exception as serve_error:
                 logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
                 raise
@@ -4419,31 +4475,13 @@ if __name__ == "__main__":
                         # Keep server running indefinitely
                         while True:
                             await asyncio.sleep(3600)
-                    except (KeyboardInterrupt, asyncio.CancelledError):
+                    except KeyboardInterrupt:
                         logger.info("Shutting down server...")
-                    except Exception as e:
-                        logger.error(f"Server error: {e}", exc_info=True)
                     finally:
-                        logger.info("Cleaning up...")
-                        try:
-                            await runner.cleanup()
-                        except Exception as cleanup_error:
-                            logger.error(f"Error during cleanup: {cleanup_error}")
+                        await runner.cleanup()
                         logger.info("Server shut down")
 
-                # Create and use new event loop
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(run_server())
-                except KeyboardInterrupt:
-                    logger.info("Received interrupt signal")
-                finally:
-                    pending = asyncio.all_tasks(loop)
-                    for task in pending:
-                        task.cancel()
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                    loop.close()
+                asyncio.run(run_server())
             except Exception as serve_error:
                 logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
                 raise

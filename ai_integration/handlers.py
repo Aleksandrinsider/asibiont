@@ -144,7 +144,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.commit()
 
     # Format result message
-    result_msg = f"[{task_id}] Добавлена задача '{title}'"
+    result_msg = f"Добавлена задача '{title}' (ID: {task_id})"
     if task.reminder_time:
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         local_time = task.reminder_time.astimezone(user_tz)
@@ -280,20 +280,16 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
                 session.close()
             return f"Некорректный ID задачи: {task_id}"
 
-        # Build query conditions
-        query_conditions = [and_(Task.id == task_id_int, Task.user_id == user.id)]
-        
-        # Add delegated task condition only if user has username
-        if user.username:
-            query_conditions.append(
-                and_(
-                    Task.id == task_id_int, 
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')), 
-                    Task.delegation_status == "accepted"
+        task = (
+            session.query(Task)
+            .filter(
+                or_(
+                    and_(Task.id == task_id_int, Task.user_id == user.id),
+                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike(user.username.replace('@', '')), Task.delegation_status == "accepted")
                 )
             )
-        
-        task = session.query(Task).filter(or_(*query_conditions)).first()
+            .first()
+        )
     elif task_title:
         # Search by words in title (including delegated tasks)
         words = task_title.lower().split()
@@ -806,7 +802,7 @@ def set_reminder(task_id, reminder_time, user_id=None):
         session.close()
 
 
-async def delegate_task(
+def delegate_task(
     title, reminder_time=None, delegated_to_username=None, user_id=None, description="", delegation_details=""
 ):
     """Create a delegated task that requires acceptance by the recipient"""
@@ -916,44 +912,33 @@ async def delegate_task(
             from main import bot
             if bot:
                 # Generate AI-powered personalized notification
-                from ai_integration.chat import generate_delegation_notification
-                
-                try:
-                    notification_text = await generate_delegation_notification(
-                        delegator.username,
-                        recipient_username,
-                        title,
-                        description,
-                        reminder_time,
-                        delegation_details,
-                        recipient.telegram_id
-                    )
-                except Exception as e:
-                    logging.warning(f"AI notification generation failed: {e}")
-                    notification_text = None
+                import asyncio
+                notification_text = asyncio.run(generate_delegation_notification(
+                    delegator.username,
+                    recipient_username,
+                    title,
+                    description,
+                    reminder_time,
+                    delegation_details,
+                    recipient.telegram_id
+                ))
 
                 if notification_text:
                     message = notification_text
                 else:
                     # Fallback to template if AI generation fails
-                    message = f"🎯 Новое предложение задачи от @{delegator.username}:\n\n"
-                    message += f"📋 Задача: {title}\n"
+                    message = f"Новое предложение задачи от @{delegator.username}:\n\n"
+                    message += f"Задача: {title}\n"
                     if description:
-                        message += f"📝 Описание: {description}\n"
+                        message += f"Описание: {description}\n"
                     if reminder_time:
-                        message += f"⏰ Дедлайн: {reminder_time}\n"
+                        message += f"Дедлайн: {reminder_time}\n"
                     if delegation_details:
-                        message += f"ℹ️ Детали: {delegation_details}\n"
-                    message += f"\n✅ Напиши 'принять задачу {task_id}' для подтверждения\n"
-                    message += f"❌ Или 'отклонить задачу {task_id}' если не можешь взяться"
+                        message += f"Детали: {delegation_details}\n"
+                    message += f"\nНапишите боту 'принять задачу {task_id}' для подтверждения или 'отклонить задачу {task_id}' для отказа."
 
-                # Schedule message sending without blocking
                 import asyncio
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.create_task(bot.send_message(recipient.telegram_id, message))
-                else:
-                    loop.run_until_complete(bot.send_message(recipient.telegram_id, message))
+                asyncio.create_task(bot.send_message(recipient.telegram_id, message))
 
         except Exception as e:
             logging.error(f"Failed to send delegation notification: {e}")
@@ -973,8 +958,7 @@ async def delegate_task(
         return f"Предложение задачи отправлено @{recipient_username}. Ожидается подтверждение."
     except Exception as e:
         session.close()
-        logging.error(f"Delegation error: {e}")
-        return f"Не удалось создать делегированную задачу: {str(e)}"
+        return f"Ошибка при создании делегированной задачи: {str(e)}"
 
 
 def suggest_alternatives(task_id, reason="", user_id=None):
@@ -1390,6 +1374,12 @@ def get_task_details(task_id, user_id=None):
     return "Задача не найдена."
 
 
+def set_priority(task_id, priority, user_id=None):
+    """Set task priority - stub function for backward compatibility"""
+    # This function is referenced in __init__.py but not actually used
+    return "Функция set_priority временно недоступна"
+
+
 def brainstorm_ideas(topic, num_ideas=5, user_id=None):
     """Generate ideas for a problem or improvement"""
     import requests
@@ -1503,17 +1493,16 @@ def list_tasks(user_id=None, session=None):
                             days = delta.days
                             hours = (delta.seconds // 3600)
                             if days > 0:
-                                reminder_info = f" просрочено на {days} д {hours} ч" if hours else f" просрочено на {days} д"
+                                reminder_info = f" - просрочено на {days} д {hours} ч" if hours else f" - просрочено на {days} д"
                             else:
-                                reminder_info = f" просрочено на {hours} ч"
+                                reminder_info = f" - просрочено на {hours} ч"
                         else:
-                            reminder_info = f" {reminder_dt.strftime('%d.%m %H:%M')}"
+                            reminder_info = f" - {reminder_dt.strftime('%d.%m %H:%M')}"
                     except Exception as e:
                         logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
                         pass
-                result += f"{task.title}{reminder_info}, "
+                result += f"- {task.title}{reminder_info}\n"
 
-            result = result.rstrip(", ") + "\n"
             if len(my_tasks) > 10:
                 result += f"...и ещё {len(my_tasks) - 10}\n"
         
@@ -1521,16 +1510,16 @@ def list_tasks(user_id=None, session=None):
         if delegated_to_me:
             result += "\nДелегированные мне:\n"
             for task in delegated_to_me[:5]:
-                result += f"{task.title} от @{task.delegated_by if hasattr(task, 'delegated_by') else 'неизвестно'}, "
-            result = result.rstrip(", ") + "\n"
+                result += f"- {task.title} (от @{task.delegated_by if hasattr(task, 'delegated_by') else 'неизвестно'})\n"
 
         # Brief recommendation
         if overdue_count > 0:
-            result += f"\n{overdue_count} просроченных - стоит разобраться"
+            result += f"\n\n{overdue_count} просроченных - стоит разобраться"
         elif len(active_tasks) == 1:
-            result += "\nОдна задача - отличный фокус"
+            result += "\n\nОдна задача - отличный фокус"
         elif len(active_tasks) > 5:
-            result += "\nМного задач - приоритизируй"
+            result += "\n\nМного задач - приоритизируй"
+
         return result.strip()
     except Exception as e:
         logger.error(f"Error listing tasks: {e}")

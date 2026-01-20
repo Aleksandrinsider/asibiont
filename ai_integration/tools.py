@@ -17,7 +17,7 @@ TOOLS = [
                         "type": "string",
                         "description": "ОПЦИОНАЛЬНО! Оставь ПУСТЫМ если пользователь не указал детали. Если указал - МАКСИМУМ 50 символов. Примеры: 'молоко, хлеб, яйца' или 'обсудить контракт'",
                     },
-                    "reminder_time": {"type": "string", "description": "Время напоминания. ПОДДЕРЖИВАЕМЫЕ ФОРМАТЫ: 1) Относительное время - передавай ТОЧНУЮ ФРАЗУ пользователя: 'через 5 минут', 'через час', 'через 2 часа' (система сама рассчитает время). 2) Абсолютное время - используй формат YYYY-MM-DD HH:MM с current_date из system prompt. КРИТИЧНО: для фраз типа 'через час', 'через 10 минут' передавай их КАК ЕСТЬ, НЕ преобразуй в абсолютное время!"},
+                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM. ОБЯЗАТЕЛЬНО используй current_date из system prompt для вычисления даты! Например, если current_date=2026-01-11 и пользователь просит 'через 5 минут в 12:30', используй '2026-01-11 12:30', а НЕ дату из прошлого!"},
                     "due_date": {"type": "string", "description": "Дедлайн в формате YYYY-MM-DD HH:MM, опционально"},
                 },
                 "required": ["title", "reminder_time"],
@@ -192,6 +192,21 @@ TOOLS = [
                     },
                 },
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_priority",
+            "description": "Установить приоритет задачи",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "integer", "description": "ID задачи"},
+                    "priority": {"type": "string", "description": "Приоритет: high, medium, low"},
+                },
+                "required": ["task_id", "priority"],
             },
         },
     },

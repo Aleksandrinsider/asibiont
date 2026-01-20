@@ -125,42 +125,29 @@ class ReminderService:
             tasks = db.query(Task).filter(Task.reminder_time.isnot(None), Task.reminder_sent == False).all()
             logger.info(f"Found {len(tasks)} tasks with reminders to schedule")
             for task in tasks:
-                try:
-                    if task.reminder_time > datetime.now(pytz.UTC).replace(tzinfo=None):
-                        # Безопасная проверка наличия user
-                        if task.user and task.user.telegram_id:
-                            logger.info(f"Scheduling reminder for task {task.id} at {task.reminder_time}")
-                            self.schedule_reminder(task.id, task.reminder_time, task.user.telegram_id, task.title)
-                        else:
-                            logger.warning(f"Task {task.id} has no user or telegram_id")
+                if task.reminder_time > datetime.now(pytz.UTC).replace(tzinfo=None):
+                    # Безопасная проверка наличия user
+                    if task.user and task.user.telegram_id:
+                        logger.info(f"Scheduling reminder for task {task.id} at {task.reminder_time}")
+                        self.schedule_reminder(task.id, task.reminder_time, task.user.telegram_id, task.title)
                     else:
-                        logger.info(f"Task {task.id} reminder time {task.reminder_time} is in the past")
-                except Exception as e:
-                    logger.error(f"Error scheduling reminder for task {task.id}: {e}")
-                    continue
+                        logger.warning(f"Task {task.id} has no user or telegram_id")
+                else:
+                    logger.info(f"Task {task.id} reminder time {task.reminder_time} is in the past")
             
             # Планируем проверки результатов для задач с reminder_sent=True и estimated_duration
-            try:
-                result_tasks = db.query(Task).filter(
-                    Task.reminder_sent == True,
-                    Task.result_check_sent == False,
-                    Task.estimated_duration.isnot(None),
-                    Task.status.in_(['pending', 'in_progress'])
-                ).all()
-                
-                for task in result_tasks:
-                    try:
-                        if task.user and task.user.telegram_id:
-                            result_check_time = task.reminder_time + timedelta(minutes=task.estimated_duration)
-                            if result_check_time > datetime.now(pytz.UTC).replace(tzinfo=None):
-                                self.schedule_result_check(task.id, result_check_time, task.user.telegram_id, task.title)
-                    except Exception as e:
-                        logger.error(f"Error scheduling result check for task {task.id}: {e}")
-                        continue
-            except Exception as e:
-                logger.error(f"Error querying result tasks: {e}")
-        except Exception as e:
-            logger.error(f"Critical error in schedule_existing_reminders: {e}", exc_info=True)
+            result_tasks = db.query(Task).filter(
+                Task.reminder_sent == True,
+                Task.result_check_sent == False,
+                Task.estimated_duration.isnot(None),
+                Task.status.in_(['pending', 'in_progress'])
+            ).all()
+            
+            for task in result_tasks:
+                if task.user and task.user.telegram_id:
+                    result_check_time = task.reminder_time + timedelta(minutes=task.estimated_duration)
+                    if result_check_time > datetime.now(pytz.UTC).replace(tzinfo=None):
+                        self.schedule_result_check(task.id, result_check_time, task.user.telegram_id, task.title)
         finally:
             db.close()
 
