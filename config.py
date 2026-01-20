@@ -22,12 +22,10 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    # Use public URL for new DB until private networking is ready
-    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL")
+    # Use DATABASE_URL (public connection) for Railway
+    DATABASE_URL = os.getenv("DATABASE_URL")
     if not DATABASE_URL:
-        DATABASE_URL = os.getenv("DATABASE_URL")
-    if not DATABASE_URL:
-        raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
+        raise ValueError("DATABASE_URL is required in production")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
