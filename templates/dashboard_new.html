@@ -1457,6 +1457,12 @@
         }
 
         async function getFavoriteContactsFromServer() {
+            // Проверить, залогинен ли пользователь
+            const isLoggedIn = document.querySelector('.main-layout') !== null;
+            if (!isLoggedIn) {
+                return [];
+            }
+            
             try {
                 const response = await fetch('/api/favorite_contacts', {
                     credentials: 'include'
@@ -1478,6 +1484,12 @@
         }
 
         async function getBlockedContactsFromServer() {
+            // Проверить, залогинен ли пользователь
+            const isLoggedIn = document.querySelector('.main-layout') !== null;
+            if (!isLoggedIn) {
+                return [];
+            }
+            
             try {
                 const response = await fetch('/api/blocked_contacts', {
                     credentials: 'include'
