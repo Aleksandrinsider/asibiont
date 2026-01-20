@@ -4266,16 +4266,17 @@ async def apply_promo_code_handler(request):
         # Сохраняем значения до закрытия сессии
         tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
         duration = promo.duration_days
+        end_date_str = end_date.strftime("%d.%m.%Y")
 
         return web.json_response({
             'success': True,
-            'message': f'Промокод активирован! Подписка {tier_name} на {duration} дней до {end_date.strftime("%d.%m.%Y")}'
+            'message': f'Промокод активирован! Подписка {tier_name} на {duration} дней до {end_date_str}'
         })
 
     except Exception as e:
-        logger.error(f"Error applying promo code: {e}")
+        logger.error(f"Error applying promo code: {e}", exc_info=True)
         session.rollback()
-        return web.json_response({'success': False, 'message': 'Ошибка активации промокода'}, status=500)
+        return web.json_response({'success': False, 'message': f'Ошибка активации промокода: {str(e)}'}, status=500)
     finally:
         session.close()
 
