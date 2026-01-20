@@ -3187,6 +3187,26 @@
             }
         }
         
+        // Функция для правильного склонения слова "задача"
+        function pluralizeTasks(count) {
+            const lastDigit = count % 10;
+            const lastTwoDigits = count % 100;
+            
+            if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+                return count + ' задач';
+            }
+            
+            if (lastDigit === 1) {
+                return count + ' задачу';
+            }
+            
+            if (lastDigit >= 2 && lastDigit <= 4) {
+                return count + ' задачи';
+            }
+            
+            return count + ' задач';
+        }
+        
         async function updateTasks() {
             // Prevent too frequent updates (similar to updateChat)
             const now = Date.now();
@@ -3471,7 +3491,7 @@
                                     
                                     // Количество делегированных задач сразу под ником
                                     if (partner.task_count) {
-                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Делегирует мне ' + partner.task_count + ' задач</span></div>';
+                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Делегирует мне ' + pluralizeTasks(partner.task_count) + '</span></div>';
                                     }
                                     // Город на отдельной строке
                                     if (partner.city) {
@@ -3578,7 +3598,7 @@
                                     
                                     // Количество делегированных задач сразу под ником
                                     if (partner.task_count) {
-                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Делегирую я ' + partner.task_count + ' задач</span></div>';
+                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Делегирую я ' + pluralizeTasks(partner.task_count) + '</span></div>';
                                     }
                                     // Город на отдельной строке
                                     if (partner.city) {
