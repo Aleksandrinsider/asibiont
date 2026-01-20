@@ -4396,16 +4396,19 @@ app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 
-if bot:
-    # webhook_requests_handler = SimpleRequestHandler(
-    #     dispatcher=dp,
-    #     bot=bot,
-    # )
-    # webhook_requests_handler.register(app, path="/webhook")
-    # setup_application(app, dp, bot=bot)
+if bot and not LOCAL:
+    from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    )
+    webhook_requests_handler.register(app, path="/webhook")
+    setup_application(app, dp, bot=bot)
+    logger.info("Webhook configured for production mode")
+elif bot:
     logger.info("Bot created, but webhook setup disabled for local mode")
 else:
-    logger.warning("Bot not created or local mode, skipping webhook setup")
+    logger.warning("Bot not created, skipping webhook setup")
 
 logger.info("App created successfully")
 
