@@ -1875,12 +1875,14 @@ def update_profile(
     updates_made = []
 
     def update_list_field(field, value, field_name):
+        logger.info(f"[UPDATE_LIST_FIELD] field_name={field_name}, field='{field}', value='{value}'")
         if value is None:
             return field, None, False
         if value == "":
             return None, f"cleared_{field_name}", False
 
         current = set((field or "").split(", ")) - {""}
+        logger.info(f"[UPDATE_LIST_FIELD] current before update: {current}")
         action = None
 
         if value.startswith("+"):
@@ -1895,13 +1897,16 @@ def update_profile(
                 action = f"removed_{field_name}:{remove_item}"
         else:
             new_items_list = [item.strip() for item in value.split(",") if item.strip()]
+            logger.info(f"[UPDATE_LIST_FIELD] new_items_list: {new_items_list}")
             for item in new_items_list:
                 if item not in current:
                     current.add(item)
             if new_items_list:
                 action = f"added_{field_name}:{', '.join(new_items_list)}"
 
-        return ", ".join(sorted(current)), action, False
+        result = ", ".join(sorted(current)) if current else None
+        logger.info(f"[UPDATE_LIST_FIELD] result: '{result}', action: {action}")
+        return result, action, False
 
     if skills is not None:
         new_value, action, _ = update_list_field(profile.skills, skills, "skills")
@@ -1910,9 +1915,10 @@ def update_profile(
             updates_made.append(action)
 
     if interests is not None:
+        old_interests = profile.interests
         new_value, action, _ = update_list_field(profile.interests, interests, "interests")
         profile.interests = new_value
-        logger.info(f"[UPDATE_PROFILE] Interests updated: old={profile.interests}, new={new_value}, action={action}")
+        logger.info(f"[UPDATE_PROFILE] Interests updated: old='{old_interests}', new='{new_value}', action={action}, input={interests}")
         if action:
             updates_made.append(action)
 
