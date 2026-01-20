@@ -498,6 +498,16 @@
             border-color: #d73a49;
         }
 
+        /* Disabled button styles */
+        button[disabled] {
+            cursor: not-allowed;
+        }
+        
+        button[disabled] * {
+            cursor: not-allowed !important;
+            pointer-events: none;
+        }
+
         /* Custom tooltips removed - no data-tooltip attributes in use */
     </style>
 </head>
@@ -714,7 +724,7 @@
             </div>
         </div>
         {% else %}
-        <div class="main-layout" style="margin-top: 0px; padding-top: 0;">
+        <div class="main-layout" style="margin-top: 5px; padding-top: 0;">
             <!-- Левая колонка - Люди -->
             <div class="left-column">
                 <div class="context-section" id="profile-section">
