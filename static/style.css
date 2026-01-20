@@ -1,11 +1,11 @@
-﻿* {
+* {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
-/* я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ */
+/* ��������������� ����� �������� ��� ����� ���������� */
 *::-webkit-scrollbar {
     width: 4px;
     height: 4px;
@@ -30,7 +30,7 @@
     scrollbar-color: #D1D9E0 transparent;
 }
 
-/* я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜ select я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ */
+/* ����� ��� select ��������� */
 select {
     appearance: none;
     -webkit-appearance: none;
@@ -96,7 +96,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }  
 
-/* я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜я┐╜ */
+/* ��������� ��������� */
 @media (max-width: 768px) {
     body {
         overflow: auto;
@@ -1796,7 +1796,7 @@ details[open] .details-content {
 }
 
 .disabled-btn:hover::after {
-    content: 'ЁЯЪл';
+    content: '🚫';
     position: absolute;
     top: -15px;
     left: 50%;

@@ -1,4 +1,4 @@
-﻿User-agent: *
+User-agent: *
 Allow: /
 Allow: /static/
 Allow: /subscription-tiers
