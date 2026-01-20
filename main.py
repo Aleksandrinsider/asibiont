@@ -341,6 +341,33 @@ try:
                 logger.info("Migration: completed_at column added successfully")
             else:
                 logger.info("Migration: completed_at column already exists")
+            
+            # Migration for skipped column
+            if 'skipped' not in task_columns:
+                logger.info("Adding skipped column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN skipped BOOLEAN DEFAULT FALSE'))
+                session.commit()
+                logger.info("Migration: skipped column added successfully")
+            else:
+                logger.info("Migration: skipped column already exists")
+            
+            # Migration for skipped_at column
+            if 'skipped_at' not in task_columns:
+                logger.info("Adding skipped_at column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN skipped_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: skipped_at column added successfully")
+            else:
+                logger.info("Migration: skipped_at column already exists")
+            
+            # Migration for skipped_reason column
+            if 'skipped_reason' not in task_columns:
+                logger.info("Adding skipped_reason column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN skipped_reason VARCHAR(255)'))
+                session.commit()
+                logger.info("Migration: skipped_reason column added successfully")
+            else:
+                logger.info("Migration: skipped_reason column already exists")
 
         # Migration for login_count column in subscriptions table
         if 'subscriptions' in inspector.get_table_names():
