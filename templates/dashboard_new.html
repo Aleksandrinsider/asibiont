@@ -268,8 +268,9 @@
         }
         
         .login-message-card {
-            background: #FFFFFF;
-            border: 1px solid #D1D9E0;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(3px);
+            border: 1px solid rgba(209, 217, 224, 0.3);
             border-radius: 6px;
             padding: 14px 16px;
             font-size: 14px;
@@ -282,9 +283,32 @@
         }
         
         .login-message-card:hover {
-            border-color: #959DA5;
+            border-color: rgba(149, 157, 165, 0.5);
             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-            background-color: #F9FAFB;
+            background: rgba(249, 250, 251, 0.9);
+        }
+        
+        /* Speech bubble triangle */
+        .login-message-card::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border: 6px solid transparent;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .login-messages-sidebar.left .login-message-card::after {
+            right: -12px;
+            border-left-color: rgba(255, 255, 255, 0.7);
+            border-right: 0;
+        }
+        
+        .login-messages-sidebar.right .login-message-card::after {
+            left: -12px;
+            border-right-color: rgba(255, 255, 255, 0.7);
+            border-left: 0;
         }
         
         
