@@ -5,7 +5,8 @@ import json
 from datetime import datetime, timezone, timedelta
 import pytz
 from models import Session, Task, User, UserProfile, Interaction
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
 from .memory import encrypt_data, decrypt_data
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
@@ -290,10 +291,25 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
             .first()
         )
     elif task_title:
-        # Search by words in title
+        # Search by words in title (including delegated tasks)
         words = task_title.lower().split()
-        conditions = [Task.title.ilike(f"%{word}%") for word in words]
-        task = session.query(Task).filter(Task.user_id == user.id, Task.status != "completed", or_(*conditions)).first()
+        # Use func.lower() for case-insensitive search
+        conditions = [func.lower(Task.title).like(f"%{word}%") for word in words]
+        
+        # Build query with optional delegated task search
+        query_conditions = [and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions))]
+        
+        if user.username:
+            query_conditions.append(
+                and_(
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegation_status == "accepted",
+                    Task.status != "completed",
+                    or_(*conditions)
+                )
+            )
+        
+        task = session.query(Task).filter(or_(*query_conditions)).first()
     else:
         if close_session:
             session.close()
@@ -405,10 +421,19 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
             .first()
         )
     elif task_title:
-        # Search by words in title
+        # Search by words in title (including delegated tasks)
         words = task_title.lower().split()
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
-        task = session.query(Task).filter(Task.user_id == user.id, Task.status != "completed", or_(*conditions)).first()
+        task = session.query(Task).filter(
+            or_(
+                and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions)),
+                and_(
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.status != "completed",
+                    or_(*conditions)
+                )
+            )
+        ).first()
     else:
         if close_session:
             session.close()
@@ -469,10 +494,18 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
             .first()
         )
     elif task_title:
-        # Search by words in title
+        # Search by words in title (including delegated tasks)
         words = task_title.lower().split()
         conditions = [Task.title.ilike(f"%{word}%") for word in words]
-        task = session.query(Task).filter(Task.user_id == user.id, or_(*conditions)).first()
+        task = session.query(Task).filter(
+            or_(
+                and_(Task.user_id == user.id, or_(*conditions)),
+                and_(
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    or_(*conditions)
+                )
+            )
+        ).first()
     else:
         if close_session:
             session.close()
@@ -773,6 +806,7 @@ def delegate_task(
     title, reminder_time=None, delegated_to_username=None, user_id=None, description="", delegation_details=""
 ):
     """Create a delegated task that requires acceptance by the recipient"""
+    from config import FREE_ACCESS_MODE
     session = Session()
     try:
         # Check if delegator has Bronze tier - Bronze users can only receive delegated tasks
@@ -780,7 +814,8 @@ def delegate_task(
         if not delegator:
             return "Ошибка: Пользователь не найден."
         
-        if delegator.subscription_tier and delegator.subscription_tier.value == 'BRONZE':
+        # Skip subscription check in FREE_ACCESS_MODE
+        if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier.value == 'BRONZE':
             return ("🥉 Делегирование задач доступно только на тарифах **Серебро** и **Золото**. "
                     "На тарифе Бронза вы можете получать делегированные задачи от других пользователей, "
                     "но не можете делегировать свои задачи. Обновите тариф для доступа к делегированию.")
@@ -972,7 +1007,7 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
             },
         ]
 
-        data = {"model": "deepseek-reasoner", "messages": messages, "max_tokens": 500}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": 500}
 
         async with aiohttp.ClientSession() as aio_session:
             async with aio_session.post(
@@ -1274,8 +1309,12 @@ def edit_task(
 
         if title:
             task.title = title
-        if description:
-            task.description = encrypt_data(description)
+        if description is not None:
+            # Only encrypt if not already encrypted (prevents double encryption)
+            if description and not description.startswith('gAAAAA'):
+                task.description = encrypt_data(description)
+            else:
+                task.description = description
         if reminder_time:
             try:
                 if "через" in reminder_time.lower():
@@ -1404,18 +1443,18 @@ def list_tasks(user_id=None, session=None):
 
         # Format detailed list
         active_tasks = [t for t in tasks if t.status != "completed"]
-        # completed_tasks = [t for t in tasks if t.status == "completed"]  # noqa: F841
-        # user_username_lower = user.username.lower() if user.username else ""  # noqa: F841
-        # delegated_to_me = [  # noqa: F841
-        #     t
-        #     for t in active_tasks
-        #     if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() == user_username_lower
-        # ]
-        # delegated_by_me = [  # noqa: F841
-        #     t
-        #     for t in active_tasks
-        #     if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() != user_username_lower
-        # ]
+        completed_tasks = [t for t in tasks if t.status == "completed"]
+        user_username_lower = user.username.lower() if user.username else ""
+        delegated_to_me = [
+            t
+            for t in active_tasks
+            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() == user_username_lower
+        ]
+        delegated_by_me = [
+            t
+            for t in active_tasks
+            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() != user_username_lower
+        ]
         my_tasks = [t for t in active_tasks if not t.delegated_to_username]
 
         # Determine user timezone
@@ -1440,8 +1479,8 @@ def list_tasks(user_id=None, session=None):
 
         result = f"У вас {len(active_tasks)} {'задача' if len(active_tasks) == 1 else 'задач'}\n\n"
 
-        # Show only first 3 tasks
-        tasks_to_show = my_tasks[:3]
+        # Show first 10 tasks instead of 3
+        tasks_to_show = my_tasks[:10]
         if tasks_to_show:
             result += "Ваши задачи:\n"
             for task in tasks_to_show:
@@ -1464,8 +1503,14 @@ def list_tasks(user_id=None, session=None):
                         pass
                 result += f"- {task.title}{reminder_info}\n"
 
-            if len(my_tasks) > 3:
-                result += f"...и ещё {len(my_tasks) - 3}\n"
+            if len(my_tasks) > 10:
+                result += f"...и ещё {len(my_tasks) - 10}\n"
+        
+        # Show delegated tasks
+        if delegated_to_me:
+            result += "\nДелегированные мне:\n"
+            for task in delegated_to_me[:5]:
+                result += f"- {task.title} (от @{task.delegated_by if hasattr(task, 'delegated_by') else 'неизвестно'})\n"
 
         # Brief recommendation
         if overdue_count > 0:

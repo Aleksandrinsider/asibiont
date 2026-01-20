@@ -27,7 +27,7 @@ else:
         raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in .env file")
 
 # AI Model Configuration
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-reasoner")  # V3.2 reasoning model for agents
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 if not DEEPSEEK_API_KEY:
     raise ValueError("DEEPSEEK_API_KEY is required")

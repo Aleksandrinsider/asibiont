@@ -1203,7 +1203,7 @@ def generate_task_recommendations(title, description, user_id):
                 "Content-Type": "application/json"
             },
             json={
-                "model": "deepseek-reasoner",
+                "model": DEEPSEEK_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 150,
                 "temperature": 0.5

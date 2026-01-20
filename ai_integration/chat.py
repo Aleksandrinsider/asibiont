@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 import re
 import pytz
 
-from config import DEEPSEEK_API_KEY
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .memory import decrypt_data
 from .utils import (
@@ -240,7 +240,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 messages.append({"role": "user", "content": "Задача НЕ создана - пользователь не указал время."})
                 
                 data = {
-                    "model": "deepseek-reasoner",
+                    "model": DEEPSEEK_MODEL,
                     "messages": messages,
                     "temperature": 0.7,
                     "max_tokens": 300
@@ -391,7 +391,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             
             # Запрашиваем естественный ответ от AI
             data = {
-                "model": "deepseek-reasoner",
+                "model": DEEPSEEK_MODEL,
                 "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 600  # Увеличено для полных ответов с временем
@@ -414,7 +414,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                                     # Последняя попытка - упрощённый запрос
                                     try:
                                         simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
-                                        simple_data = {"model": "deepseek-reasoner", "messages": simple_msg, "temperature": 0.7, "max_tokens": 500}
+                                        simple_data = {"model": DEEPSEEK_MODEL, "messages": simple_msg, "temperature": 0.7, "max_tokens": 500}
                                         async with aiohttp.ClientSession() as simple_session:
                                             async with simple_session.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
                                                 if simple_response.status == 200:
@@ -534,7 +534,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         url = "https://api.deepseek.com/v1/chat/completions"
                         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
                         msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "У пользователя нет активной подписки. Сообщи об этом и предложи активировать подписку в @asibiont_bot."}]
-                        data = {"model": "deepseek-reasoner", "messages": msg, "temperature": 0.7, "max_tokens": 80}
+                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.7, "max_tokens": 80}
                         async with aiohttp.ClientSession() as sess:
                             async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
@@ -973,7 +973,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
-            "model": "deepseek-reasoner",
+            "model": DEEPSEEK_MODEL,
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": tool_choice,
@@ -1202,7 +1202,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     url,
                                     headers=headers,
                                     json={
-                                        "model": "deepseek-reasoner",
+                                        "model": DEEPSEEK_MODEL,
                                         "messages": retry_messages,
                                         "temperature": 0.3,
                                         "tools": TOOLS,
@@ -1366,7 +1366,7 @@ async def generate_reminder(user_id, task_title):
             {"role": "user", "content": f"Сгенерируй персонализированное напоминание о задаче '{task_title}'. Учитывай контекст пользователя, давай практические советы, будь мотивирующим и заверши вопросом."},
         ]
 
-        data = {"model": "deepseek-reasoner", "messages": messages}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -1443,7 +1443,7 @@ async def generate_result_check(user_id, task_title):
             },
         ]
 
-        data = {"model": "deepseek-reasoner", "messages": messages}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -1652,7 +1652,7 @@ async def generate_proactive_message(user_id):
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
-            "model": "deepseek-reasoner",
+            "model": DEEPSEEK_MODEL,
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
@@ -1734,7 +1734,7 @@ async def generate_daily_report(user_id):
             {"role": "user", "content": f"Создай отчет: выполнено {len(completed)}, ожидают {len(pending)}"},
         ]
 
-        data = {"model": "deepseek-reasoner", "messages": messages}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -1761,7 +1761,7 @@ async def generate_daily_report(user_id):
                 else:
                     logger.error(f"Failed to generate daily report: status {response.status}")
                     retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Ежедневный отчёт."}]
-                    retry_data = {"model": "deepseek-reasoner", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
+                    retry_data = {"model": DEEPSEEK_MODEL, "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
                     async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
                         if retry_resp.status == 200:
                             retry_result = await retry_resp.json()
@@ -1771,7 +1771,7 @@ async def generate_daily_report(user_id):
                         url = "https://api.deepseek.com/v1/chat/completions"
                         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
                         msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Время подвести итоги дня. Создай короткое напоминание."}]
-                        data = {"model": "deepseek-reasoner", "messages": msg, "temperature": 0.8, "max_tokens": 50}
+                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
                         async with aiohttp.ClientSession() as sess:
                             async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
@@ -1786,7 +1786,7 @@ async def generate_daily_report(user_id):
             url = "https://api.deepseek.com/v1/chat/completions"
             headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
             msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Отчёт о дне. Создай короткий вопрос о дне."}]
-            data = {"model": "deepseek-reasoner", "messages": msg, "temperature": 0.8, "max_tokens": 50}
+            data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
             async with aiohttp.ClientSession() as sess:
                 async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                     if resp.status == 200:
@@ -1854,7 +1854,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                 "role": "system", "content": system_prompt}, {
                 "role": "user", "content": f"Напомни о просроченных задачах: {', '.join(task_titles)}. {tone_instruction} Предложи конкретные шаги решения.", }, ]
 
-        data = {"model": "deepseek-reasoner", "messages": messages}
+        data = {"model": DEEPSEEK_MODEL, "messages": messages}
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
@@ -1881,7 +1881,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                 else:
                     logger.error(f"Failed to generate overdue reminder: status {response.status}")
                     retry_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Напоминание о просроченных задачах."}]
-                    retry_data = {"model": "deepseek-reasoner", "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
+                    retry_data = {"model": DEEPSEEK_MODEL, "messages": retry_msg, "temperature": 0.7, "max_tokens": 200}
                     async with session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=20)) as retry_resp:
                         if retry_resp.status == 200:
                             retry_result = await retry_resp.json()
@@ -1891,7 +1891,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                         url = "https://api.deepseek.com/v1/chat/completions"
                         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
                         msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Просроченные задачи пользователя: {overdue_info}. Создай короткое напоминание."}]
-                        data = {"model": "deepseek-reasoner", "messages": msg, "temperature": 0.8, "max_tokens": 80}
+                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 80}
                         async with aiohttp.ClientSession() as sess:
                             async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
@@ -1906,7 +1906,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
             url = "https://api.deepseek.com/v1/chat/completions"
             headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
             msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Просроченные задачи. Напомни коротко."}]
-            data = {"model": "deepseek-reasoner", "messages": msg, "temperature": 0.8, "max_tokens": 50}
+            data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 50}
             async with aiohttp.ClientSession() as sess:
                 async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)) as resp:
                     if resp.status == 200:
