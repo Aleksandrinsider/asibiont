@@ -792,13 +792,30 @@ async def get_user_avatar_url(bot, user_id):
 
 def check_telegram_authentication(data):
     # Проверка авторизации от Telegram
-    token = TELEGRAM_TOKEN
-    if token.startswith('bot'):
-        token = token[3:]  # Remove 'bot' prefix
-    secret_key = hashlib.sha256(token.encode()).digest()
-    data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
-    hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    return hash_computed == data.get('hash')
+    try:
+        if 'hash' not in data:
+            logger.error("No hash in Telegram auth data")
+            return False
+            
+        token = TELEGRAM_TOKEN
+        if not token:
+            logger.error("TELEGRAM_TOKEN not set")
+            return False
+            
+        if token.startswith('bot'):
+            token = token[3:]  # Remove 'bot' prefix
+        secret_key = hashlib.sha256(token.encode()).digest()
+        data_check_string = '\n'.join(sorted([f'{k}={v}' for k, v in data.items() if k != 'hash']))
+        hash_computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        
+        is_valid = hash_computed == data.get('hash')
+        if not is_valid:
+            logger.warning(f"Telegram auth hash mismatch. Expected: {hash_computed[:10]}..., got: {data.get('hash', '')[:10]}...")
+        
+        return is_valid
+    except Exception as e:
+        logger.error(f"Error in check_telegram_authentication: {e}", exc_info=True)
+        return False
 
 
 async def health_handler(request):
