@@ -258,6 +258,50 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
         finally:
             db_session.close()
 
+    # Распознавание интересов для автоматического обновления профиля
+    interest_keywords = {
+        "спорт": ["бег", "фитнес", "тренировка", "спорт", "йога", "плавание", "зарядка", "гимнастика"],
+        "программирование": ["код", "программирование", "python", "js", "разработка", "проект", "кодирование"],
+        "путешествия": ["путешествие", "отпуск", "туризм", "поездка", "туризм"],
+        "музыка": ["музыка", "концерт", "гитара", "пение", "инструмент"],
+        "искусство": ["картина", "выставка", "театр", "кино", "рисование", "фотография"],
+        "чтение": ["книга", "читать", "литература", "роман"],
+        "кухня": ["готовить", "рецепт", "кухня", "еда", "выпечка"],
+        "здоровье": ["здоровье", "диета", "питание", "медитация"],
+        "бизнес": ["бизнес", "стартап", "предпринимательство", "инвестиции"],
+        "образование": ["учиться", "курс", "обучение", "образование"]
+    }
+    
+    message_lower = message.lower()
+    detected_interests = []
+    
+    # Проверяем на фразы типа "хочу заняться", "интересуюсь", "люблю"
+    interest_phrases = ["хочу заняться", "интересуюсь", "люблю", "увлекаюсь", "занимаюсь"]
+    for phrase in interest_phrases:
+        if phrase in message_lower:
+            for interest, keywords in interest_keywords.items():
+                for keyword in keywords:
+                    if keyword in message_lower:
+                        if interest not in detected_interests:
+                            detected_interests.append(interest)
+                        break
+    
+    # Если найдены интересы и AI не упомянул обновление профиля
+    if detected_interests and "добавил" not in ai_response_content.lower() and "интересы" not in ai_response_content.lower():
+        logger.info(f"[SMART FALLBACK] Detected interests: {detected_interests}, updating profile")
+        from ai_integration.handlers import update_profile
+        
+        try:
+            for interest in detected_interests:
+                result = update_profile(interests=interest, user_id=user_id)
+                fallback_actions.append({
+                    "function": "update_profile",
+                    "result": result,
+                    "reason": f"Автоматическое добавление интереса '{interest}' из сообщения пользователя"
+                })
+        except Exception as e:
+            logger.error(f"Error updating profile with interests: {e}")
+
     # Высокая уверенность AI уже обработал
     ai_confidence = 0.8  # AI уже проанализировал запрос
 
