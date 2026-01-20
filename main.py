@@ -322,6 +322,17 @@ try:
             # Commit the column additions
             session.commit()
 
+        # Migration for completed column in tasks table
+        if 'tasks' in inspector.get_table_names():
+            task_columns = [col['name'] for col in inspector.get_columns('tasks')]
+            if 'completed' not in task_columns:
+                logger.info("Adding completed column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN completed BOOLEAN DEFAULT FALSE'))
+                session.commit()
+                logger.info("Migration: completed column added successfully")
+            else:
+                logger.info("Migration: completed column already exists")
+
         # Migration for login_count column in subscriptions table
         if 'subscriptions' in inspector.get_table_names():
             sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
