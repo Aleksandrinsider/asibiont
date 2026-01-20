@@ -4230,7 +4230,15 @@ async def apply_promo_code_handler(request):
         # Ищем существующую подписку или создаем новую
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
         if not subscription:
-            subscription = Subscription(user_id=user.id, telegram_username=user.username, status='active', tier=promo.tier, start_date=start_date, end_date=end_date)
+            subscription = Subscription(
+                user_id=user.id,
+                telegram_id=user.telegram_id,
+                telegram_username=user.username,
+                status='active',
+                tier=promo.tier,
+                start_date=start_date,
+                end_date=end_date
+            )
             session.add(subscription)
             logger.info(f"Created new subscription for user {user.id} with tier {promo.tier}")
         else:
