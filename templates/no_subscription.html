@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asibiont - Требуется подписка</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        p {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .cta-button {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 15px 40px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .cta-button:hover {
+            background: #5568d3;
+        }
+        .secondary-button {
+            background: #6c757d;
+        }
+        .secondary-button:hover {
+            background: #5a6268;
+        }
+        .benefits {
+            margin-top: 40px;
+            text-align: left;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+        }
+        .benefits h3 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .benefit {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            color: #555;
+        }
+        .benefit-icon {
+            width: 24px;
+            height: 24px;
+            background: #667eea;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin-right: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🔒</div>
+        <h1>Требуется подписка</h1>
+        <p>Для доступа к полному функционалу Asibiont необходима активная подписка. Выберите подходящий тариф и откройте все возможности AI-ассистента!</p>
+        
+        <div>
+            <a href="/subscription_tiers" class="cta-button">Выбрать тариф</a>
+            <a href="/" class="cta-button secondary-button">На главную</a>
+        </div>
+
+        <div class="benefits">
+            <h3>Что вы получите:</h3>
+            <div class="benefit">
+                <div class="benefit-icon">✓</div>
+                <div>Умное управление задачами с AI</div>
+            </div>
+            <div class="benefit">
+                <div class="benefit-icon">✓</div>
+                <div>Автоматические напоминания</div>
+            </div>
+            <div class="benefit">
+                <div class="benefit-icon">✓</div>
+                <div>Делегирование задач коллегам</div>
+            </div>
+            <div class="benefit">
+                <div class="benefit-icon">✓</div>
+                <div>Детальная аналитика продуктивности</div>
+            </div>
+            <div class="benefit">
+                <div class="benefit-icon">✓</div>
+                <div>Интеграция с Telegram</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

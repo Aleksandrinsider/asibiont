@@ -213,7 +213,7 @@
         }
 
         // Highlight current subscription
-        const currentTier = '{CURRENT_TIER}';
+        const currentTier = '{{ CURRENT_TIER }}';
         if (currentTier && currentTier !== 'None' && currentTier !== '') {
             const buttons = document.querySelectorAll('.subscribe-btn');
             buttons.forEach(btn => {

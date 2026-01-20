@@ -11,8 +11,8 @@ from redis.asyncio import Redis
 import os
 from sqlalchemy import text, or_, and_
 import re
-# import jinja2
-# import aiohttp_jinja2
+import jinja2
+import aiohttp_jinja2
 from aiohttp import web
 import aiohttp
 import asyncio
@@ -723,30 +723,12 @@ def check_telegram_authentication(data):
         return False
 
 
-def render_template(template_name, context=None):
-    """Simple template rendering function"""
-    import os
-    template_path = os.path.join(os.path.dirname(__file__), 'templates', template_name)
-    try:
-        with open(template_path, 'r', encoding='utf-8') as f:
-            html = f.read()
-        
-        if context:
-            for key, value in context.items():
-                placeholder = f'{{{key}}}'
-                html = html.replace(placeholder, str(value) if value is not None else '')
-        
-        return html
-    except Exception as e:
-        logger.error(f"Error rendering template {template_name}: {e}")
-        return f"<html><body><h1>Error loading page</h1><p>{str(e)}</p></body></html>"
-
-
 async def health_handler(request):
     """Health check endpoint for Railway"""
     return web.Response(text='OK', status=200)
 
 
+@aiohttp_jinja2.template('index.html')
 async def login_handler(request):
     """Страница авторизации"""
     session = await get_session(request)
@@ -770,11 +752,10 @@ async def login_handler(request):
     bot_username = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
     auth_url = f"{WEB_APP_URL}/tg_auth" if WEB_APP_URL else "/tg_auth"
     
-    html = render_template('index.html', {
+    return {
         'BOT_USERNAME': bot_username,
         'AUTH_URL': auth_url
-    })
-    return web.Response(text=html, content_type='text/html')
+    }
 
 
 async def auth_handler(request):
@@ -1334,7 +1315,7 @@ async def dashboard_handler(request):
         
         bot_username = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
         
-        html = render_template('dashboard_new.html', {
+        return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'USER_FIRST_NAME': user_first_name,
             'USER_NAME': user_name,
             'USER_INITIALS': user_initials,
@@ -1347,7 +1328,6 @@ async def dashboard_handler(request):
             'SUBSCRIPTION_TIER': subscription_tier_name,
             'SUBSCRIPTION_EXPIRES': subscription_expires
         })
-        return web.Response(text=html, content_type='text/html')
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
         return web.HTTPFound('/')
@@ -2179,7 +2159,7 @@ app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
-# aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 
 
 async def yookassa_webhook(request):
@@ -4113,10 +4093,9 @@ async def subscription_tiers_handler(request):
         finally:
             session_db.close()
     
-    html = render_template('subscription_tiers.html', {
+    return {
         'CURRENT_TIER': current_tier
-    })
-    return web.Response(text=html, content_type='text/html')
+    }
 
 
 async def apply_promo_code_handler(request):
@@ -4289,7 +4268,7 @@ app.router.add_get('/clear_redis', clear_redis_handler)
 app.router.add_get('/admin/users', admin_users_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
-# app.router.add_static('/static', 'static')
+app.router.add_static('/static', 'static')
 app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)

@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /webhook
+Disallow: /clear_database
+Disallow: /clear_redis
+Allow: /
