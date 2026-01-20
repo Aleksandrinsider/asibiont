@@ -929,7 +929,7 @@
             processedText = processedText.replace(/^[-•]\s+/gm, '');
             
             if (normalizedSender === 'ai') {
-                processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; font-weight: 500; cursor: pointer;">@$1</a>');
+                processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">@$1</a>');
             }
             
             const messageDiv = document.createElement('div');
@@ -2249,7 +2249,7 @@
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
-                html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + clickableDelegationInfo + '</span></div>';
+                html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #374151;">' + clickableDelegationInfo + '</span></div>';
             }
             
             // Показываем описание задачи, если оно есть и это не устаревший текст делегирования
@@ -2367,7 +2367,13 @@
                     timeText = `через ${minutes} мин.`;
                 }
                 
-                nextTaskTextEl.textContent = `${next.title} ${timeText}`;
+                // Делаем ники кликабельными
+                let displayTitle = next.title.replace(/(@\w+)/g, (match, p1) => {
+                    const usernameWithoutAt = p1.substring(1);
+                    return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
+                });
+                
+                nextTaskTextEl.innerHTML = `${displayTitle} ${timeText}`;
                 nextTaskCenterEl.style.display = 'flex';
             } else {
                 nextTaskCenterEl.style.display = 'none';
