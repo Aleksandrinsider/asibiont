@@ -2559,7 +2559,7 @@ async def api_partners_handler(request):
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
 
-        # Calculate common_tasks for regular partners
+        # Calculate common_tasks for regular partners - улучшенная логика с частичным совпадением
         for p in partners:
             if profile and p:
                 # Get user's tasks
@@ -2579,7 +2579,25 @@ async def api_partners_handler(request):
                             if task.title:
                                 partner_task_titles.add(task.title.lower().strip())
 
+                        # Точное совпадение задач
                         common_task_titles = user_task_titles & partner_task_titles
+                        
+                        # Частичное совпадение - если хотя бы 2 слова совпадают
+                        if not common_task_titles:
+                            partial_matches = set()
+                            for user_task in user_task_titles:
+                                user_words = set(user_task.split())
+                                if len(user_words) < 2:  # Пропускаем слишком короткие
+                                    continue
+                                for partner_task in partner_task_titles:
+                                    partner_words = set(partner_task.split())
+                                    # Если совпадает >= 2 слов
+                                    common_words = user_words & partner_words
+                                    if len(common_words) >= 2:
+                                        partial_matches.add(user_task)
+                            if partial_matches:
+                                common_task_titles = partial_matches
+                        
                         p.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
                     else:
                         p.common_tasks = None
@@ -2744,7 +2762,24 @@ async def api_partners_handler(request):
                         if task.title:
                             delegator_task_titles.add(task.title.lower().strip())
 
+                    # Точное совпадение задач
                     common_task_titles = user_task_titles & delegator_task_titles
+                    
+                    # Частичное совпадение - если хотя бы 2 слова совпадают
+                    if not common_task_titles:
+                        partial_matches = set()
+                        for user_task in user_task_titles:
+                            user_words = set(user_task.split())
+                            if len(user_words) < 2:
+                                continue
+                            for delegator_task in delegator_task_titles:
+                                delegator_words = set(delegator_task.split())
+                                common_words = user_words & delegator_words
+                                if len(common_words) >= 2:
+                                    partial_matches.add(user_task)
+                        if partial_matches:
+                            common_task_titles = partial_matches
+                    
                     common_tasks = ', '.join(
                         list(common_task_titles)[
                             :5]) if common_task_titles else None  # Limit to 5 common tasks
@@ -2869,7 +2904,24 @@ async def api_partners_handler(request):
                         if task.title:
                             delegatee_task_titles.add(task.title.lower().strip())
 
+                    # Точное совпадение задач
                     common_task_titles = user_task_titles & delegatee_task_titles
+                    
+                    # Частичное совпадение - если хотя бы 2 слова совпадают
+                    if not common_task_titles:
+                        partial_matches = set()
+                        for user_task in user_task_titles:
+                            user_words = set(user_task.split())
+                            if len(user_words) < 2:
+                                continue
+                            for delegatee_task in delegatee_task_titles:
+                                delegatee_words = set(delegatee_task.split())
+                                common_words = user_words & delegatee_words
+                                if len(common_words) >= 2:
+                                    partial_matches.add(user_task)
+                        if partial_matches:
+                            common_task_titles = partial_matches
+                    
                     common_tasks = ', '.join(
                         list(common_task_titles)[
                             :5]) if common_task_titles else None  # Limit to 5 common tasks

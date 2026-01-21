@@ -13,14 +13,36 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         tier_name = {
             'BRONZE': 'Bronze (базовая)',
             'SILVER': 'Silver (расширенная)',
-            'GOLD': 'Gold (премиум)'
+            'GOLD': 'Gold (премиум)',
+            'bronze': 'Bronze (базовая)',
+            'silver': 'Silver (расширенная)',
+            'gold': 'Gold (премиум)'
         }.get(subscription_tier, subscription_tier)
+        
+        tier_upper = subscription_tier.upper() if isinstance(subscription_tier, str) else str(subscription_tier).upper()
         
         tier_info = f"\n💎 ПОДПИСКА ПОЛЬЗОВАТЕЛЯ: {tier_name}"
         
-        # Важно: не рекомендуй повышение тарифа тем, у кого уже Bronze или Silver
-        if subscription_tier in ['BRONZE', 'SILVER']:
-            tier_info += "\n⚠️ У пользователя уже есть активная подписка. НЕ предлагай и НЕ рекомендуй переход на другой тариф."
+        # Функции по тарифам
+        tier_info += "\n\n📋 ДОСТУПНЫЕ ФУНКЦИИ:"
+        if tier_upper in ['BRONZE', 'SILVER', 'GOLD']:
+            tier_info += "\n✅ Управление задачами (создание, редактирование, удаление)"
+            tier_info += "\n✅ Получение делегированных задач от других"
+            tier_info += "\n✅ Поиск контактов по интересам"
+        
+        if tier_upper in ['SILVER', 'GOLD']:
+            tier_info += "\n✅ ДЕЛЕГИРОВАНИЕ ЗАДАЧ другим пользователям"
+            tier_info += "\n✅ ИИ-контроль выполнения делегированных задач"
+        else:
+            tier_info += "\n❌ Делегирование задач (доступно на Silver/Gold)"
+        
+        if tier_upper == 'GOLD':
+            tier_info += "\n✅ Доступ к элитным связям (Gold контакты)"
+            tier_info += "\n✅ VIP-поддержка"
+        
+        # Важно: не рекомендуй повышение тарифа тем, у кого уже Silver или Gold
+        if tier_upper in ['SILVER', 'GOLD']:
+            tier_info += "\n\n⚠️ У пользователя уже есть активная подписка. НЕ предлагай и НЕ рекомендуй переход на другой тариф."
     
     # Basic system prompt when improved_prompts_final not available
     return f"""Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности.

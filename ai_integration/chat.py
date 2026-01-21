@@ -518,6 +518,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             # Получаем subscription_tier
             subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
+            logger.info(f"[SUBSCRIPTION] User {user_id} tier from DB: {user.subscription_tier if user else 'None'}, value: {subscription_tier}")
 
             # Check subscription
             from config import FREE_ACCESS_MODE

@@ -843,6 +843,9 @@ def delegate_task(
         if not delegator:
             return "Ошибка: Пользователь не найден."
         
+        # Log tier for debugging
+        logger.info(f"[DELEGATE] User {user_id} tier: {delegator.subscription_tier.value if delegator.subscription_tier else 'None'}")
+        
         # Skip subscription check in FREE_ACCESS_MODE
         if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier.value == 'BRONZE':
             return ("🥉 Делегирование задач доступно только на тарифах **Серебро** и **Золото**. "
