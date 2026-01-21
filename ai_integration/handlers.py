@@ -148,7 +148,9 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     if task.reminder_time:
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         local_time = task.reminder_time.astimezone(user_tz)
-        result_msg += f" с напоминанием на {local_time.strftime('%d.%m.%Y %H:%M')}"
+        time_str = local_time.strftime('%H:%M')
+        date_str = local_time.strftime('%d.%m.%Y')
+        result_msg += f" с напоминанием на {date_str} в {time_str}"
 
     if close_session:
         session.close()
