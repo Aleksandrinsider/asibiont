@@ -359,7 +359,7 @@
         let currentContactFilter = 'recommended';
         // Глобальная переменная для отслеживания активного view: 'chat' или 'feed'
         // Инициализируем из sessionStorage или по умолчанию 'chat'
-        let currentView = sessionStorage.getItem('currentView') || 'chat';
+        let currentView = 'chat'; // Начальный вид - всегда чат
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
@@ -1695,45 +1695,17 @@
 
         // Функции для ленты новостей
         function switchToChat() {
-            console.log('[SWITCH] Switching to CHAT view');
-            console.trace('[SWITCH] Call stack for switchToChat'); // Добавляем trace для отладки
-            
-            // Проверяем сохраненное состояние из sessionStorage
-            const savedView = sessionStorage.getItem('currentView');
-            if (savedView === 'feed') {
-                console.warn('[SWITCH] Blocked automatic switch to chat - user selected feed view (from sessionStorage)');
-                return;
-            }
-            
-            // Проверяем глобальную переменную
-            if (currentView === 'feed') {
-                console.warn('[SWITCH] Blocked automatic switch to chat - user is on feed view');
-                return;
-            }
-            
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
-            if (!chatView || !feedView) {
-                console.error('[SWITCH] Views not found!');
-                return;
-            }
+            if (!chatView || !feedView) return;
             
-            // Обновляем глобальную переменную и sessionStorage
             currentView = 'chat';
-            sessionStorage.setItem('currentView', 'chat');
-            
-            // Удаляем active с feed и добавляем к chat
             feedView.classList.remove('active');
             chatView.classList.add('active');
-            
-            // Принудительно устанавливаем z-index
             chatView.style.zIndex = '1';
             feedView.style.zIndex = '0';
-            
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
-            console.log('[SWITCH] Chat view active:', chatView.classList.contains('active'));
-            console.log('[SWITCH] Feed view active:', feedView.classList.contains('active'));
         }
 
         function switchToFeed() {
@@ -1741,28 +1713,15 @@
             console.trace('[SWITCH] Call stack for switchToFeed'); // Добавляем trace для отладки
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
-            if (!chatView || !feedView) {
-                console.error('[SWITCH] Views not found!');
-                return;
-            }
+            if (!chatView || !feedView) return;
             
-            // Обновляем глобальную переменную и sessionStorage
             currentView = 'feed';
-            sessionStorage.setItem('currentView', 'feed');
-            console.log('[SWITCH] Saved currentView to sessionStorage: feed');
-            
-            // Удаляем active с chat и добавляем к feed
             chatView.classList.remove('active');
             feedView.classList.add('active');
-            
-            // Принудительно устанавливаем z-index
             feedView.style.zIndex = '1';
             chatView.style.zIndex = '0';
-            
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
-            console.log('[SWITCH] Chat view active:', chatView.classList.contains('active'));
-            console.log('[SWITCH] Feed view active:', feedView.classList.contains('active'));
             loadFeed();
         }
 
@@ -3593,41 +3552,16 @@
                 return;
             }
             
-            // Убедиться что chat-view активен при загрузке ТОЛЬКО ЕСЛИ ни один view не активен
-            console.log('[INIT] Checking if any view is active on page load');
+            // Убедиться что chat-view активен при загрузке
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
             if (chatView && feedView) {
-                // Проверяем сохраненное состояние из sessionStorage
-                const savedView = sessionStorage.getItem('currentView');
-                console.log('[INIT] Saved view from sessionStorage:', savedView);
+                const chatActive = chatView.classList.contains('active');
+                const feedActive = feedView.classList.contains('active');
                 
-                if (savedView === 'feed') {
-                    // Пользователь был на ленте - восстанавливаем состояние
-                    console.log('[INIT] Restoring feed view from sessionStorage');
-                    chatView.classList.remove('active');
-                    feedView.classList.add('active');
-                    feedView.style.zIndex = '1';
-                    chatView.style.zIndex = '0';
-                    document.getElementById('chat-link').style.opacity = '0.5';
-                    document.getElementById('feed-link').style.opacity = '1';
-                    currentView = 'feed';
-                    loadFeed();
-                } else {
-                    // По умолчанию или если был на чате
-                    const chatActive = chatView.classList.contains('active');
-                    const feedActive = feedView.classList.contains('active');
-                    console.log('[INIT] Chat view active:', chatActive);
-                    console.log('[INIT] Feed view active:', feedActive);
-                    
-                    // Активируем chat только если ни один view не активен
-                    if (!chatActive && !feedActive) {
-                        console.log('[INIT] No active view, activating chat');
-                        chatView.classList.add('active');
-                        feedView.classList.remove('active');
-                        currentView = 'chat';
-                        sessionStorage.setItem('currentView', 'chat');
-                    }
+                if (!chatActive && !feedActive) {
+                    chatView.classList.add('active');
+                    currentView = 'chat';
                 }
             }
             
