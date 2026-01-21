@@ -1588,7 +1588,7 @@
                         feedContainer.appendChild(postDiv);
                     });
                 } else {
-                    feedContainer.innerHTML = '<div class="message ai"><p>Пока нет постов. Добавьте кого-нибудь в избранное или создайте свой первый пост!</p></div>';
+                    feedContainer.innerHTML = '<div class="message ai"><p>Здесь будут отображаться публикации избранных пользователей. Добавьте контакты в избранное, чтобы видеть их посты.</p></div>';
                 }
             } catch (error) {
                 console.error('Error loading feed:', error);
@@ -3209,69 +3209,53 @@
                     
                     let html = '';
                     
-                    // Avatar and basic info - точно как в панели профиля
-                    html += '<div style="text-align: center; margin-bottom: 16px;">';
-                    
-                    // Определяем цвет сияния по тарифу
-                    const tier = (partner.subscription_tier || '').toLowerCase();
-                    let glowColor = '#CD7F32'; // Bronze по умолчанию
-                    if (tier === 'silver') {
-                        glowColor = '#C0C0C0';
-                    } else if (tier === 'gold') {
-                        glowColor = '#FFD700';
-                    }
+                    // Avatar and basic info - центрированно как в панели профиля
+                    html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">';
                     
                     if (partner.photo_url) {
                         html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid white; margin: 0 auto 8px auto;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
                     }
                     
                     // Имя и ник под аватаром
                     const fullName = partner.first_name || 'Пользователь';
                     const contactInfoEscaped = (partner.contact_info || 'неизвестен').replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                     html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
-                    html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
+                    html += `<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@${contactInfoEscaped}</p>`;
                     
                     html += '</div>';
                     
-                    // Profile details - выровнены по левому краю
-                    html += '<div style="text-align: left;">';
+                    // Profile details - текст слева, отступы как в блоке профиля
+                    html += '<div class="context-item">';
                     
-                    // Тариф
-                    if (partner.subscription_tier) {
-                        const tierLower = partner.subscription_tier.toLowerCase();
-                        let tierColor = '#CD7F32'; // Bronze
-                        if (tierLower === 'silver') {
-                            tierColor = '#C0C0C0';
-                        } else if (tierLower === 'gold') {
-                            tierColor = '#FFD700';
-                        }
-                        html += `<p style="margin: 4px 0;">Тариф: ${tierLower}</p>`;
-                    }
+                    html += `<p>Город: ${partner.city || 'Не указан'}</p>`;
+                    html += `<p>Компания: ${partner.company || 'Не указана'}</p>`;
+                    html += `<p>Должность: ${partner.position || 'Не указана'}</p>`;
+                    html += `<p>Цели: ${partner.goals || 'Не указаны'}</p>`;
+                    html += `<p>Навыки: ${partner.skills || 'Не указаны'}</p>`;
+                    html += `<p>Интересы: ${partner.interests || 'Не указаны'}</p>`;
+                    html += `<p>Языки: ${partner.languages || 'Не указаны'}</p>`;
                     
-                    html += `<p style="margin: 4px 0;">Город: ${partner.city || 'Не указан'}</p>`;
-                    html += `<p style="margin: 4px 0;">Компания: ${partner.company || 'Не указана'}</p>`;
-                    html += `<p style="margin: 4px 0;">Должность: ${partner.position || 'Не указана'}</p>`;
-                    html += `<p style="margin: 4px 0;">Цели: ${partner.goals || 'Не указаны'}</p>`;
-                    html += `<p style="margin: 4px 0;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
-                    html += `<p style="margin: 4px 0;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
-                    html += `<p style="margin: 4px 0;">Языки: ${partner.languages || 'Не указаны'}</p>`;
-                    
-                    // Рекомендация
+                    // Рекомендация с цветом
                     if (partner.average_rating > 0) {
-                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#374151');
-                        html += `<p style="margin: 4px 0; color: ${ratingColor};">Рекомендация: ${partner.average_rating}/10</p>`;
+                        let ratingStyle = '';
+                        if (partner.average_rating < 5) {
+                            ratingStyle = 'style="color: #d73a49;"';
+                        } else if (partner.average_rating >= 9) {
+                            ratingStyle = 'style="color: #D7AC0C;"';
+                        }
+                        html += `<p ${ratingStyle}>Рекомендация: ${partner.average_rating}/10</p>`;
                     } else {
-                        html += `<p style="margin: 4px 0;">Рекомендация: нет рекомендаций</p>`;
+                        html += `<p>Рекомендация: нет рекомендаций</p>`;
                     }
                     
-                    // Активные задачи
+                    // Активные задачи с отступом снизу
                     if (partner.task_count) {
-                        html += `<p style="margin: 4px 0 20px 0;">Активных задач: ${partner.task_count}</p>`;
+                        html += `<p style="margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
                     } else {
-                        html += `<p style="margin: 4px 0 20px 0;">Активных задач: 0</p>`;
+                        html += `<p style="margin-bottom: 20px;">Активных задач: 0</p>`;
                     }
                     
                     html += '</div>';
