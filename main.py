@@ -3203,15 +3203,20 @@ async def api_elite_partners_handler(request):
                 User.subscription_tier == SubscriptionTier.GOLD,
                 User.id != user.id
             ).all()
+            
+            logger.info(f"Found {len(gold_users)} other Gold users for user {user.username}")
 
             partners_data = []
             for gold_user in gold_users:
                 # Skip hidden and blocked contacts
                 username_clean = gold_user.username.replace('@', '').lower() if gold_user.username else ''
                 if username_clean in hidden_contacts or gold_user.username in blocked_by_me:
+                    logger.info(f"Skipping Gold user {gold_user.username} - hidden or blocked")
                     continue
 
                 gold_profile = session_db.query(UserProfile).filter_by(user_id=gold_user.id).first()
+                
+                logger.info(f"Adding Gold user to elite partners: {gold_user.username}")
 
                 # Update avatar from Telegram if available
                 photo_url = gold_user.photo_url if gold_user.photo_url else None
