@@ -2660,12 +2660,13 @@
             
             // Кнопки действий (включая меню оверлей)
             // Для делегированных задач pending - две кнопки в ряд, для остальных - одна колонка
-            const gridColumns = task.delegation_status === 'pending' ? 'repeat(2, 1fr)' : '1fr';
+            const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
+            const gridColumns = isDelegatedToMe ? 'repeat(2, 1fr)' : '1fr';
             html += '<div class="task-actions" style="display: grid; grid-template-columns: ' + gridColumns + '; gap: 4px;">';
             
             // Проверяем статус делегирования
-            if (task.delegation_status === 'pending') {
-                // Делегированная задача, ожидающая принятия - кнопки Принять и Отклонить
+            if (isDelegatedToMe) {
+                // Задача делегирована МНЕ и ожидает моего принятия - кнопки Принять и Отклонить
                 html += '<button onclick="event.stopPropagation(); acceptDelegatedTask(' + task.id + ')" class="quick-action" style="background: #238636;" title="Принять делегированную задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
                 html += '<button onclick="event.stopPropagation(); rejectDelegatedTask(' + task.id + ')" class="quick-action" style="background: #d73a49;" title="Отклонить делегированную задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.status !== 'completed') {
@@ -3036,8 +3037,17 @@
             html += '<span class="task-meta" style="color: ' + statusColor + ';">' + statusText + '</span>';
             html += '</div>';
             html += '</div>';
-            html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
-            if (task.status !== 'completed') {
+            
+            // Кнопки действий
+            const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
+            const gridColumns = isDelegatedToMe ? 'repeat(2, 1fr)' : '1fr';
+            html += '<div class="task-actions" style="display: grid; grid-template-columns: ' + gridColumns + '; gap: 4px;">';
+            
+            if (isDelegatedToMe) {
+                // Задача делегирована МНЕ и ожидает моего принятия
+                html += '<button onclick="event.stopPropagation(); acceptDelegatedTask(' + task.id + ')" class="quick-action" style="background: #238636;" title="Принять делегированную задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
+                html += '<button onclick="event.stopPropagation(); rejectDelegatedTask(' + task.id + ')" class="quick-action" style="background: #d73a49;" title="Отклонить делегированную задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+            } else if (task.status !== 'completed') {
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Завершить задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
             } else {
                 html += '<button onclick="restoreTask(' + task.id + ')" class="quick-action" title="Восстановить задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 12V4m0 0L4 8m4-4 4 4"/></svg></button>';
