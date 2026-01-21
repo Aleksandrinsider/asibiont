@@ -3638,6 +3638,12 @@
                 return;
             }
             
+            // Skip update if elite filter is active (unless forced)
+            if (!force && currentContactFilter === 'elite') {
+                console.log('updatePeople: elite filter active, skipping');
+                return;
+            }
+            
             // Prevent too frequent updates (except when forced)
             const now = Date.now();
             if (!force && now - lastPeopleUpdate < 1000) { // Minimum 1 second between updates
@@ -4487,7 +4493,7 @@
             setInterval(() => {
                 // Полностью останавливаем обновления, если открыта лента новостей
                 const feedView = document.getElementById('feed-view');
-                if (feedView && feedView.style.display !== 'none') {
+                if (feedView && (feedView.style.display === 'flex' || feedView.style.display === 'block')) {
                     console.log('Feed view is active, skipping all auto-updates');
                     return;
                 }
@@ -4497,7 +4503,7 @@
                 updateProfile();
                 // Обновляем чат только если он активен
                 const chatView = document.getElementById('chat-view');
-                if (chatView && chatView.style.display !== 'none') {
+                if (chatView && (chatView.style.display === 'flex' || chatView.style.display === 'block')) {
                     updateChat();
                 }
             }, 5000);
