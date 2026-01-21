@@ -192,7 +192,7 @@
                             const telegramUrl = 'https://t.me/' + partner.contact_info;
                             const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                             
-                            html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '" data-type="recommended" data-tier="gold" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                            html += '<li class="task-item contact-elite" data-username="' + contactInfoEscaped + '" data-type="elite" data-tier="gold" style="display: flex; margin-bottom: 8px; align-items: center;">';
                             
                             // Аватар
                             if (partner.photo_url) {
@@ -319,6 +319,8 @@
                 let type = null;
                 if (card.classList.contains('contact-recommended')) {
                     type = 'recommended';
+                } else if (card.classList.contains('contact-elite')) {
+                    type = 'elite';
                 } else if (card.classList.contains('contact-delegating-to-me')) {
                     type = 'delegating_to_me';
                 } else if (card.classList.contains('contact-delegating-by-me')) {
@@ -337,10 +339,8 @@
                     const isFavorite = cachedFavorites && cachedFavorites.includes(username);
                     card.style.display = isFavorite ? 'flex' : 'none';
                 } else if (currentContactFilter === 'elite') {
-                    // Для elite показываем только GOLD контакты из recommended
-                    const tier = card.dataset.tier;
-                    const isElite = type === 'recommended' && tier && tier.toLowerCase() === 'gold';
-                    card.style.display = isElite ? 'flex' : 'none';
+                    // Для elite показываем контакты с type='elite'
+                    card.style.display = type === 'elite' ? 'flex' : 'none';
                 } else if (currentContactFilter === 'blocked') {
                     // Для blocked показываем только заблокированные контакты
                     card.style.display = type === 'blocked' ? 'flex' : 'none';
@@ -3172,10 +3172,13 @@
             // Получаем название задачи из самих данных задач
             let taskTitle = `задача ${taskId}`;
             const task = allTasksData.find(t => t.id === taskId);
+            let isDelegatedToMe = false;
             if (task) {
                 taskTitle = task.title;
+                // Проверяем, является ли задача делегированной на нас
+                isDelegatedToMe = task.delegated_to_username !== null && task.delegated_to_username !== undefined;
             }
-            console.log('[DELETE_TASK] Task title:', taskTitle);
+            console.log('[DELETE_TASK] Task title:', taskTitle, 'isDelegatedToMe:', isDelegatedToMe);
             
             // Подтверждение удаления
             if (!confirm(`Вы уверены, что хотите удалить задачу "${taskTitle}"?`)) {
@@ -4660,6 +4663,12 @@
 
         async function updateChat() {
             try {
+                // Не обновляем чат, если активна лента новостей
+                if (currentView === 'feed') {
+                    console.log('updateChat: Skipping - feed view is active');
+                    return;
+                }
+                
                 console.log('updateChat: Starting chat update check');
                 const response = await fetch('/api/interactions', {
                     credentials: 'include',
