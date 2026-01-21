@@ -1822,10 +1822,10 @@ def get_partners_list(user_id=None, session=None):
                             has_match = True
                             match_reasons.append(f"interests partial (2+ words): {user_interest} <-> {profile_interest}")
                             break
-                        # Или одно специфичное слово длиной >= 6 символов
+                        # Или одно специфичное слово длиной >= 5 символов (смягчено для лучшего поиска)
                         elif len(common_words) == 1:
                             word = list(common_words)[0]
-                            if len(word) >= 6:
+                            if len(word) >= 5:
                                 has_match = True
                                 match_reasons.append(f"interests specific word: {word}")
                                 break
@@ -1885,6 +1885,49 @@ def get_partners_list(user_id=None, session=None):
     sorted_partners = partners_same_city + partners_other_city
     
     logger.info(f"[PARTNERS] Sorted results: {len(partners_same_city)} from same city, {len(partners_other_city)} from other cities")
+    
+    # Добавляем информацию об общих интересах, навыках, целях и задачах
+    user_interests = set(i.strip().lower() for i in user_profile.interests.split(',')) if user_profile.interests else set()
+    user_skills = set(s.strip().lower() for s in user_profile.skills.split(',')) if user_profile.skills else set()
+    user_goals = set(g.strip().lower() for g in user_profile.goals.split(',')) if user_profile.goals else set()
+    
+    for partner in sorted_partners:
+        # Common interests
+        if partner.interests:
+            partner_interests = set(i.strip().lower() for i in partner.interests.split(','))
+            common = user_interests & partner_interests
+            partner.common_interests = ', '.join(common) if common else None
+        else:
+            partner.common_interests = None
+            
+        # Common skills
+        if partner.skills:
+            partner_skills = set(s.strip().lower() for s in partner.skills.split(','))
+            common_skills = user_skills & partner_skills
+            partner.common_skills = ', '.join(common_skills) if common_skills else None
+        else:
+            partner.common_skills = None
+            
+        # Common goals
+        if partner.goals:
+            partner_goals = set(g.strip().lower() for g in partner.goals.split(','))
+            common_goals = user_goals & partner_goals
+            partner.common_goals = ', '.join(common_goals) if common_goals else None
+        else:
+            partner.common_goals = None
+            
+        # Common tasks
+        if partner.user_id:
+            user_tasks = session.query(Task).filter_by(user_id=user.id).all()
+            user_task_titles = set(t.title.lower().strip() for t in user_tasks if t.title)
+            
+            partner_tasks = session.query(Task).filter_by(user_id=partner.user_id).all()
+            partner_task_titles = set(t.title.lower().strip() for t in partner_tasks if t.title)
+            
+            common_task_titles = user_task_titles & partner_task_titles
+            partner.common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
+        else:
+            partner.common_tasks = None
 
     if close_session:
         session.close()
