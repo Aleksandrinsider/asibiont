@@ -3703,8 +3703,23 @@ async def get_feed_handler(request):
                 except:
                     favorite_user_ids = []
 
-            # Include own posts too
-            all_user_ids = favorite_user_ids + [user.id]
+            # Get users who blocked current user (exclude their posts)
+            blocked_by_users = set()
+            all_profiles = session_db.query(UserProfile).filter(
+                UserProfile.blocked_contacts.isnot(None)
+            ).all()
+            
+            import json
+            for profile in all_profiles:
+                try:
+                    blocked_list = json.loads(profile.blocked_contacts)
+                    if user.id in blocked_list:
+                        blocked_by_users.add(profile.user_id)
+                except:
+                    pass
+
+            # Include own posts too, but exclude users who blocked current user
+            all_user_ids = [uid for uid in (favorite_user_ids + [user.id]) if uid not in blocked_by_users]
 
             # Get posts from favorites and self
             if all_user_ids:
