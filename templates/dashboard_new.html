@@ -650,12 +650,6 @@
             min-height: 0;
         }
 
-        /* When views are active (set by JavaScript) */
-        #chat-view[style*="display: flex"],
-        #feed-view[style*="display: flex"] {
-            display: flex;
-        }
-
         /* Chat messages and feed posts container */
         .chat-messages {
             flex: 1;
@@ -1009,7 +1003,7 @@
                     </div>
 
                     <!-- Чат с ИИ -->
-                    <div id="chat-view">
+                    <div id="chat-view" style="display: flex;">
                         <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
@@ -4491,14 +4485,6 @@
         // Initial update only for logged in users
         const isLoggedIn = document.querySelector('.main-layout') !== null;
         if (isLoggedIn) {
-            // Initialize view states
-            const chatView = document.getElementById('chat-view');
-            const feedView = document.getElementById('feed-view');
-            if (chatView && feedView) {
-                chatView.style.display = 'flex'; // Show chat by default
-                feedView.style.display = 'none'; // Hide feed by default
-            }
-            
             loadInitialMessages();
             updateProfile();
             
