@@ -2085,7 +2085,11 @@
                 cachedFavorites = favorites;
                 // Force reload contacts to update heart icons
                 cachedPartnersData = null;
-                updatePeople();
+                await updatePeople();
+                // Обновить элитные контакты если активен фильтр
+                if (currentContactFilter === 'elite') {
+                    await loadEliteContacts();
+                }
             }
         }
 
@@ -2097,7 +2101,11 @@
                 if (success) {
                     cachedBlocked = blocked;
                     cachedPartnersData = null;
-                    updatePeople();
+                    await updatePeople();
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 }
             }
         }
@@ -2111,7 +2119,11 @@
                 if (success) {
                     cachedBlocked = blocked;
                     cachedPartnersData = null;
-                    updatePeople();
+                    await updatePeople();
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 }
             }
         }
@@ -3180,9 +3192,14 @@
                 if (response.ok) {
                     const data = await response.json();
                     showNotification('Задача выполнена!', 'success');
-                    // Обновить задачи и чат
+                    // Обновить задачи, чат и контакты
                     await updateTasks();
                     await updateChat();
+                    await updatePeople(true);
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при выполнении задачи: ${error.error}`, 'error');
@@ -3208,9 +3225,14 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     showNotification('Задача принята', 'success');
-                    // Обновить задачи и чат
+                    // Обновить задачи, чат и контакты
                     await updateTasks();
                     await updateChat();
+                    await updatePeople(true);
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 } else {
                     showNotification('Ошибка при принятии задачи', 'error');
                 }
@@ -3234,9 +3256,14 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     showNotification('Задача отклонена', 'success');
-                    // Обновить задачи и чат
+                    // Обновить задачи, чат и контакты
                     await updateTasks();
                     await updateChat();
+                    await updatePeople(true);
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 } else {
                     showNotification('Ошибка при отклонении задачи', 'error');
                 }
@@ -3259,9 +3286,14 @@
                     // Показать уведомление об успехе
                     showNotification('Задача восстановлена', 'success');
                     
-                    // Обновить задачи и чат
+                    // Обновить задачи, чат и контакты
                     await updateTasks();
                     await updateChat();
+                    await updatePeople(true);
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                     
                     // Если текущий фильтр "Выполненные", переключить на "Все задачи"
                     if (currentTaskFilter === 'completed') {
@@ -3497,6 +3529,10 @@
                             showNotification(`Контакт @${username} заблокирован`, 'success');
                             cachedBlocked = blocked; // Update cache
                             await updatePeople(true); // Force refresh contacts list
+                            // Обновить элитные контакты если активен фильтр
+                            if (currentContactFilter === 'elite') {
+                                await loadEliteContacts();
+                            }
                         } else {
                             const error = await updateResponse.json();
                             showNotification(`Ошибка: ${error.error || 'Не удалось заблокировать контакт'}`, 'error');
@@ -3623,6 +3659,10 @@
             await toggleFavoriteContact(username);
             // Обновляем список контактов
             await updatePeople();
+            // Обновить элитные контакты если активен фильтр
+            if (currentContactFilter === 'elite') {
+                await loadEliteContacts();
+            }
         }
         
         async function blockContactFromModal(username) {
@@ -3648,6 +3688,10 @@
                     cachedPartnersData = null;
                     await updatePeople(); // Обновить список контактов
                     await updateChat(); // Обновить чат для загрузки нового сообщения
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error}`, 'error');
@@ -3834,6 +3878,11 @@
                 if (response.ok) {
                     showNotification('Задача удалена', 'success');
                     await updateTasks();
+                    await updatePeople(true);
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
+                    }
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
