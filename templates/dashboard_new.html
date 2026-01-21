@@ -1665,21 +1665,35 @@
 
         // Функции для ленты новостей
         function switchToChat() {
+            console.log('[SWITCH] Switching to CHAT view');
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
+            if (!chatView || !feedView) {
+                console.error('[SWITCH] Views not found!');
+                return;
+            }
             chatView.classList.add('active');
             feedView.classList.remove('active');
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
+            console.log('[SWITCH] Chat view active:', chatView.classList.contains('active'));
+            console.log('[SWITCH] Feed view active:', feedView.classList.contains('active'));
         }
 
         function switchToFeed() {
+            console.log('[SWITCH] Switching to FEED view');
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
+            if (!chatView || !feedView) {
+                console.error('[SWITCH] Views not found!');
+                return;
+            }
             chatView.classList.remove('active');
             feedView.classList.add('active');
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
+            console.log('[SWITCH] Chat view active:', chatView.classList.contains('active'));
+            console.log('[SWITCH] Feed view active:', feedView.classList.contains('active'));
             loadFeed();
         }
 
@@ -3120,11 +3134,12 @@
         async function deleteTask(taskId) {
             console.log('[DELETE_TASK] Called with taskId:', taskId);
             
-            // Получаем название задачи
-            const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
-            console.log('[DELETE_TASK] Found element:', taskElement);
-            
-            const taskTitle = taskElement ? taskElement.querySelector('.task-title').textContent : `задача ${taskId}`;
+            // Получаем название задачи из самих данных задач
+            let taskTitle = `задача ${taskId}`;
+            const task = allTasksData.find(t => t.id === taskId);
+            if (task) {
+                taskTitle = task.title;
+            }
             console.log('[DELETE_TASK] Task title:', taskTitle);
             
             // Подтверждение удаления
@@ -3502,6 +3517,17 @@
             if (!isLoggedIn) {
 
                 return;
+            }
+            
+            // Убедиться что chat-view активен при загрузке
+            console.log('[INIT] Ensuring chat-view is active on page load');
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            if (chatView && feedView) {
+                chatView.classList.add('active');
+                feedView.classList.remove('active');
+                console.log('[INIT] Chat view active:', chatView.classList.contains('active'));
+                console.log('[INIT] Feed view active:', feedView.classList.contains('active'));
             }
             
             // Состояние профиля уже установлено inline-скриптом, не нужно повторно применять
@@ -4510,16 +4536,18 @@
             setInterval(() => {
                 // Полностью останавливаем обновления, если открыта лента новостей
                 const feedView = document.getElementById('feed-view');
+                const chatView = document.getElementById('chat-view');
+                
                 if (feedView && feedView.classList.contains('active')) {
-                    console.log('Feed view is active, skipping all auto-updates');
+                    console.log('[AUTO-UPDATE] Feed view is active, skipping all auto-updates');
                     return;
                 }
                 
+                console.log('[AUTO-UPDATE] Chat view active, running updates');
                 updateTasks();
                 updatePeople();
                 updateProfile();
                 // Обновляем чат только если он активен
-                const chatView = document.getElementById('chat-view');
                 if (chatView && chatView.classList.contains('active')) {
                     updateChat();
                 }
