@@ -155,6 +155,7 @@
             
             // Если фильтр elite, загружаем Gold контакты
             if (filterType === 'elite') {
+                console.log('DEBUG: filterContacts("elite") called, userSubscriptionTier =', userSubscriptionTier);
                 await loadEliteContacts();
             } else if (filterType === 'blocked') {
                 // Если фильтр заблокированные, обновляем список контактов
@@ -171,6 +172,10 @@
 
             try {
                 console.log('Loading elite contacts...');
+                
+                // Загружаем избранные контакты для проверки
+                const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
+                
                 const response = await fetch('/api/elite_partners', {
                     credentials: 'include'
                 });
@@ -1248,6 +1253,7 @@
 
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
         const userSubscriptionTier = '{{ subscription_tier }}'; // Bronze/SILVER/GOLD
+        console.log('DEBUG: userSubscriptionTier =', userSubscriptionTier, 'type:', typeof userSubscriptionTier);
 
         // Функция для создания единообразного значка тарифа
         function createTierBadge(tier) {
@@ -2540,9 +2546,19 @@
             
             let statusStr = 'В работе';
             let statusColor = '#068487';
-            if (task.delegation_status === 'pending') {
+            
+            // Проверяем делегированные задачи
+            if (task.delegated_to && task.delegation_status === 'pending') {
+                // Задача делегирована кому-то, ожидает принятия
                 statusStr = 'Ожидает подтверждения';
-                statusColor = '#D7AC0C';  // Золотой цвет для ожидающих задач
+                statusColor = '#D7AC0C';
+            } else if (task.delegated_by && task.delegation_status === 'pending') {
+                // Задача делегирована мне, я еще не принял
+                statusStr = 'Ожидает принятия';
+                statusColor = '#D7AC0C';
+            } else if (task.delegation_status === 'pending') {
+                statusStr = 'Ожидает подтверждения';
+                statusColor = '#D7AC0C';
             } else if (task.status === 'completed') {
                 statusStr = 'Завершена';
                 statusColor = '#238636';
