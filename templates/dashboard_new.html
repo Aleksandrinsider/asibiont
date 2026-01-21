@@ -645,10 +645,15 @@
         #chat-view,
         #feed-view {
             flex: 1;
-            display: flex;
             flex-direction: column;
             overflow: hidden;
             min-height: 0;
+        }
+
+        /* When views are active (set by JavaScript) */
+        #chat-view[style*="display: flex"],
+        #feed-view[style*="display: flex"] {
+            display: flex;
         }
 
         /* Chat messages and feed posts container */
@@ -4486,6 +4491,14 @@
         // Initial update only for logged in users
         const isLoggedIn = document.querySelector('.main-layout') !== null;
         if (isLoggedIn) {
+            // Initialize view states
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            if (chatView && feedView) {
+                chatView.style.display = 'flex'; // Show chat by default
+                feedView.style.display = 'none'; // Hide feed by default
+            }
+            
             loadInitialMessages();
             updateProfile();
             
