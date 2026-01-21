@@ -137,12 +137,16 @@
                 }
             }
             
+            console.log('[FILTER] filterContacts called with:', filterType, 'currentContactFilter:', currentContactFilter);
+            
             // Если фильтр уже активен, только сворачиваем профиль
             if (currentContactFilter === filterType) {
+                console.log('[FILTER] Filter already active, returning');
                 return;
             }
             
             currentContactFilter = filterType;
+            console.log('[FILTER] Set currentContactFilter to:', currentContactFilter);
             
             // Обновляем стили кнопок фильтров контактов
             document.querySelectorAll('.contact-filter-btn').forEach(btn => {
@@ -1703,6 +1707,8 @@
 
         // Функции для ленты новостей
         function switchToChat() {
+            console.log('[SWITCH] Switching to CHAT view');
+            console.trace('[SWITCH] Call stack for switchToChat');
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
             if (!chatView || !feedView) return;
@@ -1714,6 +1720,7 @@
             feedView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
+            console.log('[SWITCH] Chat view activated, currentView =', currentView);
         }
 
         function switchToFeed() {
@@ -1730,6 +1737,7 @@
             chatView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
+            console.log('[SWITCH] Feed view activated, currentView =', currentView);
             loadFeed();
         }
 
@@ -1740,14 +1748,17 @@
         }
 
         async function loadFeed() {
+            console.log('[FEED] Loading feed, currentView =', currentView);
             try {
                 const response = await fetch('/api/feed', {
                     method: 'GET',
                     credentials: 'include'
                 });
+                console.log('[FEED] Feed API response status:', response.status);
 
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
+                console.log('[FEED] Feed data loaded:', data.posts ? data.posts.length : 0, 'posts');
 
                 const feedContainer = document.getElementById('feed-posts');
                 feedContainer.innerHTML = '';
@@ -2947,10 +2958,24 @@
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
                 if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
             }
-            let statusText = task.status === 'completed' ? 'Завершено' : 
-                           task.status === 'in_progress' ? 'В работе' : 
-                           task.status === 'skipped' ? 'В работе' : 'В работе';
-            html += '<span class="task-meta">' + statusText + '</span>';
+            
+            let statusText = 'В работе';
+            let statusColor = '#068487';
+            if (task.delegated_to && task.delegation_status === 'pending') {
+                statusText = 'Ожидает подтверждения';
+                statusColor = '#D7AC0C';
+            } else if (task.delegated_by && task.delegation_status === 'pending') {
+                statusText = 'Ожидает принятия';
+                statusColor = '#D7AC0C';
+            } else if (task.status === 'completed') {
+                statusText = 'Завершено';
+                statusColor = '#238636';
+            } else if (task.overdue) {
+                statusText = 'Просрочена';
+                statusColor = '#d73a49';
+            }
+            
+            html += '<span class="task-meta" style="color: ' + statusColor + ';">' + statusText + '</span>';
             html += '</div>';
             html += '</div>';
             html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
@@ -3101,6 +3126,7 @@
         }
         
         async function acceptDelegatedTask(taskId) {
+            console.log('[DELEGATION] Accepting task:', taskId);
             try {
                 // Отправляем сообщение агенту о принятии задачи
                 const response = await fetch('/api/send_message', {
@@ -3314,12 +3340,18 @@
                 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('[RATING] Rating submitted successfully for:', currentRatingUsername);
                     showNotification('Рекомендация отправлена!', 'success');
                     closeRatingModal();
                     // Очистить кэш перед обновлением
                     cachedPartnersData = null;
                     // Обновить контакты, чтобы отразить новый рейтинг (принудительно)
                     await updatePeople(true);
+                    // Если активен фильтр elite, перезагрузить элитные контакты
+                    if (currentContactFilter === 'elite') {
+                        console.log('[RATING] Reloading elite contacts after rating');
+                        await loadEliteContacts();
+                    }
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error || 'Не удалось отправить рекомендацию'}`, 'error');
@@ -3697,6 +3729,14 @@
                 if (response.ok) {
                     const data = await response.json();
                     console.log('updateTasks received data.tasks:', data.tasks ? data.tasks.length : 0);
+                    if (data.tasks && data.tasks.length > 0) {
+                        console.log('[TASKS] Sample task data:', data.tasks[0]);
+                        // Логируем делегированные задачи
+                        const delegatedToMe = data.tasks.filter(t => t.delegated_by && t.delegation_status === 'pending');
+                        const delegatedByMe = data.tasks.filter(t => t.delegated_to && t.delegation_status === 'pending');
+                        console.log('[TASKS] Delegated to me (pending):', delegatedToMe.length, delegatedToMe.map(t => ({id: t.id, title: t.title, delegated_by: t.delegated_by, delegation_status: t.delegation_status})));
+                        console.log('[TASKS] Delegated by me (pending):', delegatedByMe.length, delegatedByMe.map(t => ({id: t.id, title: t.title, delegated_to: t.delegated_to, delegation_status: t.delegation_status})));
+                    }
                     renderTaskGroups(data.tasks);
                 }
             } catch (error) {
