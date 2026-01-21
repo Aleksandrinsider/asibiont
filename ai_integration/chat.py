@@ -135,8 +135,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     company=args.get("company"),
                     position=args.get("position"),
                     interests=args.get("interests"),
+                    skills=args.get("skills"),
+                    goals=args.get("goals"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
