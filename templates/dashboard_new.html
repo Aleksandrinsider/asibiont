@@ -802,7 +802,7 @@
                                 
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }} 
-                                <button onclick="detectUserLocation()" style="background: none; border: none; cursor: pointer; padding: 0; color: #068487; font-size: 12px; text-decoration: underline; margin-left: 8px;" title="Определить автоматически по геолокации">📍 определить</button>
+                                <button onclick="detectUserLocation()" style="background: none; border: none; cursor: pointer; padding: 0; color: #068487; font-size: 13px; text-decoration: underline; margin-left: 8px;" title="Определить автоматически по геолокации">📍 определить</button>
                             </p>
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -817,7 +817,7 @@
                             {% endif %}
                             {% if formatted_end_date %}
                             <p style="margin-bottom: 20px;">Подписка: активна до {{ formatted_end_date }} 
-                                <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: none; margin-left: 8px;">продлить</a>
+                                <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">продлить</a>
                             </p>
                             {% else %}
                             <p style="margin-bottom: 20px;">Подписка: информация загружается...</p>
@@ -975,8 +975,8 @@
             </div>
             <div class="rating-modal-body">
                 <p>Рекомендуете <span id="rating-username" onclick="openContactProfileModal(currentRatingUsername)" style="font-weight: 600; color: #068487; cursor: pointer;"></span></p>
-                <p style="font-size: 12px; color: #374151; margin-bottom: 8px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
-                <p style="font-size: 12px; color: #D7AC0C; margin-bottom: 16px;">Уровень рекомендации влияет на продвижение контакта</p>
+                <p style="font-size: 13px; color: #374151; margin-bottom: 8px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
+                <p style="font-size: 13px; color: #D7AC0C; margin-bottom: 16px;">Уровень рекомендации влияет на продвижение контакта</p>
                 <div class="rating-slider-container">
                     <input type="range" id="rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="updateRatingValue(this.value)">
                     <div class="rating-value-display">
@@ -2168,9 +2168,9 @@
                 
                 if (recommendations.length > 0) {
                     html += '<div class="task-recommendations" style="margin-top: 8px; padding: 8px; background: #F6F8FA; border-radius: 6px; border-left: 3px solid #068487;">';
-                    html += '<div style="font-size: 12px; font-weight: 600; color: #068487; margin-bottom: 4px;">Рекомендации:</div>';
+                    html += '<div style="font-size: 13px; font-weight: 600; color: #068487; margin-bottom: 4px;">Рекомендации:</div>';
                     recommendations.forEach(rec => {
-                        html += '<div style="font-size: 12px; color: #374151; margin-bottom: 2px;">' + rec + '</div>';
+                        html += '<div style="font-size: 13px; color: #374151; margin-bottom: 2px;">' + rec + '</div>';
                     });
                     html += '</div>';
                 }
@@ -3410,7 +3410,7 @@
                                     
                                     // Количество делегированных задач сразу под ником
                                     if (partner.task_count) {
-                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">' + partner.task_count + ' задач</span></div>';
+                                        html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #068487;">' + partner.task_count + ' задач</span></div>';
                                     }
                                     // Город на отдельной строке
                                     if (partner.city) {
@@ -3519,7 +3519,7 @@
                                     
                                     // Количество делегированных задач сразу под ником
                                     if (partner.task_count) {
-                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Делегирует мне ' + pluralizeTasks(partner.task_count) + '</span></div>';
+                                        html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #068487;">Делегирует мне ' + pluralizeTasks(partner.task_count) + '</span></div>';
                                     }
                                     // Город на отдельной строке
                                     if (partner.city) {
@@ -3626,7 +3626,7 @@
                                     
                                     // Количество делегированных задач сразу под ником
                                     if (partner.task_count) {
-                                        html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Делегирую я ' + pluralizeTasks(partner.task_count) + '</span></div>';
+                                        html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #068487;">Делегирую я ' + pluralizeTasks(partner.task_count) + '</span></div>';
                                     }
                                     // Город на отдельной строке
                                     if (partner.city) {
@@ -3716,7 +3716,7 @@
                                     
                                     html += '<div style="flex: 1;">';
                                     html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</div>';
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #068487;">Заблокирован</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #068487;">Заблокирован</span></div>';
                                     html += '</div>';
                                     
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
