@@ -3049,51 +3049,44 @@ async def api_partners_handler(request):
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
                             favorite_tier_str = favorite_tier.value if hasattr(favorite_tier, 'value') else str(favorite_tier).lower()
 
-                            can_access = False
+                            # Избранные контакты всегда доступны независимо от тарифа
+                            can_access = True
                             required_tier = None
 
-                            if user_tier_str.lower() in ['bronze', 'silver']:
-                                can_access = (favorite_tier_str.lower() in ['bronze', 'silver'])
-                                if not can_access:
-                                    required_tier = 'gold'
-                            elif user_tier_str.lower() == 'gold':
-                                can_access = True
+                            # Update avatar from Telegram if available
+                            photo_url = favorite_user.photo_url if favorite_user.photo_url else None
+                            if favorite_user.telegram_id and 'bot' in request.app:
+                                try:
+                                    updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id)
+                                    if updated_avatar and updated_avatar != favorite_user.photo_url:
+                                        favorite_user.photo_url = updated_avatar
+                                        session_db.commit()
+                                        photo_url = updated_avatar
+                                except Exception as e:
+                                    logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
 
-                            if can_access:
-                                # Update avatar from Telegram if available
-                                photo_url = favorite_user.photo_url if favorite_user.photo_url else None
-                                if favorite_user.telegram_id and 'bot' in request.app:
-                                    try:
-                                        updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id)
-                                        if updated_avatar and updated_avatar != favorite_user.photo_url:
-                                            favorite_user.photo_url = updated_avatar
-                                            session_db.commit()
-                                            photo_url = updated_avatar
-                                    except Exception as e:
-                                        logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
-
-                                partners_data.append({
-                                    'contact_info': favorite_user.username,
-                                    'telegram_id': favorite_user.telegram_id,
-                                    'photo_url': photo_url,
-                                    'can_access': can_access,
-                                    'required_tier': required_tier,
-                                    'subscription_tier': favorite_tier.value if favorite_tier else 'bronze',
-                                    'first_name': favorite_user.first_name,
-                                    'position': favorite_profile.position if favorite_profile else None,
-                                    'interests': favorite_profile.interests if favorite_profile else None,
-                                    'city': favorite_profile.city if favorite_profile else None,
-                                    'company': favorite_profile.company if favorite_profile else None,
-                                    'common_interests': None,  # Will be calculated later if needed
-                                    'common_skills': None,
-                                    'common_goals': None,
-                                    'common_tasks': None,
-                                    'average_rating': favorite_profile.average_rating if favorite_profile else 0,
-                                    'rating_count': favorite_profile.rating_count if favorite_profile else 0,
-                                    'reason': 'избранный контакт',
-                                    'task_count': 0,
-                                    'type': 'favorite'
-                                })
+                            partners_data.append({
+                                'contact_info': favorite_user.username,
+                                'telegram_id': favorite_user.telegram_id,
+                                'photo_url': photo_url,
+                                'can_access': can_access,
+                                'required_tier': required_tier,
+                                'subscription_tier': favorite_tier.value if favorite_tier else 'bronze',
+                                'first_name': favorite_user.first_name,
+                                'position': favorite_profile.position if favorite_profile else None,
+                                'interests': favorite_profile.interests if favorite_profile else None,
+                                'city': favorite_profile.city if favorite_profile else None,
+                                'company': favorite_profile.company if favorite_profile else None,
+                                'common_interests': None,  # Will be calculated later if needed
+                                'common_skills': None,
+                                'common_goals': None,
+                                'common_tasks': None,
+                                'average_rating': favorite_profile.average_rating if favorite_profile else 0,
+                                'rating_count': favorite_profile.rating_count if favorite_profile else 0,
+                                'reason': 'избранный контакт',
+                                'task_count': 0,
+                                'type': 'favorite'
+                            })
             except json.JSONDecodeError:
                 pass
 
