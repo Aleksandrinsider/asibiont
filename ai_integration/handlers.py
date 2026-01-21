@@ -1509,7 +1509,11 @@ def list_tasks(user_id=None, session=None):
         if not active_tasks:
             return "Нет активных задач. Что планируете?"
 
-        result = f"У вас {len(active_tasks)} {'задача' if len(active_tasks) == 1 else 'задач'}\n\n"
+        # Правильный подсчёт: только личные незавершённые задачи
+        result = f"У вас {len(my_tasks)} {'задача' if len(my_tasks) == 1 else ('задачи' if 2 <= len(my_tasks) <= 4 else 'задач')}"
+        if delegated_to_me:
+            result += f" + {len(delegated_to_me)} делегированных"
+        result += "\n\n"
 
         # Show first 10 tasks instead of 3
         tasks_to_show = my_tasks[:10]

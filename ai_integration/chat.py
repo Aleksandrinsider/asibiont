@@ -391,7 +391,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 "model": DEEPSEEK_MODEL,
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 600  # Увеличено для полных ответов с временем
+                "max_tokens": 1000  # Увеличено для полных ответов без обрыва
             }
             
             final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
