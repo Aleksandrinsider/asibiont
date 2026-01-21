@@ -1908,12 +1908,40 @@
                                     </div>
                                 </div>
                                 
-                                <p style="margin: 0; white-space: pre-wrap; word-wrap: break-word; color: #1F2328; font-size: 14px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                                <p style="margin: 0 0 12px 0; white-space: pre-wrap; word-wrap: break-word; color: #1F2328; font-size: 14px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                                
+                                <!-- Comments section -->
+                                <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
+                                    <div id="comments-${post.id}" style="margin-bottom: 8px;"></div>
+                                    
+                                    <div style="display: flex; gap: 6px; align-items: center;">
+                                        <input 
+                                            type="text" 
+                                            id="comment-input-${post.id}" 
+                                            placeholder="Написать комментарий..." 
+                                            style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
+                                            onkeypress="handleCommentKeyPress(event, ${post.id})"
+                                            onfocus="this.style.borderColor='#068487'" 
+                                            onblur="this.style.borderColor='#D1D9E0'"
+                                        >
+                                        <button 
+                                            onclick="addComment(${post.id})" 
+                                            style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
+                                            onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
+                                            onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                        >
+                                            Отправить
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         `;
 
                         postDiv.innerHTML = timelineContent;
                         feedContainer.appendChild(postDiv);
+                        
+                        // Load comments for this post
+                        loadComments(post.id);
                     });
                 } else {
                     feedContainer.innerHTML = `
@@ -1996,6 +2024,114 @@
             } catch (error) {
                 console.error('Error deleting post:', error);
                 showNotification('Ошибка удаления: ' + error.message, 'error');
+            }
+        }
+
+        async function loadComments(postId) {
+            try {
+                const response = await fetch(`/api/comments/${postId}`, {
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+
+                if (response.ok && data.comments) {
+                    const commentsContainer = document.getElementById(`comments-${postId}`);
+                    if (!commentsContainer) return;
+
+                    if (data.comments.length === 0) {
+                        commentsContainer.innerHTML = '';
+                        return;
+                    }
+
+                    let html = '';
+                    data.comments.forEach(comment => {
+                        const commentTime = new Date(comment.created_at);
+                        const now = new Date();
+                        const diffMs = now - commentTime;
+                        const diffMins = Math.floor(diffMs / 60000);
+                        
+                        let timeAgo = '';
+                        if (diffMins < 1) {
+                            timeAgo = 'только что';
+                        } else if (diffMins < 60) {
+                            timeAgo = `${diffMins} мин назад`;
+                        } else {
+                            const diffHours = Math.floor(diffMs / 3600000);
+                            if (diffHours < 24) {
+                                timeAgo = `${diffHours} ч назад`;
+                            } else {
+                                timeAgo = commentTime.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+                            }
+                        }
+
+                        html += `
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px; padding: 8px; background: #F6F8FA; border-radius: 4px;">
+                                ${comment.author.photo_url ? 
+                                    `<img src="${comment.author.photo_url}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex-shrink: 0;">` : 
+                                    '<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
+                                }
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                                        <span style="font-size: 12px; font-weight: 400; color: #1F2328;">${escapeHtml(comment.author.first_name || comment.author.username || 'Пользователь')}</span>
+                                        <span style="font-size: 11px; color: #6C727F;">${timeAgo}</span>
+                                    </div>
+                                    <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #1F2328; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    commentsContainer.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('Error loading comments:', error);
+            }
+        }
+
+        async function addComment(postId) {
+            const input = document.getElementById(`comment-input-${postId}`);
+            const content = input.value.trim();
+
+            if (!content) {
+                showNotification('Введите текст комментария', 'error');
+                return;
+            }
+
+            if (content.length > 1000) {
+                showNotification('Комментарий слишком длинный (максимум 1000 символов)', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/comments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ post_id: postId, content }),
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+
+                if (response.ok) {
+                    input.value = '';
+                    loadComments(postId); // Перезагрузить комментарии
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Error adding comment:', error);
+                showNotification('Ошибка добавления комментария: ' + error.message, 'error');
+            }
+        }
+
+        function handleCommentKeyPress(event, postId) {
+            if (event.key === 'Enter') {
+                addComment(postId);
             }
         }
 

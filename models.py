@@ -193,6 +193,20 @@ class Post(Base):
     user = relationship("User", backref="posts")
 
 
+class Comment(Base):
+    """Comments on posts"""
+    __tablename__ = 'comments'
+
+    id = Column(Integer, primary_key=True)
+    post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    content = Column(Text, nullable=False)  # Comment content
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    post = relationship("Post", backref="comments")
+    user = relationship("User", backref="comments")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

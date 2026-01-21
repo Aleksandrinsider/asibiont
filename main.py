@@ -4130,6 +4130,123 @@ async def delete_post_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def create_comment_handler(request):
+    """API endpoint to create a comment on a post"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        
+        if not user_id:
+            logger.warning("create_comment_handler: No user_id in session")
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                logger.warning(f"create_comment_handler: User not found for telegram_id {user_id}")
+                return web.json_response({'error': 'User not found'}, status=401)
+
+            data = await request.json()
+            post_id = data.get('post_id')
+            content = data.get('content', '').strip()
+
+            if not post_id:
+                return web.json_response({'error': 'Post ID is required'}, status=400)
+
+            if not content:
+                return web.json_response({'error': 'Comment content is required'}, status=400)
+
+            if len(content) > 1000:
+                return web.json_response({'error': 'Comment is too long (max 1000 characters)'}, status=400)
+
+            # Check if post exists
+            post = session_db.query(Post).filter_by(id=post_id).first()
+            if not post:
+                return web.json_response({'error': 'Post not found'}, status=404)
+
+            from models import Comment
+            comment = Comment(
+                post_id=post_id,
+                user_id=user.id,
+                content=content
+            )
+            session_db.add(comment)
+            session_db.commit()
+
+            logger.info(f"Comment created: id={comment.id}, post_id={post_id}, user_id={user.id}")
+
+            return web.json_response({
+                'success': True,
+                'comment': {
+                    'id': comment.id,
+                    'post_id': comment.post_id,
+                    'content': comment.content,
+                    'created_at': comment.created_at.isoformat(),
+                    'author': {
+                        'username': user.username,
+                        'first_name': user.first_name,
+                        'photo_url': user.photo_url
+                    }
+                }
+            })
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error creating comment: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def get_comments_handler(request):
+    """API endpoint to get comments for a post"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        
+        if not user_id:
+            logger.warning("get_comments_handler: No user_id in session")
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        post_id = request.match_info.get('post_id')
+        if not post_id:
+            return web.json_response({'error': 'Post ID is required'}, status=400)
+
+        session_db = Session()
+        try:
+            from models import Comment
+            comments = session_db.query(Comment).filter_by(post_id=post_id).order_by(Comment.created_at.asc()).all()
+
+            # Get user info for comment authors
+            user_ids = list(set([c.user_id for c in comments]))
+            users_data = session_db.query(User).filter(User.id.in_(user_ids)).all()
+            users_map = {u.id: u for u in users_data}
+
+            result = []
+            for comment in comments:
+                author = users_map.get(comment.user_id)
+                if author:
+                    result.append({
+                        'id': comment.id,
+                        'content': comment.content,
+                        'created_at': comment.created_at.isoformat(),
+                        'author': {
+                            'username': author.username,
+                            'first_name': author.first_name,
+                            'photo_url': author.photo_url
+                        }
+                    })
+
+            return web.json_response({'success': True, 'comments': result})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error getting comments: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id"""
     telegram_id = request.match_info.get('telegram_id')
@@ -4994,6 +5111,8 @@ app.router.add_post('/api/set_user_rating', set_user_rating_handler)
 app.router.add_post('/api/posts', create_post_handler)
 app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
+app.router.add_post('/api/comments', create_comment_handler)
+app.router.add_get('/api/comments/{post_id}', get_comments_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
