@@ -113,7 +113,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "accept_delegated_task",
-            "description": "Принять делегированную задачу",
+            "description": "Принять делегированную задачу. ВАЖНО: Эта функция ВСЕГДА ДОСТУПНА для всех пользователей (включая Bronze). Используй её когда пользователь просит принять задачу. В ответе указывай НАЗВАНИЕ задачи, а не её ID.",
             "parameters": {
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
@@ -125,7 +125,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "reject_delegated_task",
-            "description": "Отклонить делегированную задачу",
+            "description": "Отклонить делегированную задачу. ВАЖНО: Эта функция ВСЕГДА ДОСТУПНА для всех пользователей (включая Bronze). Используй её когда пользователь просит отклонить задачу. В ответе указывай НАЗВАНИЕ задачи, а не её ID.",
             "parameters": {
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
