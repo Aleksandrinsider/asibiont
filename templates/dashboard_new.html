@@ -4287,6 +4287,19 @@
                             });
                             
                             let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
+                            
+                            // Debug: выводим все данные партнеров для проверки
+                            console.log('Partners data received:', Object.values(uniquePartners).map(p => ({
+                                username: p.contact_info,
+                                type: p.type,
+                                has_common_interests: !!p.common_interests,
+                                has_common_skills: !!p.common_skills,
+                                has_common_goals: !!p.common_goals,
+                                has_common_tasks: !!p.common_tasks,
+                                interests: p.interests,
+                                common_interests: p.common_interests
+                            })));
+                            
                             Object.values(uniquePartners).forEach(partner => {
                                 const telegramUrl = 'https://t.me/' + partner.contact_info;
                                 const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
@@ -4361,6 +4374,18 @@
                                     
                                     // Check if there are any common fields
                                     const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    
+                                    // Debug log для проверки данных
+                                    if (partner.contact_info === 'sport_contact') { // Замените на имя проблемного контакта
+                                        console.log('Partner data:', {
+                                            username: partner.contact_info,
+                                            interests: partner.interests,
+                                            common_interests: partner.common_interests,
+                                            common_skills: partner.common_skills,
+                                            common_goals: partner.common_goals,
+                                            common_tasks: partner.common_tasks
+                                        });
+                                    }
                                     
                                     if (partner.interests) {
                                         html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';

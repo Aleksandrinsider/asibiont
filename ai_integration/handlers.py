@@ -47,6 +47,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 pass
         if description:
             existing_task.description = encrypt_data(description)
+        existing_task.status = "pending"  # Reset to pending when updating
         session.commit()
         task_id = existing_task.id
         task = existing_task
