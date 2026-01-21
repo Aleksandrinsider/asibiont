@@ -3978,8 +3978,10 @@ async def get_feed_handler(request):
                 posts = session_db.query(Post).filter(
                     Post.user_id.in_(all_user_ids)
                 ).order_by(Post.created_at.desc()).limit(50).all()
+                logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
             else:
                 posts = []
+                logger.info("No favorite contacts found, returning empty feed")
 
             # Get user profiles for author info
             user_ids = list(set([p.user_id for p in posts]))
@@ -4001,21 +4003,25 @@ async def get_feed_handler(request):
             # Build feed response
             feed = []
             for post in posts:
-                author = users_map.get(post.user_id, {})
-                feed.append({
-                    'id': post.id,
-                    'content': post.content,
-                    'created_at': post.created_at.isoformat(),
-                    'author': {
-                        'telegram_id': author.get('telegram_id'),
-                        'username': author.get('username'),
-                        'first_name': author.get('first_name'),
-                        'photo_url': author.get('photo_url'),
-                        'company': author.get('company'),
-                        'position': author.get('position'),
-                        'is_current_user': post.user_id == user.id
-                    }
-                })
+                try:
+                    author = users_map.get(post.user_id, {})
+                    feed.append({
+                        'id': post.id,
+                        'content': post.content,
+                        'created_at': post.created_at.isoformat() if post.created_at else None,
+                        'author': {
+                            'telegram_id': author.get('telegram_id'),
+                            'username': author.get('username'),
+                            'first_name': author.get('first_name'),
+                            'photo_url': author.get('photo_url'),
+                            'company': author.get('company'),
+                            'position': author.get('position'),
+                            'is_current_user': post.user_id == user.id
+                        }
+                    })
+                except Exception as post_error:
+                    logger.error(f"Error processing post {post.id}: {post_error}")
+                    continue
 
             return web.json_response({'success': True, 'posts': feed})
 
