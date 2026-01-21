@@ -2608,14 +2608,14 @@
             let statusStr = 'В работе';
             let statusColor = '#068487';
             
-            // Проверяем делегированные задачи
-            if (task.delegated_to && task.delegation_status === 'pending') {
-                // Задача делегирована кому-то, ожидает принятия
-                statusStr = 'Ожидает подтверждения';
-                statusColor = '#D7AC0C';
-            } else if (task.delegated_by && task.delegation_status === 'pending') {
-                // Задача делегирована мне, я еще не принял
+            // Проверяем делегированные задачи (сначала входящие, потом исходящие)
+            if (task.delegated_by && task.delegation_status === 'pending') {
+                // Задача делегирована МНЕ, я еще не принял
                 statusStr = 'Ожидает принятия';
+                statusColor = '#D7AC0C';
+            } else if (task.delegated_to && task.delegation_status === 'pending') {
+                // Задача делегирована КОМУ-ТО, ожидает подтверждения
+                statusStr = 'Ожидает подтверждения';
                 statusColor = '#D7AC0C';
             } else if (task.delegation_status === 'rejected') {
                 // Задача отклонена
@@ -3015,11 +3015,12 @@
             
             let statusText = 'В работе';
             let statusColor = '#068487';
-            if (task.delegated_to && task.delegation_status === 'pending') {
-                statusText = 'Ожидает подтверждения';
-                statusColor = '#D7AC0C';
-            } else if (task.delegated_by && task.delegation_status === 'pending') {
+            // Проверяем делегированные задачи (сначала входящие, потом исходящие)
+            if (task.delegated_by && task.delegation_status === 'pending') {
                 statusText = 'Ожидает принятия';
+                statusColor = '#D7AC0C';
+            } else if (task.delegated_to && task.delegation_status === 'pending') {
+                statusText = 'Ожидает подтверждения';
                 statusColor = '#D7AC0C';
             } else if (task.delegation_status === 'rejected') {
                 statusText = 'Отклонена';
