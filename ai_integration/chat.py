@@ -1082,9 +1082,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                         r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text
                                     )
                                     if match:
-                                        title = match.group(1)
+                                        task_title = match.group(1)
                                         time_str = match.group(2)
-                                        natural = f'Отлично, добавил задачу "{title}" с напоминанием на {time_str}.'
+                                        natural = f'Отлично, добавил задачу "{task_title}" с напоминанием на {time_str}.'
                                         natural_responses.append(natural)
                                     else:
                                         natural_responses.append(result_text)
@@ -1092,8 +1092,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 elif "Завершена задача" in result_text:
                                     match = re.search(r"Завершена задача '([^']+)'", result_text)
                                     if match:
-                                        title = match.group(1)
-                                        natural = f'Отлично, отметил задачу "{title}" как выполненную! 👍'
+                                        task_title = match.group(1)
+                                        natural = f'Отлично, отметил задачу "{task_title}" как выполненную! 👍'
                                         natural_responses.append(natural)
                                     else:
                                         natural_responses.append(result_text)
