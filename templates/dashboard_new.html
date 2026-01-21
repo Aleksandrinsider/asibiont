@@ -837,7 +837,7 @@
                         </div>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Избранные</button>
+                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Избранное</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %}>Элитные связи</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
@@ -1022,7 +1022,7 @@
     <div id="contact-profile-modal" class="rating-modal">
         <div class="rating-modal-content">
             <div class="rating-modal-header">
-                <h3 style="text-align: center; flex: 1; margin: 0;">Профиль контакта</h3>
+                <h3>Профиль контакта</h3>
                 <button onclick="closeContactProfileModal()" class="rating-close-btn">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                         <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path>
@@ -2897,6 +2897,8 @@
                     const data = await response.json();
                     showNotification('Рекомендация отправлена!', 'success');
                     closeRatingModal();
+                    // Очистить кэш перед обновлением
+                    cachedPartnersData = null;
                     // Обновить контакты, чтобы отразить новый рейтинг (принудительно)
                     await updatePeople(true);
                 } else {
@@ -3086,9 +3088,9 @@
                     html += '</div>';
                     
                     // Action buttons
-                    html += '<div class="rating-modal-actions" style="display: flex; gap: 8px;">';
-                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #068487; color: white;">Написать</button>`;
-                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #068487; color: white;">В избранные</button>`;
+                    html += '<div class="rating-modal-actions">';
+                    html += `<button onclick="closeContactProfileModal()" class="rating-cancel-btn">Закрыть</button>`;
+                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
                     html += '</div>';
                     
                     content.innerHTML = html;
