@@ -2549,7 +2549,10 @@
             
             let statusStr = 'В работе';
             let statusColor = '#068487';
-            if (task.status === 'completed') {
+            if (task.delegation_status === 'pending') {
+                statusStr = 'Ожидает принятия';
+                statusColor = '#D7AC0C';  // Золотой цвет для ожидающих задач
+            } else if (task.status === 'completed') {
                 statusStr = 'Завершена';
                 statusColor = '#238636';
             } else if (task.overdue) {
@@ -4201,8 +4204,14 @@
                             if (blockedContacts && blockedContacts.length > 0) {
                                 blockedContacts.forEach(username => {
                                     const contactInfoEscaped = username.replace(/'/g, "\\'").replace(/`/g, "\\`");
-                                    // Найти полные данные контакта из partners
-                                    const blockedPartner = data.partners.find(p => p.contact_info && p.contact_info.replace('@', '') === username);
+                                    // Найти полные данные контакта из blocked_partners_info или partners
+                                    let blockedPartner = null;
+                                    if (data.blocked_partners_info) {
+                                        blockedPartner = data.blocked_partners_info.find(p => p.contact_info && p.contact_info.replace('@', '') === username);
+                                    }
+                                    if (!blockedPartner) {
+                                        blockedPartner = data.partners.find(p => p.contact_info && p.contact_info.replace('@', '') === username);
+                                    }
                                     
                                     html += '<li class="task-item contact-blocked" data-username="' + username + '" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     
@@ -4249,7 +4258,7 @@
                                         }
                                     }
                                     
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #d73a49;">⛔ Заблокирован</span></div>';
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #d73a49;">Заблокирован</span></div>';
                                     html += '</div>';
                                     
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';

@@ -3138,19 +3138,24 @@ async def api_partners_handler(request):
             except json.JSONDecodeError:
                 continue
 
-        # Filter partners_data
+        # Filter partners_data but save blocked contacts info
         filtered_partners_data = []
+        blocked_partners_data = []  # Сохраняем информацию о заблокированных
         for partner in partners_data:
             partner_username = partner.get('contact_info', '').replace('@', '')
             if partner_username in blocked_by_me or partner_username in blocked_me:
-                continue  # Skip blocked contacts
+                blocked_partners_data.append(partner)  # Сохраняем заблокированные
+                continue  # Skip blocked contacts from main list
             filtered_partners_data.append(partner)
 
         partners_data = filtered_partners_data
         partners_data.sort(key=sort_key)
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
-        return web.json_response({'partners': partners_data})
+        return web.json_response({
+            'partners': partners_data,
+            'blocked_partners_info': blocked_partners_data  # Добавляем информацию о заблокированных
+        })
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
         return web.json_response({'partners': []}, status=200)
