@@ -4263,7 +4263,12 @@ async def api_tasks_handler(request):
         # Get tasks created by me OR delegated to me
         query_conditions = [Task.user_id == user.id]
         if user.username:
-            query_conditions.append(Task.delegated_to_username.ilike(user.username))
+            # Compare without @ symbol to handle both @username and username formats
+            username_clean = user.username.replace('@', '')
+            query_conditions.append(or_(
+                Task.delegated_to_username.ilike(username_clean),
+                Task.delegated_to_username.ilike(f'@{username_clean}')
+            ))
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
