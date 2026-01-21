@@ -263,6 +263,13 @@
                             }
                             
                             html += '</div>'; // flex: 1
+                            
+                            // Кнопки действий для элитных контактов
+                            html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
+                            html += '<button onclick="toggleFavorite(\'' + contactInfoEscaped + '\')" class="quick-action" title="Добавить в избранное"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z"></path></svg></button>';
+                            html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                            html += '</div>';
+                            
                             html += '</li>';
                         });
                     }
@@ -2561,11 +2568,13 @@
             html += '</div>';
             
             // Кнопки действий (включая меню оверлей)
-            html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
+            // Для делегированных задач pending - две кнопки в ряд, для остальных - одна колонка
+            const gridColumns = task.delegation_status === 'pending' ? 'repeat(2, 1fr)' : '1fr';
+            html += '<div class="task-actions" style="display: grid; grid-template-columns: ' + gridColumns + '; gap: 4px;">';
             
             // Проверяем статус делегирования
             if (task.delegation_status === 'pending') {
-                // Делегированная задача, ожидающая принятия
+                // Делегированная задача, ожидающая принятия - кнопки Принять и Отклонить
                 html += '<button onclick="event.stopPropagation(); acceptDelegatedTask(' + task.id + ')" class="quick-action" style="background: #238636;" title="Принять делегированную задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
                 html += '<button onclick="event.stopPropagation(); rejectDelegatedTask(' + task.id + ')" class="quick-action" style="background: #d73a49;" title="Отклонить делегированную задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="white"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.status !== 'completed') {
@@ -4176,16 +4185,55 @@
                             if (blockedContacts && blockedContacts.length > 0) {
                                 blockedContacts.forEach(username => {
                                     const contactInfoEscaped = username.replace(/'/g, "\\'").replace(/`/g, "\\`");
+                                    // Найти полные данные контакта из partners
+                                    const blockedPartner = data.partners.find(p => p.contact_info && p.contact_info.replace('@', '') === username);
+                                    
                                     html += '<li class="task-item contact-blocked" data-username="' + username + '" style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     
-                                    // Placeholder avatar for blocked contacts
+                                    // Avatar for blocked contacts
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                    html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
+                                    if (blockedPartner && blockedPartner.photo_url) {
+                                        const imgId = 'img-blocked-' + (blockedPartner.telegram_id || username);
+                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 48px; height: 48px; border-radius: 6px; object-fit: cover; border: 1px solid #D1D9E0; cursor: pointer;" />';
+                                    } else {
+                                        html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 48px; height: 48px; border-radius: 6px; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
+                                    }
                                     html += '</div>';
                                     
                                     html += '<div style="flex: 1;">';
                                     html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</div>';
-                                    html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #068487;">Заблокирован</span></div>';
+                                    
+                                    // Город
+                                    if (blockedPartner && blockedPartner.city) {
+                                        html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + blockedPartner.city + '</span></div>';
+                                    }
+                                    
+                                    // Общие интересы/навыки/цели
+                                    if (blockedPartner) {
+                                        html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
+                                        const hasCommon = blockedPartner.common_interests || blockedPartner.common_skills || blockedPartner.common_goals;
+                                        if (blockedPartner.common_interests) {
+                                            html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + blockedPartner.common_interests + '</span>';
+                                        }
+                                        if (blockedPartner.common_skills) {
+                                            html += '<span class="task-meta" style="color: #068487;">Общие навыки: ' + blockedPartner.common_skills + '</span>';
+                                        }
+                                        if (blockedPartner.common_goals) {
+                                            html += '<span class="task-meta" style="color: #068487;">Общие цели: ' + blockedPartner.common_goals + '</span>';
+                                        }
+                                        if (!hasCommon) {
+                                            html += '<span class="task-meta" style="color: #6C727F;">Общего пока не найдено</span>';
+                                        }
+                                        html += '</div>';
+                                        
+                                        // Рекомендация
+                                        if (blockedPartner.average_rating > 0) {
+                                            const ratingColor = blockedPartner.average_rating < 5 ? '#d73a49' : (blockedPartner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
+                                            html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + blockedPartner.average_rating + '/10</span></div>';
+                                        }
+                                    }
+                                    
+                                    html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #d73a49;">⛔ Заблокирован</span></div>';
                                     html += '</div>';
                                     
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
