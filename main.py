@@ -2666,8 +2666,8 @@ async def api_partners_handler(request):
                     can_access = True
                     logger.info(f"User {user_tier_str} can access all partners")
 
-                # Only add contact if user can access it
-                if can_access and partner_user:
+                # Add ALL contacts, including those user cannot access yet (for "Premium status" filter)
+                if partner_user:
                     # Get partner's profile for rating info
                     partner_profile = session_db.query(UserProfile).filter_by(user_id=partner_user.id).first()
                     
