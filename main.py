@@ -1528,7 +1528,7 @@ async def chat_handler(request):
             try:
                 logger.info(f"Calling chat_with_ai with user_id: {user_id}")
                 response = await chat_with_ai(message, context, user_id, file_content)
-                logger.info(f"AI response: {response[:100]}...")
+                logger.info("AI response: %s...", response[:100])
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
                 response = f"Ошибка: {str(e)}"
@@ -1639,7 +1639,7 @@ async def api_send_message_handler(request):
             # Call AI chat
             try:
                 response = await chat(message, context=context, user_id=user_id, file_content=None, db_session=session_db)
-                logger.info(f"AI response: {response[:100]}...")
+                logger.info("AI response: %s...", response[:100])
             except Exception as e:
                 logger.error(f"Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
