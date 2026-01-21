@@ -34,6 +34,8 @@ class User(Base):
             datetime.timezone.utc))
     invalid_chat = Column(Boolean, default=False)  # Flag set when Telegram chat is invalid (chat not found)
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # User's subscription tier
+    average_rating = Column(Integer, default=0)  # Average rating from other users (synced from UserProfile)
+    rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
 
 
 class Task(Base):

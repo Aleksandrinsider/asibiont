@@ -1272,7 +1272,8 @@
                     credentials: 'include'
                 });
                 if (response.ok) {
-                    location.href = `/dashboard?telegram_id=${userId}`;
+                    // Session is set, reload page to get authenticated view
+                    location.reload();
                 } else {
                     alert('Ошибка входа');
                 }

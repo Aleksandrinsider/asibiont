@@ -2147,12 +2147,18 @@ async def check_sportfan3_handler(request):
 
         if result['needs_fix']:
             logger.info(f"❌ НАЙДЕНА ПРОБЛЕМА: Пользователь должен иметь GOLD, но имеет {user.subscription_tier}")
-            # Восстанавливаем подписку
+            # Восстанавливаем подписку В ОБЕИХ ТАБЛИЦАХ
             user.subscription_tier = SubscriptionTier.GOLD
+            
+            # Обновляем subscriptions.tier тоже
+            subscription = session_db.query(Subscription).filter_by(user_id=user.id, status='active').first()
+            if subscription:
+                subscription.tier = SubscriptionTier.GOLD
+            
             session_db.commit()
             result['fixed'] = True
             result['new_tier'] = 'gold'
-            logger.info("✅ Подписка восстановлена!")
+            logger.info("✅ Подписка восстановлена в users и subscriptions!")
         else:
             result['fixed'] = False
 
@@ -3900,6 +3906,64 @@ async def on_startup(app):
     # Передаём redis_client в ai_integration
     set_redis_client(redis_client)
     logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
+    
+    # Синхронизируем users.subscription_tier с subscriptions.tier при старте
+    try:
+        from datetime import datetime
+        import pytz
+        session_db = Session()
+        active_subscriptions = session_db.query(Subscription).filter_by(status='active').all()
+        synced_count = 0
+        
+        for sub in active_subscriptions:
+            user = session_db.query(User).filter_by(id=sub.user_id).first()
+            if not user:
+                continue
+            
+            # Проверяем, не истекла ли подписка
+            now = datetime.now(pytz.UTC)
+            if sub.end_date and sub.end_date.tzinfo is None:
+                sub.end_date = sub.end_date.replace(tzinfo=pytz.UTC)
+            
+            if sub.end_date and sub.end_date < now:
+                continue
+            
+            # Синхронизируем тарифы
+            user_tier_str = str(user.subscription_tier).split('.')[-1] if user.subscription_tier else None
+            sub_tier_str = str(sub.tier).split('.')[-1] if sub.tier else None
+            
+            if user_tier_str != sub_tier_str:
+                logger.info(f"Syncing tier for @{user.username}: users.{user_tier_str} -> subscriptions.{sub_tier_str}")
+                user.subscription_tier = sub.tier
+                synced_count += 1
+        
+        if synced_count > 0:
+            session_db.commit()
+            logger.info(f"✅ Synced {synced_count} user tiers with subscriptions on startup")
+        
+        # Синхронизируем users.average_rating с user_profiles.average_rating
+        all_profiles = session_db.query(UserProfile).all()
+        rating_synced_count = 0
+        
+        for profile in all_profiles:
+            user = session_db.query(User).filter_by(id=profile.user_id).first()
+            if not user:
+                continue
+            
+            # Синхронизируем рейтинг
+            if user.average_rating != profile.average_rating or user.rating_count != profile.rating_count:
+                logger.info(f"Syncing rating for @{user.username}: users.{user.average_rating} -> profile.{profile.average_rating}")
+                user.average_rating = profile.average_rating
+                user.rating_count = profile.rating_count
+                rating_synced_count += 1
+        
+        if rating_synced_count > 0:
+            session_db.commit()
+            logger.info(f"✅ Synced {rating_synced_count} user ratings with profiles on startup")
+        
+        session_db.close()
+    except Exception as e:
+        logger.error(f"❌ Error syncing subscription tiers on startup: {e}")
 
 
 async def on_shutdown(app):
