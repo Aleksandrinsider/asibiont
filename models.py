@@ -179,6 +179,18 @@ class PaymentHistory(Base):
     user = relationship("User", backref="payment_history")
 
 
+class Post(Base):
+    """User posts for news feed"""
+    __tablename__ = 'posts'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    content = Column(Text, nullable=False)  # Post content
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="posts")
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

@@ -525,6 +525,19 @@
         }
 
         /* Custom tooltips removed - no data-tooltip attributes in use */
+
+        /* Стили для кнопок переключения ленты новостей */
+        .feed-tab {
+            transition: all 0.2s ease;
+        }
+        
+        .feed-tab:hover {
+            opacity: 0.9;
+        }
+        
+        .feed-tab.active {
+            font-weight: 600;
+        }
     </style>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
@@ -850,18 +863,22 @@
                 </div>
             </div>
 
-            <!-- Центральная колонка - Чат -->
+            <!-- Центральная колонка - Чат / Лента -->
             <div class="center-column">
                 <div class="chat-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
-                                <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z"/>
-                            </svg>
-                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Чат с ИИ</h3>
-                        </div>
+                    <!-- Переключатель между чатом и лентой -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
+                        <button id="chat-tab" class="feed-tab active" onclick="switchToChat()" style="flex: 1; padding: 8px; border: none; background: #3B82F6; color: white; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
+                            Чат с ИИ
+                        </button>
+                        <button id="feed-tab" class="feed-tab" onclick="switchToFeed()" style="flex: 1; padding: 8px; border: none; background: #F3F4F6; color: #374151; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;">
+                            Лента новостей
+                        </button>
                     </div>
-                    <div id="chat-messages" class="chat-messages">
+
+                    <!-- Чат с ИИ -->
+                    <div id="chat-view" style="display: block;">
+                        <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
                             <p>?? Добро пожаловать! Войдите для общения с AI.</p>
@@ -893,6 +910,22 @@
                         </button>
                     </div>
                     {% endif %}
+                    </div>
+
+                    <!-- Лента новостей -->
+                    <div id="feed-view" style="display: none;">
+                        <div id="feed-posts" class="chat-messages">
+                            <!-- Посты будут загружены динамически -->
+                        </div>
+                        {% if logged_in %}
+                        <div class="chat-input">
+                            <textarea id="post-input" placeholder="Напишите что-нибудь..." style="resize: none; padding: 12px; border: 1px solid #D1D9E0; border-radius: 8px; font-family: inherit; font-size: 14px; width: 100%; min-height: 60px; max-height: 120px;"></textarea>
+                            <button onclick="createPost()" style="margin-top: 8px; padding: 10px 16px; background: #3B82F6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">
+                                Опубликовать
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
 
             </div>
@@ -1477,6 +1510,136 @@
             } catch (error) {
                 showNotification('Ошибка: ' + error.message, 'error');
             }
+        }
+
+        // Функции для ленты новостей
+        function switchToChat() {
+            document.getElementById('chat-view').style.display = 'block';
+            document.getElementById('feed-view').style.display = 'none';
+            document.getElementById('chat-tab').classList.add('active');
+            document.getElementById('feed-tab').classList.remove('active');
+            document.getElementById('chat-tab').style.background = '#3B82F6';
+            document.getElementById('chat-tab').style.color = 'white';
+            document.getElementById('feed-tab').style.background = '#F3F4F6';
+            document.getElementById('feed-tab').style.color = '#374151';
+        }
+
+        function switchToFeed() {
+            document.getElementById('chat-view').style.display = 'none';
+            document.getElementById('feed-view').style.display = 'block';
+            document.getElementById('chat-tab').classList.remove('active');
+            document.getElementById('feed-tab').classList.add('active');
+            document.getElementById('feed-tab').style.background = '#3B82F6';
+            document.getElementById('feed-tab').style.color = 'white';
+            document.getElementById('chat-tab').style.background = '#F3F4F6';
+            document.getElementById('chat-tab').style.color = '#374151';
+            loadFeed();
+        }
+
+        async function loadFeed() {
+            try {
+                const response = await fetch('/api/feed', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+
+                const feedContainer = document.getElementById('feed-posts');
+                feedContainer.innerHTML = '';
+
+                if (data.posts && data.posts.length > 0) {
+                    data.posts.forEach(post => {
+                        const postDiv = document.createElement('div');
+                        postDiv.className = 'message ' + (post.author.is_current_user ? 'user' : 'ai');
+                        postDiv.style.marginBottom = '16px';
+
+                        const postTime = new Date(post.created_at).toLocaleString('ru-RU', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+
+                        let authorInfo = post.author.first_name || post.author.username || 'Аноним';
+                        if (post.author.company || post.author.position) {
+                            const details = [];
+                            if (post.author.position) details.push(post.author.position);
+                            if (post.author.company) details.push(post.author.company);
+                            authorInfo += ` (${details.join(', ')})`;
+                        }
+
+                        postDiv.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                ${post.author.photo_url ? 
+                                    `<img src="${post.author.photo_url}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">` : 
+                                    '<div style="width: 32px; height: 32px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #6B7280;">' + (post.author.first_name ? post.author.first_name[0] : '?') + '</div>'
+                                }
+                                <div>
+                                    <div style="font-weight: 500; font-size: 14px; color: #111827;">${authorInfo}</div>
+                                    <div style="font-size: 12px; color: #6B7280;">${postTime}</div>
+                                </div>
+                            </div>
+                            <p style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(post.content)}</p>
+                        `;
+
+                        feedContainer.appendChild(postDiv);
+                    });
+                } else {
+                    feedContainer.innerHTML = '<div class="message ai"><p>Пока нет постов. Добавьте кого-нибудь в избранное или создайте свой первый пост!</p></div>';
+                }
+            } catch (error) {
+                console.error('Error loading feed:', error);
+                showNotification('Ошибка загрузки ленты: ' + error.message, 'error');
+            }
+        }
+
+        async function createPost() {
+            const postInput = document.getElementById('post-input');
+            const content = postInput.value.trim();
+
+            if (!content) {
+                showNotification('Введите текст поста', 'error');
+                return;
+            }
+
+            if (content.length > 2000) {
+                showNotification('Пост слишком длинный (максимум 2000 символов)', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content }),
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+
+                if (response.ok) {
+                    postInput.value = '';
+                    showNotification('Пост опубликован', 'success');
+                    loadFeed(); // Перезагрузить ленту
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Error creating post:', error);
+                showNotification('Ошибка публикации: ' + error.message, 'error');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Favorite contacts management

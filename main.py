@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -3625,6 +3625,11 @@ async def set_user_rating_handler(request):
                 rated_user.average_rating = 0
                 rated_user.rating_count = 0
 
+            # Also update UserProfile.average_rating
+            rated_profile = session_db.query(UserProfile).filter_by(user_id=rated_user.id).first()
+            if rated_profile:
+                rated_profile.average_rating = rated_user.average_rating
+
             session_db.commit()
             return web.json_response({'success': True, 'message': 'Rating submitted'})
 
@@ -3633,6 +3638,125 @@ async def set_user_rating_handler(request):
 
     except Exception as e:
         logger.error(f"Error setting rating: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def create_post_handler(request):
+    """API endpoint to create a new post"""
+    try:
+        user = request.get('user')
+        if not user:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        data = await request.json()
+        content = data.get('content', '').strip()
+
+        if not content:
+            return web.json_response({'error': 'Post content is required'}, status=400)
+
+        if len(content) > 2000:
+            return web.json_response({'error': 'Post is too long (max 2000 characters)'}, status=400)
+
+        session_db = Session()
+        try:
+            post = Post(
+                user_id=user.id,
+                content=content
+            )
+            session_db.add(post)
+            session_db.commit()
+
+            return web.json_response({
+                'success': True,
+                'post': {
+                    'id': post.id,
+                    'content': post.content,
+                    'created_at': post.created_at.isoformat()
+                }
+            })
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error creating post: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def get_feed_handler(request):
+    """API endpoint to get posts from favorite contacts"""
+    try:
+        user = request.get('user')
+        if not user:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        session_db = Session()
+        try:
+            # Get user's profile with favorites
+            user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            
+            # Parse favorite contacts from JSON
+            favorite_user_ids = []
+            if user_profile and user_profile.favorite_contacts:
+                try:
+                    import json
+                    favorite_user_ids = json.loads(user_profile.favorite_contacts)
+                except:
+                    favorite_user_ids = []
+
+            # Include own posts too
+            all_user_ids = favorite_user_ids + [user.id]
+
+            # Get posts from favorites and self
+            if all_user_ids:
+                posts = session_db.query(Post).filter(
+                    Post.user_id.in_(all_user_ids)
+                ).order_by(Post.created_at.desc()).limit(50).all()
+            else:
+                posts = []
+
+            # Get user profiles for author info
+            user_ids = list(set([p.user_id for p in posts]))
+            users_data = session_db.query(User, UserProfile).join(
+                UserProfile, User.id == UserProfile.user_id, isouter=True
+            ).filter(User.id.in_(user_ids)).all()
+
+            users_map = {}
+            for u, profile in users_data:
+                users_map[u.id] = {
+                    'telegram_id': u.telegram_id,
+                    'username': u.username,
+                    'first_name': u.first_name,
+                    'photo_url': u.photo_url,
+                    'company': profile.company if profile else None,
+                    'position': profile.position if profile else None
+                }
+
+            # Build feed response
+            feed = []
+            for post in posts:
+                author = users_map.get(post.user_id, {})
+                feed.append({
+                    'id': post.id,
+                    'content': post.content,
+                    'created_at': post.created_at.isoformat(),
+                    'author': {
+                        'telegram_id': author.get('telegram_id'),
+                        'username': author.get('username'),
+                        'first_name': author.get('first_name'),
+                        'photo_url': author.get('photo_url'),
+                        'company': author.get('company'),
+                        'position': author.get('position'),
+                        'is_current_user': post.user_id == user.id
+                    }
+                })
+
+            return web.json_response({'success': True, 'posts': feed})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error getting feed: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -4424,6 +4548,8 @@ app.router.add_get('/api/avatar/{telegram_id}', api_avatar_handler)
 app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
 app.router.add_post('/api/set_user_rating', set_user_rating_handler)
+app.router.add_post('/api/posts', create_post_handler)
+app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
