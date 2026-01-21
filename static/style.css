@@ -911,12 +911,14 @@ details[open] .details-content {
 
 .task-stats-block {
     padding: 12px;
+    padding-bottom: 0;
     margin-top: 0;
     margin-bottom: 3px;
 }
 
 .tasks-section-wrapper {
     padding: 12px;
+    padding-top: 0;
     margin-top: 0;
     flex: 1;
     display: flex;
