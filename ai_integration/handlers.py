@@ -876,6 +876,28 @@ def delegate_task(
         if not recipient:
             return f"Пользователь @{recipient_username} не найден в системе. Убедитесь, что он зарегистрирован в боте."
 
+        # Check if recipient has blocked the delegator
+        from models import UserProfile
+        recipient_profile = session.query(UserProfile).filter_by(user_id=recipient.id).first()
+        if recipient_profile and recipient_profile.blocked_contacts:
+            try:
+                import json
+                blocked_list = json.loads(recipient_profile.blocked_contacts)
+                if delegator.username.lower().replace('@', '') in [b.lower().replace('@', '') for b in blocked_list]:
+                    # Notify delegator that recipient is not accepting tasks from them
+                    try:
+                        from main import bot
+                        if bot:
+                            import asyncio
+                            message = f"@{recipient_username} не готов принимать задачи от вас. Задача '{title}' не была отправлена."
+                            asyncio.create_task(bot.send_message(delegator.telegram_id, message))
+                    except Exception as e:
+                        logging.error(f"Failed to notify about blocked delegation: {e}")
+                    
+                    return f"@{recipient_username} не готов принимать задачи от вас. Попробуйте делегировать задачу другому пользователю."
+            except (json.JSONDecodeError, Exception) as e:
+                logging.error(f"Error checking blocked contacts: {e}")
+
         # If delegating to self, create regular task
         if recipient.id == delegator.id:
             task = Task(user_id=delegator.id, title=title, description=encrypt_data(description), status="pending")

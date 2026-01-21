@@ -3553,6 +3553,49 @@ async def api_blocked_contacts_handler(request):
                 if not all(isinstance(b, str) for b in blocked):
                     return web.json_response({'error': 'All blocked must be strings'}, status=400)
 
+                # Get old blocked list to detect newly blocked users
+                old_blocked = []
+                if profile.blocked_contacts:
+                    try:
+                        old_blocked = json.loads(profile.blocked_contacts)
+                    except json.JSONDecodeError:
+                        old_blocked = []
+                
+                # Find newly blocked users
+                newly_blocked = set(blocked) - set(old_blocked)
+                
+                # Delete all delegated tasks from newly blocked users
+                if newly_blocked:
+                    for blocked_username in newly_blocked:
+                        # Find tasks delegated by this blocked user to current user
+                        tasks_to_delete = session_db.query(Task).join(User).filter(
+                            Task.user_id == User.id,
+                            User.username.ilike(blocked_username.replace('@', '')),
+                            Task.delegated_to_username.ilike(user.username.replace('@', ''))
+                        ).all()
+                        
+                        if tasks_to_delete:
+                            logger.info(f"Deleting {len(tasks_to_delete)} tasks from blocked user {blocked_username}")
+                            
+                            # Find the blocked user to notify them
+                            blocked_user = session_db.query(User).filter(
+                                User.username.ilike(blocked_username.replace('@', ''))
+                            ).first()
+                            
+                            # Delete tasks
+                            for task in tasks_to_delete:
+                                session_db.delete(task)
+                            
+                            session_db.commit()
+                            
+                            # Notify blocked user via bot
+                            if blocked_user:
+                                try:
+                                    message = f"@{user.username} не готов принимать задачи от вас. Ваши делегированные задачи были отклонены."
+                                    await bot.send_message(blocked_user.telegram_id, message)
+                                except Exception as e:
+                                    logger.error(f"Failed to notify blocked user {blocked_username}: {e}")
+
                 profile.blocked_contacts = json.dumps(blocked)
                 session_db.commit()
 
