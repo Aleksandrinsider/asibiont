@@ -2367,7 +2367,7 @@ async def api_partners_handler(request):
 
         try:
             try:
-                partners = get_partners_list(user_id=user_id)
+                partners = get_partners_list(user_id=user.id)  # Передаем user.id (базовый ID), а не telegram_id
                 logger.info(f"Got {len(partners)} partners from get_partners_list")
             except Exception as e:
                 logger.error(f"Error getting partners: {e}")
@@ -3027,12 +3027,31 @@ async def api_partners_handler(request):
         # Add favorite contacts
         if profile and profile.favorite_contacts:
             try:
-                favorite_usernames = json.loads(profile.favorite_contacts)
-                for username in favorite_usernames:
+                favorite_data = json.loads(profile.favorite_contacts)
+                for item in favorite_data:
+                    favorite_username = None
+                    # Определить username по ID или использовать напрямую
+                    if isinstance(item, int):
+                        # Это user_id
+                        fav_user = session_db.query(User).filter_by(id=item).first()
+                        if fav_user:
+                            favorite_username = fav_user.username
+                    elif isinstance(item, str):
+                        # Это username
+                        favorite_username = item
+                    
+                    if not favorite_username:
+                        continue
+                    
                     # Check if already in partners_data
-                    if not any(p.get('contact_info') == username for p in partners_data):
+                    if not any(p.get('contact_info') == favorite_username for p in partners_data):
                         # Find user by username
-                        favorite_user = session_db.query(User).filter(User.username.ilike(username.replace('@', ''))).first()
+                        favorite_user = session_db.query(User).filter(
+                            or_(
+                                User.username == favorite_username,
+                                User.username == favorite_username.replace('@', '')
+                            )
+                        ).first()
                         if favorite_user:
                             favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
 
@@ -3889,27 +3908,37 @@ async def set_user_rating_handler(request):
 async def create_post_handler(request):
     """API endpoint to create a new post"""
     try:
-        user = request.get('user')
-        if not user:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        
+        if not user_id:
+            logger.warning("create_post_handler: No user_id in session")
             return web.json_response({'error': 'Unauthorized'}, status=401)
-
-        data = await request.json()
-        content = data.get('content', '').strip()
-
-        if not content:
-            return web.json_response({'error': 'Post content is required'}, status=400)
-
-        if len(content) > 2000:
-            return web.json_response({'error': 'Post is too long (max 2000 characters)'}, status=400)
 
         session_db = Session()
         try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                logger.warning(f"create_post_handler: User not found for telegram_id {user_id}")
+                return web.json_response({'error': 'User not found'}, status=401)
+
+            data = await request.json()
+            content = data.get('content', '').strip()
+
+            if not content:
+                return web.json_response({'error': 'Post content is required'}, status=400)
+
+            if len(content) > 2000:
+                return web.json_response({'error': 'Post is too long (max 2000 characters)'}, status=400)
+
             post = Post(
                 user_id=user.id,
                 content=content
             )
             session_db.add(post)
             session_db.commit()
+
+            logger.info(f"Post created: id={post.id}, user_id={user.id}, username={user.username}")
 
             return web.json_response({
                 'success': True,
@@ -3923,7 +3952,7 @@ async def create_post_handler(request):
             session_db.close()
 
     except Exception as e:
-        logger.error(f"Error creating post: {e}")
+        logger.error(f"Error creating post: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
 
 
@@ -3951,8 +3980,24 @@ async def get_feed_handler(request):
             if user_profile and user_profile.favorite_contacts:
                 try:
                     import json
-                    favorite_user_ids = json.loads(user_profile.favorite_contacts)
-                except:
+                    favorite_data = json.loads(user_profile.favorite_contacts)
+                    # favorite_contacts может содержать как ID, так и usernames
+                    for item in favorite_data:
+                        if isinstance(item, int):
+                            # Это user_id
+                            favorite_user_ids.append(item)
+                        elif isinstance(item, str):
+                            # Это username - найти user_id
+                            fav_user = session_db.query(User).filter(
+                                or_(
+                                    User.username == item,
+                                    User.username == item.replace('@', '')
+                                )
+                            ).first()
+                            if fav_user:
+                                favorite_user_ids.append(fav_user.id)
+                except Exception as e:
+                    logger.error(f"Error parsing favorite_contacts: {e}")
                     favorite_user_ids = []
 
             # Get users who blocked current user (exclude their posts)
@@ -4036,8 +4081,11 @@ async def get_feed_handler(request):
 async def delete_post_handler(request):
     """API endpoint to delete a post"""
     try:
-        user = request.get('user')
-        if not user:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        
+        if not user_id:
+            logger.warning("delete_post_handler: No user_id in session")
             return web.json_response({'error': 'Unauthorized'}, status=401)
 
         post_id = request.match_info.get('post_id')
@@ -4046,6 +4094,11 @@ async def delete_post_handler(request):
 
         session_db = Session()
         try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                logger.warning(f"delete_post_handler: User not found for telegram_id {user_id}")
+                return web.json_response({'error': 'User not found'}, status=401)
+            
             post = session_db.query(Post).filter_by(id=post_id).first()
             
             if not post:
@@ -4057,13 +4110,15 @@ async def delete_post_handler(request):
 
             session_db.delete(post)
             session_db.commit()
+            
+            logger.info(f"Post {post_id} deleted by user {user.username}")
 
             return web.json_response({'success': True, 'message': 'Post deleted'})
         finally:
             session_db.close()
 
     except Exception as e:
-        logger.error(f"Error deleting post: {e}")
+        logger.error(f"Error deleting post: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
 
 

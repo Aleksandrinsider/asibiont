@@ -1837,26 +1837,43 @@ def get_partners_list(user_id=None, session=None):
                 has_match = True
                 match_reasons.append(f"interests exact: {user_interests & profile_interests}")
             else:
-                # Частичное совпадение - требуем минимум 2 значимых слова или одно специфичное длинное слово
+                # Проверка вхождения одного интереса в другой (например "спорт" в "пляжный спорт")
                 for user_interest in user_interests:
-                    user_words = set(w for w in user_interest.split() if w not in stop_words)
+                    user_clean = user_interest.strip()
+                    # Пропускаем слишком короткие слова
+                    if len(user_clean) < 4:
+                        continue
                     for profile_interest in profile_interests:
-                        profile_words = set(w for w in profile_interest.split() if w not in stop_words)
-                        # Совпадение минимум 2 слов
-                        common_words = user_words & profile_words
-                        if len(common_words) >= 2:
+                        profile_clean = profile_interest.strip()
+                        # Проверяем вхождение как целого слова
+                        if user_clean in profile_clean or profile_clean in user_clean:
                             has_match = True
-                            match_reasons.append(f"interests partial (2+ words): {user_interest} <-> {profile_interest}")
+                            match_reasons.append(f"interests substring: '{user_clean}' <-> '{profile_clean}'")
                             break
-                        # Или одно специфичное слово длиной >= 5 символов (смягчено для лучшего поиска)
-                        elif len(common_words) == 1:
-                            word = list(common_words)[0]
-                            if len(word) >= 5:
-                                has_match = True
-                                match_reasons.append(f"interests specific word: {word}")
-                                break
                     if has_match:
                         break
+                
+                # Если еще не нашли, проверяем частичное совпадение по словам
+                if not has_match:
+                    for user_interest in user_interests:
+                        user_words = set(w for w in user_interest.split() if w not in stop_words)
+                        for profile_interest in profile_interests:
+                            profile_words = set(w for w in profile_interest.split() if w not in stop_words)
+                            # Совпадение минимум 2 слов
+                            common_words = user_words & profile_words
+                            if len(common_words) >= 2:
+                                has_match = True
+                                match_reasons.append(f"interests partial (2+ words): {user_interest} <-> {profile_interest}")
+                                break
+                            # Или одно специфичное слово длиной >= 5 символов
+                            elif len(common_words) == 1:
+                                word = list(common_words)[0]
+                                if len(word) >= 5:
+                                    has_match = True
+                                    match_reasons.append(f"interests specific word: {word}")
+                                    break
+                        if has_match:
+                            break
 
         # Check current_plans for interest matches
         if user_profile.interests and profile.current_plans:
@@ -1912,6 +1929,25 @@ def get_partners_list(user_id=None, session=None):
     
     logger.info(f"[PARTNERS] Sorted results: {len(partners_same_city)} from same city, {len(partners_other_city)} from other cities")
     
+    # Получить текущие задачи пользователя для динамических рекомендаций
+    user_tasks = session.query(Task).filter(
+        Task.user_id == user.id,
+        Task.status.in_(['active', 'pending', 'in_progress'])
+    ).all()
+    
+    # Извлечь ключевые слова из задач пользователя
+    user_task_keywords = set()
+    for task in user_tasks:
+        if task.title:
+            # Простая токенизация: разбиваем на слова, убираем короткие
+            words = [w.lower().strip() for w in task.title.split() if len(w) > 3]
+            user_task_keywords.update(words)
+        if task.description:
+            words = [w.lower().strip() for w in task.description.split() if len(w) > 3]
+            user_task_keywords.update(words)
+    
+    logger.info(f"[PARTNERS] User task keywords: {user_task_keywords}")
+    
     # Добавляем информацию об общих интересах, навыках, целях и задачах
     user_interests = set(i.strip().lower() for i in user_profile.interests.split(',')) if user_profile.interests else set()
     user_skills = set(s.strip().lower() for s in user_profile.skills.split(',')) if user_profile.skills else set()
@@ -1931,6 +1967,83 @@ def get_partners_list(user_id=None, session=None):
             partner_skills = set(s.strip().lower() for s in partner.skills.split(','))
             common_skills = user_skills & partner_skills
             partner.common_skills = ', '.join(common_skills) if common_skills else None
+        else:
+            partner.common_skills = None
+            
+        # Common goals
+        if partner.goals:
+            partner_goals = set(g.strip().lower() for g in partner.goals.split(','))
+            common_goals = user_goals & partner_goals
+            partner.common_goals = ', '.join(common_goals) if common_goals else None
+        else:
+            partner.common_goals = None
+        
+        # НОВОЕ: Релевантность для текущих задач пользователя
+        partner.task_relevance = None
+        partner.task_relevance_score = 0
+        
+        if user_task_keywords:
+            # Проверяем совпадение навыков партнера с задачами пользователя
+            if partner.skills:
+                partner_skill_words = set()
+                for skill in partner.skills.split(','):
+                    skill_words = [w.lower().strip() for w in skill.split() if len(w) > 3]
+                    partner_skill_words.update(skill_words)
+                
+                # Находим пересечение ключевых слов задач с навыками партнера
+                task_skill_match = user_task_keywords & partner_skill_words
+                if task_skill_match:
+                    partner.task_relevance = f"навыки для задач: {', '.join(list(task_skill_match)[:3])}"
+                    partner.task_relevance_score += len(task_skill_match) * 3  # Высокий приоритет
+                    logger.info(f"[PARTNERS] @{session.query(User).filter_by(id=partner.user_id).first().username if session.query(User).filter_by(id=partner.user_id).first() else 'unknown'} relevant for tasks: {task_skill_match}")
+            
+            # Проверяем совпадение интересов партнера с задачами
+            if partner.interests and not partner.task_relevance:
+                partner_interest_words = set()
+                for interest in partner.interests.split(','):
+                    interest_words = [w.lower().strip() for w in interest.split() if len(w) > 3]
+                    partner_interest_words.update(interest_words)
+                
+                task_interest_match = user_task_keywords & partner_interest_words
+                if task_interest_match:
+                    partner.task_relevance = f"интересы для задач: {', '.join(list(task_interest_match)[:3])}"
+                    partner.task_relevance_score += len(task_interest_match) * 2
+            
+            # Проверяем совпадение задач партнера с задачами пользователя
+            partner_user = session.query(User).filter_by(id=partner.user_id).first()
+            if partner_user:
+                partner_tasks = session.query(Task).filter(
+                    Task.user_id == partner_user.id,
+                    Task.status.in_(['active', 'pending', 'in_progress'])
+                ).all()
+                
+                partner_task_keywords = set()
+                for task in partner_tasks:
+                    if task.title:
+                        words = [w.lower().strip() for w in task.title.split() if len(w) > 3]
+                        partner_task_keywords.update(words)
+                
+                common_task_words = user_task_keywords & partner_task_keywords
+                if common_task_words and not partner.task_relevance:
+                    partner.task_relevance = f"похожие задачи: {', '.join(list(common_task_words)[:3])}"
+                    partner.task_relevance_score += len(common_task_words) * 4  # Очень высокий приоритет
+                    logger.info(f"[PARTNERS] @{partner_user.username} has similar tasks: {common_task_words}")
+    
+    # Пересортируем партнеров с учетом релевантности для задач
+    # Сначала релевантные для задач (по убыванию score), потом остальные
+    relevant_for_tasks = [p for p in sorted_partners if p.task_relevance_score > 0]
+    relevant_for_tasks.sort(key=lambda p: p.task_relevance_score, reverse=True)
+    
+    not_relevant_for_tasks = [p for p in sorted_partners if p.task_relevance_score == 0]
+    
+    sorted_partners = relevant_for_tasks + not_relevant_for_tasks
+    
+    logger.info(f"[PARTNERS] Task-relevant partners: {len(relevant_for_tasks)}, other: {len(not_relevant_for_tasks)}")
+    
+    for partner in sorted_partners[:5]:  # Log top 5
+        partner_user = session.query(User).filter_by(id=partner.user_id).first()
+        if partner_user:
+            logger.info(f"[PARTNERS] Top partner: @{partner_user.username}, task_score={partner.task_relevance_score}, relevance={partner.task_relevance}")
         else:
             partner.common_skills = None
             
