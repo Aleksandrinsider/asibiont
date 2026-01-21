@@ -3043,7 +3043,10 @@
                     
                     html += '</div>';
                     
-                    // Тариф в виде обычного текста с цветом
+                    // Profile details - выровнены по левому краю
+                    html += '<div style="text-align: left;">';
+                    
+                    // Тариф
                     if (partner.subscription_tier) {
                         const tierLower = partner.subscription_tier.toLowerCase();
                         let tierColor = '#CD7F32'; // Bronze
@@ -3052,36 +3055,40 @@
                         } else if (tierLower === 'gold') {
                             tierColor = '#FFD700';
                         }
-                        html += `<p>Тариф: ${tierLower}</p>`;
+                        html += `<p style="margin: 4px 0;">Тариф: ${tierLower}</p>`;
                     }
                     
-                    // Profile details - точно такие же поля как в основном профиле
-                    html += `<p>Город: ${partner.city || 'Не указан'}</p>`;
-                    html += `<p>Компания: ${partner.company || 'Не указана'}</p>`;
-                    html += `<p>Должность: ${partner.position || 'Не указана'}</p>`;
-                    html += `<p>Цели: ${partner.goals || 'Не указаны'}</p>`;
-                    html += `<p>Навыки: ${partner.skills || 'Не указаны'}</p>`;
-                    html += `<p>Интересы: ${partner.interests || 'Не указаны'}</p>`;
-                    html += `<p>Языки: ${partner.languages || 'Не указаны'}</p>`;
+                    html += `<p style="margin: 4px 0;">Город: ${partner.city || 'Не указан'}</p>`;
+                    html += `<p style="margin: 4px 0;">Компания: ${partner.company || 'Не указана'}</p>`;
+                    html += `<p style="margin: 4px 0;">Должность: ${partner.position || 'Не указана'}</p>`;
+                    html += `<p style="margin: 4px 0;">Цели: ${partner.goals || 'Не указаны'}</p>`;
+                    html += `<p style="margin: 4px 0;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
+                    html += `<p style="margin: 4px 0;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
+                    html += `<p style="margin: 4px 0;">Языки: ${partner.languages || 'Не указаны'}</p>`;
                     
-                    // Рекомендация - точно как в основном профиле
+                    // Рекомендация
                     if (partner.average_rating > 0) {
-                        const ratingStyle = partner.average_rating < 5 ? ' style="color: #d73a49;"' : (partner.average_rating >= 9 ? ' style="color: #D7AC0C;"' : '');
-                        html += `<p${ratingStyle}>Рекомендация: ${partner.average_rating}/10</p>`;
+                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#374151');
+                        html += `<p style="margin: 4px 0; color: ${ratingColor};">Рекомендация: ${partner.average_rating}/10</p>`;
                     } else {
-                        html += `<p>Рекомендация: нет рекомендаций</p>`;
+                        html += `<p style="margin: 4px 0;">Рекомендация: нет рекомендаций</p>`;
                     }
                     
-                    // Дополнительная информация (вместо подписки)
+                    // Активные задачи
                     if (partner.task_count) {
-                        html += `<p style="margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
+                        html += `<p style="margin: 4px 0 20px 0;">Активных задач: ${partner.task_count}</p>`;
                     } else {
-                        html += `<p style="margin-bottom: 20px;">Активных задач: 0</p>`;
+                        html += `<p style="margin: 4px 0 20px 0;">Активных задач: 0</p>`;
                     }
+                    
+                    html += '</div>';
                     
                     // Action buttons
-                    html += '<div class="rating-modal-actions">';
+                    html += '<div class="rating-modal-actions" style="display: flex; gap: 8px;">';
                     html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
+                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0;">В избранные</button>`;
+                    html += `<button onclick="openRatingModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0;">Рекомендовать</button>`;
+                    html += `<button onclick="blockContactFromModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #d73a49; color: white;">Заблокировать</button>`;
                     html += '</div>';
                     
                     content.innerHTML = html;
@@ -3105,6 +3112,19 @@
             const telegramUrl = `https://t.me/${username}`;
             window.open(telegramUrl, '_blank');
             closeContactProfileModal();
+        }
+        
+        async function toggleFavoriteContactFromModal(username) {
+            await toggleFavoriteContact(username);
+            // Обновляем список контактов
+            await updatePeople();
+        }
+        
+        async function blockContactFromModal(username) {
+            if (confirm(`Вы уверены, что хотите заблокировать @${username}?`)) {
+                await blockContact(username);
+                closeContactProfileModal();
+            }
         }
         
         async function hideContact(username) {

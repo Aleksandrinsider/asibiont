@@ -1769,26 +1769,32 @@ def get_partners_list(user_id=None, session=None):
             user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
             profile_skills = set(s.strip().lower() for s in profile.skills.split(","))
             
+            # Стоп-слова
+            stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+            
             # Точное совпадение навыков
             if user_skills & profile_skills:
                 has_match = True
                 match_reasons.append(f"skills exact: {user_skills & profile_skills}")
             else:
-                # Частичное совпадение - проверяем вхождение слов
+                # Частичное совпадение - требуем минимум 2 значимых слова или одно специфичное
                 for user_skill in user_skills:
-                    user_words = set(user_skill.split())
+                    user_words = set(w for w in user_skill.split() if w not in stop_words)
                     for profile_skill in profile_skills:
-                        profile_words = set(profile_skill.split())
-                        # Если хотя бы одно слово совпадает
-                        if user_words & profile_words:
+                        profile_words = set(w for w in profile_skill.split() if w not in stop_words)
+                        # Совпадение минимум 2 слов
+                        common_words = user_words & profile_words
+                        if len(common_words) >= 2:
                             has_match = True
-                            match_reasons.append(f"skills partial: {user_skill} <-> {profile_skill}")
+                            match_reasons.append(f"skills partial (2+ words): {user_skill} <-> {profile_skill}")
                             break
-                        # Или если одно содержится в другом
-                        if any(uw in profile_skill for uw in user_words) or any(pw in user_skill for pw in profile_words):
-                            has_match = True
-                            match_reasons.append(f"skills contains: {user_skill} <-> {profile_skill}")
-                            break
+                        # Или одно специфичное слово длиной >= 5 символов (для навыков чуть меньше)
+                        elif len(common_words) == 1:
+                            word = list(common_words)[0]
+                            if len(word) >= 5:
+                                has_match = True
+                                match_reasons.append(f"skills specific word: {word}")
+                                break
                     if has_match:
                         break
 
@@ -1797,26 +1803,32 @@ def get_partners_list(user_id=None, session=None):
             user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
             profile_interests = set(i.strip().lower() for i in profile.interests.split(","))
             
+            # Стоп-слова которые игнорируем при частичном совпадении
+            stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
+            
             # Точное совпадение интересов
             if user_interests & profile_interests:
                 has_match = True
                 match_reasons.append(f"interests exact: {user_interests & profile_interests}")
             else:
-                # Частичное совпадение - проверяем вхождение слов
+                # Частичное совпадение - требуем минимум 2 значимых слова или одно специфичное длинное слово
                 for user_interest in user_interests:
-                    user_words = set(user_interest.split())
+                    user_words = set(w for w in user_interest.split() if w not in stop_words)
                     for profile_interest in profile_interests:
-                        profile_words = set(profile_interest.split())
-                        # Если хотя бы одно слово совпадает
-                        if user_words & profile_words:
+                        profile_words = set(w for w in profile_interest.split() if w not in stop_words)
+                        # Совпадение минимум 2 слов
+                        common_words = user_words & profile_words
+                        if len(common_words) >= 2:
                             has_match = True
-                            match_reasons.append(f"interests partial: {user_interest} <-> {profile_interest}")
+                            match_reasons.append(f"interests partial (2+ words): {user_interest} <-> {profile_interest}")
                             break
-                        # Или если одно содержится в другом (например, "спорт" и "спортзал")
-                        if any(uw in profile_interest for uw in user_words) or any(pw in user_interest for pw in profile_words):
-                            has_match = True
-                            match_reasons.append(f"interests contains: {user_interest} <-> {profile_interest}")
-                            break
+                        # Или одно специфичное слово длиной >= 6 символов
+                        elif len(common_words) == 1:
+                            word = list(common_words)[0]
+                            if len(word) >= 6:
+                                has_match = True
+                                match_reasons.append(f"interests specific word: {word}")
+                                break
                     if has_match:
                         break
 
