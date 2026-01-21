@@ -3426,7 +3426,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\'')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
