@@ -216,7 +216,7 @@
                             html += '<div style="flex: 1;">';
                             
                             // Имя пользователя с Gold цветом
-                            html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #D7AC0C;">@' + contactInfoEscaped + '</div>';
+                            html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</div>';
                             
                             // Город
                             if (partner.city) {
@@ -269,7 +269,7 @@
                             
                             // Рекомендация
                             if (partner.average_rating > 0) {
-                                const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
+                                const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                 html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                             }
                             
@@ -672,7 +672,7 @@
             display: inline-block;
             width: 8px;
             height: 8px;
-            background-color: #D7AC0C;
+            background-color: #068487;
             border-radius: 50%;
             margin-right: 8px;
             animation: pulse-dot 1.5s ease-in-out infinite;
@@ -999,7 +999,7 @@
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
                             <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
-                            <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 9 %}style="color: #D7AC0C;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
+                            <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 8 %}style="color: #068487;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
                             <p>Рекомендация: нет рекомендаций</p>
                             {% endif %}
@@ -1194,7 +1194,7 @@
             <div class="rating-modal-body">
                 <p>Рекомендуете <span id="rating-username" onclick="openContactProfileModal(currentRatingUsername)" style="font-weight: 600; color: #068487; cursor: pointer;"></span></p>
                 <p style="font-size: 13px; color: #374151; margin-bottom: 8px;">1 - очень плохая рекомендация, 10 - отличная рекомендация</p>
-                <p style="font-size: 13px; color: #D7AC0C; margin-bottom: 16px;">Уровень рекомендации влияет на продвижение контакта</p>
+                <p style="font-size: 13px; color: #068487; margin-bottom: 16px;">Уровень рекомендации влияет на продвижение контакта</p>
                 <div class="rating-slider-container">
                     <input type="range" id="rating-slider" min="1" max="10" value="5" class="rating-slider" oninput="updateRatingValue(this.value)">
                     <div class="rating-value-display">
@@ -2345,7 +2345,7 @@
                 const photoUrl = contact.photo_url;
                 const rating = contact.average_rating || 0;
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
-                const ratingColor = rating < 5 ? '#d73a49' : (rating >= 9 ? '#D7AC0C' : '#1F2328');
+                const ratingColor = rating < 5 ? '#d73a49' : (rating >= 8 ? '#068487' : '#1F2328');
                 const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Рекомендация: нет рекомендаций';
                 const heartColor = isFavorite ? '#068487' : '#374151';
                 
@@ -2624,18 +2624,18 @@
             if (task.delegated_by && task.delegation_status === 'pending') {
                 // Задача делегирована МНЕ, я еще не принял
                 statusStr = 'Ожидает принятия';
-                statusColor = '#D7AC0C';
+                statusColor = '#068487';
             } else if (task.delegated_to && task.delegation_status === 'pending') {
                 // Задача делегирована КОМУ-ТО, ожидает подтверждения
                 statusStr = 'Ожидает подтверждения';
-                statusColor = '#D7AC0C';
+                statusColor = '#068487';
             } else if (task.delegation_status === 'rejected') {
                 // Задача отклонена
                 statusStr = 'Отклонена';
                 statusColor = '#d73a49';
             } else if (task.delegation_status === 'pending') {
                 statusStr = 'Ожидает подтверждения';
-                statusColor = '#D7AC0C';
+                statusColor = '#068487';
             } else if (task.status === 'completed') {
                 statusStr = 'Завершена';
                 statusColor = '#238636';
@@ -3034,10 +3034,10 @@
             // Проверяем делегированные задачи (сначала входящие, потом исходящие)
             if (task.delegated_by && task.delegation_status === 'pending') {
                 statusText = 'Ожидает принятия';
-                statusColor = '#D7AC0C';
+                statusColor = '#068487';
             } else if (task.delegated_to && task.delegation_status === 'pending') {
                 statusText = 'Ожидает подтверждения';
-                statusColor = '#D7AC0C';
+                statusColor = '#068487';
             } else if (task.delegation_status === 'rejected') {
                 statusText = 'Отклонена';
                 statusColor = '#d73a49';
@@ -3615,8 +3615,8 @@
                         let ratingStyle = 'text-align: left;';
                         if (partner.average_rating < 5) {
                             ratingStyle = 'text-align: left; color: #d73a49;';
-                        } else if (partner.average_rating >= 9) {
-                            ratingStyle = 'text-align: left; color: #D7AC0C;';
+                        } else if (partner.average_rating >= 8) {
+                            ratingStyle = 'text-align: left; color: #068487;';
                         }
                         html += `<p style="${ratingStyle}">Рекомендация: ${partner.average_rating}/10</p>`;
                     } else {
@@ -4040,7 +4040,7 @@
                                         if (partner.subscription_tier === 'SILVER') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle = 'cursor: pointer; color: #D7AC0C;';
+                                            nameStyle = 'cursor: pointer; color: #068487;';
                                         }
                                         html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
@@ -4104,7 +4104,7 @@
                                     html += '</div>';
                                     // Рекомендация на отдельной строке
                                     if (partner.average_rating > 0) {
-                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
+                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
@@ -4160,7 +4160,7 @@
                                         if (partner.subscription_tier === 'SILVER') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle = 'cursor: pointer; color: #D7AC0C;';
+                                            nameStyle = 'cursor: pointer; color: #068487;';
                                         }
                                         html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
@@ -4224,7 +4224,7 @@
                                     html += '</div>';
                                     // Рекомендация на отдельной строке
                                     if (partner.average_rating > 0) {
-                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
+                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
@@ -4278,7 +4278,7 @@
                                         if (partner.subscription_tier === 'SILVER') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle = 'cursor: pointer; color: #D7AC0C;';
+                                            nameStyle = 'cursor: pointer; color: #068487;';
                                         }
                                         html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
@@ -4342,7 +4342,7 @@
                                     html += '</div>';
                                     // Рекомендация на отдельной строке
                                     if (partner.average_rating > 0) {
-                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
+                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
@@ -4429,7 +4429,7 @@
                                         
                                         // Рекомендация
                                         if (blockedPartner.average_rating > 0) {
-                                            const ratingColor = blockedPartner.average_rating < 5 ? '#d73a49' : (blockedPartner.average_rating >= 9 ? '#D7AC0C' : '#1F2328');
+                                            const ratingColor = blockedPartner.average_rating < 5 ? '#d73a49' : (blockedPartner.average_rating >= 8 ? '#068487' : '#1F2328');
                                             html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + blockedPartner.average_rating + '/10</span></div>';
                                         }
                                     }
@@ -4794,7 +4794,7 @@
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
                         html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
-                            const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 9 ? 'color: #D7AC0C;' : '');
+                            const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 8 ? 'color: #068487;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
                         } else {
                             html += '<p>Рекомендация: нет рекомендаций</p>';
