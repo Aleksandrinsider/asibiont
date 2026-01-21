@@ -1197,7 +1197,15 @@ async def dashboard_handler(request):
             session_db.close()
 
         try:
-            partners = get_partners_list(user_id=user_id)
+            # Get user to convert telegram_id to database user.id
+            session_db = Session()
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                session_db.close()
+                return web.json_response({'error': 'User not found'}, status=404)
+            
+            partners = get_partners_list(user_id=user.id)
+            session_db.close()
 
             # Apply subscription-based contact limits
             if partners and user_subscription_tier:

@@ -201,7 +201,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "get_partners_list":
-                result = get_partners_list(user_id=user_id, session=None)
+                # Convert telegram_id to database user.id
+                temp_session = Session()
+                temp_user = temp_session.query(User).filter_by(telegram_id=user_id).first()
+                if temp_user:
+                    result = get_partners_list(user_id=temp_user.id, session=temp_session)
+                else:
+                    result = []
+                temp_session.close()
                 tool_results.append({"function": func_name, "result": result})
 
             else:
@@ -685,7 +692,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Add partners/contacts info with common interests/skills/tasks
             try:
-                partners = get_partners_list(user_id=user_id, session=db_session)
+                # user_id here is telegram_id, need to get database user.id
+                memory_user = db_session.query(User).filter_by(telegram_id=user_id).first()
+                partners = get_partners_list(user_id=memory_user.id if memory_user else None, session=db_session) if memory_user else []
                 if partners:
                     # partners - это список объектов UserProfile
                     partners_info = []

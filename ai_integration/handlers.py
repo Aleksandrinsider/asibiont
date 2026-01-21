@@ -1708,9 +1708,9 @@ def get_partners_list(user_id=None, session=None):
     else:
         close_session = False
 
-    user = session.query(User).filter_by(telegram_id=user_id).first()
+    user = session.query(User).filter_by(id=user_id).first()
     if not user:
-        logger.warning(f"[PARTNERS] User not found for telegram_id: {user_id}")
+        logger.warning(f"[PARTNERS] User not found for user_id: {user_id}")
         if close_session:
             session.close()
         return []
@@ -2093,7 +2093,7 @@ def find_partners(user_id=None, session=None):
         return "Пользователь не найден."
 
     # Get partners list
-    partners = get_partners_list(user_id, session)
+    partners = get_partners_list(user.id, session)
 
     if not partners:
         if close_session:
