@@ -3162,14 +3162,18 @@ async def api_elite_partners_handler(request):
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
+                logger.warning(f"User not found for telegram_id: {user_id}")
                 return web.json_response({'error': 'User not found'}, status=404)
 
             # Check if user has Gold tier
             user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') else SubscriptionTier.BRONZE
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             
+            logger.info(f"User {user.username} has tier: {user_tier_str}")
+            
             if user_tier_str.lower() != 'gold':
                 # Only Gold users can access elite partners
+                logger.info(f"User {user.username} does not have Gold tier, returning empty partners list")
                 return web.json_response({'partners': []})
 
             # Get user profile for comparison
