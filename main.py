@@ -3930,12 +3930,19 @@ async def create_post_handler(request):
 async def get_feed_handler(request):
     """API endpoint to get posts from favorite contacts"""
     try:
-        user = request.get('user')
-        if not user:
-            return web.json_response({'error': 'Unauthorized'}, status=401)
+        session = await get_session(request)
+        user_id = session.get('user_id')
+        logger.info(f"Feed handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
+        if not user_id:
+            logger.error("No user_id in session for feed API")
+            return web.json_response({'error': 'Not authenticated'}, status=401)
 
         session_db = Session()
         try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            
             # Get user's profile with favorites
             user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
             
