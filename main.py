@@ -4218,6 +4218,11 @@ async def get_comments_handler(request):
 
             # Get user info for comment authors
             user_ids = list(set([c.user_id for c in comments]))
+            
+            # If no comments, return empty list
+            if not user_ids:
+                return web.json_response({'success': True, 'comments': []})
+            
             users_data = session_db.query(User).filter(User.id.in_(user_ids)).all()
             users_map = {u.id: u for u in users_data}
 
