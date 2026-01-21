@@ -1258,6 +1258,54 @@
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
         const userSubscriptionTier = '{{ subscription_tier }}'; // Bronze/SILVER/GOLD
         console.log('DEBUG: userSubscriptionTier =', userSubscriptionTier, 'type:', typeof userSubscriptionTier);
+        
+        // Устойчивое логирование с сохранением в localStorage
+        const debugLogs = [];
+        const originalConsoleLog = console.log;
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            const logEntry = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
+            debugLogs.push(`${new Date().toISOString().split('T')[1].split('.')[0]} ${logEntry}`);
+            if (debugLogs.length > 100) debugLogs.shift(); // Храним последние 100 логов
+            try {
+                localStorage.setItem('debug_logs', JSON.stringify(debugLogs));
+            } catch(e) {}
+        };
+        
+        // Восстановление логов после перезагрузки
+        window.addEventListener('load', function() {
+            try {
+                const savedLogs = JSON.parse(localStorage.getItem('debug_logs') || '[]');
+                if (savedLogs.length > 0) {
+                    originalConsoleLog('%c=== RESTORED LOGS FROM PREVIOUS SESSION ===', 'color: orange; font-weight: bold');
+                    savedLogs.forEach(log => originalConsoleLog('%c' + log, 'color: gray'));
+                    originalConsoleLog('%c=== END RESTORED LOGS ===', 'color: orange; font-weight: bold');
+                }
+            } catch(e) {}
+        });
+        
+        // Отслеживание перезагрузок страницы
+        window.addEventListener('beforeunload', function(e) {
+            console.log('[PAGE] Page is about to unload/reload');
+            console.trace('[PAGE] Call stack for page unload');
+        });
+        
+        // Глобальная функция для вывода всех логов (вызывается из консоли: showDebugLogs())
+        window.showDebugLogs = function() {
+            try {
+                const savedLogs = JSON.parse(localStorage.getItem('debug_logs') || '[]');
+                console.log('%c=== ALL DEBUG LOGS (' + savedLogs.length + ') ===', 'color: blue; font-weight: bold; font-size: 14px');
+                savedLogs.forEach(log => console.log(log));
+                console.log('%c=== END DEBUG LOGS ===', 'color: blue; font-weight: bold; font-size: 14px');
+            } catch(e) {
+                console.error('Failed to load debug logs:', e);
+            }
+        };
+        
+        window.clearDebugLogs = function() {
+            localStorage.removeItem('debug_logs');
+            console.log('%c=== DEBUG LOGS CLEARED ===', 'color: red; font-weight: bold');
+        };
 
         // Функция для создания единообразного значка тарифа
         function createTierBadge(tier) {
@@ -1327,13 +1375,15 @@
         async function checkAuth(response) {
 
             if (response.status === 401 || response.status === 403) {
-
+                console.log('[AUTH] Unauthorized response detected, status:', response.status);
+                console.trace('[AUTH] Call stack for unauthorized response');
+                
                 // Перезагрузить страницу только если мы не на странице логина
                 const isLoggedIn = document.querySelector('.main-layout') !== null;
 
                 if (isLoggedIn) {
-
-                    window.location.reload();
+                    console.log('[AUTH] Reloading page due to unauthorized access');
+                    setTimeout(() => window.location.reload(), 1000); // Задержка для сохранения логов
                 }
                 return false;
             }
