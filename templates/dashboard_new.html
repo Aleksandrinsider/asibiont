@@ -641,19 +641,24 @@
 
         /* Custom tooltips removed - no data-tooltip attributes in use */
 
-        /* Chat and feed views */
-        #chat-view,
-        #feed-view {
-            flex: 1;
+        /* View panels with absolute positioning */
+        .view-panel {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
             flex-direction: column;
             overflow: hidden;
-            min-height: 0;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
         }
         
-        /* When active, display as flex */
-        #chat-view,
-        #feed-view {
-            display: flex;
+        .view-panel.active {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         /* Chat messages and feed posts container */
@@ -1008,9 +1013,11 @@
                         </div>
                     </div>
 
-                    <!-- Чат с ИИ -->
-                    <div id="chat-view" style="display: flex;">
-                        <div id="chat-messages" class="chat-messages">
+                    <!-- Контейнер для переключения между чатом и лентой -->
+                    <div class="view-container" style="flex: 1; position: relative; overflow: hidden; min-height: 0;">
+                        <!-- Чат с ИИ -->
+                        <div id="chat-view" class="view-panel active">
+                            <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
                             <p>Добро пожаловать! Войдите для общения с AI.</p>
@@ -1040,13 +1047,13 @@
                             <button onclick="sendChatMessage()" class="chat-action-btn">
                                 <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163z"/></svg>
                             </button>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                    </div>
 
-                    <!-- Лента новостей -->
-                    <div id="feed-view" style="display: none;">
-                        <div id="feed-posts" class="chat-messages">
+                        <!-- Лента новостей -->
+                        <div id="feed-view" class="view-panel">
+                            <div id="feed-posts" class="chat-messages">
                             <!-- Посты будут загружены динамически -->
                         </div>
                         {% if logged_in %}
@@ -1059,8 +1066,9 @@
                             <button onclick="createPost()" class="chat-action-btn" title="Опубликовать пост">
                                 <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163z"/></svg>
                             </button>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
                     </div>
                 </div>
 
@@ -1657,15 +1665,19 @@
 
         // Функции для ленты новостей
         function switchToChat() {
-            document.getElementById('chat-view').style.display = 'flex';
-            document.getElementById('feed-view').style.display = 'none';
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            chatView.classList.add('active');
+            feedView.classList.remove('active');
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
         }
 
         function switchToFeed() {
-            document.getElementById('chat-view').style.display = 'none';
-            document.getElementById('feed-view').style.display = 'flex';
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            chatView.classList.remove('active');
+            feedView.classList.add('active');
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
             loadFeed();
@@ -4498,7 +4510,7 @@
             setInterval(() => {
                 // Полностью останавливаем обновления, если открыта лента новостей
                 const feedView = document.getElementById('feed-view');
-                if (feedView && feedView.style.display !== 'none') {
+                if (feedView && feedView.classList.contains('active')) {
                     console.log('Feed view is active, skipping all auto-updates');
                     return;
                 }
@@ -4508,7 +4520,7 @@
                 updateProfile();
                 // Обновляем чат только если он активен
                 const chatView = document.getElementById('chat-view');
-                if (chatView && chatView.style.display !== 'none') {
+                if (chatView && chatView.classList.contains('active')) {
                     updateChat();
                 }
             }, 5000);

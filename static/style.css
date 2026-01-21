@@ -497,6 +497,7 @@ details[open] .details-content {
     border-radius: 6px;
     margin-bottom: 10px;
     position: relative;
+    min-height: 0; /* Prevent flex item from overflowing */
 }
 
 .welcome-section {
