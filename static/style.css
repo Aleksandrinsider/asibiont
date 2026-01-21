@@ -296,7 +296,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 1.2fr 1.5fr 1.2fr; /* Side columns slightly wider */
+    grid-template-columns: 1fr 1.5fr 1fr; /* Center column 50% wider than side columns */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
     gap: 0px;
@@ -903,10 +903,32 @@ details[open] .details-content {
 
 
 .task-stats {
-    padding: 10px;
+    padding: 0px;
     margin-bottom: 12px;
     background-color: transparent;
     border-radius: 0;
+}
+
+.task-stats-block {
+    padding: 12px;
+    margin-top: 0;
+    margin-bottom: 3px;
+}
+
+.tasks-section-wrapper {
+    padding: 12px;
+    margin-top: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.tasks-section {
+    overflow: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 6px;
+    min-height: 0;
 }
 
 .stats-text {
