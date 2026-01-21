@@ -1259,14 +1259,20 @@
             }
         }
 
+        function login() {
+            // Открываем Telegram бота для авторизации
+            const botUsername = '{{ bot_username }}';
+            window.open(`https://t.me/${botUsername}`, '_blank');
+        }
+
         async function testLogin(userId) {
             try {
-                const response = await fetch(`/login?user_id=${userId}`, {
-                    method: 'POST',
+                const response = await fetch(`/dashboard?telegram_id=${userId}`, {
+                    method: 'GET',
                     credentials: 'include'
                 });
                 if (response.ok) {
-                    location.reload();
+                    location.href = `/dashboard?telegram_id=${userId}`;
                 } else {
                     alert('Ошибка входа');
                 }
