@@ -2131,7 +2131,7 @@
             }
             html += task.title + '</div>';
             
-            // Время и статус
+            // Время и статус на отдельных строках с отступами как у контактов
             let timeStr = '';
             if (task.reminder_time) {
                 const date = new Date(task.reminder_time);
@@ -2152,7 +2152,10 @@
                 statusColor = '#d73a49';
             }
             
-            html += '<div class="task-meta" style="color: ' + statusColor + ';">' + timeStr + '<br>' + statusStr + '</div>';
+            // Время на первой строке
+            html += '<div style="margin-top: 4px;"><span class="task-meta">' + timeStr + '</span></div>';
+            // Статус на второй строке
+            html += '<div style="margin-top: 2px;"><span class="task-meta" style="color: ' + statusColor + ';">' + statusStr + '</span></div>';
             
             // Рекомендации (если есть)
             if (task.recommendations && task.recommendations.length > 0) {
@@ -2500,7 +2503,7 @@
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
-                html += '<div style="margin-top: 2px;"><span style="font-size: 12px; color: #374151;">' + clickableDelegationInfo + '</span></div>';
+                html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #374151;">' + clickableDelegationInfo + '</span></div>';
             }
             
             // Показываем описание задачи, если оно есть и это не устаревший текст делегирования
