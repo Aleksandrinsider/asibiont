@@ -257,9 +257,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             if "Добавлена задача" in result_text:
                 match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
                 if match:
-                    title = match.group(1)
+                    task_title = match.group(1)
                     task_id = match.group(2)
-                    natural_responses.append(f"Задача '{title}' создана с ID {task_id}")
+                    natural_responses.append(f"Задача '{task_title}' создана с ID {task_id}")
                 else:
                     natural_responses.append("Задача создана успешно")
 
