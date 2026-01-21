@@ -3760,13 +3760,28 @@
                                 const username = partner.contact_info;
                                 if (!uniquePartners[username]) {
                                     uniquePartners[username] = partner;
+                                    // Если это избранный контакт, отмечаем флагом
+                                    if (partner.type === 'favorite') {
+                                        uniquePartners[username].is_favorite = true;
+                                    }
                                 } else {
                                     // Если пользователь уже есть, комбинируем типы
                                     const existing = uniquePartners[username];
+                                    
+                                    // Сохраняем флаг избранного если любой из типов - favorite
+                                    if (partner.type === 'favorite') {
+                                        existing.is_favorite = true;
+                                    }
+                                    
+                                    // Приоритет типов: recommended > delegating > favorite
                                     if (existing.type === 'recommended' && partner.type !== 'recommended') {
                                         // Оставляем recommended, если есть
                                     } else if (existing.type !== 'recommended' && partner.type === 'recommended') {
                                         uniquePartners[username] = partner;
+                                        // Восстанавливаем флаг избранного
+                                        if (existing.is_favorite) {
+                                            uniquePartners[username].is_favorite = true;
+                                        }
                                     }
                                 }
                             });
@@ -3785,11 +3800,13 @@
                                 
                                 if (partner.type === 'recommended' && partner.contact_info) {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
+                                    // Добавляем класс contact-favorite если контакт в избранном
+                                    const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
                                     // Debug log for elite filter
                                     if (partner.subscription_tier && partner.subscription_tier.toLowerCase() === 'gold') {
                                         console.log('Found GOLD contact:', partner.contact_info, 'tier:', partner.subscription_tier);
                                     }
-                                    html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '" data-type="recommended"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
@@ -3909,7 +3926,8 @@
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_to_me') {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-delegating-to-me" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
+                                    html += '<li class="task-item contact-delegating-to-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
@@ -4027,7 +4045,8 @@
                                 } else if (partner.type === 'delegating_by_me') {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                                    html += '<li class="task-item contact-delegating-by-me" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
+                                    html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
