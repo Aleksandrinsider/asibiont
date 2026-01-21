@@ -1153,6 +1153,8 @@
             // Убираем нумерацию и списки в начале строки
             processedText = processedText.replace(/^\d+\.\s+/gm, '');
             processedText = processedText.replace(/^[-•]\s+/gm, '');
+            // Убираем все новые строки и заменяем на пробелы для единого формата
+            processedText = processedText.replace(/\n+/g, ' ').trim();
             
             if (normalizedSender === 'ai') {
                 processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">@$1</a>');
@@ -3085,10 +3087,8 @@
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions" style="display: flex; gap: 8px;">';
-                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
-                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0;">В избранные</button>`;
-                    html += `<button onclick="openRatingModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #F6F8FA; color: #374151; border: 1px solid #D1D9E0;">Рекомендовать</button>`;
-                    html += `<button onclick="blockContactFromModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #d73a49; color: white;">Заблокировать</button>`;
+                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #068487; color: white;">Написать</button>`;
+                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}')" class="rating-submit-btn" style="background: #068487; color: white;">В избранные</button>`;
                     html += '</div>';
                     
                     content.innerHTML = html;
@@ -3298,10 +3298,15 @@
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
+                    showNotification('Задача удалена', 'success');
                     await updateTasks();
+                } else {
+                    const error = await response.json();
+                    showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
                 }
             } catch (error) {
                 console.error('Error deleting task:', error);
+                showNotification('Ошибка при удалении задачи', 'error');
             }
         }
 
@@ -3421,7 +3426,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\'')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -3497,10 +3502,10 @@
                                     const delegateDisabled = isBronze ? ' disabled' : '';
                                     html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
-                                    html += '<button onclick="openRatingModal(\'' + partner.contact_info + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(' + JSON.stringify(partner.contact_info) + ')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3530,7 +3535,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -3606,8 +3611,8 @@
                                     const delegateDisabled = isBronze ? ' disabled' : '';
                                     html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
-                                    html += '<button onclick="openRatingModal(\'' + partner.contact_info + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
-                                    html += '<button onclick="blockContact(' + JSON.stringify(partner.contact_info) + ')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
@@ -3637,7 +3642,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle += 'color: #D7AC0C;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + partner.contact_info + '\', true)" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -3713,10 +3718,10 @@
                                     const delegateDisabled = isBronze ? ' disabled' : '';
                                     html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
-                                    html += '<button onclick="openRatingModal(\'' + partner.contact_info + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
+                                    html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
                                     // Block button
-                                    html += '<button onclick="blockContact(' + JSON.stringify(partner.contact_info) + ')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
+                                    html += '<button onclick="blockContact(\'' + contactInfoEscaped + '\')" class="delete-btn" title="Заблокировать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
                                     
                                     html += '</div>';
                                     html += '</li>';
