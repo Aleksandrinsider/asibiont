@@ -839,7 +839,7 @@
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" title="Показать избранные контакты">Избранное</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" title="Показать рекомендуемые контакты">Рекомендуемые</button>
-                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %} title="{% if subscription_tier in ['GOLD'] %}Показать элитные связи (только Gold-пользователи){% else %}Доступно на тарифе Gold{% endif %}">Элитные связи</button>
+                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %} title="{% if subscription_tier in ['GOLD'] %}Показать пользователей с премиум статусом (Gold){% else %}Доступно на тарифе Gold{% endif %}">Премиум статус</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" title="Показать контакты, которые делегируют задачи мне">Делегирует мне</button>
                         <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %} title="{% if subscription_tier == 'BRONZE' %}Доступно на других тарифах{% else %}Показать контакты, которым я делегирую задачи{% endif %}">Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')" title="Показать заблокированные контакты">Заблокированные</button>
@@ -859,7 +859,7 @@
                                 <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">
-                                <span id="chat-link" onclick="switchToChat()" style="cursor: pointer; font-weight: 500;">Чат с ИИ</span>
+                                <span id="chat-link" onclick="switchToChat()" style="cursor: pointer;">Чат с ИИ</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="feed-link" onclick="switchToFeed()" style="cursor: pointer; opacity: 0.5;">Лента новостей</span>
                             </h3>
@@ -910,6 +910,10 @@
                         {% if logged_in %}
                         <div class="chat-input">
                             <input type="text" id="post-input" placeholder="Напишите что-нибудь..." onkeypress="handlePostKeyPress(event)">
+                            <input type="file" id="post-file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
+                            <button onclick="document.getElementById('post-file-input').click()" class="chat-action-btn" title="Прикрепить файл">
+                                <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
+                            </button>
                             <button onclick="createPost()" class="chat-action-btn" title="Опубликовать пост">
                                 <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163z"/></svg>
                             </button>
@@ -1506,18 +1510,14 @@
         function switchToChat() {
             document.getElementById('chat-view').style.display = 'block';
             document.getElementById('feed-view').style.display = 'none';
-            document.getElementById('chat-link').style.fontWeight = '500';
             document.getElementById('chat-link').style.opacity = '1';
-            document.getElementById('feed-link').style.fontWeight = '400';
             document.getElementById('feed-link').style.opacity = '0.5';
         }
 
         function switchToFeed() {
             document.getElementById('chat-view').style.display = 'none';
             document.getElementById('feed-view').style.display = 'block';
-            document.getElementById('chat-link').style.fontWeight = '400';
             document.getElementById('chat-link').style.opacity = '0.5';
-            document.getElementById('feed-link').style.fontWeight = '500';
             document.getElementById('feed-link').style.opacity = '1';
             loadFeed();
         }
@@ -1564,15 +1564,23 @@
                         }
 
                         postDiv.innerHTML = `
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                ${post.author.photo_url ? 
-                                    `<img src="${post.author.photo_url}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">` : 
-                                    '<div style="width: 32px; height: 32px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #6B7280;">' + (post.author.first_name ? post.author.first_name[0] : '?') + '</div>'
-                                }
-                                <div>
-                                    <div style="font-weight: 500; font-size: 14px; color: #111827;">${authorInfo}</div>
-                                    <div style="font-size: 12px; color: #6B7280;">${postTime}</div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    ${post.author.photo_url ? 
+                                        `<img src="${post.author.photo_url}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;">` : 
+                                        '<div style="width: 32px; height: 32px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: #6B7280;">' + (post.author.first_name ? post.author.first_name[0] : '?') + '</div>'
+                                    }
+                                    <div>
+                                        <div style="font-weight: 500; font-size: 14px; color: #111827;">${authorInfo}</div>
+                                        <div style="font-size: 12px; color: #6B7280;">${postTime}</div>
+                                    </div>
                                 </div>
+                                ${post.author.is_current_user ? 
+                                    `<button onclick="deletePost(${post.id})" style="padding: 4px 8px; background: #EF4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" title="Удалить пост">
+                                        <svg width="14" height="14" viewBox="0 0 16 16" fill="white"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg>
+                                    </button>` 
+                                    : ''
+                                }
                             </div>
                             <p style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(post.content)}</p>
                         `;
@@ -1625,6 +1633,32 @@
             } catch (error) {
                 console.error('Error creating post:', error);
                 showNotification('Ошибка публикации: ' + error.message, 'error');
+            }
+        }
+
+        async function deletePost(postId) {
+            if (!confirm('Вы уверены, что хотите удалить этот пост?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/posts/${postId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+
+                if (response.ok) {
+                    showNotification('Пост удален', 'success');
+                    loadFeed(); // Перезагрузить ленту
+                } else {
+                    showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting post:', error);
+                showNotification('Ошибка удаления: ' + error.message, 'error');
             }
         }
 

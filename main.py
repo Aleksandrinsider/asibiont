@@ -3775,6 +3775,40 @@ async def get_feed_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def delete_post_handler(request):
+    """API endpoint to delete a post"""
+    try:
+        user = request.get('user')
+        if not user:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        post_id = request.match_info.get('post_id')
+        if not post_id:
+            return web.json_response({'error': 'Post ID is required'}, status=400)
+
+        session_db = Session()
+        try:
+            post = session_db.query(Post).filter_by(id=post_id).first()
+            
+            if not post:
+                return web.json_response({'error': 'Post not found'}, status=404)
+            
+            # Only owner can delete
+            if post.user_id != user.id:
+                return web.json_response({'error': 'You can only delete your own posts'}, status=403)
+
+            session_db.delete(post)
+            session_db.commit()
+
+            return web.json_response({'success': True, 'message': 'Post deleted'})
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error deleting post: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id"""
     telegram_id = request.match_info.get('telegram_id')
@@ -4565,6 +4599,7 @@ app.router.add_get('/api/get_user_rating', get_user_rating_handler)
 app.router.add_post('/api/set_user_rating', set_user_rating_handler)
 app.router.add_post('/api/posts', create_post_handler)
 app.router.add_get('/api/feed', get_feed_handler)
+app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
