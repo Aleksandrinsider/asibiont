@@ -339,7 +339,9 @@
         // Global variables
         let currentTaskFilter = 'all';
         let currentContactFilter = 'recommended';
-        let currentView = 'chat'; // Глобальная переменная для отслеживания активного view: 'chat' или 'feed'
+        // Глобальная переменная для отслеживания активного view: 'chat' или 'feed'
+        // Инициализируем из sessionStorage или по умолчанию 'chat'
+        let currentView = sessionStorage.getItem('currentView') || 'chat';
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
