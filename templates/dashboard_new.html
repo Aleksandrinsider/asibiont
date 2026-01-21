@@ -645,9 +645,14 @@
         #chat-view,
         #feed-view {
             flex: 1;
+            display: flex;
             flex-direction: column;
             overflow: hidden;
             min-height: 0;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
         }
 
         /* Chat messages and feed posts container */
@@ -1003,7 +1008,7 @@
                     </div>
 
                     <!-- Чат с ИИ -->
-                    <div id="chat-view" style="display: flex;">
+                    <div id="chat-view" style="visibility: visible; position: relative; z-index: 1;">
                         <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
@@ -1039,7 +1044,7 @@
                     </div>
 
                     <!-- Лента новостей -->
-                    <div id="feed-view" style="display: none;">
+                    <div id="feed-view" style="visibility: hidden; position: absolute; z-index: 0; pointer-events: none;">
                         <div id="feed-posts" class="chat-messages">
                             <!-- Посты будут загружены динамически -->
                         </div>
@@ -1651,15 +1656,30 @@
 
         // Функции для ленты новостей
         function switchToChat() {
-            document.getElementById('chat-view').style.display = 'flex';
-            document.getElementById('feed-view').style.display = 'none';
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            chatView.style.visibility = 'visible';
+            chatView.style.position = 'relative';
+            chatView.style.zIndex = '1';
+            feedView.style.visibility = 'hidden';
+            feedView.style.position = 'absolute';
+            feedView.style.zIndex = '0';
+            feedView.style.pointerEvents = 'none';
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
         }
 
         function switchToFeed() {
-            document.getElementById('chat-view').style.display = 'none';
-            document.getElementById('feed-view').style.display = 'flex';
+            const chatView = document.getElementById('chat-view');
+            const feedView = document.getElementById('feed-view');
+            chatView.style.visibility = 'hidden';
+            chatView.style.position = 'absolute';
+            chatView.style.zIndex = '0';
+            chatView.style.pointerEvents = 'none';
+            feedView.style.visibility = 'visible';
+            feedView.style.position = 'relative';
+            feedView.style.zIndex = '1';
+            feedView.style.pointerEvents = 'auto';
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
             loadFeed();
@@ -4492,7 +4512,7 @@
             setInterval(() => {
                 // Полностью останавливаем обновления, если открыта лента новостей
                 const feedView = document.getElementById('feed-view');
-                if (feedView && (feedView.style.display === 'flex' || feedView.style.display === 'block')) {
+                if (feedView && feedView.style.visibility === 'visible') {
                     console.log('Feed view is active, skipping all auto-updates');
                     return;
                 }
@@ -4502,7 +4522,7 @@
                 updateProfile();
                 // Обновляем чат только если он активен
                 const chatView = document.getElementById('chat-view');
-                if (chatView && (chatView.style.display === 'flex' || chatView.style.display === 'block')) {
+                if (chatView && chatView.style.visibility === 'visible') {
                     updateChat();
                 }
             }, 5000);
