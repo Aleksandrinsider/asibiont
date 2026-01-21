@@ -2679,7 +2679,7 @@ async def api_partners_handler(request):
                             'photo_url': photo_url,
                             'can_access': can_access,
                             'required_tier': required_tier,
-                            'subscription_tier': partner_tier.value if partner_tier and hasattr(partner_tier, 'value') else 'bronze',
+                            'subscription_tier': (partner_tier.value if partner_tier and hasattr(partner_tier, 'value') else 'bronze').lower(),
                             'city': getattr(
                                 p,
                                 'city',

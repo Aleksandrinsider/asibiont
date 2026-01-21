@@ -197,7 +197,7 @@
                 } else if (currentContactFilter === 'elite') {
                     // Для elite показываем только GOLD контакты из recommended
                     const tier = card.dataset.tier;
-                    const isElite = type === 'recommended' && tier === 'gold';
+                    const isElite = type === 'recommended' && tier && tier.toLowerCase() === 'gold';
                     card.style.display = isElite ? 'flex' : 'none';
                 } else if (currentContactFilter === 'blocked') {
                     // Для blocked показываем только заблокированные контакты
@@ -837,12 +837,12 @@
                         </div>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Избранное</button>
-                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
-                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %}>Элитные связи</button>
-                        <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
-                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %}>Делегирую я</button>
-                        <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
+                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" title="Показать избранные контакты">Избранное</button>
+                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" title="Показать рекомендуемые контакты">Рекомендуемые</button>
+                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %} title="{% if subscription_tier in ['GOLD'] %}Показать элитные связи (только Gold-пользователи){% else %}Доступно на тарифе Gold{% endif %}">Элитные связи</button>
+                        <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" title="Показать контакты, которые делегируют задачи мне">Делегирует мне</button>
+                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %} title="{% if subscription_tier == 'BRONZE' %}Доступно на других тарифах{% else %}Показать контакты, которым я делегирую задачи{% endif %}">Делегирую я</button>
+                        <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')" title="Показать заблокированные контакты">Заблокированные</button>
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
