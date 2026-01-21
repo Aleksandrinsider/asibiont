@@ -2366,19 +2366,19 @@ async def api_partners_handler(request):
             return web.json_response({'error': 'Not logged in'}, status=401)
 
         try:
-            try:
-                partners = get_partners_list(user_id=user.id)  # Передаем user.id (базовый ID), а не telegram_id
-                logger.info(f"Got {len(partners)} partners from get_partners_list")
-            except Exception as e:
-                logger.error(f"Error getting partners: {e}")
-                partners = []
-
             # Filter hidden contacts
             session_db = Session()
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 logger.error(f"User not found for telegram_id: {user_id}")
                 return web.json_response({'error': 'User not found'}, status=404)
+            
+            try:
+                partners = get_partners_list(user_id=user.id)  # Передаем user.id (базовый ID), а не telegram_id
+                logger.info(f"Got {len(partners)} partners from get_partners_list")
+            except Exception as e:
+                logger.error(f"Error getting partners: {e}")
+                partners = []
 
             # Get hidden contacts from memory
             hidden_contacts = set()
