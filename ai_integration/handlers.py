@@ -1759,20 +1759,63 @@ def get_partners_list(user_id=None, session=None):
             continue
 
         has_match = False
+        match_reasons = []  # Для логирования причин совпадения
 
-        # Check skills
+        # Check skills - улучшенная логика с частичным совпадением
         if user_profile.skills and profile.skills:
             user_skills = set(s.strip().lower() for s in user_profile.skills.split(","))
             profile_skills = set(s.strip().lower() for s in profile.skills.split(","))
+            
+            # Точное совпадение навыков
             if user_skills & profile_skills:
                 has_match = True
+                match_reasons.append(f"skills exact: {user_skills & profile_skills}")
+            else:
+                # Частичное совпадение - проверяем вхождение слов
+                for user_skill in user_skills:
+                    user_words = set(user_skill.split())
+                    for profile_skill in profile_skills:
+                        profile_words = set(profile_skill.split())
+                        # Если хотя бы одно слово совпадает
+                        if user_words & profile_words:
+                            has_match = True
+                            match_reasons.append(f"skills partial: {user_skill} <-> {profile_skill}")
+                            break
+                        # Или если одно содержится в другом
+                        if any(uw in profile_skill for uw in user_words) or any(pw in user_skill for pw in profile_words):
+                            has_match = True
+                            match_reasons.append(f"skills contains: {user_skill} <-> {profile_skill}")
+                            break
+                    if has_match:
+                        break
 
-        # Check interests
+        # Check interests - улучшенная логика с частичным совпадением
         if user_profile.interests and profile.interests:
             user_interests = set(i.strip().lower() for i in user_profile.interests.split(","))
             profile_interests = set(i.strip().lower() for i in profile.interests.split(","))
+            
+            # Точное совпадение интересов
             if user_interests & profile_interests:
                 has_match = True
+                match_reasons.append(f"interests exact: {user_interests & profile_interests}")
+            else:
+                # Частичное совпадение - проверяем вхождение слов
+                for user_interest in user_interests:
+                    user_words = set(user_interest.split())
+                    for profile_interest in profile_interests:
+                        profile_words = set(profile_interest.split())
+                        # Если хотя бы одно слово совпадает
+                        if user_words & profile_words:
+                            has_match = True
+                            match_reasons.append(f"interests partial: {user_interest} <-> {profile_interest}")
+                            break
+                        # Или если одно содержится в другом (например, "спорт" и "спортзал")
+                        if any(uw in profile_interest for uw in user_words) or any(pw in user_interest for pw in profile_words):
+                            has_match = True
+                            match_reasons.append(f"interests contains: {user_interest} <-> {profile_interest}")
+                            break
+                    if has_match:
+                        break
 
         # Check current_plans for interest matches
         if user_profile.interests and profile.current_plans:
@@ -1781,6 +1824,7 @@ def get_partners_list(user_id=None, session=None):
                 interest_words = interest.strip().lower().split()
                 if any(word in profile.current_plans.lower() for word in interest_words):
                     has_match = True
+                    match_reasons.append(f"current_plans: {interest}")
                     break
 
         # Check goals
@@ -1789,15 +1833,20 @@ def get_partners_list(user_id=None, session=None):
             profile_goals = set(g.strip().lower() for g in profile.goals.split(","))
             if user_goals & profile_goals:
                 has_match = True
+                match_reasons.append(f"goals: {user_goals & profile_goals}")
 
         # Check company
         if hasattr(user_profile, "company") and hasattr(profile, "company"):
             if user_profile.company and profile.company:
                 if user_profile.company.lower() == profile.company.lower():
                     has_match = True
+                    match_reasons.append(f"company: {profile.company}")
 
         if has_match:
+            logger.info(f"[PARTNERS] Match found: @{profile_user.username} - {', '.join(match_reasons)}")
             partners.append(profile)
+        else:
+            logger.debug(f"[PARTNERS] No match: @{profile_user.username}")
 
     logger.info(f"[PARTNERS] Total partners found: {len(partners)}")
 
@@ -1819,11 +1868,13 @@ def get_partners_list(user_id=None, session=None):
 
     # Combine: first from same city, then others
     sorted_partners = partners_same_city + partners_other_city
+    
+    logger.info(f"[PARTNERS] Sorted results: {len(partners_same_city)} from same city, {len(partners_other_city)} from other cities")
 
     if close_session:
         session.close()
 
-    return sorted_partners[:20]
+    return sorted_partners[:50]  # Увеличено с 20 до 50
 
 
 def find_partners(user_id=None, session=None):
