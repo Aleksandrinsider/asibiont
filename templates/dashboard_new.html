@@ -3576,7 +3576,11 @@
                                 
                                 if (partner.type === 'recommended' && partner.contact_info) {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    // Debug log for elite filter
+                                    if (partner.subscription_tier && partner.subscription_tier.toLowerCase() === 'gold') {
+                                        console.log('Found GOLD contact:', partner.contact_info, 'tier:', partner.subscription_tier);
+                                    }
+                                    html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '" data-type="recommended"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
@@ -3696,7 +3700,7 @@
                                     html += '</li>';
                                 } else if (partner.type === 'delegating_to_me') {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
-                                    html += '<li class="task-item contact-delegating-to-me" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-delegating-to-me" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
@@ -3814,7 +3818,7 @@
                                 } else if (partner.type === 'delegating_by_me') {
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                                    html += '<li class="task-item contact-delegating-by-me" data-username="' + contactInfoEscaped + '"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
+                                    html += '<li class="task-item contact-delegating-by-me" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
