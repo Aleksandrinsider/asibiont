@@ -190,7 +190,7 @@
                             const telegramUrl = 'https://t.me/' + partner.contact_info;
                             const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                             
-                            html += '<li class="task-item contact-elite" data-username="' + contactInfoEscaped + '" data-type="elite" data-tier="gold" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                            html += '<li class="task-item contact-recommended" data-username="' + contactInfoEscaped + '" data-type="recommended" data-tier="gold" style="display: flex; margin-bottom: 8px; align-items: center;">';
                             
                             // Аватар
                             if (partner.photo_url) {
@@ -4644,7 +4644,10 @@
                 
                 console.log('[AUTO-UPDATE] Chat view active, running updates');
                 updateTasks();
-                updatePeople();
+                // Не обновляем контакты, если открыта лента (чтобы не вызывать переключение view)
+                if (!feedView || !feedView.classList.contains('active')) {
+                    updatePeople();
+                }
                 updateProfile();
                 // Обновляем чат только если он активен
                 if (chatView && chatView.classList.contains('active')) {
