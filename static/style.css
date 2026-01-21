@@ -496,6 +496,7 @@ details[open] .details-content {
     border: 1px solid #D1D9E0;
     border-radius: 6px;
     margin-bottom: 10px;
+    position: relative;
 }
 
 .welcome-section {
