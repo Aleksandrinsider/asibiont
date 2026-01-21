@@ -60,11 +60,11 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         try:
             func_name = tool_call["function"]["name"]
             args = json.loads(tool_call["function"]["arguments"])
-            logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
+            # logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
 
             if func_name == "add_task":
-                logger.info(
-                    f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
+                # logger.info(
+                #     f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
                 
                 # СТРОГАЯ проверка наличия времени
                 reminder_time = args.get("reminder_time")
@@ -73,7 +73,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 
                 # Валидация reminder_time
                 has_time = intent.get("params", {}).get("has_time", False)
-                logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
+                # logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
                 
                 # БЛОКИРУЕМ создание задач без времени
                 if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
@@ -1276,7 +1276,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
                         if not content or len(content.strip()) < 10:
                             logger.warning("[FALLBACK] Empty or too short response, using fallback")
-                            content = smart_fallback_handler(message, "", user_id, content)
+                            content = "Хорошо, продолжим работу!"
 
                         # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
                         # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI

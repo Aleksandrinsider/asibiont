@@ -322,20 +322,19 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
             .first()
         )
     elif task_title:
-        # Search by words in title (including delegated tasks)
+        # Search by words in title (including delegated tasks) - include completed tasks to check status
         words = task_title.lower().split()
         # Use func.lower() for case-insensitive search
         conditions = [func.lower(Task.title).like(f"%{word}%") for word in words]
         
-        # Build query with optional delegated task search
-        query_conditions = [and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions))]
+        # Build query with optional delegated task search - include all statuses
+        query_conditions = [and_(Task.user_id == user.id, or_(*conditions))]
         
         if user.username:
             query_conditions.append(
                 and_(
                     Task.delegated_to_username.ilike(user.username.replace('@', '')),
                     Task.delegation_status == "accepted",
-                    Task.status != "completed",
                     or_(*conditions)
                 )
             )
@@ -347,6 +346,11 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
         return "Не указан ни task_id, ни task_title."
 
     if task:
+        if task.status == "completed":
+            if close_session:
+                session.close()
+            return f"Задача '{task.title}' уже выполнена."
+        
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
         session.commit()

@@ -649,7 +649,6 @@ try:
                         title="Подготовить презентацию для клиента",
                         description="Создать презентацию о наших услугах",
                         status="pending",
-                        priority="medium",
                         created_at=now,
                         updated_at=now,
                         delegated_to_username=user_1001.username,
@@ -665,7 +664,6 @@ try:
                         title="Проверить код на ошибки",
                         description="Ревью кода для нового модуля",
                         status="pending",
-                        priority="high",
                         created_at=now,
                         updated_at=now,
                         delegated_to_username=user_1001.username,
@@ -681,7 +679,6 @@ try:
                         title="Организовать встречу с командой",
                         description="Запланировать еженедельную встречу",
                         status="pending",
-                        priority="low",
                         created_at=now,
                         updated_at=now,
                         delegated_to_username=user_1002.username,
@@ -4050,7 +4047,8 @@ async def get_feed_handler(request):
                     'first_name': u.first_name,
                     'photo_url': u.photo_url,
                     'company': profile.company if profile else None,
-                    'position': profile.position if profile else None
+                    'position': profile.position if profile else None,
+                    'subscription_tier': u.subscription_tier.value if u.subscription_tier else 'BRONZE'
                 }
 
             # Build feed response
@@ -4069,6 +4067,7 @@ async def get_feed_handler(request):
                             'photo_url': author.get('photo_url'),
                             'company': author.get('company'),
                             'position': author.get('position'),
+                            'subscription_tier': author.get('subscription_tier', 'BRONZE'),
                             'is_current_user': post.user_id == user.id
                         }
                     })
