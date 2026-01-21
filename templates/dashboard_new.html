@@ -2617,6 +2617,10 @@
                 // Задача делегирована мне, я еще не принял
                 statusStr = 'Ожидает принятия';
                 statusColor = '#D7AC0C';
+            } else if (task.delegation_status === 'rejected') {
+                // Задача отклонена
+                statusStr = 'Отклонена';
+                statusColor = '#d73a49';
             } else if (task.delegation_status === 'pending') {
                 statusStr = 'Ожидает подтверждения';
                 statusColor = '#D7AC0C';
@@ -3017,6 +3021,9 @@
             } else if (task.delegated_by && task.delegation_status === 'pending') {
                 statusText = 'Ожидает принятия';
                 statusColor = '#D7AC0C';
+            } else if (task.delegation_status === 'rejected') {
+                statusText = 'Отклонена';
+                statusColor = '#d73a49';
             } else if (task.status === 'completed') {
                 statusText = 'Завершено';
                 statusColor = '#238636';
