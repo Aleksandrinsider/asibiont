@@ -3182,6 +3182,16 @@ async def api_contact_profile_handler(request):
             if not contact_user:
                 return web.json_response({'error': 'Contact not found'}, status=404)
 
+            # Update avatar from Telegram if available
+            if contact_user.telegram_id and 'bot' in request.app:
+                try:
+                    updated_avatar = await get_user_avatar_url(request.app['bot'], contact_user.telegram_id)
+                    if updated_avatar and updated_avatar != contact_user.photo_url:
+                        contact_user.photo_url = updated_avatar
+                        session_db.commit()
+                except Exception as e:
+                    logger.error(f"Error updating contact avatar for {contact_user.telegram_id}: {e}")
+
             # Get contact profile (if doesn't exist, use defaults)
             profile = session_db.query(UserProfile).filter_by(user_id=contact_user.id).first()
 

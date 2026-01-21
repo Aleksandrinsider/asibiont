@@ -525,6 +525,28 @@
         }
 
         /* Custom tooltips removed - no data-tooltip attributes in use */
+
+        /* Chat and feed views */
+        #chat-view,
+        #feed-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /* Chat messages and feed posts container */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-height: 0;
+        }
     </style>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
@@ -867,7 +889,7 @@
                     </div>
 
                     <!-- Чат с ИИ -->
-                    <div id="chat-view" style="display: block;">
+                    <div id="chat-view">
                         <div id="chat-messages" class="chat-messages">
                         {% if not logged_in %}
                         <div class="message ai">
@@ -1515,7 +1537,7 @@
 
         // Функции для ленты новостей
         function switchToChat() {
-            document.getElementById('chat-view').style.display = 'block';
+            document.getElementById('chat-view').style.display = 'flex';
             document.getElementById('feed-view').style.display = 'none';
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
@@ -1523,7 +1545,7 @@
 
         function switchToFeed() {
             document.getElementById('chat-view').style.display = 'none';
-            document.getElementById('feed-view').style.display = 'block';
+            document.getElementById('feed-view').style.display = 'flex';
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
             loadFeed();
@@ -3240,29 +3262,29 @@
                     html += `<p style="text-align: left;">Город: ${partner.city || 'Не указан'}</p>`;
                     html += `<p style="text-align: left;">Компания: ${partner.company || 'Не указана'}</p>`;
                     html += `<p style="text-align: left;">Должность: ${partner.position || 'Не указана'}</p>`;
-                    html += `<p>Цели: ${partner.goals || 'Не указаны'}</p>`;
-                    html += `<p>Навыки: ${partner.skills || 'Не указаны'}</p>`;
-                    html += `<p>Интересы: ${partner.interests || 'Не указаны'}</p>`;
-                    html += `<p>Языки: ${partner.languages || 'Не указаны'}</p>`;
+                    html += `<p style="text-align: left;">Цели: ${partner.goals || 'Не указаны'}</p>`;
+                    html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
+                    html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
+                    html += `<p style="text-align: left;">Языки: ${partner.languages || 'Не указаны'}</p>`;
                     
                     // Рекомендация с цветом
                     if (partner.average_rating > 0) {
-                        let ratingStyle = '';
+                        let ratingStyle = 'text-align: left;';
                         if (partner.average_rating < 5) {
-                            ratingStyle = 'style="color: #d73a49;"';
+                            ratingStyle = 'text-align: left; color: #d73a49;';
                         } else if (partner.average_rating >= 9) {
-                            ratingStyle = 'style="color: #D7AC0C;"';
+                            ratingStyle = 'text-align: left; color: #D7AC0C;';
                         }
-                        html += `<p ${ratingStyle}>Рекомендация: ${partner.average_rating}/10</p>`;
+                        html += `<p style="${ratingStyle}">Рекомендация: ${partner.average_rating}/10</p>`;
                     } else {
-                        html += `<p>Рекомендация: нет рекомендаций</p>`;
+                        html += `<p style="text-align: left;">Рекомендация: нет рекомендаций</p>`;
                     }
                     
                     // Активные задачи с отступом снизу
                     if (partner.task_count) {
-                        html += `<p style="margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
+                        html += `<p style="text-align: left; margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
                     } else {
-                        html += `<p style="margin-bottom: 20px;">Активных задач: 0</p>`;
+                        html += `<p style="text-align: left; margin-bottom: 20px;">Активных задач: 0</p>`;
                     }
                     
                     html += '</div>';
