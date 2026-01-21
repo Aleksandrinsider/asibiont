@@ -176,7 +176,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "check_subscription_status":
-                result = check_subscription_status(user_id=user_id, session=None)
+                result = check_subscription_status(user_id=user_id)
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "create_subscription_payment":
@@ -1385,16 +1385,7 @@ async def generate_reminder(user_id, task_title, task_id=None):
             mentions_str,
             user_memory)
 
-        # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:
-        system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ НАПОМИНАНИЙ:\n"
-        system_prompt += "- Будь мотивирующим, энергичным и поддерживающим\n"
-        system_prompt += "- Давай 2-3 КОНКРЕТНЫХ практических совета как выполнить задачу эффективнее\n"
-        system_prompt += "- Учитывай время дня и контекст пользователя (планы, цели, интересы)\n"
-        system_prompt += "- Если задача делегированная - напомни о важности выполнения для команды\n"
-        system_prompt += "- 3-5 предложений, живое общение, персонализация\n"
-        system_prompt += "- Завершай мотивирующим вопросом или призывом к действию\n"
-        system_prompt += "- Используй эмодзи уместно (1-2 штуки максимум)\n"
-        system_prompt += "- НЕ используй шаблоны типа 'Все получится!' - будь оригинальным\n"
+        system_prompt = base_prompt
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
@@ -1474,15 +1465,7 @@ async def generate_result_check(user_id, task_title):
             mentions_str,
             user_memory)
 
-        # СПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ ПРОВЕРКИ РЕЗУЛЬТАТОВ:
-        system_prompt = f"{base_prompt}\n\nСПЕЦИАЛЬНЫЕ ПРАВИЛА ДЛЯ ПРОВЕРКИ РЕЗУЛЬТАТОВ ЗАДАЧ:\n"
-        system_prompt += "Уточни результат выполнения задачи\n"
-        system_prompt += "Спроси о времени, затраченном на выполнение\n"
-        system_prompt += "Интересуйся сложностями и уроками\n"
-        system_prompt += "Предлагай улучшения для будущих задач\n"
-        system_prompt += "Будь поддерживающим и анализируй прогресс\n"
-        system_prompt += "2-4 предложения, живое общение\n"
-        system_prompt += "Завершай вопросом для продолжения диалога\n"
+        system_prompt = base_prompt
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
@@ -1763,14 +1746,7 @@ async def generate_daily_report(user_id):
 
         base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory)
 
-        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
-        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
-        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
-        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
-        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
-        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
-        system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+        system_prompt = base_prompt
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
