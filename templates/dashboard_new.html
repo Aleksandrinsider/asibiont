@@ -837,12 +837,12 @@
                         </div>
                     </div>
                     <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
-                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" title="Показать избранные контакты">Избранное</button>
-                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" title="Показать рекомендуемые контакты">Рекомендуемые</button>
-                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %} title="{% if subscription_tier in ['GOLD'] %}Показать пользователей с премиум статусом (Gold){% else %}Доступно на тарифе Gold{% endif %}">Премиум статус</button>
-                        <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" title="Показать контакты, которые делегируют задачи мне">Делегирует мне</button>
-                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %} title="{% if subscription_tier == 'BRONZE' %}Доступно на других тарифах{% else %}Показать контакты, которым я делегирую задачи{% endif %}">Делегирую я</button>
-                        <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')" title="Показать заблокированные контакты">Заблокированные</button>
+                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Избранное</button>
+                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
+                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %}>Премиум статус</button>
+                        <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')">Делегирует мне</button>
+                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %}>Делегирую я</button>
+                        <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
                     </div>
                     <div class="people-list" id="people-list">
                         <!-- Контакты будут загружены динамически -->
@@ -881,25 +881,25 @@
                             </div>
                         </div>
                         {% endif %}
-                    </div>
-                    {% if logged_in %}
-                    <div class="chat-input">
-                        <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
-                        <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
-                        <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn">
-                            <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3ZM3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5Z"/></svg>
-                        </button>
-                        <button onclick="document.getElementById('file-input').click()" class="chat-action-btn">
-                            <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
-                        </button>
-                        <button onclick="clearChatHistory()" class="chat-action-btn">
-                            <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg>
-                        </button>
-                        <button onclick="sendChatMessage()" class="chat-action-btn">
-                            <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163z"/></svg>
-                        </button>
-                    </div>
-                    {% endif %}
+                        </div>
+                        {% if logged_in %}
+                        <div class="chat-input">
+                            <input type="text" id="message-input" placeholder="Сообщение..." onkeypress="handleKeyPress(event)">
+                            <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
+                            <button id="voice-button" onclick="startVoiceChat()" class="chat-action-btn">
+                                <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3ZM3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5Z"/></svg>
+                            </button>
+                            <button onclick="document.getElementById('file-input').click()" class="chat-action-btn">
+                                <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0V3z"/></svg>
+                            </button>
+                            <button onclick="clearChatHistory()" class="chat-action-btn">
+                                <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg>
+                            </button>
+                            <button onclick="sendChatMessage()" class="chat-action-btn">
+                                <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163z"/></svg>
+                            </button>
+                        </div>
+                        {% endif %}
                     </div>
 
                     <!-- Лента новостей -->
@@ -3595,11 +3595,11 @@
                                     
                                     // Show username or tier requirement
                                     if (canAccess) {
-                                        let nameStyle = 'cursor: pointer; color: #374151;';
+                                        let nameStyle = 'cursor: pointer; color: #068487;';
                                         if (partner.subscription_tier === 'SILVER') {
-                                            nameStyle += '';
+                                            nameStyle = 'cursor: pointer; color: #068487;';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle += 'color: #D7AC0C;';
+                                            nameStyle = 'cursor: pointer; color: #D7AC0C;';
                                         }
                                         html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
@@ -3714,11 +3714,11 @@
                                     
                                     // Show username or tier requirement
                                     if (canAccess) {
-                                        let nameStyle = 'cursor: pointer; color: #374151;';
+                                        let nameStyle = 'cursor: pointer; color: #068487;';
                                         if (partner.subscription_tier === 'SILVER') {
-                                            nameStyle += '';
+                                            nameStyle = 'cursor: pointer; color: #068487;';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle += 'color: #D7AC0C;';
+                                            nameStyle = 'cursor: pointer; color: #D7AC0C;';
                                         }
                                         html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
@@ -3831,11 +3831,11 @@
                                     
                                     // Show username or tier requirement
                                     if (canAccess) {
-                                        let nameStyle = 'cursor: pointer; color: #374151;';
+                                        let nameStyle = 'cursor: pointer; color: #068487;';
                                         if (partner.subscription_tier === 'SILVER') {
-                                            nameStyle += '';
+                                            nameStyle = 'cursor: pointer; color: #068487;';
                                         } else if (partner.subscription_tier === 'GOLD') {
-                                            nameStyle += 'color: #D7AC0C;';
+                                            nameStyle = 'cursor: pointer; color: #D7AC0C;';
                                         }
                                         html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
                                     } else {
@@ -4340,7 +4340,11 @@
                 updateTasks();
                 updatePeople();
                 updateProfile();
-                updateChat();
+                // Обновляем чат только если он активен
+                const chatView = document.getElementById('chat-view');
+                if (chatView && chatView.style.display !== 'none') {
+                    updateChat();
+                }
             }, 5000);
         }
 
