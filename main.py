@@ -2805,59 +2805,40 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
 
-            # Check tier access
-            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
+            # Для контактов "Делегирует мне" НЕ применяем фильтр по тарифу
+            # Делегированные задачи должны всегда отображаться независимо от тарифа делегатора
             delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.BRONZE
-
-            # Ensure tiers are proper enum values
-            if not hasattr(user_tier, 'value'):
-                user_tier = SubscriptionTier.BRONZE
+            
+            # Ensure tier is proper enum value
             if not hasattr(delegator_tier, 'value'):
                 delegator_tier = SubscriptionTier.BRONZE
-
-            # Convert to string for comparison
-            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+            
             delegator_tier_str = delegator_tier.value if hasattr(delegator_tier, 'value') else str(delegator_tier).lower()
-
-            can_access = False
-            required_tier = None
-
-            if user_tier_str.lower() in ['bronze', 'silver']:
-                # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (delegator_tier_str.lower() in ['bronze', 'silver'])
-                logger.info(f"Delegator check: User {user_tier_str} checking delegator {delegator_tier_str}: can_access = {can_access}")
-                if not can_access:
-                    required_tier = 'gold'
-            elif user_tier_str.lower() == 'gold':
-                can_access = True
-                logger.info(f"Delegator check: User {user_tier_str} can access all delegators")
-
-            # Only add contact if user can access it
-            if can_access:
-                logger.info(f"Adding delegating contact {contact['username']} with tier {delegator_tier_str} for user {user.username} with tier {user_tier_str}")
-                delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first() if delegator else None
-                partners_data.append({
-                    'contact_info': contact['username'] if can_access else None,
-                    'telegram_id': delegator.telegram_id if delegator else None,
-                    'can_access': can_access,
-                    'required_tier': required_tier,
-                    'subscription_tier': delegator_tier.value if delegator_tier else 'bronze',
-                    'photo_url': photo_url,
-                    'first_name': contact['first_name'],
-                    'position': contact.get('position'),
-                    'interests': contact.get('interests'),
-                    'city': contact.get('city'),
-                    'company': contact.get('company'),
-                    'common_interests': common_interests,
-                    'common_skills': common_skills,
-                    'common_goals': common_goals,
-                    'common_tasks': common_tasks,
-                    'average_rating': delegator_profile.average_rating if delegator_profile else 0,
-                    'rating_count': delegator_profile.rating_count if delegator_profile else 0,
-                    'reason': contact['reason'],
-                    'task_count': contact.get('task_count', 0),
-                    'type': 'delegating_to_me'
-                })
+            
+            logger.info(f"Adding delegating contact {contact['username']} with tier {delegator_tier_str} for user {user.username} (no tier restrictions)")
+            delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first() if delegator else None
+            partners_data.append({
+                'contact_info': contact['username'],
+                'telegram_id': delegator.telegram_id if delegator else None,
+                'can_access': True,  # Всегда доступен
+                'required_tier': None,  # Нет ограничений
+                'subscription_tier': delegator_tier.value if delegator_tier else 'bronze',
+                'photo_url': photo_url,
+                'first_name': contact['first_name'],
+                'position': contact.get('position'),
+                'interests': contact.get('interests'),
+                'city': contact.get('city'),
+                'company': contact.get('company'),
+                'common_interests': common_interests,
+                'common_skills': common_skills,
+                'common_goals': common_goals,
+                'common_tasks': common_tasks,
+                'average_rating': delegator_profile.average_rating if delegator_profile else 0,
+                'rating_count': delegator_profile.rating_count if delegator_profile else 0,
+                'reason': contact['reason'],
+                'task_count': contact.get('task_count', 0),
+                'type': 'delegating_to_me'
+            })
 
         for contact in delegating_by_me:
             # Получить профиль делегата для расчета общих интересов/навыков/целей
