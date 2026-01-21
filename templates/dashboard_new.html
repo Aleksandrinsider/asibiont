@@ -3460,6 +3460,10 @@
                                     
                                     // Остальное на отдельных строках
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
+                                    
+                                    // Check if there are any common fields
+                                    const hasCommonFields1 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    
                                     if (partner.interests) {
                                         html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                     }
@@ -3475,6 +3479,12 @@
                                     if (partner.common_tasks) {
                                         html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
                                     }
+                                    
+                                    // If no common fields, show a fallback message
+                                    if (!hasCommonFields1) {
+                                        html += '<span class="task-meta" style="color: #6C727F;">Общего пока не найдено</span>';
+                                    }
+                                    
                                     html += '</div>';
                                     // Рекомендация на отдельной строке
                                     if (partner.average_rating > 0) {
@@ -3569,6 +3579,10 @@
                                     
                                     // Остальное на отдельных строках
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
+                                    
+                                    // Check if there are any common fields
+                                    const hasCommonFields2 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    
                                     if (partner.interests) {
                                         html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                     }
@@ -3584,6 +3598,12 @@
                                     if (partner.common_tasks) {
                                         html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
                                     }
+                                    
+                                    // If no common fields, show a fallback message
+                                    if (!hasCommonFields2) {
+                                        html += '<span class="task-meta" style="color: #6C727F;">Общего пока не найдено</span>';
+                                    }
+                                    
                                     html += '</div>';
                                     // Рекомендация на отдельной строке
                                     if (partner.average_rating > 0) {
@@ -3676,6 +3696,10 @@
                                     
                                     // Остальное на отдельных строках
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
+                                    
+                                    // Check if there are any common fields
+                                    const hasCommonFields3 = partner.common_interests || partner.common_skills || partner.common_goals || partner.common_tasks;
+                                    
                                     if (partner.interests) {
                                         html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                     }
@@ -3691,6 +3715,12 @@
                                     if (partner.common_tasks) {
                                         html += '<span class="task-meta" style="color: #068487;">Общие задачи: ' + partner.common_tasks + '</span>';
                                     }
+                                    
+                                    // If no common fields, show a fallback message
+                                    if (!hasCommonFields3) {
+                                        html += '<span class="task-meta" style="color: #6C727F;">Общего пока не найдено</span>';
+                                    }
+                                    
                                     html += '</div>';
                                     // Рекомендация на отдельной строке
                                     if (partner.average_rating > 0) {
