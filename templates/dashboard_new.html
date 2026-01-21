@@ -3662,8 +3662,16 @@
                 const chatActive = chatView.classList.contains('active');
                 const feedActive = feedView.classList.contains('active');
                 
+                // Только при первой загрузке устанавливаем chat как активный
                 if (!chatActive && !feedActive) {
+                    console.log('[INIT] No view active, setting chat as default');
                     chatView.classList.add('active');
+                    currentView = 'chat';
+                } else if (feedActive) {
+                    console.log('[INIT] Feed view is already active');
+                    currentView = 'feed';
+                } else {
+                    console.log('[INIT] Chat view is already active');
                     currentView = 'chat';
                 }
             }

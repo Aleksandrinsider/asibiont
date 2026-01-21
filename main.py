@@ -4270,8 +4270,17 @@ async def api_tasks_handler(request):
                 'overdue': False,
                 'overdue_text': None,
                 'is_delegated': task.delegated_to_username is not None,
-                'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None
+                'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
+                'delegated_to': task.delegated_to_username,
+                'delegated_by': None  # Будет установлено ниже если задача делегирована мне
             }
+            
+            # Определяем delegated_by если задача делегирована мне
+            if task.delegated_to_username and user.username:
+                if task.delegated_to_username.lower().strip('@') == user.username.lower():
+                    creator = session_db.query(User).filter_by(id=task.user_id).first()
+                    if creator and creator.username:
+                        task_data['delegated_by'] = creator.username
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
                     task.reminder_time = pytz.UTC.localize(task.reminder_time)
