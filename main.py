@@ -3163,6 +3163,204 @@ async def api_partners_handler(request):
             pass
 
 
+async def api_elite_partners_handler(request):
+    """Get ALL Gold partners for Gold users (Premium status filter)"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        logger.info(f"API elite partners handler called for user_id: {user_id}")
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Check if user has Gold tier
+            user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') else SubscriptionTier.BRONZE
+            user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
+            
+            if user_tier_str.lower() != 'gold':
+                # Only Gold users can access elite partners
+                return web.json_response({'partners': []})
+
+            # Get user profile for comparison
+            user_profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            if not user_profile:
+                return web.json_response({'partners': []})
+
+            # Get hidden contacts from memory
+            hidden_contacts = set()
+            if user and user.memory and len(user.memory.strip()) > 0:
+                try:
+                    from datetime import timezone as dt_timezone_local
+                    decrypted = decrypt_data(user.memory)
+                    if decrypted:
+                        hide_matches = re.findall(r'hide_contact:@?(\w+):(\d+)', decrypted, re.IGNORECASE)
+                        current_time = int(datetime.now(dt_timezone_local.utc).timestamp())
+                        for username, expiration_ts in hide_matches:
+                            exp_ts = int(expiration_ts)
+                            if exp_ts > current_time:
+                                hidden_contacts.add(username.lower())
+                except Exception as e:
+                    logger.error(f"Error parsing hidden contacts: {e}")
+
+            # Get blocked contacts
+            blocked_by_me = set()
+            if user_profile.blocked_contacts:
+                try:
+                    blocked_by_me = set(json.loads(user_profile.blocked_contacts))
+                except json.JSONDecodeError:
+                    pass
+
+            # Get all Gold users (except self)
+            gold_users = session_db.query(User).filter(
+                User.subscription_tier == SubscriptionTier.GOLD,
+                User.id != user.id
+            ).all()
+
+            partners_data = []
+            for gold_user in gold_users:
+                # Skip hidden and blocked contacts
+                username_clean = gold_user.username.replace('@', '').lower() if gold_user.username else ''
+                if username_clean in hidden_contacts or gold_user.username in blocked_by_me:
+                    continue
+
+                gold_profile = session_db.query(UserProfile).filter_by(user_id=gold_user.id).first()
+
+                # Update avatar from Telegram if available
+                photo_url = gold_user.photo_url if gold_user.photo_url else None
+                if gold_user.telegram_id and 'bot' in request.app:
+                    try:
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], gold_user.telegram_id)
+                        if updated_avatar and updated_avatar != gold_user.photo_url:
+                            gold_user.photo_url = updated_avatar
+                            session_db.commit()
+                            photo_url = updated_avatar
+                    except Exception as e:
+                        logger.error(f"Error updating Gold user avatar for {gold_user.telegram_id}: {e}")
+
+                # Calculate common interests/skills/goals/tasks
+                common_interests = None
+                common_skills = None
+                common_goals = None
+                common_tasks = None
+
+                if gold_profile:
+                    # Common interests
+                    if gold_profile.interests and user_profile.interests:
+                        user_interests = set(i.strip().lower() for i in user_profile.interests.split(','))
+                        gold_interests = set(i.strip().lower() for i in gold_profile.interests.split(','))
+                        common = user_interests & gold_interests
+                        common_interests = ', '.join(common) if common else None
+
+                    # Common skills
+                    if gold_profile.skills and user_profile.skills:
+                        user_skills = set(s.strip().lower() for s in user_profile.skills.split(','))
+                        gold_skills = set(s.strip().lower() for s in gold_profile.skills.split(','))
+                        common_sk = user_skills & gold_skills
+                        common_skills = ', '.join(common_sk) if common_sk else None
+
+                    # Common goals
+                    if gold_profile.goals and user_profile.goals:
+                        user_goals = set(g.strip().lower() for g in user_profile.goals.split(','))
+                        gold_goals = set(g.strip().lower() for g in gold_profile.goals.split(','))
+                        common_g = user_goals & gold_goals
+                        common_goals = ', '.join(common_g) if common_g else None
+
+                    # Common tasks
+                    user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+                    gold_tasks = session_db.query(Task).filter_by(user_id=gold_user.id).all()
+                    
+                    user_task_titles = set(t.title.lower().strip() for t in user_tasks if t.title)
+                    gold_task_titles = set(t.title.lower().strip() for t in gold_tasks if t.title)
+                    
+                    common_task_titles = user_task_titles & gold_task_titles
+                    if not common_task_titles:
+                        partial_matches = set()
+                        for user_task in user_task_titles:
+                            user_words = set(user_task.split())
+                            if len(user_words) < 2:
+                                continue
+                            for gold_task in gold_task_titles:
+                                gold_words = set(gold_task.split())
+                                common_words = user_words & gold_words
+                                if len(common_words) >= 2:
+                                    partial_matches.add(user_task)
+                        if partial_matches:
+                            common_task_titles = partial_matches
+                    
+                    common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
+
+                partners_data.append({
+                    'contact_info': gold_user.username if gold_user.username else None,
+                    'telegram_id': gold_user.telegram_id,
+                    'photo_url': photo_url,
+                    'can_access': True,  # Gold users can access all Gold users
+                    'required_tier': None,
+                    'subscription_tier': 'gold',
+                    'first_name': gold_user.first_name,
+                    'city': gold_profile.city if gold_profile else None,
+                    'company': gold_profile.company if gold_profile else None,
+                    'position': gold_profile.position if gold_profile else None,
+                    'interests': gold_profile.interests if gold_profile else None,
+                    'skills': gold_profile.skills if gold_profile else None,
+                    'goals': gold_profile.goals if gold_profile else None,
+                    'common_interests': common_interests,
+                    'common_skills': common_skills,
+                    'common_goals': common_goals,
+                    'common_tasks': common_tasks,
+                    'average_rating': gold_profile.average_rating if gold_profile else 0,
+                    'rating_count': gold_profile.rating_count if gold_profile else 0,
+                    'type': 'elite'
+                })
+
+            # Sort: first by same city, then by rating
+            user_city = user_profile.city.lower() if user_profile.city else None
+            
+            def normalize_city(city):
+                if not city:
+                    return None
+                city = city.lower().strip()
+                city_map = {
+                    'москва': 'moscow', 'санкт-петербург': 'saint petersburg',
+                    'петербург': 'saint petersburg', 'спб': 'saint petersburg',
+                    'екатеринбург': 'yekaterinburg', 'новосибирск': 'novosibirsk', 'казань': 'kazan'
+                }
+                return city_map.get(city, city)
+
+            normalized_user_city = normalize_city(user_city)
+
+            def sort_key(partner):
+                partner_city = normalize_city(partner.get('city', ''))
+                same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
+                rating = partner.get('average_rating', 0) or 0
+                if rating >= 5:
+                    rating_group = 0
+                    rating_value = -rating
+                elif rating == 0:
+                    rating_group = 1
+                    rating_value = 0
+                else:
+                    rating_group = 2
+                    rating_value = -rating
+                return (same_city, rating_group, rating_value)
+
+            partners_data.sort(key=sort_key)
+
+            logger.info(f"Returning {len(partners_data)} elite (Gold) partners for user {user_id}")
+            return web.json_response({'partners': partners_data})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error in api_elite_partners_handler: {e}", exc_info=True)
+        return web.json_response({'partners': []}, status=200)
+
+
 async def api_contact_profile_handler(request):
     """Get detailed profile of a contact"""
     try:
@@ -4662,6 +4860,7 @@ app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
+app.router.add_get('/api/elite_partners', api_elite_partners_handler)
 app.router.add_get('/api/contact_profile', api_contact_profile_handler)
 app.router.add_get('/api/favorite_contacts', api_favorite_contacts_handler)
 app.router.add_post('/api/favorite_contacts', api_favorite_contacts_handler)
