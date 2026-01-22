@@ -299,12 +299,12 @@ body {
     grid-template-columns: 1fr 1.5fr 1fr; /* Center column 50% wider than side columns */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
-    gap: 0px;
+    gap: 8px;
     overflow: visible;
     align-items: stretch; /* Stretch columns to equal height */
     width: 100%;
     margin-top: 15px;
-    padding: 0 8px;
+    padding: 0;
 }
 
 /* Ensure direct children can shrink properly inside grid */
@@ -322,12 +322,10 @@ body {
     gap: 0;
     overflow: auto;
     height: 100%;
-    padding: 10px 10px;
+    padding: 6px;
     min-height: 0;
     margin-top: 0;
-    padding-bottom: 10px;
     -webkit-overflow-scrolling: touch;
-    padding-right: 6px;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: normal;
@@ -343,9 +341,9 @@ body {
 
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
-    padding: 12px;
+    padding: 8px;
     margin-top: 0;
-    margin-bottom: 3px;
+    margin-bottom: 0;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -355,7 +353,7 @@ body {
     overflow: auto;
     flex: 1;
     -webkit-overflow-scrolling: touch;
-    padding-right: 6px;
+    padding-right: 0;
     min-height: 0;
 }
 
@@ -371,7 +369,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: 10px 12px;
+    padding: 6px;
     overflow: hidden;
     max-height: 100%;
     min-height: 0;
