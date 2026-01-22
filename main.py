@@ -3527,7 +3527,7 @@ async def api_favorite_contacts_handler(request):
 
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
             if not profile:
-                profile = UserProfile(user_id=user.id)
+                profile = UserProfile(user_id=user.id, favorite_contacts='[]')
                 session_db.add(profile)
                 session_db.commit()
 
@@ -3537,13 +3537,21 @@ async def api_favorite_contacts_handler(request):
                 if profile.favorite_contacts:
                     try:
                         favorites = json.loads(profile.favorite_contacts)
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, TypeError):
                         favorites = []
+                        profile.favorite_contacts = '[]'
+                        session_db.commit()
+                else:
+                    favorites = []
                 return web.json_response({'favorites': favorites})
 
             elif request.method == 'POST':
                 # Update favorite contacts
-                data = await request.json()
+                try:
+                    data = await request.json()
+                except json.JSONDecodeError:
+                    return web.json_response({'error': 'Invalid JSON'}, status=400)
+                
                 favorites = data.get('favorites', [])
 
                 if not isinstance(favorites, list):
