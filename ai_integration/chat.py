@@ -738,7 +738,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 )
                 if delegated_tasks:
                     delegated_info = [
-                        f"Задача '{t.title}' (ID: {t.id}) от @{creator.username if (creator := db_session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}"
+                        f"Задача '{t.title}' от @{creator.username if (creator := db_session.query(User).filter_by(id=t.user_id).first()) else 'unknown'}"
                         for t in delegated_tasks[:3]
                     ]
                     user_memory += f"\nДелегированные задачи для принятия: {', '.join(delegated_info)}"

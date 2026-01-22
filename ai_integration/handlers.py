@@ -996,7 +996,7 @@ def delegate_task(
                         message += f"Дедлайн: {reminder_time}\n"
                     if delegation_details:
                         message += f"Детали: {delegation_details}\n"
-                    message += f"\nНапишите боту 'принять задачу {task_id}' для подтверждения или 'отклонить задачу {task_id}' для отказа."
+                    message += f"\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
 
                 import asyncio
                 asyncio.create_task(bot.send_message(recipient.telegram_id, message))

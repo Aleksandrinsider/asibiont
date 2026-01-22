@@ -3319,14 +3319,17 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        message: `Прими делегированную задачу с ID ${taskId}.`
+                        message: `Прими делегированную задачу.`
                     }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     showNotification('Задача принята', 'success');
-                    // Обновить задачи, чат и контакты
+                    
+                    // Принудительно обновляем интерфейс
+                    lastTasksUpdate = 0; // Сбрасываем throttle
+                    lastPeopleUpdate = 0; // Сбрасываем throttle для контактов
                     await updateTasks();
                     await updateChat();
                     await updatePeople(true);
@@ -3350,14 +3353,27 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        message: `Отклони делегированную задачу с ID ${taskId}.`
+                        message: `Отклони делегированную задачу.`
                     }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
+                    // Немедленно удаляем задачу из DOM
+                    const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+                    if (taskElement) {
+                        taskElement.remove();
+                    }
+                    
+                    // Обновляем данные задач в памяти
+                    allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
+                    allTasksData = allTasksData.filter(t => t.id !== taskId);
+                    
                     showNotification('Задача отклонена', 'success');
-                    // Обновить задачи, чат и контакты
+                    
+                    // Принудительно обновляем интерфейс
+                    lastTasksUpdate = 0; // Сбрасываем throttle
+                    lastPeopleUpdate = 0; // Сбрасываем throttle для контактов
                     await updateTasks();
                     await updateChat();
                     await updatePeople(true);
