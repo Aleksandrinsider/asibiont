@@ -68,6 +68,30 @@ def reset_and_seed():
                 'username': 'dmitry_qa',
                 'first_name': 'Дмитрий',
                 'timezone': 'Europe/Moscow'
+            },
+            {
+                'telegram_id': 666666666,
+                'username': 'sergey_gamer',
+                'first_name': 'Сергей',
+                'timezone': 'Europe/Moscow'
+            },
+            {
+                'telegram_id': 777777777,
+                'username': 'anna_esports',
+                'first_name': 'Анна',
+                'timezone': 'Europe/Moscow'
+            },
+            {
+                'telegram_id': 888888888,
+                'username': 'pavel_coach',
+                'first_name': 'Павел',
+                'timezone': 'Europe/Moscow'
+            },
+            {
+                'telegram_id': 999999999,
+                'username': 'elena_fitness',
+                'first_name': 'Елена',
+                'timezone': 'Europe/Moscow'
             }
         ]
         
@@ -89,6 +113,10 @@ def reset_and_seed():
             {'user_id': users[3].id, 'tier': SubscriptionTier.BRONZE, 'telegram_id': users[3].telegram_id, 'username': users[3].username},  # igor_pm
             {'user_id': users[4].id, 'tier': SubscriptionTier.SILVER, 'telegram_id': users[4].telegram_id, 'username': users[4].username},  # olga_analyst
             {'user_id': users[5].id, 'tier': SubscriptionTier.GOLD, 'telegram_id': users[5].telegram_id, 'username': users[5].username},    # dmitry_qa
+            {'user_id': users[6].id, 'tier': SubscriptionTier.SILVER, 'telegram_id': users[6].telegram_id, 'username': users[6].username},  # sergey_gamer
+            {'user_id': users[7].id, 'tier': SubscriptionTier.GOLD, 'telegram_id': users[7].telegram_id, 'username': users[7].username},    # anna_esports
+            {'user_id': users[8].id, 'tier': SubscriptionTier.BRONZE, 'telegram_id': users[8].telegram_id, 'username': users[8].username},  # pavel_coach
+            {'user_id': users[9].id, 'tier': SubscriptionTier.SILVER, 'telegram_id': users[9].telegram_id, 'username': users[9].username},  # elena_fitness
         ]
         
         for sub_data in subscriptions_data:
@@ -160,6 +188,38 @@ def reset_and_seed():
                 'city': 'Екатеринбург',
                 'company': 'QA Team',
                 'position': 'QA Lead'
+            },
+            {
+                'user_id': users[6].id,
+                'interests': 'компьютерные игры, киберспорт, стриминг',
+                'skills': 'CS:GO, Dota 2, Valorant',
+                'city': 'Москва',
+                'company': 'Esports Team',
+                'position': 'Pro Player'
+            },
+            {
+                'user_id': users[7].id,
+                'interests': 'компьютерные игры, спорт, программирование',
+                'skills': 'Game Development, Unity, C#',
+                'city': 'Санкт-Петербург',
+                'company': 'Game Studio',
+                'position': 'Game Developer'
+            },
+            {
+                'user_id': users[8].id,
+                'interests': 'спорт, фитнес, питание',
+                'skills': 'Персональные тренировки, Диетология',
+                'city': 'Сочи',
+                'company': 'Fitness Club',
+                'position': 'Тренер'
+            },
+            {
+                'user_id': users[9].id,
+                'interests': 'спорт, йога, медитация',
+                'skills': 'Хатха-йога, Пилатес, Растяжка',
+                'city': 'Казань',
+                'company': 'Wellness Center',
+                'position': 'Инструктор йоги'
             }
         ]
         
@@ -169,7 +229,10 @@ def reset_and_seed():
             db.flush()  # Flush после каждого профиля
         
         db.commit()
-        print(f"✓ Создано профилей: {len(profiles_data)} (у всех интерес 'спорт')\n")
+        print(f"✓ Создано профилей: {len(profiles_data)}")
+        print(f"  - Спорт: 7 пользователей")
+        print(f"  - Компьютерные игры: 2 пользователя")
+        print(f"  - Спорт + Игры: 1 пользователь\n")
         
         # Создаем посты
         posts_data = [
@@ -202,6 +265,26 @@ def reset_and_seed():
                 'user_id': users[5].id,
                 'username': users[5].username,
                 'content': 'Ищу партнера для игры в теннис. Уровень - средний. Кто в деле?'
+            },
+            {
+                'user_id': users[6].id,
+                'username': users[6].username,
+                'content': 'Сегодня турнир по CS:GO! Кто со мной в команду? Нужен 5-й игрок'
+            },
+            {
+                'user_id': users[7].id,
+                'username': users[7].username,
+                'content': 'Разрабатываю новую инди-игру! Кто хочет протестировать альфа-версию?'
+            },
+            {
+                'user_id': users[8].id,
+                'username': users[8].username,
+                'content': 'Новая программа тренировок для начинающих. Записывайтесь на пробное занятие!'
+            },
+            {
+                'user_id': users[9].id,
+                'username': users[9].username,
+                'content': 'Утренняя йога каждый день - залог хорошего самочувствия 🧘‍♀️'
             }
         ]
         
@@ -224,6 +307,10 @@ def reset_and_seed():
             {'post_id': posts[3].id, 'user_id': users[5].id, 'username': users[5].username, 'content': 'Я в деле! Где и когда?'},
             {'post_id': posts[4].id, 'user_id': users[0].id, 'username': users[0].username, 'content': 'Поздравляю! Это отличный результат!'},
             {'post_id': posts[5].id, 'user_id': users[0].id, 'username': users[0].username, 'content': 'Я бы с удовольствием, но у меня нет ракетки'},
+            {'post_id': posts[6].id, 'user_id': users[7].id, 'username': users[7].username, 'content': 'Я могу! Какой ранг?'},
+            {'post_id': posts[7].id, 'user_id': users[6].id, 'username': users[6].username, 'content': 'Хочу протестировать! Какой жанр?'},
+            {'post_id': posts[8].id, 'user_id': users[0].id, 'username': users[0].username, 'content': 'Интересно! Сколько стоит занятие?'},
+            {'post_id': posts[9].id, 'user_id': users[8].id, 'username': users[8].username, 'content': 'Полностью согласен! Йога - это здорово'},
         ]
         
         for comment_data in comments_data:
@@ -326,6 +413,20 @@ def reset_and_seed():
                 'due_date': now + datetime.timedelta(days=2),
                 'status': 'completed',
                 'actual_completion_time': now - datetime.timedelta(hours=2)
+            },
+            {
+                'user_id': users[6].id,
+                'title': 'Тренировка по CS:GO',
+                'description': 'Отработать бросок гранат на карте Mirage',
+                'due_date': now + datetime.timedelta(hours=3),
+                'status': 'pending'
+            },
+            {
+                'user_id': users[7].id,
+                'title': 'Исправить баги в игре',
+                'description': 'Пофиксить 5 критических багов перед релизом',
+                'due_date': now + datetime.timedelta(days=1),
+                'status': 'pending'
             }
         ]
         
@@ -337,7 +438,7 @@ def reset_and_seed():
         print(f"✓ Создано задач: {len(tasks_data)}")
         print(f"  - Обычные задачи aleksandrinsider: 3")
         print(f"  - Делегированные задачи между другими: 4")
-        print(f"  - Прочие задачи: 3")
+        print(f"  - Прочие задачи: 5")
         print()
         
         print("=" * 60)

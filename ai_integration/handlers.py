@@ -317,7 +317,7 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
             .filter(
                 or_(
                     and_(Task.id == task_id_int, Task.user_id == user.id),
-                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike(user.username.replace('@', '')), Task.delegation_status == "accepted")
+                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
                 )
             )
             .first()
@@ -334,7 +334,7 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
         if user.username:
             query_conditions.append(
                 and_(
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
                     Task.delegation_status == "accepted",
                     or_(*conditions)
                 )
@@ -396,7 +396,7 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
         # Если задача была делегирована этому пользователю, отправляем отчет делегировавшему
         if task.delegated_to_username and task.delegation_status == "accepted":
             # Проверяем, является ли текущий пользователь получателем делегированной задачи
-            if task.delegated_to_username.replace('@', '').lower() == user.username.replace('@', '').lower():
+            if task.delegated_to_username.replace('@', '').lower() == (user.username or '').replace('@', '').lower():
                 # Находим пользователя, который делегировал задачу
                 delegator = session.query(User).filter_by(id=task.user_id).first()
                 if delegator:
