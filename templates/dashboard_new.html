@@ -83,6 +83,31 @@
             }
         }
 
+        function copyUsernameToClipboard(username, button) {
+            // Убираем @ если есть
+            const cleanUsername = username.startsWith('@') ? username.slice(1) : username;
+            
+            // Копируем в буфер
+            navigator.clipboard.writeText(cleanUsername).then(() => {
+                // Меняем текст кнопки на "Скопировано"
+                const originalText = button.textContent;
+                button.textContent = '✓ Скопировано';
+                button.classList.add('copied');
+                
+                // Возвращаем обратно через 1.5 секунды
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 1500);
+            }).catch(err => {
+                console.error('Ошибка копирования:', err);
+                button.textContent = 'Ошибка';
+                setTimeout(() => {
+                    button.textContent = 'Копировать';
+                }, 1500);
+            });
+        }
+
         function toggleStatsSection() {
             const content = document.getElementById('stats-content');
             const button = document.getElementById('stats-toggle-btn');
@@ -216,7 +241,7 @@
                             html += '<div style="flex: 1;">';
                             
                             // Имя пользователя с Gold цветом
-                            html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</div>';
+                            html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)">Копировать</button></div>';
                             
                             // Город
                             if (partner.city) {
@@ -4148,7 +4173,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)">Копировать</button></div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -4268,7 +4293,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)">Копировать</button></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -4386,7 +4411,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)">Копировать</button></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -4508,7 +4533,7 @@
                                     html += '</div>';
                                     
                                     html += '<div style="flex: 1;">';
-                                    html += '<div class="task-title" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</div>';
+                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + username + '\', this)">Копировать</button></div>';
                                     
                                     // Город
                                     if (blockedPartner && blockedPartner.city) {
