@@ -3431,21 +3431,6 @@
                     lastTasksUpdate = 0; // Сбрасываем throttle
                     await updateTasks();
                     await updateChat();
-                    
-                    // Если причина связана с улучшением системы, предложим помощь
-                    const lowerReason = reason.toLowerCase();
-                    if (lowerReason.includes('ошибк') || lowerReason.includes('дублир') || lowerReason.includes('актуальн')) {
-                        setTimeout(() => {
-                            if (confirm('Хотите, чтобы я помог вам создать новую задачу или улучшить существующие?')) {
-                                // Фокус на поле ввода сообщения
-                                const messageInput = document.getElementById('message-input');
-                                if (messageInput) {
-                                    messageInput.focus();
-                                    messageInput.placeholder = 'Расскажите, какую задачу создать или как улучшить существующие...';
-                                }
-                            }
-                        }, 1000);
-                    }
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
