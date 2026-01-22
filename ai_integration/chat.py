@@ -103,6 +103,7 @@ reject_delegated_task = handlers.reject_delegated_task
 list_tasks = handlers.list_tasks
 find_partners = handlers.find_partners
 update_profile = handlers.update_profile
+update_user_memory = handlers.update_user_memory
 delegate_task = handlers.delegate_task
 delete_all_tasks = handlers.delete_all_tasks
 delete_task = handlers.delete_task
@@ -284,6 +285,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 else:
                     result = []
                 temp_session.close()
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "update_user_memory":
+                result = update_user_memory(
+                    info=args.get("info"),
+                    user_id=user_id,
+                    session=db_session,
+                )
                 tool_results.append({"function": func_name, "result": result})
 
             else:

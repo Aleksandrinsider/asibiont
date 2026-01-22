@@ -778,14 +778,15 @@ def save_context_to_db(user_id, user_message, ai_message):
         )
         session.add(user_interaction)
         
-        # Save AI message
-        ai_interaction = Interaction(
-            user_id=user.id,
-            message_type='ai',
-            content=ai_message,
-            created_at=datetime.now(dt_timezone.utc)
-        )
-        session.add(ai_interaction)
+        # Save AI message only if provided
+        if ai_message is not None:
+            ai_interaction = Interaction(
+                user_id=user.id,
+                message_type='ai',
+                content=ai_message,
+                created_at=datetime.now(dt_timezone.utc)
+            )
+            session.add(ai_interaction)
         
         session.commit()
     finally:
@@ -1648,9 +1649,9 @@ async def chat_handler(request):
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
                 response = f"Ошибка: {str(e)}"
 
-            # Save interaction to DB
-            save_context_to_db(user_id, message, response)
-            logger.info("Context saved to DB")
+            # Save interaction to DB (only user message here, AI response saved separately)
+            save_context_to_db(user_id, message, None)  # Don't save AI response here
+            logger.info("User message saved to DB")
 
             # Save agent response to Interaction table
             if user:
