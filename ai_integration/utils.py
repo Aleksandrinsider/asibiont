@@ -223,7 +223,7 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
         word in message.lower() for word in greeting_words
     )  # Содержит слово приветствия
 
-    if is_greeting and len(ai_response_content.strip()) < 50:  # Ответ AI слишком короткий
+    if is_greeting and len(str(ai_response_content).strip()) < 50:  # Ответ AI слишком короткий
         logger.info("[SMART FALLBACK] Greeting detected, enhancing response")
         # Получаем список задач для подробного ответа
         from models import Session

@@ -1301,7 +1301,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     content = post_process_response(content)
 
                     try:
-                        fallback_result = smart_fallback_handler(original_message, content, user_id, intent)
+                        fallback_result = smart_fallback_handler(original_message, content, user_id, content)
                         logger.info(f"[FALLBACK] Fallback actions completed")
                         logger.debug(
                             f"[FALLBACK] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
