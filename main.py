@@ -1040,11 +1040,10 @@ async def dashboard_handler(request):
         session = await get_session(request)
         logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
     except Exception as e:
-        logger.error(f"Error loading session: {e}, clearing corrupted session")
-        # Clear corrupted session cookie by creating a new response
-        response = web.HTTPFound('/dashboard')
-        response.del_cookie('AIOHTTP_SESSION')
-        return response
+        logger.error(f"Error loading session: {e}, creating new empty session")
+        # Create new empty session instead of redirecting
+        from aiohttp_session import new_session
+        session = await new_session(request)
     try:
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
