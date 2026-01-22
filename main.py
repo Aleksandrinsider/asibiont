@@ -1568,6 +1568,7 @@ async def dashboard_handler(request):
             'skipped_tasks': skipped_tasks,
             'current_date': current_date,
             'current_time': current_time,
+            'user_timezone': user.timezone if user and user.timezone else 'UTC',
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': 1768857743,
@@ -3977,12 +3978,17 @@ async def create_post_handler(request):
 
             logger.info(f"Post created: id={post.id}, user_id={user.id}, username={user.username}")
 
+            # Ensure created_at has UTC timezone info
+            created_at_str = post.created_at.isoformat()
+            if post.created_at and post.created_at.tzinfo is None:
+                created_at_str = post.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+            
             return web.json_response({
                 'success': True,
                 'post': {
                     'id': post.id,
                     'content': post.content,
-                    'created_at': post.created_at.isoformat()
+                    'created_at': created_at_str
                 }
             })
         finally:
@@ -4266,10 +4272,18 @@ async def get_feed_handler(request):
             for post in posts:
                 try:
                     author = users_map.get(post.user_id, {})
+                    # Ensure created_at has UTC timezone info for proper browser conversion
+                    created_at_str = None
+                    if post.created_at:
+                        if post.created_at.tzinfo is None:
+                            # Assume UTC if no timezone
+                            created_at_str = post.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+                        else:
+                            created_at_str = post.created_at.isoformat()
                     feed.append({
                         'id': post.id,
                         'content': post.content,
-                        'created_at': post.created_at.isoformat() if post.created_at else None,
+                        'created_at': created_at_str,
                         'author': {
                             'telegram_id': author.get('telegram_id'),
                             'username': author.get('username'),
@@ -4389,13 +4403,18 @@ async def create_comment_handler(request):
 
             logger.info(f"Comment created: id={comment.id}, post_id={post_id}, user_id={user.id}")
 
+            # Ensure created_at has UTC timezone info
+            created_at_str = comment.created_at.isoformat()
+            if comment.created_at and comment.created_at.tzinfo is None:
+                created_at_str = comment.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+
             return web.json_response({
                 'success': True,
                 'comment': {
                     'id': comment.id,
                     'post_id': comment.post_id,
                     'content': comment.content,
-                    'created_at': comment.created_at.isoformat(),
+                    'created_at': created_at_str,
                     'author': {
                         'username': user.username,
                         'first_name': user.first_name,
@@ -4444,14 +4463,20 @@ async def get_comments_handler(request):
             for comment in comments:
                 author = users_map.get(comment.user_id)
                 if author:
+                    # Ensure created_at has UTC timezone info
+                    created_at_str = comment.created_at.isoformat()
+                    if comment.created_at and comment.created_at.tzinfo is None:
+                        created_at_str = comment.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+                    
                     result.append({
                         'id': comment.id,
                         'content': comment.content,
-                        'created_at': comment.created_at.isoformat(),
+                        'created_at': created_at_str,
                         'author': {
                             'username': author.username,
                             'first_name': author.first_name,
-                            'photo_url': author.photo_url
+                            'photo_url': author.photo_url,
+                            'is_current_user': comment.user_id == user_id
                         }
                     })
 

@@ -46,6 +46,16 @@
     }
     </script>
     <script>
+        // User timezone from server
+        const USER_TIMEZONE = '{{ user_timezone }}';
+        
+        // Helper function to convert UTC date to user timezone
+        function toUserTimezone(date) {
+            // Convert to UTC string, then parse in user's timezone
+            const utcTime = date.toISOString();
+            return new Date(utcTime.replace('Z', '+00:00'));
+        }
+        
         // Global functions defined early for HTML onclick handlers
         function toggleProfileSection() {
             const content = document.getElementById('profile-content');
@@ -89,8 +99,24 @@
             
             // Копируем в буфер
             navigator.clipboard.writeText(cleanUsername).then(() => {
+                // Показываем подтверждение
+                const originalColor = button.style.color;
+                button.style.color = '#10b981'; // Зелёный цвет
+                button.title = 'Скопировано!';
+                
+                // Возвращаем исходный вид через 1.5 секунды
+                setTimeout(() => {
+                    button.style.color = originalColor;
+                    button.title = 'Копировать ник';
+                }, 1500);
             }).catch(err => {
                 console.error('Ошибка копирования:', err);
+                button.style.color = '#ef4444'; // Красный при ошибке
+                button.title = 'Ошибка копирования';
+                setTimeout(() => {
+                    button.style.color = '';
+                    button.title = 'Копировать ник';
+                }, 1500);
             });
         }
 
@@ -1761,8 +1787,9 @@
                         `;
 
                         const postTime = new Date(post.created_at);
-                        const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                        const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                        // Convert to user timezone
+                        const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: USER_TIMEZONE });
+                        const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: USER_TIMEZONE });
 
                         const telegramUsername = post.author.username || '';
                         const usernameClean = telegramUsername.replace('@', '');
@@ -3788,15 +3815,17 @@
         
         // Функция обновления времени в шапке
         function updateHeaderTime() {
+            // Use server-provided time with user timezone
             const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const userTime = new Date(now.toLocaleString('en-US', { timeZone: USER_TIMEZONE }));
+            const hours = String(userTime.getHours()).padStart(2, '0');
+            const minutes = String(userTime.getMinutes()).padStart(2, '0');
             
             const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
                           'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-            const day = now.getDate();
-            const month = months[now.getMonth()];
-            const year = now.getFullYear();
+            const day = userTime.getDate();
+            const month = months[userTime.getMonth()];
+            const year = userTime.getFullYear();
             
             const timeString = `${hours}:${minutes}`;
             const dateString = `${day} ${month} ${year} г.`;
