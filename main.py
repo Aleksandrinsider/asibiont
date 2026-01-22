@@ -1036,14 +1036,8 @@ async def logout_handler(request):
 @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     logger.info(f"Dashboard handler called for path: {request.path}")
-    try:
-        session = await get_session(request)
-        logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
-    except Exception as e:
-        logger.error(f"Error loading session: {e}, creating new empty session")
-        # Create new empty session instead of redirecting
-        from aiohttp_session import new_session
-        session = await new_session(request)
+    session = await get_session(request)
+    logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
     try:
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
@@ -2172,6 +2166,23 @@ if bot:
 
 
 @web.middleware
+async def session_error_middleware(request, handler):
+    """Handle corrupted session cookies"""
+    try:
+        return await handler(request)
+    except json.JSONDecodeError as e:
+        logger.error(f"Corrupted session cookie detected: {e}, clearing cookie")
+        # Create response without session cookie
+        response = web.Response(status=302)
+        response.headers['Location'] = request.path
+        response.del_cookie('AIOHTTP_SESSION', domain=None, path='/')
+        return response
+    except Exception as e:
+        logger.error(f"Session error: {e}")
+        raise
+
+
+@web.middleware
 async def logging_middleware(request, handler):
     """Log all incoming requests"""
     logger.info(f"Incoming request: {request.method} {request.path} from {request.remote}")
@@ -2206,6 +2217,7 @@ async def csp_middleware(request, handler):
     return response
 
 app.middlewares.append(redirect_to_root_middleware)
+app.middlewares.append(session_error_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
