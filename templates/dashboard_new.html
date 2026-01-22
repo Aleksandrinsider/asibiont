@@ -1756,32 +1756,13 @@
                         postDiv.style.cssText = `
                             display: flex; 
                             gap: 14px; 
-                            margin-bottom: 20px; 
-                            padding: 0;
+                            margin-bottom: 8px; 
+                            padding: 8px 0;
                         `;
 
                         const postTime = new Date(post.created_at);
-                        const now = new Date();
-                        const diffMs = now - postTime;
-                        const diffSecs = Math.floor(diffMs / 1000);
-                        const diffMins = Math.floor(diffMs / 60000);
-                        const diffHours = Math.floor(diffMs / 3600000);
-                        const diffDays = Math.floor(diffMs / 86400000);
-                        
-                        let timeAgo = '';
-                        if (diffSecs < 60) {
-                            timeAgo = 'только что';
-                        } else if (diffMins < 60) {
-                            timeAgo = `${diffMins} мин назад`;
-                        } else if (diffHours < 24) {
-                            timeAgo = diffHours === 1 ? '1 час назад' : `${diffHours} часа назад`;
-                        } else if (diffDays === 1) {
-                            timeAgo = 'вчера';
-                        } else if (diffDays < 7) {
-                            timeAgo = `${diffDays} дня назад`;
-                        } else {
-                            timeAgo = postTime.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-                        }
+                        const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                        const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
                         const telegramUsername = post.author.username || '';
                         const usernameClean = telegramUsername.replace('@', '');
@@ -1799,17 +1780,14 @@
                                     }
                                     <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
                                         <div style="display: flex; align-items: center; gap: 6px;">
-                                            ${post.author.first_name ? `<span style="font-size: 14px; color: #1F2328; font-weight: 400;">${escapeHtml(post.author.first_name)}</span>` : ''}
+                                            ${post.author.first_name ? `<span style="font-size: 13px; color: #1F2328; font-weight: 400;">${escapeHtml(post.author.first_name)}</span>` : ''}
                                             ${telegramUsername ? 
-                                                `<span onclick="openContactProfileModal('${usernameClean}')" style="font-weight: 400; font-size: 14px; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${usernameClean}</span>` :
+                                                `<span onclick="openContactProfileModal('${usernameClean}')" style="font-weight: 400; font-size: 13px; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${usernameClean}</span>` :
                                                 ''
                                             }
                                         </div>
-                                        <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #6C727F;">
-                                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity: 0.7;">
-                                                <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z"></path>
-                                            </svg>
-                                            ${timeAgo}
+                                        <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8C959F; opacity: 0.7; font-weight: 400;">
+                                            ${dateString} ${timeString}
                                         </div>
                                     </div>
                                     
@@ -1821,7 +1799,7 @@
                                     </div>
                                 </div>
                                 
-                                <p style="margin: 0 0 12px 0; white-space: pre-wrap; word-wrap: break-word; color: #1F2328; font-size: 14px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
+                                <p style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
                                 
                                 <!-- Comments section -->
                                 <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
