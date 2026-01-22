@@ -4257,11 +4257,23 @@ async def get_feed_handler(request):
 
             users_map = {}
             for u, profile in users_data:
+                # Update avatar from Telegram if available
+                photo_url = u.photo_url
+                if u.telegram_id and 'bot' in request.app:
+                    try:
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id)
+                        if updated_avatar and updated_avatar != u.photo_url:
+                            u.photo_url = updated_avatar
+                            session_db.commit()
+                            photo_url = updated_avatar
+                    except Exception as e:
+                        logger.error(f"Error updating avatar in feed for {u.telegram_id}: {e}")
+                
                 users_map[u.id] = {
                     'telegram_id': u.telegram_id,
                     'username': u.username,
                     'first_name': u.first_name,
-                    'photo_url': u.photo_url,
+                    'photo_url': photo_url,
                     'company': profile.company if profile else None,
                     'position': profile.position if profile else None,
                     'subscription_tier': u.subscription_tier.value if u.subscription_tier else 'BRONZE'
@@ -4458,6 +4470,18 @@ async def get_comments_handler(request):
                 return web.json_response({'success': True, 'comments': []})
             
             users_data = session_db.query(User).filter(User.id.in_(user_ids)).all()
+            
+            # Update avatars from Telegram
+            for u in users_data:
+                if u.telegram_id and 'bot' in request.app:
+                    try:
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id)
+                        if updated_avatar and updated_avatar != u.photo_url:
+                            u.photo_url = updated_avatar
+                            session_db.commit()
+                    except Exception as e:
+                        logger.error(f"Error updating avatar in comments for {u.telegram_id}: {e}")
+            
             users_map = {u.id: u for u in users_data}
 
             result = []
