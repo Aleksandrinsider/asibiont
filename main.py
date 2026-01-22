@@ -1221,7 +1221,8 @@ async def dashboard_handler(request):
                 favorite_contacts = []
                 if profile and profile.favorite_contacts:
                     try:
-                        favorite_contacts = [c.lower().replace('@', '') for c in json.loads(profile.favorite_contacts)]
+                        raw_favorites = json.loads(profile.favorite_contacts)
+                        favorite_contacts = [str(c).lower().replace('@', '') if isinstance(c, str) else str(c) for c in raw_favorites]
                     except json.JSONDecodeError:
                         favorite_contacts = []
 
