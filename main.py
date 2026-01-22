@@ -3571,10 +3571,8 @@ async def api_favorite_contacts_handler(request):
                     logger.error(f"[FAVORITE_CONTACTS] Favorites is not a list for user {user_id}: {type(favorites)}, value: {favorites}")
                     return web.json_response({'error': 'Favorites must be a list'}, status=400)
 
-                # Validate that all favorites are strings
-                if not all(isinstance(f, str) for f in favorites):
-                    logger.error(f"[FAVORITE_CONTACTS] Not all favorites are strings for user {user_id}: {favorites}")
-                    return web.json_response({'error': 'All favorites must be strings'}, status=400)
+                # Convert all favorites to strings (handle both strings and integers)
+                favorites = [str(f) for f in favorites]
 
                 profile.favorite_contacts = json.dumps(favorites)
                 session_db.commit()
@@ -3632,9 +3630,8 @@ async def api_blocked_contacts_handler(request):
                 if not isinstance(blocked, list):
                     return web.json_response({'error': 'Blocked must be a list'}, status=400)
 
-                # Validate that all blocked are strings
-                if not all(isinstance(b, str) for b in blocked):
-                    return web.json_response({'error': 'All blocked must be strings'}, status=400)
+                # Convert all blocked to strings (handle both strings and integers)
+                blocked = [str(b) for b in blocked]
 
                 # Get old blocked list to detect newly blocked users
                 old_blocked = []
