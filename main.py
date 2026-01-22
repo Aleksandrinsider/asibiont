@@ -3539,20 +3539,28 @@ async def api_favorite_contacts_handler(request):
                 if profile.favorite_contacts:
                     try:
                         favorites = json.loads(profile.favorite_contacts)
-                    except json.JSONDecodeError:
+                    except (json.JSONDecodeError, TypeError):
                         favorites = []
+                        logger.warning(f"Invalid favorite_contacts format for user {user_id}, resetting to empty list")
                 return web.json_response({'favorites': favorites})
 
             elif request.method == 'POST':
                 # Update favorite contacts
-                data = await request.json()
+                try:
+                    data = await request.json()
+                except json.JSONDecodeError:
+                    logger.error(f"Invalid JSON in favorite_contacts POST from user {user_id}")
+                    return web.json_response({'error': 'Invalid JSON'}, status=400)
+                
                 favorites = data.get('favorites', [])
 
                 if not isinstance(favorites, list):
+                    logger.error(f"Favorites is not a list for user {user_id}: {type(favorites)}")
                     return web.json_response({'error': 'Favorites must be a list'}, status=400)
 
                 # Validate that all favorites are strings
                 if not all(isinstance(f, str) for f in favorites):
+                    logger.error(f"Not all favorites are strings for user {user_id}")
                     return web.json_response({'error': 'All favorites must be strings'}, status=400)
 
                 profile.favorite_contacts = json.dumps(favorites)
@@ -3564,7 +3572,7 @@ async def api_favorite_contacts_handler(request):
             session_db.close()
 
     except Exception as e:
-        logger.error(f"Unexpected error in api_favorite_contacts_handler: {e}")
+        logger.error(f"Unexpected error in api_favorite_contacts_handler: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
