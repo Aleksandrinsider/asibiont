@@ -1468,6 +1468,21 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
+            // Проверка на дубликаты: проверяем последние 5 сообщений
+            const existingMessages = Array.from(messages.querySelectorAll('.message'));
+            const lastFiveMessages = existingMessages.slice(-5);
+            for (const msg of lastFiveMessages) {
+                const msgText = msg.querySelector('.message-text')?.textContent || '';
+                const msgTime = msg.querySelector('.message-time')?.textContent || '';
+                const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
+                
+                // Если найдено сообщение с таким же текстом, отправителем и временем - это дубликат
+                if (msgText === text && msgSender === normalizedSender && msgTime === `${dateString} ${timeString}`) {
+                    console.log('Duplicate message detected, skipping:', text.substring(0, 50));
+                    return; // Не добавляем дубликат
+                }
+            }
+            
             // Парсинг @username в ссылки на профили контактов и убираем Markdown форматирование
             let processedText = text;
             
@@ -1639,6 +1654,12 @@
 
                     addMessage(data.response, 'ai');
                     
+                    // Сразу помечаем сообщения как отображенные (используем временный ID)
+                    // чтобы избежать дублирования при синхронизации
+                    const tempId = Date.now(); // временный ID пока не получим настоящий
+                    displayedMessageIds.add(`temp-user-${tempId}`);
+                    displayedMessageIds.add(`temp-ai-${tempId}`);
+                    
                     // Синхронизируем с БД через 1 секунду
                     setTimeout(async () => {
                         try {
@@ -1648,6 +1669,10 @@
                                 // Обновляем счетчик и добавляем ID в displayedMessageIds
                                 if (syncData.interactions) {
                                     lastMessageCount = syncData.interactions.length;
+                                    // Очищаем временные ID
+                                    displayedMessageIds.delete(`temp-user-${tempId}`);
+                                    displayedMessageIds.delete(`temp-ai-${tempId}`);
+                                    // Добавляем реальные ID
                                     syncData.interactions.forEach(interaction => {
                                         displayedMessageIds.add(interaction.id);
                                     });
