@@ -550,6 +550,11 @@ def parse_natural_time(time_str, current_time):
     # Create datetime
     try:
         result = current_time.replace(year=date.year, month=date.month, day=date.day, hour=h, minute=m, second=0, microsecond=0)
+        
+        # If the time has already passed today and no explicit date was mentioned, schedule for tomorrow
+        if result <= current_time and not any(word in time_str for word in ['завтра', 'послезавтра', 'вчера']):
+            result = result + timedelta(days=1)
+        
         return result
     except ValueError:
         return None

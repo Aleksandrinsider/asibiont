@@ -2,6 +2,7 @@
 
 import logging
 import json
+import re
 from datetime import datetime, timezone, timedelta
 import pytz
 from models import Session, Task, User, UserProfile, Interaction
@@ -92,15 +93,33 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         logging.info(
                             f"Task {title} natural time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
                     else:
-                        # Fallback to absolute time format
-                        try:
-                            local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                            local_dt = user_tz.localize(local_dt)
-                            task.reminder_time = local_dt.astimezone(pytz.UTC)
+                        # Try simple HH:MM format first
+                        simple_time_match = re.match(r'^(\d{1,2}):(\d{2})$', reminder_time.strip())
+                        if simple_time_match:
+                            h, m = int(simple_time_match.group(1)), int(simple_time_match.group(2))
+                            current_time = datetime.now(user_tz)
+                            # Create time for today
+                            today_time = current_time.replace(hour=h, minute=m, second=0, microsecond=0)
+                            # If time has passed, schedule for tomorrow
+                            if today_time <= current_time:
+                                today_time = today_time + timedelta(days=1)
+                            task.reminder_time = today_time.astimezone(pytz.UTC)
                             logging.info(
-                                f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
-                        except ValueError:
-                            logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
+                                f"Task {title} simple time parsed: '{reminder_time}' -> local: {today_time} -> UTC: {task.reminder_time}")
+                        else:
+                            # Fallback to absolute time format
+                            try:
+                                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                                local_dt = user_tz.localize(local_dt)
+                                task.reminder_time = local_dt.astimezone(pytz.UTC)
+                                logging.info(
+                                    f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+                            except ValueError:
+                                logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
+                                # Don't create task without valid time
+                                if close_session:
+                                    session.close()
+                                return f"Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
             except Exception as e:
                 logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
         if due_date:
