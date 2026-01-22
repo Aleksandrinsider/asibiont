@@ -458,6 +458,323 @@ body {
     }
 }
 
+/* Мобильная адаптация для планшетов и мобильных устройств */
+@media (max-width: 1200px) {
+    .main-layout {
+        grid-template-columns: 1fr 1.2fr 1fr;
+        gap: 8px;
+    }
+    
+    .header-content {
+        padding: 0 5px;
+    }
+}
+
+@media (max-width: 992px) {
+    :root {
+        --header-height: 60px;
+    }
+
+    .container {
+        margin: calc(var(--header-height) + 10px) 10px 0 10px;
+        width: calc(100% - 20px);
+    }
+
+    .main-layout {
+        grid-template-columns: 1fr;
+        grid-auto-rows: auto;
+        height: auto;
+        gap: 12px;
+        margin-top: 10px;
+    }
+
+    .left-column,
+    .right-column,
+    .center-column {
+        padding: 10px;
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+    }
+
+    .chat-section {
+        min-height: 400px;
+    }
+
+    .header-left,
+    .header-right {
+        flex: 0 0 auto;
+    }
+
+    .header-info {
+        flex-wrap: wrap;
+        font-size: 12px;
+        gap: 8px;
+    }
+
+    .people-section,
+    .tasks-section-wrapper {
+        max-height: none;
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        font-size: 12px;
+    }
+
+    :root {
+        --header-height: 55px;
+    }
+
+    .app-header {
+        padding: 0 5px;
+    }
+
+    .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 5px;
+    }
+
+    .header-left,
+    .header-center,
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0;
+    }
+
+    .header-info {
+        flex-direction: row;
+        flex-wrap: wrap;
+        font-size: 11px;
+    }
+
+    .container {
+        margin: calc(var(--header-height) + 60px) 8px 8px 8px;
+        width: calc(100% - 16px);
+    }
+
+    .main-layout {
+        gap: 10px;
+    }
+
+    .context-section,
+    .people-section,
+    .task-stats-block,
+    .tasks-section-wrapper {
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .chat-messages {
+        padding: 10px;
+    }
+
+    .message {
+        padding: 10px;
+        font-size: 12px;
+    }
+
+    .chat-input {
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .chat-input input {
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+
+    button,
+    .quick-actions button {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+
+    .logout-button {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    h1, h2, h3 {
+        font-size: 1.2em;
+    }
+
+    .task-item,
+    .person-card {
+        padding: 10px;
+    }
+
+    .quick-actions {
+        gap: 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --header-height: 50px;
+    }
+
+    body {
+        font-size: 11px;
+    }
+
+    .container {
+        margin: calc(var(--header-height) + 70px) 5px 5px 5px;
+        width: calc(100% - 10px);
+    }
+
+    .main-layout {
+        gap: 8px;
+    }
+
+    .app-header {
+        padding: 0 3px;
+    }
+
+    .header-content {
+        padding: 6px 3px;
+    }
+
+    .context-section,
+    .people-section,
+    .task-stats-block,
+    .tasks-section-wrapper,
+    .chat-section {
+        padding: 8px;
+    }
+
+    .chat-messages {
+        padding: 8px;
+    }
+
+    .message {
+        padding: 8px;
+        font-size: 11px;
+    }
+
+    .chat-input {
+        padding: 6px;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+
+    .chat-input input {
+        padding: 5px 6px;
+        font-size: 11px;
+        min-width: 100%;
+    }
+
+    button,
+    .quick-actions button {
+        padding: 5px 8px;
+        font-size: 11px;
+    }
+
+    .logout-button {
+        padding: 5px 10px;
+        font-size: 11px;
+    }
+
+    h1 {
+        font-size: 1.1em;
+    }
+
+    h2, h3 {
+        font-size: 1em;
+    }
+
+    .task-item,
+    .person-card {
+        padding: 8px;
+    }
+
+    .voice-button,
+    .send-button {
+        width: 36px;
+        height: 36px;
+    }
+}
+
+/* Ландшафтная ориентация на мобильных */
+@media (max-width: 768px) and (orientation: landscape) {
+    .container {
+        margin-top: calc(var(--header-height) + 45px);
+    }
+
+    .chat-section {
+        min-height: 300px;
+    }
+}
+
+/* Улучшенная читаемость на маленьких экранах */
+@media (max-width: 768px) {
+    * {
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    }
+
+    input,
+    textarea,
+    select,
+    button {
+        font-size: 16px !important; /* Предотвращает зум на iOS */
+    }
+
+    .chat-input input {
+        font-size: 16px !important;
+    }
+
+    /* Увеличиваем размер кликабельных областей */
+    button,
+    a,
+    .quick-action,
+    .task-item,
+    .person-card {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Улучшаем отступы для touch */
+    .task-item,
+    .person-card {
+        margin-bottom: 8px;
+    }
+
+    /* Упрощаем скроллинг */
+    .chat-messages,
+    .tasks-section,
+    .people-list {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+}
+
+/* Оптимизация для маленьких экранов */
+@media (max-width: 480px) {
+    /* Скрываем менее важные элементы */
+    .header-info > *:not(:first-child):not(:last-child) {
+        display: none;
+    }
+
+    /* Делаем кнопки на всю ширину */
+    .quick-actions {
+        flex-direction: column;
+    }
+
+    .quick-actions button {
+        width: 100%;
+    }
+
+    /* Упрощаем карточки */
+    .task-item,
+    .person-card {
+        border-radius: 4px;
+    }
+}
+
 
 
 /* Slight transitions for mode toggle */

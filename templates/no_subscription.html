@@ -67,14 +67,120 @@
             max-width: 300px;
             min-width: 250px;
         }
+
+        /* Адаптация для планшетов */
+        @media (max-width: 992px) {
+            .pricing-container {
+                max-width: 100%;
+            }
+
+            body::before {
+                background-size: 60%;
+                background-position: calc(100% - 30px) center;
+            }
+
+            .pricing-item {
+                flex: 1 1 280px;
+                min-width: 200px;
+            }
+        }
+
+        /* Адаптация для мобильных устройств */
         @media (max-width: 768px) {
+            body {
+                padding: 15px;
+                align-items: flex-start;
+                padding-top: 30px;
+            }
+
+            body::before {
+                background-size: 80%;
+                background-position: center top;
+                opacity: 0.05;
+            }
+
+            .pricing-card {
+                padding: 20px;
+            }
+
+            .pricing-card h1 {
+                font-size: 20px !important;
+            }
+
+            .pricing-card p {
+                font-size: 13px !important;
+            }
+
             .pricing-grid {
                 flex-direction: column;
                 align-items: center;
+                gap: 20px;
             }
+
             .pricing-item {
                 width: 100%;
                 max-width: none;
+            }
+
+            .pricing-item h2 {
+                font-size: 16px !important;
+            }
+
+            .pricing-item div[style*="font-size: 28px"] {
+                font-size: 24px !important;
+            }
+
+            .pricing-item button {
+                padding: 12px 16px !important;
+                font-size: 14px !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+                padding-top: 20px;
+            }
+
+            .pricing-card {
+                padding: 15px;
+            }
+
+            .pricing-card h1 {
+                font-size: 18px !important;
+                margin-bottom: 12px !important;
+            }
+
+            .pricing-card p {
+                font-size: 12px !important;
+            }
+
+            .pricing-card > div[style*="margin-bottom: 24px"] {
+                margin-bottom: 16px !important;
+            }
+
+            .pricing-item {
+                padding: 16px !important;
+            }
+
+            .pricing-item h2 {
+                font-size: 15px !important;
+            }
+
+            .pricing-item div[style*="font-size: 28px"] {
+                font-size: 22px !important;
+            }
+
+            .pricing-item div[style*="font-size: 13px"] {
+                font-size: 12px !important;
+            }
+        }
+
+        /* Улучшенная читаемость на мобильных */
+        @media (max-width: 768px) {
+            input,
+            button {
+                font-size: 16px !important; /* Предотвращает зум на iOS */
             }
         }
     </style>
