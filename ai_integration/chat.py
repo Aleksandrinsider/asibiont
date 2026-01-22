@@ -421,9 +421,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 for tr in task_accepted_responses:
                     if ":" in tr:
                         task_title = tr.split(":", 1)[1].strip()
-                        final_content = f"Принял задачу '{task_title}'. Она добавлена в твой список задач."
+                        final_content = f"TASK_ACCEPTED: {task_title}"
                     else:
-                        final_content = "Задача принята и добавлена в твой список."
+                        final_content = "TASK_ACCEPTED"
             else:
                 final_content = " | ".join(natural_responses)
             
@@ -450,6 +450,13 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             
             # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
             tool_context_msg = f"СТРОГО СОБЛЮДАЙ: показывай ТОЛЬКО реальные задачи из предоставленных данных, НЕ выдумывай и НЕ придумывай задачи!\n\n{final_content}{profile_context}"
+            
+            # Специальная обработка для принятия делегированной задачи
+            if "TASK_ACCEPTED:" in final_content:
+                task_title = final_content.split(":", 1)[1].strip()
+                tool_context_msg = f"Пользователь принял делегированную задачу: '{task_title}'. ВАЖНО: это ПОЛЬЗОВАТЕЛЬ принял задачу (не ты), поэтому говори 'ты принял', 'давай решать', 'предлагаю'. Дай конкретные рекомендации по выполнению этой задачи."
+            elif final_content == "TASK_ACCEPTED":
+                tool_context_msg = "Пользователь принял делегированную задачу. ВАЖНО: это ПОЛЬЗОВАТЕЛЬ принял задачу (не ты), поэтому говори 'ты принял', 'давай решать'. Дай рекомендации по выполнению."
             
             # Добавляем контекст в messages - УБИРАЕМ tool_calls из messages, так как они невалидны для API
             messages = [{"role": "system", "content": system_prompt}]
