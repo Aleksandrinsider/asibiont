@@ -929,6 +929,7 @@ async def login_handler(request):
     return aiohttp_jinja2.render_template('dashboard_new.html', request, {
         'logged_in': False,
         'bot_username': bot_user,
+        'subscription_tier': 'BRONZE',  # По умолчанию для неавторизованных
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
@@ -1076,6 +1077,7 @@ async def dashboard_handler(request):
             return aiohttp_jinja2.render_template('dashboard_new.html', request, {
                 'logged_in': False,
                 'bot_username': bot_user,
+                'subscription_tier': 'BRONZE',
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
@@ -1091,6 +1093,7 @@ async def dashboard_handler(request):
                 return aiohttp_jinja2.render_template('dashboard_new.html', request, {
                     'logged_in': False,
                     'bot_username': bot_user,
+                    'subscription_tier': 'BRONZE',
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
@@ -1563,6 +1566,7 @@ async def dashboard_handler(request):
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'bot_username': bot_user,
+            'subscription_tier': 'BRONZE',
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
