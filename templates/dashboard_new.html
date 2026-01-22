@@ -4957,6 +4957,13 @@
                 // Проверяем наличие новых постов
                 checkNewPosts();
             }, 5000);
+            
+            // Отдельный интервал для проверки новых сообщений из Telegram независимо от активного view
+            // Это гарантирует, что сообщения от бота и пользователя всегда синхронизируются
+            setInterval(() => {
+                console.log('[TELEGRAM-SYNC] Checking for new messages from Telegram');
+                updateChat();
+            }, 3000); // Проверяем каждые 3 секунды
         }
 
         async function checkNewPosts() {
