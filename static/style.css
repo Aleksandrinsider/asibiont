@@ -1015,35 +1015,23 @@ details[open] .details-content {
 }
 
 .task-title .copy-username-btn {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-left: 8px;
-    padding: 4px 8px;
-    background: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
-    color: #374151;
-    font-size: 11px;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    color: #6C727F;
     cursor: pointer;
     transition: all 0.2s;
     flex-shrink: 0;
-}
-
-.task-title:hover .copy-username-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    width: 20px;
+    height: 20px;
 }
 
 .task-title .copy-username-btn:hover {
-    background: #F6F8FA;
-    border-color: #068487;
     color: #068487;
-}
-
-.task-title .copy-username-btn.copied {
-    background: #068487;
-    border-color: #068487;
-    color: #FFFFFF;
 }
 
 .task-meta {
