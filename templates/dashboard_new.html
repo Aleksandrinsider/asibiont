@@ -89,7 +89,6 @@
             
             // Копируем в буфер
             navigator.clipboard.writeText(cleanUsername).then(() => {
-                console.log('Скопировано:', cleanUsername);
             }).catch(err => {
                 console.error('Ошибка копирования:', err);
             });
@@ -149,16 +148,12 @@
                 }
             }
             
-            console.log('[FILTER] filterContacts called with:', filterType, 'currentContactFilter:', currentContactFilter);
-            
             // Если фильтр уже активен, только сворачиваем профиль
             if (currentContactFilter === filterType) {
-                console.log('[FILTER] Filter already active, returning');
                 return;
             }
             
             currentContactFilter = filterType;
-            console.log('[FILTER] Set currentContactFilter to:', currentContactFilter);
             
             // Обновляем стили кнопок фильтров контактов
             document.querySelectorAll('.contact-filter-btn').forEach(btn => {
@@ -171,7 +166,6 @@
             
             // Если фильтр elite, загружаем Gold контакты
             if (filterType === 'elite') {
-                console.log('DEBUG: filterContacts("elite") called, userSubscriptionTier =', userSubscriptionTier);
                 await loadEliteContacts();
             } else if (filterType === 'blocked') {
                 // Если фильтр заблокированные, обновляем список контактов
@@ -187,8 +181,6 @@
             if (!peopleList) return;
 
             try {
-                console.log('Loading elite contacts...');
-                
                 // Загружаем избранные контакты для проверки
                 const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
                 
@@ -201,7 +193,6 @@
                 if (response.ok) {
                     const data = await response.json();
                     const elitePartners = data.partners || [];
-                    console.log('Elite partners loaded:', elitePartners.length);
                     
                     // Очищаем список и рендерим Gold контакты
                     let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
@@ -1272,55 +1263,6 @@
 
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
         const userSubscriptionTier = '{{ subscription_tier }}'; // Bronze/SILVER/GOLD
-        console.log('DEBUG: userSubscriptionTier =', userSubscriptionTier, 'type:', typeof userSubscriptionTier);
-        
-        // Устойчивое логирование с сохранением в localStorage
-        const debugLogs = [];
-        const originalConsoleLog = console.log;
-        console.log = function(...args) {
-            originalConsoleLog.apply(console, args);
-            const logEntry = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : String(arg)).join(' ');
-            debugLogs.push(`${new Date().toISOString().split('T')[1].split('.')[0]} ${logEntry}`);
-            if (debugLogs.length > 100) debugLogs.shift(); // Храним последние 100 логов
-            try {
-                localStorage.setItem('debug_logs', JSON.stringify(debugLogs));
-            } catch(e) {}
-        };
-        
-        // Восстановление логов после перезагрузки
-        window.addEventListener('load', function() {
-            try {
-                const savedLogs = JSON.parse(localStorage.getItem('debug_logs') || '[]');
-                if (savedLogs.length > 0) {
-                    originalConsoleLog('%c=== RESTORED LOGS FROM PREVIOUS SESSION ===', 'color: orange; font-weight: bold');
-                    savedLogs.forEach(log => originalConsoleLog('%c' + log, 'color: gray'));
-                    originalConsoleLog('%c=== END RESTORED LOGS ===', 'color: orange; font-weight: bold');
-                }
-            } catch(e) {}
-        });
-        
-        // Отслеживание перезагрузок страницы
-        window.addEventListener('beforeunload', function(e) {
-            console.log('[PAGE] Page is about to unload/reload');
-            console.trace('[PAGE] Call stack for page unload');
-        });
-        
-        // Глобальная функция для вывода всех логов (вызывается из консоли: showDebugLogs())
-        window.showDebugLogs = function() {
-            try {
-                const savedLogs = JSON.parse(localStorage.getItem('debug_logs') || '[]');
-                console.log('%c=== ALL DEBUG LOGS (' + savedLogs.length + ') ===', 'color: blue; font-weight: bold; font-size: 14px');
-                savedLogs.forEach(log => console.log(log));
-                console.log('%c=== END DEBUG LOGS ===', 'color: blue; font-weight: bold; font-size: 14px');
-            } catch(e) {
-                console.error('Failed to load debug logs:', e);
-            }
-        };
-        
-        window.clearDebugLogs = function() {
-            localStorage.removeItem('debug_logs');
-            console.log('%c=== DEBUG LOGS CLEARED ===', 'color: red; font-weight: bold');
-        };
 
         // Функция для создания единообразного значка тарифа
         function createTierBadge(tier) {
@@ -1388,16 +1330,11 @@
         
         // Глобальная функция для проверки авторизации
         async function checkAuth(response) {
-
             if (response.status === 401 || response.status === 403) {
-                console.log('[AUTH] Unauthorized response detected, status:', response.status);
-                console.trace('[AUTH] Call stack for unauthorized response');
-                
                 // Перезагрузить страницу только если мы не на странице логина
                 const isLoggedIn = document.querySelector('.main-layout') !== null;
 
                 if (isLoggedIn) {
-                    console.log('[AUTH] Reloading page due to unauthorized access');
                     setTimeout(() => window.location.reload(), 1000); // Задержка для сохранения логов
                 }
                 return false;
@@ -1406,8 +1343,6 @@
         }
         
         function addMessage(text, sender, timestamp) {
-            console.log('[WEB CHAT] addMessage called with:', { text: text.substring(0, 50) + '...', sender, timestamp });
-
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
@@ -1542,14 +1477,10 @@
 
         async function sendChatMessage() {
             if (window.sendingMessage) {
-                console.warn('[WEB CHAT] Duplicate send attempt blocked');
                 return; // Prevent multiple sends
             }
             window.sendingMessage = true;
             window.lastMessageSent = Date.now(); // Mark when message was sent
-
-            console.log('[WEB CHAT] Starting message send process');
-
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -1562,7 +1493,6 @@
             }
 
             // Add user message immediately
-            console.log('[WEB CHAT] Adding user message to chat:', message);
             if (message) {
                 addMessage(message, 'user');
             }
@@ -1597,20 +1527,15 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
-                    console.log('[WEB CHAT] Received response from server:', data);
                     if (data.duplicate) {
-                        console.log('[WEB CHAT] Duplicate message detected, skipping');
                         // Duplicate message, don't add to chat
-
                         return;
                     }
 
-                    console.log('[WEB CHAT] Adding AI response to chat');
                     addMessage(data.response, 'ai');
                     // Mark this message as displayed to prevent duplication by updateChat
                     if (data.message_id) {
                         displayedMessageIds.add(data.message_id);
-                        console.log('[WEB CHAT] Marked message ID as displayed:', data.message_id);
                     }
                     // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
                     setTimeout(async () => {
@@ -1643,7 +1568,6 @@
                 addMessage('Ошибка: ' + error.message, 'ai');
             } finally {
                 window.sendingMessage = false;
-                console.log('[WEB CHAT] Message send process completed');
             }
         }
 
@@ -1772,8 +1696,6 @@
 
         // Функции для ленты новостей
         function switchToChat() {
-            console.log('[SWITCH] Switching to CHAT view');
-            console.trace('[SWITCH] Call stack for switchToChat');
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
             if (!chatView || !feedView) return;
@@ -1785,12 +1707,9 @@
             feedView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '1';
             document.getElementById('feed-link').style.opacity = '0.5';
-            console.log('[SWITCH] Chat view activated, currentView =', currentView);
         }
 
         function switchToFeed() {
-            console.log('[SWITCH] Switching to FEED view');
-            console.trace('[SWITCH] Call stack for switchToFeed'); // Добавляем trace для отладки
             const chatView = document.getElementById('chat-view');
             const feedView = document.getElementById('feed-view');
             if (!chatView || !feedView) return;
@@ -1802,7 +1721,6 @@
             chatView.style.zIndex = '0';
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
-            console.log('[SWITCH] Feed view activated, currentView =', currentView);
             
             // Скрыть индикатор новых постов и обновить lastSeenPostId
             const indicator = document.getElementById('new-posts-indicator');
@@ -1818,17 +1736,14 @@
         }
 
         async function loadFeed() {
-            console.log('[FEED] Loading feed, currentView =', currentView);
             try {
                 const response = await fetch('/api/feed', {
                     method: 'GET',
                     credentials: 'include'
                 });
-                console.log('[FEED] Feed API response status:', response.status);
 
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
-                console.log('[FEED] Feed data loaded:', data.posts ? data.posts.length : 0, 'posts');
 
                 const feedContainer = document.getElementById('feed-posts');
                 feedContainer.innerHTML = '';
@@ -2167,10 +2082,8 @@
                     console.warn('Not authorized to load favorites yet, will retry later');
                     return [];
                 }
-                console.log('getFavoriteContactsFromServer response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('getFavoriteContactsFromServer data:', data);
                     return data.favorites || [];
                 }
             } catch (error) {
@@ -2194,10 +2107,8 @@
                     console.warn('Not authorized to load blocked contacts yet, will retry later');
                     return [];
                 }
-                console.log('getBlockedContactsFromServer response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('getBlockedContactsFromServer data:', data);
                     return data.blocked || [];
                 }
             } catch (error) {
@@ -2251,14 +2162,12 @@
         setTimeout(async () => {
             try {
                 cachedFavorites = await getFavoriteContactsFromServer();
-                console.log('Initialized cachedFavorites:', cachedFavorites);
             } catch (error) {
                 console.error('Error initializing cachedFavorites:', error);
                 cachedFavorites = [];
             }
             try {
                 cachedBlocked = await getBlockedContactsFromServer();
-                console.log('Initialized cachedBlocked:', cachedBlocked);
             } catch (error) {
                 console.error('Error initializing cachedBlocked:', error);
                 cachedBlocked = [];
@@ -2807,7 +2716,6 @@
         }
         
         function renderTaskGroups(tasks) {
-            console.log('renderTaskGroups called with tasks:', tasks ? tasks.length : 0);
             // Сохраняем все задачи с сервера
             allTasksFromServer = tasks;
             
@@ -2967,7 +2875,6 @@
         }
         
         function filterTasks(filterType) {
-            console.log('filterTasks called with:', filterType);
             currentTaskFilter = filterType;
             currentPage = 1; // Сброс страницы при смене фильтра
             
@@ -3187,12 +3094,10 @@
         }
         
         function updateStats(tasks) {
-            console.log('updateStats called with allTasksFromServer:', allTasksFromServer.length, 'tasks param:', tasks ? tasks.length : 0);
             // Используем все задачи для статистики, независимо от фильтра
             const allTasks = allTasksFromServer.length > 0 ? allTasksFromServer : tasks;
             const completed = allTasks.filter(t => t.status === 'completed').length;
             const total = allTasks.length;
-            console.log('updateStats: completed =', completed, 'total =', total);
             const percent = total > 0 ? (completed / total * 100) : 0;
             
             // Подсчет задач на сегодня и завтра
@@ -3281,7 +3186,6 @@
             if (completedEl) completedEl.textContent = completed;
             if (totalEl) totalEl.textContent = total;
             if (progressEl) progressEl.style.width = percent + '%';
-            console.log('Updated DOM: completedEl =', completedEl ? completedEl.textContent : 'null', 'totalEl =', totalEl ? totalEl.textContent : 'null');
             
             // Общая статистика по всем задачам (включая завершенные из allTasksFromServer)
             const totalInProgress = allTasks.filter(t => (t.status === 'pending' || t.status === 'in_progress') && !t.overdue).length;
@@ -3297,7 +3201,6 @@
         }
         
         async function completeTask(taskId) {
-            console.log('completeTask called with taskId:', taskId);
             try {
                 const response = await fetch('/complete_task', {
                     method: 'POST',
@@ -3328,9 +3231,7 @@
         }
         
         async function acceptDelegatedTask(taskId) {
-            console.log('[DELEGATION] Accepting task:', taskId);
             try {
-                // Отправляем прямой запрос на принятие задачи
                 const response = await fetch('/api/accept_delegated_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3447,8 +3348,6 @@
         }
         
         async function deleteTask(taskId) {
-            console.log('[DELETE_TASK] Called with taskId:', taskId);
-            
             // Получаем название задачи из самих данных задач
             let taskTitle = `задача ${taskId}`;
             const task = allTasksData.find(t => t.id === taskId);
@@ -3458,17 +3357,13 @@
                 // Проверяем, является ли задача делегированной на нас
                 isDelegatedToMe = task.delegated_to_username !== null && task.delegated_to_username !== undefined;
             }
-            console.log('[DELETE_TASK] Task title:', taskTitle, 'isDelegatedToMe:', isDelegatedToMe);
             
             // Подтверждение удаления
             if (!confirm(`Вы уверены, что хотите удалить задачу "${taskTitle}"?`)) {
-                console.log('[DELETE_TASK] User cancelled');
-                return; // Пользователь отменил
+                return;
             }
             
             const reason = ""; // Причина удаления (пока пустая)
-            
-            console.log('[DELETE_TASK] Sending request with taskId:', taskId);
             
             try {
                 const response = await fetch('/delete_task', {
@@ -3591,7 +3486,6 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('[RATING] Rating submitted successfully for:', currentRatingUsername);
                     showNotification('Рекомендация отправлена!', 'success');
                     closeRatingModal();
                     // Очистить кэш перед обновлением
@@ -3600,7 +3494,6 @@
                     await updatePeople(true);
                     // Если активен фильтр elite, перезагрузить элитные контакты
                     if (currentContactFilter === 'elite') {
-                        console.log('[RATING] Reloading elite contacts after rating');
                         await loadEliteContacts();
                     }
                 } else {
@@ -3850,14 +3743,11 @@
                 
                 // Только при первой загрузке устанавливаем chat как активный
                 if (!chatActive && !feedActive) {
-                    console.log('[INIT] No view active, setting chat as default');
                     chatView.classList.add('active');
                     currentView = 'chat';
                 } else if (feedActive) {
-                    console.log('[INIT] Feed view is already active');
                     currentView = 'feed';
                 } else {
-                    console.log('[INIT] Chat view is already active');
                     currentView = 'chat';
                 }
             }
@@ -3953,12 +3843,10 @@
             // Prevent too frequent updates (similar to updateChat)
             const now = Date.now();
             if (now - lastTasksUpdate < 1000) { // Minimum 1 second between updates
-                console.log('updateTasks: too frequent, skipping');
                 return;
             }
             lastTasksUpdate = now;
             
-            console.log('updateTasks called');
             try {
                 const response = await fetch('/api/tasks?t=' + Date.now(), {
                     credentials: 'include',
@@ -3969,18 +3857,8 @@
                     cache: 'no-store'
                 });
                 if (!await checkAuth(response)) return;
-                console.log('updateTasks response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('updateTasks received data.tasks:', data.tasks ? data.tasks.length : 0);
-                    if (data.tasks && data.tasks.length > 0) {
-                        console.log('[TASKS] Sample task data:', data.tasks[0]);
-                        // Логируем делегированные задачи
-                        const delegatedToMe = data.tasks.filter(t => t.delegated_by && t.delegation_status === 'pending');
-                        const delegatedByMe = data.tasks.filter(t => t.delegated_to && t.delegation_status === 'pending');
-                        console.log('[TASKS] Delegated to me (pending):', delegatedToMe.length, delegatedToMe.map(t => ({id: t.id, title: t.title, delegated_by: t.delegated_by, delegation_status: t.delegation_status})));
-                        console.log('[TASKS] Delegated by me (pending):', delegatedByMe.length, delegatedByMe.map(t => ({id: t.id, title: t.title, delegated_to: t.delegated_to, delegation_status: t.delegation_status})));
-                    }
                     renderTaskGroups(data.tasks);
                 }
             } catch (error) {
@@ -4028,23 +3906,19 @@
             
             // Skip update if elite filter is active (unless forced)
             if (!force && currentContactFilter === 'elite') {
-                console.log('updatePeople: elite filter active, skipping');
                 return;
             }
             
             // Prevent too frequent updates (except when forced)
             const now = Date.now();
             if (!force && now - lastPeopleUpdate < 1000) { // Minimum 1 second between updates
-                console.log('updatePeople: too frequent, skipping');
                 return;
             }
             lastPeopleUpdate = now;
             
             try {
-                console.log('Starting updatePeople');
                 // Получаем избранные контакты заранее
                 const favoriteContacts = cachedFavorites || await getFavoriteContactsFromServer();
-                // console.log('Loaded favoriteContacts:', favoriteContacts);
                 
                 // Получаем заблокированные контакты
                 const blockedResponse = await fetch('/api/blocked_contacts', {
@@ -4056,7 +3930,6 @@
                     blockedContacts = blockedData.blocked || [];
                     cachedBlocked = blockedContacts;
                 }
-                // console.log('Loaded blockedContacts:', blockedContacts);
                 
                 const response = await fetch('/api/partners', {
                     credentials: 'include',
@@ -4067,7 +3940,6 @@
                     cache: 'no-store'
                 });
                 if (!await checkAuth(response)) return;
-                console.log('updatePeople response status:', response.status);
                 if (response.ok) {
                     const data = await response.json();
                     const peopleList = document.getElementById('people-list');
@@ -4791,7 +4663,6 @@
             // Prevent too frequent updates
             const now = Date.now();
             if (now - lastProfileUpdate < 1000) { // Minimum 1 second between updates
-                console.log('updateProfile: too frequent, skipping');
                 return;
             }
             lastProfileUpdate = now;
@@ -4951,11 +4822,9 @@
                 const chatView = document.getElementById('chat-view');
                 
                 if (feedView && feedView.classList.contains('active')) {
-                    console.log('[AUTO-UPDATE] Feed view is active, skipping all auto-updates');
                     return;
                 }
                 
-                console.log('[AUTO-UPDATE] Chat view active, running updates');
                 updateTasks();
                 // Не обновляем контакты, если открыта лента (чтобы не вызывать переключение view)
                 if (!feedView || !feedView.classList.contains('active')) {
@@ -4973,7 +4842,6 @@
             // Отдельный интервал для проверки новых сообщений из Telegram независимо от активного view
             // Это гарантирует, что сообщения от бота и пользователя всегда синхронизируются
             setInterval(() => {
-                console.log('[TELEGRAM-SYNC] Checking for new messages from Telegram');
                 updateChat();
             }, 3000); // Проверяем каждые 3 секунды
         }
@@ -5015,11 +4883,9 @@
             try {
                 // Не обновляем чат, если активна лента новостей
                 if (currentView === 'feed') {
-                    console.log('updateChat: Skipping - feed view is active');
                     return;
                 }
                 
-                console.log('updateChat: Starting chat update check');
                 const response = await fetch('/api/interactions', {
                     credentials: 'include',
                     headers: {
@@ -5031,14 +4897,11 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('updateChat: Received data:', data);
                     if (data.interactions) {
                         const currentMessageCount = data.interactions.length;
-                        console.log('updateChat: Current message count:', currentMessageCount, 'Last count:', lastMessageCount);
                         
                         if (lastMessageCount === 0) {
                             // Первая загрузка - очищаем и показываем все сообщения
-                            console.log('updateChat: First load, clearing and showing all messages');
                             const chatMessages = document.getElementById('chat-messages');
                             chatMessages.innerHTML = '';
                             displayedMessageIds.clear();
@@ -5050,7 +4913,6 @@
                             sortedInteractions.forEach((interaction) => {
                                 const msgId = interaction.id; // Используем database ID для уникальности
                                 if (!displayedMessageIds.has(msgId)) {
-                                    console.log('updateChat: Adding message ID:', msgId, 'Type:', interaction.message_type);
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
                                 }
@@ -5060,35 +4922,25 @@
                             // Check if message was sent recently (within last 10 seconds) to avoid duplication
                             const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
                             if (timeSinceLastSend < 10000) {
-                                console.log('updateChat: Skipping new messages check - message sent recently (' + timeSinceLastSend + 'ms ago)');
                                 return;
                             }
-                            console.log('updateChat: New messages detected, count increased from', lastMessageCount, 'to', currentMessageCount);
                             // Есть новые сообщения - добавляем только их
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
                             
                             // Находим новые сообщения (с ID больше последнего отображенного)
                             const maxDisplayedId = Math.max(...Array.from(displayedMessageIds));
-                            console.log('updateChat: Max displayed ID:', maxDisplayedId);
                             
                             sortedInteractions.forEach((interaction) => {
                                 const msgId = interaction.id;
                                 if (msgId > maxDisplayedId && !displayedMessageIds.has(msgId)) {
-                                    console.log('updateChat: Adding new message ID:', msgId, 'Type:', interaction.message_type);
                                     addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                     displayedMessageIds.add(msgId);
                                 }
                             });
                             lastMessageCount = currentMessageCount;
-                        } else {
-                            console.log('updateChat: No new messages, count unchanged');
                         }
-                    } else {
-                        console.log('updateChat: No interactions in response');
                     }
-                } else {
-                    console.log('updateChat: Response not ok, status:', response.status);
                 }
             } catch (error) {
                 console.error('Error updating chat:', error);
