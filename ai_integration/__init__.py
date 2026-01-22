@@ -13,7 +13,6 @@ from .handlers import (
     create_subscription_payment, check_subscription_status, brainstorm_ideas,
     cancel_subscription, get_partners_list, enrich_task_list_with_insights, check_delegation_deadlines, restore_task
 )
-from .utils import set_redis_client
 
 __all__ = [
     'TOOLS',

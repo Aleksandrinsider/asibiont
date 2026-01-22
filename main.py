@@ -1556,7 +1556,6 @@ async def chat_handler(request):
         is_duplicate = check_duplicate_message(user_id, message)
         if is_duplicate:
             logger.warning(f"[WEB DUPLICATE] Message from user {user_id} IGNORED (already processed): '{message[:100]}...'")
-                    else:
             return web.json_response({'duplicate': True, 'message': 'Message already processed'})
         
         logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
