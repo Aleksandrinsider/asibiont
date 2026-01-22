@@ -1468,17 +1468,16 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
-            // Проверка на дубликаты: проверяем последние 5 сообщений
+            // Проверка на дубликаты: проверяем последние 5 сообщений по тексту и отправителю
             const existingMessages = Array.from(messages.querySelectorAll('.message'));
             const lastFiveMessages = existingMessages.slice(-5);
             for (const msg of lastFiveMessages) {
                 const msgText = msg.querySelector('.message-text')?.textContent || '';
-                const msgTime = msg.querySelector('.message-time')?.textContent || '';
                 const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
                 
-                // Если найдено сообщение с таким же текстом, отправителем и временем - это дубликат
-                if (msgText === text && msgSender === normalizedSender && msgTime === `${dateString} ${timeString}`) {
-                    console.log('Duplicate message detected, skipping:', text.substring(0, 50));
+                // Если найдено сообщение с таким же текстом и отправителем - это дубликат
+                if (msgText === processedText && msgSender === normalizedSender) {
+                    console.log('Duplicate message detected, skipping:', processedText.substring(0, 50));
                     return; // Не добавляем дубликат
                 }
             }

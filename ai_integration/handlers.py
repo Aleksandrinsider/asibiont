@@ -145,6 +145,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
 
         session.commit()
         task_id = task.id
+        logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
 
     # Schedule reminder if specified
     if task.reminder_time:

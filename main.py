@@ -3629,26 +3629,34 @@ async def api_blocked_contacts_handler(request):
                 if newly_blocked:
                     for blocked_username in newly_blocked:
                         # Find and delete tasks delegated by this blocked user to current user
-                        tasks_deleted = session_db.query(Task).join(User).filter(
-                            Task.user_id == User.id,
-                            User.username.ilike(blocked_username.replace('@', '')),
-                            Task.delegated_to_username.ilike(user.username.replace('@', ''))
-                        ).delete(synchronize_session=False)
-                        
-                        if tasks_deleted > 0:
-                            # Find the blocked user to notify them
+                        try:
+                            # Clean username (remove @)
+                            clean_blocked = blocked_username.replace('@', '').lower()
+                            clean_current = (user.username or '').replace('@', '').lower()
+                            
+                            # Find the blocked user first
                             blocked_user = session_db.query(User).filter(
-                                User.username.ilike(blocked_username.replace('@', ''))
+                                User.username != None,
+                                User.username.ilike(clean_blocked)
                             ).first()
                             
-                            # Notify blocked user via bot (don't await to avoid blocking)
-                            if blocked_user:
-                                try:
-                                    message = f"@{user.username} не готов принимать задачи от вас. Ваши делегированные задачи были отклонены."
-                                    # Schedule notification asynchronously to avoid blocking
-                                    asyncio.create_task(bot.send_message(blocked_user.telegram_id, message))
-                                except Exception as e:
-                                    logger.error(f"Failed to notify blocked user {blocked_username}: {e}")
+                            if blocked_user and user.username:
+                                # Delete tasks delegated from blocked user to current user
+                                tasks_deleted = session_db.query(Task).filter(
+                                    Task.user_id == blocked_user.id,
+                                    Task.delegated_to_username.ilike(clean_current)
+                                ).delete(synchronize_session=False)
+                                
+                                if tasks_deleted > 0:
+                                    # Notify blocked user via bot (don't await to avoid blocking)
+                                    try:
+                                        message = f"@{user.username} не готов принимать задачи от вас. Ваши делегированные задачи были отклонены."
+                                        # Schedule notification asynchronously to avoid blocking
+                                        asyncio.create_task(bot.send_message(blocked_user.telegram_id, message))
+                                    except Exception as e:
+                                        logger.error(f"Failed to notify blocked user {blocked_username}: {e}")
+                        except Exception as e:
+                            logger.error(f"Error processing blocked user {blocked_username}: {e}")
 
                     session_db.commit()
 

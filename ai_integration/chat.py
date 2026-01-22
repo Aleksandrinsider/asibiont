@@ -149,6 +149,19 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if corrected_tool_calls:
         tool_calls = corrected_tool_calls
 
+    # Убираем дубликаты tool calls по function name и arguments
+    seen_calls = set()
+    unique_tool_calls = []
+    for call in tool_calls:
+        call_key = (call.get("function", {}).get("name"), str(call.get("function", {}).get("arguments")))
+        if call_key not in seen_calls:
+            seen_calls.add(call_key)
+            unique_tool_calls.append(call)
+        else:
+            logger.warning(f"[TOOL CALLS] Removed duplicate tool call: {call_key}")
+    
+    tool_calls = unique_tool_calls
+
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
         return None
