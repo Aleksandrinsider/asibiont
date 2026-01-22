@@ -36,6 +36,7 @@ class User(Base):
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # User's subscription tier
     average_rating = Column(Integer, default=0)  # Average rating from other users (synced from UserProfile)
     rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
+    history_cleared_at = Column(DateTime)  # When user cleared chat history
 
 
 class Task(Base):

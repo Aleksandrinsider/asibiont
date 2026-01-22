@@ -1,5 +1,4 @@
 import logging
-import redis
 import re
 from datetime import datetime, timedelta, timezone
 import pytz
@@ -16,15 +15,6 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 cipher = Fernet(ENCRYPTION_KEY.encode())
-
-# Redis client - будет импортирован из main.py
-redis_client = None
-
-
-def set_redis_client(client):
-    """Установка Redis клиента из main.py"""
-    global redis_client
-    redis_client = client
 
 
 def analyze_interaction_for_profile_update(user_id, message, ai_response):

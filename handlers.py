@@ -82,26 +82,9 @@ Bronze, Silver и Gold - выберите подходящий для вас
 
 logger = logging.getLogger(__name__)
 
-# Global Redis client
-redis_client = None
-
-
-async def init_redis(client):
-    global redis_client
-    redis_client = client
-
-
 @router.message(Command("start"))
 async def start_handler(message: Message):
     user_id = message.from_user.id
-
-    # Check for duplicate message processing
-    message_key = f"processed_message:{message.message_id}"
-    if redis_client:
-        if await redis_client.exists(message_key):
-            logger.info(f"Duplicate /start message {message.message_id} ignored")
-            return
-        await redis_client.set(message_key, "1", ex=3600)
 
     # Create user if doesn't exist
     session = Session()
@@ -140,29 +123,9 @@ async def update_profile_handler(message: Message):
         prompt = f"Обнови мой профиль: {text}"
     else:
         prompt = "Помоги обновить профиль"
-    try:
-        if redis_client:
-            context_data = redis_client.get(f"context:{user_id}")
-            if context_data:
-                if isinstance(context_data, bytes):
-                    context = json.loads(context_data.decode('utf-8'))
-                else:
-                    context = json.loads(context_data)
-        else:
-            context = []
-    except Exception:
-        context = []
+    context = []  # Simplified: no context in bot
     response = await chat_with_ai(prompt, context, user_id)
     await message.bot.send_message(message.chat.id, response)
-    # Сохранить контекст
-    context.append({"user": prompt, "agent": response})
-    if len(context) > 10:
-        context = context[-10:]
-    try:
-        if redis_client:
-            redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-    except Exception:
-        pass
 
 
 @router.message(Command("find_partners"))
@@ -182,28 +145,9 @@ async def find_partners_handler(message: Message):
     session.close()
     # Отправить запрос в ИИ
     try:
-        if redis_client:
-            context_data = redis_client.get(f"context:{user_id}")
-            if context_data:
-                if isinstance(context_data, bytes):
-                    context = json.loads(context_data.decode('utf-8'))
-                else:
-                    context = json.loads(context_data)
-        else:
-            context = []
-    except Exception:
-        context = []
+    context = []  # Simplified: no context in bot
     response = await chat_with_ai("Найди партнеров", context, user_id)
     await message.bot.send_message(message.chat.id, response)
-    # Сохранить контекст
-    context.append({"user": "Найди партнеров", "agent": response})
-    if len(context) > 10:
-        context = context[-10:]
-    try:
-        if redis_client:
-            redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-    except Exception:
-        pass
 
 
 @router.message(Command("subscribe"))
@@ -399,41 +343,21 @@ async def process_text_message(user_id, text, message, state):
             return
 
         if text.lower() == "очистить историю":
-            context = []
-            if redis_client:
-                try:
-                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-                except Exception as e:
-                    logger.error(f"Error saving context to Redis: {e}")
+            # Update user.history_cleared_at in DB
+            session = Session()
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                from datetime import datetime, timezone
+                user.history_cleared_at = datetime.now(timezone.utc)
+                session.commit()
+            session.close()
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
 
-        context = []
-        if redis_client:
-            try:
-                context_data = await redis_client.get(f"context:{user_id}")
-                logger.debug(f"Redis get for user {user_id}: {context_data}")
-                if context_data:
-                    context = json.loads(context_data.decode('utf-8'))
-                    logger.info(f"Loaded context for user {user_id}: {len(context)} messages")
-                else:
-                    context = []
-                    logger.debug(f"No context found for user {user_id}")
-            except Exception as e:
-                logger.error(f"Error loading context from Redis: {e}", exc_info=True)
-                context = []
-        else:
-            logger.warning("Redis client not initialized, context will not persist")
+        context = []  # Simplified: no context in bot
         response = await chat_with_ai(text, context, user_id)
         logger.debug(f"AI response generated for user {user_id}: '{response[:100]}...'")
         logger.debug(f"[HANDLER] Response from chat_with_ai: '{response[:200]}...'")
-        # Сохранить контекст для продолжения
-        context.append({"user": text, "agent": response})
-        if len(context) > 10:
-            context = context[-10:]  # Keep last 10 exchanges
-        if redis_client:
-            try:
-                context_json = json.dumps(context).encode('utf-8')
                 await redis_client.set(f"context:{user_id}", context_json)
                 logger.info(f"Saved context for user {user_id}: {len(context)} messages")
             except Exception as e:

@@ -1,13 +1,11 @@
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, init_db
 from reminder_service import ReminderService
-from ai_integration import chat_with_ai, get_partners_list, set_redis_client, decrypt_data, encrypt_data
+from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
-from aiohttp_session.redis_storage import RedisStorage
 from aiohttp_session import get_session
 import aiohttp_session
-from redis.asyncio import Redis
 import os
 from sqlalchemy import text, or_, and_
 import re
@@ -704,7 +702,95 @@ try:
 except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
-redis_client = None
+
+# Helper functions for context management using DB instead of Redis
+def get_context_from_db(user_id, limit=10):
+    """Get chat context from Interaction table"""
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return []
+        
+        # Get history_cleared_at timestamp
+        cleared_at = user.history_cleared_at
+        
+        # Get last N interactions after clear timestamp
+        query = session.query(Interaction).filter(Interaction.user_id == user.id)
+        if cleared_at:
+            query = query.filter(Interaction.created_at > cleared_at)
+        
+        interactions = query.order_by(Interaction.created_at.desc()).limit(limit * 2).all()
+        interactions.reverse()  # Oldest first
+        
+        # Convert to context format
+        context = []
+        for i in range(0, len(interactions), 2):
+            if i + 1 < len(interactions):
+                user_msg = interactions[i]
+                ai_msg = interactions[i + 1]
+                if user_msg.message_type == 'user' and ai_msg.message_type == 'ai':
+                    context.append({
+                        'user': user_msg.content,
+                        'agent': ai_msg.content
+                    })
+        
+        return context[-limit:] if len(context) > limit else context
+    finally:
+        session.close()
+
+
+def save_context_to_db(user_id, user_message, ai_message):
+    """Save chat interaction to Interaction table"""
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return
+        
+        # Save user message
+        user_interaction = Interaction(
+            user_id=user.id,
+            message_type='user',
+            content=user_message,
+            created_at=datetime.now(dt_timezone.utc)
+        )
+        session.add(user_interaction)
+        
+        # Save AI message
+        ai_interaction = Interaction(
+            user_id=user.id,
+            message_type='ai',
+            content=ai_message,
+            created_at=datetime.now(dt_timezone.utc)
+        )
+        session.add(ai_interaction)
+        
+        session.commit()
+    finally:
+        session.close()
+
+
+def check_duplicate_message(user_id, message_text):
+    """Check for duplicate message in last 30 seconds"""
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return False
+        
+        # Check if same message exists in last 30 seconds
+        threshold = datetime.now(dt_timezone.utc) - timedelta(seconds=30)
+        duplicate = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'user',
+            Interaction.content == message_text,
+            Interaction.created_at > threshold
+        ).first()
+        
+        return duplicate is not None
+    finally:
+        session.close()
 
 
 async def get_timezone_from_ip(ip_address):
@@ -1047,20 +1133,11 @@ async def dashboard_handler(request):
                 logger.info(f"Task {task.id}: {task.title} (user_id: {task.user_id})")
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
 
-            # Проверяем timestamp очистки истории
+            # Проверяем timestamp очистки истории из БД
             history_cleared_timestamp = None
-            if redis_client:
-                try:
-                    timestamp_bytes = await redis_client.get(f"history_cleared_timestamp:{user_id}")
-                    if timestamp_bytes:
-                        history_cleared_timestamp = float(timestamp_bytes.decode('utf-8'))
-                        logger.info(f"History cleared timestamp from Redis: {history_cleared_timestamp}")
-                except Exception as e:
-                    logger.error(f"Error checking history_cleared_timestamp: {e}")
-            else:
-                # Fallback на session если Redis недоступен
-                history_cleared_timestamp = session.get('history_cleared_timestamp')
-                logger.info(f"History cleared timestamp from session: {history_cleared_timestamp}")
+            if user.history_cleared_at:
+                history_cleared_timestamp = user.history_cleared_at.timestamp()
+                logger.info(f"History cleared timestamp from DB: {history_cleared_timestamp}")
 
             # Берем последние 50 сообщений, но фильтруем по timestamp очистки
             if user:
@@ -1468,66 +1545,26 @@ async def chat_handler(request):
             logger.info(f"File received: {file.filename}, size: {len(file_content)}")
         logger.info(f"Message received: {message}")
 
-        # Load context from Redis
-        context = []
-        if redis_client:
-            try:
-                context_data = await redis_client.get(f"context:{user_id}")
-                if context_data:
-                    full_context = json.loads(context_data.decode('utf-8'))
-                    # Filter messages from last 24 hours
-                    cutoff_time = datetime.now(dt_timezone.utc).timestamp() - 24 * 3600
-                    context = [msg for msg in full_context if datetime.fromisoformat(
-                        msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
-                    logger.info(f"Loaded and filtered context with {len(context)} messages from last 24h")
-                else:
-                    logger.info("No context found in Redis")
-            except Exception as e:
-                logger.error(f"Error loading context: {e}")
-                context = []
+        # Load context from DB
+        context = get_context_from_db(user_id, limit=10)
+        logger.info(f"Loaded context with {len(context)} message pairs from DB")
 
         # Save user message WITH PRECISE TIMESTAMP before AI call
         user_message_timestamp = datetime.now(dt_timezone.utc)
 
-        # Check for duplicate via Redis (web chat duplicate protection)
-        message_key = f"web_chat_message:{user_id}:{message[:50]}"  # Use message prefix as key
-        if redis_client:
-            try:
-                is_duplicate = await redis_client.exists(message_key)
-                if is_duplicate:
-                    logger.warning(f"[WEB DUPLICATE] Message from user {user_id} IGNORED (already processed): '{message[:100]}...'")
-                    # Log additional context for debugging
-                    cached_response = await redis_client.get(f"{message_key}:response")
-                    if cached_response:
-                        logger.warning(f"[WEB DUPLICATE] Cached response exists, length: {len(cached_response)}")
+        # Check for duplicate via DB (web chat duplicate protection)
+        is_duplicate = check_duplicate_message(user_id, message)
+        if is_duplicate:
+            logger.warning(f"[WEB DUPLICATE] Message from user {user_id} IGNORED (already processed): '{message[:100]}...'")
                     else:
-                        logger.warning(f"[WEB DUPLICATE] No cached response found")
-                    # Return duplicate flag instead of cached response to prevent frontend from adding duplicate message
-                    return web.json_response({'duplicate': True, 'message': 'Message already processed'})
-                else:
-                    logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
-            except Exception as e:
-                logger.error(f"Error checking duplicate: {e}")
+            return web.json_response({'duplicate': True, 'message': 'Message already processed'})
+        
+        logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
 
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             logger.info(f"User found: {user is not None}")
-            if user:
-                content = message
-                if file:
-                    content += f" [Файл: {file.filename}]"
-
-                # Сохраняем сообщение пользователя (дубликаты контролируются через Redis)
-                interaction_user = Interaction(
-                    user_id=user.id,
-                    message_type='user',
-                    content=content,
-                    created_at=user_message_timestamp  # Точное время ДО вызова AI
-                )
-                session_db.add(interaction_user)
-                session_db.commit()
-                logger.info("Saved user message to database")
 
             # Get AI response (will take time, so agent timestamp will be later)
             try:
@@ -1538,35 +1575,11 @@ async def chat_handler(request):
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
                 response = f"Ошибка: {str(e)}"
 
-            # Save context back to Redis with timestamp
-            context.append({
-                "user": message,
-                "agent": response,
-                "timestamp": datetime.now(dt_timezone.utc).isoformat()
-            })
-            # Keep only messages from last 24 hours
-            cutoff_time = datetime.now(dt_timezone.utc).timestamp() - 24 * 3600
-            context = [msg for msg in context if datetime.fromisoformat(
-                msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
-            # Limit to last 50 messages to prevent excessive storage
-            if len(context) > 50:
-                context = context[-50:]
-            if redis_client:
-                try:
-                    # Expire in 24 hours
-                    await redis_client.setex(f"context:{user_id}", 24 * 3600, json.dumps(context).encode('utf-8'))
-                    # Mark message as processed to prevent duplicates
-                    await redis_client.setex(message_key, 30, "1")  # 30 second window
-                    # Cache response for duplicate requests
-                    await redis_client.setex(f"{message_key}:response", 30, response.encode('utf-8'))
-                    logger.info("[WEB CHAT] Marked message as processed")
+            # Save interaction to DB
+            save_context_to_db(user_id, message, response)
+            logger.info("Context saved to DB")
 
-                    # НЕ удаляем timestamp - новые сообщения будут после него и будут видны
-                    logger.info(f"Context saved to Redis with {len(context)} messages")
-                except Exception as e:
-                    logger.error(f"Error saving context: {e}")
-
-            # Save agent response (дубликаты контролируются через Redis на уровне запроса)
+            # Save agent response to Interaction table
             if user:
                 agent_response_timestamp = datetime.now(dt_timezone.utc)
                 interaction_agent = Interaction(
@@ -1602,16 +1615,8 @@ async def api_send_message_handler(request):
         message = data.get('message', '')
         logger.info(f"API Message received: {message}")
 
-        # Load context from Redis
-        context = []
-        if redis_client:
-            try:
-                context_data = await redis_client.get(f"context:{user_id}")
-                if context_data:
-                    full_context = json.loads(context_data.decode('utf-8'))
-                    context = full_context[-20:]
-            except Exception as e:
-                logger.error(f"Error loading context from Redis: {e}")
+        # Load context from DB
+        context = get_context_from_db(user_id, limit=20)
 
         # Import chat function
         from ai_integration.chat import chat_with_ai as chat
@@ -1622,24 +1627,6 @@ async def api_send_message_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
-
-            # Save user message to database BEFORE AI call
-            from datetime import datetime, timezone as dt_timezone
-            user_message_timestamp = datetime.now(dt_timezone.utc)
-            interaction_user = Interaction(
-                user_id=user.id,
-                message_type='user',
-                content=message,
-                created_at=user_message_timestamp
-            )
-            session_db.add(interaction_user)
-            try:
-                session_db.commit()
-                logger.info("Saved user message to database")
-            except Exception as e:
-                logger.error(f"Error saving user message: {e}", exc_info=True)
-                session_db.rollback()
-                return web.json_response({'error': 'Failed to save message'}, status=500)
 
             # Call AI chat
             try:
@@ -1658,45 +1645,11 @@ async def api_send_message_handler(request):
                     'upgrade_url': '/subscription_tiers'
                 }, status=403)
 
-            # Save context back to Redis with timestamp
-            context.append({
-                "user": message,
-                "agent": response,
-                "timestamp": datetime.now(dt_timezone.utc).isoformat()
-            })
-
-            # Keep only messages from last 24 hours
-            cutoff_time = datetime.now(dt_timezone.utc).timestamp() - 24 * 3600
-            context = [msg for msg in context if datetime.fromisoformat(
-                msg.get("timestamp", "2000-01-01T00:00:00")).timestamp() > cutoff_time]
-
-            # Limit to last 50 messages
-            if len(context) > 50:
-                context = context[-50:]
-
-            if redis_client:
-                try:
-                    await redis_client.setex(f"context:{user_id}", 24 * 3600, json.dumps(context).encode('utf-8'))
-                    logger.info(f"Context saved to Redis with {len(context)} messages")
-                except Exception as e:
-                    logger.error(f"Error saving context: {e}")
-
-            # Save to database
-            if user:
-                agent_response_timestamp = datetime.now(dt_timezone.utc)
-                interaction_agent = Interaction(
-                    user_id=user.id,
-                    message_type='ai',
-                    content=response,
-                    created_at=agent_response_timestamp
-                )
-                session_db.add(interaction_agent)
-                try:
-                    session_db.commit()
-                    logger.info("Saved AI response to database")
-                except Exception as e:
-                    logger.error(f"Error saving AI response: {e}", exc_info=True)
-                    session_db.rollback()
+            # Save context to DB
+            save_context_to_db(user_id, message, response)
+            # Save context to DB
+            save_context_to_db(user_id, message, response)
+            logger.info("Context saved to DB")
         finally:
             session_db.close()
 
@@ -1709,8 +1662,6 @@ async def api_send_message_handler(request):
             'details': str(e),
             'type': type(e).__name__
         }, status=500)
-    finally:
-        session_db.close()
 
 
 async def clear_history_handler(request):
@@ -1720,22 +1671,16 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    # Очищаем контекст в Redis и сохраняем timestamp
-    from datetime import datetime, timezone
-    clear_timestamp = datetime.now(timezone.utc).timestamp()
-
-    if redis_client:
-        try:
-            await redis_client.set(f"context:{user_id}", json.dumps([]).encode('utf-8'))
-            # Сохраняем timestamp очистки на 24 часа
-            await redis_client.setex(f"history_cleared_timestamp:{user_id}", 24 * 3600, str(clear_timestamp))
-            logger.info(f"Context cleared and history_cleared_timestamp set to {clear_timestamp}")
-        except Exception as e:
-            logger.error(f"Error clearing context: {e}")
-    else:
-        # Если Redis недоступен, используем session
-        session['history_cleared_timestamp'] = clear_timestamp
-        logger.info(f"History cleared timestamp set in session: {clear_timestamp}")
+    # Обновляем history_cleared_at в БД
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            user.history_cleared_at = datetime.now(dt_timezone.utc)
+            session_db.commit()
+            logger.info(f"History cleared, timestamp set to {user.history_cleared_at}")
+    finally:
+        session_db.close()
 
     return web.json_response({'success': True, 'message': 'History cleared'})
 
@@ -2013,25 +1958,6 @@ async def clear_database_handler(request):
         return web.json_response({'error': str(e)}, status=500)
     finally:
         session_db.close()
-
-
-async def clear_redis_handler(request):
-    """Admin endpoint to clear Redis cache"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
-
-    if not redis_client:
-        return web.json_response({'error': 'Redis not configured'}, status=400)
-
-    try:
-        await redis_client.flushdb()
-        logger.info("Redis cleared successfully")
-        return web.json_response({'message': 'Redis cleared successfully'})
-    except Exception as e:
-        logger.error(f"Error clearing Redis: {e}")
-        return web.json_response({'error': str(e)}, status=500)
 
 
 async def admin_users_handler(request):
@@ -2733,11 +2659,15 @@ async def api_partners_handler(request):
             common_goals = None
 
             if profile and delegator_profile:
-                # Common interests
+                # Common interests (partial match)
                 if delegator_profile.interests and profile.interests:
                     user_interests = set(i.strip().lower() for i in profile.interests.split(','))
                     partner_interests = set(i.strip().lower() for i in delegator_profile.interests.split(','))
-                    common = user_interests & partner_interests
+                    common = set()
+                    for ui in user_interests:
+                        for pi in partner_interests:
+                            if ui in pi or pi in ui:
+                                common.add(pi)
                     common_interests = ', '.join(common) if common else None
 
                 # Common skills
@@ -2856,11 +2786,15 @@ async def api_partners_handler(request):
             common_goals = None
 
             if profile and delegatee_profile:
-                # Common interests
+                # Common interests (partial match)
                 if delegatee_profile.interests and profile.interests:
                     user_interests = set(i.strip().lower() for i in profile.interests.split(','))
                     partner_interests = set(i.strip().lower() for i in delegatee_profile.interests.split(','))
-                    common = user_interests & partner_interests
+                    common = set()
+                    for ui in user_interests:
+                        for pi in partner_interests:
+                            if ui in pi or pi in ui:
+                                common.add(pi)
                     common_interests = ', '.join(common) if common else None
 
                 # Common skills
@@ -4322,26 +4256,14 @@ async def api_reminders_handler(request):
 
 
 async def on_startup(app):
-    from config import REDIS_URL, LOCAL, redis_client as config_redis_client
-    global redis_client
-    if LOCAL:
-        # In local mode, use dict for Redis
-        redis_client = None
-        logger.info("Using local mode without Redis")
-        storage = SimpleCookieStorage()
-    else:
-        # Use the Redis client from config.py
-        redis_client = config_redis_client
-        logger.info("Redis client initialized from config")
-        storage = RedisStorage(redis_client)
+    from config import LOCAL
+    # Always use SimpleCookieStorage (no Redis)
+    storage = SimpleCookieStorage()
+    logger.info("Using SimpleCookieStorage for sessions")
 
     # Setup session middleware
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware set up")
-
-    # Передаём redis_client в ai_integration
-    set_redis_client(redis_client)
-    logger.info(f"Redis client set in ai_integration: {redis_client is not None}")
     
     # Синхронизируем users.subscription_tier с subscriptions.tier при старте
     try:
@@ -4405,10 +4327,6 @@ async def on_startup(app):
 async def on_shutdown(app):
     """Закрываем Redis клиент при завершении приложения"""
     global redis_client
-    if redis_client:
-        await redis_client.close()
-        logger.info("Redis client closed")
-
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
         # Get webhook URL from environment variable or construct from Railway variables
@@ -4431,11 +4349,6 @@ async def on_shutdown(app):
             logger.warning("Continuing without webhook setup - bot may not receive updates")
     else:
         logger.warning("Bot not created or local mode, skipping webhook setup")
-
-    # Initialize handlers Redis
-    async def init_handlers_redis(client):
-        from handlers import init_redis as handlers_init_redis
-        await handlers_init_redis(client)
 
     await init_handlers_redis(redis_client)
     logger.info("Handlers Redis initialized")
@@ -4645,12 +4558,10 @@ async def api_interactions_handler(request):
         
         logger.info(f"Found {len(interactions)} total interactions for user {user.id}")
 
-        # Get history cleared timestamp from Redis
+        # Get history cleared timestamp from DB
         history_cleared_timestamp = 0
-        if redis_client:
-            cleared_data = await redis_client.get(f"history_cleared_timestamp:{user_id}")
-            if cleared_data:
-                history_cleared_timestamp = float(cleared_data.decode('utf-8'))
+        if user.history_cleared_at:
+            history_cleared_timestamp = user.history_cleared_at.timestamp()
 
         # Filter interactions based on cleared timestamp
         filtered_interactions = [
@@ -4807,22 +4718,7 @@ async def api_profile_handler(request):
         logger.error(f"Error getting session in api_profile: {e}", exc_info=True)
         return web.json_response({'error': 'Session error'}, status=500)
 
-    # Try to get cached profile data first
-    cache_key = f"profile:{user_id}"
-    cached_profile = None
-    if redis_client:
-        try:
-            cached_data = await redis_client.get(cache_key)
-            if cached_data:
-                cached_profile = json.loads(cached_data.decode('utf-8'))
-                logger.info(f"Using cached profile data for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error getting cached profile: {e}")
-
-    if cached_profile:
-        return web.json_response(cached_profile)
-
-    # Get fresh data from database
+    # Get fresh data from database (убрали кеширование для мгновенного обновления)
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -4890,14 +4786,6 @@ async def api_profile_handler(request):
             'user_avatar_url': user_avatar_url,
             'first_name': user.first_name
         }
-
-        # Cache the profile data for 1 hour
-        if redis_client:
-            try:
-                await redis_client.setex(cache_key, 3600, json.dumps(response_data).encode('utf-8'))
-                logger.info(f"Cached profile data for user {user_id}")
-            except Exception as e:
-                logger.error(f"Error caching profile: {e}")
 
         return web.json_response(response_data)
     except Exception as e:
@@ -5093,7 +4981,6 @@ app.router.add_post('/apply_promo_code', apply_promo_code_handler)
 app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
-app.router.add_get('/clear_redis', clear_redis_handler)
 app.router.add_get('/admin/users', admin_users_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)

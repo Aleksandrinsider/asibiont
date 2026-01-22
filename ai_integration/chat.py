@@ -15,7 +15,7 @@ from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
     replace_placeholders, clean_technical_details,
     post_process_tool_calls, smart_fallback_handler,
-    redis_client, post_process_response
+    post_process_response
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
@@ -938,15 +938,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
-        if redis_client and user_id:
+        if user_id:
             try:
-                last_task_data = await redis_client.get(f"last_task_id:{user_id}")
-                if last_task_data:
-                    task_info = json.loads(last_task_data.decode("utf-8"))
-                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={task_info['id']}, название='{task_info['title']}', время='{task_info.get('reminder_time', '')}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={task_info['id']}, ...)!"
-                    logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: {task_info}")
+                # Получаем последнюю созданную задачу из БД
+                last_task = db_session.query(Task).filter(
+                    Task.user_id == user.id
+                ).order_by(Task.created_at.desc()).first()
+                if last_task:
+                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={last_task.id}, название='{last_task.title}', время='{last_task.reminder_time or ''}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={last_task.id}, ...)!"
+                    logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: ID={last_task.id}, title={last_task.title}")
             except Exception as e:
-                logger.error(f"Error loading last_task_id from Redis: {e}")
+                logger.error(f"Error loading last_task from DB: {e}")
 
         messages = [{"role": "system", "content": system_prompt}]
         if context and isinstance(context, list):
@@ -1574,20 +1576,11 @@ async def generate_proactive_message(user_id):
     """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI"""
     try:
         # Используем тот же подход, что и в chat_with_ai
-        from ai_integration.utils import redis_client
         import json
+        from models import Interaction
 
-        # Получить контекст чата из Redis
+        # Получить контекст чата из БД
         context = []
-        if redis_client:
-            try:
-                context_data = await redis_client.get(f"context:{user_id}")
-                if context_data:
-                    context = json.loads(context_data.decode('utf-8'))
-                    logger.info(f"Loaded context for proactive message: {len(context)} messages")
-            except Exception as e:
-                logger.error(f"Error loading context for proactive: {e}")
-                context = []
 
         # Получить данные пользователя (как в chat_with_ai)
         user_memory = ""
