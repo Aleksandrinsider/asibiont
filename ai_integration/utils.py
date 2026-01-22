@@ -971,6 +971,73 @@ def post_process_tool_calls(intent, tool_calls, message):
     Пост-обработка tool calls для коррекции ошибок AI.
     Возвращает исправленные tool_calls или None если коррекция не нужна.
     """
+    corrected_calls = []
+    function_name = None
+
+    # СПЕЦИАЛЬНАЯ ОБРАБОТКА UPDATE_PROFILE: фильтруем и корректируем неправильные calls
+    if intent.get("type") == "update_profile" and tool_calls:
+        update_profile_calls = [call for call in tool_calls if call.get("function", {}).get("name") == "update_profile"]
+
+        if update_profile_calls:
+            # Анализируем сообщение для определения правильных полей
+            message_lower = message.lower().strip()
+
+            # Определяем, какие поля должны быть обновлены
+            correct_args = {}
+
+            # Навыки (skills)
+            if any(word in message_lower for word in ["навык", "умею", "знаю", "могу", "опыт", "специалист"]):
+                # Извлекаем навыки из сообщения
+                skills_text = message
+                # Удаляем слова-триггеры
+                for trigger in ["добавь навыки", "добавь навык", "обнови навыки", "навыки"]:
+                    skills_text = skills_text.replace(trigger, "").strip()
+                if skills_text:
+                    correct_args["skills"] = skills_text
+
+            # Город (city)
+            if any(word in message_lower for word in ["город", "живу в", "из города"]):
+                city_text = message
+                # Удаляем слова-триггеры
+                for trigger in ["обнови город на", "добавь город", "город"]:
+                    city_text = city_text.replace(trigger, "").strip()
+                if city_text:
+                    correct_args["city"] = city_text
+
+            # Компания (company)
+            if any(word in message_lower for word in ["компания", "работаю в", "фирма", "работодатель"]):
+                company_text = message
+                # Удаляем слова-триггеры
+                for trigger in ["добавь компанию", "обнови компанию", "компания", "работаю в"]:
+                    company_text = company_text.replace(trigger, "").strip()
+                if company_text:
+                    correct_args["company"] = company_text
+
+            # Если не нашли специфических полей, используем interests по умолчанию
+            if not correct_args:
+                correct_args["interests"] = message
+
+            # Создаем один корректный call вместо всех неправильных
+            corrected_calls.append({
+                "index": 0,
+                "id": "call_corrected_profile",
+                "type": "function",
+                "function": {
+                    "name": "update_profile",
+                    "arguments": json.dumps(correct_args)
+                }
+            })
+
+            # Добавляем остальные calls (не update_profile)
+            for call in tool_calls:
+                if call.get("function", {}).get("name") != "update_profile":
+                    call_copy = call.copy()
+                    call_copy["index"] = len(corrected_calls)
+                    corrected_calls.append(call_copy)
+
+            return corrected_calls
+
+    # Обычная обработка для других случаев
     corrected_calls = tool_calls.copy() if tool_calls else []
     function_name = None
 

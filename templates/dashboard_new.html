@@ -3318,18 +3318,19 @@
         async function acceptDelegatedTask(taskId) {
             console.log('[DELEGATION] Accepting task:', taskId);
             try {
-                // Отправляем сообщение агенту о принятии задачи
-                const response = await fetch('/api/send_message', {
+                // Отправляем прямой запрос на принятие задачи
+                const response = await fetch('/api/accept_delegated_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        message: `Прими делегированную задачу.`
+                        task_id: taskId
                     }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
-                    showNotification('Задача принята', 'success');
+                    const result = await response.json();
+                    showNotification(result.message || 'Задача принята', 'success');
                     
                     // Принудительно обновляем интерфейс
                     lastTasksUpdate = 0; // Сбрасываем throttle
@@ -3342,7 +3343,8 @@
                         await loadEliteContacts();
                     }
                 } else {
-                    showNotification('Ошибка при принятии задачи', 'error');
+                    const error = await response.json();
+                    showNotification(error.error || 'Ошибка при принятии задачи', 'error');
                 }
             } catch (error) {
                 console.error('Error accepting task:', error);
@@ -3352,17 +3354,19 @@
         
         async function rejectDelegatedTask(taskId) {
             try {
-                // Отправляем сообщение агенту об отклонении задачи
-                const response = await fetch('/api/send_message', {
+                // Отправляем прямой запрос на отклонение задачи
+                const response = await fetch('/api/reject_delegated_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        message: `Отклони делегированную задачу.`
+                        task_id: taskId
                     }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
+                    const result = await response.json();
+                    
                     // Немедленно удаляем задачу из DOM
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
@@ -3373,7 +3377,7 @@
                     allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
-                    showNotification('Задача отклонена', 'success');
+                    showNotification(result.message || 'Задача отклонена', 'success');
                     
                     // Принудительно обновляем интерфейс
                     lastTasksUpdate = 0; // Сбрасываем throttle
@@ -3386,7 +3390,8 @@
                         await loadEliteContacts();
                     }
                 } else {
-                    showNotification('Ошибка при отклонении задачи', 'error');
+                    const error = await response.json();
+                    showNotification(error.error || 'Ошибка при отклонении задачи', 'error');
                 }
             } catch (error) {
                 console.error('Error rejecting task:', error);
@@ -4715,23 +4720,26 @@
                                 const city = data.address.city || data.address.town || data.address.village || data.address.state;
                                 
                                 if (city) {
-                                    // Отправляем сообщение агенту для обновления профиля
-                                    const updateResponse = await fetch('/api/send_message', {
+                                    // Отправляем прямой запрос на обновление профиля
+                                    const updateResponse = await fetch('/api/update_profile', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
-                                            message: `Обнови мой город на ${city}`
+                                            city: city
                                         }),
                                         credentials: 'include'
                                     });
                                     
+                                    if (!await checkAuth(updateResponse)) return;
                                     if (updateResponse.ok) {
+                                        const result = await updateResponse.json();
                                         showNotification(`Город определён: ${city}`, 'success');
                                         // Обновляем профиль и чат
                                         await updateProfile();
                                         await updateChat();
                                     } else {
-                                        showNotification('Ошибка при обновлении города', 'error');
+                                        const error = await updateResponse.json();
+                                        showNotification(error.error || 'Ошибка при обновлении города', 'error');
                                     }
                                 } else {
                                     showNotification('Не удалось определить город', 'error');

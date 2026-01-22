@@ -17,6 +17,7 @@ test_local.db
 test_comprehensive.db
 test_results.txt
 production_test.db
+tasks.db
 *.log
 test_dialogue.log
 *.swp

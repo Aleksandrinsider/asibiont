@@ -3974,6 +3974,172 @@ async def create_post_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_accept_delegated_task_handler(request):
+    """Direct API endpoint to accept a delegated task"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        task_id = data.get('task_id')
+
+        if not task_id:
+            return web.json_response({'error': 'Missing task_id'}, status=400)
+
+        session_db = Session()
+        try:
+            # Get the task
+            task = session_db.query(Task).filter_by(id=task_id).first()
+            if not task:
+                return web.json_response({'error': 'Task not found'}, status=404)
+
+            # Check if user is the delegatee
+            if task.assigned_to != user_id:
+                return web.json_response({'error': 'Not authorized to accept this task'}, status=403)
+
+            # Check if task is in delegated status
+            if task.status != 'delegated':
+                return web.json_response({'error': 'Task is not in delegated status'}, status=400)
+
+            # Update task status to accepted
+            task.status = 'accepted'
+            task.updated_at = datetime.now(pytz.UTC)
+
+            # Create interaction record
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            interaction = Interaction(
+                user_id=user.id,
+                message_type='ai',
+                content=f'Задача "{task.title}" принята'
+            )
+            session_db.add(interaction)
+
+            session_db.commit()
+
+            return web.json_response({
+                'success': True,
+                'message': f'Задача "{task.title}" принята'
+            })
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error accepting delegated task: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_reject_delegated_task_handler(request):
+    """Direct API endpoint to reject a delegated task"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        task_id = data.get('task_id')
+
+        if not task_id:
+            return web.json_response({'error': 'Missing task_id'}, status=400)
+
+        session_db = Session()
+        try:
+            # Get the task
+            task = session_db.query(Task).filter_by(id=task_id).first()
+            if not task:
+                return web.json_response({'error': 'Task not found'}, status=404)
+
+            # Check if user is the delegatee
+            if task.assigned_to != user_id:
+                return web.json_response({'error': 'Not authorized to reject this task'}, status=403)
+
+            # Check if task is in delegated status
+            if task.status != 'delegated':
+                return web.json_response({'error': 'Task is not in delegated status'}, status=400)
+
+            # Update task status to rejected
+            task.status = 'rejected'
+            task.updated_at = datetime.now(pytz.UTC)
+
+            # Create interaction record
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            interaction = Interaction(
+                user_id=user.id,
+                message_type='ai',
+                content=f'Задача "{task.title}" отклонена'
+            )
+            session_db.add(interaction)
+
+            session_db.commit()
+
+            return web.json_response({
+                'success': True,
+                'message': f'Задача "{task.title}" отклонена'
+            })
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error rejecting delegated task: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def api_update_profile_handler(request):
+    """API endpoint to update user profile"""
+    try:
+        session_req = await get_session(request)
+        user_id = session_req.get('user_id')
+        if not user_id:
+            return web.json_response({'error': 'Not logged in'}, status=401)
+
+        data = await request.json()
+        city = data.get('city')
+        company = data.get('company')
+        position = data.get('position')
+        bio = data.get('bio')
+        skills = data.get('skills')
+        interests = data.get('interests')
+        goals = data.get('goals')
+        languages = data.get('languages')
+        timezone = data.get('timezone')
+
+        session_db = Session()
+        try:
+            # Import the update_profile function
+            from ai_integration.handlers import update_profile
+
+            # Call the update_profile function
+            update_profile(
+                city=city,
+                company=company,
+                position=position,
+                bio=bio,
+                skills=skills,
+                interests=interests,
+                goals=goals,
+                languages=languages,
+                timezone=timezone,
+                user_id=user_id,
+                session=session_db
+            )
+
+            return web.json_response({
+                'success': True,
+                'message': 'Профиль обновлен'
+            })
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def get_feed_handler(request):
     """API endpoint to get posts from favorite contacts"""
     try:
@@ -5083,6 +5249,9 @@ app.router.add_post('/api/rate_user', rate_user_handler)
 app.router.add_get('/api/get_user_rating', get_user_rating_handler)
 app.router.add_post('/api/set_user_rating', set_user_rating_handler)
 app.router.add_post('/api/posts', create_post_handler)
+app.router.add_post('/api/update_profile', api_update_profile_handler)
+app.router.add_post('/api/accept_delegated_task', api_accept_delegated_task_handler)
+app.router.add_post('/api/reject_delegated_task', api_reject_delegated_task_handler)
 app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
 app.router.add_post('/api/comments', create_comment_handler)

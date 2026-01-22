@@ -374,6 +374,7 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
                 datetime.now(timezone.utc) - task.created_at.replace(tzinfo=timezone.utc)
             ).total_seconds() / 60
             profile.completed_tasks = (profile.completed_tasks or 0) + 1
+            profile.interaction_count = (profile.interaction_count or 0) + 1  # Увеличиваем счетчик взаимодействий
             prev_avg = profile.average_completion_time or 0
             if profile.completed_tasks > 0:
                 profile.average_completion_time = (
@@ -2538,3 +2539,77 @@ def check_delegation_deadlines():
     except Exception as e:
         logger.error(f"Error in check_delegation_deadlines: {e}")
         session.close()
+
+
+async def delete_task(task_id=None, task_title=None, user_id=None, session=None):
+    """Delete a task by ID or title"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден."
+
+    # Find task by ID or title
+    if task_id:
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        task = (
+            session.query(Task)
+            .filter(
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username.replace('@', '')))
+            )
+            .first()
+        )
+    elif task_title:
+        # Search by words in title (including delegated tasks)
+        words = task_title.lower().split()
+        conditions = [Task.title.ilike(f"%{word}%") for word in words]
+        task = session.query(Task).filter(
+            or_(
+                and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions)),
+                and_(
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.status != "completed",
+                    or_(*conditions)
+                )
+            )
+        ).first()
+    else:
+        if close_session:
+            session.close()
+        return "Не указан ни task_id, ни task_title."
+
+    if task:
+        task_title = task.title
+        session.delete(task)
+        session.commit()
+
+        # Update profile analytics
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile:
+            profile.total_tasks_created = (profile.total_tasks_created or 0) - 1  # Decrement created tasks when deleting
+            session.commit()
+
+        result = f"Задача '{task_title}' удалена."
+
+        # Save to interaction history
+        interaction = Interaction(user_id=user.id, message_type="ai", content=result)
+        session.add(interaction)
+        session.commit()
+    else:
+        result = "Задача не найдена."
+
+    if close_session:
+        session.close()
+    return result

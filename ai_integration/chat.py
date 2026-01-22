@@ -7,6 +7,9 @@ import traceback
 from datetime import datetime, timezone, timedelta
 import re
 import pytz
+import hashlib
+import time
+from functools import lru_cache
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
@@ -21,6 +24,110 @@ from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 
 logger = logging.getLogger(__name__)
+
+# ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
+class SimpleCache:
+    def __init__(self, max_size=1000, ttl_seconds=300):  # 5 минут TTL
+        self.cache = {}
+        self.max_size = max_size
+        self.ttl = ttl_seconds
+        self.redis_client = None
+
+        # Пытаемся подключить Redis опционально
+        try:
+            import redis
+            self.redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            # Проверяем подключение
+            self.redis_client.ping()
+            logger.info("[CACHE] Redis connected successfully")
+        except ImportError:
+            logger.info("[CACHE] Redis not available, using in-memory cache")
+        except Exception as e:
+            logger.warning(f"[CACHE] Redis connection failed: {e}, using in-memory cache")
+            self.redis_client = None
+
+    def _get_key(self, messages, temperature, max_tokens):
+        """Генерируем ключ на основе содержимого запроса"""
+        content = ""
+        for msg in messages:
+            content += f"{msg.get('role', '')}:{msg.get('content', '')}"
+        content += f"temp:{temperature}max:{max_tokens}"
+        return hashlib.md5(content.encode()).hexdigest()
+
+    def get(self, messages, temperature, max_tokens):
+        key = self._get_key(messages, temperature, max_tokens)
+        if key in self.cache:
+            entry = self.cache[key]
+            if time.time() - entry['timestamp'] < self.ttl:
+                logger.info(f"[CACHE HIT] Using cached response for key {key[:8]}...")
+                return entry['response']
+            else:
+                # Удаляем просроченный кэш
+                del self.cache[key]
+        return None
+
+    def set(self, messages, temperature, max_tokens, response):
+        key = self._get_key(messages, temperature, max_tokens)
+        if len(self.cache) >= self.max_size:
+            # Удаляем самый старый элемент
+            oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k]['timestamp'])
+            del self.cache[oldest_key]
+
+        self.cache[key] = {
+            'response': response,
+            'timestamp': time.time()
+        }
+        logger.info(f"[CACHE SET] Cached response for key {key[:8]}...")
+
+    def get_by_key(self, key):
+        # Сначала проверяем Redis
+        if self.redis_client:
+            try:
+                response = self.redis_client.get(key)
+                if response:
+                    logger.info(f"[CACHE HIT] Using Redis cached response for key {key[:8]}...")
+                    return response
+            except Exception as e:
+                logger.warning(f"[CACHE] Redis get error: {e}")
+
+        # Fallback на in-memory кэш
+        if key in self.cache:
+            entry = self.cache[key]
+            if time.time() - entry['timestamp'] < entry.get('ttl', self.ttl):
+                logger.info(f"[CACHE HIT] Using in-memory cached response for key {key[:8]}...")
+                return entry['response']
+            else:
+                # Удаляем просроченный кэш
+                del self.cache[key]
+        return None
+
+    def set_by_key(self, key, response, ttl=None):
+        ttl = ttl or self.ttl
+
+        # Сохраняем в Redis если доступен
+        if self.redis_client:
+            try:
+                self.redis_client.setex(key, ttl, response)
+                logger.info(f"[CACHE SET] Redis cached response for key {key[:8]}...")
+                return  # Не сохраняем в memory если Redis работает
+            except Exception as e:
+                logger.warning(f"[CACHE] Redis set error: {e}")
+
+        # Fallback на in-memory кэш
+        if len(self.cache) >= self.max_size:
+            # Удаляем самый старый элемент
+            oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k]['timestamp'])
+            del self.cache[oldest_key]
+
+        self.cache[key] = {
+            'response': response,
+            'timestamp': time.time(),
+            'ttl': ttl
+        }
+        logger.info(f"[CACHE SET] In-memory cached response for key {key[:8]}...")
+
+# Глобальный кэш
+cache = SimpleCache()
 
 add_task = handlers.add_task
 complete_task = handlers.complete_task
@@ -382,7 +489,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # Для неизвестных результатов передаем как есть
                 natural_responses.append(result_text)
 
-        # Формируем финальный контент для AI
+        # УПРОЩЕННАЯ ОБРАБОТКА: Формируем финальный контент на основе результатов
         if natural_responses:
             # Специальная обработка для обновления профиля
             if any("PROFILE_UPDATED" in r for r in natural_responses):
@@ -426,8 +533,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     else:
                         final_content = "TASK_ACCEPTED"
             else:
+                # ПРОСТАЯ ОБРАБОТКА: объединяем все результаты
                 final_content = " | ".join(natural_responses)
-            
+
             # Добавляем контекст профиля для list_tasks
             profile_context = ""
             if has_list_tasks and list_tasks_result:
@@ -448,32 +556,25 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     db_session_local.close()
                 except Exception as e:
                     logger.warning(f"Failed to get profile context: {e}")
-            
-            # ТОЛЬКО результаты и данные - БЕЗ инструкций, единый промпт сам всё знает
-            tool_context_msg = f"СТРОГО СОБЛЮДАЙ: показывай ТОЛЬКО реальные задачи из предоставленных данных, НЕ выдумывай и НЕ придумывай задачи!\n\n{final_content}{profile_context}"
-            
-            # Специальная обработка для принятия делегированной задачи
-            if "TASK_ACCEPTED:" in final_content:
-                task_title = final_content.split(":", 1)[1].strip()
-                tool_context_msg = f"Пользователь принял делегированную задачу: '{task_title}'. ВАЖНО: это ПОЛЬЗОВАТЕЛЬ принял задачу (не ты), поэтому говори 'ты принял', 'давай решать', 'предлагаю'. Дай конкретные рекомендации по выполнению этой задачи."
-            elif final_content == "TASK_ACCEPTED":
-                tool_context_msg = "Пользователь принял делегированную задачу. ВАЖНО: это ПОЛЬЗОВАТЕЛЬ принял задачу (не ты), поэтому говори 'ты принял', 'давай решать'. Дай рекомендации по выполнению."
-            
-            # Добавляем контекст в messages - УБИРАЕМ tool_calls из messages, так как они невалидны для API
+
+            # ФОРМИРУЕМ КОНТЕКСТ ДЛЯ AI: результаты + профиль + инструкции
+            tool_context_msg = f"РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:\n{final_content}{profile_context}\n\nВАЖНО: На основе этих результатов дай естественный, полезный ответ пользователю. Учитывай время суток и персонализируй ответ."
+
+            # Добавляем контекст в messages
             messages = [{"role": "system", "content": system_prompt}]
             messages.append({"role": "user", "content": original_message})
             messages.append({"role": "user", "content": tool_context_msg})
-            
+
             # Запрашиваем естественный ответ от AI
             data = {
                 "model": DEEPSEEK_MODEL,
                 "messages": messages,
                 "temperature": 0.7,
-                "max_tokens": 1000  # Увеличено для полных ответов без обрыва
+                "max_tokens": 1200  # Увеличено для полных ответов
             }
-            
-            final_content = "Действие выполнено"  # Инициализация на случай всех ошибок
-            max_retries = 3
+
+            final_content = "Действие выполнено"  # Инициализация на случай ошибок
+            max_retries = 2
             for attempt in range(max_retries):
                 try:
                     async with aiohttp.ClientSession() as ai_session:
@@ -485,32 +586,17 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                                 break
                             else:
                                 logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
-                                if attempt == max_retries - 1:
-                                    # Последняя попытка - упрощённый запрос
-                                    try:
-                                        simple_msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Действие выполнено. {profile_context}"}]
-                                        simple_data = {"model": DEEPSEEK_MODEL, "messages": simple_msg, "temperature": 0.7, "max_tokens": 500}
-                                        async with aiohttp.ClientSession() as simple_session:
-                                            async with simple_session.post(url, headers=headers, json=simple_data, timeout=aiohttp.ClientTimeout(total=30)) as simple_response:
-                                                if simple_response.status == 200:
-                                                    simple_result = await simple_response.json()
-                                                    final_content = simple_result["choices"][0]["message"]["content"].strip()
-                                    except Exception as simple_error:
-                                        logger.error(f"Simple retry failed: {simple_error}")
                 except Exception as e:
-                    logger.warning(f"[AI NATURAL RESPONSE] Attempt {attempt+1} failed: {e}")
+                    logger.error(f"[AI NATURAL RESPONSE] Error: {e}")
                     if attempt == max_retries - 1:
-                        # Крайний случай - минимальный запрос
-                        final_content = "Действие выполнено успешно"
-            
-            # Пост-обработка для улучшения качества ответа
-            final_content = post_process_response(final_content)
+                        # Fallback: используем сырые результаты
+                        final_content = f"Действие выполнено успешно. {final_content}"
 
-            logger.info(
-                f"[TOOL CALLS] Processed {len(tool_results)} tool calls, returning natural response")
-            return final_content
-    
-    return None
+        else:
+            # Нет результатов tool calls - обычная обработка
+            final_content = None
+
+    return final_content
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None):
@@ -652,8 +738,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 except (Exception,):
                     user_memory = ""  # If decryption fails, skip
 
-            # Добавляем информацию из профиля (компания, должность и т.д.)
-            profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+            # Добавляем информацию о времени суток для персонализации
+            current_hour = user_now.hour
+            if 6 <= current_hour < 12:
+                time_context = "УТРО: Предлагай планирование дня, утренние задачи, зарядку"
+            elif 12 <= current_hour < 18:
+                time_context = "ДЕНЬ: Предлагай текущие задачи, встречи, активную работу"
+            elif 18 <= current_hour < 22:
+                time_context = "ВЕЧЕР: Предлагай подведение итогов дня, отдых, планирование завтра"
+            else:
+                time_context = "НОЧЬ: Предлагай отдых, подготовку ко сну, легкие задачи"
+            
+            user_memory += f"\nВРЕМЯ СУТОК: {time_context}"
             profile_filled = False
             if profile:
                 profile_info = []
@@ -698,6 +794,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     user_memory += f"\n⚠️ НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво)!"
 
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
+
+                # ДЕМОНСТРАЦИЯ ВОЗМОЖНОСТЕЙ: каждые 5-7 взаимодействий
+                interaction_count = getattr(profile, 'interaction_count', 0) or 0
+                if interaction_count > 0 and interaction_count % 6 == 0:  # Каждые 6 взаимодействий
+                    user_memory += "\nДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Расскажи о полезных функциях - поиске контактов, делегировании задач, анализе прогресса. Сделай это естественно в контексте ответа!"
+
                 # Если профиль совсем пустой - срочно спроси в первом сообщении
                 if not profile_filled and (len(context) if context else 0 < 2):
                     user_memory += "\nКРИТИЧНО ВАЖНО: Профиль почти ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
@@ -1053,6 +1155,53 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         logger.info(f"Using temperature {temperature}, top_p {top_p} for intent type '{intent_type}'")
 
+        # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
+        # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности
+        should_cache = intent_type not in [
+            'conversation', 'unknown', 'greeting', 'find_partners', 'profile_info'
+        ] and not is_advice_question  # Вопросы совета тоже не кэшируем
+
+        if should_cache:
+            # КЭШИРОВАНИЕ ОТВЕТОВ ДЛЯ СНИЖЕНИЯ НАГРУЗКИ НА API
+            # Создаем ключ кэша на основе основных параметров
+            # Добавляем динамические параметры для лучшей персонализации
+            tasks_count = 0
+            if user:
+                try:
+                    tasks_count = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
+                except:
+                    tasks_count = 0
+
+            cache_key_components = [
+                str(user_id or "anonymous"),
+                clean_message[:200],  # Ограничиваем длину сообщения
+                intent_type,
+                str(temperature),
+                str(top_p),
+                tool_choice,
+                current_time_str,  # Время влияет на ответы
+                subscription_tier or "free",
+                str(tasks_count),  # Количество активных задач
+                current_date_str,  # Дата для уникальности по дням
+            ]
+            cache_key = "|".join(cache_key_components)
+            logger.info(f"Cache key generated: {cache_key[:100]}...")
+
+            # Проверяем кэш перед отправкой запроса к API
+            cached_response = cache.get_by_key(cache_key)
+            if cached_response:
+                logger.info("Cache hit! Returning cached response")
+                # Обновляем счетчик взаимодействий
+                if user:
+                    profile = db_session.query(User).filter_by(id=user_id).first()
+                    if profile:
+                        profile.interaction_count = (profile.interaction_count or 0) + 1
+                        db_session.commit()
+                return cached_response
+        else:
+            logger.info(f"Skipping cache for intent_type '{intent_type}' (requires freshness)")
+            cache_key = None  # Для сохранения в кэш позже
+
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         data = {
@@ -1360,6 +1509,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         if not content or len(content.strip()) < 5:
                             logger.warning("[FINAL FALLBACK] Response became empty after post-processing, using final fallback")
                             content = "Хорошо, понял. Продолжим работу!"
+
+                        # КЭШИРУЕМ УСПЕШНЫЙ ОТВЕТ
+                        if content and len(content.strip()) >= 5 and cache_key:
+                            cache.set_by_key(cache_key, content, ttl=300)  # Кэшируем на 5 минут
+                            logger.info(f"Cached response for key: {cache_key[:50]}...")
 
                         return content
 
@@ -2049,3 +2203,15 @@ def validate_response_compliance(content, msg_type):
 
 
 # Функции для работы с задачами
+
+async def generate_result_check(user_id, task_title):
+    """
+    Генерирует запрос на уточнение результатов выполнения задачи
+    """
+    try:
+        # Создаем простой запрос на уточнение результата
+        result_check_text = f"Расскажите, пожалуйста, о результатах выполнения задачи '{task_title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
+        return result_check_text
+    except Exception as e:
+        logger.error(f"Error generating result check: {e}")
+        return f"Расскажите о результатах выполнения задачи '{task_title}'. Что было сделано?"

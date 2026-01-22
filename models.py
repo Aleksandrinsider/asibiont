@@ -104,6 +104,7 @@ class UserProfile(Base):
     rating_count = Column(Integer, default=0)  # Number of ratings received
     favorite_contacts = Column(Text)  # JSON array of favorite contact usernames
     blocked_contacts = Column(Text)  # JSON array of blocked contact usernames
+    interaction_count = Column(Integer, default=0)  # Total interactions with AI
 
     user = relationship("User", backref="profile")
 
