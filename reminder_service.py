@@ -488,6 +488,7 @@ class ReminderService:
     async def send_task_checkpoint_message(self, user_id: int, checkpoint_type: str = "general"):
         """Отправка сообщения для чекпоинта задачи (1/3, 2/3, overdue)"""
         from subscription_service import check_subscription
+        from models import Interaction
         
         # Проверить подписку
         if not check_subscription(user_id):

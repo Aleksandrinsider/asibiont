@@ -1036,8 +1036,15 @@ async def logout_handler(request):
 @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     logger.info(f"Dashboard handler called for path: {request.path}")
-    session = await get_session(request)
-    logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
+    try:
+        session = await get_session(request)
+        logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
+    except Exception as e:
+        logger.error(f"Error loading session: {e}, clearing corrupted session")
+        # Clear corrupted session cookie by creating a new response
+        response = web.HTTPFound('/dashboard')
+        response.del_cookie('AIOHTTP_SESSION')
+        return response
     try:
         user_id = session.get('user_id')
         logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
