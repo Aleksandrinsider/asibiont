@@ -191,6 +191,14 @@ try:
             else:
                 logger.info("Migration: invalid_chat column already exists")
 
+            if 'history_cleared_at' not in user_columns:
+                logger.info("Adding history_cleared_at column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN history_cleared_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: history_cleared_at column added successfully")
+            else:
+                logger.info("Migration: history_cleared_at column already exists")
+
             # Migration for subscription_tier column
             if is_sqlite:
                 logger.info("Skipping subscription_tier enum migration for SQLite")
