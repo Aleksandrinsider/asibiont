@@ -145,9 +145,9 @@ async def find_partners_handler(message: Message):
     session.close()
     # Отправить запрос в ИИ
     try:
-    context = []  # Simplified: no context in bot
-    response = await chat_with_ai("Найди партнеров", context, user_id)
-    await message.bot.send_message(message.chat.id, response)
+        context = []  # Simplified: no context in bot
+        response = await chat_with_ai("Найди партнеров", context, user_id)
+        await message.bot.send_message(message.chat.id, response)
 
 
 @router.message(Command("subscribe"))
