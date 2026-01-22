@@ -52,5 +52,4 @@ __all__ = [
     'enrich_task_list_with_insights',
     'check_delegation_deadlines',
     'restore_task',
-    'set_redis_client',
 ]

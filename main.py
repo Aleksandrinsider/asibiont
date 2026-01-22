@@ -711,7 +711,7 @@ except Exception as e:
     logger.error(f"Failed to run migrations: {e}", exc_info=True)
 
 
-# Helper functions for context management using DB instead of Redis
+# Helper functions for context management
 def get_context_from_db(user_id, limit=10):
     """Get chat context from Interaction table"""
     session = Session()

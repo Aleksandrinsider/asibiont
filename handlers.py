@@ -297,21 +297,6 @@ async def process_text_message(user_id, text, message, state):
     logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {text[:50]}")
 
     try:
-        # Check for duplicate message processing
-        message_key = f"processed_message:{message_id}:{user_id}"
-        if redis_client:
-            logger.debug(f"[REDIS] Checking duplicate for key: {message_key}")
-            is_duplicate = await redis_client.exists(message_key)
-            if is_duplicate:
-                logger.warning(
-                    f"[DUPLICATE BLOCKED] Message {message_id} from user {user_id} IGNORED (already processed)")
-                return
-            # Set key with longer expiration
-            await redis_client.set(message_key, "1", ex=3600)
-            logger.info(f"[REDIS OK] Marked message {message_id} as processed, will respond")
-        else:
-            logger.warning(f"[NO REDIS] Cannot prevent duplicates for message {message_id}")
-
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:

@@ -1,7 +1,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-# from aiogram import Bot
 from models import Session
 from models import Task, User
 from config import DATABASE_URL
@@ -518,26 +517,6 @@ class ReminderService:
             try:
                 proactive_text = await self.generate_proactive_message(user_id)
                 
-                # Сохранить в историю чата (Redis)
-                try:
-                    import json
-                    redis_client = None  # Redis removed
-                    if redis_client:
-                        context_data = await redis_client.get(f"context:{user_id}")
-                        if context_data:
-                            context = json.loads(context_data.decode('utf-8'))
-                        else:
-                            context = []
-                        
-                        context.append({"user": "", "agent": proactive_text})
-                        if len(context) > 10:
-                            context = context[-10:]
-                        
-                        await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-                        logger.info(f"Saved checkpoint message to chat context for user {user_id}")
-                except Exception as e:
-                    logger.error(f"Failed to save checkpoint message to context: {e}")
-                
                 # Сохранить в таблицу Interaction
                 try:
                     interaction = Interaction(
@@ -971,27 +950,6 @@ class ReminderService:
             try:
                 proactive_text = await self.generate_proactive_message(user_id)
                 
-                # Сохранить проактивное сообщение в историю чата (Redis)
-                try:
-                    import json
-                    redis_client = None  # Redis removed
-                    if redis_client:
-                        context_data = await redis_client.get(f"context:{user_id}")
-                        if context_data:
-                            context = json.loads(context_data.decode('utf-8'))
-                        else:
-                            context = []
-                        
-                        # Добавляем проактивное сообщение как сообщение от AI
-                        context.append({"user": "", "agent": proactive_text})
-                        if len(context) > 10:
-                            context = context[-10:]
-                        
-                        await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-                        logger.info(f"Saved proactive message to chat context for user {user_id}")
-                except Exception as e:
-                    logger.error(f"Failed to save proactive message to context: {e}")
-                
                 # Сохранить проактивное сообщение в таблицу Interaction
                 try:
                     interaction = Interaction(
@@ -1079,27 +1037,6 @@ class ReminderService:
             # Генерируем текст напоминания с учётом эскалации
             max_reminders = max(task.overdue_reminders_sent for task in current_overdue_tasks)
             overdue_text = await self.generate_overdue_reminder(user_id, current_overdue_tasks, escalation_level=max_reminders)
-            
-            # Сохранить overdue reminder в историю чата (Redis)
-            try:
-                import json
-                redis_client = None  # Redis removed
-                if redis_client:
-                    context_data = await redis_client.get(f"context:{user_id}")
-                    if context_data:
-                        context = json.loads(context_data.decode('utf-8'))
-                    else:
-                        context = []
-                    
-                    # Добавляем overdue reminder как сообщение от AI
-                    context.append({"user": "", "agent": overdue_text})
-                    if len(context) > 10:
-                        context = context[-10:]
-                    
-                    await redis_client.set(f"context:{user_id}", json.dumps(context).encode('utf-8'))
-                    logger.info(f"Saved overdue reminder to chat context for user {user_id}")
-            except Exception as e:
-                logger.error(f"Failed to save overdue reminder to context: {e}")
             
             if self.bot:
                 await self.bot.send_message(
@@ -1198,27 +1135,6 @@ class ReminderService:
                         )
                         logger.info(f"Sent progress request to recipient {recipient_id} for task {task_id}")
                         
-                        # Сохранить progress request в историю чата получателя (Redis)
-                        try:
-                            import json
-                            redis_client = None  # Redis removed
-                            if redis_client:
-                                context_data = await redis_client.get(f"context:{recipient_id}")
-                                if context_data:
-                                    context = json.loads(context_data.decode('utf-8'))
-                                else:
-                                    context = []
-                                
-                                # Добавляем progress request как сообщение от AI
-                                context.append({"user": "", "agent": message})
-                                if len(context) > 10:
-                                    context = context[-10:]
-                                
-                                await redis_client.set(f"context:{recipient_id}", json.dumps(context).encode('utf-8'))
-                                logger.info(f"Saved progress request to chat context for recipient {recipient_id}")
-                        except Exception as e:
-                            logger.error(f"Failed to save progress request to recipient context: {e}")
-
                         # Also notify delegator about the progress check
                         try:
                             delegator_message = f"📋 Отправлен запрос о прогрессе по задаче '{task.title}'\n\nОжидаем ответа от исполнителя."
@@ -1227,25 +1143,6 @@ class ReminderService:
                                 text=delegator_message
                             )
                             logger.info(f"Notified delegator {delegator_id} about progress request for task {task_id}")
-                            
-                            # Сохранить уведомление delegator'у в историю чата (Redis)
-                            try:
-                                if redis_client:
-                                    context_data = await redis_client.get(f"context:{delegator_id}")
-                                    if context_data:
-                                        context = json.loads(context_data.decode('utf-8'))
-                                    else:
-                                        context = []
-                                    
-                                    # Добавляем уведомление как сообщение от AI
-                                    context.append({"user": "", "agent": delegator_message})
-                                    if len(context) > 10:
-                                        context = context[-10:]
-                                    
-                                    await redis_client.set(f"context:{delegator_id}", json.dumps(context).encode('utf-8'))
-                                    logger.info(f"Saved delegator notification to chat context for delegator {delegator_id}")
-                            except Exception as e:
-                                logger.error(f"Failed to save delegator notification to context: {e}")
                                 
                         except Exception as e:
                             logger.error(f"Failed to notify delegator: {e}")
