@@ -2183,7 +2183,15 @@ def update_profile(
         logger.info(f"[UPDATE_LIST_FIELD] current before update: {current}")
         action = None
 
-        if value.startswith("+"):
+        if value.startswith("только "):
+            current = set()
+            value = value[7:].strip()
+            new_items_list = [item.strip() for item in value.split(",") if item.strip()]
+            for item in new_items_list:
+                current.add(item)
+            if new_items_list:
+                action = f"cleared_and_added_{field_name}:{', '.join(new_items_list)}"
+        elif value.startswith("+"):
             new_item = value[1:].strip()
             if new_item:
                 current.add(new_item)
@@ -2260,29 +2268,6 @@ def update_profile(
         updates_made.append(f"updated_timezone:{timezone}")
 
     session.commit()
-    
-    # Инвалидируем кеш профиля в Redis
-    if updates_made:
-        try:
-            from ai_integration.utils import redis_client
-            if redis_client:
-                import asyncio
-                cache_key = f"profile:{user_id}"
-                # Удаляем синхронно в новом event loop если его нет
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Если loop уже запущен, создаем task
-                        asyncio.create_task(redis_client.delete(cache_key))
-                    else:
-                        # Если loop не запущен, запускаем синхронно
-                        loop.run_until_complete(redis_client.delete(cache_key))
-                except RuntimeError:
-                    # Нет event loop, создаем новый
-                    asyncio.run(redis_client.delete(cache_key))
-                logger.info(f"[UPDATE_PROFILE] Invalidated cache for user {user_id}")
-        except Exception as e:
-            logger.warning(f"[UPDATE_PROFILE] Failed to invalidate cache: {e}")
 
     if close_session:
         session.close()

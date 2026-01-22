@@ -296,6 +296,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     else:
                         natural_responses.append("PROFILE_UPDATED: removed=interests")
 
+                elif "cleared_and_added_interests:" in result_text:
+                    match = re.search(r"cleared_and_added_interests:([^;]+)", result_text)
+                    if match:
+                        items = match.group(1).strip()
+                        natural_responses.append(f"PROFILE_UPDATED: cleared_and_added_interests={items}")
+                    else:
+                        natural_responses.append("PROFILE_UPDATED: type=interests")
+
                 elif "changed_city:" in result_text:
                     match = re.search(r"changed_city:([^->]+)->([^;]+)", result_text)
                     if match:
@@ -362,7 +370,40 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
         # Формируем финальный контент для AI
         if natural_responses:
-            final_content = " | ".join(natural_responses)
+            # Специальная обработка для обновления профиля
+            if any("PROFILE_UPDATED" in r for r in natural_responses):
+                profile_responses = [r for r in natural_responses if "PROFILE_UPDATED" in r]
+                details = []
+                for pr in profile_responses:
+                    if "added_interests=" in pr:
+                        items = pr.split("=", 1)[1]
+                        details.append(f"добавлены интересы {items}")
+                    elif "removed_interests=" in pr:
+                        items = pr.split("=", 1)[1]
+                        details.append(f"удалены интересы {items}")
+                    elif "cleared_and_added_interests=" in pr:
+                        items = pr.split("=", 1)[1]
+                        details.append(f"оставил только интересы {items}")
+                    elif "city=" in pr:
+                        city_info = pr.split("=", 1)[1]
+                        details.append(f"город {city_info}")
+                    elif "company=" in pr:
+                        company = pr.split("=", 1)[1]
+                        details.append(f"компания {company}")
+                    elif "added_skills=" in pr:
+                        items = pr.split("=", 1)[1]
+                        details.append(f"добавлены навыки {items}")
+                    elif "added_goals=" in pr:
+                        items = pr.split("=", 1)[1]
+                        details.append(f"добавлены цели {items}")
+                    else:
+                        details.append("профиль обновлен")
+                if details:
+                    final_content = f"Профиль обновлён — {', '.join(details)}."
+                else:
+                    final_content = "Профиль обновлен."
+            else:
+                final_content = " | ".join(natural_responses)
             
             # Добавляем контекст профиля для list_tasks
             profile_context = ""
@@ -821,10 +862,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[LIST TASKS DETECTED] Setting intent to list_tasks for message: {clean_message[:50]}...")
 
         # Special handling for update profile requests
-        if any(word in clean_message.lower() for word in ['обнови', 'измени', 'добавь', 'update', 'change', 'add']):
-            if any(word in clean_message.lower() for word in ['профиль', 'профиле', 'profile']):
-                intent = {"type": "update_profile", "confidence": 0.9, "params": {}}
-                logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
+        if any(word in clean_message.lower() for word in ['обнови', 'измени', 'добавь', 'оставь', 'очистить', 'только', 'update', 'change', 'add']):
+            intent = {"type": "update_profile", "confidence": 0.8, "params": {}}
+            logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
 
         # Special handling for profile information sharing
         if any(word in clean_message.lower() for word in ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']):
@@ -1658,19 +1698,16 @@ async def generate_proactive_message(user_id):
                     messages.append({"role": "assistant", "content": item["agent"]})
 
         # Проактивный контекст - AI сам решит, что сказать на основе ситуации
-        proactive_prompt = """ПРОАКТИВНОЕ СООБЩЕНИЕ: Напиши короткое, полезное сообщение (не более 100 слов). 
+        proactive_prompt = """ПРОАКТИВНОЕ СООБЩЕНИЕ: Напиши короткое, полезное сообщение (не более 50 слов). 
 
-ФОРМАТ: 1/3 - персонализация (упомяни задачу/профиль), 2/3 - конкретное предложение действия.
+ФОРМАТ: 1/3 - персонализация, 2/3 - предложение действия.
 
 ПРАВИЛА:
-- Максимум 3-4 предложения
-- Конкретные советы, не банальности
-- Закончи вопросом или предложением действия
-- Будь краток и полезен
-- Учитывай контекст пользователя из профиля и задач
-- Для просроченных задач: предлагай конкретные решения, не просто напоминай
-- Для предстоящих задач: предлагай подготовительные действия
-- Для отсутствия задач: предлагай полезные активности на основе профиля"""
+- Максимум 2-3 предложения
+- Конкретные советы
+- Закончи вопросом
+- Будь краток
+- Учитывай контекст"""
 
         messages.append({"role": "user", "content": proactive_prompt})
 
@@ -1744,7 +1781,7 @@ async def generate_daily_report(user_id):
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_optimized_prompt_final(user_now, current_time_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
 
         system_prompt = base_prompt
 
@@ -1912,7 +1949,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                     try:
                         url = "https://api.deepseek.com/v1/chat/completions"
                         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Просроченные задачи пользователя: {overdue_info}. Создай короткое напоминание."}]
+                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Просроченные задачи пользователя: {', '.join(task_titles)}. Создай короткое напоминание."}]
                         data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.8, "max_tokens": 80}
                         async with aiohttp.ClientSession() as sess:
                             async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
@@ -1937,6 +1974,55 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         except:
             pass
         return "Задачи ждут внимания 📌"
+
+
+def validate_response_compliance(content, msg_type):
+    """Проверка соответствия ответа промту"""
+    if not content:
+        return False, ["Empty content"]
+    
+    content_lower = content.lower()
+    word_count = len(content.split())
+    issues = []
+    
+    # Общие правила
+    if word_count > 100:  # Слишком длинный
+        issues.append("Too long")
+    if word_count < 5:  # Слишком короткий
+        issues.append("Too short")
+    if any(word in content_lower for word in ["здравствуйте", "спасибо за вопрос", "я помогу"]):  # Клише
+        issues.append("Contains clichés")
+    
+    # Специфические по типу
+    if msg_type in ["reminder", "overdue"]:
+        if "?" not in content:  # Должен быть вопрос
+            issues.append("No question")
+        if word_count > 40:  # Слишком длинный
+            issues.append("Too long for type")
+        if word_count < 10:  # Слишком короткий
+            issues.append("Too short for type")
+    
+    if msg_type == "proactive":
+        if word_count > 50:  # Разрешить до 50
+            issues.append("Too long for proactive")
+        if word_count < 10:  # Минимум 10
+            issues.append("Too short for proactive")
+    
+    if msg_type == "daily_report":
+        if word_count > 30:
+            issues.append("Too long for report")
+        if word_count < 5:
+            issues.append("Too short for report")
+    
+    if msg_type == "create_task":
+        if "завтра в" not in content_lower and "время" not in content_lower:
+            issues.append("No time indication")
+    
+    if msg_type == "complete_task":
+        if "выполнена" not in content_lower and "завершена" not in content_lower:
+            issues.append("No completion confirmation")
+    
+    return len(issues) == 0, issues
 
 
 # Функции для работы с задачами

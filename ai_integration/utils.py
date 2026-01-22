@@ -1086,6 +1086,14 @@ def post_process_tool_calls(intent, tool_calls, message):
         elif intent["type"] == "update_profile" and function_name != "update_profile":
             field = intent.get("params", {}).get("field", "interests")
             value = message
+            # Обработка команд типа "оставь только спорт" - очистить и оставить только указанное
+            if "только" in message.lower():
+                parts = message.lower().split("только")
+                if len(parts) > 1:
+                    remaining = parts[1].strip()
+                    # Извлекаем интерес после "только"
+                    # Предполагаем, что после "только" идет список интересов
+                    value = f"только {remaining}"
             corrected_calls.append({
                 "index": len(corrected_calls),
                 "id": f"call_corrected_{len(corrected_calls)}",
