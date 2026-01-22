@@ -128,8 +128,8 @@ TOOLS = [
             "description": "Отклонить делегированную задачу. ВАЖНО: Эта функция ВСЕГДА ДОСТУПНА для всех пользователей (включая Bronze). Используй её когда пользователь просит отклонить задачу. В ответе указывай НАЗВАНИЕ задачи, а не её ID.",
             "parameters": {
                 "type": "object",
-                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
-                "required": ["task_id"],
+                "properties": {"task_id": {"type": "integer", "description": "ID задачи (опционально если указан task_title)"}, "task_title": {"type": "string", "description": "Название задачи или его часть (опционально если указан task_id)"}},
+                "required": [],
             },
         },
     },

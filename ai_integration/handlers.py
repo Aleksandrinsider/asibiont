@@ -1201,7 +1201,7 @@ def accept_delegated_task(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
-def reject_delegated_task(task_id, user_id=None):
+def reject_delegated_task(task_id=None, task_title=None, user_id=None):
     """Reject a delegated task"""
     session = Session()
     try:
@@ -1209,21 +1209,35 @@ def reject_delegated_task(task_id, user_id=None):
         if not user:
             return "Ошибка: Пользователь не найден."
 
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            return f"Некорректный ID задачи: {task_id}"
+        # Find task by ID or title
+        if task_id:
+            try:
+                task_id_int = int(task_id)
+            except (ValueError, TypeError):
+                return f"Некорректный ID задачи: {task_id}"
 
-        # Find task delegated to ME
-        task = (
-            session.query(Task)
-            .filter(
-                Task.id == task_id_int,
+            # Find task delegated to ME
+            task = (
+                session.query(Task)
+                .filter(
+                    Task.id == task_id_int,
+                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegation_status == "pending",
+                )
+                .first()
+            )
+        elif task_title:
+            # Search by words in title (including delegated tasks)
+            words = task_title.lower().split()
+            conditions = [Task.title.ilike(f"%{word}%") for word in words]
+            task = session.query(Task).filter(
                 Task.delegated_to_username.ilike(user.username.replace('@', '')),
                 Task.delegation_status == "pending",
-            )
-            .first()
-        )
+                or_(*conditions)
+            ).first()
+        else:
+            return "Не указан ни task_id, ни task_title."
+
         if not task:
             return "Задача не найдена или уже обработана."
 

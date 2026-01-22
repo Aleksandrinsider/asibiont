@@ -22,6 +22,21 @@ async def test_agent_comprehensive():
         logger.error("Test user not found")
         return
     user_id = user.telegram_id
+
+    # Создать делегированную задачу для теста reject
+    from ai_integration.handlers import delegate_task
+    try:
+        result = delegate_task(
+            title="Подготовить план питания на неделю",
+            reminder_time="2026-01-25 10:00",
+            delegated_to_username="testuser",
+            user_id=user_id,
+            description="Создать сбалансированный план питания"
+        )
+        logger.info(f"Created delegated task for test: {result}")
+    except Exception as e:
+        logger.warning(f"Could not create delegated task: {e}")
+
     db.close()
 
     user_now = datetime.now(pytz.UTC)
@@ -41,9 +56,9 @@ async def test_agent_comprehensive():
             "expected": "Задача выполнена"
         },
         {
-            "type": "list_tasks",
-            "message": "Покажи мои задачи",
-            "expected": "Список задач"
+            "type": "reject_delegated_task",
+            "message": "Отклони делегированную задачу о питании",
+            "expected": "Задача отклонена"
         },
         {
             "type": "advice",

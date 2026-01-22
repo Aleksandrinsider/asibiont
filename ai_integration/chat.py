@@ -111,6 +111,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "reject_delegated_task":
                 result = reject_delegated_task(
                     task_id=args.get("task_id"),
+                    task_title=args.get("task_title"),
                     user_id=user_id,
                     session=None,
                 )
