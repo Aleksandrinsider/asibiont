@@ -148,6 +148,9 @@ async def find_partners_handler(message: Message):
         context = []  # Simplified: no context in bot
         response = await chat_with_ai("Найди партнеров", context, user_id)
         await message.bot.send_message(message.chat.id, response)
+    except Exception as e:
+        logger.error(f"Error in find_partners_handler: {e}")
+        await message.bot.send_message(message.chat.id, "Произошла ошибка при поиске партнеров.")
 
 
 @router.message(Command("subscribe"))
