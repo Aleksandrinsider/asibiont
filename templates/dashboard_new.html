@@ -2292,9 +2292,11 @@
                 blocked.push(username);
                 const success = await saveBlockedContactsToServer(blocked);
                 if (success) {
+                    showNotification(`Контакт @${username} заблокирован`, 'success');
                     cachedBlocked = blocked;
                     cachedPartnersData = null;
-                    await updatePeople();
+                    lastPeopleUpdate = 0; // Сбрасываем throttle
+                    await updatePeople(true);
                     // Обновить элитные контакты если активен фильтр
                     if (currentContactFilter === 'elite') {
                         await loadEliteContacts();
@@ -2310,9 +2312,11 @@
                 blocked.splice(index, 1);
                 const success = await saveBlockedContactsToServer(blocked);
                 if (success) {
+                    showNotification(`Контакт @${username} разблокирован`, 'success');
                     cachedBlocked = blocked;
                     cachedPartnersData = null;
-                    await updatePeople();
+                    lastPeopleUpdate = 0; // Сбрасываем throttle
+                    await updatePeople(true);
                     // Обновить элитные контакты если активен фильтр
                     if (currentContactFilter === 'elite') {
                         await loadEliteContacts();
@@ -3630,48 +3634,21 @@
             }
         }
 
-        async function blockContact(username) {
-            try {
-                const response = await fetch('/api/blocked_contacts', {
-                    method: 'GET',
-                    credentials: 'include'
-                });
-                if (!await checkAuth(response)) return;
-                if (response.ok) {
-                    const data = await response.json();
-                    const blocked = data.blocked || [];
-                    
-                    // Add username to blocked list if not already there
-                    if (!blocked.includes(username)) {
-                        blocked.push(username);
-                        
-                        // Update blocked contacts
-                        const updateResponse = await fetch('/api/blocked_contacts', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ blocked: blocked }),
-                            credentials: 'include'
-                        });
-                        
-                        if (!await checkAuth(updateResponse)) return;
-                        
-                        if (updateResponse.ok) {
-                            showNotification(`Контакт @${username} заблокирован`, 'success');
-                            cachedBlocked = blocked; // Update cache
-                            await updatePeople(true); // Force refresh contacts list
-                            // Обновить элитные контакты если активен фильтр
-                            if (currentContactFilter === 'elite') {
-                                await loadEliteContacts();
-                            }
-                        } else {
-                            const error = await updateResponse.json();
-                            showNotification(`Ошибка: ${error.error || 'Не удалось заблокировать контакт'}`, 'error');
-                        }
+        async function unblockContact(username) {
+            let blocked = await getBlockedContactsFromServer();
+            const index = blocked.indexOf(username);
+            if (index > -1) {
+                blocked.splice(index, 1);
+                const success = await saveBlockedContactsToServer(blocked);
+                if (success) {
+                    cachedBlocked = blocked;
+                    cachedPartnersData = null;
+                    await updatePeople(true);
+                    // Обновить элитные контакты если активен фильтр
+                    if (currentContactFilter === 'elite') {
+                        await loadEliteContacts();
                     }
                 }
-            } catch (error) {
-                console.error('Error blocking contact:', error);
-                showNotification('Ошибка при блокировке контакта', 'error');
             }
         }
         
