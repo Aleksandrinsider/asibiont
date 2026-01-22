@@ -153,6 +153,19 @@ try:
         else:
             logger.info("Migration: blocked_contacts column already exists")
 
+        # Migration for interaction_count column
+        if 'interaction_count' not in columns:
+            try:
+                logger.info("Adding interaction_count column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN interaction_count INTEGER DEFAULT 0'))
+                session.commit()
+                logger.info("Migration: interaction_count column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add interaction_count column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: interaction_count column already exists")
+
         # Migration for subscriptions table
         if 'subscriptions' in inspector.get_table_names():
             sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
