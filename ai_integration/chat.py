@@ -27,24 +27,12 @@ logger = logging.getLogger(__name__)
 
 # ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
 class SimpleCache:
+    """Простой in-memory кеш с TTL и ограничением размера"""
     def __init__(self, max_size=1000, ttl_seconds=300):  # 5 минут TTL
         self.cache = {}
         self.max_size = max_size
         self.ttl = ttl_seconds
-        self.redis_client = None
-
-        # Пытаемся подключить Redis опционально
-        try:
-            import redis
-            self.redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-            # Проверяем подключение
-            self.redis_client.ping()
-            logger.info("[CACHE] Redis connected successfully")
-        except ImportError:
-            logger.info("[CACHE] Redis not available, using in-memory cache")
-        except Exception as e:
-            logger.warning(f"[CACHE] Redis connection failed: {e}, using in-memory cache")
-            self.redis_client = None
+        logger.info("[CACHE] Using in-memory cache")
 
     def _get_key(self, messages, temperature, max_tokens):
         """Генерируем ключ на основе содержимого запроса"""
@@ -80,21 +68,10 @@ class SimpleCache:
         logger.info(f"[CACHE SET] Cached response for key {key[:8]}...")
 
     def get_by_key(self, key):
-        # Сначала проверяем Redis
-        if self.redis_client:
-            try:
-                response = self.redis_client.get(key)
-                if response:
-                    logger.info(f"[CACHE HIT] Using Redis cached response for key {key[:8]}...")
-                    return response
-            except Exception as e:
-                logger.warning(f"[CACHE] Redis get error: {e}")
-
-        # Fallback на in-memory кэш
         if key in self.cache:
             entry = self.cache[key]
             if time.time() - entry['timestamp'] < entry.get('ttl', self.ttl):
-                logger.info(f"[CACHE HIT] Using in-memory cached response for key {key[:8]}...")
+                logger.info(f"[CACHE HIT] Using cached response for key {key[:8]}...")
                 return entry['response']
             else:
                 # Удаляем просроченный кэш
@@ -104,16 +81,6 @@ class SimpleCache:
     def set_by_key(self, key, response, ttl=None):
         ttl = ttl or self.ttl
 
-        # Сохраняем в Redis если доступен
-        if self.redis_client:
-            try:
-                self.redis_client.setex(key, ttl, response)
-                logger.info(f"[CACHE SET] Redis cached response for key {key[:8]}...")
-                return  # Не сохраняем в memory если Redis работает
-            except Exception as e:
-                logger.warning(f"[CACHE] Redis set error: {e}")
-
-        # Fallback на in-memory кэш
         if len(self.cache) >= self.max_size:
             # Удаляем самый старый элемент
             oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k]['timestamp'])

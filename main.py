@@ -4578,8 +4578,7 @@ async def on_startup(app):
 
 
 async def on_shutdown(app):
-    """Закрываем Redis клиент при завершении приложения"""
-    global redis_client
+    """Cleanup on application shutdown"""
     # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
     if bot and not LOCAL:
         # Get webhook URL from environment variable or construct from Railway variables
@@ -4603,9 +4602,7 @@ async def on_shutdown(app):
     else:
         logger.warning("Bot not created or local mode, skipping webhook setup")
 
-    await init_handlers_redis(redis_client)
-    logger.info("Handlers Redis initialized")
-
+    # Redis was removed from the project - using in-memory cache only
     # ReminderService will be started later in start_reminder_service
 
 
