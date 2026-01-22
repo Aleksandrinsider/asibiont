@@ -3542,7 +3542,23 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
+                    
+                    // Немедленно удаляем задачу из DOM
+                    const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+                    if (taskElement) {
+                        taskElement.remove();
+                    }
+                    
+                    // Обновляем данные задач в памяти
+                    allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
+                    allTasksData = allTasksData.filter(t => t.id !== taskId);
+                    
                     showNotification('Задача удалена', 'success');
+                    
+                    // Принудительно обновляем интерфейс с новыми данными
+                    lastTasksUpdate = 0; // Сбрасываем throttle
+                    await updateTasks();
+                    await updateChat();
                     
                     // Если причина связана с улучшением системы, предложим помощь
                     const lowerReason = reason.toLowerCase();
@@ -3558,9 +3574,6 @@
                             }
                         }, 1000);
                     }
-                    
-                    await updateTasks();
-                    await updateChat();
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
