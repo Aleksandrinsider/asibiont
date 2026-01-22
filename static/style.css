@@ -796,13 +796,6 @@ details[open] .details-content {
     border-color: #0969DA;
 }
 
-.context-section {
-    padding: 8px; /* Reduced padding */
-    overflow: visible;
-    background-color: #FFFFFF;
-    border-radius: 6px;
-}
-
 .context-section h3 {
     margin: 0 0 15px 0;
     font-size: 16px;
