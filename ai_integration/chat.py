@@ -268,7 +268,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 if match:
                     task_title = match.group(1)
                     task_id = match.group(2)
-                    natural_responses.append(f"Задача '{task_title}' создана с ID {task_id}")
+                    natural_responses.append(f"Задача '{task_title}' создана")
                 else:
                     natural_responses.append("Задача создана успешно")
 

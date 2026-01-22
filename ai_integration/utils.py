@@ -981,13 +981,10 @@ def post_process_tool_calls(intent, tool_calls, message):
     Пост-обработка tool calls для коррекции ошибок AI.
     Возвращает исправленные tool_calls или None если коррекция не нужна.
     """
-    if not tool_calls:
-        return None
-
-    corrected_calls = []
+    corrected_calls = tool_calls.copy() if tool_calls else []
+    function_name = None
 
     for call in tool_calls:
-        function_name = call.get("function", {}).get("name", "")
         args = call.get("function", {}).get("arguments", "{}")
 
         try:
@@ -1128,6 +1125,89 @@ def post_process_tool_calls(intent, tool_calls, message):
         # Если коррекция не нужна, оставляем оригинальный call
         else:
             corrected_calls.append(call)
+
+    # Handle cases where no tool calls but intent requires action
+    if not tool_calls:
+        if intent["type"].startswith("emotion_"):
+            corrected_calls.append({
+                "index": len(corrected_calls),
+                "id": f"call_corrected_{len(corrected_calls)}",
+                "type": "function",
+                "function": {
+                    "name": "list_tasks",
+                    "arguments": "{}"
+                }
+            })
+        elif intent["type"] == "add_task":
+            # Извлекаем задачу из сообщения
+            task_title = message.strip()
+            if task_title:
+                # Ищем время в сообщении
+                args_dict = {}
+                time_match = re.search(r"(?:напоминание|напомни|в|через)\s+(.+)", message, re.IGNORECASE)
+                if time_match:
+                    time_str = time_match.group(1).strip()
+                    args_dict["reminder_time"] = time_str
+                corrected_calls.append({
+                    "index": len(corrected_calls),
+                    "id": f"call_corrected_{len(corrected_calls)}",
+                    "type": "function",
+                    "function": {
+                        "name": "add_task",
+                        "arguments": json.dumps({
+                            "title": task_title,
+                            "reminder_time": args_dict.get("reminder_time")
+                        })
+                    }
+                })
+        elif intent["type"] == "complete_task":
+            task_title = intent.get("params", {}).get("task_title", "")
+            if task_title:
+                corrected_calls.append({
+                    "index": len(corrected_calls),
+                    "id": f"call_corrected_{len(corrected_calls)}",
+                    "type": "function",
+                    "function": {
+                        "name": "complete_task",
+                        "arguments": json.dumps({"title": task_title})
+                    }
+                })
+        elif intent["type"] == "update_profile":
+            field = intent.get("params", {}).get("field", "interests")
+            value = message
+            # Обработка команд типа "оставь только спорт" - очистить и оставить только указанное
+            if "только" in message.lower():
+                parts = message.lower().split("только")
+                if len(parts) > 1:
+                    remaining = parts[1].strip()
+                    value = f"только {remaining}"
+            corrected_calls.append({
+                "index": len(corrected_calls),
+                "id": f"call_corrected_{len(corrected_calls)}",
+                "type": "function",
+                "function": {
+                    "name": "update_profile",
+                    "arguments": json.dumps({field: value})
+                }
+            })
+        elif intent["type"] == "delegate_task":
+            delegated_to = intent.get("params", {}).get("delegated_to", "")
+            task_title = intent.get("params", {}).get("task_title", "")
+            reminder_time = intent.get("params", {}).get("reminder_time")
+            if delegated_to and task_title:
+                corrected_calls.append({
+                    "index": len(corrected_calls),
+                    "id": f"call_corrected_{len(corrected_calls)}",
+                    "type": "function",
+                    "function": {
+                        "name": "delegate_task",
+                        "arguments": json.dumps({
+                            "title": task_title,
+                            "delegated_to": delegated_to,
+                            "reminder_time": reminder_time
+                        })
+                    }
+                })
 
     return corrected_calls if corrected_calls != tool_calls else None
 

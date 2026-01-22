@@ -145,7 +145,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.commit()
 
     # Format result message
-    result_msg = f"Добавлена задача '{title}' (ID: {task_id})"
+    result_msg = f"Добавлена задача '{title}'"
     if task.reminder_time:
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
         local_time = task.reminder_time.astimezone(user_tz)
