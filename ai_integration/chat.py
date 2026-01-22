@@ -1842,21 +1842,20 @@ async def generate_proactive_message(user_id):
                     messages.append({"role": "assistant", "content": item["agent"]})
 
         # Проактивный контекст - AI сам решит, что сказать на основе ситуации
-        proactive_prompt = """ПРОАКТИВНОЕ СООБЩЕНИЕ: Напиши короткое, полезное сообщение (не более 50 слов). 
-
-ФОРМАТ: 1/3 - персонализация, 2/3 - предложение действия.
+        proactive_prompt = """ПРОАКТИВНОЕ СООБЩЕНИЕ: Следуй правилам для проактивных сообщений из системного промпта.
 
 ПРАВИЛА:
-- Максимум 2-3 предложения
-- Конкретные советы
-- Закончи вопросом
-- Будь краток
-- Учитывай контекст"""
+- Предлагай новые задачи или контакты на основе профиля
+- Короткие предложения: "Может, добавить задачу на [тема]?"
+- Или: "Нашел контакты по [интерес]: [имена]"
+- Заканчивай вопросом для диалога
+- Максимум 2 предложения
+- Будь краток и полезен"""
 
         messages.append({"role": "user", "content": proactive_prompt})
 
-        # Используем те же параметры, что и для обычных сообщений
-        temperature = 0.8  # Немного выше для разнообразия
+        # Используем те же параметры, что и для обычных сообщений, но более строгие для краткости
+        temperature = 0.7  # Ниже для более предсказуемых коротких сообщений
         top_p = 0.95
 
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -1866,7 +1865,7 @@ async def generate_proactive_message(user_id):
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
-            "max_tokens": 500
+            "max_tokens": 150  # Уменьшаем для более коротких сообщений
         }
 
         async with aiohttp.ClientSession() as session:
@@ -1884,13 +1883,13 @@ async def generate_proactive_message(user_id):
                     return content
                 else:
                     logger.error(f"Failed to generate proactive message: status {response.status}")
-                    # Fallback к простому сообщению
-                    return "Привет! Как дела? Есть чем могу помочь?"
+                    # Fallback к простому сообщению согласно правилам
+                    return "Может, добавить задачу на сегодня?"
 
     except Exception as e:
         logger.error(f"Error in generate_proactive_message: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return "Привет! Чем занимаешься сегодня?"
+        return "Нашел интересные контакты. Посмотреть?"
 
 
 async def generate_daily_report(user_id):
