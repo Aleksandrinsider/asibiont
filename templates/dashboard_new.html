@@ -1027,7 +1027,7 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
                     </div>
-                    <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
+                    <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')">Избранное</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')">Рекомендуемые</button>
                         <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %}>Премиум статус</button>
@@ -1166,7 +1166,7 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
                     </div>
-                    <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
+                    <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')">Личные задачи</button>
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
