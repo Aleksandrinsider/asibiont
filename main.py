@@ -1324,11 +1324,17 @@ async def dashboard_handler(request):
                 contacted_usernames.update(mentions)
 
             for p in partners:
-                # Common interests
+                # Common interests - improved matching with partial string matching
                 if p.interests:
-                    partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                    partner_interests = set(i.strip().lower() for i in p.interests.split(',') if i.strip())
                     common = user_interests & partner_interests
-                    p.common_interests = ', '.join(common) if common else None
+                    # Also check for partial matches (e.g., "спорт" matches "спорт, футбол")
+                    if not common:
+                        for ui in user_interests:
+                            for pi in partner_interests:
+                                if ui and pi and (ui in pi or pi in ui):
+                                    common.add(pi)
+                    p.common_interests = ', '.join(sorted(common)) if common else None
                 else:
                     p.common_interests = None
 
@@ -2487,11 +2493,17 @@ async def api_partners_handler(request):
                 contacted_usernames.update(mentions)
 
             for p in partners:
-                # Common interests
+                # Common interests - improved matching with partial string matching
                 if p.interests:
-                    partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                    partner_interests = set(i.strip().lower() for i in p.interests.split(',') if i.strip())
                     common = user_interests & partner_interests
-                    p.common_interests = ', '.join(common) if common else None
+                    # Also check for partial matches (e.g., "спорт" matches "спорт, футбол")
+                    if not common:
+                        for ui in user_interests:
+                            for pi in partner_interests:
+                                if ui and pi and (ui in pi or pi in ui):
+                                    common.add(pi)
+                    p.common_interests = ', '.join(sorted(common)) if common else None
                 else:
                     p.common_interests = None
 
@@ -4080,6 +4092,10 @@ async def delete_post_handler(request):
             if post.user_id != user.id:
                 return web.json_response({'error': 'You can only delete your own posts'}, status=403)
 
+            # Delete all comments first to avoid constraint violation
+            from models import Comment
+            session_db.query(Comment).filter_by(post_id=post_id).delete()
+            
             session_db.delete(post)
             session_db.commit()
             
