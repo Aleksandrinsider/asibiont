@@ -765,9 +765,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
 
                 # Проактивное заполнение при незаполненных полях
-                if empty_fields:
-                    fields_list = ', '.join(empty_fields[:3])  # Берем первые 3 незаполненных
-                    user_memory += f"\n⚠️ НЕЗАПОЛНЕННЫЕ ПОЛЯ: {fields_list}. Каждые 5-7 сообщений ПРОАКТИВНО спрашивай об одном из них (естественно в контексте диалога, не навязчиво)!"
+                if empty_fields and len(empty_fields) > 0:
+                    # Выбираем только 1-2 наиболее важных незаполненных поля для естественного вопроса
+                    priority_fields = []
+                    if not profile.city:
+                        priority_fields.append("город")
+                    if not profile.interests:
+                        priority_fields.append("интересы")
+                    if not profile.company:
+                        priority_fields.append("компания")
+                    if not profile.skills:
+                        priority_fields.append("навыки")
+                    
+                    if priority_fields:
+                        # Спрашиваем только об одном поле за раз, естественно в контексте
+                        field_to_ask = priority_fields[0]  # Берем первое по приоритету
+                        user_memory += f"\n💭 ЕСЛИ ПОДХОДИТ КОНТЕКСТ: можешь ненавязчиво спросить о {field_to_ask}е для персонализации советов (только если разговор естественным образом к этому ведет)"
+                    else:
+                        # Если основные поля заполнены, не спрашиваем вообще
+                        pass
 
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
 
@@ -776,9 +792,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 if interaction_count > 0 and interaction_count % 6 == 0:  # Каждые 6 взаимодействий
                     user_memory += "\nДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Расскажи о полезных функциях - поиске контактов, делегировании задач, анализе прогресса. Сделай это естественно в контексте ответа!"
 
-                # Если профиль совсем пустой - срочно спроси в первом сообщении
+                # Если профиль совсем пустой - мягко предложи заполнить в первом сообщении
                 if not profile_filled and (len(context) if context else 0 < 2):
-                    user_memory += "\nКРИТИЧНО ВАЖНО: Профиль почти ПУСТ! В первом ответе дружелюбно спроси о городе, компании или интересах для лучшей помощи!"
+                    user_memory += "\n👋 ПЕРВОЕ ЗНАКОМСТВО: Если пользователь здоровается, можешь ненавязчиво предложить рассказать о себе (город, интересы) для персонализации, но только если разговор естественно к этому ведет"
             else:
                 user_memory += "\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
 
