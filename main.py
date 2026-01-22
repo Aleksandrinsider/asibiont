@@ -669,7 +669,6 @@ try:
                         description="Создать презентацию о наших услугах",
                         status="pending",
                         created_at=now,
-                        updated_at=now,
                         delegated_to_username=user_1001.username,
                         delegation_status="accepted"
                     )
@@ -684,7 +683,6 @@ try:
                         description="Ревью кода для нового модуля",
                         status="pending",
                         created_at=now,
-                        updated_at=now,
                         delegated_to_username=user_1001.username,
                         delegation_status="accepted"
                     )
@@ -699,7 +697,6 @@ try:
                         description="Запланировать еженедельную встречу",
                         status="pending",
                         created_at=now,
-                        updated_at=now,
                         delegated_to_username=user_1002.username,
                         delegation_status="accepted"
                     )
