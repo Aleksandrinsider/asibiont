@@ -84,14 +84,27 @@
         }
 
         function copyUsernameToClipboard(username, button) {
-            // Добавляем @ если его нет
-            const fullUsername = username.startsWith('@') ? username : '@' + username;
+            // Убираем @ если есть
+            const cleanUsername = username.startsWith('@') ? username.slice(1) : username;
             
             // Копируем в буфер
-            navigator.clipboard.writeText(fullUsername).then(() => {
-                console.log('Скопировано:', fullUsername);
+            navigator.clipboard.writeText(cleanUsername).then(() => {
+                // Меняем текст кнопки на "Скопировано"
+                const originalText = button.textContent;
+                button.textContent = '✓ Скопировано';
+                button.classList.add('copied');
+                
+                // Возвращаем обратно через 1.5 секунды
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 1500);
             }).catch(err => {
                 console.error('Ошибка копирования:', err);
+                button.textContent = 'Ошибка';
+                setTimeout(() => {
+                    button.textContent = 'Копировать';
+                }, 1500);
             });
         }
 
