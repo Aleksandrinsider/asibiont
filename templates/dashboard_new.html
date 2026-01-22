@@ -1049,7 +1049,10 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">
                                 <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer;">Чат с ИИ</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
-                                <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">Лента новостей</span>
+                                <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
+                                    Лента новостей
+                                    <span id="new-posts-indicator" class="new-posts-indicator" style="display: none;"></span>
+                                </span>
                             </h3>
                         </div>
                     </div>
@@ -1788,6 +1791,11 @@
             document.getElementById('chat-link').style.opacity = '0.5';
             document.getElementById('feed-link').style.opacity = '1';
             console.log('[SWITCH] Feed view activated, currentView =', currentView);
+            
+            // Скрыть индикатор новых постов и обновить lastSeenPostId
+            const indicator = document.getElementById('new-posts-indicator');
+            if (indicator) indicator.style.display = 'none';
+            
             loadFeed();
         }
 
@@ -1921,6 +1929,11 @@
                         // Load comments for this post
                         loadComments(post.id);
                     });
+                    
+                    // Обновляем lastSeenPostId до последнего поста
+                    if (currentView === 'feed') {
+                        lastSeenPostId = data.posts[0].id;
+                    }
                 } else {
                     feedContainer.innerHTML = `
                         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
@@ -2683,6 +2696,7 @@
         let lastTasksUpdate = 0;
         let lastPeopleUpdate = 0;
         let lastProfileUpdate = 0;
+        let lastSeenPostId = null; // Для отслеживания последнего просмотренного поста
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
@@ -5025,7 +5039,42 @@
                 if (chatView && chatView.classList.contains('active')) {
                     updateChat();
                 }
+                // Проверяем наличие новых постов
+                checkNewPosts();
             }, 5000);
+        }
+
+        async function checkNewPosts() {
+            try {
+                const response = await fetch('/api/feed', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+                
+                if (data.posts && data.posts.length > 0) {
+                    const latestPostId = data.posts[0].id;
+                    const indicator = document.getElementById('new-posts-indicator');
+                    
+                    // Если есть новые посты и мы не в ленте
+                    if (lastSeenPostId !== null && latestPostId > lastSeenPostId && currentView !== 'feed') {
+                        if (indicator) indicator.style.display = 'inline-block';
+                    } else if (currentView === 'feed') {
+                        // Когда переключаемся в ленту, обновляем lastSeenPostId и скрываем индикатор
+                        lastSeenPostId = latestPostId;
+                        if (indicator) indicator.style.display = 'none';
+                    }
+                    
+                    // Инициализируем lastSeenPostId при первой загрузке
+                    if (lastSeenPostId === null) {
+                        lastSeenPostId = latestPostId;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking new posts:', error);
+            }
         }
 
         async function updateChat() {

@@ -39,18 +39,6 @@ AI_MAX_TOKENS_ANALYSIS = int(os.getenv("AI_MAX_TOKENS_ANALYSIS", "500"))
 AI_TEMPERATURE_LOW = float(os.getenv("AI_TEMPERATURE_LOW", "0.1"))  # For factual tasks
 AI_TEMPERATURE_HIGH = float(os.getenv("AI_TEMPERATURE_HIGH", "0.7"))  # For creative tasks
 
-# Redis
-REDIS_URL = os.getenv("REDIS_URL")
-if not REDIS_URL and not LOCAL:
-    raise ValueError("REDIS_URL is required in production mode")
-
-# Redis client
-if REDIS_URL:
-    import redis.asyncio as redis
-    redis_client = redis.from_url(REDIS_URL, max_connections=5)  # Limit connections to avoid hitting limits
-else:
-    redis_client = None
-
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TELEGRAM_TOKEN and not LOCAL:
