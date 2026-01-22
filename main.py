@@ -8,6 +8,7 @@ from aiohttp_session import get_session
 import aiohttp_session
 import os
 from sqlalchemy import text, or_, and_
+from sqlalchemy.orm import joinedload
 import re
 import jinja2
 import aiohttp_jinja2
@@ -3522,11 +3523,12 @@ async def api_favorite_contacts_handler(request):
 
         session_db = Session()
         try:
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            # Get user with profile in one query
+            user = session_db.query(User).options(joinedload(User.profile)).filter_by(telegram_id=user_id).first()
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
 
-            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+            profile = user.profile
             if not profile:
                 profile = UserProfile(user_id=user.id, favorite_contacts='[]')
                 session_db.add(profile)
