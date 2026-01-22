@@ -1011,7 +1011,13 @@ async def auth_handler(request):
                 if session_db:
                     session_db.close()
 
-            session = await get_session(request)
+            try:
+                session = await get_session(request)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"Corrupted session during auth, creating new: {e}")
+                from aiohttp_session import new_session
+                session = await new_session(request)
+            
             session['user_id'] = user_id
             logger.info(f"Session set with user_id: {user_id}")
 
