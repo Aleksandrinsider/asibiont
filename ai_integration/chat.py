@@ -25,6 +25,30 @@ from .tools import TOOLS
 
 logger = logging.getLogger(__name__)
 
+async def generate_result_check(user_id, task_title):
+    """Генерирует персонализированный запрос о результатах выполнения задачи"""
+    try:
+        # Получаем профиль пользователя для персонализации
+        session = Session()
+        user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+        session.close()
+        
+        # Базовый текст запроса
+        base_text = f"Расскажите, пожалуйста, о результатах выполнения задачи '{task_title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
+        
+        # Если есть профиль, персонализируем
+        if user_profile and user_profile.interests:
+            interests = user_profile.interests.lower()
+            if 'проект' in interests or 'работа' in interests:
+                base_text += " Как это повлияло на ваш проект или работу?"
+            elif 'учеба' in interests or 'образование' in interests:
+                base_text += " Как это помогло в вашем обучении?"
+        
+        return base_text
+    except Exception as e:
+        logger.warning(f"Could not generate personalized result check: {e}")
+        return f"Расскажите, пожалуйста, о результатах выполнения задачи '{task_title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
+
 # ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
 class SimpleCache:
     """Простой in-memory кеш с TTL и ограничением размера"""
@@ -232,7 +256,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "delete_task":
-                result = delete_task(
+                result = await delete_task(
                     task_id=args.get("task_id"),
                     task_title=args.get("task_title"),
                     user_id=user_id,
@@ -249,6 +273,64 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     user_id=user_id,
                     session=None,
                 )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "edit_task":
+                # Special handling for time-only updates
+                if intent.get("params", {}).get("time_only"):
+                    # Find the most recent pending task to update
+                    temp_session = Session()
+                    try:
+                        user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
+                        if user_obj:
+                            recent_task = temp_session.query(Task).filter_by(
+                                user_id=user_obj.id, 
+                                status="pending"
+                            ).order_by(Task.created_at.desc()).first()
+                            
+                            if recent_task:
+                                # Parse time from message
+                                time_match = re.search(r'(\d{1,2}):(\d{2})', original_message)
+                                if time_match:
+                                    hours, minutes = time_match.groups()
+                                    # Assume tomorrow if "завтра" in message, otherwise today
+                                    base_date = datetime.now(pytz.UTC)
+                                    if 'завтра' in original_message.lower():
+                                        base_date += timedelta(days=1)
+                                    
+                                    reminder_time = base_date.replace(hour=int(hours), minute=int(minutes), second=0, microsecond=0)
+                                    if reminder_time.tzinfo is None:
+                                        reminder_time = pytz.UTC.localize(reminder_time)
+                                    
+                                    result = edit_task(
+                                        task_id=recent_task.id,
+                                        title=None,
+                                        description=None,
+                                        reminder_time=reminder_time.isoformat(),
+                                        user_id=user_id,
+                                        session=None,
+                                    )
+                                else:
+                                    result = "Не удалось распознать время в сообщении"
+                            else:
+                                result = "Нет активных задач для обновления времени"
+                        else:
+                            result = "Пользователь не найден"
+                    except Exception as e:
+                        logger.error(f"Error in edit_task time_only: {e}")
+                        result = f"Ошибка обновления времени: {str(e)}"
+                    finally:
+                        temp_session.close()
+                else:
+                    # Regular edit_task handling
+                    result = edit_task(
+                        task_id=args.get("task_id"),
+                        title=args.get("title"),
+                        description=args.get("description"),
+                        reminder_time=args.get("reminder_time"),
+                        user_id=user_id,
+                        session=None,
+                    )
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "check_subscription_status":
@@ -996,6 +1078,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent = {"type": "profile_info", "confidence": 0.8, "params": {}}
                 logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
+        # Special handling for time expressions (update existing task)
+        time_patterns = [
+            r'завтра\s+в\s+\d{1,2}:\d{2}',
+            r'сегодня\s+в\s+\d{1,2}:\d{2}',
+            r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
+            r'в\s+\d{1,2}:\d{2}',
+            r'\d{1,2}:\d{2}'
+        ]
+        if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns):
+            # Check if there are pending tasks to update
+            if user:
+                pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
+                if pending_tasks:
+                    intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
+                    logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
+
         # Убрана специальная обработка приветствий - все через AI промпт
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
@@ -1521,13 +1619,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 return f"Ошибка: {str(e)} [v2]"
 
     except Exception as e:
-        import traceback
-
         logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
         # Добавляем номер строки для отладки
         tb = traceback.extract_tb(e.__traceback__)
+        if tb:
+            last_frame = tb[-1]
+            logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
+        return f"Ошибка: {str(e)} [v2]"
         if tb:
             last_frame = tb[-1]
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
