@@ -322,7 +322,7 @@ body {
     gap: 0;
     overflow: auto;
     height: 100%;
-    padding: 6px;
+    padding: 12px;
     min-height: 0;
     margin-top: 0;
     -webkit-overflow-scrolling: touch;
@@ -341,7 +341,7 @@ body {
 
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
-    padding: 8px;
+    padding: 12px;
     margin-top: 0;
     margin-bottom: 0;
     flex: 1;
@@ -369,7 +369,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: 6px;
+    padding: 12px;
     overflow: hidden;
     max-height: 100%;
     min-height: 0;
@@ -986,7 +986,7 @@ details[open] .details-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 2px 5px;
+    padding: 8px 12px;
     margin-bottom: 0px;
     border-radius: 6px;
     border: none;
@@ -1046,7 +1046,7 @@ details[open] .details-content {
 }
 
 .quick-action {
-    padding: 8px;
+    padding: 6px;
     color: #374151;
     border: 1px solid #D1D9E0;
     border-radius: 6px;
@@ -1099,7 +1099,7 @@ details[open] .details-content {
 }
 
 .person-card {
-    padding: 10px;
+    padding: 12px;
     background: #FFFFFF;
     border-radius: 6px;
     transition: all 0.2s;
@@ -1172,7 +1172,7 @@ details[open] .details-content {
 
 .timeline-content {
     background-color: #FFFFFF;
-    padding: 10px 10px 10px 20px;
+    padding: 12px 12px 12px 20px;
 }
 
 .task-item {
