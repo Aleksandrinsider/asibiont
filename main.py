@@ -1205,7 +1205,8 @@ async def dashboard_handler(request):
                 delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_to_username.ilike(user.username.replace('@', '')),
                     Task.delegation_status.in_(['pending', 'accepted']),
-                    Task.status != 'deleted'
+                    Task.status != 'deleted',
+                    Task.status != 'rejected'
                 ).all()
 
                 delegator_ids = set()
@@ -2402,7 +2403,8 @@ async def api_partners_handler(request):
                         Task.delegated_to_username.ilike(f'@{username_clean}')
                     ),
                     Task.delegation_status.in_(['pending', 'accepted']),
-                    Task.status != 'deleted'
+                    Task.status != 'deleted',
+                    Task.status != 'rejected'
                 ).all()
 
                 delegator_ids = set()

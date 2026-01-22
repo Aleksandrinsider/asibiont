@@ -2806,20 +2806,20 @@
                 // Показываем только завершенные задачи
                 filteredTasks = allTasksFromServer.filter(t => t.status === 'completed');
             } else if (currentTaskFilter === 'my') {
-                // Личные задачи - задачи без делегирования, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && !t.is_delegated);
+                // Личные задачи - задачи без делегирования, незавершенные, неотклоненные
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
-                // Назначенные мне - задачи делегированные мне, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - Делегирована от @'));
+                // Назначенные мне - задачи делегированные мне, незавершенные, неотклоненные
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.is_delegated && t.title.includes(' - Делегирована от @'));
             } else if (currentTaskFilter === 'assigned-by-me') {
-                // Назначенные мной - задачи делегированные другим, незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.is_delegated && t.title.includes(' - Делегирована на @'));
+                // Назначенные мной - задачи делегированные другим, незавершенные, неотклоненные
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.is_delegated && t.title.includes(' - Делегирована на @'));
             } else if (currentTaskFilter === 'overdue') {
-                // С отставанием - просроченные задачи
-                filteredTasks = allTasksFromServer.filter(t => t.overdue === true);
+                // С отставанием - просроченные задачи (неотклоненные)
+                filteredTasks = allTasksFromServer.filter(t => t.overdue === true && t.status !== 'rejected');
             } else {
-                // Все задачи - показываем незавершенные
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed');
+                // Все задачи - показываем незавершенные и неотклоненные
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected');
             }
             
             allTasksData = filteredTasks;
