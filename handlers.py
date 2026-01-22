@@ -361,12 +361,6 @@ async def process_text_message(user_id, text, message, state):
         response = await chat_with_ai(text, context, user_id)
         logger.debug(f"AI response generated for user {user_id}: '{response[:100]}...'")
         logger.debug(f"[HANDLER] Response from chat_with_ai: '{response[:200]}...'")
-                await redis_client.set(f"context:{user_id}", context_json)
-                logger.info(f"Saved context for user {user_id}: {len(context)} messages")
-            except Exception as e:
-                logger.error(f"Error saving context to Redis: {e}", exc_info=True)
-        else:
-            logger.warning("Redis client not initialized, context not saved")
 
         if response and response.strip():
             try:
