@@ -3404,13 +3404,11 @@
                 return;
             }
             
-            const reason = ""; // Причина удаления (пока пустая)
-            
             try {
                 const response = await fetch('/delete_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId, reason: reason.trim() }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
                 if (!await checkAuth(response)) return;
