@@ -407,7 +407,7 @@ async def process_other_message(user_id, message, state):
         return
 
 
-async def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, company=None, bio=None, languages=None, position=None, user_id=None, session=None):
+def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, company=None, bio=None, languages=None, position=None, user_id=None, session=None):
     """Обновить профиль пользователя"""
     try:
         if not session:
@@ -514,7 +514,7 @@ async def update_profile(skills=None, interests=None, goals=None, city=None, cur
         return f"Ошибка при обновлении профиля: {str(e)}"
 
 
-async def update_user_memory(info=None, user_id=None, session=None):
+def update_user_memory(info=None, user_id=None, session=None):
     """Обновить память пользователя"""
     try:
         if not session:
