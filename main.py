@@ -1201,6 +1201,14 @@ async def dashboard_handler(request):
             delegating_by_me = []  # Люди, которым я делегировал задачи
 
             try:
+                # Получить список избранных контактов
+                favorite_contacts = []
+                if profile and profile.favorite_contacts:
+                    try:
+                        favorite_contacts = [c.lower().replace('@', '') for c in json.loads(profile.favorite_contacts)]
+                    except json.JSONDecodeError:
+                        favorite_contacts = []
+
                 # Люди, которые делегировали мне задачи (я получаю задачи от них)
                 delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_to_username.ilike(user.username.replace('@', '')),
@@ -1226,6 +1234,32 @@ async def dashboard_handler(request):
                                 'tasks': task_titles,
                                 'task_count': task_count
                             })
+
+                # Добавить избранные контакты, у которых все задачи отклонены, но контакт в избранном
+                for favorite_username in favorite_contacts:
+                    favorite_user = session_db.query(User).filter(
+                        User.username.ilike(favorite_username)
+                    ).first()
+                    
+                    if favorite_user and favorite_user.id != user.id and favorite_user.id not in delegator_ids:
+                        # Проверить, были ли у этого контакта задачи (включая отклоненные)
+                        all_tasks_from_favorite = session_db.query(Task).filter(
+                            Task.user_id == favorite_user.id,
+                            Task.delegated_to_username.ilike(user.username.replace('@', ''))
+                        ).all()
+                        
+                        if all_tasks_from_favorite:
+                            # Есть история делегирования - добавляем в список
+                            rejected_count = sum(1 for t in all_tasks_from_favorite if t.status == 'rejected')
+                            if rejected_count > 0:
+                                delegating_to_me.append({
+                                    'id': favorite_user.id,
+                                    'username': favorite_user.username,
+                                    'first_name': favorite_user.first_name,
+                                    'reason': f'в избранном',
+                                    'tasks': [],
+                                    'task_count': 0
+                                })
 
                 # Люди, которым я делегировал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
