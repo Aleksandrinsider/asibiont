@@ -3517,22 +3517,17 @@ async def api_favorite_contacts_handler(request):
         session_req = await get_session(request)
         user_id = session_req.get('user_id')
         
-        logger.info(f"[FAVORITE_CONTACTS] Request from user_id: {user_id}, method: {request.method}")
-        
         if not user_id:
-            logger.warning("[FAVORITE_CONTACTS] No user_id in session")
             return web.json_response({'error': 'Not logged in'}, status=401)
 
         session_db = Session()
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
-                logger.error(f"[FAVORITE_CONTACTS] User not found: {user_id}")
                 return web.json_response({'error': 'User not found'}, status=404)
 
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
             if not profile:
-                logger.info(f"[FAVORITE_CONTACTS] Creating new profile for user {user_id}")
                 profile = UserProfile(user_id=user.id, favorite_contacts='[]')
                 session_db.add(profile)
                 session_db.commit()
@@ -3543,14 +3538,11 @@ async def api_favorite_contacts_handler(request):
                 if profile.favorite_contacts:
                     try:
                         favorites = json.loads(profile.favorite_contacts)
-                        logger.info(f"[FAVORITE_CONTACTS] Loaded {len(favorites)} favorites for user {user_id}")
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.warning(f"[FAVORITE_CONTACTS] Invalid favorite_contacts format for user {user_id}: {e}, resetting to empty list")
+                    except (json.JSONDecodeError, TypeError):
                         favorites = []
                         profile.favorite_contacts = '[]'
                         session_db.commit()
                 else:
-                    logger.info(f"[FAVORITE_CONTACTS] No favorite_contacts for user {user_id}, initializing")
                     profile.favorite_contacts = '[]'
                     session_db.commit()
                     
@@ -3560,14 +3552,12 @@ async def api_favorite_contacts_handler(request):
                 # Update favorite contacts
                 try:
                     data = await request.json()
-                except json.JSONDecodeError as e:
-                    logger.error(f"[FAVORITE_CONTACTS] Invalid JSON in POST from user {user_id}: {e}")
+                except json.JSONDecodeError:
                     return web.json_response({'error': 'Invalid JSON'}, status=400)
                 
                 favorites = data.get('favorites', [])
 
                 if not isinstance(favorites, list):
-                    logger.error(f"[FAVORITE_CONTACTS] Favorites is not a list for user {user_id}: {type(favorites)}, value: {favorites}")
                     return web.json_response({'error': 'Favorites must be a list'}, status=400)
 
                 # Convert all favorites to strings (handle both strings and integers)
@@ -3579,14 +3569,13 @@ async def api_favorite_contacts_handler(request):
                 return web.json_response({'success': True})
             
             else:
-                logger.error(f"[FAVORITE_CONTACTS] Unsupported method: {request.method}")
                 return web.json_response({'error': 'Method not allowed'}, status=405)
 
         finally:
             session_db.close()
 
     except Exception as e:
-        logger.error(f"[FAVORITE_CONTACTS] Unexpected error: {e}", exc_info=True)
+        logger.error(f"Unexpected error in api_favorite_contacts_handler: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
