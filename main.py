@@ -4658,6 +4658,10 @@ async def api_tasks_handler(request):
             ))
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
+        
+        # Exclude rejected tasks from the list
+        tasks = [t for t in tasks if t.status != 'rejected' and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
+        
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
         # Set overdue flag and local time for tasks
