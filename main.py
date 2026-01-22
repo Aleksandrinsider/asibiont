@@ -1135,7 +1135,9 @@ async def dashboard_handler(request):
             logger.info(
                 f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}, tier: {subscription.tier if subscription else None}, user_tier: {user.subscription_tier.value if user.subscription_tier else None}")
 
-            if not subscription or subscription.status != 'active':
+            # В FREE_ACCESS_MODE не требуется активная подписка
+            from config import FREE_ACCESS_MODE
+            if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
                 logger.info("No active subscription, redirecting to subscription_tiers")
                 return web.HTTPFound('/subscription_tiers')
 
