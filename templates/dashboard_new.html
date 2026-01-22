@@ -734,7 +734,6 @@
         }
         
         button[disabled] * {
-            cursor: not-allowed !important;
             pointer-events: none;
         }
 
@@ -1528,7 +1527,6 @@
                 return; // Prevent multiple sends
             }
             window.sendingMessage = true;
-            window.lastMessageSent = Date.now(); // Mark when message was sent
             
             const input = document.getElementById('message-input');
             const fileInput = document.getElementById('file-input');
@@ -1545,11 +1543,10 @@
                 addMessage(message, 'user');
             }
             if (file) {
-                addMessage(`?? ${file.name}`, 'user');
+                addMessage(`📎 ${file.name}`, 'user');
             }
             input.value = '';
             fileInput.value = '';
-            // Note: We don't increment lastMessageCount here to avoid conflicts with updateChat
 
             // Show loading animation after user message
             showTypingIndicator();
@@ -1581,23 +1578,26 @@
                     }
 
                     addMessage(data.response, 'ai');
-                    // Mark this message as displayed to prevent duplication by updateChat
-                    if (data.message_id) {
-                        displayedMessageIds.add(data.message_id);
-                    }
-                    // Обновить счетчик через API, чтобы синхронизировать с реальным количеством
+                    
+                    // Синхронизируем с БД через 1 секунду
                     setTimeout(async () => {
                         try {
                             const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
                             if (syncResponse.ok) {
                                 const syncData = await syncResponse.json();
-                                lastMessageCount = syncData.interactions ? syncData.interactions.length : lastMessageCount;
+                                // Обновляем счетчик и добавляем ID в displayedMessageIds
+                                if (syncData.interactions) {
+                                    lastMessageCount = syncData.interactions.length;
+                                    syncData.interactions.forEach(interaction => {
+                                        displayedMessageIds.add(interaction.id);
+                                    });
+                                }
                             }
                         } catch (e) {
-                            // Если не удалось синхронизировать, увеличиваем на 2
-                            lastMessageCount += 2;
+                            console.error('Sync error:', e);
                         }
-                    }, 500);
+                    }, 1000);
+                    
                     // Обновить список задач, профиль и контакты после отправки сообщения
                     setTimeout(async () => {
                         try {
@@ -1607,7 +1607,7 @@
                         } catch (e) {
                             console.error('Error updating after message:', e);
                         }
-                    }, 500);
+                    }, 1500);
                 } else {
                     addMessage(`Ошибка: ${data.error || 'Неизвестная ошибка'}`, 'ai');
                 }
@@ -4929,6 +4929,12 @@
                     return;
                 }
                 
+                // Не обновляем чат в течение 15 секунд после отправки сообщения
+                const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
+                if (timeSinceLastSend < 15000) {
+                    return;
+                }
+                
                 const response = await fetch('/api/interactions', {
                     credentials: 'include',
                     headers: {
@@ -4962,11 +4968,6 @@
                             });
                             lastMessageCount = currentMessageCount;
                         } else if (currentMessageCount > lastMessageCount) {
-                            // Check if message was sent recently (within last 10 seconds) to avoid duplication
-                            const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
-                            if (timeSinceLastSend < 10000) {
-                                return;
-                            }
                             // Есть новые сообщения - добавляем только их
                             const sortedInteractions = data.interactions
                                 .sort((a, b) => a.id - b.id);
