@@ -3971,6 +3971,7 @@ async def create_post_handler(request):
 
             post = Post(
                 user_id=user.id,
+                username=user.username,
                 content=content
             )
             session_db.add(post)
@@ -3981,7 +3982,7 @@ async def create_post_handler(request):
             # Ensure created_at has UTC timezone info
             created_at_str = post.created_at.isoformat()
             if post.created_at and post.created_at.tzinfo is None:
-                created_at_str = post.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+                created_at_str = post.created_at.replace(tzinfo=dt_timezone.utc).isoformat()
             
             return web.json_response({
                 'success': True,
@@ -4277,7 +4278,7 @@ async def get_feed_handler(request):
                     if post.created_at:
                         if post.created_at.tzinfo is None:
                             # Assume UTC if no timezone
-                            created_at_str = post.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+                            created_at_str = post.created_at.replace(tzinfo=dt_timezone.utc).isoformat()
                         else:
                             created_at_str = post.created_at.isoformat()
                     feed.append({
@@ -4396,6 +4397,7 @@ async def create_comment_handler(request):
             comment = Comment(
                 post_id=post_id,
                 user_id=user.id,
+                username=user.username,
                 content=content
             )
             session_db.add(comment)
@@ -4406,7 +4408,7 @@ async def create_comment_handler(request):
             # Ensure created_at has UTC timezone info
             created_at_str = comment.created_at.isoformat()
             if comment.created_at and comment.created_at.tzinfo is None:
-                created_at_str = comment.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+                created_at_str = comment.created_at.replace(tzinfo=dt_timezone.utc).isoformat()
 
             return web.json_response({
                 'success': True,
@@ -4466,7 +4468,7 @@ async def get_comments_handler(request):
                     # Ensure created_at has UTC timezone info
                     created_at_str = comment.created_at.isoformat()
                     if comment.created_at and comment.created_at.tzinfo is None:
-                        created_at_str = comment.created_at.replace(tzinfo=datetime.timezone.utc).isoformat()
+                        created_at_str = comment.created_at.replace(tzinfo=dt_timezone.utc).isoformat()
                     
                     result.append({
                         'id': comment.id,

@@ -189,6 +189,7 @@ class Post(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    username = Column(String(255))  # Denormalized username for easy viewing
     content = Column(Text, nullable=False)  # Post content
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
@@ -202,6 +203,7 @@ class Comment(Base):
     id = Column(Integer, primary_key=True)
     post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    username = Column(String(255))  # Denormalized username for easy viewing
     content = Column(Text, nullable=False)  # Comment content
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
