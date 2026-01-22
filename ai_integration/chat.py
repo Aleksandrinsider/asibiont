@@ -275,6 +275,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif "Задача выполнена" in result_text or "отмечена как выполненная" in result_text:
                 natural_responses.append("Задача выполнена")
 
+            elif "Вы приняли задачу" in result_text:
+                # Обработка принятия делегированной задачи
+                match = re.search(r"Вы приняли задачу '([^']+)'", result_text)
+                if match:
+                    task_title = match.group(1)
+                    natural_responses.append(f"TASK_ACCEPTED: {task_title}")
+                else:
+                    natural_responses.append("TASK_ACCEPTED")
+
             elif "Найдены партнеры:" in result_text or "партнеры найдены" in result_text.lower():
                 natural_responses.append(result_text)
 
@@ -303,6 +312,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         natural_responses.append(f"PROFILE_UPDATED: cleared_and_added_interests={items}")
                     else:
                         natural_responses.append("PROFILE_UPDATED: type=interests")
+                
+                elif "TASK_ACCEPTED" in result_text:
+                    # Принятие делегированной задачи уже обработано выше
+                    pass
 
                 elif "changed_city:" in result_text:
                     match = re.search(r"changed_city:([^->]+)->([^;]+)", result_text)
@@ -402,6 +415,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     final_content = f"Профиль обновлён — {', '.join(details)}."
                 else:
                     final_content = "Профиль обновлен."
+            elif any("TASK_ACCEPTED" in r for r in natural_responses):
+                # Обработка принятия делегированной задачи
+                task_accepted_responses = [r for r in natural_responses if "TASK_ACCEPTED" in r]
+                for tr in task_accepted_responses:
+                    if ":" in tr:
+                        task_title = tr.split(":", 1)[1].strip()
+                        final_content = f"Принял задачу '{task_title}'. Она добавлена в твой список задач."
+                    else:
+                        final_content = "Задача принята и добавлена в твой список."
             else:
                 final_content = " | ".join(natural_responses)
             
