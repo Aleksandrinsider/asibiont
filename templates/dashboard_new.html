@@ -609,6 +609,66 @@
                 display: none;
             }
         }
+
+        /* Мобильная адаптация панели управления */
+        @media (max-width: 992px) {
+            body {
+                font-size: 14px;
+            }
+            .container {
+                padding: 10px;
+            }
+            h1, h2, h3 {
+                font-size: 1.2em;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+                font-size: 13px;
+            }
+            .container {
+                padding: 8px;
+            }
+            .context-section, .people-section {
+                min-width: 100%;
+                flex: 1 1 100%;
+            }
+            button {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            input[type="text"], textarea {
+                font-size: 16px !important; /* Предотвращает zoom на iOS */
+            }
+            .chat-messages {
+                padding: 10px;
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                font-size: 12px;
+            }
+            .container {
+                padding: 5px;
+            }
+            h1 {
+                font-size: 1.1em;
+            }
+            h2, h3 {
+                font-size: 1em;
+            }
+            button {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+            .quick-action, .delete-btn {
+                padding: 4px;
+            }
+        }
         
         .container {
             position: relative;
