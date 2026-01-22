@@ -762,11 +762,13 @@
 
         /* View panels with absolute positioning */
         .view-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -792,6 +794,11 @@
             flex-direction: column;
             gap: 12px;
             min-height: 0;
+        }
+        
+        /* Chat input should stay at bottom */
+        .chat-input {
+            flex-shrink: 0;
         }
     </style>
 </head>
@@ -1106,7 +1113,7 @@
                     </div>
 
                     <!-- Контейнер для переключения между чатом и лентой -->
-                    <div class="view-container" style="flex: 1; position: relative; overflow: hidden; min-height: 0;">
+                    <div class="view-container">
                         <!-- Чат с ИИ -->
                         <div id="chat-view" class="view-panel active">
                             <div id="chat-messages" class="chat-messages">
