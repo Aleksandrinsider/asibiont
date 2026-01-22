@@ -339,14 +339,25 @@ body {
     height: 100%;
 }
 
+/* Context section for profile - fixed size when expanded */
+.context-section {
+    padding: 12px;
+    margin-top: 0;
+    margin-bottom: 12px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
     padding: 12px;
     margin-top: 0;
     margin-bottom: 0;
-    flex: 1;
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .people-list {
@@ -354,6 +365,34 @@ body {
     flex: 1;
     -webkit-overflow-scrolling: touch;
     padding-right: 0;
+    min-height: 0;
+}
+
+/* Task stats block - fixed size */
+.task-stats-block {
+    padding: 12px;
+    margin-top: 0;
+    margin-bottom: 12px;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Tasks section wrapper - fills remaining space */
+.tasks-section-wrapper {
+    padding: 12px;
+    margin-top: 0;
+    margin-bottom: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.tasks-section {
+    overflow: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
     min-height: 0;
 }
 
