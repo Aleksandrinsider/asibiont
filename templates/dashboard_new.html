@@ -1082,7 +1082,7 @@
                         <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %}>Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')">Заблокированные</button>
                     </div>
-                    <div class="people-list" id="people-list">
+                    <div class="people-list" id="people-list" style="padding: 0 4px;">
                         <!-- Контакты будут загружены динамически -->
                     </div>
                 </div>
@@ -1221,7 +1221,7 @@
                         <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
                         <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Выполненные</button>
                     </div>
-                    <div class="tasks-section" id="tasks-scroll-container">
+                    <div class="tasks-section" id="tasks-scroll-container" style="padding: 0 4px;">
                         <div class="task-groups" id="task-groups">
                             <!-- Задачи будут сгруппированы по срокам -->
                         </div>

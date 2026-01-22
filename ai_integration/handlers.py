@@ -2050,6 +2050,28 @@ def get_partners_list(user_id=None, session=None):
                     partner.task_relevance = f"похожие задачи: {', '.join(list(common_task_words)[:3])}"
                     partner.task_relevance_score += len(common_task_words) * 4  # Очень высокий приоритет
                     logger.info(f"[PARTNERS] @{partner_user.username} has similar tasks: {common_task_words}")
+                
+                # НОВОЕ: Проверяем точное совпадение названий активных задач
+                if not partner.task_relevance:  # Если еще не нашли релевантность
+                    user_active_task_titles = set()
+                    for ut in user_tasks:
+                        if ut.title and ut.status in ['active', 'pending', 'in_progress']:
+                            # Нормализуем название: убираем лишние пробелы, приводим к нижнему регистру
+                            normalized_title = ' '.join(ut.title.lower().split())
+                            user_active_task_titles.add(normalized_title)
+                    
+                    partner_active_task_titles = set()
+                    for pt in partner_tasks:
+                        if pt.title and pt.status in ['active', 'pending', 'in_progress']:
+                            normalized_title = ' '.join(pt.title.lower().split())
+                            partner_active_task_titles.add(normalized_title)
+                    
+                    # Ищем точные совпадения названий задач
+                    exact_task_matches = user_active_task_titles & partner_active_task_titles
+                    if exact_task_matches:
+                        partner.task_relevance = f"та же активная задача: {', '.join(list(exact_task_matches)[:2])}"
+                        partner.task_relevance_score += 10  # Максимальный приоритет для точных совпадений
+                        logger.info(f"[PARTNERS] @{partner_user.username} has exact same active tasks: {exact_task_matches}")
     
     # Пересортируем партнеров с учетом релевантности для задач
     # Сначала релевантные для задач (по убыванию score), потом остальные
