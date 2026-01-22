@@ -4009,25 +4009,31 @@ async def api_accept_delegated_task_handler(request):
 
         session_db = Session()
         try:
+            # Get the user
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user or not user.username:
+                return web.json_response({'error': 'User not found or no username'}, status=404)
+
             # Get the task
             task = session_db.query(Task).filter_by(id=task_id).first()
             if not task:
                 return web.json_response({'error': 'Task not found'}, status=404)
 
-            # Check if user is the delegatee
-            if task.assigned_to != user_id:
+            # Check if user is the delegatee (compare usernames without @)
+            username_clean = user.username.replace('@', '')
+            if not task.delegated_to_username or task.delegated_to_username.lower() != username_clean.lower():
                 return web.json_response({'error': 'Not authorized to accept this task'}, status=403)
 
-            # Check if task is in delegated status
-            if task.status != 'delegated':
-                return web.json_response({'error': 'Task is not in delegated status'}, status=400)
+            # Check if task is in pending delegation status
+            if task.delegation_status != 'pending':
+                return web.json_response({'error': 'Task is not in pending delegation status'}, status=400)
 
             # Update task status to accepted
             task.status = 'accepted'
+            task.delegation_status = 'accepted'
             task.updated_at = datetime.now(pytz.UTC)
 
             # Create interaction record
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
@@ -4066,25 +4072,31 @@ async def api_reject_delegated_task_handler(request):
 
         session_db = Session()
         try:
+            # Get the user
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user or not user.username:
+                return web.json_response({'error': 'User not found or no username'}, status=404)
+
             # Get the task
             task = session_db.query(Task).filter_by(id=task_id).first()
             if not task:
                 return web.json_response({'error': 'Task not found'}, status=404)
 
-            # Check if user is the delegatee
-            if task.assigned_to != user_id:
+            # Check if user is the delegatee (compare usernames without @)
+            username_clean = user.username.replace('@', '')
+            if not task.delegated_to_username or task.delegated_to_username.lower() != username_clean.lower():
                 return web.json_response({'error': 'Not authorized to reject this task'}, status=403)
 
-            # Check if task is in delegated status
-            if task.status != 'delegated':
-                return web.json_response({'error': 'Task is not in delegated status'}, status=400)
+            # Check if task is in pending delegation status
+            if task.delegation_status != 'pending':
+                return web.json_response({'error': 'Task is not in pending delegation status'}, status=400)
 
             # Update task status to rejected
             task.status = 'rejected'
+            task.delegation_status = 'rejected'
             task.updated_at = datetime.now(pytz.UTC)
 
             # Create interaction record
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
