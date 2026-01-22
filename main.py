@@ -3516,7 +3516,6 @@ async def api_favorite_contacts_handler(request):
     try:
         session_req = await get_session(request)
         user_id = session_req.get('user_id')
-        
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3528,7 +3527,7 @@ async def api_favorite_contacts_handler(request):
 
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
             if not profile:
-                profile = UserProfile(user_id=user.id, favorite_contacts='[]')
+                profile = UserProfile(user_id=user.id)
                 session_db.add(profile)
                 session_db.commit()
 
@@ -3538,23 +3537,13 @@ async def api_favorite_contacts_handler(request):
                 if profile.favorite_contacts:
                     try:
                         favorites = json.loads(profile.favorite_contacts)
-                    except (json.JSONDecodeError, TypeError):
+                    except json.JSONDecodeError:
                         favorites = []
-                        profile.favorite_contacts = '[]'
-                        session_db.commit()
-                else:
-                    profile.favorite_contacts = '[]'
-                    session_db.commit()
-                    
                 return web.json_response({'favorites': favorites})
 
             elif request.method == 'POST':
                 # Update favorite contacts
-                try:
-                    data = await request.json()
-                except json.JSONDecodeError:
-                    return web.json_response({'error': 'Invalid JSON'}, status=400)
-                
+                data = await request.json()
                 favorites = data.get('favorites', [])
 
                 if not isinstance(favorites, list):
@@ -3567,9 +3556,6 @@ async def api_favorite_contacts_handler(request):
                 session_db.commit()
 
                 return web.json_response({'success': True})
-            
-            else:
-                return web.json_response({'error': 'Method not allowed'}, status=405)
 
         finally:
             session_db.close()
