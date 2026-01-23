@@ -211,6 +211,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     session=None,
                 )
                 tool_results.append({"function": func_name, "result": result})
+                # Перезагрузить список задач после завершения
+                updated_tasks = list_tasks(user_id=user_id, session=None)
+                tool_results.append({"function": "list_tasks", "result": f"[Обновленный список после завершения] {updated_tasks}"})
 
             elif func_name == "accept_delegated_task":
                 result = accept_delegated_task(
