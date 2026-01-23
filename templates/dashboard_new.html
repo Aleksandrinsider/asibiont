@@ -449,9 +449,6 @@
         let currentView = 'chat'; // Начальный вид - всегда чат
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="64x64" href="/static/favicon-64x64.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -1923,6 +1920,7 @@
 
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
+                console.log('Feed data received:', data);
 
                 const feedContainer = document.getElementById('feed-posts');
                 feedContainer.innerHTML = '';
