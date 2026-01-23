@@ -5396,6 +5396,88 @@ app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
+app.router.add_get('/admin/setup_feed', setup_production_feed_handler)
+
+async def setup_production_feed_handler(request):
+    """Временный админ-эндпоинт для настройки production ленты"""
+    try:
+        import json
+        from datetime import timezone
+        
+        session = Session()
+        results = []
+        
+        # Находим пользователей
+        aleksandr = session.query(User).filter_by(username='aleksandrinsider').first()
+        test_sport = session.query(User).filter_by(username='test_sport_10').first()
+        
+        if not aleksandr:
+            return web.json_response({'error': 'aleksandrinsider не найден'}, status=404)
+        
+        if not test_sport:
+            return web.json_response({'error': 'test_sport_10 не найден'}, status=404)
+        
+        results.append(f"aleksandrinsider ID: {aleksandr.id}")
+        results.append(f"test_sport_10 ID: {test_sport.id}")
+        
+        # Получаем/создаем профиль aleksandrinsider
+        profile = session.query(UserProfile).filter_by(user_id=aleksandr.id).first()
+        if not profile:
+            profile = UserProfile(user_id=aleksandr.id)
+            session.add(profile)
+            session.flush()
+        
+        # Добавляем test_sport_10 в избранное
+        current_favorites = json.loads(profile.favorite_contacts or '[]')
+        if 'test_sport_10' not in current_favorites:
+            current_favorites.append('test_sport_10')
+            profile.favorite_contacts = json.dumps(current_favorites)
+            session.commit()
+            results.append("test_sport_10 добавлен в избранное aleksandrinsider")
+        else:
+            results.append("test_sport_10 уже в избранном")
+        
+        # Проверяем существующие посты
+        existing_posts = session.query(Post).filter_by(user_id=test_sport.id).count()
+        results.append(f"Текущее количество постов test_sport_10: {existing_posts}")
+        
+        # Создаем посты если их меньше 9
+        posts_to_create = [
+            '🎯 Сегодня пробежал личный рекорд - 10км за 45 минут! Чувствую себя отлично, тренировки дают результат. #бег #спорт #здоровье',
+            '☕️ Утренняя пробежка + кофе = идеальное начало дня. Кто со мной на завтра в 7:00? #утро #пробежка #мотивация'
+        ]
+        
+        created_count = 0
+        for content in posts_to_create:
+            if existing_posts + created_count >= 9:
+                break
+            
+            new_post = Post(
+                user_id=test_sport.id,
+                content=content,
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(new_post)
+            created_count += 1
+        
+        if created_count > 0:
+            session.commit()
+            results.append(f"Создано {created_count} постов от test_sport_10")
+        else:
+            results.append("Посты не созданы (уже достаточно)")
+        
+        # Итоговая статистика
+        total_posts = session.query(Post).filter_by(user_id=test_sport.id).count()
+        results.append(f"Итого постов test_sport_10: {total_posts}")
+        results.append(f"Избранные aleksandrinsider: {profile.favorite_contacts}")
+        
+        session.close()
+        return web.json_response({'success': True, 'results': results})
+        
+    except Exception as e:
+        logger.error(f"Error in setup_production_feed_handler: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
 
 # Setup for production
 # dp = Dispatcher()
