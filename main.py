@@ -127,6 +127,32 @@ try:
         else:
             logger.info("Migration: languages column already exists")
 
+        # Migration for birthdate column
+        if 'birthdate' not in columns:
+            try:
+                logger.info("Adding birthdate column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN birthdate VARCHAR(10)'))
+                session.commit()
+                logger.info("Migration: birthdate column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add birthdate column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: birthdate column already exists")
+
+        # Migration for zodiac_sign column
+        if 'zodiac_sign' not in columns:
+            try:
+                logger.info("Adding zodiac_sign column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN zodiac_sign VARCHAR(20)'))
+                session.commit()
+                logger.info("Migration: zodiac_sign column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add zodiac_sign column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: zodiac_sign column already exists")
+
         # Migration for favorite_contacts column
         if 'favorite_contacts' not in columns:
             try:
