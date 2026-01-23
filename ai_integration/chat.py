@@ -994,6 +994,52 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             if file_content:
                 user_memory += f"\nСодержимое прикрепленного файла: {file_content[:2000]}"  # Limit to 2000 chars
 
+            # Add feed posts for context
+            try:
+                from models import Post
+                # Get user's profile with favorites
+                user_profile = db_session.query(UserProfile).filter_by(user_id=memory_user.id if memory_user else None).first()
+                
+                # Parse favorite contacts from JSON
+                favorite_user_ids = []
+                if user_profile and user_profile.favorite_contacts:
+                    try:
+                        import json
+                        favorite_data = json.loads(user_profile.favorite_contacts)
+                        for item in favorite_data:
+                            if isinstance(item, int):
+                                favorite_user_ids.append(item)
+                            elif isinstance(item, str):
+                                fav_user = db_session.query(User).filter(
+                                    User.username == item.replace('@', '')
+                                ).first()
+                                if fav_user:
+                                    favorite_user_ids.append(fav_user.id)
+                    except Exception as e:
+                        logger.error(f"Error parsing favorite_contacts: {e}")
+                
+                # Include own posts too
+                all_user_ids = favorite_user_ids + [memory_user.id] if memory_user else []
+                
+                # Get recent posts (last 10)
+                if all_user_ids:
+                    posts = db_session.query(Post).filter(
+                        Post.user_id.in_(all_user_ids)
+                    ).order_by(Post.created_at.desc()).limit(10).all()
+                    
+                    if posts:
+                        posts_info = []
+                        for post in posts:
+                            post_user = db_session.query(User).filter_by(id=post.user_id).first()
+                            if post_user:
+                                username = post_user.username or post_user.first_name or 'пользователь'
+                                posts_info.append(f"@{username}: {post.content[:100]}")
+                        
+                        if posts_info:
+                            user_memory += f"\n\nПОСЛЕДНИЕ ПОСТЫ В ЛЕНТЕ (для контекста):\n" + "\n".join(posts_info[:5])
+            except Exception as e:
+                logger.error(f"Error getting feed posts for context: {e}")
+
             # Обработка pending_action
             if user and user.pending_action:
                 try:
