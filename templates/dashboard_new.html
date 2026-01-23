@@ -1949,6 +1949,7 @@
 
                 if (data.posts && data.posts.length > 0) {
                     data.posts.forEach((post, index) => {
+                        try {
                         const postDiv = document.createElement('div');
                         
                         // Простой стиль без рамок и фона
