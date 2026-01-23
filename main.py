@@ -4522,11 +4522,12 @@ async def delete_comment_handler(request):
     db_session = None
     try:
         user_session = await get_session(request)
-        if not user_session:
-            logger.warning("Delete comment: No user session")
+        user_id = user_session.get('user_id')
+        
+        if not user_id:
+            logger.warning("delete_comment_handler: No user_id in session")
             return web.json_response({'error': 'Unauthorized'}, status=401)
 
-        user_id = user_session['telegram_id']
         comment_id = int(request.match_info['comment_id'])
         logger.info(f"Deleting comment {comment_id} by user {user_id}")
 
