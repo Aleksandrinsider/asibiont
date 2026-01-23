@@ -170,8 +170,8 @@ async def generate_birthday_post(user_id, session):
         return None
 
 
-async def create_auto_post(user_id, content, session):
-    """Create a post in the database"""
+async def create_auto_post(user_id, content, session, notify=True):
+    """Create a post in the database and optionally notify user"""
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
@@ -187,6 +187,28 @@ async def create_auto_post(user_id, content, session):
         session.commit()
         
         logger.info(f"Auto-post created for user {user_id}")
+        
+        # Notify user about created post
+        if notify:
+            try:
+                from main import bot
+                if bot:
+                    # Determine post type
+                    is_birthday = 'день рождения' in content.lower() or 'birthday' in content.lower()
+                    
+                    if is_birthday:
+                        notification_text = f"🎂 Я создал поздравительный пост в ленту от вашего имени:\n\n{content}\n\n✨ Пост опубликован и виден вашим контактам!"
+                    else:
+                        notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Это помогает поддерживать активность в ленте. Вы можете отредактировать или удалить пост в веб-панели."
+                    
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text=notification_text
+                    )
+                    logger.info(f"Notification sent to user {user_id} about auto-post")
+            except Exception as notify_error:
+                logger.warning(f"Could not send notification to user {user_id}: {notify_error}")
+        
         return True
         
     except Exception as e:

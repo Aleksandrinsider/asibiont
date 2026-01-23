@@ -511,14 +511,21 @@ def parse_natural_time(time_str, current_time):
     # Extract time part (HH:MM or natural like '10 утра')
     time_match = None
     
-    # Patterns for time
+    # Patterns for time (order matters - more specific first)
     time_patterns = [
         (r'(\d{1,2}):(\d{2})', lambda h, m: (int(h), int(m))),  # 10:30
         (r'к\s*(\d{1,2})\s*часам?', lambda h, m: (int(h), 0)),  # к 10 часам
+        (r'до\s*(\d{1,2})\s*часов?', lambda h, m: (int(h), 0)),  # до 10 часов
+        (r'после\s*(\d{1,2})\s*часов?', lambda h, m: (int(h), 0)),  # после 10 часов
+        (r'в\s*(\d{1,2})\s*часов?', lambda h, m: (int(h), 0)),  # в 10 часов
+        (r'около\s*(\d{1,2})\s*часов?', lambda h, m: (int(h), 0)),  # около 10 часов
+        (r'примерно\s*(\d{1,2})\s*часов?', lambda h, m: (int(h), 0)),  # примерно в 10 часов
         (r'(\d{1,2})\s*утра', lambda h, m: (int(h) if int(h) <= 12 else int(h) - 12, 0)),  # 10 утра
         (r'(\d{1,2})\s*вечера', lambda h, m: ((int(h) + 12) if int(h) < 12 else int(h), 0)),  # 8 вечера
         (r'(\d{1,2})\s*ночи', lambda h, m: (int(h), 0)),  # 2 ночи
         (r'(\d{1,2})\s*дня', lambda h, m: (int(h), 0)),  # 2 дня
+        (r'полдень', lambda h, m: (12, 0)),  # полдень
+        (r'полночь', lambda h, m: (0, 0)),  # полночь
     ]
     
     for pattern, converter in time_patterns:
