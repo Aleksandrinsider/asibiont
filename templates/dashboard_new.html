@@ -1980,12 +1980,19 @@
                 console.log('[FEED] Number of posts:', data.posts ? data.posts.length : 0);
 
                 const feedContainer = document.getElementById('feed-posts');
-                feedContainer.innerHTML = '';
+                
+                // Получаем существующие ID постов
+                const existingPosts = Array.from(feedContainer.querySelectorAll('[data-post-id]'));
+                const existingIds = new Set(existingPosts.map(el => el.getAttribute('data-post-id')));
 
                 if (data.posts && data.posts.length > 0) {
-                    data.posts.forEach((post, index) => {
+                    // Добавляем только новые посты в начало
+                    const newPosts = data.posts.filter(post => !existingIds.has(String(post.id)));
+                    
+                    newPosts.reverse().forEach((post, index) => {
                         try {
                             const postDiv = document.createElement('div');
+                        postDiv.setAttribute('data-post-id', post.id);
                         
                         // Простой стиль без рамок и фона
                         postDiv.style.cssText = `
@@ -2077,7 +2084,7 @@
                         `;
 
                             postDiv.innerHTML = timelineContent;
-                            feedContainer.appendChild(postDiv);
+                            feedContainer.insertBefore(postDiv, feedContainer.firstChild);
                             
                             // Load comments for this post
                             loadComments(post.id);
@@ -2086,11 +2093,37 @@
                         }
                     });
                     
+                    // Обновляем лайки и комментарии для существующих постов
+                    data.posts.forEach(post => {
+                        if (existingIds.has(String(post.id))) {
+                            // Обновляем счетчик лайков
+                            const likeCountEl = document.getElementById(`like-count-${post.id}`);
+                            if (likeCountEl) {
+                                likeCountEl.textContent = post.likes_count || 0;
+                            }
+                            
+                            // Обновляем состояние кнопки лайка
+                            const likeBtnEl = document.getElementById(`like-btn-${post.id}`);
+                            if (likeBtnEl) {
+                                likeBtnEl.style.background = post.user_liked ? '#E0F4F4' : '#F6F8FA';
+                                likeBtnEl.style.borderColor = post.user_liked ? '#068487' : '#D1D9E0';
+                                const svg = likeBtnEl.querySelector('svg');
+                                if (svg) {
+                                    svg.setAttribute('fill', post.user_liked ? '#068487' : '#374151');
+                                }
+                            }
+                            
+                            // Загружаем новые комментарии
+                            loadComments(post.id);
+                        }
+                    });
+                    
                     // Обновляем lastSeenPostId до последнего поста
                     if (currentView === 'feed') {
                         lastSeenPostId = data.posts[0].id;
                     }
-                } else {
+                } else if (existingIds.size === 0) {
+                    // Показываем сообщение о пустой ленте только если нет существующих постов
                     feedContainer.innerHTML = `
                         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
                             <svg width="64" height="64" viewBox="0 0 16 16" fill="#D1D9E0" style="margin-bottom: 16px;">
