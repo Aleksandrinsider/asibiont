@@ -1388,6 +1388,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+        
+        # Параметры запроса согласно документации DeepSeek API
         data = {
             "model": DEEPSEEK_MODEL,
             "messages": messages,
@@ -1395,19 +1397,31 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             "tool_choice": tool_choice,
             "temperature": temperature,
             "top_p": top_p,
+            "max_tokens": 4096,  # Максимум токенов для ответа
+            "frequency_penalty": 0.0,  # Не повторять одни и те же фразы
+            "presence_penalty": 0.0,  # Стимулировать новые темы
         }
-        logger.info(f"Sending request to DeepSeek API with {len(messages)} messages")
-        # Retry loop for API call
-        max_retries = 2
+        logger.info(f"Sending request to DeepSeek API with {len(messages)} messages, temp={temperature}, top_p={top_p}")
+        # Retry loop с exponential backoff
+        max_retries = 3  # Увеличиваем до 3 попыток
         message_response = {"content": ""}  # Initialize with default
         tool_calls = []  # Initialize tool_calls
+        
         for attempt in range(max_retries + 1):
             try:
+                # Exponential backoff: 0, 2, 4, 8 секунд
+                if attempt > 0:
+                    backoff_time = 2 ** (attempt - 1)
+                    logger.info(f"Waiting {backoff_time}s before retry {attempt}/{max_retries}")
+                    await asyncio.sleep(backoff_time)
+                
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
                         url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
                     ) as response:
-                        logger.info(f"DeepSeek API response status: {response.status} (attempt {attempt + 1})")
+                        logger.info(f"DeepSeek API response status: {response.status} (attempt {attempt + 1}/{max_retries + 1})")
+                        
+                        # Обработка различных HTTP статусов согласно документации
                         if response.status == 200:
                             # Успешный ответ - обрабатываем
                             tool_calls = []
@@ -1478,6 +1492,53 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 if result:
                                     return result
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
+                            
+                            # Успех - выходим из retry loop
+                            break
+                        
+                        elif response.status == 429:
+                            # Rate limit - обязательно retry
+                            logger.warning(f"Rate limit (429), retry {attempt + 1}/{max_retries + 1}")
+                            if attempt < max_retries:
+                                continue
+                            else:
+                                content = "Извините, слишком много запросов. Попробуйте через несколько секунд."
+                                break
+                        
+                        elif response.status in [500, 502, 503, 504]:
+                            # Server errors - retry
+                            error_text = await response.text()
+                            logger.error(f"Server error {response.status}: {error_text[:200]}")
+                            if attempt < max_retries:
+                                logger.info(f"Retrying due to server error ({response.status})")
+                                continue
+                            else:
+                                content = "Извините, сервер временно недоступен. Попробуйте позже."
+                                break
+                        
+                        elif response.status == 400:
+                            # Bad request - не retry, логируем для отладки
+                            error_text = await response.text()
+                            logger.error(f"Bad request (400): {error_text}")
+                            logger.error(f"Request data: {json.dumps(data, ensure_ascii=False, indent=2)}")
+                            content = "Извините, некорректный запрос. Попробуйте переформулировать."
+                            break
+                        
+                        elif response.status == 401:
+                            # Unauthorized - критическая ошибка
+                            logger.error("API key invalid or expired (401)")
+                            content = "Извините, проблема с авторизацией API. Обратитесь к администратору."
+                            break
+                        
+                        else:
+                            # Другие ошибки
+                            error_text = await response.text()
+                            logger.error(f"Unexpected status {response.status}: {error_text[:200]}")
+                            if attempt < max_retries:
+                                continue
+                            else:
+                                content = "Извините, произошла ошибка. Попробуйте еще раз."
+                                break
 
 
                     # Все запросы обрабатывает AI, без принудительных триггеров
