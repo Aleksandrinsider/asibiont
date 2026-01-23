@@ -726,7 +726,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Initialize time variables with defaults
         base_now = datetime.now(pytz.UTC)
         user_now = base_now
-        current_time_str = user_now.strftime("%H:%M")
+        # Формат времени С ТАЙМЗОНОЙ для промпта: "15:43 (UTC)"
+        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         months = [
             'января',
             'февраля',
@@ -783,7 +784,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
             logger.info(f"[TIME CHECK] Formatted: {base_now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
             user_now = base_now  # Default to base_now
-            current_time_str = user_now.strftime("%H:%M")
+            # Формат времени С ТАЙМЗОНОЙ для промпта
+            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
             user_tz = pytz.UTC  # Default
             if user:
                 tz_str = user.timezone if user.timezone else "UTC"
@@ -791,7 +793,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 try:
                     user_tz = pytz.timezone(tz_str)
                     user_now = base_now.astimezone(user_tz)
-                    current_time_str = user_now.strftime("%H:%M")
+                    # Формат времени С ТАЙМЗОНОЙ для промпта: "15:43 (Europe/Moscow)"
+                    current_time_str = f"{user_now.strftime('%H:%M')} ({tz_str})"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                     logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
                     logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
@@ -800,7 +803,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     logger.error(f"Error setting user timezone: {e}")
                     user_tz = pytz.UTC
                     user_now = base_now
-                    current_time_str = user_now.strftime("%H:%M")
+                    # Формат времени С ТАЙМЗОНОЙ для промпта
+                    current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
 
             if user and user.memory:
@@ -1780,7 +1784,8 @@ async def generate_reminder(user_id, task_title, task_id=None):
         from datetime import datetime
         import pytz
         user_now = datetime.now(pytz.UTC)
-        current_time_str = user_now.strftime("%H:%M")
+        # Формат времени С ТАЙМЗОНОЙ для промпта
+        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         user_username = user.username if user.username else "пользователь"
         mentions_str = ""
@@ -1860,7 +1865,8 @@ async def generate_result_check(user_id, task_title):
         from datetime import datetime
         import pytz
         user_now = datetime.now(pytz.UTC)
-        current_time_str = user_now.strftime("%H:%M")
+        # Формат времени С ТАЙМЗОНОЙ для промпта
+        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         user_username = "пользователь"
         mentions_str = ""
@@ -1940,7 +1946,8 @@ async def generate_proactive_message(user_id):
                 # Получаем время пользователя
                 base_now = datetime.now(pytz.UTC)
                 user_now = base_now
-                current_time_str = user_now.strftime("%H:%M")
+                # Формат времени С ТАЙМЗОНОЙ для промпта
+                current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                 user_tz = pytz.UTC
 
@@ -1948,7 +1955,8 @@ async def generate_proactive_message(user_id):
                     try:
                         user_tz = pytz.timezone(user.timezone)
                         user_now = base_now.astimezone(user_tz)
-                        current_time_str = user_now.strftime("%H:%M")
+                        # Обновляем с учетом таймзоны пользователя
+                        current_time_str = f"{user_now.strftime('%H:%M')} ({user.timezone})"
                         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                     except Exception as e:
                         logger.error(f"Error setting user timezone: {e}")
@@ -2136,7 +2144,9 @@ async def generate_daily_report(user_id):
         from datetime import datetime
         import pytz
         user_now = datetime.now(pytz.UTC)
-        current_time_str = user_now.strftime("%H:%M")
+        # Формат времени С ТАЙМЗОНОЙ для промпта
+        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+        current_date_str = user_now.strftime("%Y-%m-%d")
         user_username = "пользователь"
         mentions_str = ""
 
@@ -2240,7 +2250,8 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         from datetime import datetime
         import pytz
         user_now = datetime.now(pytz.UTC)
-        current_time_str = user_now.strftime("%H:%M")
+        # Формат времени С ТАЙМЗОНОЙ для промпта
+        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         user_username = "пользователь"
         mentions_str = ""
