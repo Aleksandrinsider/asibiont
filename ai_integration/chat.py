@@ -1057,55 +1057,100 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}...")
 
         # Special handling for delete task requests
-        if any(word in clean_message.lower() for word in ['удали', 'удалить', 'delete', 'remove', 'сними', 'отмени']):
-            if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
-                intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[DELETE TASK DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
+        if intent.get('type') == 'conversation':  # Только если intent еще не определен
+            if any(word in clean_message.lower() for word in ['удали', 'удалить', 'delete', 'remove', 'сними', 'отмени']):
+                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+                    intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
+                    logger.info(f"[DELETE TASK DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
 
-        # Special handling for add task requests
-        if any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'add', 'create']):
-            if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
-                intent = {"type": "add_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
+        # Special handling for add task requests - EXPLICIT (добавь задачу, создай задачу)
+        if intent.get('type') == 'conversation':  # Только если intent еще не определен
+            if any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'add', 'create']):
+                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+                    intent = {"type": "add_task", "confidence": 0.9, "params": {}}
+                    logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
+
+        # Special handling for IMPLICIT task creation (нужно сходить, надо купить)
+        if intent.get('type') == 'conversation':  # Только если intent еще не определен
+            implicit_indicators = ['нужно', 'надо', 'должен', 'планирую', 'собираюсь', 'need to', 'have to']
+            action_words = ['сходить', 'купить', 'позвонить', 'написать', 'встретиться', 'подготовить', 'сделать', 'закончить']
+            
+            has_implicit = any(word in clean_message.lower() for word in implicit_indicators)
+            has_action = any(word in clean_message.lower() for word in action_words)
+            
+            # Добавим обработку для напоминаний
+            reminder_words = ['напомни', 'напомнить', 'remind']
+            has_reminder = any(word in clean_message.lower() for word in reminder_words)
+            
+            if (has_implicit and has_action) or has_reminder:
+                intent = {"type": "add_task", "confidence": 0.85, "params": {}}
+                logger.info(f"[IMPLICIT TASK DETECTED] Setting intent to add_task for implicit request: {clean_message[:50]}...")
 
         # Special handling for complete task requests
-        if any(word in clean_message.lower() for word in ['заверши', 'выполни', 'complete', 'finish', 'done']):
-            if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
-                intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
+        if intent.get('type') == 'conversation':  # Только если intent еще не определен
+            if any(word in clean_message.lower() for word in ['заверши', 'выполни', 'complete', 'finish', 'done']):
+                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+                    intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
+                    logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
 
         # Special handling for list tasks requests
-        if any(word in clean_message.lower() for word in ['покажи', 'список', 'list', 'show']):
-            if any(word in clean_message.lower() for word in ['задачи', 'задач', 'tasks']):
-                intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
-                logger.info(f"[LIST TASKS DETECTED] Setting intent to list_tasks for message: {clean_message[:50]}...")
+        if intent.get('type') == 'conversation':  # Только если intent еще не определен
+            if any(word in clean_message.lower() for word in ['покажи', 'список', 'list', 'show']):
+                if any(word in clean_message.lower() for word in ['задачи', 'задач', 'tasks']):
+                    intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+                    logger.info(f"[LIST TASKS DETECTED] Setting intent to list_tasks for message: {clean_message[:50]}...")
 
-        # Special handling for update profile requests
-        if any(word in clean_message.lower() for word in ['обнови', 'измени', 'добавь', 'оставь', 'очистить', 'только', 'update', 'change', 'add']):
-            intent = {"type": "update_profile", "confidence": 0.8, "params": {}}
-            logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
+        # Special handling for update profile requests - ONLY if not a task-related request
+        if intent.get('type') == 'conversation':  # Проверяем, что intent еще не определен как задача
+            profile_explicit = ['обнови профиль', 'измени профиль', 'заполни профиль', 'update profile']
+            is_explicit_profile = any(phrase in clean_message.lower() for phrase in profile_explicit)
+            
+            if is_explicit_profile or (
+                any(word in clean_message.lower() for word in ['обнови', 'измени', 'оставь', 'очистить']) 
+                and not any(word in clean_message.lower() for word in ['задач', 'task'])
+            ):
+                intent = {"type": "update_profile", "confidence": 0.8, "params": {}}
+                logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
 
-        # Special handling for profile information sharing
-        if any(word in clean_message.lower() for word in ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']):
-            if any(word in clean_message.lower() for word in ['директор', 'менеджер', 'разработчик', 'компания', 'фирма', 'director', 'manager', 'developer', 'company']):
-                intent = {"type": "profile_info", "confidence": 0.8, "params": {}}
+        # Special handling for profile information sharing - расширенная версия
+        if intent.get('type') == 'conversation':  # Только если intent еще не определен
+            # Личные местоимения + профессиональная информация
+            personal_pronouns = ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']
+            professional_info = ['директор', 'менеджер', 'разработчик', 'аналитик', 'компания', 'фирма', 
+                               'навыки', 'умею', 'знаю', 'занимаюсь', 'специализируюсь',
+                               'python', 'sql', 'java', 'javascript', 'react', 'программирую',
+                               'живу', 'город', 'москва', 'петербург', 'екатеринбург',
+                               'интересы', 'увлечения', 'интересуюсь', 'люблю',
+                               'director', 'manager', 'developer', 'company', 'analyst', 'skills']
+            
+            has_personal = any(word in clean_message.lower() for word in personal_pronouns)
+            has_professional = any(word in clean_message.lower() for word in professional_info)
+            
+            # Также проверим, есть ли явная просьба заполнить профиль
+            profile_fill_request = any(phrase in clean_message.lower() for phrase in 
+                                      ['заполн', 'давай заполн', 'обнов', 'расскаж о себе'])
+            
+            if (has_personal and has_professional) or profile_fill_request:
+                intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
                 logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
         # Special handling for time expressions (update existing task)
-        time_patterns = [
-            r'завтра\s+в\s+\d{1,2}:\d{2}',
-            r'сегодня\s+в\s+\d{1,2}:\d{2}',
-            r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
-            r'в\s+\d{1,2}:\d{2}',
-            r'\d{1,2}:\d{2}'
-        ]
-        if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns):
-            # Check if there are pending tasks to update
-            if user:
-                pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
-                if pending_tasks:
-                    intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
-                    logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
+        # Только если уже нет более приоритетного intent
+        if intent.get('type') == 'conversation':
+            time_patterns = [
+                r'завтра\s+в\s+\d{1,2}:\d{2}',
+                r'сегодня\s+в\s+\d{1,2}:\d{2}',
+                r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
+                r'в\s+\d{1,2}:\d{2}',
+                r'\d{1,2}:\d{2}'
+            ]
+            if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns):
+                # Check if there are pending tasks to update
+                if user:
+                    pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
+                    if pending_tasks:
+                        intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
+                        logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
 
         # Убрана специальная обработка приветствий - все через AI промпт
 
@@ -1206,7 +1251,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Определяем, является ли сообщение запросом на управление задачами на основе intent
         is_task_request = intent.get('type') in [
             'add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task',
-            'delegate_task', 'find_partners', 'update_profile'
+            'delegate_task', 'find_partners', 'update_profile', 'profile_info'
         ]
 
         # Умная логика выбора инструментов на основе intent classification
@@ -1224,8 +1269,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         elif intent_type == 'find_partners':
             # Поиск партнеров - используем инструменты
             tool_choice = "auto"
-        elif intent_type == 'update_profile':
-            # Обновление профиля - используем инструменты
+        elif intent_type in ['update_profile', 'profile_info']:
+            # Обновление профиля или информация о профиле - используем инструменты
             tool_choice = "auto"
         else:
             # По умолчанию - автоопределение
