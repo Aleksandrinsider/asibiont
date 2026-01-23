@@ -1068,7 +1068,7 @@
             <!-- Левая колонка - Люди -->
             <div class="left-column">
                 <div class="context-section" id="profile-section">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
                         <div onclick="openQuickProfileModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm.061 3.073a4 4 0 1 0-5.123 0 6.004 6.004 0 0 0-3.431 5.142.75.75 0 0 0 1.498.07 4.5 4.5 0 0 1 8.99 0 .75.75 0 1 0 1.498-.07 6.005 6.005 0 0 0-3.432-5.142Z"/>
@@ -1585,14 +1585,14 @@
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
                 // AI avatar with fallback
-                avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; flex-shrink: 0; margin-right: 8px;">AI</div>';
+                avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px; margin-top: 15px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; flex-shrink: 0; margin-right: 8px; margin-top: 15px;">AI</div>';
             } else {
                 // User avatar from profile
                 if (window.currentUserProfile && window.currentUserProfile.photo_url) {
-                    avatarHtml = `<img src="${window.currentUserProfile.photo_url}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;">`;
+                    avatarHtml = `<img src="${window.currentUserProfile.photo_url}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px; margin-top: 15px;">`;
                 } else {
                     const firstLetter = window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U';
-                    avatarHtml = `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; margin-right: 8px;">${firstLetter}</div>`;
+                    avatarHtml = `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; margin-right: 8px; margin-top: 15px;">${firstLetter}</div>`;
                 }
             }
             
@@ -5370,7 +5370,7 @@
                         
                         if (hasProfileData && data.formatted_end_date) {
                         const extendUrl = '/extend_subscription';
-                        let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
+                        let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<div onclick="openQuickProfileModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">';
                         html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm.061 3.073a4 4 0 1 0-5.123 0 6.004 6.004 0 0 0-3.431 5.142.75.75 0 0 0 1.498.07 4.5 4.5 0 0 1 8.99 0 .75.75 0 1 0 1.498-.07 6.005 6.005 0 0 0-3.432-5.142Z"/></svg>';
                         html += '<h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Профиль</h3>';
@@ -5382,7 +5382,7 @@
                         html += '</button>';
                         html += '</div>';
                         const displayStyle = isCollapsed ? 'none' : 'block';
-                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 15px;">';
+                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 5px;">';
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
