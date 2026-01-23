@@ -1104,7 +1104,6 @@
                             <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
                             <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
-                            <p>Языки: {{ profile.languages or 'Не указаны' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 8 %}style="color: #068487;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
@@ -3881,7 +3880,6 @@
                     html += `<p style="text-align: left;">Цели: ${partner.goals || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
-                    html += `<p style="text-align: left;">Языки: ${partner.languages || 'Не указаны'}</p>`;
                     
                     // Рекомендация с цветом
                     if (partner.average_rating > 0) {
@@ -5051,7 +5049,6 @@
                         html += '<p>Цели: ' + (data.profile.goals || 'Не указаны') + '</p>';
                         html += '<p>Навыки: ' + (data.profile.skills || 'Не указаны') + '</p>';
                         html += '<p>Интересы: ' + (data.profile.interests || 'Не указаны') + '</p>';
-                        html += '<p>Языки: ' + (data.profile.languages || 'Не указаны') + '</p>';
                         if (data.profile.average_rating && data.profile.average_rating > 0) {
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 8 ? 'color: #068487;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';

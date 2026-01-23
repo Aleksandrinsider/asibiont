@@ -546,52 +546,6 @@ try:
     # Production mode: Test users and promo codes disabled
     logger.info("Production mode: Test data creation disabled")
 
-    # Create special promo code for Bronze tier
-    try:
-        session_db = Session()
-        existing_promo = session_db.query(PromoCode).filter_by(code='BRONZEFREE26').first()
-        if not existing_promo:
-            expiry_date = datetime(2026, 2, 1)  # 1 февраля 2026
-            promo = PromoCode(
-                code='BRONZEFREE26',
-                discount_percent=100,  # 100% discount = free
-                tier='BRONZE',
-                max_uses=None,  # Unlimited uses
-                duration_days=30,
-                expires_at=expiry_date,
-                created_at=datetime.now()
-            )
-            session_db.add(promo)
-            session_db.commit()
-            logger.info("Created unlimited Bronze promo code BRONZEFREE26 expiring 2026-02-01")
-        else:
-            logger.info("Bronze promo code BRONZEFREE26 already exists")
-
-        # Create special promo code for Silver tier
-        existing_silver_promo = session_db.query(PromoCode).filter_by(code='SILVERTEST').first()
-        if not existing_silver_promo:
-            from datetime import datetime
-            expiry_date = datetime(2026, 12, 31)  # 31 декабря 2026
-            silver_promo = PromoCode(
-                code='SILVERTEST',
-                discount_percent=100,  # 100% discount = free
-                tier='SILVER',
-                max_uses=None,  # Unlimited uses
-                duration_days=30,
-                expires_at=expiry_date,
-                created_at=datetime.now()
-            )
-            session_db.add(silver_promo)
-            session_db.commit()
-            logger.info("Created unlimited Silver promo code SILVERTEST expiring 2026-12-31")
-        else:
-            logger.info("Silver promo code SILVERTEST already exists")
-    except Exception as e:
-        logger.error(f"Error creating promo code: {e}")
-    finally:
-        if 'session_db' in locals():
-            session_db.close()
-
     # Create test users with different tiers and sport interests (only in local mode)
     if os.getenv('LOCAL') == '1':
         try:
