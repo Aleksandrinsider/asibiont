@@ -5411,8 +5411,7 @@
                 const chatView = document.getElementById('chat-view');
                 
                 if (feedView && feedView.classList.contains('active')) {
-                    // Если открыта лента, обновляем только её
-                    loadFeed();
+                    // Если открыта лента, НЕ обновляем - только проверяем новые посты
                     return;
                 }
                 
