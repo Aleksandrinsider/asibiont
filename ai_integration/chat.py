@@ -1406,6 +1406,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         max_retries = 3  # Увеличиваем до 3 попыток
         message_response = {"content": ""}  # Initialize with default
         tool_calls = []  # Initialize tool_calls
+        success_flag = False  # Флаг успешного выполнения
+        success = False  # Флаг успешного выполнения
         
         for attempt in range(max_retries + 1):
             try:
@@ -1494,6 +1496,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
                             
                             # Успех - выходим из retry loop
+                            print(f"[DEBUG SUCCESS] API call successful, content length: {len(content) if content else 0}")
+                            print(f"[DEBUG SUCCESS] Tool calls found: {len(tool_calls) if tool_calls else 0}")
+                            print(f"[DEBUG BEFORE BREAK] About to break from retry loop")
+                            logger.info(f"[SUCCESS] API call successful, content length: {len(content) if content else 0}")
+                            logger.info(f"[SUCCESS] Tool calls found: {len(tool_calls) if tool_calls else 0}")
+                            # Устанавливаем флаг успешного выполнения
+                            success = True
                             break
                         
                         elif response.status == 429:
@@ -1539,241 +1548,60 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             else:
                                 content = "Извините, произошла ошибка. Попробуйте еще раз."
                                 break
-
-
-                    # Все запросы обрабатывает AI, без принудительных триггеров
-                    logger.info("[AI ONLY] All requests handled by AI without forced triggers")
-
-                    # SMART FALLBACK: Проверяем, нужно ли применить умный fallback (use improved version if available)
-                    # Определяем content заранее для использования в fallback
-                    original_content = message_response.get("content", "")
-                    content = original_content
-                    content = replace_placeholders(content, user_now, current_time_str)
-
-                    # Пост-обработка: удаляем запрещенные форматы и элементы
-                    content = post_process_response(content)
-
-                    try:
-                        fallback_result = smart_fallback_handler(original_message, content, user_id, content)
-                        logger.info(f"[FALLBACK] Fallback actions completed")
-                        logger.debug(
-                            f"[FALLBACK] Fallback result: {len(fallback_result) if fallback_result else 0} actions"
-                        )
-                        if fallback_result:
-                            logger.info(
-                                f"[SMART FALLBACK] Applied {len(fallback_result)} fallback actions for user {user_id}"
-                            )
-
-                            # Обрабатываем результаты fallback аналогично tool calls
-                            natural_responses = []
-                            for action in fallback_result:
-                                result_text = action["result"]
-                                func_name = action["function"]
-
-                                if "Добавлена задача" in result_text:
-                                    match = re.search(
-                                        r"Добавлена задача '([^']+)' \(ID: \d+\) с напоминанием на ([^)]+)", result_text
-                                    )
-                                    if match:
-                                        task_title = match.group(1)
-                                        time_str = match.group(2)
-                                        natural = f'Отлично, добавил задачу "{task_title}" с напоминанием на {time_str}.'
-                                        natural_responses.append(natural)
-                                    else:
-                                        natural_responses.append(result_text)
-
-                                elif "Завершена задача" in result_text:
-                                    match = re.search(r"Завершена задача '([^']+)'", result_text)
-                                    if match:
-                                        task_title = match.group(1)
-                                        natural = f'Отлично, отметил задачу "{task_title}" как выполненную! 👍'
-                                        natural_responses.append(natural)
-                                    else:
-                                        natural_responses.append(result_text)
-
-                                elif "Задачи:" in result_text:
-                                    # Не добавляем сразу, анализ будет добавлен отдельно
-                                    pass
-
-                                elif "Удалены все задачи" in result_text:
-                                    natural = (
-                                        "Удалил все твои задачи. Теперь список пуст - можно начинать с чистого листа!"
-                                    )
-                                    natural_responses.append(natural)
-
-                                elif "Задача" in result_text and "делегирована" in result_text:
-                                    natural = "Отлично, задача делегирована! Я уведомлю получателя."
-                                    natural_responses.append(natural)
-
-                                else:
-                                    natural_responses.append(result_text)
-
-                            # Проверяем, есть ли list_tasks в результатах fallback
-                            has_list_tasks = any(action["function"] == "list_tasks" for action in fallback_result)
-                            list_tasks_result = None
-                            if has_list_tasks:
-                                for action in fallback_result:
-                                    if action["function"] == "list_tasks":
-                                        list_tasks_result = action["result"]
-                                        break
-
-                            # Для list_tasks просто добавляем результат - главный промпт уже содержит все правила
-                            if has_list_tasks and list_tasks_result:
-                                natural_responses.append(list_tasks_result)
-
-                            # Формируем финальный контент
-                            final_content = "\n".join(natural_responses)
-
-                            # Enforcement отключен - AI должен отвечать естественно
-                            # intent_type = "list_tasks" if has_list_tasks else None
-                            # final_content = await enforce_prompt_compliance(
-                            #     final_content, intent_type, user_id, context,
-                            #     system_prompt, messages, url, headers
-                            # )
-
-                            # Пост-обработка для улучшения качества ответа
-                            final_content = post_process_response(final_content)
-
-                            return final_content
-                    except Exception as e:
-                        logger.error(f"[SMART FALLBACK] Error in fallback handler: {e}")
-
-                    # Если forced calls не сработали, обрабатываем обычный ответ AI
-                    # Обрабатываем обычный ответ AI без tool calls
-                    logger.info("[TOOL CALLS] Tool calls completed, 0 results. Generating natural response...")
-
-                    # Для обычных ответов ТОЛЬКО заменяем плейсхолдеры, без дополнительной очистки
-                    content = replace_placeholders(content, user_now, current_time_str)
-
-                    # КРИТИЧЕСКАЯ ПРОВЕРКА: если content пустой или слишком короткий
-                    if not content or len(content.strip()) < 3:
-                        logger.debug(
-                            f"[RESPONSE] Content is empty or too short: '{content}', len={len(content.strip())}"
-                        )
-                        logger.warning(f"[EMPTY RESPONSE] Original: '{original_content[:100]}...', returning original")
-                        content = original_content.strip()
-                        if not content:
-                            logger.warning("[RETRY] Response empty, retrying with explicit instruction")
-                            retry_system = (
-                                system_prompt +
-                                "\n\nКРИТИЧЕСКИ ВАЖНО:\n1. НЕ возвращай JSON, code blocks или технические теги\n2. Отвечай ТОЛЬКО обычным текстом\n3. Если создал задачу - скажи об этом и предложи найти партнёра\n4. Минимум 20 слов в ответе\n5. Будь дружелюбным и конкретным!")
-
-                            retry_messages = [{"role": "system", "content": retry_system}]
-                            if context:
-                                for item in context:
-                                    if "user" in item:
-                                        retry_messages.append({"role": "user", "content": item["user"]})
-                                    if "assistant" in item:
-                                        retry_messages.append({"role": "assistant", "content": item["assistant"]})
-                            retry_messages.append({"role": "user", "content": original_message})
-
-                            async with aiohttp.ClientSession() as retry_session:
-                                async with retry_session.post(
-                                    url,
-                                    headers=headers,
-                                    json={
-                                        "model": DEEPSEEK_MODEL,
-                                        "messages": retry_messages,
-                                        "temperature": 0.3,
-                                        "tools": TOOLS,
-                                        "tool_choice": "auto",
-                                    },
-                                    timeout=aiohttp.ClientTimeout(total=120),
-                                ) as retry_response:
-                                    if retry_response.status == 200:
-                                        retry_result = await retry_response.json()
-                                        if "choices" in retry_result and retry_result["choices"]:
-                                            retry_message = retry_result["choices"][0]["message"]
-                                            retry_content = retry_message.get("content", "")
-                                            retry_tool_calls = retry_message.get("tool_calls")
-                                            
-                                            # Если в retry есть tool_calls, обрабатываем их
-                                            if retry_tool_calls:
-                                                logger.info(f"[RETRY] Found {len(retry_tool_calls)} tool calls in retry response")
-                                                tool_calls = retry_tool_calls
-                                                # Переходим к обработке tool_calls вместо обычного ответа
-                                                content = retry_content.strip() if retry_content else ""
-                                            else:
-                                                retry_content = replace_placeholders(retry_content, user_now, current_time_str)
-                                                content = retry_content.strip()
-                                                logger.info(f"[RETRY] Got retry content: '{content[:100]}...'")
-                                        else:
-                                            logger.error(f"[RETRY] No choices in retry response: {retry_result}")
-                                            content = "Извините, произошла ошибка при обработке запроса."
-                                    else:
-                                        logger.error(f"[RETRY] Retry request failed with status {retry_response.status}")
-                                        content = "Извините, произошла ошибка при обработке запроса."
-                                        if retry_content and len(retry_content.strip()) >= 3:
-                                            content = retry_content
-                                        else:
-                                            content = "Хорошо, продолжим работу!"
-                        else:
-                            logger.info(f"[RECOVERED] Using original content: '{content[:100]}...'")
-
-                    # Если все еще пустой после retry
-                    if not content:
-                        content = "Хорошо, продолжим работу!"
-
-                    # Проверяем tool_calls после retry
-                    if tool_calls:
-                        logger.info(f"[TOOL CALLS] Processing {len(tool_calls)} tool calls after retry")
-                        result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question)
-                        if result:
-                            return result
-                    else:
-                        # Обрабатываем обычный ответ AI без tool calls
-                        logger.info("[TOOL CALLS] No tool calls found, processing as regular response")
-
-                        # ИЗБЫТОЧНЫЕ ОБРАБОТКИ УБРАНЫ:
-                        # - enrich_response_with_engagement (AI сам задает вопросы через промпт)
-                        # - validate_response_compliance (ничего не делает, enforce отключен)
-                        # - clean_technical_details (только для сгенерированных ответов, не для основного AI)
-
-                        # Метрики качества ответа
-                        response_quality = {
-                            'length': len(content),
-                            'has_questions': '?' in content,
-                            'has_tools': bool(tool_calls),
-                            'intent_type': intent.get('type', 'unknown'),
-                            'user_id': user_id
-                        }
-                        logger.info(f"[RESPONSE QUALITY] {response_quality}")
-
-                        # Обработка ошибок: если ответ слишком короткий или пустой, дать fallback
-                        if not content or len(content.strip()) < 10:
-                            logger.warning("[FALLBACK] Empty or too short response, using fallback")
-                            content = "Хорошо, продолжим работу!"
-
-                        # ДОПОЛНИТЕЛЬНЫЕ АНАЛИЗЫ ПОЛНОСТЬЮ УБРАНЫ ДЛЯ ЛАКОНИЧНОСТИ
-                        # Никаких эмоций, рекомендаций, дубликатов - только чистый ответ AI
-
-                        # Пост-обработка для улучшения качества ответа
-                        content = post_process_response(content)
-
-                        # Финальная проверка на пустой ответ
-                        if not content or len(content.strip()) < 5:
-                            logger.warning("[FINAL FALLBACK] Response became empty after post-processing, using final fallback")
-                            content = "Хорошо, понял. Продолжим работу!"
-
-                        # КЭШИРУЕМ УСПЕШНЫЙ ОТВЕТ
-                        if content and len(content.strip()) >= 5 and cache_key:
-                            cache.set_by_key(cache_key, content, ttl=300)  # Кэшируем на 5 минут
-                            logger.info(f"Cached response for key: {cache_key[:50]}...")
-
-                        return content
-
+                                
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                logger.error(f"Network error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries:
+                    continue
+                else:
+                    content = "Извините, проблема с сетевым соединением. Попробуйте позже."
+                    break
             except Exception as e:
-                logger.error(f"Error in chat_with_ai: {e}")
-                logger.error(f"Error type: {type(e).__name__}")
-                logger.error(f"Traceback:\n{traceback.format_exc()}")
-                # Добавляем номер строки для отладки
-                tb = traceback.extract_tb(e.__traceback__)
-                if tb:
-                    last_frame = tb[-1]
-                    logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
-                return f"Ошибка: {str(e)} [v2]"
+                logger.error(f"Unexpected error on attempt {attempt + 1}: {e}")
+                if attempt < max_retries:
+                    continue
+                else:
+                    content = "Извините, произошла неожиданная ошибка. Попробуйте еще раз."
+                    break
+                
+        # ОБРАБОТКА РЕЗУЛЬТАТОВ ПОСЛЕ RETRY LOOP
+        print(f"[DEBUG AFTER LOOP] After retry loop, success: {success if 'success' in locals() else False}")
+        print(f"[DEBUG AFTER LOOP] Content: '{content[:50] if content else 'None'}...'")
+        print(f"[DEBUG AFTER LOOP] Tool calls: {len(tool_calls) if tool_calls else 0}")
+        
+        # Проверяем флаг успеха
+        if 'success' not in locals() or not success:
+            logger.warning("[RETRY FAILED] All retry attempts failed")
+            if not content:
+                content = "Извините, не удалось получить ответ. Попробуйте позже."
+            return content
+            
+        # Обработка успешного ответа
+        # Обработка успешного ответа
+        if not content or len(content.strip()) < 5:
+            logger.warning("[FALLBACK] No valid content after retry loop")
+            content = "Хорошо, понял. Продолжим работу!"
+        
+        # Получаем финальный контент от AI
+        logger.info("[AI RESPONSE] Processing AI response for conversation")
+        final_content = content
+        final_content = replace_placeholders(final_content, user_now, current_time_str)
+
+        # Пост-обработка
+        print(f"[DEBUG FINAL] Before post_process: '{final_content[:50] if final_content else 'None'}...'")
+        final_content = post_process_response(final_content)
+        print(f"[DEBUG FINAL] After post_process: '{final_content[:50] if final_content else 'None'}...'")
+
+        # Финальная проверка
+        if not final_content or len(final_content.strip()) < 5:
+            logger.warning("[FINAL FALLBACK] Content empty after processing, using fallback")
+            final_content = "Хорошо, понял. Продолжим работу!"
+
+        print(f"[DEBUG RETURN] Final return: '{final_content[:50] if final_content else 'None'}...'")
+        return final_content
 
     except Exception as e:
+        print(f"[DEBUG EXCEPTION] Exception in chat_with_ai: {e}")
         logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
@@ -1782,11 +1610,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if tb:
             last_frame = tb[-1]
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
-        return f"Ошибка: {str(e)} [v2]"
+        return f"ERROR: {str(e)} [chat_with_ai]"
+        # Добавляем номер строки для отладки
+        tb = traceback.extract_tb(e.__traceback__)
         if tb:
             last_frame = tb[-1]
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
-        return f"Ошибка: {str(e)} [v2]"
+        return f"OUTER ERROR: {str(e)} [v2]"
 
 
 async def generate_reminder(user_id, task_title, task_id=None):
