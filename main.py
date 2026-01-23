@@ -5043,7 +5043,7 @@ async def update_timezone_handler(request):
 
 
 async def api_profile_handler(request):
-    """API для получения профиля пользователя"""
+    """API для получения и обновления профиля пользователя"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id') if session else None
@@ -5056,6 +5056,49 @@ async def api_profile_handler(request):
     except Exception as e:
         logger.error(f"Error getting session in api_profile: {e}", exc_info=True)
         return web.json_response({'error': 'Session error'}, status=500)
+
+    # Handle POST request - update profile
+    if request.method == 'POST':
+        try:
+            data = await request.json()
+            logger.info(f"[API PROFILE POST] Received data: {data}")
+            
+            session_db = Session()
+            try:
+                user = session_db.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    return web.json_response({'error': 'User not found'}, status=404)
+
+                profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                if not profile:
+                    profile = UserProfile(user_id=user.id)
+                    session_db.add(profile)
+
+                # Update profile fields
+                if 'city' in data and data['city']:
+                    profile.city = data['city']
+                if 'company' in data and data['company']:
+                    profile.company = data['company']
+                if 'position' in data and data['position']:
+                    profile.position = data['position']
+                if 'interests' in data and data['interests']:
+                    profile.interests = data['interests']
+                if 'skills' in data and data['skills']:
+                    profile.skills = data['skills']
+                if 'goals' in data and data['goals']:
+                    profile.goals = data['goals']
+                if 'bio' in data and data['bio']:
+                    profile.bio = data['bio']
+
+                session_db.commit()
+                logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")
+                
+                return web.json_response({'success': True, 'message': 'Profile updated'})
+            finally:
+                session_db.close()
+        except Exception as e:
+            logger.error(f"Error updating profile: {e}", exc_info=True)
+            return web.json_response({'error': str(e)}, status=500)
 
     # Get fresh data from database (убрали кеширование для мгновенного обновления)
     session_db = Session()
@@ -5348,6 +5391,7 @@ app.router.add_post('/api/comments', create_comment_handler)
 app.router.add_get('/api/comments/{post_id}', get_comments_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
+app.router.add_post('/api/profile', api_profile_handler)
 app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)

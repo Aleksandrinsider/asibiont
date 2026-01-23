@@ -1402,10 +1402,6 @@
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Цели <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <textarea id="quick-goals" placeholder="Чего вы хотите достичь?" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; min-height: 60px; font-family: inherit; resize: vertical;"></textarea>
                     </div>
-                    <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Языки <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
-                        <input type="text" id="quick-languages" placeholder="Например: Русский, English" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
-                    </div>
                 </form>
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn">Пропустить</button>
@@ -3719,7 +3715,6 @@
             const interests = document.getElementById('quick-interests').value.trim();
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
-            const languages = document.getElementById('quick-languages').value.trim();
 
             // Проверяем обязательные поля
             if (!city) {
@@ -3746,8 +3741,7 @@
                         position: position || undefined,
                         interests: interests,
                         skills: skills || undefined,
-                        goals: goals || undefined,
-                        languages: languages || undefined
+                        goals: goals || undefined
                     }),
                     credentials: 'include'
                 });
