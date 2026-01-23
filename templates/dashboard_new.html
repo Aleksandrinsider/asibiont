@@ -1392,7 +1392,7 @@
                         <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Дата рождения</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Дата рождения <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-birthdate" placeholder="ДД.ММ.ГГГГ (например: 15.03.1990)" maxlength="10" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                         <div id="zodiac-display" style="font-size: 12px; color: #068487; margin-top: 4px; min-height: 18px;"></div>
                     </div>
@@ -3877,12 +3877,7 @@
                 return;
             }
             
-            if (!birthdate) {
-                showNotification('Укажите дату рождения', 'error');
-                return;
-            }
-            
-            if (!validateBirthdate(birthdate)) {
+            if (birthdate && !validateBirthdate(birthdate)) {
                 showNotification('Неверный формат даты рождения (ДД.ММ.ГГГГ)', 'error');
                 return;
             }
@@ -3902,9 +3897,12 @@
                 if (zodiac) profileData.zodiac_sign = zodiac;
                 if (company) profileData.company = company;
                 if (position) profileData.position = position;
-                if (skills) profileData.skills = skills;
-                if (goals) profileData.goals = goals;
-
+                if (skprofileData = { city, interests };
+                if (birthdate) {
+                    profileData.birthdate = birthdate;
+                    const zodiac = calculateZodiacSign(birthdate);
+                    if (zodiac) profileData.zodiac_sign = zodiac;
+                }
                 const response = await fetch('/api/profile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
