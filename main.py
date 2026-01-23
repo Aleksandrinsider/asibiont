@@ -4446,6 +4446,10 @@ async def get_comments_handler(request):
             
             users_map = {u.id: u for u in users_data}
 
+            # Get current user's database id
+            current_user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            current_user_id = current_user.id if current_user else None
+
             result = []
             for comment in comments:
                 author = users_map.get(comment.user_id)
@@ -4463,7 +4467,7 @@ async def get_comments_handler(request):
                             'username': author.username,
                             'first_name': author.first_name,
                             'photo_url': author.photo_url,
-                            'is_current_user': comment.user_id == user_id
+                            'is_current_user': comment.user_id == current_user_id
                         }
                     })
 
