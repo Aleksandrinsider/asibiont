@@ -1952,7 +1952,7 @@
                             <div style="flex: 1; min-width: 0;">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
                                     ${post.author.photo_url ? 
-                                        `<img src="${post.author.photo_url}" onclick="openContactProfileModal('${usernameClean}')" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='#068487'" onmouseout="this.style.borderColor='#E8ECEF'">` : 
+                                        `<img src="${post.author.photo_url}" onclick="openContactProfileModal('${usernameClean}')" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;">` : 
                                         '<div onclick="openContactProfileModal(\'' + usernameClean + '\')" style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #05696c 100%); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: white; cursor: pointer; box-shadow: 0 2px 4px rgba(6, 132, 135, 0.2);">' + (post.author.first_name ? post.author.first_name[0].toUpperCase() : (telegramUsername ? telegramUsername[0].toUpperCase() : '?')) + '</div>'
                                     }
                                     <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
@@ -2123,16 +2123,22 @@
                         const commentTime = new Date(comment.created_at);
                         const dateString = commentTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
                         const timeString = commentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                        const commentUsername = comment.author.username || '';
+                        const commentUsernameClean = commentUsername.replace('@', '');
 
                         html += `
                             <div style="display: flex; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(246, 248, 250, 0.5); border-radius: 4px;">
                                 ${comment.author.photo_url ? 
-                                    `<img src="${comment.author.photo_url}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0;">` : 
-                                    '<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
+                                    `<img src="${comment.author.photo_url}" onclick="openContactProfileModal('${commentUsernameClean}')" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` : 
+                                    '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
                                 }
                                 <div style="flex: 1; min-width: 0;">
-                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                                        <span style="font-size: 12px; font-weight: 500; color: #374151;">${escapeHtml(comment.author.first_name || comment.author.username || 'Пользователь')}</span>
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
+                                        ${comment.author.first_name ? `<span style="font-size: 12px; font-weight: 500; color: #374151;">${escapeHtml(comment.author.first_name)}</span>` : ''}
+                                        ${commentUsername ? 
+                                            `<span onclick="openContactProfileModal('${commentUsernameClean}')" style="font-size: 12px; font-weight: 400; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${commentUsernameClean}</span>` : 
+                                            ''
+                                        }
                                         <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                     </div>
                                     <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
