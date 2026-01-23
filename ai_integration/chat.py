@@ -25,30 +25,6 @@ from .tools import TOOLS
 
 logger = logging.getLogger(__name__)
 
-async def generate_result_check(user_id, task_title):
-    """Генерирует персонализированный запрос о результатах выполнения задачи"""
-    try:
-        # Получаем профиль пользователя для персонализации
-        session = Session()
-        user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-        session.close()
-        
-        # Базовый текст запроса
-        base_text = f"Расскажите, пожалуйста, о результатах выполнения задачи '{task_title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
-        
-        # Если есть профиль, персонализируем
-        if user_profile and user_profile.interests:
-            interests = user_profile.interests.lower()
-            if 'проект' in interests or 'работа' in interests:
-                base_text += " Как это повлияло на ваш проект или работу?"
-            elif 'учеба' in interests or 'образование' in interests:
-                base_text += " Как это помогло в вашем обучении?"
-        
-        return base_text
-    except Exception as e:
-        logger.warning(f"Could not generate personalized result check: {e}")
-        return f"Расскажите, пожалуйста, о результатах выполнения задачи '{task_title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
-
 # ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
 class SimpleCache:
     """Простой in-memory кеш с TTL и ограничением размера"""
@@ -2409,15 +2385,3 @@ def validate_response_compliance(content, msg_type):
 
 
 # Функции для работы с задачами
-
-async def generate_result_check(user_id, task_title):
-    """
-    Генерирует запрос на уточнение результатов выполнения задачи
-    """
-    try:
-        # Создаем простой запрос на уточнение результата
-        result_check_text = f"Расскажите, пожалуйста, о результатах выполнения задачи '{task_title}'. Что было сделано? Какие возникли сложности? Это поможет улучшить планирование будущих задач."
-        return result_check_text
-    except Exception as e:
-        logger.error(f"Error generating result check: {e}")
-        return f"Расскажите о результатах выполнения задачи '{task_title}'. Что было сделано?"

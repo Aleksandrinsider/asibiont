@@ -1568,7 +1568,8 @@
             // Prepare avatar HTML
             let avatarHtml = '';
             if (normalizedSender === 'ai') {
-                avatarHtml = '<img src="/static/asibiont.svg" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;">';
+                // AI avatar with fallback
+                avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; flex-shrink: 0; margin-right: 8px;">AI</div>';
             } else {
                 // User avatar from profile
                 if (window.currentUserProfile && window.currentUserProfile.photo_url) {
