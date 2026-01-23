@@ -296,7 +296,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 1fr 1.5fr 1fr; /* Center column wider */
+    grid-template-columns: 1fr 1.4fr 1.1fr; /* Balanced layout */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
     gap: 4px;
