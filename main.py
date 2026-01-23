@@ -379,17 +379,7 @@ except Exception as e:
 # Subscription restoration removed for production
 
 
-# Test functions disabled in production mode
-# def add_test_sport_users():
-#     pass
-# def ensure_sport_interest():
-#     pass
-# def create_test_promo_codes():
-#     pass
 
-# IMPORTANT: Test users creation disabled to prevent @sportfan3 recreation
-# The function below created test users including @sportfan3 (GOLD tier)
-# which caused issues in production. It's now completely disabled.
 """
 def check_database_connection():
     \"\"\"Добавляет тестовых пользователей с интересами 'спорт' если их еще нет\"\"\"
@@ -514,8 +504,7 @@ def ensure_sport_interest():
         logger.error(f"Failed to add sport interest: {e}")
 
 
-# def create_test_promo_codes():
-#     # DOCSTRING: Создает тестовые промокоды
+
 #     try:
 #         session = Session()
 
@@ -2197,15 +2186,6 @@ except Exception as e:
 
 # Global app for Railway
 app = web.Application()
-
-# Setup CORS
-# cors = aiohttp_cors.setup(app, defaults={
-#     "*": aiohttp_cors.ResourceOptions(
-#         allow_credentials=True,
-#         expose_headers="*",
-#         allow_headers="*",
-#     )
-# })
 
 # Add bot to app
 if bot:
