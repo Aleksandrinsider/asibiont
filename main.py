@@ -4517,6 +4517,46 @@ async def get_comments_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def delete_comment_handler(request):
+    """Delete a comment"""
+    try:
+        session = await get_session(request)
+        if not session:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        user_id = session['telegram_id']
+        comment_id = int(request.match_info['comment_id'])
+
+        session_db = Session()
+        try:
+            # Get the comment
+            comment = session_db.query(Comment).filter_by(id=comment_id).first()
+            if not comment:
+                return web.json_response({'error': 'Comment not found'}, status=404)
+
+            # Get current user
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Check if user owns the comment
+            if comment.user_id != user.id:
+                return web.json_response({'error': 'Forbidden'}, status=403)
+
+            # Delete the comment
+            session_db.delete(comment)
+            session_db.commit()
+
+            return web.json_response({'success': True})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error deleting comment: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id"""
     telegram_id = request.match_info.get('telegram_id')
@@ -5470,6 +5510,7 @@ app.router.add_get('/api/feed', get_feed_handler)
 app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
 app.router.add_post('/api/comments', create_comment_handler)
 app.router.add_get('/api/comments/{post_id}', get_comments_handler)
+app.router.add_delete('/api/comments/{comment_id}', delete_comment_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)
