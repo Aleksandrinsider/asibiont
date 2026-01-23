@@ -1929,6 +1929,7 @@
         }
 
         async function loadFeed() {
+            console.log('[FEED] Loading feed...');
             try {
                 const response = await fetch('/api/feed', {
                     method: 'GET',
@@ -1937,7 +1938,8 @@
 
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
-                console.log('Feed data received:', data);
+                console.log('[FEED] Feed data received:', data);
+                console.log('[FEED] Number of posts:', data.posts ? data.posts.length : 0);
 
                 const feedContainer = document.getElementById('feed-posts');
                 feedContainer.innerHTML = '';
