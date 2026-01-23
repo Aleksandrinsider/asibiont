@@ -1450,13 +1450,13 @@ async def dashboard_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task.overdue_text = f"просрочено на {days} дн."
+                        task.overdue_text = f"на {days} дн."
                     elif hours > 0:
-                        task.overdue_text = f"просрочено на {hours} ч."
+                        task.overdue_text = f"на {hours} ч."
                     elif minutes > 0:
-                        task.overdue_text = f"просрочено на {minutes} мин."
+                        task.overdue_text = f"на {minutes} мин."
                     else:
-                        task.overdue_text = "просрочено"
+                        task.overdue_text = ""
                 else:
                     task.overdue_text = None
             else:
@@ -3459,6 +3459,8 @@ async def api_contact_profile_handler(request):
                     'languages': getattr(profile, 'languages', None) if profile else None,
                     'bio': getattr(profile, 'bio', None) if profile else None,
                     'current_plans': getattr(profile, 'current_plans', None) if profile else None,
+                    'birthdate': getattr(profile, 'birthdate', None) if profile else None,
+                    'zodiac_sign': getattr(profile, 'zodiac_sign', None) if profile else None,
                     'common_interests': common_interests,
                     'average_rating': getattr(profile, 'average_rating', 0) if profile else 0,
                     'task_count': active_tasks,
@@ -4785,11 +4787,11 @@ async def api_tasks_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task_data['overdue_text'] = f'просрочено на {days} дн.'
+                        task_data['overdue_text'] = f'на {days} дн.'
                     elif hours > 0:
-                        task_data['overdue_text'] = f'просрочено на {hours} ч.'
+                        task_data['overdue_text'] = f'на {hours} ч.'
                     else:
-                        task_data['overdue_text'] = f'просрочено на {minutes} мин.'
+                        task_data['overdue_text'] = f'на {minutes} мин.'
             tasks_data.append(task_data)
 
         return web.json_response({'tasks': tasks_data})

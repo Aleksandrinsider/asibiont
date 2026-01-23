@@ -1053,7 +1053,7 @@
             <div class="left-column">
                 <div class="context-section" id="profile-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #D1D9E0;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div onclick="openQuickProfileModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm.061 3.073a4 4 0 1 0-5.123 0 6.004 6.004 0 0 0-3.431 5.142.75.75 0 0 0 1.498.07 4.5 4.5 0 0 1 8.99 0 .75.75 0 1 0 1.498-.07 6.005 6.005 0 0 0-3.432-5.142Z"/>
                             </svg>
@@ -1113,6 +1113,9 @@
                             <p>Город: {{ profile.city or 'Не указан' }} 
                                 <button onclick="detectUserLocation()" style="background: none; border: none; cursor: pointer; padding: 0; color: #068487; font-size: 13px; text-decoration: underline; margin-left: 8px;" title="Определить автоматически по геолокации">📍 определить</button>
                             </p>
+                            {% if profile.birthdate %}
+                            <p>День рождения: {{ profile.birthdate }}{% if profile.zodiac_sign %} ({{ profile.zodiac_sign }}){% endif %}</p>
+                            {% endif %}
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
                             <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
@@ -3856,6 +3859,44 @@
             }
         });
         
+        function openQuickProfileModal() {
+            const modal = document.getElementById('quick-profile-modal');
+            if (modal) {
+                // Заполняем текущие данные профиля
+                const cityField = document.getElementById('quick-city');
+                const birthdateField = document.getElementById('quick-birthdate');
+                const companyField = document.getElementById('quick-company');
+                const positionField = document.getElementById('quick-position');
+                const interestsField = document.getElementById('quick-interests');
+                const skillsField = document.getElementById('quick-skills');
+                const goalsField = document.getElementById('quick-goals');
+                
+                // Получаем текущие данные из профиля
+                {% if profile %}
+                if (cityField) cityField.value = '{{ profile.city or "" }}';
+                if (birthdateField) {
+                    birthdateField.value = '{{ profile.birthdate or "" }}';
+                    // Пересчитываем знак зодиака
+                    if (birthdateField.value && validateBirthdate(birthdateField.value)) {
+                        const zodiac = calculateZodiacSign(birthdateField.value);
+                        const display = document.getElementById('zodiac-display');
+                        if (zodiac && display) {
+                            display.textContent = `Знак зодиака: ${zodiac} ♈`;
+                            display.style.color = '#068487';
+                        }
+                    }
+                }
+                if (companyField) companyField.value = '{{ profile.company or "" }}';
+                if (positionField) positionField.value = '{{ profile.position or "" }}';
+                if (interestsField) interestsField.value = '{{ profile.interests or "" }}';
+                if (skillsField) skillsField.value = '{{ profile.skills or "" }}';
+                if (goalsField) goalsField.value = '{{ profile.goals or "" }}';
+                {% endif %}
+                
+                modal.style.display = 'flex';
+            }
+        }
+        
         function skipQuickProfile() {
             const modal = document.getElementById('quick-profile-modal');
             if (modal) {
@@ -4047,6 +4088,9 @@
                     html += `<p style="text-align: left;">Город: ${partner.city || 'Не указан'}</p>`;
                     html += `<p style="text-align: left;">Компания: ${partner.company || 'Не указана'}</p>`;
                     html += `<p style="text-align: left;">Должность: ${partner.position || 'Не указана'}</p>`;
+                    if (partner.birthdate) {
+                        html += `<p style="text-align: left;">День рождения: ${partner.birthdate}${partner.zodiac_sign ? ' (' + partner.zodiac_sign + ')' : ''}</p>`;
+                    }
                     html += `<p style="text-align: left;">Цели: ${partner.goals || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
