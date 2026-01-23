@@ -4421,7 +4421,8 @@ async def create_comment_handler(request):
                     'author': {
                         'username': user.username,
                         'first_name': user.first_name,
-                        'photo_url': user.photo_url
+                        'photo_url': user.photo_url,
+                        'is_current_user': True
                     }
                 }
             })

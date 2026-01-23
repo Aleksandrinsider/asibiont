@@ -1193,14 +1193,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                'интересы', 'увлечения', 'интересуюсь', 'люблю',
                                'director', 'manager', 'developer', 'company', 'analyst', 'skills']
             
+            # Интересы и увлечения - расширенная детекция
+            interests_keywords = ['хочу заняться', 'начну заниматься', 'планирую заняться', 'буду заниматься',
+                                'интересуюсь', 'увлекаюсь', 'нравится', 'люблю', 'хочу изучить', 'изучаю',
+                                'спорт', 'фитнес', 'тренажерный зал', 'бег', 'плавание', 'йога',
+                                'программирование', 'дизайн', 'музыка', 'рисование', 'чтение',
+                                'путешествия', 'кулинария', 'танцы', 'фотография']
+            
             has_personal = any(word in clean_message.lower() for word in personal_pronouns)
             has_professional = any(word in clean_message.lower() for word in professional_info)
+            has_interests = any(phrase in clean_message.lower() for phrase in interests_keywords)
             
             # Также проверим, есть ли явная просьба заполнить профиль
             profile_fill_request = any(phrase in clean_message.lower() for phrase in 
                                       ['заполн', 'давай заполн', 'обнов', 'расскаж о себе'])
             
-            if (has_personal and has_professional) or profile_fill_request:
+            if (has_personal and has_professional) or has_interests or profile_fill_request:
                 intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
                 logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
@@ -1815,7 +1823,7 @@ async def generate_result_check(user_id, task_title):
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": f"Спроси о результате выполнения задачи '{task_title}'. Узнай о времени, сложностях, улучшениях.",
+                "content": f"Задача '{task_title}' отмечена как выполненная. Поздравь с завершением задачи кратко и позитивно (1-2 предложения). Не задавай дополнительных вопросов.",
             },
         ]
 
@@ -1836,10 +1844,10 @@ async def generate_result_check(user_id, task_title):
                     return content
                 else:
                     logger.error(f"Failed to generate result check: status {response.status}")
-                    return f"Привет! Как прошло выполнение задачи '{task_title}'? Поделись результатами! 😊"
+                    return f"Отлично! Задача '{task_title}' выполнена! ✅"
     except Exception as e:
         logger.error(f"Error in generate_result_check: {e}")
-        return f"Как успехи с задачей '{task_title}'? Расскажи, что получилось!"
+        return f"Поздравляю с выполнением задачи '{task_title}'! 🎉"
 
 
 async def generate_proactive_message(user_id):

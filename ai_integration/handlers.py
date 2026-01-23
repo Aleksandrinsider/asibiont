@@ -411,7 +411,7 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
         task = (
             session.query(Task)
             .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username.replace('@', '')))
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
             .first()
         )
@@ -423,7 +423,7 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
             or_(
                 and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions)),
                 and_(
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                     Task.status != "completed",
                     or_(*conditions)
                 )
@@ -484,7 +484,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
         task = (
             session.query(Task)
             .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username.replace('@', '')))
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
             .first()
         )
@@ -496,7 +496,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
             or_(
                 and_(Task.user_id == user.id, or_(*conditions)),
                 and_(
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                     or_(*conditions)
                 )
             )
@@ -694,7 +694,7 @@ def analyze_task(task_id=None, user_id=None, session=None):
         task = (
             session.query(Task)
             .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username.replace('@', '')))
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
             .first()
         )
@@ -1150,7 +1150,7 @@ def accept_delegated_task(task_id, user_id=None):
             session.query(Task)
             .filter(
                 Task.id == task_id_int,
-                Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                 Task.delegation_status == "pending",
             )
             .first()
@@ -1215,7 +1215,7 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
                 session.query(Task)
                 .filter(
                     Task.id == task_id_int,
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                     Task.delegation_status == "pending",
                 )
                 .first()
@@ -1225,7 +1225,7 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
             words = task_title.lower().split()
             conditions = [Task.title.ilike(f"%{word}%") for word in words]
             task = session.query(Task).filter(
-                Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                 Task.delegation_status == "pending",
                 or_(*conditions)
             ).first()
@@ -1507,7 +1507,7 @@ def list_tasks(user_id=None, session=None):
         query = session.query(Task).filter(Task.user_id == user.id)
         if user.username and user.username.strip():
             query = query.union(
-                session.query(Task).filter(Task.delegated_to_username.ilike(user.username.replace('@', '')))
+                session.query(Task).filter(Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
         tasks = query.all()
 
@@ -1742,7 +1742,7 @@ def get_partners_list(user_id=None, session=None):
         delegated_to_me = (
             session.query(Task)
             .filter(
-                Task.delegated_to_username.ilike(user.username.replace('@', '')), Task.delegation_status.in_(["pending", "accepted"])
+                Task.delegated_to_username.ilike((user.username or "").replace('@', '')), Task.delegation_status.in_(["pending", "accepted"])
             )
             .all()
         )
@@ -2586,7 +2586,7 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None)
         task = (
             session.query(Task)
             .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike(user.username.replace('@', '')))
+                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
             .first()
         )
@@ -2598,7 +2598,7 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None)
             or_(
                 and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions)),
                 and_(
-                    Task.delegated_to_username.ilike(user.username.replace('@', '')),
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
                     Task.status != "completed",
                     or_(*conditions)
                 )
