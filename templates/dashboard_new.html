@@ -1564,9 +1564,29 @@
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
+            
+            // Prepare avatar HTML
+            let avatarHtml = '';
+            if (normalizedSender === 'ai') {
+                avatarHtml = '<img src="/static/asibiont.svg" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;">';
+            } else {
+                // User avatar from profile
+                if (window.currentUserProfile && window.currentUserProfile.photo_url) {
+                    avatarHtml = `<img src="${window.currentUserProfile.photo_url}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;">`;
+                } else {
+                    const firstLetter = window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U';
+                    avatarHtml = `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; margin-right: 8px;">${firstLetter}</div>`;
+                }
+            }
+            
             messageDiv.innerHTML = `
-                <div class="message-text">${processedText}</div>
-                <div class="message-time">${dateString} ${timeString}</div>
+                <div style="display: flex; align-items: flex-start; gap: 0;">
+                    ${avatarHtml}
+                    <div style="flex: 1; min-width: 0;">
+                        <div class="message-text">${processedText}</div>
+                        <div class="message-time">${dateString} ${timeString}</div>
+                    </div>
+                </div>
             `;
             messages.appendChild(messageDiv);
             
@@ -5166,6 +5186,13 @@
                 if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const data = await response.json();
+                    
+                    // Store current user profile globally for chat avatars
+                    window.currentUserProfile = {
+                        photo_url: data.user_avatar_url,
+                        first_name: data.first_name,
+                        username: data.profile?.username
+                    };
                     
                     // Update time display in header
                     const headerTimeDisplay = document.getElementById('header-time-display');
