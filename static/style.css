@@ -296,7 +296,7 @@ body {
 
 .main-layout {
     display: grid;
-    grid-template-columns: 1fr 1.47fr 1.03fr; /* Fine-tuned layout */
+    grid-template-columns: 1fr 1.5fr 1fr; /* Fine-tuned layout */
     grid-auto-rows: 1fr; /* Make them equal height */
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
     gap: 4px;
