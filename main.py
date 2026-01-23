@@ -907,11 +907,18 @@ async def login_handler(request):
     return aiohttp_jinja2.render_template('dashboard_new.html', request, {
         'logged_in': False,
         'bot_username': bot_user,
-        'subscription_tier': 'BRONZE',  # По умолчанию для неавторизованных
+        'subscription_tier': 'BRONZE',
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
-        'timestamp': 1768857743
+        'timestamp': 1768857743,
+        'user_timezone': 'UTC',
+        'user': None,
+        'profile': None,
+        'tasks': [],
+        'messages': [],
+        'partners': [],
+        'subscription': None
     })
 
 
@@ -1059,7 +1066,14 @@ async def dashboard_handler(request):
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
-                'timestamp': 1768857743
+                'timestamp': 1768857743,
+                'user_timezone': 'UTC',
+                'user': None,
+                'profile': None,
+                'tasks': [],
+                'messages': [],
+                'partners': [],
+                'subscription': None
             })
 
         # Получить задачи пользователя
@@ -1075,7 +1089,14 @@ async def dashboard_handler(request):
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
-                    'timestamp': 1768857743
+                    'timestamp': 1768857743,
+                    'user_timezone': 'UTC',
+                    'user': None,
+                    'profile': None,
+                    'tasks': [],
+                    'messages': [],
+                    'partners': [],
+                    'subscription': None
                 })
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
