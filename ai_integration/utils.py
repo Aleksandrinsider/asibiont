@@ -533,8 +533,11 @@ def parse_natural_time(time_str, current_time):
         if match:
             if len(match.groups()) == 2:
                 h, m = converter(match.group(1), match.group(2))
-            else:
+            elif len(match.groups()) == 1:
                 h, m = converter(match.group(1), '0')
+            else:
+                # No groups (e.g., "полдень", "полночь")
+                h, m = converter(None, None)
             time_match = (h, m)
             break
     
