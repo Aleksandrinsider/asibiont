@@ -444,7 +444,7 @@ body {
 /* Responsive adjustments */
 @media (min-width: 1600px) {
     .main-layout {
-        grid-template-columns: minmax(360px, 420px) 1fr minmax(360px, 560px);
+        grid-template-columns: 1fr 1.5fr 1fr;
         gap: 28px;
     }
 }
@@ -461,7 +461,7 @@ body {
 /* Мобильная адаптация для планшетов и мобильных устройств */
 @media (max-width: 1200px) {
     .main-layout {
-        grid-template-columns: 1fr 1.2fr 1fr;
+        grid-template-columns: 1fr 1.5fr 1fr;
         gap: 8px;
     }
     

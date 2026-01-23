@@ -4519,42 +4519,40 @@ async def get_comments_handler(request):
 
 async def delete_comment_handler(request):
     """Delete a comment"""
+    user_session = await get_session(request)
+    if not user_session:
+        return web.json_response({'error': 'Unauthorized'}, status=401)
+
+    user_id = user_session['telegram_id']
+    comment_id = int(request.match_info['comment_id'])
+
+    db_session = Session()
     try:
-        session = await get_session(request)
-        if not session:
-            return web.json_response({'error': 'Unauthorized'}, status=401)
+        # Get the comment
+        comment = db_session.query(Comment).filter_by(id=comment_id).first()
+        if not comment:
+            return web.json_response({'error': 'Comment not found'}, status=404)
 
-        user_id = session['telegram_id']
-        comment_id = int(request.match_info['comment_id'])
+        # Get current user
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'User not found'}, status=404)
 
-        session_db = Session()
-        try:
-            # Get the comment
-            comment = session_db.query(Comment).filter_by(id=comment_id).first()
-            if not comment:
-                return web.json_response({'error': 'Comment not found'}, status=404)
+        # Check if user owns the comment
+        if comment.user_id != user.id:
+            return web.json_response({'error': 'Forbidden'}, status=403)
 
-            # Get current user
-            user = session_db.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                return web.json_response({'error': 'User not found'}, status=404)
+        # Delete the comment
+        db_session.delete(comment)
+        db_session.commit()
 
-            # Check if user owns the comment
-            if comment.user_id != user.id:
-                return web.json_response({'error': 'Forbidden'}, status=403)
-
-            # Delete the comment
-            session_db.delete(comment)
-            session_db.commit()
-
-            return web.json_response({'success': True})
-
-        finally:
-            session_db.close()
+        return web.json_response({'success': True})
 
     except Exception as e:
         logger.error(f"Error deleting comment: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
+    finally:
+        db_session.close()
 
 
 async def api_avatar_handler(request):
