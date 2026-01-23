@@ -1515,20 +1515,6 @@
             const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             
-            // Проверка на дубликаты: проверяем последние 5 сообщений по тексту и отправителю
-            const existingMessages = Array.from(messages.querySelectorAll('.message'));
-            const lastFiveMessages = existingMessages.slice(-5);
-            for (const msg of lastFiveMessages) {
-                const msgText = msg.querySelector('.message-text')?.textContent || '';
-                const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
-                
-                // Если найдено сообщение с таким же текстом и отправителем - это дубликат
-                if (msgText === processedText && msgSender === normalizedSender) {
-                    console.log('Duplicate message detected, skipping:', processedText.substring(0, 50));
-                    return; // Не добавляем дубликат
-                }
-            }
-            
             // Парсинг @username в ссылки на профили контактов и убираем Markdown форматирование
             let processedText = text;
             
@@ -1542,6 +1528,20 @@
             processedText = processedText.replace(/^[-•]\s+/gm, '');
             // Убираем все новые строки и заменяем на пробелы для единого формата
             processedText = processedText.replace(/\n+/g, ' ').trim();
+            
+            // Проверка на дубликаты: проверяем последние 5 сообщений по тексту и отправителю
+            const existingMessages = Array.from(messages.querySelectorAll('.message'));
+            const lastFiveMessages = existingMessages.slice(-5);
+            for (const msg of lastFiveMessages) {
+                const msgText = msg.querySelector('.message-text')?.textContent || '';
+                const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
+                
+                // Если найдено сообщение с таким же текстом и отправителем - это дубликат
+                if (msgText === processedText && msgSender === normalizedSender) {
+                    console.log('Duplicate message detected, skipping:', processedText.substring(0, 50));
+                    return; // Не добавляем дубликат
+                }
+            }
             
             if (normalizedSender === 'ai') {
                 processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">@$1</a>');
