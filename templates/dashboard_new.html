@@ -1989,8 +1989,8 @@
                     // Полностью перезагружаем посты в правильном порядке (новые первыми)
                     feedContainer.innerHTML = '';
                     
-                    // Реверсируем массив чтобы новые посты были сверху
-                    data.posts.reverse().forEach((post, index) => {
+                    // Посты уже отсортированы от новых к старым с бэкенда
+                    data.posts.forEach((post, index) => {
                         try {
                             const postDiv = document.createElement('div');
                         postDiv.setAttribute('data-post-id', post.id);
