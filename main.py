@@ -4519,41 +4519,55 @@ async def get_comments_handler(request):
 
 async def delete_comment_handler(request):
     """Delete a comment"""
-    db_session = Session()
+    db_session = None
     try:
         user_session = await get_session(request)
         if not user_session:
+            logger.warning("Delete comment: No user session")
             return web.json_response({'error': 'Unauthorized'}, status=401)
 
         user_id = user_session['telegram_id']
         comment_id = int(request.match_info['comment_id'])
+        logger.info(f"Deleting comment {comment_id} by user {user_id}")
 
+        db_session = Session()
+        
         # Get the comment
         comment = db_session.query(Comment).filter_by(id=comment_id).first()
         if not comment:
+            logger.warning(f"Comment {comment_id} not found")
             return web.json_response({'error': 'Comment not found'}, status=404)
+
+        logger.info(f"Comment found: user_id={comment.user_id}, post_id={comment.post_id}")
 
         # Get current user
         user = db_session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
+            logger.warning(f"User with telegram_id {user_id} not found")
             return web.json_response({'error': 'User not found'}, status=404)
+
+        logger.info(f"User found: id={user.id}")
 
         # Check if user owns the comment
         if comment.user_id != user.id:
+            logger.warning(f"User {user.id} trying to delete comment owned by {comment.user_id}")
             return web.json_response({'error': 'Forbidden'}, status=403)
 
         # Delete the comment
         db_session.delete(comment)
         db_session.commit()
+        logger.info(f"Comment {comment_id} deleted successfully")
 
         return web.json_response({'success': True})
 
     except Exception as e:
-        db_session.rollback()
+        if db_session:
+            db_session.rollback()
         logger.error(f"Error deleting comment: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
     finally:
-        db_session.close()
+        if db_session:
+            db_session.close()
 
 
 async def api_avatar_handler(request):
