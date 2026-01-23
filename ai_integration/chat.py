@@ -161,14 +161,33 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # logger.info(
                 #     f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
                 
-                # КРИТИЧЕСКАЯ ПРОВЕРКА: ищем время в ОРИГИНАЛЬНОМ сообщении пользователя
+                # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
+                task_title = args.get("title", args.get("task_title", "Задача"))
+                existing_tasks = list_tasks(user_id=user_id, session=db_session)
+                
+                # Проверяем, есть ли уже похожая задача (по заголовку)
+                is_duplicate = False
+                if existing_tasks:
+                    for line in existing_tasks.split('\n'):
+                        # Простая проверка вхождения названия задачи в существующие
+                        if task_title.lower() in line.lower() and ('В работе' in line or 'Ожидает' in line):
+                            logger.warning(f"[ADD TASK] DUPLICATE DETECTED - similar task already exists: {line[:80]}")
+                            tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Похожая задача уже существует - {line[:100]}"})
+                            is_duplicate = True
+                            break
+                
+                if is_duplicate:
+                    continue
+                
+                # КРИТИЧЕСКАЯ ПРОВЕРКА: ищем КОНКРЕТНОЕ время в ОРИГИНАЛЬНОМ сообщении пользователя
+                # Только точные форматы времени, неточные формулировки ("завтра с утра") НЕ считаются
                 time_patterns = [
                     r'\d{1,2}:\d{2}',  # 10:00, 8:30
-                    r'через\s+\d+\s+(минут|час|день)',  # через 30 минут, через 2 часа
+                    r'через\s+\d+\s+(минут[уы]?|час[аов]?|дне[йя]|секунд)',  # через 30 минут, через 2 часа
                     r'завтра\s+в\s+\d{1,2}',  # завтра в 10
                     r'сегодня\s+в\s+\d{1,2}',  # сегодня в 15
-                    r'послезавтра',
-                    r'на\s+неделе',
+                    r'в\s+\d{1,2}\s+(час|утра|вечера|дня)',  # в 10 утра, в 15 часов
+                    r'\d{1,2}\s+(утра|вечера|дня|ночи)',  # 10 утра, 15 дня
                 ]
                 
                 has_explicit_time = False
@@ -180,7 +199,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # Если пользователь НЕ указал время в сообщении - БЛОКИРУЕМ создание
                 if not has_explicit_time:
                     logger.warning(f"[ADD TASK] BLOCKED - user did not specify time in message: {original_message[:50]}...")
-                    tool_results.append({"function": func_name, "result": "NEED_TIME"})
+                    tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
                     continue
                 
                 # СТРОГАЯ проверка наличия времени
@@ -195,7 +214,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # БЛОКИРУЕМ создание задач без времени
                 if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
                     logger.warning(f"[ADD TASK] BLOCKED - no valid reminder_time provided")
-                    tool_results.append({"function": func_name, "result": "NEED_TIME"})
+                    tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
                 else:
                     # Вызываем add_task только с валидным временем
                     result = add_task(
