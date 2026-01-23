@@ -4241,7 +4241,7 @@ async def get_feed_handler(request):
             if all_user_ids:
                 posts = session_db.query(Post).filter(
                     Post.user_id.in_(all_user_ids)
-                ).order_by(Post.created_at.desc()).limit(50).all()
+                ).order_by(Post.created_at.desc()).limit(20).all()
                 logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
             else:
                 posts = []
