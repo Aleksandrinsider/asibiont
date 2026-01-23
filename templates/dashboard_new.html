@@ -1028,7 +1028,7 @@
                     Хочу найти компанию для вечерней прогулки 🌙
                 </div>
                 <div class="login-message-card right">
-                    Друзья есть, но никто не разделяет мои странные хобби 😔
+                    Нужен напарник для утренних пробежек в парке 🏃
                 </div>
                 <div class="login-message-card right">
                     Хочу расти в карьере, нужен опытный наставник
@@ -1388,32 +1388,32 @@
                 </p>
                 <form id="quick-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Дата рождения</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Дата рождения <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <input type="text" id="quick-birthdate" placeholder="ДД.ММ.ГГГГ (например: 15.03.1990)" maxlength="10" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                         <div id="zodiac-display" style="font-size: 12px; color: #068487; margin-top: 4px; min-height: 18px;"></div>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Компания</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Компания <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-company" placeholder="Название компании" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Должность</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Должность <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-position" placeholder="Ваша должность" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-interests" placeholder="Например: спорт, программирование, путешествия" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Навыки</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Навыки <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-skills" placeholder="Например: Python, менеджмент, дизайн" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Цели</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Цели <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <textarea id="quick-goals" placeholder="Чего вы хотите достичь?" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; min-height: 60px; font-family: inherit; resize: vertical;"></textarea>
                     </div>
                 </form>
@@ -3871,13 +3871,18 @@
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
 
-            // Проверяем обязательные поля - хотя бы одно должно быть заполнено
-            if (!city && !interests && !company && !position && !skills && !goals) {
-                showNotification('Заполните хотя бы одно поле профиля', 'error');
+            // Проверяем обязательные поля
+            if (!city) {
+                showNotification('Укажите город', 'error');
                 return;
             }
             
-            if (birthdate && !validateBirthdate(birthdate)) {
+            if (!birthdate) {
+                showNotification('Укажите дату рождения', 'error');
+                return;
+            }
+            
+            if (!validateBirthdate(birthdate)) {
                 showNotification('Неверный формат даты рождения (ДД.ММ.ГГГГ)', 'error');
                 return;
             }
