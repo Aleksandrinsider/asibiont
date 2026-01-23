@@ -116,60 +116,6 @@ async def generate_progress_post(user_id, session):
         return None
 
 
-async def generate_birthday_post(user_id, session):
-    """Generate birthday post"""
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return None
-        
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if not profile or not profile.birthdate:
-            return None
-        
-        # Calculate age if possible
-        try:
-            day, month, year = map(int, profile.birthdate.split('.'))
-            age = datetime.now().year - year
-            age_text = f"{age} лет" if age > 0 else ""
-        except:
-            age_text = ""
-        
-        zodiac = profile.zodiac_sign or ""
-        
-        prompt = f"""Напиши короткий пост от первого лица о том, что сегодня мой день рождения.
-
-Информация:
-- Возраст: {age_text}
-- Знак зодиака: {zodiac}
-
-Требования:
-- От первого лица
-- Радостное настроение
-- Можно пошутить про возраст
-- Пригласи людей отметить вместе (виртуально)
-- 2-3 предложения максимум
-- Используй эмодзи
-
-Примеры стиля:
-- "Сегодня мой день рождения! 🎉 Ещё на год старше и мудрее (надеюсь 😄). Кто присоединится к виртуальному празднованию?"
-- "🎂 День рождения! Официально стал на год опытнее. Принимаю поздравления и советы как прожить этот год ещё круче!"
-"""
-        
-        post_content = await chat_with_ai(prompt, user_id=user_id, db_session=session)
-        
-        if post_content:
-            post_content = post_content.strip()
-            if len(post_content) > 300:
-                post_content = post_content[:297] + "..."
-        
-        return post_content
-        
-    except Exception as e:
-        logger.error(f"Error generating birthday post for user {user_id}: {e}")
-        return None
-
-
 async def create_auto_post(user_id, content, session, notify=True):
     """Create a post in the database and optionally notify user"""
     try:
@@ -193,13 +139,7 @@ async def create_auto_post(user_id, content, session, notify=True):
             try:
                 from main import bot
                 if bot:
-                    # Determine post type
-                    is_birthday = 'день рождения' in content.lower() or 'birthday' in content.lower()
-                    
-                    if is_birthday:
-                        notification_text = f"🎂 Я создал поздравительный пост в ленту от вашего имени:\n\n{content}\n\n✨ Пост опубликован и виден вашим контактам!"
-                    else:
-                        notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Это помогает поддерживать активность в ленте. Вы можете отредактировать или удалить пост в веб-панели."
+                    notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Это помогает поддерживать активность в ленте. Вы можете отредактировать или удалить пост в веб-панели."
                     
                     await bot.send_message(
                         chat_id=user_id,
@@ -235,28 +175,6 @@ async def check_and_create_posts():
                 
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 user_now = datetime.now(pytz.UTC).astimezone(user_tz)
-                
-                # Check if it's birthday
-                if profile.birthdate:
-                    try:
-                        day, month, _ = map(int, profile.birthdate.split('.'))
-                        if user_now.day == day and user_now.month == month:
-                            # Check if birthday post already created today
-                            today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
-                            existing_post = session.query(Post).filter(
-                                Post.user_id == user.id,
-                                Post.created_at >= today_start,
-                                Post.content.like('%день рождения%')
-                            ).first()
-                            
-                            if not existing_post:
-                                logger.info(f"Creating birthday post for user {user.telegram_id}")
-                                content = await generate_birthday_post(user.telegram_id, session)
-                                if content:
-                                    await create_auto_post(user.telegram_id, content, session)
-                                continue  # Skip progress post on birthday
-                    except:
-                        pass
                 
                 # Create progress post at random time during the day
                 # Only create if user has tasks and hasn't posted today
