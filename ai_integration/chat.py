@@ -893,31 +893,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             else:
                 user_memory += "\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
 
-            # НЕ загружаем задачи в user_memory! Агент должен сам вызвать list_tasks()
-            # Это критично для предотвращения выдумывания задач
-
-            # НО добавляем КРАТКУЮ сводку для контекста
-            tasks_summary = db_session.query(Task).filter_by(user_id=user.id, status="pending").count()
-            overdue_tasks = (
-                db_session.query(Task)
-                .filter(Task.user_id == user.id, Task.reminder_time < user_now, Task.status == "pending")
-                .limit(5)
-                .all()
-            )
-
-            if tasks_summary > 0:
-                user_memory += f"\nСводка: всего активных задач {tasks_summary}"
-
-            if overdue_tasks:
-                overdue_info = []
-                for t in overdue_tasks:
-                    # Ensure both datetimes are timezone-aware for comparison
-                    reminder_time = t.reminder_time
-                    if reminder_time.tzinfo is None:
-                        reminder_time = pytz.UTC.localize(reminder_time)
-                    overdue_hours = int((user_now - reminder_time).total_seconds() / 3600)
-                    overdue_info.append(f"'{t.title}' (просрочена на {overdue_hours}ч)")
-                user_memory += f"\nПРОСРОЧЕННЫЕ ЗАДАЧИ: {', '.join(overdue_info)}. ДАЙ ЭФФЕКТИВНЫЕ РЕШЕНИЯ: анализируй причины, предлагай конкретные действия, используй профиль пользователя, задавай вопросы если данных мало!"
+            # ЗАГРУЖАЕМ ПОЛНЫЙ СПИСОК ЗАДАЧ ДЛЯ ПРЕДОТВРАЩЕНИЯ ВЫДУМЫВАНИЯ
+            # Агент НЕ ДОЛЖЕН выдумывать задачи - только использовать реальные данные из БД
+            from .handlers import list_tasks
+            tasks_info = list_tasks(user_id=user_id, session=db_session)
+            if tasks_info and "У вас" in tasks_info:
+                user_memory += f"\n\nАКТИВНЫЕ ЗАДАЧИ:\n{tasks_info}\n\nВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
+            else:
+                user_memory += "\n\nУ пользователя нет активных задач."
 
             # Add delegated tasks info
             if user.username:
