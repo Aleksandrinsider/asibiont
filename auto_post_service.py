@@ -66,7 +66,7 @@ async def generate_progress_post(user_id, session):
         completed_today = session.query(Task).filter(
             Task.user_id == user.id,
             Task.status == 'completed',
-            Task.updated_at >= today_start
+            Task.actual_completion_time >= today_start
         ).count()
         
         pending_today = session.query(Task).filter(
