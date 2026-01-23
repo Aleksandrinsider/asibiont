@@ -3732,17 +3732,16 @@
             submitBtn.textContent = 'Сохранение...';
 
             try {
+                const profileData = { city, interests };
+                if (company) profileData.company = company;
+                if (position) profileData.position = position;
+                if (skills) profileData.skills = skills;
+                if (goals) profileData.goals = goals;
+
                 const response = await fetch('/api/profile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        city: city,
-                        company: company || undefined,
-                        position: position || undefined,
-                        interests: interests,
-                        skills: skills || undefined,
-                        goals: goals || undefined
-                    }),
+                    body: JSON.stringify(profileData),
                     credentials: 'include'
                 });
 
