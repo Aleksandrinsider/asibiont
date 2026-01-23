@@ -386,41 +386,9 @@ class ReminderService:
 
 
     def schedule_daily_reports(self):
-        """Планирование ежедневных отчетов в 22:00 по времени пользователя"""
-        from models import Session
-        from models import User
-        
-        db = Session()
-        try:
-            users = db.query(User).all()
-            logger.info(f"Scheduling daily reports for {len(users)} users")
-            for user in users:
-                job_id = f"daily_report_{user.telegram_id}"
-                
-                # Проверяем, существует ли уже такой джоб
-                if self.scheduler.get_job(job_id):
-                    logger.debug(f"Daily report job {job_id} already exists, skipping")
-                    continue
-                
-                # Получить timezone пользователя
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                
-                # Планируем ежедневный отчет в 22:00 по времени пользователя
-                # Use jobstore-safe wrapper function
-                self.scheduler.add_job(
-                    _send_daily_report_job,
-                    trigger="cron",
-                    hour=DAILY_REPORT_HOUR,
-                    minute=0,
-                    timezone=user_tz,
-                    args=[user.telegram_id],
-                    id=job_id,
-                    replace_existing=True,
-                    misfire_grace_time=30
-                )
-                logger.debug(f"Scheduled daily report for user {user.telegram_id}")
-        finally:
-            db.close()
+        """Планирование ежедневных отчетов в 22:00 по времени пользователя - ОТКЛЮЧЕНО"""
+        logger.info("Daily reports are disabled")
+        return
 
     async def send_daily_report(self, user_id: int):
         """Отправка ежедневного отчета пользователю"""
