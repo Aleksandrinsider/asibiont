@@ -117,6 +117,13 @@ get_partners_list = handlers.get_partners_list
 
 async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False):
     """Обрабатывает tool calls и возвращает естественный ответ"""
+    logger = logging.getLogger(__name__)
+    logger.info(f"[PROCESS_TOOL_CALLS] Called with user_id={user_id}, tool_calls count={len(tool_calls)}")
+    
+    if user_id is None:
+        logger.error(f"[PROCESS_TOOL_CALLS] ERROR: user_id is None! Cannot process tool calls without user_id")
+        return None
+        
     if not tool_calls:
         return None
         
@@ -196,7 +203,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         description=args.get("description", ""),
                         reminder_time=reminder_time,
                         user_id=user_id,
-                        session=None,
+                        session=db_session,
                     )
                     tool_results.append({"function": func_name, "result": result})
 
@@ -206,18 +213,18 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     task_id=args.get("task_id"),
                     task_title=task_title,
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
                 # Перезагрузить список задач после завершения
-                updated_tasks = list_tasks(user_id=user_id, session=None)
+                updated_tasks = list_tasks(user_id=user_id, session=db_session)
                 tool_results.append({"function": "list_tasks", "result": f"[Обновленный список после завершения] {updated_tasks}"})
 
             elif func_name == "accept_delegated_task":
                 result = accept_delegated_task(
                     task_id=args.get("task_id"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
@@ -226,12 +233,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     task_id=args.get("task_id"),
                     task_title=args.get("task_title"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "list_tasks":
-                result = list_tasks(user_id=user_id, session=None)
+                result = list_tasks(user_id=user_id, session=db_session)
                 # Add delegation instructions if this is for delegation
                 if intent.get("params", {}).get("for_delegation"):
                     target_user = intent.get("params", {}).get("target_user", "")
@@ -240,7 +247,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "find_partners":
-                result = find_partners(user_id=user_id, session=None)
+                result = find_partners(user_id=user_id, session=db_session)
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "update_profile":
@@ -266,7 +273,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "delete_all_tasks":
-                result = delete_all_tasks(user_id=user_id, session=None)
+                result = delete_all_tasks(user_id=user_id, session=db_session)
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "delete_task":
@@ -274,7 +281,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     task_id=args.get("task_id"),
                     task_title=args.get("task_title"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
@@ -285,7 +292,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     description=args.get("description"),
                     reminder_time=args.get("reminder_time"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
@@ -322,7 +329,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                                         description=None,
                                         reminder_time=reminder_time.isoformat(),
                                         user_id=user_id,
-                                        session=None,
+                                        session=db_session,
                                     )
                                 else:
                                     result = "Не удалось распознать время в сообщении"
@@ -343,7 +350,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         description=args.get("description"),
                         reminder_time=args.get("reminder_time"),
                         user_id=user_id,
-                        session=None,
+                        session=db_session,
                     )
                 tool_results.append({"function": func_name, "result": result})
 
@@ -355,7 +362,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 result = create_subscription_payment(
                     tier=args.get("tier"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
@@ -364,12 +371,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     topic=args.get("topic"),
                     context=args.get("context"),
                     user_id=user_id,
-                    session=None,
+                    session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "enrich_task_list_with_insights":
-                result = enrich_task_list_with_insights(user_id=user_id, session=None)
+                result = enrich_task_list_with_insights(user_id=user_id, session=db_session)
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "get_partners_list":
@@ -681,6 +688,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     logger = logging.getLogger(__name__)
+    logger.info(f"[CHAT_WITH_AI] Called with user_id={user_id}")
+    
+    if user_id is None:
+        logger.error(f"[CHAT_WITH_AI] ERROR: user_id is None! This will cause issues with tool calls")
 
     # Ensure context is a list or None
     if context is not None and not isinstance(context, list):
@@ -702,7 +713,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         detected_timezone = determine_timezone_from_time(user_time_str, user_id)
         if detected_timezone:
             logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
-            update_profile(timezone=detected_timezone, user_id=user_id, db_session=db_session)
+            update_profile(timezone=detected_timezone, user_id=user_id, session=db_session)
 
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
@@ -766,6 +777,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Check subscription
             from config import FREE_ACCESS_MODE
+            logger.info(f"[SUBSCRIPTION] FREE_ACCESS_MODE = {FREE_ACCESS_MODE}")
 
             if not FREE_ACCESS_MODE:
                 subscription = db_session.query(Subscription).filter_by(user_id=user.id, status="active").first()

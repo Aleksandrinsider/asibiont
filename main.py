@@ -4357,6 +4357,10 @@ async def delete_post_handler(request):
             if post.user_id != user.id:
                 return web.json_response({'error': 'You can only delete your own posts'}, status=403)
 
+            # Delete all likes first to avoid constraint violation
+            from models import PostLike
+            session_db.query(PostLike).filter_by(post_id=post_id).delete()
+            
             # Delete all comments first to avoid constraint violation
             from models import Comment
             session_db.query(Comment).filter_by(post_id=post_id).delete()

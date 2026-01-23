@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
     """Add a new task"""
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}")
+    
+    if user_id is None:
+        logger.error(f"[ADD_TASK] ERROR: user_id is None! Cannot create task without user_id")
+        return "ERROR: user_id is required but was None"
 
     if session is None:
         session = Session()
@@ -34,8 +38,12 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.add(user)
         session.commit()
 
-    # Check if task with same title exists
-    existing_task = session.query(Task).filter_by(user_id=user.id, title=title).first()
+    # Check if task with same title exists (case insensitive)
+    from sqlalchemy import func
+    existing_task = session.query(Task).filter(
+        Task.user_id == user.id,
+        func.lower(Task.title) == func.lower(title)
+    ).first()
     if existing_task:
         # Update existing task
         if reminder_time:
