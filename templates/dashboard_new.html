@@ -2242,45 +2242,57 @@
                     const commentsContainer = document.getElementById(`comments-${postId}`);
                     if (!commentsContainer) return;
 
+                    // Получаем существующие ID комментариев
+                    const existingComments = Array.from(commentsContainer.querySelectorAll('[data-comment-id]'));
+                    const existingIds = new Set(existingComments.map(el => el.getAttribute('data-comment-id')));
+
                     if (data.comments.length === 0) {
-                        commentsContainer.innerHTML = '';
+                        if (existingIds.size === 0) {
+                            commentsContainer.innerHTML = '';
+                        }
                         return;
                     }
 
-                    let html = '';
+                    // Добавляем только новые комментарии
                     data.comments.forEach(comment => {
+                        if (existingIds.has(String(comment.id))) {
+                            return; // Комментарий уже есть, пропускаем
+                        }
+
                         const commentTime = new Date(comment.created_at);
                         const dateString = commentTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
                         const timeString = commentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
                         const commentUsername = comment.author.username || '';
                         const commentUsernameClean = commentUsername.replace('@', '');
 
-                        html += `
-                            <div style="display: flex; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(246, 248, 250, 0.5); border-radius: 4px;">
-                                ${comment.author.photo_url ? 
-                                    `<img src="${comment.author.photo_url}" onclick="openContactProfileModal('${commentUsernameClean}')" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` : 
-                                    '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
-                                }
-                                <div style="flex: 1; min-width: 0;">
-                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
-                                        ${comment.author.first_name ? `<span style="font-size: 12px; font-weight: 400; color: #374151;">${escapeHtml(comment.author.first_name)}</span>` : ''}
-                                        ${commentUsername ? 
-                                            `<span onclick="openContactProfileModal('${commentUsernameClean}')" style="font-size: 12px; font-weight: 400; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${commentUsernameClean}</span>` : 
-                                            ''
-                                        }
-                                        <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
-                                    </div>
-                                    <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
+                        const commentDiv = document.createElement('div');
+                        commentDiv.setAttribute('data-comment-id', comment.id);
+                        commentDiv.style.cssText = 'display: flex; gap: 8px; margin-bottom: 8px; padding: 8px; background: rgba(246, 248, 250, 0.5); border-radius: 4px;';
+                        
+                        commentDiv.innerHTML = `
+                            ${comment.author.photo_url ? 
+                                `<img src="${comment.author.photo_url}" onclick="openContactProfileModal('${commentUsernameClean}')" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` : 
+                                '<div onclick="openContactProfileModal(\'' + commentUsernameClean + '\')" style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; cursor: pointer;">' + (comment.author.first_name ? comment.author.first_name[0].toUpperCase() : '?') + '</div>'
+                            }
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap;">
+                                    ${comment.author.first_name ? `<span style="font-size: 12px; font-weight: 400; color: #374151;">${escapeHtml(comment.author.first_name)}</span>` : ''}
+                                    ${commentUsername ? 
+                                        `<span onclick="openContactProfileModal('${commentUsernameClean}')" style="font-size: 12px; font-weight: 400; color: #068487; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${commentUsernameClean}</span>` : 
+                                        ''
+                                    }
+                                    <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
                                 </div>
-                                ${comment.author.is_current_user ? 
-                                    `<button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="Удалить комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
-                                    : ''
-                                }
+                                <p style="margin: 0; font-size: 13px; line-height: 1.4; color: #374151; word-wrap: break-word;">${escapeHtml(comment.content)}</p>
                             </div>
+                            ${comment.author.is_current_user ? 
+                                `<button onclick="deleteComment(${comment.id}, ${postId})" class="delete-btn" title="Удалить комментарий" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                : ''
+                            }
                         `;
+                        
+                        commentsContainer.appendChild(commentDiv);
                     });
-
-                    commentsContainer.innerHTML = html;
                 }
             } catch (error) {
                 console.error('Error loading comments:', error);
