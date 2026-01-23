@@ -178,6 +178,28 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # logger.info(
                 #     f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
                 
+                # КРИТИЧЕСКАЯ ПРОВЕРКА: ищем время в ОРИГИНАЛЬНОМ сообщении пользователя
+                time_patterns = [
+                    r'\d{1,2}:\d{2}',  # 10:00, 8:30
+                    r'через\s+\d+\s+(минут|час|день)',  # через 30 минут, через 2 часа
+                    r'завтра\s+в\s+\d{1,2}',  # завтра в 10
+                    r'сегодня\s+в\s+\d{1,2}',  # сегодня в 15
+                    r'послезавтра',
+                    r'на\s+неделе',
+                ]
+                
+                has_explicit_time = False
+                for pattern in time_patterns:
+                    if re.search(pattern, original_message.lower()):
+                        has_explicit_time = True
+                        break
+                
+                # Если пользователь НЕ указал время в сообщении - БЛОКИРУЕМ создание
+                if not has_explicit_time:
+                    logger.warning(f"[ADD TASK] BLOCKED - user did not specify time in message: {original_message[:50]}...")
+                    tool_results.append({"function": func_name, "result": "NEED_TIME"})
+                    continue
+                
                 # СТРОГАЯ проверка наличия времени
                 reminder_time = args.get("reminder_time")
                 if not reminder_time or '@unknown' in str(reminder_time):
