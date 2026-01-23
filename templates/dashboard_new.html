@@ -283,10 +283,10 @@
                             if (partner.photo_url) {
                                 const imgId = 'img-elite-' + (partner.telegram_id || partner.contact_info);
                                 html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
+                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
                                 html += '</div>';
                             } else {
-                                html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 48px; height: 48px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
+                                html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
                             }
                             
                             html += '<div style="flex: 1;">';
@@ -2645,8 +2645,8 @@
                          onmouseout="this.style.background='#FFFFFF'">
                         ${photoUrl ? 
                             `<img src="${photoUrl}" alt="${contact.first_name}" onclick="openContactProfileModal('${contact.username}')"
-                                 style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` :
-                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 48px; height: 48px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">${initials}</div>`
+                                 style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; flex-shrink: 0; cursor: pointer;">` :
+                            `<div onclick="openContactProfileModal('${contact.username}')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">${initials}</div>`
                         }
                         <div style="flex: 1; min-width: 0;">
                             <div onclick="openContactProfileModal('${contact.username}')" style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 2px; cursor: pointer;">
@@ -4287,10 +4287,10 @@
                                     if (partner.photo_url) {
                                         const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -4407,10 +4407,10 @@
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -4525,10 +4525,10 @@
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 48px; height: 48px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
@@ -4655,9 +4655,9 @@
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                     if (blockedPartner && blockedPartner.photo_url) {
                                         const imgId = 'img-blocked-' + (blockedPartner.telegram_id || username);
-                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
+                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
                                     } else {
-                                        html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 48px; height: 48px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 20px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
+                                        html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
                                     }
                                     html += '</div>';
                                     
