@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, Comment, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -4282,6 +4282,14 @@ async def get_feed_handler(request):
             for post in posts:
                 try:
                     author = users_map.get(post.user_id, {})
+                    
+                    # Get likes count and check if current user liked
+                    likes_count = session_db.query(PostLike).filter_by(post_id=post.id).count()
+                    user_liked = session_db.query(PostLike).filter_by(
+                        post_id=post.id, 
+                        user_id=user.id
+                    ).first() is not None
+                    
                     # Ensure created_at has UTC timezone info for proper browser conversion
                     created_at_str = None
                     if post.created_at:
@@ -4294,6 +4302,8 @@ async def get_feed_handler(request):
                         'id': post.id,
                         'content': post.content,
                         'created_at': created_at_str,
+                        'likes_count': likes_count,
+                        'user_liked': user_liked,
                         'author': {
                             'telegram_id': author.get('telegram_id'),
                             'username': author.get('username'),
@@ -4317,8 +4327,6 @@ async def get_feed_handler(request):
     except Exception as e:
         logger.error(f"Error getting feed: {e}")
         return web.json_response({'error': str(e)}, status=500)
-
-
 async def delete_post_handler(request):
     """API endpoint to delete a post"""
     try:
@@ -4567,6 +4575,74 @@ async def delete_comment_handler(request):
         if db_session:
             db_session.rollback()
         logger.error(f"Error deleting comment: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        if db_session:
+            db_session.close()
+
+
+async def toggle_like_handler(request):
+    """Toggle like on a post"""
+    db_session = None
+    try:
+        user_session = await get_session(request)
+        user_id = user_session.get('user_id')
+        
+        if not user_id:
+            logger.warning("toggle_like_handler: No user_id in session")
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        post_id = int(request.match_info['post_id'])
+        logger.info(f"Toggling like on post {post_id} by user {user_id}")
+
+        db_session = Session()
+        
+        # Get current user
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            logger.warning(f"User with telegram_id {user_id} not found")
+            return web.json_response({'error': 'User not found'}, status=404)
+
+        # Check if post exists
+        post = db_session.query(Post).filter_by(id=post_id).first()
+        if not post:
+            logger.warning(f"Post {post_id} not found")
+            return web.json_response({'error': 'Post not found'}, status=404)
+
+        # Check if like already exists
+        existing_like = db_session.query(PostLike).filter_by(
+            post_id=post_id,
+            user_id=user.id
+        ).first()
+
+        if existing_like:
+            # Unlike: remove like
+            db_session.delete(existing_like)
+            db_session.commit()
+            logger.info(f"User {user.id} unliked post {post_id}")
+            action = 'unliked'
+        else:
+            # Like: add new like
+            new_like = PostLike(post_id=post_id, user_id=user.id)
+            db_session.add(new_like)
+            db_session.commit()
+            logger.info(f"User {user.id} liked post {post_id}")
+            action = 'liked'
+
+        # Get updated likes count
+        likes_count = db_session.query(PostLike).filter_by(post_id=post_id).count()
+
+        return web.json_response({
+            'success': True,
+            'action': action,
+            'likes_count': likes_count,
+            'user_liked': action == 'liked'
+        })
+
+    except Exception as e:
+        if db_session:
+            db_session.rollback()
+        logger.error(f"Error toggling like: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
     finally:
         if db_session:
@@ -5527,6 +5603,7 @@ app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
 app.router.add_post('/api/comments', create_comment_handler)
 app.router.add_get('/api/comments/{post_id}', get_comments_handler)
 app.router.add_delete('/api/comments/{comment_id}', delete_comment_handler)
+app.router.add_post('/api/posts/{post_id}/like', toggle_like_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)

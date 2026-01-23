@@ -1,7 +1,7 @@
 import datetime
 import logging
 import enum
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from config import DATABASE_URL
 
@@ -196,6 +196,24 @@ class Post(Base):
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="posts")
+
+
+class PostLike(Base):
+    """Likes on posts"""
+    __tablename__ = 'post_likes'
+
+    id = Column(Integer, primary_key=True)
+    post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    post = relationship("Post", backref="likes")
+    user = relationship("User", backref="post_likes")
+
+    # Unique constraint: один пользователь может поставить только один лайк посту
+    __table_args__ = (
+        UniqueConstraint('post_id', 'user_id', name='unique_post_like'),
+    )
 
 
 class Comment(Base):
