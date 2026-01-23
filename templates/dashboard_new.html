@@ -874,7 +874,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(3px);
             -webkit-backdrop-filter: blur(3px);
             z-index: 9999;
@@ -1129,6 +1129,8 @@
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             {% if profile.birthdate %}
                             <p>День рождения: {{ profile.birthdate }}{% if profile.zodiac_sign %} ({{ profile.zodiac_sign }}){% endif %}</p>
+                            {% else %}
+                            <p>День рождения: Не указано</p>
                             {% endif %}
                             <p>Компания: {{ profile.company or 'Не указана' }}</p>
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
@@ -4231,11 +4233,13 @@
                     html += '<div class="context-item">';
                     
                     html += `<p style="text-align: left;">Город: ${partner.city || 'Не указан'}</p>`;
-                    html += `<p style="text-align: left;">Компания: ${partner.company || 'Не указана'}</p>`;
-                    html += `<p style="text-align: left;">Должность: ${partner.position || 'Не указана'}</p>`;
                     if (partner.birthdate) {
                         html += `<p style="text-align: left;">День рождения: ${partner.birthdate}${partner.zodiac_sign ? ' (' + partner.zodiac_sign + ')' : ''}</p>`;
+                    } else {
+                        html += `<p style="text-align: left;">День рождения: Не указано</p>`;
                     }
+                    html += `<p style="text-align: left;">Компания: ${partner.company || 'Не указана'}</p>`;
+                    html += `<p style="text-align: left;">Должность: ${partner.position || 'Не указана'}</p>`;
                     html += `<p style="text-align: left;">Цели: ${partner.goals || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
                     html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
