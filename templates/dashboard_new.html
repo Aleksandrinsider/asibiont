@@ -1388,7 +1388,7 @@
                 </p>
                 <form id="quick-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
@@ -1405,7 +1405,7 @@
                         <input type="text" id="quick-position" placeholder="Ваша должность" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-interests" placeholder="Например: спорт, программирование, путешествия" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
@@ -3871,9 +3871,9 @@
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
 
-            // Проверяем обязательные поля
-            if (!city) {
-                showNotification('Укажите город', 'error');
+            // Проверяем обязательные поля - хотя бы одно должно быть заполнено
+            if (!city && !interests && !company && !position && !skills && !goals) {
+                showNotification('Заполните хотя бы одно поле профиля', 'error');
                 return;
             }
             
@@ -3882,27 +3882,23 @@
                 return;
             }
 
-            if (!interests) {
-                showNotification('Укажите интересы', 'error');
-                return;
-            }
-
             const submitBtn = document.getElementById('quick-profile-btn-text');
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Сохранение...';
 
             try {
-                const zodiac = calculateZodiacSign(birthdate);
-                const profileData = { city, birthdate, interests };
-                if (zodiac) profileData.zodiac_sign = zodiac;
-                if (company) profileData.company = company;
-                if (position) profileData.position = position;
-                if (skprofileData = { city, interests };
+                const profileData = {};
+                if (city) profileData.city = city;
+                if (interests) profileData.interests = interests;
                 if (birthdate) {
                     profileData.birthdate = birthdate;
                     const zodiac = calculateZodiacSign(birthdate);
                     if (zodiac) profileData.zodiac_sign = zodiac;
                 }
+                if (company) profileData.company = company;
+                if (position) profileData.position = position;
+                if (skills) profileData.skills = skills;
+                if (goals) profileData.goals = goals;
                 const response = await fetch('/api/profile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
