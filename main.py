@@ -4519,15 +4519,15 @@ async def get_comments_handler(request):
 
 async def delete_comment_handler(request):
     """Delete a comment"""
-    user_session = await get_session(request)
-    if not user_session:
-        return web.json_response({'error': 'Unauthorized'}, status=401)
-
-    user_id = user_session['telegram_id']
-    comment_id = int(request.match_info['comment_id'])
-
     db_session = Session()
     try:
+        user_session = await get_session(request)
+        if not user_session:
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        user_id = user_session['telegram_id']
+        comment_id = int(request.match_info['comment_id'])
+
         # Get the comment
         comment = db_session.query(Comment).filter_by(id=comment_id).first()
         if not comment:
@@ -4549,6 +4549,7 @@ async def delete_comment_handler(request):
         return web.json_response({'success': True})
 
     except Exception as e:
+        db_session.rollback()
         logger.error(f"Error deleting comment: {e}", exc_info=True)
         return web.json_response({'error': str(e)}, status=500)
     finally:
