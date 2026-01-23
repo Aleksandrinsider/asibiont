@@ -1392,6 +1392,11 @@
                         <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Дата рождения</label>
+                        <input type="text" id="quick-birthdate" placeholder="ДД.ММ.ГГГГ (например: 15.03.1990)" maxlength="10" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                        <div id="zodiac-display" style="font-size: 12px; color: #068487; margin-top: 4px; min-height: 18px;"></div>
+                    </div>
+                    <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Компания <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
                         <input type="text" id="quick-company" placeholder="Название компании" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
@@ -3772,6 +3777,84 @@
             }
         }
         
+        function calculateZodiacSign(birthdate) {
+            // birthdate format: DD.MM.YYYY
+            const parts = birthdate.split('.');
+            if (parts.length !== 3) return null;
+            
+            const day = parseInt(parts[0]);
+            const month = parseInt(parts[1]);
+            
+            const zodiacDates = [
+                {cutoff: 20, sign1: 'Козерог', sign2: 'Водолей'},
+                {cutoff: 19, sign1: 'Водолей', sign2: 'Рыбы'},
+                {cutoff: 21, sign1: 'Рыбы', sign2: 'Овен'},
+                {cutoff: 20, sign1: 'Овен', sign2: 'Телец'},
+                {cutoff: 21, sign1: 'Телец', sign2: 'Близнецы'},
+                {cutoff: 21, sign1: 'Близнецы', sign2: 'Рак'},
+                {cutoff: 23, sign1: 'Рак', sign2: 'Лев'},
+                {cutoff: 23, sign1: 'Лев', sign2: 'Дева'},
+                {cutoff: 23, sign1: 'Дева', sign2: 'Весы'},
+                {cutoff: 23, sign1: 'Весы', sign2: 'Скорпион'},
+                {cutoff: 22, sign1: 'Скорпион', sign2: 'Стрелец'},
+                {cutoff: 22, sign1: 'Стрелец', sign2: 'Козерог'}
+            ];
+            
+            if (month < 1 || month > 12) return null;
+            
+            const zodiac = zodiacDates[month - 1];
+            return day >= zodiac.cutoff ? zodiac.sign2 : zodiac.sign1;
+        }
+        
+        function validateBirthdate(birthdate) {
+            // Format: DD.MM.YYYY
+            const regex = /^(\d{2})\.(\d{2})\.(\d{4})$/;
+            const match = birthdate.match(regex);
+            if (!match) return false;
+            
+            const day = parseInt(match[1]);
+            const month = parseInt(match[2]);
+            const year = parseInt(match[3]);
+            
+            if (month < 1 || month > 12) return false;
+            if (day < 1 || day > 31) return false;
+            if (year < 1900 || year > new Date().getFullYear()) return false;
+            
+            return true;
+        }
+        
+        // Auto-format birthdate input
+        document.addEventListener('DOMContentLoaded', function() {
+            const birthdateInput = document.getElementById('quick-birthdate');
+            if (birthdateInput) {
+                birthdateInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/[^\d.]/g, '');
+                    
+                    // Auto-add dots
+                    if (value.length === 2 && !value.includes('.')) {
+                        value += '.';
+                    } else if (value.length === 5 && value.split('.').length === 2) {
+                        value += '.';
+                    }
+                    
+                    e.target.value = value;
+                    
+                    // Calculate zodiac
+                    if (value.length === 10 && validateBirthdate(value)) {
+                        const zodiac = calculateZodiacSign(value);
+                        const display = document.getElementById('zodiac-display');
+                        if (zodiac && display) {
+                            display.textContent = `Знак зодиака: ${zodiac} ♈`;
+                            display.style.color = '#068487';
+                        }
+                    } else {
+                        const display = document.getElementById('zodiac-display');
+                        if (display) display.textContent = '';
+                    }
+                });
+            }
+        });
+        
         function skipQuickProfile() {
             const modal = document.getElementById('quick-profile-modal');
             if (modal) {
@@ -3781,6 +3864,7 @@
         
         async function submitQuickProfile() {
             const city = document.getElementById('quick-city').value.trim();
+            const birthdate = document.getElementById('quick-birthdate').value.trim();
             const company = document.getElementById('quick-company').value.trim();
             const position = document.getElementById('quick-position').value.trim();
             const interests = document.getElementById('quick-interests').value.trim();
@@ -3790,6 +3874,16 @@
             // Проверяем обязательные поля
             if (!city) {
                 showNotification('Укажите город', 'error');
+                return;
+            }
+            
+            if (!birthdate) {
+                showNotification('Укажите дату рождения', 'error');
+                return;
+            }
+            
+            if (!validateBirthdate(birthdate)) {
+                showNotification('Неверный формат даты рождения (ДД.ММ.ГГГГ)', 'error');
                 return;
             }
 
@@ -3803,7 +3897,9 @@
             submitBtn.textContent = 'Сохранение...';
 
             try {
-                const profileData = { city, interests };
+                const zodiac = calculateZodiacSign(birthdate);
+                const profileData = { city, birthdate, interests };
+                if (zodiac) profileData.zodiac_sign = zodiac;
                 if (company) profileData.company = company;
                 if (position) profileData.position = position;
                 if (skills) profileData.skills = skills;

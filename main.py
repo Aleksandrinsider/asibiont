@@ -5035,6 +5035,10 @@ async def api_profile_handler(request):
                 # Update profile fields
                 if 'city' in data and data['city']:
                     profile.city = data['city']
+                if 'birthdate' in data and data['birthdate']:
+                    profile.birthdate = data['birthdate']
+                if 'zodiac_sign' in data and data['zodiac_sign']:
+                    profile.zodiac_sign = data['zodiac_sign']
                 if 'company' in data and data['company']:
                     profile.company = data['company']
                 if 'position' in data and data['position']:
@@ -5070,6 +5074,8 @@ async def api_profile_handler(request):
         profile_data = {
             'username': user.username,
             'city': profile.city if profile else None,
+            'birthdate': profile.birthdate if profile else None,
+            'zodiac_sign': profile.zodiac_sign if profile else None,
             'company': profile.company if profile else None,
             'position': profile.position if profile else None,
             'goals': profile.goals if profile else None,

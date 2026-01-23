@@ -88,6 +88,8 @@ class UserProfile(Base):
     goals = Column(Text)  # User's goals
     contact_info = Column(String(255))  # Telegram username or other contact
     city = Column(String(100))  # City for location-based matching
+    birthdate = Column(String(10))  # Date of birth in DD.MM.YYYY format
+    zodiac_sign = Column(String(20))  # Zodiac sign (auto-calculated)
     company = Column(String(255))  # Company name
     position = Column(String(255))  # Job position
     bio = Column(Text)  # Short bio/description (2-3 sentences about user)
