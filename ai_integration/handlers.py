@@ -755,12 +755,33 @@ def set_reminder(task_id, reminder_time, user_id=None):
         task = session.query(Task).filter_by(id=task_id_int, user_id=user.id).first()
         if task:
             try:
-                reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+                # Try to parse as absolute time first
+                try:
+                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                    local_dt = user_tz.localize(local_dt)
+                    reminder_time_parsed = local_dt.astimezone(pytz.UTC)
+                except ValueError:
+                    # If that fails, try parsing as relative time
+                    parsed_time = parse_time_to_datetime(reminder_time, user_id)
+                    if parsed_time:
+                        # parse_time_to_datetime returns string, parse it
+                        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                        local_dt = datetime.strptime(parsed_time, "%Y-%m-%d %H:%M")
+                        local_dt = user_tz.localize(local_dt)
+                        reminder_time_parsed = local_dt.astimezone(pytz.UTC)
+                    else:
+                        return f"Не удалось распознать время '{reminder_time}'. Используйте формат 'YYYY-MM-DD HH:MM' или естественный язык ('завтра в 10:00', 'сегодня в 15:30')."
+                
                 task.reminder_time = reminder_time_parsed
                 session.commit()
-                result = f"Установлено напоминание для '{task.title}' на {reminder_time_parsed}."
-            except ValueError:
-                result = "Неверный формат времени."
+                
+                # Format time for display in user's timezone
+                display_time = reminder_time_parsed.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
+                result = f"Установлено напоминание для '{task.title}' на {display_time}."
+            except Exception as e:
+                logger.error(f"[SET_REMINDER] Error parsing time: {e}")
+                result = f"Ошибка при установке напоминания: {str(e)}"
         else:
             result = "Задача не найдена."
         return result
