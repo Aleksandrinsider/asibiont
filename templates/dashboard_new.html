@@ -3292,7 +3292,6 @@
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
-                if (task.overdue) html += '<span class="task-meta" style="color: #d73a49;">' + task.overdue_text + '</span>';
             }
             
             let statusText = 'В работе';
@@ -3311,7 +3310,7 @@
                 statusText = 'Выполнена';
                 statusColor = '#238636';
             } else if (task.overdue) {
-                statusText = 'С отставанием';
+                statusText = 'С отставанием ' + task.overdue_text;
                 statusColor = '#d73a49';
             }
             
