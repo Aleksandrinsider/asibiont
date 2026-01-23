@@ -514,6 +514,7 @@ def parse_natural_time(time_str, current_time):
     # Patterns for time
     time_patterns = [
         (r'(\d{1,2}):(\d{2})', lambda h, m: (int(h), int(m))),  # 10:30
+        (r'к\s*(\d{1,2})\s*часам?', lambda h, m: (int(h), 0)),  # к 10 часам
         (r'(\d{1,2})\s*утра', lambda h, m: (int(h) if int(h) <= 12 else int(h) - 12, 0)),  # 10 утра
         (r'(\d{1,2})\s*вечера', lambda h, m: ((int(h) + 12) if int(h) < 12 else int(h), 0)),  # 8 вечера
         (r'(\d{1,2})\s*ночи', lambda h, m: (int(h), 0)),  # 2 ночи
