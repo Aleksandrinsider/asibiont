@@ -5299,35 +5299,47 @@
         }
 
         async function checkNewPosts() {
+            console.log('[NEW_POSTS] Checking for new posts, lastSeenPostId:', lastSeenPostId, 'currentView:', currentView);
             try {
                 const response = await fetch('/api/feed', {
                     method: 'GET',
                     credentials: 'include'
                 });
                 
-                if (!await checkAuth(response)) return;
+                if (!await checkAuth(response)) {
+                    console.log('[NEW_POSTS] Auth check failed');
+                    return;
+                }
                 const data = await response.json();
+                console.log('[NEW_POSTS] Feed response:', data.posts ? data.posts.length + ' posts' : 'no posts');
                 
                 if (data.posts && data.posts.length > 0) {
                     const latestPostId = data.posts[0].id;
                     const indicator = document.getElementById('new-posts-indicator');
+                    console.log('[NEW_POSTS] Latest post ID:', latestPostId, 'lastSeenPostId:', lastSeenPostId, 'indicator element:', indicator);
                     
                     // Если есть новые посты и мы не в ленте
                     if (lastSeenPostId !== null && latestPostId > lastSeenPostId && currentView !== 'feed') {
-                        if (indicator) indicator.style.display = 'inline-block';
+                        console.log('[NEW_POSTS] NEW POSTS DETECTED! Showing indicator');
+                        if (indicator) {
+                            indicator.style.display = 'inline-block';
+                            console.log('[NEW_POSTS] Indicator display set to inline-block');
+                        }
                     } else if (currentView === 'feed') {
                         // Когда переключаемся в ленту, обновляем lastSeenPostId и скрываем индикатор
+                        console.log('[NEW_POSTS] In feed view, hiding indicator');
                         lastSeenPostId = latestPostId;
                         if (indicator) indicator.style.display = 'none';
                     }
                     
                     // Инициализируем lastSeenPostId при первой загрузке
                     if (lastSeenPostId === null) {
+                        console.log('[NEW_POSTS] First load, setting lastSeenPostId to:', latestPostId);
                         lastSeenPostId = latestPostId;
                     }
                 }
             } catch (error) {
-                console.error('Error checking new posts:', error);
+                console.error('[NEW_POSTS] Error checking new posts:', error);
             }
         }
 
