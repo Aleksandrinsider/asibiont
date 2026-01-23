@@ -1110,9 +1110,7 @@
                                 <p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@{{ user.username or 'неизвестен' }}</p>
                                 
                             </div>
-                            <p>Город: {{ profile.city or 'Не указан' }} 
-                                <button onclick="detectUserLocation()" style="background: none; border: none; cursor: pointer; padding: 0; color: #068487; font-size: 13px; text-decoration: underline; margin-left: 8px;" title="Определить автоматически по геолокации">📍 определить</button>
-                            </p>
+                            <p>Город: {{ profile.city or 'Не указан' }}</p>
                             {% if profile.birthdate %}
                             <p>День рождения: {{ profile.birthdate }}{% if profile.zodiac_sign %} ({{ profile.zodiac_sign }}){% endif %}</p>
                             {% endif %}
