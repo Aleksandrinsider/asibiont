@@ -1589,9 +1589,11 @@
                 // AI avatar with fallback
                 avatarHtml = '<img src="/static/asibiont.svg" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;"><div style="display: none; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #04a8b3 100%); align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: white; flex-shrink: 0; margin-right: 8px;">AI</div>';
             } else {
-                // User avatar from profile
-                if (window.currentUserProfile && window.currentUserProfile.photo_url) {
-                    avatarHtml = `<img src="${window.currentUserProfile.photo_url}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;">`;
+                // User avatar from profile - приоритет отдаем window.userAvatarUrl
+                const avatarUrl = window.userAvatarUrl || (window.currentUserProfile && window.currentUserProfile.photo_url);
+                if (avatarUrl) {
+                    avatarHtml = `<img src="${avatarUrl}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: #F6F8FA; flex-shrink: 0; margin-right: 8px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: none; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; margin-right: 8px;">${window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U'}</div>`;
                 } else {
                     const firstLetter = window.currentUserProfile && window.currentUserProfile.first_name ? window.currentUserProfile.first_name[0].toUpperCase() : 'U';
                     avatarHtml = `<div style="width: 24px; height: 24px; border-radius: 50%; background: #068487; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: white; flex-shrink: 0; margin-right: 8px;">${firstLetter}</div>`;
@@ -3026,6 +3028,11 @@
         let lastPeopleUpdate = 0;
         let lastProfileUpdate = 0;
         let lastSeenPostId = null; // Для отслеживания последнего просмотренного поста
+        
+        // Устанавливаем аватар пользователя для использования в чате
+        {% if user_avatar_url %}
+        window.userAvatarUrl = '{{ user_avatar_url | safe }}';
+        {% endif %}
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {

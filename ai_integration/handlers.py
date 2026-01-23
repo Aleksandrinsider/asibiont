@@ -77,11 +77,17 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                     current_time = datetime.now(user_tz)
                     parsed_time = parse_relative_time(reminder_time, current_time)
                     if parsed_time:
+                        # parsed_time уже в правильной timezone от parse_relative_time
                         if parsed_time.tzinfo is None:
                             parsed_time = user_tz.localize(parsed_time)
                         task.reminder_time = parsed_time.astimezone(pytz.UTC)
                         logging.info(
                             f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+                    else:
+                        logging.warning(f"Could not parse relative time '{reminder_time}' for task {title}")
+                        if close_session:
+                            session.close()
+                        return f"Не удалось распознать время '{reminder_time}'. Попробуйте 'через 5 минут' или 'через 2 часа'"
                 else:
                     # Try natural time parsing first
                     current_time = datetime.now(user_tz)

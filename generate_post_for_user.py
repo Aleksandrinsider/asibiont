@@ -29,6 +29,27 @@ async def generate_and_create_post(username):
         total_tasks = session.query(Task).filter_by(user_id=user.id).count()
         completed_tasks = session.query(Task).filter_by(user_id=user.id, status='completed').count()
         
+        # Get user profile for personalization
+        from models import UserProfile
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        profile_info = ""
+        if profile:
+            profile_parts = []
+            if profile.skills:
+                profile_parts.append(f"Навыки: {profile.skills}")
+            if profile.interests:
+                profile_parts.append(f"Интересы: {profile.interests}")
+            if profile.goals:
+                profile_parts.append(f"Цели: {profile.goals}")
+            if profile.company:
+                profile_parts.append(f"Компания: {profile.company}")
+            if profile.position:
+                profile_parts.append(f"Должность: {profile.position}")
+            if profile.city:
+                profile_parts.append(f"Город: {profile.city}")
+            if profile_parts:
+                profile_info = f"\n\nМой профиль:\n{'; '.join(profile_parts)}"
+        
         # Generate post content using AI
         print("\n🤖 Генерирую пост с помощью AI...")
         
@@ -36,7 +57,7 @@ async def generate_and_create_post(username):
 
 Контекст:
 - Всего задач: {total_tasks}
-- Выполнено: {completed_tasks}
+- Выполнено: {completed_tasks}{profile_info}
 
 Требования:
 - От первого лица (я, мне)

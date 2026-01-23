@@ -444,13 +444,20 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 continue
 
             if "Добавлена задача" in result_text:
-                match = re.search(r"Добавлена задача '([^']+)' \(ID: (\d+)\)", result_text)
+                # Парсим детали задачи для персонализированного ответа
+                match = re.search(r"Добавлена задача '([^']+)'", result_text)
                 if match:
                     task_title = match.group(1)
-                    task_id = match.group(2)
-                    natural_responses.append(f"Задача '{task_title}' создана")
+                    # Передаем детали для умного ответа
+                    time_match = re.search(r"с напоминанием на ([\d\.]+) в ([\d:]+)", result_text)
+                    if time_match:
+                        date_part = time_match.group(1)
+                        time_part = time_match.group(2)
+                        natural_responses.append(f"TASK_CREATED: {task_title} | scheduled_at: {date_part} {time_part}")
+                    else:
+                        natural_responses.append(f"TASK_CREATED: {task_title}")
                 else:
-                    natural_responses.append("Задача создана успешно")
+                    natural_responses.append("TASK_CREATED: Новая задача")
 
             elif "Задача выполнена" in result_text or "отмечена как выполненная" in result_text:
                 natural_responses.append("Задача выполнена")
@@ -630,7 +637,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     logger.warning(f"Failed to get profile context: {e}")
 
             # ФОРМИРУЕМ КОНТЕКСТ ДЛЯ AI: результаты + профиль + инструкции
-            tool_context_msg = f"РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:\n{final_content}{profile_context}\n\nВАЖНО: На основе этих результатов дай естественный, полезный ответ пользователю. Учитывай время суток и персонализируй ответ."
+            tool_context_msg = f"РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:\n{final_content}{profile_context}\n\nИНСТРУКЦИЯ: На основе результатов дай естественный, ПОЛЕЗНЫЙ ответ с конкретными советами:\n- Если создана задача - дай 1-2 практических совета как ее выполнить\n- Упомяни подходящее время суток и контекст\n- Персонализируй ответ используя данные профиля\n- Будь кратким но полезным (2-3 предложения)\n- Добавь эмоджи где уместно"
 
             # Добавляем контекст в messages
             messages = [{"role": "system", "content": system_prompt}]

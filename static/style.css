@@ -1929,7 +1929,7 @@ details[open] .details-content {
 }
 
 .rating-cancel-btn:hover {
-    background: #F6F8FA;
+    background-color: #F6F8FA;
     border-color: #374151;
 }
 
@@ -1940,7 +1940,7 @@ details[open] .details-content {
 }
 
 .rating-submit-btn:hover {
-    background: #F6F8FA;
+    background-color: #F6F8FA;
     border-color: #374151;
 }
 

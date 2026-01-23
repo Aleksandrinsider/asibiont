@@ -76,18 +76,39 @@ async def generate_progress_post(user_id, session):
             Task.reminder_time < now_utc
         ).count()
         
+        # Get user profile for personalization
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        profile_info = ""
+        if profile:
+            profile_parts = []
+            if profile.skills:
+                profile_parts.append(f"Навыки: {profile.skills}")
+            if profile.interests:
+                profile_parts.append(f"Интересы: {profile.interests}")
+            if profile.goals:
+                profile_parts.append(f"Цели: {profile.goals}")
+            if profile.company:
+                profile_parts.append(f"Компания: {profile.company}")
+            if profile.position:
+                profile_parts.append(f"Должность: {profile.position}")
+            if profile.city:
+                profile_parts.append(f"Город: {profile.city}")
+            if profile_parts:
+                profile_info = f"\n\nМой профиль:\n{'; '.join(profile_parts)}"
+        
         # Generate post using AI
         prompt = f"""Напиши короткий пост от первого лица о моём прогрессе за сегодня. 
 
 Статистика:
 - Создано задач: {total_today}
 - Выполнено задач: {completed_today}
-- Не выполнено в срок: {pending_today}
+- Не выполнено в срок: {pending_today}{profile_info}
 
 Требования:
 - Пиши от первого лица (я, мне, мой)
 - Будь честным - если не сделал ничего, так и скажи
 - Без конкретных названий задач
+- ОБЯЗАТЕЛЬНО упомяни 1-2 элемента из профиля (интересы/навыки/цели) чтобы другие пользователи заинтересовались
 - НЕ упоминай конкретное время (не пиши "сейчас 08:45" и т.п.)
 - Добавь что-то мотивирующее или вопрос для вовлечения других
 - Максимум 2-3 предложения
