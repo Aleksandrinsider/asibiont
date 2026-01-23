@@ -200,9 +200,7 @@ SILVER (9000₽/мес):
 {silver_url}
 
 GOLD (27000₽/мес):
-{gold_url}
-
-Или выберите тариф на сайте с промокодом: https://asibiont.ru/subscription-tiers"""
+{gold_url}"""
     
     await message.bot.send_message(message.chat.id, payment_message)
     session.close()

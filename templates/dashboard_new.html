@@ -1366,6 +1366,57 @@
         </div>
     </div>
 
+    <!-- Quick Profile Setup Modal -->
+    <div id="quick-profile-modal" class="rating-modal" style="display: none;">
+        <div class="rating-modal-content" style="max-width: 500px;">
+            <div class="rating-modal-header">
+                <h3>Быстрая настройка профиля</h3>
+            </div>
+            <div class="rating-modal-body">
+                <p style="font-size: 13px; color: #374151; margin-bottom: 20px;">
+                    Заполните базовую информацию о себе, чтобы мы могли найти вам подходящих партнеров.
+                    Это займет всего минуту!
+                </p>
+                <form id="quick-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город</label>
+                        <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Компания <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
+                        <input type="text" id="quick-company" placeholder="Название компании" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Должность <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
+                        <input type="text" id="quick-position" placeholder="Ваша должность" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы</label>
+                        <input type="text" id="quick-interests" placeholder="Например: спорт, программирование, путешествия" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Навыки <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
+                        <input type="text" id="quick-skills" placeholder="Например: Python, менеджмент, дизайн" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Цели <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
+                        <textarea id="quick-goals" placeholder="Чего вы хотите достичь?" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; min-height: 60px; font-family: inherit; resize: vertical;"></textarea>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Языки <span style="color: #6C727F; font-weight: 400;">(необязательно)</span></label>
+                        <input type="text" id="quick-languages" placeholder="Например: Русский, English" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                    </div>
+                </form>
+                <div class="rating-modal-actions" style="margin-top: 16px;">
+                    <button onclick="skipQuickProfile()" class="rating-cancel-btn">Пропустить</button>
+                    <button onclick="submitQuickProfile()" class="rating-submit-btn" style="display: flex; align-items: center; justify-content: center;">
+                        <span id="quick-profile-btn-text">Сохранить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
 
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
@@ -3613,6 +3664,118 @@
                 showNotification('Ошибка при отправке рекомендации', 'error');
             }
         }
+
+        // Quick Profile Setup Functions
+        async function checkProfileCompleteness() {
+            try {
+                const response = await fetch('/api/profile', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) return;
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const profile = data.profile;
+
+                    // Проверяем, заполнены ли основные поля
+                    const isEmpty = (value) => !value || value === 'Не указан' || value === 'Не указана' || value === 'Не указаны';
+
+                    const isIncomplete = isEmpty(profile.city) || 
+                                       isEmpty(profile.interests);
+
+                    // Показываем модальное окно только если профиль не заполнен
+                    if (isIncomplete) {
+                        // Небольшая задержка для лучшего UX
+                        setTimeout(() => {
+                            showQuickProfileModal();
+                        }, 500);
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking profile completeness:', error);
+            }
+        }
+        
+        function showQuickProfileModal() {
+            const modal = document.getElementById('quick-profile-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+            }
+        }
+        
+        function skipQuickProfile() {
+            const modal = document.getElementById('quick-profile-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        async function submitQuickProfile() {
+            const city = document.getElementById('quick-city').value.trim();
+            const company = document.getElementById('quick-company').value.trim();
+            const position = document.getElementById('quick-position').value.trim();
+            const interests = document.getElementById('quick-interests').value.trim();
+            const skills = document.getElementById('quick-skills').value.trim();
+            const goals = document.getElementById('quick-goals').value.trim();
+            const languages = document.getElementById('quick-languages').value.trim();
+
+            // Проверяем обязательные поля
+            if (!city) {
+                showNotification('Укажите город', 'error');
+                return;
+            }
+
+            if (!interests) {
+                showNotification('Укажите интересы', 'error');
+                return;
+            }
+
+            const submitBtn = document.getElementById('quick-profile-btn-text');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Сохранение...';
+
+            try {
+                const response = await fetch('/api/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        city: city,
+                        company: company || undefined,
+                        position: position || undefined,
+                        interests: interests,
+                        skills: skills || undefined,
+                        goals: goals || undefined,
+                        languages: languages || undefined
+                    }),
+                    credentials: 'include'
+                });
+
+                if (!await checkAuth(response)) {
+                    submitBtn.textContent = originalText;
+                    return;
+                }
+
+                if (response.ok) {
+                    showNotification('Профиль успешно заполнен!', 'success');
+                    skipQuickProfile();
+
+                    // Обновляем отображение профиля на странице
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500);
+                } else {
+                    const error = await response.json();
+                    showNotification(`Ошибка: ${error.error || 'Не удалось сохранить профиль'}`, 'error');
+                    submitBtn.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Error submitting quick profile:', error);
+                showNotification('Ошибка при сохранении профиля', 'error');
+                submitBtn.textContent = originalText;
+            }
+        }
         
         async function unblockContact(username) {
             try {
@@ -3841,6 +4004,9 @@
 
                 return;
             }
+
+            // Проверить заполненность профиля и показать модальное окно при необходимости
+            checkProfileCompleteness();
             
             // Убедиться что chat-view активен при загрузке
             const chatView = document.getElementById('chat-view');
