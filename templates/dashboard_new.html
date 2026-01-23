@@ -2289,7 +2289,17 @@
                 });
 
                 if (!await checkAuth(response)) return;
-                const data = await response.json();
+
+                let data;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    showNotification('Ошибка сервера: ' + response.status, 'error');
+                    return;
+                }
 
                 if (response.ok) {
                     showNotification('Комментарий удален', 'success');
