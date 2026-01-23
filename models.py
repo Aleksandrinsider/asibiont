@@ -193,7 +193,7 @@ class Post(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     username = Column(String(255))  # Denormalized username for easy viewing
     content = Column(Text, nullable=False)  # Post content
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="posts")
 
