@@ -114,19 +114,6 @@ try:
         else:
             logger.info("Migration: bio column already exists")
 
-        # Migration for languages column
-        if 'languages' not in columns:
-            try:
-                logger.info("Adding languages column to user_profiles table")
-                session.execute(text('ALTER TABLE user_profiles ADD COLUMN languages VARCHAR(500)'))
-                session.commit()
-                logger.info("Migration: languages column added successfully")
-            except Exception as e:
-                logger.error(f"Failed to add languages column: {e}")
-                session.rollback()
-        else:
-            logger.info("Migration: languages column already exists")
-
         # Migration for birthdate column
         if 'birthdate' not in columns:
             try:
