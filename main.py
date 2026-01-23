@@ -4554,8 +4554,10 @@ async def delete_comment_handler(request):
             logger.warning(f"User {user.id} trying to delete comment owned by {comment.user_id}")
             return web.json_response({'error': 'Forbidden'}, status=403)
 
-        # Delete the comment
-        db_session.delete(comment)
+        # Delete the comment - expunge first to avoid relationship issues
+        post_id = comment.post_id
+        db_session.expunge(comment)
+        db_session.query(Comment).filter_by(id=comment_id).delete()
         db_session.commit()
         logger.info(f"Comment {comment_id} deleted successfully")
 
