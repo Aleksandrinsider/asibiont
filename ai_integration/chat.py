@@ -115,9 +115,17 @@ enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 
 
-async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False):
-    """Обрабатывает tool calls и возвращает естественный ответ"""
+async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None):
+    """Обрабатывает tool calls и возвращает естественный ответ
+    
+    Args:
+        current_time: Текущее время пользователя (datetime object с timezone)
+    """
     logger = logging.getLogger(__name__)
+    
+    # Если current_time не передан, используем user_now
+    if current_time is None:
+        current_time = user_now
     logger.info(f"[PROCESS_TOOL_CALLS] Called with user_id={user_id}, tool_calls count={len(tool_calls)}")
     
     if user_id is None:
@@ -202,8 +210,18 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
                     continue
                 
-                # СТРОГАЯ проверка наличия времени
+                # КРИТИЧЕСКИ ВАЖНО: Правильно обрабатываем относительное время
+                # Если в сообщении "через X минут/часов" - ВСЕГДА пересчитываем от current_time
                 reminder_time = args.get("reminder_time")
+                
+                # Проверяем относительное время в оригинальном сообщении
+                from ai_integration.utils import parse_relative_time
+                relative_time_result = parse_relative_time(original_message, current_time)
+                if relative_time_result:
+                    # Если нашли относительное время - ИСПОЛЬЗУЕМ его вместо AI расчета
+                    reminder_time = relative_time_result.strftime("%Y-%m-%d %H:%M")
+                    logger.info(f"[ADD TASK] Recalculated relative time: {reminder_time} (current_time: {current_time.strftime('%H:%M')})")
+                
                 if not reminder_time or '@unknown' in str(reminder_time):
                     reminder_time = intent.get("params", {}).get("reminder_time")
                 
@@ -1553,7 +1571,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     pass
 
                             if tool_calls:
-                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question)
+                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
                                 if result:
                                     return result
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке

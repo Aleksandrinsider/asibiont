@@ -2560,8 +2560,12 @@ def check_delegation_deadlines():
         session.close()
 
 
-async def delete_task(task_id=None, task_title=None, user_id=None, session=None):
-    """Delete a task by ID or title"""
+async def delete_task(task_id=None, task_title=None, user_id=None, session=None, confirmed=False):
+    """Delete a task by ID or title. Requires confirmation unless confirmed=True.
+    
+    Args:
+        confirmed: If True, skip confirmation and delete immediately (for API calls with user confirmation)
+    """
     if session is None:
         session = Session()
         close_session = True
@@ -2610,6 +2614,16 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None)
         return "Не указан ни task_id, ни task_title."
 
     if task:
+        # КРИТИЧЕСКИ ВАЖНО: AI АГЕНТ ДОЛЖЕН СПРОСИТЬ ПОДТВЕРЖДЕНИЕ
+        # Если confirmed=False - возвращаем специальный код для AI
+        if not confirmed:
+            task_info = f"{task.title} (время: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указано'})"
+            result = f"CONFIRMATION_REQUIRED: Задача найдена - {task_info}. ОБЯЗАТЕЛЬНО спроси у пользователя: 'Точно удалить задачу \"{task.title}\"? Напиши да/удалить для подтверждения.' Без подтверждения НЕ удаляй!"
+            if close_session:
+                session.close()
+            return result
+        
+        # Confirmed - удаляем
         task_title = task.title
         session.delete(task)
         session.commit()
