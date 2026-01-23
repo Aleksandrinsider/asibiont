@@ -1264,14 +1264,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Приветствия - не используем инструменты, отвечаем текстом
             tool_choice = "none"
         elif intent_type in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 'delegate_task']:
-            # Явные запросы на управление задачами - используем инструменты
-            tool_choice = "auto"
+            # Явные запросы на управление задачами - ОБЯЗАТЕЛЬНО используем инструменты
+            tool_choice = "required"
+            logger.info(f"[TOOL CHOICE] REQUIRED for task management: {intent_type}")
         elif intent_type == 'find_partners':
             # Поиск партнеров - используем инструменты
             tool_choice = "auto"
         elif intent_type in ['update_profile', 'profile_info']:
-            # Обновление профиля или информация о профиле - используем инструменты
-            tool_choice = "auto"
+            # Обновление профиля или информация о профиле - ОБЯЗАТЕЛЬНО используем инструменты
+            tool_choice = "required"
+            logger.info(f"[TOOL CHOICE] REQUIRED for profile update: {intent_type}")
         else:
             # По умолчанию - автоопределение
             tool_choice = "auto"
