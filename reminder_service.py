@@ -21,11 +21,17 @@ async def _send_reminder_job(task_id: int):
     db = Session()
     try:
         task = db.query(Task).filter_by(id=task_id).first()
-        if not task or not task.user:
-            logger.warning(f"_send_reminder_job: task {task_id} or user not found")
+        if not task:
+            logger.warning(f"_send_reminder_job: task {task_id} not found")
+            return
+        if not task.user:
+            logger.warning(f"_send_reminder_job: user not found for task {task_id}")
+            return
+        if not hasattr(task.user, 'telegram_id') or task.user.telegram_id is None:
+            logger.warning(f"_send_reminder_job: telegram_id is None for task {task_id}")
             return
         user_id = task.user.telegram_id
-        task_title = task.title
+        task_title = task.title or "Без названия"
     finally:
         db.close()
 
@@ -39,11 +45,17 @@ async def _send_result_check_job(task_id: int):
     db = Session()
     try:
         task = db.query(Task).filter_by(id=task_id).first()
-        if not task or not task.user:
-            logger.warning(f"_send_result_check_job: task {task_id} or user not found")
+        if not task:
+            logger.warning(f"_send_result_check_job: task {task_id} not found")
+            return
+        if not task.user:
+            logger.warning(f"_send_result_check_job: user not found for task {task_id}")
+            return
+        if not hasattr(task.user, 'telegram_id') or task.user.telegram_id is None:
+            logger.warning(f"_send_result_check_job: telegram_id is None for task {task_id}")
             return
         user_id = task.user.telegram_id
-        task_title = task.title
+        task_title = task.title or "Без названия"
     finally:
         db.close()
 

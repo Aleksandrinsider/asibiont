@@ -34,6 +34,11 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     # Check if user exists
     user = session.query(User).filter_by(telegram_id=user_id).first()
     if not user:
+        if user_id is None:
+            logger.error("[ADD_TASK] Cannot create user with None telegram_id")
+            if close_session:
+                session.close()
+            return "ERROR: user_id cannot be None"
         user = User(telegram_id=user_id)
         session.add(user)
         session.commit()
@@ -237,6 +242,16 @@ def delete_all_tasks(user_id=None, session=None):
 
 async def complete_task(task_id=None, task_title=None, user_id=None, session=None):
     """Mark task as completed"""
+    logger.info(f"[COMPLETE_TASK] Called with task_id={task_id}, user_id={user_id}")
+    
+    if user_id is None:
+        logger.error("[COMPLETE_TASK] user_id is None")
+        return "ERROR: user_id не может быть None"
+    
+    if task_id is None and (task_title is None or task_title.strip() == ""):
+        logger.error("[COMPLETE_TASK] Both task_id and task_title are None/empty") 
+        return "ERROR: Не указан идентификатор или название задачи"
+    
     if session is None:
         session = Session()
         close_session = True
@@ -808,6 +823,20 @@ def delegate_task(
 ):
     """Create a delegated task that requires acceptance by the recipient"""
     from config import FREE_ACCESS_MODE
+    
+    # Validate input parameters
+    if user_id is None:
+        logger.error("[DELEGATE] user_id is None")
+        return "ERROR: Пользователь не указан"
+    
+    if not title or title.strip() == "":
+        logger.error("[DELEGATE] title is empty or None")
+        return "ERROR: Название задачи не может быть пустым"
+    
+    if not delegated_to_username or delegated_to_username.strip() == "":
+        logger.error("[DELEGATE] delegated_to_username is empty or None")
+        return "ERROR: Получатель не указан"
+    
     session = Session()
     try:
         # Check if delegator has Bronze tier - Bronze users can only receive delegated tasks
@@ -1459,6 +1488,10 @@ def brainstorm_ideas(topic, num_ideas=5, user_id=None):
 
 def list_tasks(user_id=None, session=None):
     """Return list of user's tasks in plain text format"""
+    if user_id is None:
+        logger.error("[LIST_TASKS] user_id is None")
+        return "ERROR: user_id не может быть None"
+    
     if session is None:
         session = Session()
         close_session = True
@@ -1468,7 +1501,7 @@ def list_tasks(user_id=None, session=None):
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return "Пользователь не найден"
+            return "У вас пока нет задач"
 
         # Get user tasks or delegated tasks
         query = session.query(Task).filter(Task.user_id == user.id)

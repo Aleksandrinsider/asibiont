@@ -770,7 +770,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 user = User(telegram_id=user_id)
                 db_session.add(user)
                 db_session.commit()
+                
+            # Получаем профиль пользователя
+            profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+            logger.info(f"[PROFILE] User {user_id} profile loaded: {'Yes' if profile else 'No'}")
             
+            # Устанавливаем имя пользователя
+            if user.username:
+                user_username = user.username
+            elif user.first_name:
+                user_username = user.first_name
+            else:
+                user_username = "user"
+                
             # Получаем subscription_tier
             subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
             logger.info(f"[SUBSCRIPTION] User {user_id} tier from DB: {user.subscription_tier if user else 'None'}, value: {subscription_tier}")
@@ -882,9 +894,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
                 if profile_info:
                     user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+                    logger.info(f"[PROFILE DEBUG] Profile info added to prompt: {profile_info}")
 
                 # Проактивное заполнение при незаполненных полях
                 if empty_fields and len(empty_fields) > 0:
+                    logger.info(f"[PROFILE DEBUG] Empty fields detected: {empty_fields}")
                     # Выбираем только 1-2 наиболее важных незаполненных поля для естественного вопроса
                     priority_fields = []
                     if not profile.city:
@@ -905,6 +919,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         pass
 
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
+                logger.info(f"[PROFILE DEBUG] Profile filled status: {profile_filled}, fields count: {len(profile_info)}")
 
                 # ДЕМОНСТРАЦИЯ ВОЗМОЖНОСТЕЙ: каждые 5-7 взаимодействий
                 interaction_count = getattr(profile, 'interaction_count', 0) or 0
@@ -916,11 +931,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     user_memory += "\nПЕРВОЕ ЗНАКОМСТВО: Если пользователь здоровается, можешь ненавязчиво предложить рассказать о себе (город, интересы) для персонализации, но только если разговор естественно к этому ведет"
             else:
                 user_memory += "\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
+                logger.info("[PROFILE DEBUG] No profile found, will request profile filling")
 
             # ЗАГРУЖАЕМ ПОЛНЫЙ СПИСОК ЗАДАЧ ДЛЯ ПРЕДОТВРАЩЕНИЯ ВЫДУМЫВАНИЯ
             # Агент НЕ ДОЛЖЕН выдумывать задачи - только использовать реальные данные из БД
             from .handlers import list_tasks
             tasks_info = list_tasks(user_id=user_id, session=db_session)
+            logger.info(f"[TASKS DEBUG] Tasks loaded: {tasks_info[:100] if tasks_info else 'None'}...")
             if tasks_info and "У вас" in tasks_info:
                 user_memory += f"\n\nАКТИВНЫЕ ЗАДАЧИ:\n{tasks_info}\n\nВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
             else:
