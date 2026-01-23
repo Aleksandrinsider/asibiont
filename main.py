@@ -3148,6 +3148,28 @@ async def api_partners_handler(request):
         partners_data = filtered_partners_data
         partners_data.sort(key=sort_key)
 
+        # Добавить флаг is_favorite для всех контактов
+        favorite_usernames = set()
+        if profile and profile.favorite_contacts:
+            try:
+                favorite_data = json.loads(profile.favorite_contacts)
+                for item in favorite_data:
+                    if isinstance(item, int):
+                        # Это user_id
+                        fav_user = session_db.query(User).filter_by(id=item).first()
+                        if fav_user and fav_user.username:
+                            favorite_usernames.add(fav_user.username.replace('@', '').lower())
+                    elif isinstance(item, str):
+                        # Это username
+                        favorite_usernames.add(item.replace('@', '').lower())
+            except json.JSONDecodeError:
+                pass
+
+        # Установить флаг is_favorite для всех контактов
+        for partner in partners_data:
+            contact_username = partner.get('contact_info', '').replace('@', '').lower()
+            partner['is_favorite'] = contact_username in favorite_usernames
+
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({
             'partners': partners_data,
