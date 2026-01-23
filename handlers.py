@@ -292,8 +292,6 @@ async def chat_handler(message: Message):
 async def process_text_message(user_id, text, message, state):
     message_id = message.message_id
 
-    logger.info(f"[HANDLER START] Received message {message_id} from user {user_id}: {text[:50]}")
-
     try:
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -342,15 +340,10 @@ async def process_text_message(user_id, text, message, state):
 
         context = []  # Simplified: no context in bot
         response = await chat_with_ai(text, context, user_id)
-        logger.debug(f"AI response generated for user {user_id}: '{response[:100]}...'")
-        logger.debug(f"[HANDLER] Response from chat_with_ai: '{response[:200]}...'")
 
         if response and response.strip():
             try:
-                logger.info(
-                    f"[SENDING] Sending response to user {user_id}, chat {message.chat.id}, message_id={message_id}")
                 await message.bot.send_message(message.chat.id, response.strip())
-                logger.info(f"[SENT OK] Response sent successfully to user {user_id}")
             except Exception as e:
                 logger.error(f"Error sending message to {message.chat.id}: {e}")
                 await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при отправке ответа.")
@@ -362,21 +355,17 @@ async def process_text_message(user_id, text, message, state):
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if user:
             from models import Interaction
-            logger.info(f"Saving user interaction: user_id={user.id}, content='{text[:50]}...'")
             interaction = Interaction(user_id=user.id, message_type='user', content=text)
             session.add(interaction)
             if response and response.strip():
-                logger.info(f"Saving AI interaction: user_id={user.id}, content='{response.strip()[:50]}...'")
                 interaction = Interaction(user_id=user.id, message_type='ai', content=response.strip())
             else:
-                logger.info(f"Saving error AI interaction: user_id={user.id}")
                 interaction = Interaction(
                     user_id=user.id,
                     message_type='ai',
                     content="Извините, не удалось сгенерировать ответ.")
             session.add(interaction)
             session.commit()
-            logger.info(f"Interactions saved successfully for user {user.id}")
         else:
             logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
         session.close()

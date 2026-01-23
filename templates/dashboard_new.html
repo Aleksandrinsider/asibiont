@@ -1571,7 +1571,6 @@
                 
                 // Если найдено сообщение с таким же текстом и отправителем - это дубликат
                 if (msgText === processedText && msgSender === normalizedSender) {
-                    console.log('Duplicate message detected, skipping:', processedText.substring(0, 50));
                     return; // Не добавляем дубликат
                 }
             }
@@ -1971,7 +1970,6 @@
         }
 
         async function loadFeed() {
-            console.log('[FEED] Loading feed...');
             try {
                 const response = await fetch('/api/feed', {
                     method: 'GET',
@@ -1980,8 +1978,6 @@
 
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
-                console.log('[FEED] Feed data received:', data);
-                console.log('[FEED] Number of posts:', data.posts ? data.posts.length : 0);
 
                 const feedContainer = document.getElementById('feed-posts');
                 
@@ -4680,10 +4676,6 @@
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     // Добавляем класс contact-favorite если контакт в избранном
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
-                                    // Debug log for elite filter
-                                    if (partner.subscription_tier && partner.subscription_tier.toLowerCase() === 'gold') {
-                                        console.log('Found GOLD contact:', partner.contact_info, 'tier:', partner.subscription_tier);
-                                    }
                                     html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
@@ -4709,7 +4701,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -4829,7 +4821,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -4947,7 +4939,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(\'' + contactInfoEscaped + '\', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5393,7 +5385,6 @@
                         // ALWAYS show indicator when profile data changed
                         const indicator = document.getElementById('profile-update-indicator');
                         if (indicator) {
-                            console.log('Profile data changed, showing indicator');
                             indicator.style.display = 'inline-block';
                             
                             // Auto-hide after 8 seconds if profile is expanded
@@ -5401,7 +5392,6 @@
                             if (!isCollapsed) {
                                 setTimeout(() => {
                                     if (indicator && indicator.style.display === 'inline-block') {
-                                        console.log('Auto-hiding indicator after 8 seconds');
                                         indicator.style.display = 'none';
                                     }
                                 }, 8000);
@@ -5549,7 +5539,6 @@
         }
 
         async function checkNewPosts() {
-            console.log('[NEW_POSTS] Checking for new posts, lastSeenPostId:', lastSeenPostId, 'currentView:', currentView);
             try {
                 const response = await fetch('/api/feed', {
                     method: 'GET',
@@ -5557,34 +5546,27 @@
                 });
                 
                 if (!await checkAuth(response)) {
-                    console.log('[NEW_POSTS] Auth check failed');
                     return;
                 }
                 const data = await response.json();
-                console.log('[NEW_POSTS] Feed response:', data.posts ? data.posts.length + ' posts' : 'no posts');
                 
                 if (data.posts && data.posts.length > 0) {
                     const latestPostId = data.posts[0].id;
                     const indicator = document.getElementById('new-posts-indicator');
-                    console.log('[NEW_POSTS] Latest post ID:', latestPostId, 'lastSeenPostId:', lastSeenPostId, 'indicator element:', indicator);
                     
                     // Если есть новые посты и мы не в ленте
                     if (lastSeenPostId !== null && latestPostId > lastSeenPostId && currentView !== 'feed') {
-                        console.log('[NEW_POSTS] NEW POSTS DETECTED! Showing indicator');
                         if (indicator) {
                             indicator.style.display = 'inline-block';
-                            console.log('[NEW_POSTS] Indicator display set to inline-block');
                         }
                     } else if (currentView === 'feed') {
                         // Когда переключаемся в ленту, обновляем lastSeenPostId и скрываем индикатор
-                        console.log('[NEW_POSTS] In feed view, hiding indicator');
                         lastSeenPostId = latestPostId;
                         if (indicator) indicator.style.display = 'none';
                     }
                     
                     // Инициализируем lastSeenPostId при первой загрузке
                     if (lastSeenPostId === null) {
-                        console.log('[NEW_POSTS] First load, setting lastSeenPostId to:', latestPostId);
                         lastSeenPostId = latestPostId;
                     }
                 }
