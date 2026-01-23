@@ -5140,11 +5140,20 @@
                     if (profileDataChanged) {
                         lastProfileData = currentProfileKey;
                         
-                        // Show indicator if profile is collapsed and data changed
-                        const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
+                        // Show indicator when profile data changed (regardless of collapsed state)
                         const indicator = document.getElementById('profile-update-indicator');
-                        if (indicator && isCollapsed) {
+                        if (indicator) {
                             indicator.style.display = 'inline-block';
+                            
+                            // Hide indicator after 5 seconds if profile is expanded
+                            const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
+                            if (!isCollapsed) {
+                                setTimeout(() => {
+                                    if (indicator) {
+                                        indicator.style.display = 'none';
+                                    }
+                                }, 5000);
+                            }
                         }
                     }
                     
