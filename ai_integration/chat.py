@@ -365,14 +365,18 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                                 time_match = re.search(r'(\d{1,2}):(\d{2})', original_message)
                                 if time_match:
                                     hours, minutes = time_match.groups()
+                                    # Get user timezone
+                                    user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
                                     # Assume tomorrow if "завтра" in message, otherwise today
-                                    base_date = datetime.now(pytz.UTC)
+                                    base_date = datetime.now(user_tz)
                                     if 'завтра' in original_message.lower():
                                         base_date += timedelta(days=1)
                                     
+                                    # Set time in user's timezone, then convert to UTC
                                     reminder_time = base_date.replace(hour=int(hours), minute=int(minutes), second=0, microsecond=0)
                                     if reminder_time.tzinfo is None:
-                                        reminder_time = pytz.UTC.localize(reminder_time)
+                                        reminder_time = user_tz.localize(reminder_time)
+                                    reminder_time = reminder_time.astimezone(pytz.UTC)
                                     
                                     result = edit_task(
                                         task_id=recent_task.id,

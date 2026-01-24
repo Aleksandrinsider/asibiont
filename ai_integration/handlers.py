@@ -1377,10 +1377,14 @@ def edit_task(
                         session.close()
                         return "Не удалось распарсить относительное время."
                 else:
-                    reminder_time_parsed = datetime.strptime(
-                        reminder_time, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-                    task.reminder_time = reminder_time_parsed
-                    logger.info(f"Task {task.id} absolute time updated: {reminder_time_parsed}")
+                    # Parse time as local time in user's timezone, then convert to UTC
+                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                    reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                    # Localize to user timezone
+                    reminder_time_local = user_tz.localize(reminder_time_parsed)
+                    # Convert to UTC for storage
+                    task.reminder_time = reminder_time_local.astimezone(pytz.UTC)
+                    logger.info(f"Task {task.id} absolute time updated: {reminder_time} (local) -> {task.reminder_time} (UTC)")
             except ValueError:
                 if close_session:
                     session.close()
