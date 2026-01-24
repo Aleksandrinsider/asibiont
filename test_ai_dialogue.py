@@ -11,7 +11,9 @@ import json
 
 sys.path.insert(0, '.')
 
-from models import Session, User, Task
+from models import User, Task, Base, Subscription
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from ai_integration.chat import chat_with_ai
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
@@ -78,8 +80,11 @@ async def run_dialogue_test():
     print("=" * 80)
     print()
     
-    # Создаем тестовую сессию
-    session = Session()
+    # Создаем тестовую сессию с SQLite
+    engine = create_engine("sqlite:///test_dialogue.db")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
     
     # Создаем тестового пользователя
     test_user_id = 888888
@@ -95,6 +100,23 @@ async def run_dialogue_test():
         session.add(test_user)
         session.commit()
     
+    # Создаем активную подписку для теста
+    from models import Subscription
+    from datetime import timedelta
+    import pytz
+    
+    subscription = session.query(Subscription).filter_by(user_id=test_user.id, status="active").first()
+    if not subscription:
+        subscription = Subscription(
+            user_id=test_user.id,
+            telegram_id=test_user.telegram_id,
+            status="active",
+            start_date=datetime.now(pytz.UTC),
+            end_date=datetime.now(pytz.UTC) + timedelta(days=30)
+        )
+        session.add(subscription)
+        session.commit()
+    
     # Очищаем старые задачи
     old_tasks = session.query(Task).filter_by(user_id=test_user.id).all()
     for task in old_tasks:
@@ -102,53 +124,57 @@ async def run_dialogue_test():
     session.commit()
     
     conversation_history = []
-    num_turns = 8  # Количество обменов сообщениями
+    num_turns = 4  # Уменьшаем количество раундов для быстрого теста
     
     # Первое сообщение от пользователя
     user_message = "привет, как дела?"
     
-    for turn in range(num_turns):
-        print(f"{'─' * 80}")
-        print(f"РАУНД {turn + 1}/{num_turns}")
-        print(f"{'─' * 80}")
-        print()
-        
-        # Пользователь пишет
-        print(f"👤 ПОЛЬЗОВАТЕЛЬ: {user_message}")
-        print()
-        
-        conversation_history.append(f"Пользователь: {user_message}")
-        
-        # Агент отвечает
-        try:
-            agent_response = await chat_with_ai(
-                message=user_message,
-                user_id=test_user_id,
-                db_session=session
-            )
-        except Exception as e:
-            agent_response = f"[ОШИБКА: {str(e)}]"
-        
-        print(f"🤖 АГЕНТ: {agent_response}")
-        print()
-        
-        conversation_history.append(f"Агент: {agent_response}")
-        
-        # Небольшая пауза для реалистичности
-        await asyncio.sleep(1)
-        
-        # Если не последний раунд - генерируем следующее сообщение пользователя
-        if turn < num_turns - 1:
-            # Ограничиваем историю последними 6 сообщениями
-            recent_history = '\n'.join(conversation_history[-6:])
+    try:
+        for turn in range(num_turns):
+            print(f"{'─' * 80}")
+            print(f"РАУНД {turn + 1}/{num_turns}")
+            print(f"{'─' * 80}")
+            print()
             
+            # Пользователь пишет
+            print(f"👤 ПОЛЬЗОВАТЕЛЬ: {user_message}")
+            print()
+            
+            conversation_history.append(f"Пользователь: {user_message}")
+            
+            # Агент отвечает
             try:
-                user_message = await generate_user_message(recent_history, agent_response)
+                agent_response = await chat_with_ai(
+                    message=user_message,
+                    user_id=test_user_id,
+                    db_session=session
+                )
             except Exception as e:
-                print(f"⚠️ Ошибка генерации сообщения пользователя: {e}")
-                user_message = "покажи мои задачи"
+                agent_response = f"[ОШИБКА: {str(e)}]"
             
-            await asyncio.sleep(1)
+            print(f"🤖 АГЕНТ: {agent_response}")
+            print()
+            
+            conversation_history.append(f"Агент: {agent_response}")
+            
+            # Небольшая пауза для реалистичности
+            await asyncio.sleep(0.5)
+            
+            # Если не последний раунд - генерируем следующее сообщение пользователя
+            if turn < num_turns - 1:
+                # Ограничиваем историю последними 6 сообщениями
+                recent_history = '\n'.join(conversation_history[-6:])
+                
+                try:
+                    user_message = await generate_user_message(recent_history, agent_response)
+                except Exception as e:
+                    print(f"⚠️ Ошибка генерации сообщения пользователя: {e}")
+                    user_message = "покажи мои задачи"
+                
+                await asyncio.sleep(1)
+    
+    except KeyboardInterrupt:
+        print("\n⚠️  Тест прерван пользователем")
     
     print()
     print("=" * 80)
@@ -176,6 +202,10 @@ async def run_dialogue_test():
 
 
 if __name__ == "__main__":
+    # Устанавливаем FREE_ACCESS_MODE для теста
+    import os
+    os.environ['FREE_ACCESS_MODE'] = '1'
+    
     # Устанавливаем UTF-8 для вывода в консоль
     import sys
     if sys.platform == 'win32':

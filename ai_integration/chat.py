@@ -1819,9 +1819,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
                             
                             # Успех - выходим из retry loop
-                            print(f"[DEBUG SUCCESS] API call successful, content length: {len(content) if content else 0}")
-                            print(f"[DEBUG SUCCESS] Tool calls found: {len(tool_calls) if tool_calls else 0}")
-                            print(f"[DEBUG BEFORE BREAK] About to break from retry loop")
                             logger.info(f"[SUCCESS] API call successful, content length: {len(content) if content else 0}")
                             logger.info(f"[SUCCESS] Tool calls found: {len(tool_calls) if tool_calls else 0}")
                             # Устанавливаем флаг успешного выполнения
@@ -1888,10 +1885,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     break
                 
         # ОБРАБОТКА РЕЗУЛЬТАТОВ ПОСЛЕ RETRY LOOP
-        print(f"[DEBUG AFTER LOOP] After retry loop, success: {success if 'success' in locals() else False}")
-        print(f"[DEBUG AFTER LOOP] Content: '{content[:50] if content else 'None'}...'")
-        print(f"[DEBUG AFTER LOOP] Tool calls: {len(tool_calls) if tool_calls else 0}")
-        
         # Проверяем флаг успеха
         if 'success' not in locals() or not success:
             logger.warning("[RETRY FAILED] All retry attempts failed")
@@ -1911,20 +1904,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         final_content = replace_placeholders(final_content, user_now, current_time_str)
 
         # Пост-обработка
-        print(f"[DEBUG FINAL] Before post_process: '{final_content[:50] if final_content else 'None'}...'")
         final_content = post_process_response(final_content, user_id, db_session)
-        print(f"[DEBUG FINAL] After post_process: '{final_content[:50] if final_content else 'None'}...'")
 
         # Финальная проверка
         if not final_content or len(final_content.strip()) < 5:
             logger.warning("[FINAL FALLBACK] Content empty after processing, using fallback")
             final_content = "Хорошо, понял. Продолжим работу!"
 
-        print(f"[DEBUG RETURN] Final return: '{final_content[:50] if final_content else 'None'}...'")
         return final_content
 
     except Exception as e:
-        print(f"[DEBUG EXCEPTION] Exception in chat_with_ai: {e}")
         logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
