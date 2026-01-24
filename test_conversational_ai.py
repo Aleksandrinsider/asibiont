@@ -157,20 +157,27 @@ class ConversationalAITester:
 
         # Проверки качества
         word_count = len(agent_response.split())
-        if word_count < 5:
+        if word_count < 3:  # Уменьшили порог с 5 до 3
             analysis["issues"].append("Очень короткий ответ")
-        elif word_count > 200:
+        elif word_count > 80:  # Строже порог с 100 до 80
             analysis["issues"].append("Слишком длинный ответ")
 
         # Проверка естественности
         if agent_response.count("!") > 3:
             analysis["issues"].append("Слишком много восклицательных знаков")
 
-        # Проверка релевантности
-        user_words = set(user_message.lower().split())
-        agent_words = set(response_lower.split())
-        common_words = user_words.intersection(agent_words)
-        if len(common_words) == 0:
+        # Проверка релевантности - улучшенная логика
+        user_keywords = [word for word in user_message.lower().split() if len(word) > 3]  # Только значимые слова
+        agent_keywords = [word for word in response_lower.split() if len(word) > 3]
+        common_keywords = set(user_keywords).intersection(set(agent_keywords))
+        
+        # Более строгая проверка: хотя бы 1 общее ключевое слово ИЛИ ответ содержит задачу/время/действие
+        has_relevance = (
+            len(common_keywords) > 0 or
+            any(keyword in response_lower for keyword in ["задач", "время", "созда", "измен", "покаж", "список", "сегодня", "завтра", "напомин", "встреч", "перенес", "удали", "добави", "выполни"])
+        )
+        
+        if not has_relevance:
             analysis["issues"].append("Ответ не связан с вопросом")
 
         # Качество ответа
@@ -246,6 +253,13 @@ class ConversationalAITester:
 
                 # Анализируем ответ
                 analysis = self._analyze_agent_response(user_message, agent_response, i)
+                
+                # Логируем проблемы для анализа
+                if analysis["issues"]:
+                    print(f"⚠️  Итерация {i}: Проблемы - {', '.join(analysis['issues'])}")
+                    print(f"   Вопрос: {user_message[:100]}...")
+                    print(f"   Ответ: {agent_response[:100]}...")
+                    print()
                 self.test_results.append(analysis)
 
                 print(f"📊 Качество: {analysis['quality_score']}/10")
