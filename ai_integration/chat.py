@@ -862,6 +862,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         except:
             conversation_context = []
 
+    # ВСЕГДА получаем актуальный список задач перед обработкой
+    # Это гарантирует, что AI видит свежие данные после операций через веб-интерфейс
+    current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
+    fresh_tasks_info = f"\n[АКТУАЛЬНЫЕ ЗАДАЧИ НА МОМЕНТ ЗАПРОСА]\n{current_tasks}\n"
+
     # Добавляем текущее сообщение в контекст
     conversation_context.append({
         'role': 'user',
@@ -1174,11 +1179,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # ЗАГРУЖАЕМ ПОЛНЫЙ СПИСОК ЗАДАЧ ДЛЯ ПРЕДОТВРАЩЕНИЯ ВЫДУМЫВАНИЯ
             # Агент НЕ ДОЛЖЕН выдумывать задачи - только использовать реальные данные из БД
-            from .handlers import list_tasks
-            tasks_info = list_tasks(user_id=user_id, session=db_session)
-            logger.info(f"[TASKS DEBUG] Tasks loaded: {tasks_info[:100] if tasks_info else 'None'}...")
-            if tasks_info and "У вас" in tasks_info:
-                user_memory += f"\n\nАКТИВНЫЕ ЗАДАЧИ:\n{tasks_info}\n\nВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
+            # Используем свежие данные, полученные в начале функции
+            logger.info(f"[TASKS DEBUG] Using fresh tasks: {fresh_tasks_info[:100] if fresh_tasks_info else 'None'}...")
+            if fresh_tasks_info and "У вас" in fresh_tasks_info:
+                user_memory += f"\n\n{fresh_tasks_info}\n\nВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
             else:
                 user_memory += "\n\nУ пользователя нет активных задач."
 
