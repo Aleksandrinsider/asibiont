@@ -185,12 +185,25 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # КРИТИЧНО: Фильтруем слишком длинные title (берут весь текст сообщения)
                 task_title = args.get("title", args.get("task_title", "Задача"))
                 
-                # Если title слишком длинный (>60 символов или >10 слов) - скипаем
+                # Если title слишком длинный (>60 символов или >10 слов) - пытаемся извлечь правильный
                 word_count = len(task_title.split())
                 if len(task_title) > 60 or word_count > 10:
-                    logger.warning(f"[ADD TASK] SKIPPED - title too long ({len(task_title)} chars, {word_count} words): {task_title[:80]}")
-                    tool_results.append({"function": func_name, "result": f"ERROR: Название задачи слишком длинное ({word_count} слов). Нужно краткое название (2-5 слов). Пример: 'Позвонить клиенту', 'Подготовить отчёт'."})
-                    continue
+                    logger.warning(f"[ADD TASK] Title too long ({len(task_title)} chars, {word_count} words), extracting short version from: {task_title[:80]}")
+                    
+                    # Пытаемся извлечь короткое название из оригинального сообщения
+                    from .utils import extract_short_title_from_message
+                    extracted_title = await extract_short_title_from_message(original_message, task_title)
+                    
+                    if extracted_title:
+                        logger.info(f"[ADD TASK] Extracted short title: '{extracted_title}'")
+                        # Обновляем args с правильным title
+                        args["title"] = extracted_title
+                        task_title = extracted_title
+                    else:
+                        # Если не удалось извлечь - возвращаем ошибку
+                        logger.warning(f"[ADD TASK] SKIPPED - failed to extract short title from: {task_title[:80]}")
+                        tool_results.append({"function": func_name, "result": f"ERROR: Название задачи слишком длинное ({word_count} слов). Нужно краткое название (2-5 слов). Пример: 'Позвонить клиенту', 'Подготовить отчёт'."})
+                        continue
                 
                 # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
                 existing_tasks = list_tasks(user_id=user_id, session=db_session)

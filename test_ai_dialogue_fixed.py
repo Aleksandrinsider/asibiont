@@ -62,10 +62,12 @@ async def generate_user_message(conversation_history, agent_last_response):
 
 
 async def run_dialogue_test():
-    """Запускает тест-диалог между AI-пользователем и AI-агентом"""
+    """Запускает тест-диалог между AI-пользователем и AI-агентом на 20 итерациях"""
 
+    num_turns = 20  # Количество раундов диалога
+    
     print("=" * 80, flush=True)
-    print("ТЕСТ ДИАЛОГА: AI-ПОЛЬЗОВАТЕЛЬ ↔ AI-АГЕНТ", flush=True)
+    print(f"ТЕСТ ДИАЛОГА: AI-ПОЛЬЗОВАТЕЛЬ ↔ AI-АГЕНТ ({num_turns} итераций)", flush=True)
     print("=" * 80, flush=True)
     print(flush=True)
 

@@ -1537,3 +1537,70 @@ def post_process_response(content, user_id, db_session=None):
             content = content.rstrip('?!.') + '. ' + additions[0]
     
     return content.strip()
+
+
+async def extract_short_title_from_message(message, current_title):
+    """
+    Извлекает короткое название задачи из длинного текста пользователя.
+    Использует DeepSeek API для умного извлечения сути.
+    
+    Args:
+        message: Оригинальное сообщение пользователя
+        current_title: Неправильный title, который нужно исправить
+        
+    Returns:
+        Короткое название задачи (2-5 слов) или None если не удалось
+    """
+    import aiohttp
+    
+    try:
+        prompt = f"""Извлеки КОРОТКОЕ название задачи (2-5 слов) из сообщения пользователя.
+
+ПРИМЕРЫ:
+"давай запланируем пробежку завтра утром в парке" → "Пробежка"
+"напомни мне позвонить Сидорову обсудить договор" → "Позвонить Сидорову"
+"нужно отправить отчёт по проекту Солар клиенту" → "Отправить отчёт Солар"
+"добавь задачу подготовить презентацию к встрече" → "Подготовить презентацию"
+"создай задачу купить молоко и хлеб в магазине" → "Купить молоко и хлеб"
+
+СООБЩЕНИЕ: "{message}"
+НЕПРАВИЛЬНЫЙ ВАРИАНТ: "{current_title[:100]}"
+
+Ответь ТОЛЬКО коротким названием задачи (2-5 слов), без кавычек и пояснений."""
+
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": DEEPSEEK_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 30,
+            "temperature": 0.3  # Низкая температура для точности
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    extracted_title = result["choices"][0]["message"]["content"].strip()
+                    
+                    # Очищаем от кавычек, точек и лишних символов
+                    extracted_title = extracted_title.strip('"\'.,!?')
+                    
+                    # Проверяем что результат разумный (2-10 слов, не больше 60 символов)
+                    word_count = len(extracted_title.split())
+                    if 2 <= word_count <= 10 and len(extracted_title) <= 60:
+                        logger.info(f"[EXTRACT_TITLE] Successfully extracted: '{extracted_title}' from message: '{message[:80]}'")
+                        return extracted_title
+                    else:
+                        logger.warning(f"[EXTRACT_TITLE] Extracted title invalid: {word_count} words, {len(extracted_title)} chars")
+                        return None
+                else:
+                    logger.error(f"[EXTRACT_TITLE] API error: {response.status}")
+                    return None
+                    
+    except Exception as e:
+        logger.error(f"[EXTRACT_TITLE] Error: {e}")
+        return None
