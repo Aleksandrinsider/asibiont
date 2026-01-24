@@ -3,9 +3,9 @@ import logging
 import asyncio
 import os
 import tempfile
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 router = Router()
 from ai_integration import chat_with_ai
@@ -520,4 +520,15 @@ async def dashboard_handler(message: Message):
     # Generate dashboard URL
     base_url = WEBHOOK_URL.replace("/webhook", "")
     dashboard_url = f"{base_url}/dashboard?telegram_id={user_id}"
-    await message.bot.send_message(message.chat.id, f"Ваш личный дашборд: {dashboard_url}")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Открыть веб-версию", web_app=WebAppInfo(url=dashboard_url))]
+    ])
+    
+    await message.bot.send_message(
+        message.chat.id, 
+        f"🌐 Ваш личный дашборд:\n{dashboard_url}", 
+        reply_markup=keyboard
+    )
+
+

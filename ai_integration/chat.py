@@ -779,6 +779,17 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 else:
                     ai_context = "Профиль обновлен."
                     fallback_message = "Профиль обновлен."
+            elif any("НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ:" in r for r in natural_responses):
+                # Специальная обработка для запроса времени
+                time_responses = [r for r in natural_responses if "НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ:" in r]
+                for tr in time_responses:
+                    if ":" in tr:
+                        task_title = tr.split(":", 1)[1].strip()
+                        ai_context = tr  # Передаем маркер AI для естественной генерации
+                        fallback_message = f"Во сколько поставить задачу '{task_title}'?"  # Fallback на случай если AI не сгенерирует ответ
+                    else:
+                        ai_context = "НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ: неизвестная задача"
+                        fallback_message = "Во сколько поставить задачу?"
             elif any("TASK_ACCEPTED" in r for r in natural_responses):
                 # Обработка принятия делегированной задачи
                 task_accepted_responses = [r for r in natural_responses if "TASK_ACCEPTED" in r]

@@ -302,11 +302,22 @@ class ReminderService:
             # Перед генерацией текста напоминания проверяем состояние пользователя
             db = Session()
             try:
-                from models import User
+                from models import User, Task
                 user = db.query(User).filter_by(telegram_id=user_id).first()
                 if not user:
                     logger.warning(f"User with telegram_id {user_id} not found in database - aborting reminder for task {task_id}")
                     return
+                
+                # Проверяем статус задачи - не отправляем напоминание для завершенных задач
+                task = db.query(Task).filter_by(id=task_id).first()
+                if not task:
+                    logger.warning(f"Task {task_id} not found - aborting reminder")
+                    return
+                
+                if task.status in ['completed', 'cancelled', 'deleted']:
+                    logger.info(f"Task {task_id} has status '{task.status}' - skipping reminder")
+                    return
+                
                 # Проверяем режим 'не беспокоить' для пользователя
                 if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
                     logger.info(f"User {user_id} in DND until {user.do_not_disturb_until}, skipping reminder for task {task_id}")
