@@ -1960,7 +1960,11 @@
             const indicator = document.getElementById('new-posts-indicator');
             if (indicator) indicator.style.display = 'none';
             
-            loadFeed();
+            // Загружаем ленту только если она пустая (не загружена ранее)
+            const feedContainer = document.getElementById('feed-container');
+            if (!feedContainer || feedContainer.innerHTML.trim() === '') {
+                loadFeed();
+            }
         }
 
         function handlePostKeyPress(event) {
@@ -5682,12 +5686,6 @@
                 const feedView = document.getElementById('feed-view');
                 const chatView = document.getElementById('chat-view');
                 
-                if (feedView && feedView.classList.contains('active')) {
-                    // Если открыта лента, обновляем её динамически
-                    loadFeed();
-                    return;
-                }
-                
                 updateTasks();
                 updatePeople();
                 updateProfile();
@@ -5695,7 +5693,7 @@
                 if (chatView && chatView.classList.contains('active')) {
                     updateChat();
                 }
-                // Проверяем наличие новых постов
+                // Проверяем наличие новых постов, но НЕ перезагружаем ленту полностью
                 checkNewPosts();
             }, 5000);
             
