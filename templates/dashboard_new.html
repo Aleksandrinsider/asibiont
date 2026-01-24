@@ -268,7 +268,7 @@
                             html += '<div style="flex: 1;">';
                             
                             // Имя пользователя с Gold цветом
-                            html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                            html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span></div>';
                             
                             // Город
                             if (partner.city) {
@@ -1049,7 +1049,7 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm.061 3.073a4 4 0 1 0-5.123 0 6.004 6.004 0 0 0-3.431 5.142.75.75 0 0 0 1.498.07 4.5 4.5 0 0 1 8.99 0 .75.75 0 1 0 1.498-.07 6.005 6.005 0 0 0-3.432-5.142Z"/>
                             </svg>
-                            <h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Профиль</h3>
+                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>
                         </div>
                         <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
@@ -1134,7 +1134,7 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M5.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.49 3.49 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Z"/>
                             </svg>
-                            <h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Контакты</h3>
+                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
                     </div>
                     <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
@@ -1159,7 +1159,7 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M0 2.75C0 1.784.784 1 1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25Z"/>
                             </svg>
-                            <h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal; letter-spacing: normal;">
+                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal; letter-spacing: normal;">
                                 <span id="chat-link" onclick="event.stopPropagation(); switchToChat()" style="cursor: pointer;">Чат с ИИ</span>
                                 <span style="margin: 0 4px; opacity: 0.5;">/</span>
                                 <span id="feed-link" onclick="event.stopPropagation(); switchToFeed()" style="cursor: pointer; opacity: 0.5;">
@@ -1240,7 +1240,7 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M1.5 1.75V13.5h13.75a.75.75 0 0 1 0 1.5H.75a.75.75 0 0 1-.75-.75V1.75a.75.75 0 0 1 1.5 0Zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"/>
                             </svg>
-                            <h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Статистика</h3>
+                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Статистика</h3>
                         </div>
                         <button onclick="toggleStatsSection()" class="section-toggle-btn" id="stats-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
@@ -1272,7 +1272,7 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
                                 <path d="M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 0 1.5H2.75A1.75 1.75 0 0 1 1 13.25V1.75C1 .784 1.784 0 2.75 0h8.5C12.216 0 13 .784 13 1.75v7.736a.75.75 0 0 1-1.5 0V1.75a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13.274 9.537a.75.75 0 0 1-.04 1.06l-2.516 2.45a.75.75 0 0 1-1.054-.02l-1.233-1.234a.75.75 0 1 1 1.061-1.06l.696.695 1.992-1.939a.75.75 0 0 1 1.06.04ZM4.75 4a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5ZM4 7.75A.75.75 0 0 1 4.75 7h2a.75.75 0 0 1 0 1.5h-2A.75.75 0 0 1 4 7.75Z"/>
                             </svg>
-                            <h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Задачи</h3>
+                            <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
                     </div>
                     <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
@@ -4923,7 +4923,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5043,7 +5043,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5161,7 +5161,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5275,7 +5275,7 @@
                                     
                                     // Username
                                     let nameStyle = 'cursor: pointer; color: #068487;';
-                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                    html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     
                                     // Task count if available
                                     if (partner.task_count) {
@@ -5392,7 +5392,7 @@
                                     html += '</div>';
                                     
                                     html += '<div style="flex: 1;">';
-                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(username) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span></div>';
                                     
                                     // Город
                                     if (blockedPartner && blockedPartner.city) {
@@ -5780,7 +5780,7 @@
                         let html = '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">';
                         html += '<div onclick="openQuickProfileModal()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">';
                         html += '<svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm.061 3.073a4 4 0 1 0-5.123 0 6.004 6.004 0 0 0-3.431 5.142.75.75 0 0 0 1.498.07 4.5 4.5 0 0 1 8.99 0 .75.75 0 1 0 1.498-.07 6.005 6.005 0 0 0-3.432-5.142Z"/></svg>';
-                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Профиль</h3>';
+                        html += '<h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Профиль</h3>';
                         html += '</div>';
                         const isCollapsed = localStorage.getItem('profileCollapsed') === 'true' || localStorage.getItem('profileCollapsed') === null;
                         const svgRotation = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
