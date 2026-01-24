@@ -4861,6 +4861,22 @@
                                 }
                             });
                             
+                            // Добавляем избранные контакты, которых нет в списке от сервера
+                            // Это важно, чтобы избранные не пропадали при изменении интересов
+                            favoriteContacts.forEach(username => {
+                                if (!uniquePartners[username] && !blockedContacts.includes(username)) {
+                                    // Создаем минимальный объект для избранного контакта
+                                    uniquePartners[username] = {
+                                        contact_info: username,
+                                        type: 'favorite',
+                                        is_favorite: true,
+                                        first_name: '',
+                                        photo_url: null,
+                                        can_access: true
+                                    };
+                                }
+                            });
+                            
                             let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                             Object.values(uniquePartners).forEach(partner => {
                                 const telegramUrl = 'https://t.me/' + partner.contact_info;

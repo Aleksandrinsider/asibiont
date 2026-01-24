@@ -169,11 +169,14 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     # Schedule reminder if specified
     if task.reminder_time:
         try:
-            from main import reminder_service
-            if reminder_service:
-                reminder_service.schedule_reminder(
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE:
+                REMINDER_SERVICE.schedule_reminder(
                     task_id=task.id, reminder_time=task.reminder_time, user_id=user.telegram_id, task_title=task.title
                 )
+                logger.info(f"[ADD_TASK] Scheduled reminder for task {task.id} at {task.reminder_time}")
+            else:
+                logger.warning(f"[ADD_TASK] REMINDER_SERVICE not initialized, cannot schedule reminder for task {task.id}")
         except Exception as e:
             logging.warning(f"Could not schedule reminder for task {task_id}: {e}")
 
@@ -320,9 +323,9 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
         # Schedule result check - уточнение результата выполнения через 1 час
         result_check_time = datetime.now(timezone.utc) + timedelta(hours=1)
         try:
-            from main import reminder_service
-            if reminder_service:
-                reminder_service.schedule_result_check(
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE:
+                REMINDER_SERVICE.schedule_result_check(
                     task_id=task.id, result_check_time=result_check_time, user_id=user.telegram_id, task_title=task.title
                 )
         except Exception as e:
@@ -912,9 +915,9 @@ def delegate_task(
             # Schedule reminder
             if task.reminder_time:
                 try:
-                    from main import reminder_service
-                    if reminder_service:
-                        reminder_service.schedule_reminder(
+                    from reminder_service import REMINDER_SERVICE
+                    if REMINDER_SERVICE:
+                        REMINDER_SERVICE.schedule_reminder(
                             task_id=task.id,
                             reminder_time=task.reminder_time,
                             user_id=delegator.telegram_id,
@@ -1141,9 +1144,9 @@ def accept_delegated_task(task_id, user_id=None):
         # Schedule reminder
         if task.reminder_time:
             try:
-                from main import reminder_service
-                if reminder_service:
-                    reminder_service.schedule_reminder(
+                from reminder_service import REMINDER_SERVICE
+                if REMINDER_SERVICE:
+                    REMINDER_SERVICE.schedule_reminder(
                         task_id=task.id,
                         reminder_time=task.reminder_time,
                         user_id=user.telegram_id,
@@ -2436,8 +2439,8 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
 def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline):
     """Schedule delegation monitoring with three progress checkpoints for all tasks"""
     try:
-        from main import reminder_service
-        if not reminder_service:
+        from reminder_service import REMINDER_SERVICE
+        if not REMINDER_SERVICE:
             logger.warning("Reminder service not available for delegation monitoring")
             return
 
@@ -2472,7 +2475,7 @@ def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline
             if check_time > current_time:
                 logger.info(f"Scheduling progress check {i}/2 for task {task_id} at {check_time}")
 
-                reminder_service.schedule_delegation_check(
+                REMINDER_SERVICE.schedule_delegation_check(
                     task_id=task_id,
                     check_time=check_time,
                     delegator_id=delegator_id,
@@ -2484,7 +2487,7 @@ def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline
         # Always schedule final overdue check 1 day after deadline
         overdue_check = deadline + timedelta(days=1)
         if overdue_check > current_time:
-            reminder_service.schedule_delegation_check(
+            REMINDER_SERVICE.schedule_delegation_check(
                 task_id=task_id,
                 check_time=overdue_check,
                 delegator_id=delegator_id,
