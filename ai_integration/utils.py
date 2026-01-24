@@ -1604,3 +1604,39 @@ async def extract_short_title_from_message(message, current_title):
     except Exception as e:
         logger.error(f"[EXTRACT_TITLE] Error: {e}")
         return None
+
+
+def extract_time_from_message(message):
+    """
+    Извлекает время из сообщения пользователя используя регулярные выражения.
+    Возвращает найденное время в виде строки или None.
+    
+    Args:
+        message: Сообщение пользователя
+        
+    Returns:
+        Строка со временем или None
+    """
+    import re
+    
+    # Паттерны для поиска времени
+    patterns = [
+        (r'(?:на|в)\s+(\d{1,2}):(\d{2})', 'exact'),  # "на 10:30", "в 14:00"
+        (r'(?:на|в)\s+(\d{1,2})\s+(?:час|утра|вечера|дня)', 'hour'),  # "в 10 утра", "на 15 часов"
+        (r'(\d{1,2}):(\d{2})', 'exact'),  # просто "10:30"
+        (r'(?:завтра|сегодня)\s+(?:в|на)\s+(\d{1,2}):(\d{2})', 'exact'),  # "завтра в 10:30"
+        (r'(?:завтра|сегодня)\s+(?:в|на)\s+(\d{1,2})\s+(?:час|утра|вечера)', 'hour'),  # "завтра в 10 утра"
+    ]
+    
+    for pattern, time_type in patterns:
+        match = re.search(pattern, message.lower())
+        if match:
+            if time_type == 'exact':
+                hour = int(match.group(1))
+                minute = int(match.group(2)) if len(match.groups()) > 1 else 0
+                return f"{hour:02d}:{minute:02d}"
+            elif time_type == 'hour':
+                hour = int(match.group(1))
+                return f"{hour:02d}:00"
+    
+    return None

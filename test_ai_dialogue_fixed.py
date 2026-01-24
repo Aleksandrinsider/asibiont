@@ -12,7 +12,7 @@ import json
 
 sys.path.insert(0, '.')
 
-from models import User, Task, Base, Subscription
+from models import User, Task, Base, Subscription, UserProfile
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from ai_integration.chat import chat_with_ai
@@ -90,6 +90,80 @@ async def run_dialogue_test():
         )
         session.add(test_user)
         session.commit()
+
+    # Создаем профиль для тестового пользователя
+    test_profile = session.query(UserProfile).filter_by(user_id=test_user.id).first()
+    if not test_profile:
+        test_profile = UserProfile(
+            user_id=test_user.id,
+            contact_info="@test_manager",
+            city="Москва",
+            skills="управление проектами, аналитика, Python",
+            interests="технологии, бизнес, ИИ",
+            goals="улучшить навыки делегирования, найти техлида"
+        )
+        session.add(test_profile)
+        session.commit()
+
+    # Создаем тестовые контакты с профилями
+    test_contacts = [
+        {
+            "telegram_id": 777001,
+            "username": "ivan_tech",
+            "first_name": "Иван",
+            "profile": {
+                "contact_info": "@ivan_tech",
+                "city": "Москва",
+                "skills": "Python, архитектура микросервисов, DevOps",
+                "interests": "технологии, стартапы",
+                "goals": "развивать команду, изучить ML"
+            }
+        },
+        {
+            "telegram_id": 777002,
+            "username": "anna_design",
+            "first_name": "Анна",
+            "profile": {
+                "contact_info": "@anna_design",
+                "city": "Санкт-Петербург",
+                "skills": "UI/UX дизайн, Figma, исследования пользователей",
+                "interests": "дизайн, психология",
+                "goals": "работать с ИИ-продуктами"
+            }
+        },
+        {
+            "telegram_id": 777003,
+            "username": "dmitry_pm",
+            "first_name": "Дмитрий",
+            "profile": {
+                "contact_info": "@dmitry_pm",
+                "city": "Москва",
+                "skills": "управление проектами, Agile, аналитика",
+                "interests": "бизнес, технологии",
+                "goals": "найти технического партнера"
+            }
+        }
+    ]
+
+    for contact_data in test_contacts:
+        contact_user = session.query(User).filter_by(telegram_id=contact_data["telegram_id"]).first()
+        if not contact_user:
+            contact_user = User(
+                telegram_id=contact_data["telegram_id"],
+                username=contact_data["username"],
+                first_name=contact_data["first_name"],
+                timezone='Europe/Moscow'
+            )
+            session.add(contact_user)
+            session.commit()
+
+            # Создаем профиль контакта
+            contact_profile = UserProfile(
+                user_id=contact_user.id,
+                **contact_data["profile"]
+            )
+            session.add(contact_profile)
+            session.commit()
 
     # Создаем активную подписку для теста
     subscription = session.query(Subscription).filter_by(user_id=test_user.id, status="active").first()

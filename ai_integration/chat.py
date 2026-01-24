@@ -205,6 +205,19 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         tool_results.append({"function": func_name, "result": f"ERROR: Название задачи слишком длинное ({word_count} слов). Нужно краткое название (2-5 слов). Пример: 'Позвонить клиенту', 'Подготовить отчёт'."})
                         continue
                 
+                # ПРОВЕРКА ВРЕМЕНИ: извлекаем точное время из сообщения и сравниваем с тем что предложил AI
+                from .utils import extract_time_from_message
+                user_specified_time = extract_time_from_message(original_message)
+                if user_specified_time:
+                    # Проверяем что AI правильно распарсил время
+                    ai_time = args.get("reminder_time", "")
+                    if ai_time and user_specified_time not in ai_time:
+                        logger.warning(f"[ADD TASK] Time mismatch: user said '{user_specified_time}' but AI parsed '{ai_time}'")
+                        # ИСПРАВЛЕНИЕ: заменяем на простой формат HH:MM
+                        # Handler в add_task правильно обработает такой формат с учётом текущего времени
+                        args["reminder_time"] = user_specified_time
+                        logger.info(f"[ADD TASK] Corrected time from '{ai_time}' to '{user_specified_time}' (simple HH:MM format)")
+                
                 # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
                 existing_tasks = list_tasks(user_id=user_id, session=db_session)
                 
