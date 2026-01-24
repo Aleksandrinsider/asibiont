@@ -3046,15 +3046,13 @@
                             `<div onclick="openContactProfileModal('${contact.username}')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; flex-shrink: 0; cursor: pointer;">${initials}</div>`
                         }
                         <div style="flex: 1; min-width: 0;">
-                            <div onclick="openContactProfileModal('${contact.username}')" style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 2px; cursor: pointer;">
-                                ${contact.first_name || contact.username}
-                            </div>
-                            <div style="font-size: 13px; color: #374151; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                            <div style="font-size: 13px; font-weight: 400; margin-bottom: 2px; display: flex; align-items: center; gap: 6px;">
+                                ${contact.first_name ? `<span style="color: #1F2328;">${contact.first_name}</span>` : ''}
                                 <span onclick="openContactProfileModal('${contact.username}')" style="cursor: pointer; color: #068487;">@${contact.username}</span>
-                                ${contact.city ? `<span>· ${contact.city}</span>` : ''}
                             </div>
+                            ${contact.city ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;">Город: ${contact.city}</div>` : ''}
+                            ${contact.interests ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;">Интересы: ${contact.interests}</div>` : ''}
                             ${contact.bio ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px; line-height: 1.4;">${contact.bio}</div>` : ''}
-                            ${contact.interests ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;">${contact.interests}</div>` : ''}
                             <div style="margin-top: 2px;"><span style="font-size: 13px; color: ${ratingColor};">${ratingText}</span></div>
                         </div>
                         <div style="display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex-shrink: 0;">
