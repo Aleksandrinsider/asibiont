@@ -1882,6 +1882,23 @@ async def complete_task_handler(request):
                     logger.info(f"Sent AI response to Telegram user {user_id}")
             except Exception as ai_error:
                 logger.error(f"Error processing result through AI: {ai_error}")
+        else:
+            # Для обычного завершения задачи отправляем простое уведомление
+            try:
+                if 'bot' in request.app:
+                    # Получаем информацию о задаче для уведомления
+                    from models import Session as DBSession, Task
+                    db_session = DBSession()
+                    try:
+                        task = db_session.query(Task).filter_by(id=task_id).first()
+                        if task:
+                            notification_text = f"✅ Задача завершена из веб-панели: {task.title}"
+                            await request.app['bot'].send_message(chat_id=user_id, text=notification_text)
+                            logger.info(f"Sent task completion notification to Telegram user {user_id}")
+                    finally:
+                        db_session.close()
+            except Exception as notification_error:
+                logger.error(f"Error sending completion notification: {notification_error}")
         
         return web.json_response({'message': result})
     except Exception as e:

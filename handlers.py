@@ -3,9 +3,9 @@ import logging
 import asyncio
 import os
 import tempfile
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 router = Router()
 from ai_integration import chat_with_ai
@@ -520,4 +520,155 @@ async def dashboard_handler(message: Message):
     # Generate dashboard URL
     base_url = WEBHOOK_URL.replace("/webhook", "")
     dashboard_url = f"{base_url}/dashboard?telegram_id={user_id}"
-    await message.bot.send_message(message.chat.id, f"Ваш личный дашборд: {dashboard_url}")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🌐 Открыть веб-версию", web_app=WebAppInfo(url=dashboard_url))]
+    ])
+    
+    await message.bot.send_message(
+        message.chat.id, 
+        f"🌐 Ваш личный дашборд:\n{dashboard_url}", 
+        reply_markup=keyboard
+    )
+
+
+@router.callback_query(F.data.startswith("complete_"))
+async def complete_task_callback(callback: CallbackQuery):
+    """Обработчик кнопки 'Выполнено' в напоминаниях"""
+    try:
+        task_id = int(callback.data.split("_")[1])
+        user_id = callback.from_user.id
+        
+        # Завершаем задачу через AI handler
+        from ai_integration import complete_task
+        result = await complete_task(task_id=task_id, user_id=user_id)
+        
+        # Отвечаем пользователю
+        if "уже выполнена" in result:
+            await callback.answer("✅ Задача уже была выполнена", show_alert=True)
+        elif "выполнена" in result or "завершена" in result:
+            await callback.answer("✅ Задача отмечена как выполненная!", show_alert=True)
+        else:
+            await callback.answer("❌ Задача не найдена", show_alert=True)
+        
+        # Обновляем сообщение, убирая кнопки
+        await callback.message.edit_text(
+            callback.message.text + "\n\n✅ Отмечена как выполненная",
+            reply_markup=None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in complete_task_callback: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("skip_"))
+async def skip_task_callback(callback: CallbackQuery):
+    """Обработчик кнопки 'Пропустить' в напоминаниях"""
+    try:
+        task_id = int(callback.data.split("_")[1])
+        user_id = callback.from_user.id
+        
+        # Переносим задачу на потом (редактируем время)
+        from ai_integration import edit_task
+        from datetime import datetime, timedelta
+        import pytz
+        
+        # Переносим на час вперед
+        new_time = datetime.now(pytz.UTC) + timedelta(hours=1)
+        result = edit_task(
+            task_id=task_id,
+            user_id=user_id,
+            new_reminder_time=new_time.strftime("%Y-%m-%d %H:%M")
+        )
+        
+        await callback.answer("⏰ Напомню через час", show_alert=False)
+        
+        # Обновляем сообщение
+        await callback.message.edit_text(
+            callback.message.text + "\n\n⏰ Перенесено на час вперед",
+            reply_markup=None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in skip_task_callback: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("delete_"))
+async def delete_task_callback(callback: CallbackQuery):
+    """Обработчик кнопки 'Удалить' в напоминаниях"""
+    try:
+        task_id = int(callback.data.split("_")[1])
+        user_id = callback.from_user.id
+        
+        # Удаляем задачу через AI handler
+        from ai_integration import delete_task
+        result = await delete_task(task_id=task_id, user_id=user_id, confirmed=True)
+        
+        await callback.answer("🗑️ Задача удалена", show_alert=False)
+        
+        # Обновляем сообщение
+        await callback.message.edit_text(
+            callback.message.text + "\n\n🗑️ Задача удалена",
+            reply_markup=None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in delete_task_callback: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("confirm_done_"))
+async def confirm_done_callback(callback: CallbackQuery):
+    """Обработчик кнопки 'Задача была выполнена' в проверке результата"""
+    try:
+        task_id = int(callback.data.split("_")[1])
+        user_id = callback.from_user.id
+        
+        # Оставляем задачу как выполненную
+        await callback.answer("✅ Отлично! Задача остается выполненной", show_alert=True)
+        
+        # Обновляем сообщение
+        await callback.message.edit_text(
+            callback.message.text + "\n\n✅ Подтверждено: задача была выполнена",
+            reply_markup=None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in confirm_done_callback: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("mark_incomplete_"))
+async def mark_incomplete_callback(callback: CallbackQuery):
+    """Обработчик кнопки 'Не успел выполнить' в проверке результата"""
+    try:
+        task_id = int(callback.data.split("_")[1])
+        user_id = callback.from_user.id
+        
+        # Возвращаем задачу в активное состояние
+        from models import Session, Task
+        session = Session()
+        try:
+            task = session.query(Task).filter_by(id=task_id).first()
+            if task and task.user.telegram_id == user_id:
+                task.status = "active"
+                task.actual_completion_time = None
+                session.commit()
+                
+                await callback.answer("⏰ Задача возвращена в работу", show_alert=True)
+                
+                # Обновляем сообщение
+                await callback.message.edit_text(
+                    callback.message.text + "\n\n⏰ Задача возвращена в активное состояние",
+                    reply_markup=None
+                )
+            else:
+                await callback.answer("❌ Задача не найдена", show_alert=True)
+        finally:
+            session.close()
+        
+    except Exception as e:
+        logger.error(f"Error in mark_incomplete_callback: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
