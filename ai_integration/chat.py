@@ -325,7 +325,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "list_tasks":
-                result = list_tasks(user_id=user_id, session=db_session)
+                include_completed = args.get("include_completed", False)
+                result = list_tasks(user_id=user_id, session=db_session, include_completed=include_completed)
                 # Add delegation instructions if this is for delegation
                 if intent.get("params", {}).get("for_delegation"):
                     target_user = intent.get("params", {}).get("target_user", "")

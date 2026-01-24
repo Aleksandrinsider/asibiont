@@ -1469,8 +1469,14 @@ def brainstorm_ideas(topic, num_ideas=5, user_id=None):
         return f"Ошибка генерации идей: {str(e)}"
 
 
-def list_tasks(user_id=None, session=None):
-    """Return list of user's tasks in plain text format"""
+def list_tasks(user_id=None, session=None, include_completed=False):
+    """Return list of user's tasks in plain text format
+    
+    Args:
+        user_id: Telegram ID пользователя
+        session: Database session (опционально)
+        include_completed: Если True, показывает только выполненные задачи. По умолчанию False (активные)
+    """
     if user_id is None:
         logger.error("[LIST_TASKS] user_id is None")
         return "ERROR: user_id не может быть None"
@@ -1495,11 +1501,35 @@ def list_tasks(user_id=None, session=None):
         tasks = query.all()
 
         if not tasks:
-            return "У вас нет активных задач. Добавьте первую задачу - просто напишите что нужно сделать!"
+            return "У вас нет задач" if include_completed else "У вас нет активных задач. Добавьте первую задачу - просто напишите что нужно сделать!"
 
         # Format detailed list
         active_tasks = [t for t in tasks if t.status != "completed"]
         completed_tasks = [t for t in tasks if t.status == "completed"]
+        
+        # Если запрошены выполненные задачи, показываем только их
+        if include_completed:
+            if not completed_tasks:
+                return "У вас пока нет выполненных задач"
+            
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            result = f"Выполненные задачи ({len(completed_tasks)}):\n\n"
+            
+            # Показываем последние 20 выполненных задач
+            for task in completed_tasks[-20:]:
+                completed_info = ""
+                if task.updated_at:
+                    try:
+                        completed_dt = task.updated_at.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                        completed_info = f" - выполнено {completed_dt.strftime('%d.%m.%Y %H:%M')}"
+                    except Exception as e:
+                        logger.warning(f"Failed to process completion time for task {task.id}: {e}")
+                result += f"✓ {task.title}{completed_info}\n"
+            
+            if len(completed_tasks) > 20:
+                result += f"\n...всего {len(completed_tasks)} выполненных задач"
+            
+            return result.strip()
         user_username_lower = user.username.lower() if user.username else ""
         delegated_to_me = [
             t

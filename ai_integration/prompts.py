@@ -331,7 +331,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 ДОСТУПНЫЕ КОМАНДЫ:
 - add_task(title, description, reminder_time) - создать задачу с временем
-- list_tasks() - показать задачи
+- list_tasks(include_completed) - показать задачи. include_completed=False (по умолчанию) - активные задачи, include_completed=True - выполненные задачи
 - complete_task(task_id, task_title) - завершить задачу
 - edit_task(task_id, new_title, new_description, new_reminder_time) - изменить
 - delete_task(task_id, task_title) - удалить
@@ -340,6 +340,11 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - delegate_task(title, description, delegated_to_username, reminder_time) - делегировать (Silver/Gold)
 - accept_delegated_task(task_id) - принять делегированную задачу
 - reject_delegated_task(task_id) - отклонить делегированную задачу
+
+⚠️⚠️⚠️ КРИТИЧНО ВАЖНО ПРИ ЗАПРОСАХ НА ПОКАЗ ВЫПОЛНЕННЫХ ЗАДАЧ:
+- Если пользователь ЯВНО просит показать ВЫПОЛНЕННЫЕ задачи ("покажи выполненные", "что я выполнил", "мои завершенные задачи"), ОБЯЗАТЕЛЬНО вызывай list_tasks(include_completed=True)
+- Если пользователь просит показать АКТИВНЫЕ задачи или просто "мои задачи" - вызывай list_tasks() или list_tasks(include_completed=False)
+- НЕ путай эти два режима!
 
 КРИТИЧЕСКИ ВАЖНО:
 - ⚠️ ФОРМАТ ВРЕМЕНИ: ВСЕГДА указывай время ПОЛНОСТЬЮ с двумя цифрами часов и минут: "завтра в 10:00", "в 08:30", "к 23:00". НИКОГДА не пиши "в 10:", "к 8:", "до 15:" - это ОШИБКА! Правильно: "в 10:00", "к 08:00", "до 15:00"
