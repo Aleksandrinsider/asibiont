@@ -788,6 +788,16 @@
             margin-left: 4px;
             animation: pulse-dot 1.5s ease-in-out infinite;
         }
+        
+        .reminder-pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #068487;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
 
         /* Custom tooltips removed - no data-tooltip attributes in use */
 
@@ -1040,7 +1050,6 @@
                                 <path d="M10.5 5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm.061 3.073a4 4 0 1 0-5.123 0 6.004 6.004 0 0 0-3.431 5.142.75.75 0 0 0 1.498.07 4.5 4.5 0 0 1 8.99 0 .75.75 0 1 0 1.498-.07 6.005 6.005 0 0 0-3.432-5.142Z"/>
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 600; color: #374151; line-height: normal;">Профиль</h3>
-                            <span id="profile-update-indicator" class="pending-indicator" style="display: none; margin-left: 4px;"></span>
                         </div>
                         <button onclick="toggleProfileSection()" class="section-toggle-btn" id="profile-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
@@ -1119,7 +1128,6 @@
                     </div>
                 </div>
                 {% endif %}
-
                 <div class="people-section">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0;">
                         <div style="display: flex; align-items: center; gap: 8px;">
