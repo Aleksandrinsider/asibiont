@@ -1488,14 +1488,14 @@ def post_process_response(content, user_id, db_session=None):
     # СТРОГО ЗАПРЕЩЕННЫЕ ЭЛЕМЕНТЫ ФОРМАТИРОВАНИЯ (требования проекта)
     # Удаляем маркеры списков в начале строк
     content = re.sub(r'^\s*[-*•]\s+', '', content, flags=re.MULTILINE)
-    content = re.sub(r'^\s*\d+\.\s+', '', content, flags=re.MULTILINE)
+    content = re.sub(r'^\s*\d+\.\s+(?=[А-ЯA-Z])', '', content, flags=re.MULTILINE)  # Только если после точки заглавная буква
     content = re.sub(r'^\s*[a-zA-Z]\.\s+', '', content, flags=re.MULTILINE)
     content = re.sub(r'^\s*\(\d+\)\s+', '', content, flags=re.MULTILINE)
     
     # Удаляем маркеры списков в середине текста (после переносов строк)
-    content = re.sub(r'\n\s*[-*•]\s*', '\n', content)
-    content = re.sub(r'\n\s*\d+\.\s*', '\n', content)
-    content = re.sub(r'\n\s*[a-zA-Z]\.\s*', '\n', content)
+    content = re.sub(r'\n\s*[-*•]\s+', '\n', content)
+    content = re.sub(r'\n\s*\d+\.\s+(?=[А-ЯA-Z])', '\n', content)  # Только если после точки заглавная буква
+    content = re.sub(r'\n\s*[a-zA-Z]\.\s+', '\n', content)
     content = re.sub(r'\n\s*\(\d+\)\s*', '\n', content)
     
     # Преобразуем перечисления через "или" в естественный текст
@@ -1536,57 +1536,4 @@ def post_process_response(content, user_id, db_session=None):
         if additions:
             content = content.rstrip('?!.') + '. ' + additions[0]
     
-    return content.strip()
-
-
-def post_process_response(content):
-    """
-    Пост-обработка ответа AI для удаления запрещенных элементов и улучшения качества.
-    """
-    if not content:
-        return content
-
-    # Удаляем запрещенные форматы
-    # Нумерация: 1. 2. 3. etc.
-    content = re.sub(r'\d+\.\s*', '', content)
-
-    # Маркеры списков: - * •
-    content = re.sub(r'[-*•]\s*', '', content)
-
-    # Кавычки для выделения: "текст"
-    content = re.sub(r'"([^"]*)"', r'\1', content)
-
-    # Жирный текст: **текст**
-    content = re.sub(r'\*\*([^*]*)\*\*', r'\1', content)
-
-    # Курсив: *текст* (но не маркеры)
-    content = re.sub(r'\*([^*]+)\*', r'\1', content)
-
-    # Заголовки: # ## ###
-    content = re.sub(r'^#+\s*', '', content, flags=re.MULTILINE)
-
-    # Удаляем пустые строки и лишние пробелы
-    content = re.sub(r'\n\s*\n', '\n\n', content)
-    content = content.strip()
-
-    # Удаляем банальные фразы
-    banned_phrases = [
-        "разбить на этапы",
-        "составить список",
-        "начать с простого",
-        "сделать шаг за шагом",
-        "выделить время",
-        "организовать/спланировать",
-        "начать с малого",
-        "постепенно",
-        "шаг за шагом"
-    ]
-
-    for phrase in banned_phrases:
-        content = re.sub(re.escape(phrase), '', content, flags=re.IGNORECASE)
-
-    # Удаляем лишние пробелы после удаления
-    content = re.sub(r'\s+', ' ', content)
-    content = re.sub(r'\n\s+', '\n', content)
-
     return content.strip()
