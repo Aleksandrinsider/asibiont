@@ -856,17 +856,33 @@ class ReminderService:
                 
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 
-                # Планируем проверки просроченных задач каждые 15 минут
-                self.scheduler.add_job(
-                    _check_and_send_overdue_reminder_job,
-                    trigger="cron",
-                    minute=f"*/{OVERDUE_CHECK_INTERVAL_MINUTES}",
-                    timezone=user_tz,
-                    args=[user.telegram_id],
-                    id=job_id,
-                    replace_existing=True,
-                    misfire_grace_time=30
-                )
+                # Планируем проверки просроченных задач
+                # Если интервал >= 60 минут, используем часовой триггер
+                if OVERDUE_CHECK_INTERVAL_MINUTES >= 60:
+                    hours_interval = OVERDUE_CHECK_INTERVAL_MINUTES // 60
+                    self.scheduler.add_job(
+                        _check_and_send_overdue_reminder_job,
+                        trigger="cron",
+                        hour=f"*/{hours_interval}",
+                        minute="0",
+                        timezone=user_tz,
+                        args=[user.telegram_id],
+                        id=job_id,
+                        replace_existing=True,
+                        misfire_grace_time=30
+                    )
+                else:
+                    # Для интервалов < 60 минут используем минутный триггер
+                    self.scheduler.add_job(
+                        _check_and_send_overdue_reminder_job,
+                        trigger="cron",
+                        minute=f"*/{OVERDUE_CHECK_INTERVAL_MINUTES}",
+                        timezone=user_tz,
+                        args=[user.telegram_id],
+                        id=job_id,
+                        replace_existing=True,
+                        misfire_grace_time=30
+                    )
                 logger.debug(f"Scheduled overdue check for user {user.telegram_id}")
         finally:
             db.close()
