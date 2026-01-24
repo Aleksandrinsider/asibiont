@@ -2207,10 +2207,12 @@ def update_profile(
     updates_made = []
 
     def update_list_field(field, value, field_name):
-        logger.info(f"[UPDATE_LIST_FIELD] field_name={field_name}, field='{field}', value='{value}'")
+        logger.info(f"[UPDATE_LIST_FIELD] field_name={field_name}, field='{field}', value='{value}', type(value)={type(value)}")
         if value is None:
+            logger.info(f"[UPDATE_LIST_FIELD] value is None, returning field unchanged")
             return field, None, False
         if value == "":
+            logger.info(f"[UPDATE_LIST_FIELD] value is empty string, clearing {field_name}")
             return None, f"cleared_{field_name}", False
 
         current = set((field or "").split(", ")) - {""}
@@ -2648,110 +2650,6 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
     return result
 
 
-def update_profile(skills=None, interests=None, goals=None, city=None, current_plans=None, current_time=None, timezone=None, company=None, bio=None, languages=None, position=None, user_id=None, session=None):
-    """Обновить профиль пользователя"""
-    try:
-        if not session:
-            session = Session()
-            should_close = True
-        else:
-            should_close = False
-
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if should_close:
-                session.close()
-            return "Пользователь не найден"
-
-        # Получить или создать профиль
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if not profile:
-            profile = UserProfile(user_id=user.id)
-            session.add(profile)
-
-        # Обновить поля профиля
-        if city is not None:
-            profile.city = city
-        if company is not None:
-            profile.company = company
-        if position is not None:
-            profile.position = position
-        if bio is not None:
-            profile.bio = bio
-        if languages is not None:
-            profile.languages = languages
-
-        # Для полей-списков (skills, interests, goals) - добавляем к существующим
-        if skills:
-            if skills.startswith('-'):
-                # Удаление навыка
-                skill_to_remove = skills[1:]
-                if profile.skills:
-                    current_skills = [s.strip() for s in profile.skills.split(',')]
-                    if skill_to_remove in current_skills:
-                        current_skills.remove(skill_to_remove)
-                        profile.skills = ', '.join(current_skills)
-            elif skills == '':
-                # Полная очистка
-                profile.skills = None
-            else:
-                # Добавление навыка
-                if profile.skills:
-                    current_skills = [s.strip() for s in profile.skills.split(',')]
-                    new_skills = [s.strip() for s in skills.split(',')]
-                    for skill in new_skills:
-                        if skill and skill not in current_skills:
-                            current_skills.append(skill)
-                    profile.skills = ', '.join(current_skills)
-                else:
-                    profile.skills = skills
-
-        if interests:
-            if interests.startswith('-'):
-                # Удаление интереса
-                interest_to_remove = interests[1:]
-                if profile.interests:
-                    current_interests = [i.strip() for i in profile.interests.split(',')]
-                    if interest_to_remove in current_interests:
-                        current_interests.remove(interest_to_remove)
-                        profile.interests = ', '.join(current_interests)
-            elif interests == '':
-                # Полная очистка
-                profile.interests = None
-            else:
-                # Добавление интереса
-                if profile.interests:
-                    current_interests = [i.strip() for i in profile.interests.split(',')]
-                    new_interests = [i.strip() for i in interests.split(',')]
-                    for interest in new_interests:
-                        if interest and interest not in current_interests:
-                            current_interests.append(interest)
-                    profile.interests = ', '.join(current_interests)
-                else:
-                    profile.interests = interests
-
-        if goals:
-            if goals == '':
-                profile.goals = None
-            else:
-                profile.goals = goals
-
-        # Обновить timezone пользователя если передан
-        if timezone:
-            user.timezone = timezone
-
-        session.commit()
-
-        if should_close:
-            session.close()
-
-        return "Профиль успешно обновлен"
-
-    except Exception as e:
-        logger.error(f"Error updating profile for user {user_id}: {e}")
-        if should_close and 'session' in locals():
-            session.close()
-        return f"Ошибка при обновлении профиля: {str(e)}"
 
 
 def update_user_memory(info=None, user_id=None, session=None):

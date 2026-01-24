@@ -126,7 +126,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     # Если current_time не передан, используем user_now
     if current_time is None:
         current_time = user_now
-    logger.info(f"[PROCESS_TOOL_CALLS] Called with user_id={user_id}, tool_calls count={len(tool_calls)}")
+    logger.info(f"[PROCESS_TOOL_CALLS] Called with user_id={user_id}, tool_calls count={len(tool_calls) if tool_calls else 0}")
+    
+    # Print tool_calls for debugging
+    if tool_calls:
+        for i, tc in enumerate(tool_calls):
+            logger.info(f"[PROCESS_TOOL_CALLS] Tool call {i}: {tc}")
+    else:
+        logger.warning("[PROCESS_TOOL_CALLS] tool_calls is empty or None!")
     
     if user_id is None:
         logger.error(f"[PROCESS_TOOL_CALLS] ERROR: user_id is None! Cannot process tool calls without user_id")
@@ -152,6 +159,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             logger.warning(f"[TOOL CALLS] Removed duplicate tool call: {call_key}")
     
     tool_calls = unique_tool_calls
+    
+    logger.info(f"[PROCESS_TOOL_CALLS] After deduplication: {len(tool_calls)} unique tool calls")
+    if not tool_calls:
+        logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after deduplication!")
 
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
@@ -159,11 +170,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         
     # Обработка tool calls
     tool_results = []
+    logger.info(f"[PROCESS_TOOL_CALLS] Starting to process {len(tool_calls)} tool calls")
     for tool_call in tool_calls:
         try:
             func_name = tool_call["function"]["name"]
             args = json.loads(tool_call["function"]["arguments"])
-            # logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
+            logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
 
             if func_name == "add_task":
                 # logger.info(

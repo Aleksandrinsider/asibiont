@@ -632,10 +632,10 @@ def clean_technical_details(text):
     if before != text:
         pass
 
-    # Удаляем названия функций (с скобками и без)
+    # Удаляем названия функций (с скобками и без, включая аргументы)
     before = text
     text = re.sub(
-        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|cancel_delegation|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)(\s*\(\s*\))?",
+        r"\b(list_tasks|add_task|delete_task|complete_task|delegate_task|cancel_delegation|update_profile|find_partners|update_user_memory|set_reminder|edit_task|get_task_details)\s*\([^)]*\)",
         "",
         text,
         flags=re.IGNORECASE,
