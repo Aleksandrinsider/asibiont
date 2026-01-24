@@ -808,6 +808,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             # ФОРМИРУЕМ КОНТЕКСТ ДЛЯ AI: результаты + профиль + инструкции
             tool_context_msg = f"РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:\n{ai_context}{profile_context}\n\nИНСТРУКЦИЯ: На основе результатов дай естественный, ПОЛЕЗНЫЙ ответ с конкретными советами:\n- Если создана задача - дай 1-2 практических совета как ее выполнить\n- Упомяни подходящее время суток и контекст\n- Персонализируй ответ используя данные профиля\n- Будь кратким но полезным (2-3 предложения)\n- Добавь эмоджи где уместно"
 
+            logger.info(f"[AI CONTEXT] ai_context={ai_context[:200]}")
+            logger.info(f"[AI CONTEXT] fallback_message={fallback_message[:200]}")
+            logger.info(f"[AI CONTEXT] tool_context_msg={tool_context_msg[:300]}")
+
             # Добавляем контекст в messages
             messages = [{"role": "system", "content": system_prompt}]
             messages.append({"role": "user", "content": original_message})
@@ -823,6 +827,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             # Используем fallback_message в качестве значения по умолчанию
             final_content = fallback_message
+            logger.info(f"[AI REQUEST] Requesting AI natural response with {len(messages)} messages")
+            logger.info(f"[AI REQUEST] Requesting AI natural response with {len(messages)} messages")
             max_retries = 2
             for attempt in range(max_retries):
                 try:
@@ -831,20 +837,23 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                             if ai_response.status == 200:
                                 ai_result = await ai_response.json()
                                 final_content = ai_result["choices"][0]["message"]["content"].strip()
-                                logger.info(f"[AI NATURAL RESPONSE] Generated natural response after tool calls")
+                                logger.info(f"[AI NATURAL RESPONSE] Generated: {final_content[:200]}")
                                 break
                             else:
-                                logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}")
+                                error_body = await ai_response.text()
+                                logger.warning(f"[AI NATURAL RESPONSE] Status {ai_response.status}, attempt {attempt+1}/{max_retries}, error: {error_body[:200]}")
                 except Exception as e:
-                    logger.error(f"[AI NATURAL RESPONSE] Error: {e}")
+                    logger.error(f"[AI NATURAL RESPONSE] Error on attempt {attempt+1}/{max_retries}: {e}", exc_info=True)
                     if attempt == max_retries - 1:
                         # Fallback уже установлен выше (fallback_message)
-                        logger.warning(f"[AI NATURAL RESPONSE] Using fallback: {final_content}")
+                        logger.warning(f"[AI NATURAL RESPONSE] All attempts failed, using fallback: {final_content}")
 
         else:
             # Нет результатов tool calls - обычная обработка
+            logger.info("[AI RESPONSE] No natural_responses, skipping AI natural response generation")
             final_content = None
 
+    logger.info(f"[CHAT_WITH_AI] Returning final_content: {final_content[:200] if final_content else 'None'}")
     return final_content
 
 
