@@ -1612,14 +1612,39 @@ def list_tasks(user_id=None, session=None, include_completed=False):
                     if delegator and delegator.username:
                         delegator_info = f"@{delegator.username}"
                 
-                # Add status indicator
-                status_text = ""
+                # Add delegation status indicator
+                delegation_status_text = ""
                 if task.delegation_status == "pending":
-                    status_text = " [ОЖИДАЕТ ПРИНЯТИЯ]"
+                    delegation_status_text = " [ОЖИДАЕТ ПРИНЯТИЯ]"
                 elif task.delegation_status == "accepted":
-                    status_text = " [ПРИНЯТО]"
+                    delegation_status_text = " [ПРИНЯТО]"
+                elif task.delegation_status == "rejected":
+                    delegation_status_text = " [ОТКЛОНЕНО]"
                 
-                result += f"- {task.title} (от {delegator_info}){status_text}\n"
+                # Add time status indicator
+                time_status_text = ""
+                reminder_info = ""
+                if task.reminder_time:
+                    try:
+                        reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                        if reminder_dt < now:
+                            delta = now - reminder_dt
+                            days = delta.days
+                            hours = (delta.seconds // 3600)
+                            time_status_text = " [ПРОСРОЧЕНО]"
+                            if days > 0:
+                                reminder_info = f" - просрочено на {days} д {hours} ч" if hours else f" - просрочено на {days} д"
+                            else:
+                                reminder_info = f" - просрочено на {hours} ч"
+                        else:
+                            time_status_text = " [АКТУАЛЬНО]"
+                            tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
+                            reminder_info = f" - {reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
+                    except Exception as e:
+                        logger.warning(f"Failed to process reminder time for delegated task {task.id}: {e}")
+                        pass
+                
+                result += f"- {task.title} (от {delegator_info}){delegation_status_text}{time_status_text}{reminder_info}\n"
 
         # Brief recommendation
         if overdue_count > 0:
