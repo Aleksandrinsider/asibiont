@@ -1726,8 +1726,6 @@ async def api_send_message_handler(request):
 
             # Save context to DB
             save_context_to_db(user_id, message, response)
-            # Save context to DB
-            save_context_to_db(user_id, message, response)
             logger.info("Context saved to DB")
         finally:
             session_db.close()
