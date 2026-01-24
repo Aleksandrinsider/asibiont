@@ -911,23 +911,42 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
     # ОБРАБОТКА СОСТОЯНИЙ РАЗГОВОРА
     if conversation_state == 'waiting_for_task_time' and pending_task_data:
-        # Пользователь отвечает на вопрос о времени для задачи
-        logger.info(f"[STATE] Processing time response for pending task: {pending_task_data}")
+        # Проверяем, похоже ли сообщение на указание времени
+        time_patterns = [
+            r'\d{1,2}:\d{2}',  # 10:00, 15:30
+            r'\d{1,2}\s*(час|минут)',  # через 2 часа, 30 минут
+            r'(завтра|сегодня|послезавтра)',
+            r'(утр|вечер|ноч|обед|дн)',
+            r'через',
+        ]
         
-        # Парсим время из сообщения
-        from ai_integration.utils import parse_relative_time, parse_natural_time
-        current_time = datetime.now(timezone.utc)
-        if user and user.timezone:
-            try:
-                user_tz = pytz.timezone(user.timezone)
-                current_time = current_time.astimezone(user_tz)
-            except:
-                pass
+        looks_like_time = any(re.search(pattern, clean_message.lower()) for pattern in time_patterns)
         
-        # Сначала пробуем распознать абсолютное время (завтра в 10 утра)
-        parsed_time = parse_natural_time(clean_message, current_time)
-        if not parsed_time:
-            # Если не получилось, пробуем относительное время (через 2 часа)
+        if not looks_like_time:
+            # Сообщение НЕ похоже на время - сбрасываем состояние и обрабатываем как обычное
+            logger.info(f"[STATE] Message doesn't look like time, resetting state: {clean_message}")
+            user.conversation_state = 'normal'
+            user.pending_task_data = None
+            db_session.commit()
+            # Продолжаем обычную обработку (не возвращаем здесь)
+        else:
+            # Пользователь отвечает на вопрос о времени для задачи
+            logger.info(f"[STATE] Processing time response for pending task: {pending_task_data}")
+            
+            # Парсим время из сообщения
+            from ai_integration.utils import parse_relative_time, parse_natural_time
+            current_time = datetime.now(timezone.utc)
+            if user and user.timezone:
+                try:
+                    user_tz = pytz.timezone(user.timezone)
+                    current_time = current_time.astimezone(user_tz)
+                except:
+                    pass
+            
+            # Сначала пробуем распознать абсолютное время (завтра в 10 утра)
+            parsed_time = parse_natural_time(clean_message, current_time)
+            if not parsed_time:
+                # Если не получилось, пробуем относительное время (через 2 часа)
             parsed_time = parse_relative_time(clean_message, current_time)
         if parsed_time:
             # Создаем задачу с распознанным временем
@@ -966,42 +985,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Время не распознано, просим уточнить
             return "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'."
 
-    context_len = (
-        len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
-    )
-    logger.info(
-        f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}")
-    logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
-
-    if not DEEPSEEK_API_KEY:
-        logger.warning("DEEPSEEK_API_KEY not set")
-        return "API ключ DeepSeek не настроен. Обратитесь к администратору для настройки."
-
-    try:
-        logger.info("Starting chat_with_ai processing")
-        # Get user memory and all tasks for extended context
-        user_memory = ""
-        user = None
-        profile = None
-        session = None
-        subscription_tier = None
-        # Initialize time variables with defaults
-        base_now = datetime.now(pytz.UTC)
-        user_now = base_now
-        # Формат времени С ТАЙМЗОНОЙ для промпта: "15:43 (UTC)"
-        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-        months = [
-            'января',
-            'февраля',
-            'марта',
-            'апреля',
-            'мая',
-            'июня',
-            'июля',
-            'августа',
-            'сентября',
-            'октября',
-            'ноября',
             'декабря']
         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         user_username = "user"
