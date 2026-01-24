@@ -92,40 +92,6 @@
             }
         }
 
-        function copyUsernameToClipboard(username, button) {
-            // Убираем @ если есть
-            const cleanUsername = username.startsWith('@') ? username.slice(1) : username;
-            
-            // Копируем в буфер
-            navigator.clipboard.writeText(cleanUsername).then(() => {
-                // Показываем подтверждение
-                const originalColor = button.style.color;
-                button.style.color = '#10b981'; // Зелёный цвет
-                button.title = 'Скопировано!';
-                
-                // Показываем уведомление
-                showNotification(`Ник @${cleanUsername} скопирован в буфер обмена`, 'success');
-                
-                // Возвращаем исходный вид через 1.5 секунды
-                setTimeout(() => {
-                    button.style.color = originalColor;
-                    button.title = 'Копировать ник';
-                }, 1500);
-            }).catch(err => {
-                console.error('Ошибка копирования:', err);
-                button.style.color = '#ef4444'; // Красный при ошибке
-                button.title = 'Ошибка копирования';
-                
-                // Показываем уведомление об ошибке
-                showNotification('Ошибка при копировании ника', 'error');
-                
-                setTimeout(() => {
-                    button.style.color = '';
-                    button.title = 'Копировать ник';
-                }, 1500);
-            });
-        }
-
         // Error notification functions
         function showErrorNotification(message, type = 'error', duration = 5000) {
             const notification = document.getElementById('error-notification');
@@ -2291,7 +2257,8 @@
                 const telegramUsername = post.author.username || '';
                 const usernameClean = telegramUsername.replace('@', '');
                 
-                const postHTML = `
+                const timelineContent = `
+                    <!-- Content -->
                     <div style="flex: 1; min-width: 0;">
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
                             ${post.author.photo_url ? 
@@ -2306,55 +2273,61 @@
                                         ''
                                     }
                                 </div>
-                                <span style="font-size: 11px; color: #8C959F; opacity: 0.7;">${dateString} ${timeString}</span>
+                                <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8C959F; opacity: 0.7; font-weight: 400;">
+                                    ${dateString} ${timeString}
+                                </div>
                             </div>
-                            ${post.author.is_current_user ? 
-                                `<button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
-                                : ''
-                            }
+                            
+                            <div style="display: flex; gap: 4px;">
+                                ${post.author.is_current_user ? 
+                                    `<button onclick="deletePost(${post.id})" class="delete-btn" title="Удалить пост" style="margin-top: 3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` 
+                                    : ''
+                                }
+                            </div>
                         </div>
                         
-                        <div style="margin-bottom: 12px;">
-                            <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #1F2328; white-space: pre-wrap; word-wrap: break-word;">${escapeHtml(post.content)}</p>
-                        </div>
-                        
-                        <!-- Likes and Comments section -->
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                            <button onclick="toggleLike(${post.id})" 
-                                    id="like-btn-${post.id}" 
-                                    style="background: none; border: none; padding: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px; border-radius: 4px; transition: background-color 0.2s;" 
-                                    onmouseover="this.style.backgroundColor='#F6F8FA'" 
-                                    onmouseout="this.style.backgroundColor='transparent'"
-                                    title="${post.user_liked ? 'Убрать лайк' : 'Поставить лайк'}">
-                                <svg id="like-icon-${post.id}" width="16" height="16" viewBox="0 0 16 16" fill="${post.user_liked ? '#068487' : '#8C959F'}">
-                                    <path d="M8 14s6-5.686 6-10c0-2.21-1.79-4-4-4-1.5 0-2.81.83-3.5 2.08C5.81.83 4.5 0 3 0 .79 0-1 1.79-1 4c0 4.314 6 10 6 10z"/>
-                                </svg>
-                                <span id="like-count-${post.id}" style="font-size: 12px; color: #8C959F;">${post.like_count || 0}</span>
-                            </button>
-                        </div>
+                        <p style="margin: 0 0 8px 0; white-space: pre-wrap; word-wrap: break-word; color: #374151; font-size: 13px; line-height: 1.6; font-weight: 400;">${escapeHtml(post.content)}</p>
                         
                         <!-- Comments section -->
-                        <div style="margin-top: 12px;">
+                        <div style="border-top: 1px solid #F6F8FA; padding-top: 8px; margin-top: 8px;">
                             <div id="comments-${post.id}" style="margin-bottom: 8px;"></div>
-                            <div style="display: flex; gap: 8px; align-items: flex-start;">
-                                <input type="text" 
-                                       id="comment-input-${post.id}" 
-                                       placeholder="Написать комментарий..." 
-                                       style="flex: 1; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; resize: none; outline: none;" 
-                                       onkeypress="handleCommentKeyPress(event, ${post.id})">
-                                <button type="button" 
-                                        onclick="addComment(${post.id})" 
-                                        style="padding: 8px 12px; background: #068487; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap;" 
-                                        onmouseover="this.style.opacity='0.9'" 
-                                        onmouseout="this.style.opacity='1'">
+                            
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <input 
+                                    type="text" 
+                                    id="comment-input-${post.id}" 
+                                    placeholder="Написать комментарий..." 
+                                    style="flex: 1; padding: 6px 10px; border: 1px solid #D1D9E0; border-radius: 4px; font-size: 13px; outline: none; transition: border-color 0.2s;" 
+                                    onkeypress="handleCommentKeyPress(event, ${post.id})"
+                                    onfocus="this.style.borderColor='#068487'" 
+                                    onblur="this.style.borderColor='#D1D9E0'"
+                                >
+                                <button 
+                                    onclick="addComment(${post.id})" 
+                                    style="padding: 6px 10px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151;" 
+                                    onmouseover="this.style.background='#E8ECEF'; this.style.borderColor='#374151'" 
+                                    onmouseout="this.style.background='#F6F8FA'; this.style.borderColor='#D1D9E0'"
+                                >
                                     Отправить
+                                </button>
+                                <button 
+                                    id="like-btn-${post.id}"
+                                    onclick="toggleLike(${post.id})" 
+                                    style="padding: 6px 10px; background: ${post.user_liked ? '#E0F4F4' : '#F6F8FA'}; border: 1px solid ${post.user_liked ? '#068487' : '#D1D9E0'}; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 400; color: #374151; display: flex; align-items: center; gap: 4px;" 
+                                    onmouseover="this.style.background='${post.user_liked ? '#C8EAEA' : '#E8ECEF'}'; this.style.borderColor='#374151'" 
+                                    onmouseout="this.style.background='${post.user_liked ? '#E0F4F4' : '#F6F8FA'}'; this.style.borderColor='${post.user_liked ? '#068487' : '#D1D9E0'}'"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="${post.user_liked ? '#068487' : '#374151'}" style="transition: fill 0.2s;">
+                                        <path d="m8 14.25.345.666a.75.75 0 0 1-.69 0l-.008-.004-.018-.01a7.152 7.152 0 0 1-.31-.17 22.055 22.055 0 0 1-3.434-2.414C2.045 10.731 0 8.35 0 5.5 0 2.836 2.086 1 4.25 1 5.797 1 7.153 1.802 8 3.02 8.847 1.802 10.203 1 11.75 1 13.914 1 16 2.836 16 5.5c0 2.85-2.045 5.231-3.885 6.818a22.066 22.066 0 0 1-3.744 2.584l-.018.01-.006.003h-.002ZM4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.58 20.58 0 0 0 8 13.393a20.58 20.58 0 0 0 3.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 0 1-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5Z"></path>
+                                    </svg>
+                                    <span id="like-count-${post.id}">${post.likes_count || 0}</span>
                                 </button>
                             </div>
                         </div>
                     </div>
                 `;
                 
-                postDiv.innerHTML = postHTML;
+                postDiv.innerHTML = timelineContent;
                 
                 // Добавить в начало ленты (новые посты первыми)
                 feedContainer.insertBefore(postDiv, feedContainer.firstChild);
@@ -2748,6 +2721,8 @@
                 // Force reload contacts to update heart icons
                 cachedPartnersData = null;
                 await updatePeople();
+                // Обновляем ленту новостей, так как состав избранного изменился
+                await loadFeed();
                 // Обновить элитные контакты если активен фильтр
                 if (currentContactFilter === 'elite') {
                     await loadEliteContacts();
@@ -2919,6 +2894,40 @@
                     }
                 }, 300);
             }, 3000);
+        }
+
+        function copyUsernameToClipboard(username, button) {
+            // Убираем @ если есть
+            const cleanUsername = username.startsWith('@') ? username.slice(1) : username;
+            
+            // Копируем в буфер
+            navigator.clipboard.writeText(cleanUsername).then(() => {
+                // Показываем подтверждение
+                const originalColor = button.style.color;
+                button.style.color = '#10b981'; // Зелёный цвет
+                button.title = 'Скопировано!';
+                
+                // Показываем уведомление
+                showNotification(`Ник @${cleanUsername} скопирован в буфер обмена`, 'success');
+                
+                // Возвращаем исходный вид через 1.5 секунды
+                setTimeout(() => {
+                    button.style.color = originalColor;
+                    button.title = 'Копировать ник';
+                }, 1500);
+            }).catch(err => {
+                console.error('Ошибка копирования:', err);
+                button.style.color = '#ef4444'; // Красный при ошибке
+                button.title = 'Ошибка копирования';
+                
+                // Показываем уведомление об ошибке
+                showNotification('Ошибка при копировании ника', 'error');
+                
+                setTimeout(() => {
+                    button.style.color = '';
+                    button.title = 'Копировать ник';
+                }, 1500);
+            });
         }
 
         function showNotificationWithLink(message, type = 'info', linkText, linkUrl) {
@@ -3775,8 +3784,11 @@
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
                     showNotification('Задача выполнена!', 'success');
+                    // Показываем анимацию загрузки пока ждем ответ от агента
+                    showTypingIndicator();
                     // Обновить чат для получения ответа агента
                     await updateChat();
+                    hideTypingIndicator();
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при выполнении задачи: ${error.error}`, 'error');
@@ -3806,7 +3818,10 @@
                     lastTasksUpdate = 0; // Сбрасываем throttle
                     lastPeopleUpdate = 0; // Сбрасываем throttle для контактов
                     await updateTasks();
+                    // Показываем анимацию загрузки пока ждем ответ от агента
+                    showTypingIndicator();
                     await updateChat();
+                    hideTypingIndicator();
                     await updatePeople(true);
                     // Обновить элитные контакты если активен фильтр
                     if (currentContactFilter === 'elite') {
@@ -3853,7 +3868,10 @@
                     lastTasksUpdate = 0; // Сбрасываем throttle
                     lastPeopleUpdate = 0; // Сбрасываем throttle для контактов
                     await updateTasks();
+                    // Показываем анимацию загрузки пока ждем ответ от агента
+                    showTypingIndicator();
                     await updateChat();
+                    hideTypingIndicator();
                     await updatePeople(true);
                     // Обновить элитные контакты если активен фильтр
                     if (currentContactFilter === 'elite') {
@@ -3884,7 +3902,10 @@
                     
                     // Обновить задачи, чат и контакты
                     await updateTasks();
+                    // Показываем анимацию загрузки пока ждем ответ от агента
+                    showTypingIndicator();
                     await updateChat();
+                    hideTypingIndicator();
                     await updatePeople(true);
                     // Обновить элитные контакты если активен фильтр
                     if (currentContactFilter === 'elite') {

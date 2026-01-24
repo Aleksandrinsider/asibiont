@@ -1195,8 +1195,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Special handling for add task requests - EXPLICIT (добавь задачу, создай задачу)
         if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            if any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'add', 'create']):
-                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
+            if any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'запланируй', 'запланировать', 'запланируем', 'add', 'create', 'schedule']):
+                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']) or not any(word in clean_message.lower() for word in ['профиль', 'контакт', 'profile', 'contact']):
                     intent = {"type": "add_task", "confidence": 0.9, "params": {}}
                     logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
 
