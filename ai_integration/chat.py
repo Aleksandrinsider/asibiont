@@ -217,11 +217,30 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         has_explicit_time = True
                         break
                 
-                # Если пользователь НЕ указал время в сообщении - БЛОКИРУЕМ создание
+                # Если пользователь НЕ указал время в сообщении - устанавливаем состояние ожидания
                 if not has_explicit_time:
-                    logger.warning(f"[ADD TASK] BLOCKED - user did not specify time in message: {original_message[:50]}...")
-                    tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
-                    continue
+                    logger.info(f"[ADD TASK] No time specified - setting waiting state for user {user_id}")
+                    
+                    # Получаем пользователя для обновления состояния
+                    from models import User
+                    user_obj = db_session.query(User).filter_by(telegram_id=user_id).first()
+                    if user_obj:
+                        # Сохраняем данные задачи для создания
+                        task_data = {
+                            'title': task_title,
+                            'description': args.get('description', ''),
+                            'timestamp': datetime.now(timezone.utc).isoformat()
+                        }
+                        user_obj.conversation_state = 'waiting_for_task_time'
+                        user_obj.pending_task_data = json.dumps(task_data)
+                        db_session.commit()
+                        
+                        tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
+                        continue
+                    else:
+                        logger.error(f"[ADD TASK] User not found for telegram_id {user_id}")
+                        tool_results.append({"function": func_name, "result": "Ошибка: пользователь не найден"})
+                        continue
                 
                 # КРИТИЧЕСКИ ВАЖНО: Правильно обрабатываем относительное время
                 # Если в сообщении "через X минут/часов" - ВСЕГДА пересчитываем от current_time
@@ -242,10 +261,28 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 has_time = intent.get("params", {}).get("has_time", False)
                 # logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
                 
-                # БЛОКИРУЕМ создание задач без времени
+                # Если reminder_time не валиден - устанавливаем состояние ожидания
                 if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
-                    logger.warning(f"[ADD TASK] BLOCKED - no valid reminder_time provided")
-                    tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
+                    logger.info(f"[ADD TASK] Invalid reminder_time - setting waiting state for user {user_id}")
+                    
+                    # Получаем пользователя для обновления состояния
+                    from models import User
+                    user_obj = db_session.query(User).filter_by(telegram_id=user_id).first()
+                    if user_obj:
+                        # Сохраняем данные задачи для создания
+                        task_data = {
+                            'title': task_title,
+                            'description': args.get('description', ''),
+                            'timestamp': datetime.now(timezone.utc).isoformat()
+                        }
+                        user_obj.conversation_state = 'waiting_for_task_time'
+                        user_obj.pending_task_data = json.dumps(task_data)
+                        db_session.commit()
+                        
+                        tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
+                    else:
+                        logger.error(f"[ADD TASK] User not found for telegram_id {user_id}")
+                        tool_results.append({"function": func_name, "result": "Ошибка: пользователь не найден"})
                 else:
                     # Вызываем add_task только с валидным временем
                     result = add_task(
@@ -770,6 +807,62 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
     else:
         close_session = False
 
+    # Получаем пользователя и его состояние
+    user = None
+    if user_id:
+        from models import User
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            # Создаем пользователя если не существует
+            user = User(telegram_id=user_id, conversation_state='normal', timezone='Europe/Moscow')
+            db_session.add(user)
+            db_session.commit()
+            logger.info(f"Created new user {user_id}")
+
+    # Управление состоянием разговора
+    conversation_state = user.conversation_state if user else 'normal'
+    pending_task_data = None
+    if user and user.pending_task_data:
+        try:
+            import json
+            pending_task_data = json.loads(user.pending_task_data)
+        except:
+            pending_task_data = None
+
+    # Обновляем время последнего взаимодействия
+    if user:
+        user.last_interaction_at = datetime.now(timezone.utc)
+        db_session.commit()
+
+    # Управление контекстом разговора
+    conversation_context = []
+    if user and user.conversation_context:
+        try:
+            import json
+            conversation_context = json.loads(user.conversation_context)
+        except:
+            conversation_context = []
+
+    # Добавляем текущее сообщение в контекст
+    conversation_context.append({
+        'role': 'user',
+        'content': message,
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    })
+
+    # Ограничиваем контекст последними 10 сообщениями
+    if len(conversation_context) > 10:
+        conversation_context = conversation_context[-10:]
+
+    # Сохраняем обновленный контекст
+    if user:
+        try:
+            import json
+            user.conversation_context = json.dumps(conversation_context)
+            db_session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to save conversation context: {e}")
+
     # Проверяем сообщение о времени и обновляем timezone
     time_message_match = re.search(r"мое\s+местное\s+время:\s*(\d{1,2}:\d{2})", message.lower())
     if time_message_match:
@@ -786,6 +879,64 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
     mentions_str = ", ".join(mentions) if mentions else "нет"
     # Clean message from mentions for processing
     clean_message = re.sub(r"@[\w]+", "", message).strip()
+
+    # ОБРАБОТКА СОСТОЯНИЙ РАЗГОВОРА
+    if conversation_state == 'waiting_for_task_time' and pending_task_data:
+        # Пользователь отвечает на вопрос о времени для задачи
+        logger.info(f"[STATE] Processing time response for pending task: {pending_task_data}")
+        
+        # Парсим время из сообщения
+        from ai_integration.utils import parse_relative_time, parse_natural_time
+        current_time = datetime.now(timezone.utc)
+        if user and user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+                current_time = current_time.astimezone(user_tz)
+            except:
+                pass
+        
+        # Сначала пробуем распознать абсолютное время (завтра в 10 утра)
+        parsed_time = parse_natural_time(clean_message, current_time)
+        if not parsed_time:
+            # Если не получилось, пробуем относительное время (через 2 часа)
+            parsed_time = parse_relative_time(clean_message, current_time)
+        if parsed_time:
+            # Создаем задачу с распознанным временем
+            try:
+                task_data = pending_task_data
+                result = add_task(
+                    title=task_data.get('title', 'Задача'),
+                    description=task_data.get('description', ''),
+                    reminder_time=parsed_time.strftime('%Y-%m-%d %H:%M'),
+                    user_id=user_id,
+                    session=db_session
+                )
+                
+                # Сбрасываем состояние
+                user.conversation_state = 'normal'
+                user.pending_task_data = None
+                db_session.commit()
+                
+                # Добавляем ответ AI в контекст
+                conversation_context.append({
+                    'role': 'assistant',
+                    'content': result,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+                user.conversation_context = json.dumps(conversation_context)
+                db_session.commit()
+                
+                return result
+            except Exception as e:
+                logger.error(f"Failed to create task from pending data: {e}")
+                user.conversation_state = 'normal'
+                user.pending_task_data = None
+                db_session.commit()
+                return "Извините, не удалось создать задачу. Попробуйте еще раз."
+        else:
+            # Время не распознано, просим уточнить
+            return "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'."
+
     context_len = (
         len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
     )

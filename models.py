@@ -37,6 +37,10 @@ class User(Base):
     average_rating = Column(Integer, default=0)  # Average rating from other users (synced from UserProfile)
     rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
     history_cleared_at = Column(DateTime)  # When user cleared chat history
+    conversation_state = Column(String(100), default='normal')  # Current conversation state
+    pending_task_data = Column(Text)  # JSON for pending task creation data
+    last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    conversation_context = Column(Text)  # JSON array of recent messages for context
 
 
 class Task(Base):

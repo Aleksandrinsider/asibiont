@@ -201,6 +201,38 @@ try:
             else:
                 logger.info("Migration: photo_url column already exists")
 
+            if 'conversation_state' not in user_columns:
+                logger.info("Adding conversation_state column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN conversation_state VARCHAR(100) DEFAULT \'normal\''))
+                session.commit()
+                logger.info("Migration: conversation_state column added successfully")
+            else:
+                logger.info("Migration: conversation_state column already exists")
+
+            if 'pending_task_data' not in user_columns:
+                logger.info("Adding pending_task_data column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN pending_task_data TEXT'))
+                session.commit()
+                logger.info("Migration: pending_task_data column added successfully")
+            else:
+                logger.info("Migration: pending_task_data column already exists")
+
+            if 'last_interaction_at' not in user_columns:
+                logger.info("Adding last_interaction_at column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN last_interaction_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: last_interaction_at column added successfully")
+            else:
+                logger.info("Migration: last_interaction_at column already exists")
+
+            if 'conversation_context' not in user_columns:
+                logger.info("Adding conversation_context column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN conversation_context TEXT'))
+                session.commit()
+                logger.info("Migration: conversation_context column added successfully")
+            else:
+                logger.info("Migration: conversation_context column already exists")
+
             if 'updated_at' not in user_columns:
                 logger.info("Adding updated_at column to users table")
                 session.execute(text('ALTER TABLE users ADD COLUMN updated_at TIMESTAMP'))
