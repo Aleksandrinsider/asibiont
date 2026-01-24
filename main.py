@@ -2745,6 +2745,7 @@ async def api_partners_handler(request):
                             'contact_info': partner_user.username if (partner_user and partner_user.username) else None,
                             'telegram_id': partner_user.telegram_id if partner_user else None,
                             'photo_url': photo_url,
+                            'first_name': partner_user.first_name,
                             'can_access': can_access,
                             'required_tier': required_tier,
                             'subscription_tier': (partner_tier.value if partner_tier and hasattr(partner_tier, 'value') else 'bronze').lower(),
