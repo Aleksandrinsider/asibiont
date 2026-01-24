@@ -84,7 +84,7 @@ html, body {
 }
 
 body {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background-color: #FFFFFF;
     color: #374151;
     line-height: normal;
     font-size: 13px; /* Changed from 14px */
@@ -107,7 +107,7 @@ body {
 .app-header {
     width: 100%;
     height: var(--header-height);
-    background: #FFFFFF;
+    background-color: #FFFFFF;
     color: #374151;
     margin: 0;
     padding: 0 8px;
@@ -119,8 +119,7 @@ body {
     border-radius: 6px;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid rgba(209, 217, 224, 0.6);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid #D1D9E0;
 }
 
 
@@ -351,17 +350,13 @@ body {
 
 /* Make people section fill available vertical space and allow internal scrolling */
 .people-section {
-    padding: 16px;
+    padding: 12px;
     margin-top: 0;
     margin-bottom: 0;
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border: 1px solid rgba(209, 217, 224, 0.6);
-    border-radius: 12px;
-    background: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .people-list {
@@ -374,31 +369,23 @@ body {
 
 /* Task stats block - fixed size */
 .task-stats-block {
-    padding: 16px;
+    padding: 12px;
     margin-top: 0;
     margin-bottom: 12px;
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    border: 1px solid rgba(209, 217, 224, 0.6);
-    border-radius: 12px;
-    background: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* Tasks section wrapper - fills remaining space */
 .tasks-section-wrapper {
-    padding: 16px;
+    padding: 12px;
     margin-top: 0;
     margin-bottom: 0;
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border: 1px solid rgba(209, 217, 224, 0.6);
-    border-radius: 12px;
-    background: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .tasks-section {
@@ -872,17 +859,15 @@ details[open] .details-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 16px;
+    padding: 12px;
     height: 100%;
     max-height: 100%;
     overflow: hidden;
-    border: 1px solid rgba(209, 217, 224, 0.6);
-    border-radius: 12px;
+    border: 1px solid #D1D9E0;
+    border-radius: 6px;
     margin-bottom: 10px;
     position: relative;
     min-height: 0; /* Prevent flex item from overflowing */
-    background: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .welcome-section {
@@ -1254,13 +1239,11 @@ details[open] .details-content {
 }
 
 .context-section {
-    padding: 16px;
-    border: 1px solid rgba(209, 217, 224, 0.6);
-    border-radius: 12px;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
     margin-top: 0;
     margin-bottom: 12px;
-    background: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 
