@@ -182,8 +182,17 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # logger.info(
                 #     f"[AI TOOL CALL] add_task called with args: {args}, intent params: {intent.get('params', {})}")
                 
-                # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
+                # КРИТИЧНО: Фильтруем слишком длинные title (берут весь текст сообщения)
                 task_title = args.get("title", args.get("task_title", "Задача"))
+                
+                # Если title слишком длинный (>60 символов или >10 слов) - скипаем
+                word_count = len(task_title.split())
+                if len(task_title) > 60 or word_count > 10:
+                    logger.warning(f"[ADD TASK] SKIPPED - title too long ({len(task_title)} chars, {word_count} words): {task_title[:80]}")
+                    tool_results.append({"function": func_name, "result": f"ERROR: Название задачи слишком длинное ({word_count} слов). Нужно краткое название (2-5 слов). Пример: 'Позвонить клиенту', 'Подготовить отчёт'."})
+                    continue
+                
+                # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
                 existing_tasks = list_tasks(user_id=user_id, session=db_session)
                 
                 # Проверяем, есть ли уже похожая задача (по заголовку)
