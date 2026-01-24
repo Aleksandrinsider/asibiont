@@ -4886,7 +4886,9 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        // Display first_name before username
+                                        let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5006,7 +5008,9 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        // Display first_name before username
+                                        let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5124,7 +5128,9 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        // Display first_name before username
+                                        let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5238,7 +5244,9 @@
                                     
                                     // Username
                                     let nameStyle = 'cursor: pointer; color: #068487;';
-                                    html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                    // Display first_name before username
+                                    let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
+                                    html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
                                     
                                     // Task count if available
                                     if (partner.task_count) {
@@ -5355,7 +5363,9 @@
                                     html += '</div>';
                                     
                                     html += '<div style="flex: 1;">';
-                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span></div>';
+                                    // Display first_name before username
+                                    let displayName = (blockedPartner && blockedPartner.first_name) ? (blockedPartner.first_name + ' @' + username) : ('@' + username);
+                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">' + displayName + '</span></div>';
                                     
                                     // Город
                                     if (blockedPartner && blockedPartner.city) {
