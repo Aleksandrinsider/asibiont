@@ -1566,10 +1566,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Special handling for complete task requests
         if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            if any(word in clean_message.lower() for word in ['заверши', 'выполни', 'complete', 'finish', 'done']):
-                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
-                    intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
-                    logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
+            if any(word in clean_message.lower() for word in ['заверши', 'выполни', 'завершил', 'выполнил', 'сделал', 'проверил', 'закончил', 'complete', 'finish', 'done']):
+                intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
 
         # Special handling for list tasks requests
         if intent.get('type') == 'conversation':  # Только если intent еще не определен
