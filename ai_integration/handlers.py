@@ -2570,11 +2570,12 @@ def check_delegation_deadlines():
         session.close()
 
 
-async def delete_task(task_id=None, task_title=None, user_id=None, session=None, confirmed=False):
+async def delete_task(task_id=None, task_title=None, user_id=None, session=None, confirmed=False, deletion_reason=None):
     """Delete a task by ID or title. Requires confirmation unless confirmed=True.
     
     Args:
         confirmed: If True, skip confirmation and delete immediately (for API calls with user confirmation)
+        deletion_reason: Optional reason for deletion to save for AI analysis
     """
     if session is None:
         session = Session()
@@ -2633,8 +2634,15 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
                 session.close()
             return result
         
-        # Confirmed - удаляем
+        # Confirmed - сохраняем причину удаления, затем удаляем
         task_title = task.title
+        
+        # Сохраняем причину удаления в историю (для будущего анализа AI)
+        if deletion_reason:
+            task.skipped_reason = deletion_reason
+            task.status = "deleted"
+            session.commit()
+        
         session.delete(task)
         session.commit()
 
@@ -2644,7 +2652,11 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
             profile.total_tasks_created = (profile.total_tasks_created or 0) - 1  # Decrement created tasks when deleting
             session.commit()
 
-        result = f"Задача '{task_title}' удалена."
+        # Если причина НЕ указана - AI должен её выяснить
+        if not deletion_reason:
+            result = f"TASK_DELETED_ASK_REASON: Задача '{task_title}' удалена. ОБЯЗАТЕЛЬНО спроси: 'Почему удалил задачу \"{task_title}\"? Это поможет мне лучше тебя понимать.' После получения ответа сохрани причину через update_user_memory."
+        else:
+            result = f"Задача '{task_title}' удалена. Понял, что причина: {deletion_reason}."
 
         # Save to interaction history
         interaction = Interaction(user_id=user.id, message_type="ai", content=result)
