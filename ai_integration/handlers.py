@@ -2852,6 +2852,8 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
         # Возвращаем ответ с флагом для AI
         if not deletion_reason:
             result = f"TASK_DELETED_ASK_REASON: Задача '{task_title}' удалена."
+        elif task.status == "completed":
+            result = ""  # Не отправлять сообщение для выполненных задач при удалении
         else:
             result = f"Задача '{task_title}' удалена. Понял, что причина: {deletion_reason}."
 
