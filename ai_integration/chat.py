@@ -651,6 +651,24 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     natural_responses.append(f"TASK_DELETED_ASK_REASON: {task_title}")
                 else:
                     natural_responses.append("TASK_DELETED_ASK_REASON")
+            
+            elif "TASK_COMPLETED_ASK_RESULT:" in result_text:
+                # AI должен спросить о результате выполнения
+                match = re.search(r"TASK_COMPLETED_ASK_RESULT: Задача '([^']+)' завершена", result_text)
+                if match:
+                    task_title = match.group(1)
+                    natural_responses.append(f"TASK_COMPLETED_ASK_RESULT: {task_title}")
+                else:
+                    natural_responses.append("TASK_COMPLETED_ASK_RESULT")
+            
+            elif "TASK_UPDATED:" in result_text:
+                # AI должен прокомментировать изменение
+                match = re.search(r"TASK_UPDATED: Задача '([^']+)' обновлена", result_text)
+                if match:
+                    task_title = match.group(1)
+                    natural_responses.append(f"TASK_UPDATED: {task_title}")
+                else:
+                    natural_responses.append("TASK_UPDATED")
 
             elif "Задача удалена" in result_text or "Задача.*удалена" in result_text:
                 natural_responses.append("Задача удалена")
