@@ -724,6 +724,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif "Список партнеров:" in result_text:
                 natural_responses.append(result_text)
 
+            elif "NEED_TIME_FOR_TASK:" in result_text:
+                # AI должен спросить о времени для задачи - создаем понятный вопрос
+                if ":" in result_text:
+                    task_title = result_text.split(":", 1)[1].strip()
+                    natural_responses.append(f"На какое время поставить задачу '{task_title}'?")
+                else:
+                    natural_responses.append("На какое время поставить задачу?")
+
             else:
                 # Для неизвестных результатов передаем как есть
                 natural_responses.append(result_text)
