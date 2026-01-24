@@ -1900,6 +1900,24 @@ def get_partners_list(user_id=None, session=None):
                     has_match = True
                     match_reasons.append(f"company: {profile.company}")
 
+        # ВАЖНО: Всегда показывать избранные и заблокированные контакты
+        is_favorite = False
+        is_blocked = False
+        
+        if user_profile.favorite_contacts:
+            favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
+            if profile_user.username and profile_user.username.replace('@', '').lower() in favorite_usernames:
+                is_favorite = True
+                has_match = True  # Принудительно показываем избранных
+                match_reasons.append("favorite contact")
+                
+        if user_profile.blocked_contacts:
+            blocked_usernames = [u.strip().lower().replace('@', '') for u in user_profile.blocked_contacts.split(',')]
+            if profile_user.username and profile_user.username.replace('@', '').lower() in blocked_usernames:
+                is_blocked = True
+                has_match = True  # Принудительно показываем заблокированных
+                match_reasons.append("blocked contact")
+
         if has_match:
             logger.info(f"[PARTNERS] Match found: @{profile_user.username} - {', '.join(match_reasons)}")
             partners.append(profile)

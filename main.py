@@ -3961,7 +3961,15 @@ async def create_post_handler(request):
                 'post': {
                     'id': post.id,
                     'content': post.content,
-                    'created_at': created_at_str
+                    'created_at': created_at_str,
+                    'like_count': 0,
+                    'user_liked': False,
+                    'author': {
+                        'username': user.username,
+                        'first_name': user.first_name,
+                        'photo_url': user.photo_url,
+                        'is_current_user': True
+                    }
                 }
             })
         finally:
