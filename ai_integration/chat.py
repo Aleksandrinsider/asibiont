@@ -866,6 +866,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
     # Это гарантирует, что AI видит свежие данные после операций через веб-интерфейс
     current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
     fresh_tasks_info = f"\n[АКТУАЛЬНЫЕ ЗАДАЧИ НА МОМЕНТ ЗАПРОСА]\n{current_tasks}\n"
+    
+    # Очищаем упоминания задач из старого контекста, чтобы AI не ссылался на выполненные задачи
+    # Оставляем только последние 3 сообщения для сохранения контекста разговора
+    if len(conversation_context) > 3:
+        conversation_context = conversation_context[-3:]
 
     # Добавляем текущее сообщение в контекст
     conversation_context.append({
