@@ -235,7 +235,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         user_obj.pending_task_data = json.dumps(task_data)
                         db_session.commit()
                         
-                        tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
+                        tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: {task_title}"})
                         continue
                     else:
                         logger.error(f"[ADD TASK] User not found for telegram_id {user_id}")
@@ -279,7 +279,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         user_obj.pending_task_data = json.dumps(task_data)
                         db_session.commit()
                         
-                        tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: Задача '{task_title}' - не указано время. ОБЯЗАТЕЛЬНО спроси у пользователя: 'На какое время поставить задачу '{task_title}'?' и НЕ отвлекайся на другие темы."})
+                        tool_results.append({"function": func_name, "result": f"NEED_TIME_FOR_TASK: {task_title}"})
                     else:
                         logger.error(f"[ADD TASK] User not found for telegram_id {user_id}")
                         tool_results.append({"function": func_name, "result": "Ошибка: пользователь не найден"})

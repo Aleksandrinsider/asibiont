@@ -346,8 +346,8 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
                 ) / profile.completed_tasks
             session.commit()
         
-        # Возвращаем специальное сообщение для AI, чтобы он ОБЯЗАТЕЛЬНО спросил о результатах
-        result = f"✓ Задача '{task.title}' завершена. ОБЯЗАТЕЛЬНО СПРОСИ У ПОЛЬЗОВАТЕЛЯ: 'Как прошло? Какой результат получил?' или 'Расскажи подробнее, как все прошло?' - НЕ давай советов до получения ответа!"
+        # Возвращаем сообщение о завершении - AI сам решит спрашивать ли о результате
+        result = f"✓ Задача '{task.title}' завершена."
 
         # Если задача была делегирована этому пользователю, отправляем отчет делегировавшему
         if task.delegated_to_username and task.delegation_status == "accepted":
@@ -2629,7 +2629,7 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
         # Если confirmed=False - возвращаем специальный код для AI
         if not confirmed:
             task_info = f"{task.title} (время: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указано'})"
-            result = f"CONFIRMATION_REQUIRED: Задача найдена - {task_info}. ОБЯЗАТЕЛЬНО спроси у пользователя: 'Точно удалить задачу \"{task.title}\"? Напиши да/удалить для подтверждения.' Без подтверждения НЕ удаляй!"
+            result = f"CONFIRMATION_REQUIRED: {task_info}"
             if close_session:
                 session.close()
             return result
@@ -2652,9 +2652,9 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
             profile.total_tasks_created = (profile.total_tasks_created or 0) - 1  # Decrement created tasks when deleting
             session.commit()
 
-        # Если причина НЕ указана - AI должен её выяснить
+        # Возвращаем простой ответ, AI сам решит спрашивать ли о причине
         if not deletion_reason:
-            result = f"TASK_DELETED_ASK_REASON: Задача '{task_title}' удалена. ОБЯЗАТЕЛЬНО спроси: 'Почему удалил задачу \"{task_title}\"? Это поможет мне лучше тебя понимать.' После получения ответа сохрани причину через update_user_memory."
+            result = f"Задача '{task_title}' удалена."
         else:
             result = f"Задача '{task_title}' удалена. Понял, что причина: {deletion_reason}."
 
