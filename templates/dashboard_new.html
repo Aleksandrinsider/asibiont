@@ -5248,46 +5248,50 @@
                                     html += '</li>';
                                 } else if (partner.type === 'favorite') {
                                     // Favorite contacts (shown when no common interests)
+                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     html += '<li class="task-item contact-favorite" data-contact="' + partner.contact_info + '">';
                                     html += '<div class="task-content">';
                                     
                                     // Avatar with initials (larger for individual contacts)
-                                    const initial = partner.contact_info ? partner.contact_info[0].toUpperCase() : 'U';
-                                    const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'");
-                                    html += '<div style="margin-right: 12px; flex-shrink: 0;"><div class="contact-avatar" style="width: 48px; height: 48px; font-size: 18px;">' + initial + '</div></div>';
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info[0].toUpperCase() : 'U');
                                     
-                                    html += '<div style="flex: 1; min-width: 0;">';
+                                    if (partner.photo_url) {
+                                        const imgId = 'img-fav-' + (partner.telegram_id || partner.contact_info);
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;">';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
+                                        html += '</div>';
+                                    } else {
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
+                                    }
+                                    
+                                    html += '<div style="flex: 1;">';
+                                    
                                     // Username
-                                    const contactInfoHtml = partner.contact_info;
-                                    const nameStyle = 'cursor: pointer; color: #068487;';
-                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
+                                    let nameStyle = 'cursor: pointer; color: #068487;';
+                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoEscaped + '</span><button class="copy-username-btn" onclick="event.stopPropagation(); copyUsernameToClipboard(' + JSON.stringify(partner.contact_info) + ', this)" title="Копировать ник"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"></path><path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"></path></svg></button></div>';
                                     
                                     // City
                                     if (partner.city) {
                                         html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                                     }
                                     
-                                    // Company and position
-                                    const companyParts = [];
-                                    if (partner.company) {
-                                        companyParts.push('Компания: ' + partner.company);
-                                    }
-                                    if (partner.position) {
-                                        companyParts.push('Должность: ' + partner.position);
-                                    }
-                                    if (companyParts.length > 0) {
-                                        html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                        companyParts.forEach(part => {
-                                            html += '<span class="task-meta">' + part + '</span>';
-                                        });
-                                        html += '</div>';
-                                    }
-                                    
-                                    // Interests if available
+                                    // Interests
+                                    html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     if (partner.interests) {
-                                        html += '<div style="margin-top: 4px;"><span class="task-meta">Интересы: ' + partner.interests + '</span></div>';
+                                        html += '<span class="task-meta">Интересы: ' + partner.interests + '</span>';
                                     }
+                                    if (partner.common_interests) {
+                                        html += '<span class="task-meta" style="color: #068487;">Общие интересы: ' + partner.common_interests + '</span>';
+                                    }
+                                    html += '</div>';
                                     
+                                    // Rating
+                                    if (partner.average_rating > 0) {
+                                        const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
+                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
+                                    } else {
+                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
+                                    }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
