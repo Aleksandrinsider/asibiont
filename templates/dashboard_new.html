@@ -1118,7 +1118,7 @@
                             <p>Рекомендация: нет рекомендаций</p>
                             {% endif %}
                             {% if formatted_end_date %}
-                            <p style="margin: 0;">Подписка: активна до {{ formatted_end_date }} 
+                            <p style="margin: 0; margin-bottom: -4px;">Подписка: активна до {{ formatted_end_date }} 
                                 <a href="/extend_subscription" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">продлить</a>
                             </p>
                             {% else %}
@@ -4886,7 +4886,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5006,7 +5006,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5124,7 +5124,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5780,7 +5780,7 @@
                             html += '<p>Рекомендация: нет рекомендаций</p>';
                         }
                         if (data.formatted_end_date) {
-                            html += '<p style="margin-bottom: 20px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
+                            html += '<p style="margin-bottom: 16px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
                         } else {
                             html += '<p style="margin-bottom: 20px;">Подписка: информация загружается...</p>';
                         }
