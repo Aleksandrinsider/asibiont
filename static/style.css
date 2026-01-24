@@ -84,7 +84,7 @@ html, body {
 }
 
 body {
-    background-color: #FFFFFF;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #374151;
     line-height: normal;
     font-size: 13px; /* Changed from 14px */
@@ -107,7 +107,9 @@ body {
 .app-header {
     width: 100%;
     height: var(--header-height);
-    background-color: #FFFFFF;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     color: #374151;
     margin: 0;
     padding: 0 8px;
@@ -119,7 +121,8 @@ body {
     border-radius: 6px;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid #D1D9E0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(31, 38, 135, 0.1);
 }
 
 
@@ -213,9 +216,13 @@ body {
 
 .welcome-content {
     max-width: 560px;
-    background-color: #FFFFFF;
-    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 12px;
     padding: 40px;
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 @media (min-width: 1200px) {
@@ -357,6 +364,12 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 .people-list {
@@ -375,6 +388,12 @@ body {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 /* Tasks section wrapper - fills remaining space */
@@ -386,6 +405,12 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 .tasks-section {
@@ -412,7 +437,7 @@ body {
     min-height: 0;
     -webkit-overflow-scrolling: touch;
     margin-top: 0;
-    background-color: #FFFFFF;
+    background-color: transparent;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     font-size: 13px;
     line-height: normal;
@@ -863,11 +888,15 @@ details[open] .details-content {
     height: 100%;
     max-height: 100%;
     overflow: hidden;
-    border: 1px solid #D1D9E0;
-    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     margin-bottom: 10px;
     position: relative;
     min-height: 0; /* Prevent flex item from overflowing */
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 .welcome-section {
@@ -1209,23 +1238,31 @@ details[open] .details-content {
 
 .task-stats-block {
     padding: 12px;
-    border: none;
-    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     margin-top: 0;
     margin-bottom: 0;
     flex: 0 0 auto;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 .tasks-section-wrapper {
     padding: 12px;
-    border: none;
-    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
     overflow: auto;
     transition: all 0.3s ease;
     flex: 1 1 auto;
     min-height: 0;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 .tasks-section {
@@ -1240,10 +1277,14 @@ details[open] .details-content {
 
 .context-section {
     padding: 12px;
-    border: none;
-    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
     margin-top: 0;
     margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.15);
 }
 
 
