@@ -998,34 +998,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             else:
                 user_username = "user"
                 
-            # Получаем subscription_tier
-            subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
-            logger.info(f"[SUBSCRIPTION] User {user_id} tier from DB: {user.subscription_tier if user else 'None'}, value: {subscription_tier}")
-
-            # Check subscription
-            from config import FREE_ACCESS_MODE
-            logger.info(f"[SUBSCRIPTION] FREE_ACCESS_MODE = {FREE_ACCESS_MODE}")
-
-            if not FREE_ACCESS_MODE:
-                subscription = db_session.query(Subscription).filter_by(user_id=user.id, status="active").first()
-                if not subscription:
-                    db_session.close()
-                    # Генерируем сообщение о подписке через AI
-                    try:
-                        url = "https://api.deepseek.com/v1/chat/completions"
-                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "У пользователя нет активной подписки. Сообщи об этом и предложи активировать подписку в @asibiont_bot."}]
-                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.7, "max_tokens": 80}
-                        async with aiohttp.ClientSession() as sess:
-                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                                if resp.status == 200:
-                                    result = await resp.json()
-                                    return result["choices"][0]["message"]["content"].strip()
-                    except Exception:
-                        pass
-                    return "Для использования требуется активная подписка 💳 Активируйте её в @asibiont_bot"
-
-            # Get user current time FIRST before using it
+            # Get user current time FIRST before using it (moved BEFORE subscription check)
             base_now = datetime.now(pytz.UTC)
             logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
             logger.info(f"[TIME CHECK] Formatted: {base_now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -1052,6 +1025,33 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     # Формат времени С ТАЙМЗОНОЙ для промпта
                     current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+            
+            # Получаем subscription_tier
+            subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
+            logger.info(f"[SUBSCRIPTION] User {user_id} tier from DB: {user.subscription_tier if user else 'None'}, value: {subscription_tier}")
+
+            # Check subscription
+            from config import FREE_ACCESS_MODE
+            logger.info(f"[SUBSCRIPTION] FREE_ACCESS_MODE = {FREE_ACCESS_MODE}")
+
+            if not FREE_ACCESS_MODE:
+                subscription = db_session.query(Subscription).filter_by(user_id=user.id, status="active").first()
+                if not subscription:
+                    db_session.close()
+                    # Генерируем сообщение о подписке через AI
+                    try:
+                        url = "https://api.deepseek.com/v1/chat/completions"
+                        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+                        msg = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "У пользователя нет активной подписки. Сообщи об этом и предложи активировать подписку в @asibiont_bot."}]
+                        data = {"model": DEEPSEEK_MODEL, "messages": msg, "temperature": 0.7, "max_tokens": 80}
+                        async with aiohttp.ClientSession() as sess:
+                            async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                                if resp.status == 200:
+                                    result = await resp.json()
+                                    return result["choices"][0]["message"]["content"].strip()
+                    except Exception:
+                        pass
+                    return "Для использования требуется активная подписка 💳 Активируйте её в @asibiont_bot"
 
             if user and user.memory:
                 try:
