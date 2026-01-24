@@ -4807,16 +4807,16 @@
                                 const username = partner.contact_info;
                                 if (!uniquePartners[username]) {
                                     uniquePartners[username] = partner;
-                                    // Если это избранный контакт, отмечаем флагом
-                                    if (partner.type === 'favorite') {
+                                    // Проверяем избранное из кэша, а не из типа партнера
+                                    if (favoriteContacts.includes(username) || partner.type === 'favorite') {
                                         uniquePartners[username].is_favorite = true;
                                     }
                                 } else {
                                     // Если пользователь уже есть, комбинируем типы
                                     const existing = uniquePartners[username];
                                     
-                                    // Сохраняем флаг избранного если любой из типов - favorite
-                                    if (partner.type === 'favorite') {
+                                    // Сохраняем флаг избранного если контакт в favoriteContacts или тип - favorite
+                                    if (favoriteContacts.includes(username) || partner.type === 'favorite') {
                                         existing.is_favorite = true;
                                     }
                                     
@@ -4826,7 +4826,7 @@
                                     } else if (existing.type !== 'recommended' && partner.type === 'recommended') {
                                         uniquePartners[username] = partner;
                                         // Восстанавливаем флаг избранного
-                                        if (existing.is_favorite) {
+                                        if (existing.is_favorite || favoriteContacts.includes(username)) {
                                             uniquePartners[username].is_favorite = true;
                                         }
                                     }
