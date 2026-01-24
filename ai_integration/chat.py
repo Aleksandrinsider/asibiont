@@ -909,38 +909,43 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             user_memory += f"\nВРЕМЯ СУТОК: {time_context}"
             profile_filled = False
+            
+            # Helper function to check if field is empty
+            def is_empty_field(value):
+                return not value or (isinstance(value, str) and not value.strip())
+            
             if profile:
                 profile_info = []
-                if profile.city:
+                if not is_empty_field(profile.city):
                     profile_info.append(f"Город: {profile.city}")
-                if profile.company:
+                if not is_empty_field(profile.company):
                     profile_info.append(f"Компания: {profile.company}")
-                if profile.position:
+                if not is_empty_field(profile.position):
                     profile_info.append(f"Должность: {profile.position}")
-                if hasattr(profile, 'languages') and profile.languages:
+                if hasattr(profile, 'languages') and not is_empty_field(profile.languages):
                     profile_info.append(f"Языки: {profile.languages}")
-                if profile.skills:
+                if not is_empty_field(profile.skills):
                     profile_info.append(f"Навыки: {profile.skills}")
-                if profile.interests:
+                if not is_empty_field(profile.interests):
                     profile_info.append(f"Интересы: {profile.interests}")
-                if profile.goals:
+                if not is_empty_field(profile.goals):
                     profile_info.append(f"Цели: {profile.goals}")
 
                 # Определяем незаполненные поля
                 empty_fields = []
-                if not profile.city:
+                if is_empty_field(profile.city):
                     empty_fields.append("город")
-                if not profile.company:
+                if is_empty_field(profile.company):
                     empty_fields.append("компания")
-                if not profile.position:
+                if is_empty_field(profile.position):
                     empty_fields.append("должность")
-                if not profile.skills:
+                if is_empty_field(profile.skills):
                     empty_fields.append("навыки")
-                if not profile.interests:
+                if is_empty_field(profile.interests):
                     empty_fields.append("интересы")
-                if not profile.goals:
+                if is_empty_field(profile.goals):
                     empty_fields.append("цели")
-                if not (hasattr(profile, 'languages') and profile.languages):
+                if not (hasattr(profile, 'languages') and not is_empty_field(profile.languages)):
                     empty_fields.append("языки")
 
                 if profile_info:
@@ -952,11 +957,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     logger.info(f"[PROFILE DEBUG] Empty fields detected: {empty_fields}")
                     # Выбираем только 1-2 наиболее важных незаполненных поля для естественного вопроса
                     priority_fields = []
-                    if not profile.city:
+                    if is_empty_field(profile.city):
                         priority_fields.append("город")
-                    if not profile.interests:
+                    if is_empty_field(profile.interests):
                         priority_fields.append("интересы")
-                    if not profile.company:
+                    if is_empty_field(profile.company):
                         priority_fields.append("компания")
                     if not profile.skills:
                         priority_fields.append("навыки")

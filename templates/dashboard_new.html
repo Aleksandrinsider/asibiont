@@ -4043,6 +4043,12 @@
         // Quick Profile Setup Functions
         async function checkProfileCompleteness() {
             try {
+                // Проверяем, пропускал ли пользователь модальное окно ранее
+                const skipQuickSetup = localStorage.getItem('skipQuickSetup');
+                if (skipQuickSetup === 'true') {
+                    return; // Не показываем модальное окно, если пользователь пропустил его
+                }
+
                 const response = await fetch('/api/profile', {
                     method: 'GET',
                     credentials: 'include'
@@ -4054,11 +4060,17 @@
                     const data = await response.json();
                     const profile = data.profile;
 
-                    // Проверяем, заполнены ли основные поля
-                    const isEmpty = (value) => !value || value === 'Не указан' || value === 'Не указана' || value === 'Не указаны';
+                    // Проверяем, заполнены ли основные поля (учитываем null, undefined, пустые строки и пробелы)
+                    const isEmpty = (value) => {
+                        if (value === null || value === undefined) return true;
+                        if (typeof value === 'string') {
+                            const trimmed = value.trim();
+                            return trimmed === '' || trimmed === 'Не указан' || trimmed === 'Не указана' || trimmed === 'Не указаны';
+                        }
+                        return true;
+                    };
 
-                    const isIncomplete = isEmpty(profile.city) || 
-                                       isEmpty(profile.interests);
+                    const isIncomplete = isEmpty(profile.city) || isEmpty(profile.interests);
 
                     // Показываем модальное окно только если профиль не заполнен
                     if (isIncomplete) {
@@ -4200,6 +4212,43 @@
             const modal = document.getElementById('quick-profile-modal');
             if (modal) {
                 modal.style.display = 'none';
+                // Сохраняем флаг, что пользователь пропустил настройку
+                localStorage.setItem('skipQuickSetup', 'true');
+            }
+        }
+        
+        async function updateProfileDisplay() {
+            // Обновляем отображение профиля на странице динамически
+            try {
+                const response = await fetch('/api/profile', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const profile = data.profile;
+                    
+                    // Обновляем элементы на странице, если они существуют
+                    const cityElement = document.querySelector('[data-profile="city"]');
+                    if (cityElement && profile.city) {
+                        cityElement.textContent = profile.city;
+                    }
+                    
+                    const interestsElement = document.querySelector('[data-profile="interests"]');
+                    if (interestsElement && profile.interests) {
+                        interestsElement.textContent = profile.interests;
+                    }
+                    
+                    // Если нужно полное обновление, перезагружаем через небольшую задержку
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } catch (error) {
+                console.error('Error updating profile display:', error);
+                // В случае ошибки просто перезагружаем страницу
+                window.location.reload();
             }
         }
         
@@ -4255,12 +4304,18 @@
 
                 if (response.ok) {
                     showNotification('Профиль успешно заполнен!', 'success');
-                    skipQuickProfile();
+                    
+                    // Очищаем флаг пропуска, т.к. профиль заполнен
+                    localStorage.removeItem('skipQuickSetup');
+                    
+                    // Закрываем модальное окно
+                    const modal = document.getElementById('quick-profile-modal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                    }
 
-                    // Обновляем отображение профиля на странице
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 500);
+                    // Обновляем отображение профиля на странице без перезагрузки
+                    await updateProfileDisplay();
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error || 'Не удалось сохранить профиль'}`, 'error');

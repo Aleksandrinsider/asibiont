@@ -2271,8 +2271,13 @@ def update_profile(
 
     if city is not None:
         old_city = profile.city
-        profile.city = city if city else None
-        updates_made.append(f"changed_city:{old_city}->{city if city else 'cleared'}")
+        # Не сохраняем пустые строки и строки из пробелов
+        if city and city.strip():
+            profile.city = city.strip()
+        else:
+            profile.city = None
+        logger.info(f"[UPDATE_PROFILE] City updated: old='{old_city}', new='{profile.city}', input='{city}'")
+        updates_made.append(f"changed_city:{old_city}->{profile.city if profile.city else 'cleared'}")
 
     if current_plans:
         profile.current_plans = current_plans
@@ -2280,23 +2285,23 @@ def update_profile(
 
     if hasattr(profile, "company") and company is not None:
         old_company = profile.company
-        profile.company = company if company else None
-        updates_made.append(f"changed_company:{old_company}->{company if company else 'cleared'}")
+        profile.company = company.strip() if company and company.strip() else None
+        updates_made.append(f"changed_company:{old_company}->{profile.company if profile.company else 'cleared'}")
 
     if hasattr(profile, "position") and position is not None:
         old_position = profile.position
-        profile.position = position if position else None
-        updates_made.append(f"changed_position:{old_position}->{position if position else 'cleared'}")
+        profile.position = position.strip() if position and position.strip() else None
+        updates_made.append(f"changed_position:{old_position}->{profile.position if profile.position else 'cleared'}")
 
     if hasattr(profile, "bio") and bio is not None:
         old_bio = profile.bio
-        profile.bio = bio if bio else None
-        updates_made.append(f"changed_bio:{old_bio}->{bio if bio else 'cleared'}")
+        profile.bio = bio.strip() if bio and bio.strip() else None
+        updates_made.append(f"changed_bio:{old_bio}->{profile.bio if profile.bio else 'cleared'}")
 
     if hasattr(profile, "languages") and languages is not None:
         old_languages = profile.languages
-        profile.languages = languages if languages else None
-        updates_made.append(f"changed_languages:{old_languages}->{languages if languages else 'cleared'}")
+        profile.languages = languages.strip() if languages and languages.strip() else None
+        updates_made.append(f"changed_languages:{old_languages}->{profile.languages if profile.languages else 'cleared'}")
 
     if timezone:
         user.timezone = timezone
