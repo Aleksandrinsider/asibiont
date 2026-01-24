@@ -1902,7 +1902,8 @@ async def delete_task_handler(request):
 
     from ai_integration import delete_task
     try:
-        result = await delete_task(task_id=task_id, user_id=user_id)
+        # Передаём confirmed=True, поскольку пользователь уже подтвердил удаление в UI
+        result = await delete_task(task_id=task_id, user_id=user_id, confirmed=True)
         logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:

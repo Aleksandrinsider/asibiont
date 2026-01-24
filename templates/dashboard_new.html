@@ -3939,8 +3939,9 @@
                     
                     showNotification('Задача удалена', 'success');
                     
-                    // Обновить чат для получения ответа агента
-                    await updateChat();
+                    // НЕ вызываем updateChat() - это может вернуть удаленные задачи
+                    // Обновим только счетчик задач
+                    updateTasksCounter();
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
@@ -3948,6 +3949,15 @@
             } catch (error) {
                 console.error('Error deleting task:', error);
                 showNotification('Ошибка при удалении задачи', 'error');
+            }
+        }
+        
+        function updateTasksCounter() {
+            // Обновляем счетчик задач в статистике
+            const totalCountElement = document.getElementById('total-count');
+            if (totalCountElement && allTasksData) {
+                const activeTasksCount = allTasksData.filter(t => t.status !== 'completed').length;
+                totalCountElement.textContent = activeTasksCount;
             }
         }
 
