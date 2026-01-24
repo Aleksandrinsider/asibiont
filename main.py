@@ -5206,25 +5206,25 @@ async def api_profile_handler(request):
                     profile = UserProfile(user_id=user.id)
                     session_db.add(profile)
 
-                # Update profile fields (фильтруем пустые строки и пробелы)
-                if 'city' in data and data['city'] and data['city'].strip():
-                    profile.city = data['city'].strip()
-                if 'birthdate' in data and data['birthdate'] and data['birthdate'].strip():
-                    profile.birthdate = data['birthdate'].strip()
-                if 'zodiac_sign' in data and data['zodiac_sign'] and data['zodiac_sign'].strip():
-                    profile.zodiac_sign = data['zodiac_sign'].strip()
-                if 'company' in data and data['company'] and data['company'].strip():
-                    profile.company = data['company'].strip()
-                if 'position' in data and data['position'] and data['position'].strip():
-                    profile.position = data['position'].strip()
-                if 'interests' in data and data['interests'] and data['interests'].strip():
-                    profile.interests = data['interests'].strip()
-                if 'skills' in data and data['skills'] and data['skills'].strip():
-                    profile.skills = data['skills'].strip()
-                if 'goals' in data and data['goals'] and data['goals'].strip():
-                    profile.goals = data['goals'].strip()
-                if 'bio' in data and data['bio'] and data['bio'].strip():
-                    profile.bio = data['bio'].strip()
+                # Update profile fields (пустые строки удаляют данные)
+                if 'city' in data:
+                    profile.city = data['city'].strip() if data['city'] and data['city'].strip() else None
+                if 'birthdate' in data:
+                    profile.birthdate = data['birthdate'].strip() if data['birthdate'] and data['birthdate'].strip() else None
+                if 'zodiac_sign' in data:
+                    profile.zodiac_sign = data['zodiac_sign'].strip() if data['zodiac_sign'] and data['zodiac_sign'].strip() else None
+                if 'company' in data:
+                    profile.company = data['company'].strip() if data['company'] and data['company'].strip() else None
+                if 'position' in data:
+                    profile.position = data['position'].strip() if data['position'] and data['position'].strip() else None
+                if 'interests' in data:
+                    profile.interests = data['interests'].strip() if data['interests'] and data['interests'].strip() else None
+                if 'skills' in data:
+                    profile.skills = data['skills'].strip() if data['skills'] and data['skills'].strip() else None
+                if 'goals' in data:
+                    profile.goals = data['goals'].strip() if data['goals'] and data['goals'].strip() else None
+                if 'bio' in data:
+                    profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
 
                 session_db.commit()
                 logger.info(f"[API PROFILE POST] Profile updated for user {user_id}")

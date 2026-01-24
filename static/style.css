@@ -301,7 +301,7 @@ body {
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
     gap: 4px;
     overflow: visible;
-    align-items: stretch; /* Stretch columns to equal height */
+    align-items: start; /* Align columns to top */
     width: 100%;
     margin-top: 15px;
     padding: 0;
@@ -322,6 +322,7 @@ body {
     gap: 0;
     overflow: auto;
     height: 100%;
+    max-height: calc(100vh - var(--header-height) - 31px); /* Prevent expansion */
     padding: 12px;
     min-height: 0;
     margin-top: 0;
@@ -337,6 +338,7 @@ body {
 /* Ensure right column also stretches to full height */
 .right-column {
     height: 100%;
+    max-height: calc(100vh - var(--header-height) - 31px);
 }
 
 /* Context section for profile - fixed size when expanded */
@@ -410,7 +412,7 @@ body {
     gap: 0;
     padding: 12px;
     overflow: hidden;
-    max-height: 100%;
+    max-height: calc(100vh - var(--header-height) - 31px); /* Prevent expansion */
     min-height: 0;
     -webkit-overflow-scrolling: touch;
     margin-top: 0;
