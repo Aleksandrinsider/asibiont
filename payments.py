@@ -1,8 +1,18 @@
 from yookassa import Configuration, Payment
-from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_WEBHOOK_URL, WEB_APP_URL
+from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_WEBHOOK_URL, WEB_APP_URL, LOCAL
+import logging
 
-print(f"Yookassa config: SHOP_ID={YOOKASSA_SHOP_ID}, SECRET_KEY starts with {YOOKASSA_SECRET_KEY[:10] if YOOKASSA_SECRET_KEY else 'None'}...")
-Configuration.configure(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
+logger = logging.getLogger(__name__)
+
+# Validate Yookassa configuration
+if YOOKASSA_SHOP_ID and YOOKASSA_SECRET_KEY:
+    logger.info(f"Yookassa config: SHOP_ID={YOOKASSA_SHOP_ID}, SECRET_KEY configured")
+    Configuration.configure(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
+else:
+    if not LOCAL:
+        logger.error("Yookassa credentials not configured in production mode")
+    else:
+        logger.warning("Yookassa credentials not configured (local mode)")
 
 # Pricing for subscription tiers (RUB/month)
 TIER_PRICES = {
@@ -26,6 +36,10 @@ def create_payment(amount, description, user_id, tier='bronze'):
         user_id: User ID for metadata
         tier: Subscription tier (bronze, silver, gold)
     """
+    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+        logger.error("Cannot create payment: Yookassa credentials not configured")
+        raise ValueError("Payment system not configured")
+    
     try:
         payment = Payment.create({
             "amount": {
@@ -45,7 +59,7 @@ def create_payment(amount, description, user_id, tier='bronze'):
         })
         return payment.confirmation.confirmation_url
     except Exception as e:
-        print(f"Yookassa error: {e}")
+        logger.error(f"Yookassa error: {e}")
         raise
 
 def get_tier_price(tier):

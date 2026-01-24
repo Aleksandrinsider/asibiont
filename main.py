@@ -390,9 +390,6 @@ try:
                 session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
             session.commit()
 
-            # Commit the column additions
-            session.commit()
-
         session.close()
         logger.info("Migration session closed successfully")
     except Exception as e:

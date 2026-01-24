@@ -34,6 +34,11 @@ def transcribe_audio_sync(audio_file_path):
 
     wav_path = None
     try:
+        # Проверяем существование файла
+        if not os.path.exists(audio_file_path):
+            logging.error(f"Audio file not found: {audio_file_path}")
+            return None
+        
         # Конвертируем OGG в WAV для SpeechRecognition
         audio = AudioSegment.from_ogg(audio_file_path)
         wav_path = audio_file_path.replace('.ogg', '.wav')

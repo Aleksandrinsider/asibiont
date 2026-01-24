@@ -32,6 +32,9 @@ def check_subscription(user_id):
                 # end_date is offset-aware
                 return sub.end_date > now
         return False
+    except Exception as e:
+        logger.error(f"Error checking subscription for user {user_id}: {e}")
+        return False
     finally:
         session.close()
 
@@ -50,6 +53,10 @@ def cancel_subscription(user_id):
             sub.status = 'cancelled'
             session.commit()
             return True
+        return False
+    except Exception as e:
+        logger.error(f"Error cancelling subscription for user {user_id}: {e}")
+        session.rollback()
         return False
     finally:
         session.close()
@@ -107,6 +114,7 @@ def activate_subscription(user_id, plan='monthly', tier='bronze'):
                 logger.info(f"💾 Subscription activation logged: user={user.username}, tier={tier}")
             except Exception as e:
                 logger.error(f"❌ Failed to log subscription activation: {e}")
+                session.rollback()
             
             return True, f"Подписка обновлена до {sub.end_date.strftime('%d.%m.%Y')}"
         else:
@@ -144,10 +152,11 @@ def activate_subscription(user_id, plan='monthly', tier='bronze'):
                 logger.info(f"💾 New subscription logged: user={user.username}, tier={tier}")
             except Exception as e:
                 logger.error(f"❌ Failed to log new subscription: {e}")
+                session.rollback()
             
             return True, f"Подписка активирована до {end_date.strftime('%d.%m.%Y')}"
-            
     except Exception as e:
+        logger.error(f"Error activating subscription for user {user_id}: {e}")
         session.rollback()
         return False, f"Ошибка активации подписки: {str(e)}"
     finally:
