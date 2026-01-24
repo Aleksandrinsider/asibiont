@@ -295,13 +295,11 @@ body {
 
 
 .main-layout {
-    display: grid;
-    grid-template-columns: 1fr 1.5fr 1fr; /* Column ratio 1:1.5:1 */
-    grid-auto-rows: 1fr; /* Make them equal height */
+    display: flex;
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
     gap: 4px;
     overflow: visible;
-    align-items: start; /* Align columns to top */
+    align-items: stretch;
     width: 100%;
     margin-top: 15px;
     padding: 0;
@@ -322,7 +320,6 @@ body {
     gap: 0;
     overflow: auto;
     height: 100%;
-    max-height: calc(100vh - var(--header-height) - 31px); /* Prevent expansion */
     padding: 12px;
     min-height: 0;
     margin-top: 0;
@@ -333,12 +330,12 @@ body {
     font-weight: 400;
     letter-spacing: normal;
     color: #374151;
+    flex: 1.02;
 }
 
 /* Ensure right column also stretches to full height */
 .right-column {
     height: 100%;
-    max-height: calc(100vh - var(--header-height) - 31px);
 }
 
 /* Context section for profile - fixed size when expanded */
@@ -412,7 +409,6 @@ body {
     gap: 0;
     padding: 12px;
     overflow: hidden;
-    max-height: calc(100vh - var(--header-height) - 31px); /* Prevent expansion */
     min-height: 0;
     -webkit-overflow-scrolling: touch;
     margin-top: 0;
@@ -423,6 +419,7 @@ body {
     font-weight: 400;
     letter-spacing: normal;
     color: #374151;
+    flex: 1;
 }
 
 /* Chat section should fill available space */
