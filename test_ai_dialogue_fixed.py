@@ -109,7 +109,7 @@ async def run_dialogue_test():
     session.commit()
 
     conversation_history = []
-    num_turns = 10  # Количество раундов диалога
+    num_turns = 20  # Полный тест на 20 итераций для проверки всех возможностей
 
     # Первое сообщение от пользователя
     user_message = "привет, как дела?"

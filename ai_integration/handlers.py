@@ -22,6 +22,22 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     if user_id is None:
         logger.error(f"[ADD_TASK] ERROR: user_id is None! Cannot create task without user_id")
         return "ERROR: user_id is required but was None"
+    
+    # УМНОЕ СОКРАЩЕНИЕ НАЗВАНИЯ: если слишком длинное, пытаемся извлечь суть
+    original_title = title
+    word_count = len(title.split())
+    if len(title) > 60 or word_count > 10:
+        logger.warning(f"[ADD_TASK] Title too long ({len(title)} chars, {word_count} words), attempting smart extraction")
+        # Попытка извлечь ключевые слова (простая эвристика)
+        # Убираем стоп-слова и берём первые 5 значимых слов
+        stop_words = ['нужно', 'надо', 'необходимо', 'давай', 'создай', 'добавь', 'напомни', 'поставь', 'я', 'мне', 'для', 'чтобы', 'как']
+        words = [w for w in title.split() if w.lower() not in stop_words and len(w) > 2]
+        if len(words) > 5:
+            title = ' '.join(words[:5])
+            logger.info(f"[ADD_TASK] Title shortened: '{original_title}' -> '{title}'")
+        else:
+            title = ' '.join(words)
+            logger.info(f"[ADD_TASK] Title cleaned: '{original_title}' -> '{title}'")
 
     if session is None:
         session = Session()
@@ -243,9 +259,17 @@ def delete_all_tasks(user_id=None, session=None):
         return f"Ошибка удаления задач: {str(e)}"
 
 
-async def complete_task(task_id=None, task_title=None, user_id=None, session=None):
-    """Mark task as completed"""
-    logger.info(f"[COMPLETE_TASK] Called with task_id={task_id}, user_id={user_id}")
+async def complete_task(task_id=None, task_title=None, completion_note=None, user_id=None, session=None):
+    """Mark task as completed
+    
+    Args:
+        task_id: ID задачи
+        task_title: Название задачи (если нет ID)
+        completion_note: Заметка о результате выполнения
+        user_id: ID пользователя
+        session: Сессия БД
+    """
+    logger.info(f"[COMPLETE_TASK] Called with task_id={task_id}, completion_note='{completion_note}', user_id={user_id}")
     
     if user_id is None:
         logger.error("[COMPLETE_TASK] user_id is None")
@@ -318,6 +342,12 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
         
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
+        
+        # Сохраняем заметку о результате выполнения
+        if completion_note:
+            task.completion_notes = encrypt_data(completion_note)
+            logger.info(f"[COMPLETE_TASK] Saved completion note for task {task.id}")
+        
         session.commit()
 
         # Schedule result check - уточнение результата выполнения через 1 час
