@@ -725,12 +725,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 natural_responses.append(result_text)
 
             elif "NEED_TIME_FOR_TASK:" in result_text:
-                # AI должен спросить о времени для задачи - создаем понятный вопрос
+                # AI должен спросить о времени для задачи - передаем контекст для естественного ответа
                 if ":" in result_text:
                     task_title = result_text.split(":", 1)[1].strip()
-                    natural_responses.append(f"На какое время поставить задачу '{task_title}'?")
+                    natural_responses.append(f"НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ: {task_title}")
                 else:
-                    natural_responses.append("На какое время поставить задачу?")
+                    natural_responses.append("НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ: неизвестная задача")
 
             else:
                 # Для неизвестных результатов передаем как есть
@@ -779,6 +779,17 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 else:
                     ai_context = "Профиль обновлен."
                     fallback_message = "Профиль обновлен."
+            elif any("НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ:" in r for r in natural_responses):
+                # Специальная обработка для запроса времени
+                time_responses = [r for r in natural_responses if "НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ:" in r]
+                for tr in time_responses:
+                    if ":" in tr:
+                        task_title = tr.split(":", 1)[1].strip()
+                        ai_context = tr  # Передаем маркер AI для естественной генерации
+                        fallback_message = f"Во сколько поставить задачу '{task_title}'?"  # Fallback на случай если AI не сгенерирует ответ
+                    else:
+                        ai_context = "НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ: неизвестная задача"
+                        fallback_message = "Во сколько поставить задачу?"
             elif any("TASK_ACCEPTED" in r for r in natural_responses):
                 # Обработка принятия делегированной задачи
                 task_accepted_responses = [r for r in natural_responses if "TASK_ACCEPTED" in r]
@@ -857,10 +868,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
       - Если задача на завтра - комментируй планирование
       - Если задача через 5 минут - дай быстрые советы
    
-   в) ПЕРСОНАЛИЗАЦИЯ:
-      - Используй данные профиля (интересы, навыки, цели)
-      - Упомяни релевантные детали: если задача про AI и у пользователя интерес к AI
-      - Учти историю взаимодействий
+   в) СПЕЦИАЛЬНЫЕ СИТУАЦИИ:
+      - Если результат содержит "НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ: [название]", спроси у пользователя удобное время естественным образом
+      - Пример: вместо "На какое время поставить задачу?", скажи "Во сколько тебе удобно забрать сына с баскетбола?" или "Когда планируешь забрать ребенка?"
+      - Адаптируй вопрос под контекст задачи и стиль общения
 
 3. ДЛИНА И СТРУКТУРА:
    - 3-5 предложений для создания/изменения задач

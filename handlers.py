@@ -539,23 +539,29 @@ async def complete_task_callback(callback: CallbackQuery):
         task_id = int(callback.data.split("_")[1])
         user_id = callback.from_user.id
         
-        # Завершаем задачу через AI handler
-        from ai_integration import complete_task
-        result = await complete_task(task_id=task_id, user_id=user_id)
+        # Завершаем задачу напрямую в БД без AI обработки
+        from models import Session, Task
+        from datetime import datetime
         
-        # Отвечаем пользователю
-        if "уже выполнена" in result:
-            await callback.answer("✅ Задача уже была выполнена", show_alert=True)
-        elif "выполнена" in result or "завершена" in result:
-            await callback.answer("✅ Задача отмечена как выполненная!", show_alert=True)
-        else:
-            await callback.answer("❌ Задача не найдена", show_alert=True)
-        
-        # Обновляем сообщение, убирая кнопки
-        await callback.message.edit_text(
-            callback.message.text + "\n\n✅ Отмечена как выполненная",
-            reply_markup=None
-        )
+        db_session = Session()
+        try:
+            task = db_session.query(Task).filter_by(id=task_id).first()
+            if task and task.user.telegram_id == user_id:
+                task.status = 'completed'
+                task.actual_completion_time = datetime.now()
+                db_session.commit()
+                
+                await callback.answer("✅ Задача выполнена!", show_alert=False)
+                
+                # Обновляем сообщение, убирая кнопки
+                await callback.message.edit_text(
+                    callback.message.text + "\n\n✅ Выполнено",
+                    reply_markup=None
+                )
+            else:
+                await callback.answer("❌ Задача не найдена", show_alert=True)
+        finally:
+            db_session.close()
         
     except Exception as e:
         logger.error(f"Error in complete_task_callback: {e}")
