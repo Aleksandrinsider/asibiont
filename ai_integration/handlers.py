@@ -401,10 +401,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     # Для делегированных задач добавляем дополнительный запрос
                     result += f" Это также поможет @{delegator.username} оценить качество выполненной работы."
 
-        # Save to interaction history
-        interaction = Interaction(user_id=user.id, message_type="ai", content=result)
-        session.add(interaction)
-        session.commit()
+        # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:
         result = "Задача не найдена."
 
@@ -473,10 +470,7 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
             session.commit()
         result = f"Задача '{task.title}' отмечена как пропущенная."
 
-        # Save to interaction history
-        interaction = Interaction(user_id=user.id, message_type="ai", content=result)
-        session.add(interaction)
-        session.commit()
+        # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:
         result = "Задача не найдена."
 
@@ -548,10 +542,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
 
         result = f"Задача '{task.title}' восстановлена в работу."
 
-        # Save to interaction history
-        interaction = Interaction(user_id=user.id, message_type="ai", content=result)
-        session.add(interaction)
-        session.commit()
+        # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:
         result = "Задача не найдена."
 
@@ -609,10 +600,7 @@ async def reschedule_task(task_id=None, new_date=None, user_id=None, session=Non
 
             result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
 
-            # Save to interaction history
-            interaction = Interaction(user_id=user.id, message_type="ai", content=result)
-            session.add(interaction)
-            session.commit()
+            # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
         except ValueError as e:
             result = f"Ошибка формата даты: {e}. Используйте формат YYYY-MM-DD или YYYY-MM-DD HH:MM."
     else:
@@ -679,10 +667,7 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
             advice = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=500))
             result = f"Совет по задаче '{title}':\n\n{advice}"
 
-            # Save to interaction history
-            interaction = Interaction(user_id=user.id, message_type="ai", content=result)
-            session.add(interaction)
-            session.commit()
+            # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
         except Exception as e:
             logger.error(f"Error getting AI advice: {e}")
             result = f"Не удалось получить совет по задаче '{title}'. Попробуйте позже."
@@ -2746,10 +2731,7 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
         else:
             result = f"Задача '{task_title}' удалена. Понял, что причина: {deletion_reason}."
 
-        # Save to interaction history
-        interaction = Interaction(user_id=user.id, message_type="ai", content=result)
-        session.add(interaction)
-        session.commit()
+        # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:
         result = "Задача не найдена."
 
