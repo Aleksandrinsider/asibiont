@@ -494,6 +494,37 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
         task.status = "skipped"
         session.commit()
 
+        # Отменяем все запланированные джобы для этой задачи
+        try:
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE and REMINDER_SERVICE.scheduler:
+                # Отменяем напоминание
+                reminder_job_id = f"reminder_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
+                    logger.info(f"[SKIP_TASK] Cancelled reminder job for task {task.id}")
+                
+                # Отменяем проверку результата
+                result_check_job_id = f"result_check_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
+                    logger.info(f"[SKIP_TASK] Cancelled result check job for task {task.id}")
+                
+                # Отменяем чекпоинты задач
+                for checkpoint_type in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
+                    checkpoint_job_id = f"task_overdue_{task.id}_{checkpoint_type}_{user.telegram_id}"
+                    if REMINDER_SERVICE.scheduler.get_job(checkpoint_job_id):
+                        REMINDER_SERVICE.scheduler.remove_job(checkpoint_job_id)
+                        logger.info(f"[SKIP_TASK] Cancelled checkpoint job {checkpoint_type} for task {task.id}")
+                
+                # Отменяем чекпоинт 1/3
+                checkpoint_1_3_job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
+                if REMINDER_SERVICE.scheduler.get_job(checkpoint_1_3_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(checkpoint_1_3_job_id)
+                    logger.info(f"[SKIP_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
+        except Exception as e:
+            logger.warning(f"[SKIP_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
+
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
@@ -1264,6 +1295,37 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
         task.delegation_status = "rejected"
         task.status = "rejected"
         session.commit()
+
+        # Отменяем все запланированные джобы для этой задачи
+        try:
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE and REMINDER_SERVICE.scheduler:
+                # Отменяем напоминание
+                reminder_job_id = f"reminder_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
+                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled reminder job for task {task.id}")
+                
+                # Отменяем проверку результата
+                result_check_job_id = f"result_check_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
+                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled result check job for task {task.id}")
+                
+                # Отменяем чекпоинты задач
+                for checkpoint_type in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
+                    checkpoint_job_id = f"task_overdue_{task.id}_{checkpoint_type}_{user.telegram_id}"
+                    if REMINDER_SERVICE.scheduler.get_job(checkpoint_job_id):
+                        REMINDER_SERVICE.scheduler.remove_job(checkpoint_job_id)
+                        logger.info(f"[REJECT_DELEGATED_TASK] Cancelled checkpoint job {checkpoint_type} for task {task.id}")
+                
+                # Отменяем чекпоинт 1/3
+                checkpoint_1_3_job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
+                if REMINDER_SERVICE.scheduler.get_job(checkpoint_1_3_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(checkpoint_1_3_job_id)
+                    logger.info(f"[REJECT_DELEGATED_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
+        except Exception as e:
+            logger.warning(f"[REJECT_DELEGATED_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
 
         # Notify delegator
         try:
