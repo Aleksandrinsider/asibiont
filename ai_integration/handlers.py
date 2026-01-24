@@ -1575,6 +1575,7 @@ def list_tasks(user_id=None, session=None, include_completed=False):
             result += "Ваши задачи:\n"
             for task in tasks_to_show:
                 reminder_info = ""
+                status_marker = ""
                 if task.reminder_time:
                     try:
                         reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
@@ -1582,18 +1583,20 @@ def list_tasks(user_id=None, session=None, include_completed=False):
                             delta = now - reminder_dt
                             days = delta.days
                             hours = (delta.seconds // 3600)
+                            status_marker = " [ПРОСРОЧЕНО]"
                             if days > 0:
                                 reminder_info = f" - просрочено на {days} д {hours} ч" if hours else f" - просрочено на {days} д"
                             else:
                                 reminder_info = f" - просрочено на {hours} ч"
                         else:
+                            status_marker = " [АКТУАЛЬНО]"
                             # Добавляем часовой пояс к времени для ясности
                             tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
                             reminder_info = f" - {reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
                     except Exception as e:
                         logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
                         pass
-                result += f"- {task.title}{reminder_info}\n"
+                result += f"- {task.title}{status_marker}{reminder_info}\n"
 
             if len(my_tasks) > 10:
                 result += f"...и ещё {len(my_tasks) - 10}\n"
