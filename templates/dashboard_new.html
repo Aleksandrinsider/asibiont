@@ -1739,22 +1739,25 @@
                     displayedMessageIds.add(`temp-user-${tempId}`);
                     displayedMessageIds.add(`temp-ai-${tempId}`);
                     
-                    // Синхронизируем с БД через 1 секунду
+                    // Синхронизируем с БД через 1 секунду и загружаем новые сообщения
                     setTimeout(async () => {
                         try {
                             const syncResponse = await fetch('/api/interactions', { credentials: 'include' });
                             if (syncResponse.ok) {
                                 const syncData = await syncResponse.json();
-                                // Обновляем счетчик и добавляем ID в displayedMessageIds
                                 if (syncData.interactions) {
-                                    lastMessageCount = syncData.interactions.length;
-                                    // Очищаем временные ID
-                                    displayedMessageIds.delete(`temp-user-${tempId}`);
-                                    displayedMessageIds.delete(`temp-ai-${tempId}`);
-                                    // Добавляем реальные ID
-                                    syncData.interactions.forEach(interaction => {
+                                    // Находим новые сообщения (которых нет в displayedMessageIds)
+                                    const newInteractions = syncData.interactions.filter(interaction => 
+                                        !displayedMessageIds.has(interaction.id)
+                                    );
+                                    
+                                    // Добавляем только новые сообщения в чат
+                                    newInteractions.forEach(interaction => {
+                                        addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                         displayedMessageIds.add(interaction.id);
                                     });
+                                    
+                                    lastMessageCount = syncData.interactions.length;
                                 }
                             }
                         } catch (e) {
@@ -3229,6 +3232,47 @@
             }
         }
 
+        // Функция для проверки новых сообщений
+        async function checkForNewMessages() {
+            try {
+                const response = await fetch('/api/interactions', {
+                    credentials: 'include',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.interactions && data.interactions.length > lastMessageCount) {
+                        // Есть новые сообщения
+                        const newInteractions = data.interactions.slice(lastMessageCount);
+                        newInteractions.forEach((interaction) => {
+                            const msgId = interaction.id;
+                            if (!displayedMessageIds.has(msgId)) {
+                                addMessage(interaction.content, interaction.message_type, interaction.created_at);
+                                displayedMessageIds.add(msgId);
+                            }
+                        });
+                        lastMessageCount = data.interactions.length;
+                        
+                        // Прокрутить чат вниз, если пользователь внизу
+                        const messages = document.getElementById('chat-messages');
+                        if (messages) {
+                            const isNearBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 100;
+                            if (isNearBottom) {
+                                setTimeout(() => messages.scrollTop = messages.scrollHeight, 100);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking for new messages:', error);
+            }
+        }
+
         // Initialize task groups on load
         {% if tasks %}
         const initialTasks = {{ tasks|tojson }};
@@ -4630,6 +4674,20 @@
                     updateTasks();
                 }
             }, 10000);
+            
+            // Проверять новые сообщения каждые 30 секунд
+            setInterval(() => {
+                if (currentView === 'chat') {
+                    checkForNewMessages();
+                }
+            }, 30000);
+            
+            // Проверять новые сообщения при фокусе окна
+            window.addEventListener('focus', () => {
+                if (currentView === 'chat') {
+                    checkForNewMessages();
+                }
+            });
         });
         
         // Функция обновления времени в шапке
