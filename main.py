@@ -4184,24 +4184,34 @@ async def get_feed_handler(request):
                 try:
                     import json
                     favorite_data = json.loads(user_profile.favorite_contacts)
+                    logger.info(f"Feed: favorite_data from profile: {favorite_data}")
                     # favorite_contacts может содержать как ID, так и usernames
                     for item in favorite_data:
                         if isinstance(item, int):
                             # Это user_id
                             favorite_user_ids.append(item)
+                            logger.info(f"Feed: Added favorite user_id: {item}")
                         elif isinstance(item, str):
                             # Это username - найти user_id
+                            username_clean = item.replace('@', '')
                             fav_user = session_db.query(User).filter(
                                 or_(
                                     User.username == item,
-                                    User.username == item.replace('@', '')
+                                    User.username == username_clean
                                 )
                             ).first()
                             if fav_user:
                                 favorite_user_ids.append(fav_user.id)
+                                logger.info(f"Feed: Found favorite username '{item}' -> user_id {fav_user.id}")
+                            else:
+                                logger.warning(f"Feed: Favorite username '{item}' not found in database")
                 except Exception as e:
                     logger.error(f"Error parsing favorite_contacts: {e}")
                     favorite_user_ids = []
+            
+            logger.info(f"Feed: final favorite_user_ids: {favorite_user_ids}")
+
+            logger.info(f"Feed: final favorite_user_ids: {favorite_user_ids}")
 
             # Get users who blocked current user (exclude their posts)
             blocked_by_users = set()
@@ -4218,8 +4228,12 @@ async def get_feed_handler(request):
                 except:
                     pass
 
+            logger.info(f"Feed: blocked_by_users: {blocked_by_users}")
+
             # Include own posts too, but exclude users who blocked current user
             all_user_ids = [uid for uid in (favorite_user_ids + [user.id]) if uid not in blocked_by_users]
+            
+            logger.info(f"Feed: all_user_ids for feed (favorites + self - blocked): {all_user_ids}")
 
             # Get posts from favorites and self
             if all_user_ids:
@@ -4227,6 +4241,9 @@ async def get_feed_handler(request):
                     Post.user_id.in_(all_user_ids)
                 ).order_by(Post.created_at.desc()).limit(20).all()
                 logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
+                for post in posts:
+                    post_author = session_db.query(User).filter_by(id=post.user_id).first()
+                    logger.info(f"Feed post: ID={post.id}, author={post_author.username if post_author else 'unknown'} (user_id={post.user_id}), content={post.content[:30]}...")
             else:
                 posts = []
                 logger.info("No favorite contacts found, returning empty feed")
