@@ -4323,17 +4323,23 @@
 
             try {
                 const profileData = {};
-                if (city) profileData.city = city;
-                if (interests) profileData.interests = interests;
+                // Всегда отправляем все поля, даже если они пустые (для удаления)
+                profileData.city = city;
+                profileData.interests = interests;
+                profileData.skills = skills;
+                profileData.goals = goals;
+                profileData.company = company;
+                profileData.position = position;
+                
                 if (birthdate) {
                     profileData.birthdate = birthdate;
                     const zodiac = calculateZodiacSign(birthdate);
                     if (zodiac) profileData.zodiac_sign = zodiac;
+                } else {
+                    profileData.birthdate = '';
+                    profileData.zodiac_sign = '';
                 }
-                if (company) profileData.company = company;
-                if (position) profileData.position = position;
-                if (skills) profileData.skills = skills;
-                if (goals) profileData.goals = goals;
+                
                 const response = await fetch('/api/profile', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
