@@ -346,8 +346,8 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
                 ) / profile.completed_tasks
             session.commit()
         
-        # Возвращаем обычное сообщение
-        result = f"Задача '{task.title}' завершена."
+        # Возвращаем сообщение с флагом для AI чтобы спросил о результате
+        result = f"TASK_COMPLETED_ASK_RESULT: Задача '{task.title}' завершена."
 
         # Если задача была делегирована этому пользователю, отправляем отчет делегировавшему
         if task.delegated_to_username and task.delegation_status == "accepted":
@@ -1388,7 +1388,7 @@ def edit_task(
                     session.close()
                 return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM или 'через X минут'."
         session.commit()
-        result = f"Задача '{task.title}' обновлена."
+        result = f"TASK_UPDATED: Задача '{task.title}' обновлена."
     else:
         result = "Задача не найдена."
 
@@ -2682,9 +2682,9 @@ async def delete_task(task_id=None, task_title=None, user_id=None, session=None,
             profile.total_tasks_created = (profile.total_tasks_created or 0) - 1  # Decrement created tasks when deleting
             session.commit()
 
-        # Возвращаем обычное сообщение
+        # Возвращаем ответ с флагом для AI
         if not deletion_reason:
-            result = f"Задача '{task_title}' удалена."
+            result = f"TASK_DELETED_ASK_REASON: Задача '{task_title}' удалена."
         else:
             result = f"Задача '{task_title}' удалена. Понял, что причина: {deletion_reason}."
 

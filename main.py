@@ -1867,6 +1867,24 @@ async def complete_task_handler(request):
     try:
         result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} completed by user {user_id}: {result}")
+        
+        # Если результат содержит флаг, обработаем через AI и отправим в Telegram
+        if result.startswith('TASK_COMPLETED_ASK_RESULT:') or result.startswith('TASK_UPDATED:') or result.startswith('TASK_DELETED_ASK_REASON:'):
+            try:
+                from ai_integration.chat import chat_with_ai
+                from models import Session as DBSession
+                db_session = DBSession()
+                # Обработка через AI для генерации естественного ответа
+                ai_response = await chat_with_ai(result, user_id=user_id, db_session=db_session)
+                db_session.close()
+                
+                # Отправляем AI ответ в Telegram если бот доступен
+                if 'bot' in request.app and ai_response:
+                    await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
+                    logger.info(f"Sent AI response to Telegram user {user_id}")
+            except Exception as ai_error:
+                logger.error(f"Error processing result through AI: {ai_error}")
+        
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error completing task {task_id}: {e}")
@@ -1934,6 +1952,24 @@ async def delete_task_handler(request):
         # Передаём confirmed=True, поскольку пользователь уже подтвердил удаление в UI
         result = await delete_task(task_id=task_id, user_id=user_id, confirmed=True)
         logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
+        
+        # Если результат содержит флаг, обработаем через AI и отправим в Telegram
+        if result.startswith('TASK_COMPLETED_ASK_RESULT:') or result.startswith('TASK_UPDATED:') or result.startswith('TASK_DELETED_ASK_REASON:'):
+            try:
+                from ai_integration.chat import chat_with_ai
+                from models import Session as DBSession
+                db_session = DBSession()
+                # Обработка через AI для генерации естественного ответа
+                ai_response = await chat_with_ai(result, user_id=user_id, db_session=db_session)
+                db_session.close()
+                
+                # Отправляем AI ответ в Telegram если бот доступен
+                if 'bot' in request.app and ai_response:
+                    await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
+                    logger.info(f"Sent AI response to Telegram user {user_id}")
+            except Exception as ai_error:
+                logger.error(f"Error processing result through AI: {ai_error}")
+        
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error deleting task {task_id}: {e}")
