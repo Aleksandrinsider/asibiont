@@ -259,16 +259,16 @@
                             if (partner.photo_url) {
                                 const imgId = 'img-elite-' + (partner.telegram_id || partner.contact_info);
                                 html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
+                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
                                 html += '</div>';
                             } else {
-                                html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
+                                html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
                             }
                             
                             html += '<div style="flex: 1;">';
                             
                             // Имя пользователя с Gold цветом
-                            html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span></div>';
+                            html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span></div>';
                             
                             // Город
                             if (partner.city) {
@@ -4864,7 +4864,7 @@
                                     html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
@@ -4886,7 +4886,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -4984,7 +4984,7 @@
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
                                     html += '<li class="task-item contact-delegating-to-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_to_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
@@ -5006,7 +5006,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5103,7 +5103,7 @@
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
                                     html += '<li class="task-item contact-delegating-by-me' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="delegating_by_me"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const canAccess = partner.can_access !== false;
-                                    const clickHandler = canAccess ? `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"` : '';
+                                    const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     
                                     if (partner.photo_url) {
@@ -5124,7 +5124,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5222,7 +5222,7 @@
                                     const tierAttr = partner.subscription_tier ? ` data-tier="${partner.subscription_tier.toLowerCase()}"` : '';
                                     html += '<li class="task-item contact-favorite" data-username="' + contactInfoEscaped + '" data-type="favorite"' + tierAttr + ' style="display: flex; margin-bottom: 8px; align-items: center;">';
                                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                                    const clickHandler = `onclick="openContactProfileModal(${JSON.stringify(partner.contact_info)}, true)"`;
+                                    const clickHandler = `onclick="openContactProfileModal('${contactInfoEscaped}', true)"`;
                                     const cursorStyle = 'cursor: pointer;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                                     
@@ -5238,7 +5238,7 @@
                                     
                                     // Username
                                     let nameStyle = 'cursor: pointer; color: #068487;';
-                                    html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(' + JSON.stringify(partner.contact_info) + ')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
+                                    html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     
                                     // Task count if available
                                     if (partner.task_count) {
