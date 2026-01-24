@@ -880,6 +880,60 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
     # Clean message from mentions for processing
     clean_message = re.sub(r"@[\w]+", "", message).strip()
 
+    # БЫСТРАЯ ОБРАБОТКА КОРОТКИХ КОМАНД (до AI)
+    # Если пользователь написал просто "Выполнена", "Готово", "Сделано" - завершаем последнюю активную задачу
+    short_complete_commands = ["выполнена", "готово", "сделано", "выполнено", "done", "completed"]
+    if clean_message.lower().strip() in short_complete_commands and user_id:
+        logger.info(f"[SHORT_COMMAND] Detected completion command: '{clean_message}' for user {user_id}")
+        
+        # Находим последнюю активную задачу пользователя (по времени reminder_time)
+        try:
+            from models import Task
+            from sqlalchemy import or_, and_
+            
+            # Получаем все активные задачи пользователя, отсортированные по времени напоминания
+            active_task = (
+                db_session.query(Task)
+                .filter(
+                    or_(
+                        and_(Task.user_id == user.id, Task.status == "pending"),
+                        and_(
+                            Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
+                            Task.delegation_status == "accepted",
+                            Task.status == "pending"
+                        )
+                    )
+                )
+                .order_by(Task.reminder_time.asc())  # Берем задачу с ближайшим временем
+                .first()
+            )
+            
+            if active_task:
+                logger.info(f"[SHORT_COMMAND] Found active task: {active_task.title} (id={active_task.id})")
+                # Вызываем complete_task напрямую
+                from ai_integration.handlers import complete_task
+                result = await complete_task(task_id=active_task.id, user_id=user_id, session=db_session)
+                
+                # Добавляем ответ AI в контекст
+                conversation_context.append({
+                    'role': 'assistant',
+                    'content': result,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+                user.conversation_context = json.dumps(conversation_context)
+                db_session.commit()
+                
+                if close_session:
+                    db_session.close()
+                    
+                return result
+            else:
+                logger.info(f"[SHORT_COMMAND] No active tasks found for user {user_id}")
+                # Нет активных задач - передаем в AI для обработки
+        except Exception as e:
+            logger.error(f"[SHORT_COMMAND] Error processing completion command: {e}")
+            # При ошибке передаем в AI
+
     # ОБРАБОТКА СОСТОЯНИЙ РАЗГОВОРА
     if conversation_state == 'waiting_for_task_time' and pending_task_data:
         # Пользователь отвечает на вопрос о времени для задачи
