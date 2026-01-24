@@ -1689,7 +1689,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Пост-обработка
         print(f"[DEBUG FINAL] Before post_process: '{final_content[:50] if final_content else 'None'}...'")
-        final_content = post_process_response(final_content, user_id, session_db)
+        final_content = post_process_response(final_content, user_id, db_session)
         print(f"[DEBUG FINAL] After post_process: '{final_content[:50] if final_content else 'None'}...'")
 
         # Финальная проверка
@@ -2092,7 +2092,7 @@ async def generate_proactive_message(user_id):
                     content = clean_technical_details(content)
 
                     # Пост-обработка как в обычных ответах
-                    content = post_process_response(content, user_id, session)
+                    content = post_process_response(content, user_id, db_session)
 
                     logger.info(f"[PROACTIVE] Generated dynamic message: {content[:100]}...")
                     return content
