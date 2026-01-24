@@ -224,13 +224,21 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 # Проверяем, есть ли уже похожая задача (по заголовку)
                 is_duplicate = False
                 if existing_tasks:
+                    from difflib import SequenceMatcher
                     for line in existing_tasks.split('\n'):
-                        # Простая проверка вхождения названия задачи в существующие
-                        if task_title.lower() in line.lower() and ('В работе' in line or 'Ожидает' in line):
-                            logger.warning(f"[ADD TASK] DUPLICATE DETECTED - similar task already exists: {line[:80]}")
-                            tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Похожая задача уже существует - {line[:100]}"})
-                            is_duplicate = True
-                            break
+                        # Извлекаем название задачи из строки (до даты/времени)
+                        if '📌' in line or '✅' in line:
+                            # Формат: "📌 Название задачи (DD.MM.YYYY HH:MM)"
+                            parts = line.split('(')
+                            if len(parts) > 0:
+                                existing_title = parts[0].replace('📌', '').replace('✅', '').strip()
+                                # Fuzzy match: проверяем схожесть названий (>0.87 = очень похожи)
+                                similarity = SequenceMatcher(None, task_title.lower(), existing_title.lower()).ratio()
+                                if similarity > 0.87 and ('В работе' in line or 'Ожидает' in line):
+                                    logger.warning(f"[ADD TASK] DUPLICATE DETECTED - similar task (similarity={similarity:.2f}): '{existing_title}' vs '{task_title}'")
+                                    tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Похожая задача уже существует - '{existing_title}'"})
+                                    is_duplicate = True
+                                    break
                 
                 if is_duplicate:
                     continue
