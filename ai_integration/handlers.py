@@ -342,14 +342,9 @@ async def complete_task(task_id=None, task_title=None, user_id=None, session=Non
                     (prev_avg * (profile.completed_tasks - 1)) + completion_time
                 ) / profile.completed_tasks
             session.commit()
-        # Генерируем ТОЛЬКО AI сообщение без системного префикса
-        try:
-            from ai_integration.chat import generate_result_check
-            result = await generate_result_check(user.telegram_id, task.title)
-        except Exception as e:
-            logging.warning(f"Could not generate result check text: {e}")
-            # Краткое подтверждение без лишнего текста
-            result = f"✓ Задача '{task.title}' завершена"
+        
+        # Возвращаем специальное сообщение для AI, чтобы он ОБЯЗАТЕЛЬНО спросил о результатах
+        result = f"✓ Задача '{task.title}' завершена. ОБЯЗАТЕЛЬНО СПРОСИ У ПОЛЬЗОВАТЕЛЯ: 'Как прошло? Какой результат получил?' или 'Расскажи подробнее, как все прошло?' - НЕ давай советов до получения ответа!"
 
         # Если задача была делегирована этому пользователю, отправляем отчет делегировавшему
         if task.delegated_to_username and task.delegation_status == "accepted":
