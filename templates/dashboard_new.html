@@ -4886,9 +4886,13 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        // Display first_name before username
-                                        let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
+                                        // Display first_name and username separately like in news feed
+                                        html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
+                                        if (partner.first_name) {
+                                            html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
+                                        }
+                                        html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
+                                        html += '</div>';
                                     } else {
                                         const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5008,9 +5012,13 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        // Display first_name before username
-                                        let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
+                                        // Display first_name and username separately like in news feed
+                                        html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
+                                        if (partner.first_name) {
+                                            html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
+                                        }
+                                        html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
+                                        html += '</div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5128,9 +5136,13 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        // Display first_name before username
-                                        let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
-                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
+                                        // Display first_name and username separately like in news feed
+                                        html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
+                                        if (partner.first_name) {
+                                            html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
+                                        }
+                                        html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
+                                        html += '</div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5242,11 +5254,14 @@
                                     }
                                     html += '<div style="flex: 1;">';
                                     
-                                    // Username
+                                    // Username - display first_name and username separately like in news feed
                                     let nameStyle = 'cursor: pointer; color: #068487;';
-                                    // Display first_name before username
-                                    let displayName = partner.first_name ? (partner.first_name + ' @' + contactInfoHtml) : ('@' + contactInfoHtml);
-                                    html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">' + displayName + '</span></div>';
+                                    html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
+                                    if (partner.first_name) {
+                                        html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
+                                    }
+                                    html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
+                                    html += '</div>';
                                     
                                     // Task count if available
                                     if (partner.task_count) {
@@ -5363,9 +5378,13 @@
                                     html += '</div>';
                                     
                                     html += '<div style="flex: 1;">';
-                                    // Display first_name before username
-                                    let displayName = (blockedPartner && blockedPartner.first_name) ? (blockedPartner.first_name + ' @' + username) : ('@' + username);
-                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">' + displayName + '</span></div>';
+                                    // Display first_name and username separately like in news feed
+                                    html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
+                                    if (blockedPartner && blockedPartner.first_name) {
+                                        html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + blockedPartner.first_name + '</span>';
+                                    }
+                                    html += '<span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span>';
+                                    html += '</div>';
                                     
                                     // Город
                                     if (blockedPartner && blockedPartner.city) {
