@@ -947,44 +947,81 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             parsed_time = parse_natural_time(clean_message, current_time)
             if not parsed_time:
                 # Если не получилось, пробуем относительное время (через 2 часа)
-            parsed_time = parse_relative_time(clean_message, current_time)
-        if parsed_time:
-            # Создаем задачу с распознанным временем
-            try:
-                task_data = pending_task_data
-                result = add_task(
-                    title=task_data.get('title', 'Задача'),
-                    description=task_data.get('description', ''),
-                    reminder_time=parsed_time.strftime('%Y-%m-%d %H:%M'),
-                    user_id=user_id,
-                    session=db_session
-                )
-                
-                # Сбрасываем состояние
-                user.conversation_state = 'normal'
-                user.pending_task_data = None
-                db_session.commit()
-                
-                # Добавляем ответ AI в контекст
-                conversation_context.append({
-                    'role': 'assistant',
-                    'content': result,
-                    'timestamp': datetime.now(timezone.utc).isoformat()
-                })
-                user.conversation_context = json.dumps(conversation_context)
-                db_session.commit()
-                
-                return result
-            except Exception as e:
-                logger.error(f"Failed to create task from pending data: {e}")
-                user.conversation_state = 'normal'
-                user.pending_task_data = None
-                db_session.commit()
-                return "Извините, не удалось создать задачу. Попробуйте еще раз."
-        else:
-            # Время не распознано, просим уточнить
-            return "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'."
+                parsed_time = parse_relative_time(clean_message, current_time)
+            
+            if parsed_time:
+                # Создаем задачу с распознанным временем
+                try:
+                    task_data = pending_task_data
+                    result = add_task(
+                        title=task_data.get('title', 'Задача'),
+                        description=task_data.get('description', ''),
+                        reminder_time=parsed_time.strftime('%Y-%m-%d %H:%M'),
+                        user_id=user_id,
+                        session=db_session
+                    )
+                    
+                    # Сбрасываем состояние
+                    user.conversation_state = 'normal'
+                    user.pending_task_data = None
+                    db_session.commit()
+                    
+                    # Добавляем ответ AI в контекст
+                    conversation_context.append({
+                        'role': 'assistant',
+                        'content': result,
+                        'timestamp': datetime.now(timezone.utc).isoformat()
+                    })
+                    user.conversation_context = json.dumps(conversation_context)
+                    db_session.commit()
+                    
+                    return result
+                except Exception as e:
+                    logger.error(f"Failed to create task from pending data: {e}")
+                    user.conversation_state = 'normal'
+                    user.pending_task_data = None
+                    db_session.commit()
+                    return "Извините, не удалось создать задачу. Попробуйте еще раз."
+            else:
+                # Время не распознано, просим уточнить
+                return "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'."
 
+    context_len = (
+        len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
+    )
+    logger.info(
+        f"chat_with_ai called with message: {clean_message[:50]}..., mentions: {mentions_str}, context len: {context_len}, user_id: {user_id}, file: {file_content is not None}")
+    logger.info(f"DEEPSEEK_API_KEY present: {bool(DEEPSEEK_API_KEY)}")
+
+    if not DEEPSEEK_API_KEY:
+        logger.warning("DEEPSEEK_API_KEY not set")
+        return "API ключ DeepSeek не настроен. Обратитесь к администратору для настройки."
+
+    try:
+        logger.info("Starting chat_with_ai processing")
+        # Get user memory and all tasks for extended context
+        user_memory = ""
+        user = None
+        profile = None
+        session = None
+        subscription_tier = None
+        # Initialize time variables with defaults
+        base_now = datetime.now(pytz.UTC)
+        user_now = base_now
+        # Формат времени С ТАЙМЗОНОЙ для промпта: "15:43 (UTC)"
+        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+        months = [
+            'января',
+            'февраля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'августа',
+            'сентября',
+            'октября',
+            'ноября',
             'декабря']
         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
         user_username = "user"
