@@ -1555,7 +1555,9 @@ def list_tasks(user_id=None, session=None):
                             else:
                                 reminder_info = f" - просрочено на {hours} ч"
                         else:
-                            reminder_info = f" - {reminder_dt.strftime('%d.%m.%Y %H:%M')}"
+                            # Добавляем часовой пояс к времени для ясности
+                            tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
+                            reminder_info = f" - {reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
                     except Exception as e:
                         logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
                         pass

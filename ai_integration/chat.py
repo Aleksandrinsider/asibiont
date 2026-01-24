@@ -1330,8 +1330,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     Task.user_id == user.id
                 ).order_by(Task.created_at.desc()).first()
                 if last_task:
-                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={last_task.id}, название='{last_task.title}', время='{last_task.reminder_time or ''}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={last_task.id}, ...)!"
-                    logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: ID={last_task.id}, title={last_task.title}")
+                    # Конвертируем время в часовой пояс пользователя
+                    task_time_str = ''
+                    if last_task.reminder_time:
+                        try:
+                            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                            reminder_dt = last_task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                            tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
+                            task_time_str = f"{reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
+                        except Exception:
+                            task_time_str = str(last_task.reminder_time)
+                    
+                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={last_task.id}, название='{last_task.title}', время='{task_time_str}'. ЕСЛИ пользователь даёт уточнения (я ошибся, не завтра а сегодня, изменить время и т.д.), ОБЯЗАТЕЛЬНО используй edit_task(task_id={last_task.id}, ...)!"
+                    logger.info(f"[LAST_TASK_CONTEXT] Loaded for user {user_id}: ID={last_task.id}, title={last_task.title}, time={task_time_str}")
             except Exception as e:
                 logger.error(f"Error loading last_task from DB: {e}")
 
