@@ -58,11 +58,8 @@ YOOKASSA_WEBHOOK_URL = os.getenv("YOOKASSA_WEBHOOK_URL")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID")
 YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY")
 
-# Security
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
-if not ENCRYPTION_KEY:
-    raise ValueError("ENCRYPTION_KEY is required")
-
+# Security - no encryption needed (backward compatibility)
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "dummy_key_not_used")  # Legacy compatibility
 SESSION_SECRET = os.getenv("SESSION_SECRET")
 if not SESSION_SECRET:
     raise ValueError("SESSION_SECRET is required for production")

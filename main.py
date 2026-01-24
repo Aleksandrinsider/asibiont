@@ -3352,34 +3352,7 @@ async def api_elite_partners_handler(request):
 
             # Sort: first by same city, then by rating
             user_city = user_profile.city.lower() if user_profile.city else None
-            
-            def normalize_city(city):
-                if not city:
-                    return None
-                city = city.lower().strip()
-                city_map = {
-                    'москва': 'moscow', 'санкт-петербург': 'saint petersburg',
-                    'петербург': 'saint petersburg', 'спб': 'saint petersburg',
-                    'екатеринбург': 'yekaterinburg', 'новосибирск': 'novosibirsk', 'казань': 'kazan'
-                }
-                return city_map.get(city, city)
-
             normalized_user_city = normalize_city(user_city)
-
-            def sort_key(partner):
-                partner_city = normalize_city(partner.get('city', ''))
-                same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
-                rating = partner.get('average_rating', 0) or 0
-                if rating >= 5:
-                    rating_group = 0
-                    rating_value = -rating
-                elif rating == 0:
-                    rating_group = 1
-                    rating_value = 0
-                else:
-                    rating_group = 2
-                    rating_value = -rating
-                return (same_city, rating_group, rating_value)
 
             partners_data.sort(key=sort_key)
 

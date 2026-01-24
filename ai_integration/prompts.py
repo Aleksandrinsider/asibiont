@@ -262,21 +262,6 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 """
 
 
-def replace_placeholders(content, user_now=None, current_time_str=None):
-    """Replace placeholders in content"""
-    if not content:
-        return content
-    
-    if user_now:
-        content = content.replace("{{current_time}}", user_now.strftime('%H:%M'))
-        content = content.replace("{{current_date}}", user_now.strftime('%d.%m.%Y'))
-    
-    if current_time_str:
-        content = content.replace("{{current_time}}", current_time_str)
-    
-    return content
-
-
 def get_optimized_system_prompt():
     """Get minimal system prompt for performance"""
     return "Ты - ASI Biont, AI-помощник для управления задачами. Отвечай кратко."

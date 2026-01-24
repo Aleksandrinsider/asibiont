@@ -1082,15 +1082,7 @@ async def _suggest_alternatives_async(task_id, reason="", user_id=None):
         session.close()
 
 
-def create_subscription_payment(user_id=None):
-    """Create subscription payment"""
-    from subscription_service import create_subscription_payment as create_sub_payment
 
-    try:
-        payment_url = create_sub_payment(user_id)
-        return f"Ссылка на оплату месячной подписки создана: {payment_url}"
-    except Exception as e:
-        return f"Ошибка создания платежа: {str(e)}"
 
 
 def check_subscription_status(user_id=None):
@@ -1118,18 +1110,7 @@ def check_subscription_status(user_id=None):
         return f"Ошибка проверки подписки: {str(e)}"
 
 
-def cancel_subscription(user_id=None):
-    """Cancel subscription"""
-    from subscription_service import cancel_subscription as cancel_sub
 
-    try:
-        success = cancel_sub(user_id)
-        if success:
-            return "Подписка успешно отменена."
-        else:
-            return "Подписка не найдена или уже отменена."
-    except Exception as e:
-        return f"Ошибка отмены подписки: {str(e)}"
 
 
 def accept_delegated_task(task_id, user_id=None):
@@ -2682,3 +2663,28 @@ def update_user_memory(info=None, user_id=None, session=None):
         if should_close and 'session' in locals():
             session.close()
         return f"Ошибка при обновлении памяти: {str(e)}"
+
+
+def create_subscription_payment(user_id=None):
+    """Create subscription payment"""
+    from subscription_service import create_subscription_payment as create_sub_payment
+
+    try:
+        payment_url = create_sub_payment(user_id)
+        return f"Ссылка на оплату месячной подписки создана: {payment_url}"
+    except Exception as e:
+        return f"Ошибка создания платежа: {str(e)}"
+
+
+def cancel_subscription(user_id=None):
+    """Cancel subscription"""
+    from subscription_service import cancel_subscription as cancel_sub
+
+    try:
+        success = cancel_sub(user_id)
+        if success:
+            return "Подписка успешно отменена."
+        else:
+            return "Подписка не найдена или уже отменена."
+    except Exception as e:
+        return f"Ошибка отмены подписки: {str(e)}"

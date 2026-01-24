@@ -110,6 +110,7 @@ delete_task = handlers.delete_task
 edit_task = handlers.edit_task
 check_subscription_status = handlers.check_subscription_status
 create_subscription_payment = handlers.create_subscription_payment
+cancel_subscription = handlers.cancel_subscription
 brainstorm_ideas = handlers.brainstorm_ideas
 enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list

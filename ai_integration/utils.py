@@ -5,16 +5,13 @@ import pytz
 from models import Session, User, UserProfile, Task, Interaction
 from config import (
     DEEPSEEK_API_KEY,
-    DEEPSEEK_MODEL,
-    ENCRYPTION_KEY
+    DEEPSEEK_MODEL
 )
-from cryptography.fernet import Fernet, InvalidToken
 import json
 import requests
 import hashlib
 
 logger = logging.getLogger(__name__)
-cipher = Fernet(ENCRYPTION_KEY.encode())
 
 
 def analyze_interaction_for_profile_update(user_id, message, ai_response):
@@ -252,26 +249,6 @@ def smart_fallback_handler(message, mentions_str, user_id, ai_response_content="
     ai_confidence = 0.8  # AI уже проанализировал запрос
 
     return fallback_actions
-
-
-def encrypt_data(data):
-    if data:
-        return cipher.encrypt(data.encode()).decode()
-    return data
-
-
-def decrypt_data(data):
-    if data is None:
-        return None
-    if not isinstance(data, str):
-        raise ValueError("Data must be a string")
-    if data:
-        try:
-            return cipher.decrypt(data.encode()).decode()
-        except InvalidToken:
-            # If decryption fails, assume it's plain text (for backward compatibility)
-            return data
-    return data
 
 
 def determine_timezone_from_time(user_time_str, user_id):

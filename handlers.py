@@ -501,39 +501,6 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
         return f"Ошибка при обновлении профиля: {str(e)}"
 
 
-def update_user_memory(info=None, user_id=None, session=None):
-    """Обновить память пользователя"""
-    try:
-        if not session:
-            session = Session()
-            should_close = True
-        else:
-            should_close = False
-
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if should_close:
-                session.close()
-            return "Пользователь не найден"
-
-        # Зашифровать и сохранить информацию
-        from ai_integration.utils import encrypt_data
-        encrypted_info = encrypt_data(info)
-        user.memory = encrypted_info
-        session.commit()
-
-        if should_close:
-            session.close()
-
-        return "Память пользователя обновлена"
-
-    except Exception as e:
-        logger.error(f"Error updating user memory for user {user_id}: {e}")
-        if should_close and 'session' in locals():
-            session.close()
-        return f"Ошибка при обновлении памяти: {str(e)}"
-
-
 @router.message(Command("dashboard"))
 async def dashboard_handler(message: Message):
     user_id = message.from_user.id

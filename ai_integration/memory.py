@@ -1,33 +1,18 @@
-# Memory management functions: encryption/decryption
+# Memory management functions: no encryption
 
 import logging
-from cryptography.fernet import Fernet, InvalidToken
-from config import ENCRYPTION_KEY
 
-# Initialize cipher
-cipher = Fernet(ENCRYPTION_KEY.encode())
 logger = logging.getLogger(__name__)
 
 
 def encrypt_data(data):
-    """Encrypt user data"""
-    if data:
-        return cipher.encrypt(data.encode()).decode()
+    """Return data as is (no encryption)"""
     return data
 
 
 def decrypt_data(data):
-    """Decrypt user data with backward compatibility"""
-    if data is None:
-        return None
-    if not isinstance(data, str):
-        raise ValueError("Data must be a string")
-    if data:
-        try:
-            return cipher.decrypt(data.encode()).decode()
-        except InvalidToken:
-            # If decryption fails, assume it's plain text (for backward compatibility)
-            return data
+    """Return data as is (no decryption)"""
+    return data
     return data
 
 
