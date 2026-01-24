@@ -1690,7 +1690,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Пост-обработка
         print(f"[DEBUG FINAL] Before post_process: '{final_content[:50] if final_content else 'None'}...'")
         final_content = post_process_response(final_content, user_id, session_db)
-        print(f"[DEBUG FINAL] After post_process: '{final_content[:50] if final_content else 'None'}...'"))
+        print(f"[DEBUG FINAL] After post_process: '{final_content[:50] if final_content else 'None'}...'")
 
         # Финальная проверка
         if not final_content or len(final_content.strip()) < 5:

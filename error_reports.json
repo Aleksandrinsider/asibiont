@@ -1,0 +1,160 @@
+{
+  "timestamp": "2026-01-24T03:59:45.492909",
+  "total_errors": 2,
+  "critical_count": 1,
+  "high_count": 1,
+  "errors": [
+    {
+      "type": "syntax_error",
+      "message": "CRITICAL: SyntaxError: invalid syntax",
+      "timestamp": "2026-01-24T12:04:00",
+      "severity": "CRITICAL",
+      "auto_fix": false,
+      "match_groups": [
+        "invalid syntax"
+      ],
+      "raw_log": {
+        "message": "CRITICAL: SyntaxError: invalid syntax",
+        "timestamp": "2026-01-24T12:04:00"
+      }
+    },
+    {
+      "type": "import_error",
+      "message": "ERROR: ImportError: No module named \"missing_package\"",
+      "timestamp": "2026-01-24T12:05:00",
+      "severity": "HIGH",
+      "auto_fix": true,
+      "match_groups": [
+        "No module named \"missing_package\""
+      ],
+      "raw_log": {
+        "message": "ERROR: ImportError: No module named \"missing_package\"",
+        "timestamp": "2026-01-24T12:05:00"
+      }
+    }
+  ]
+}
+---
+{
+  "timestamp": "2026-01-24T04:00:05.347919",
+  "total_errors": 2,
+  "critical_count": 1,
+  "high_count": 1,
+  "errors": [
+    {
+      "type": "syntax_error",
+      "message": "CRITICAL: SyntaxError: invalid syntax",
+      "timestamp": "2026-01-24T12:04:00",
+      "severity": "CRITICAL",
+      "auto_fix": false,
+      "match_groups": [
+        "invalid syntax"
+      ],
+      "raw_log": {
+        "message": "CRITICAL: SyntaxError: invalid syntax",
+        "timestamp": "2026-01-24T12:04:00"
+      }
+    },
+    {
+      "type": "import_error",
+      "message": "ERROR: ImportError: No module named \"missing_package\"",
+      "timestamp": "2026-01-24T12:05:00",
+      "severity": "HIGH",
+      "auto_fix": true,
+      "match_groups": [
+        "No module named \"missing_package\""
+      ],
+      "raw_log": {
+        "message": "ERROR: ImportError: No module named \"missing_package\"",
+        "timestamp": "2026-01-24T12:05:00"
+      }
+    }
+  ]
+}
+---
+{
+  "timestamp": "2026-01-24T04:02:32.762853",
+  "total_errors": 5,
+  "critical_count": 1,
+  "high_count": 2,
+  "errors": [
+    {
+      "type": "missing_parameter",
+      "message": "ERROR: post_process_response() missing 1 required positional argument: 'user_id'",
+      "timestamp": "2026-01-24T04:00:05",
+      "severity": "HIGH",
+      "auto_fix": true,
+      "match_groups": [
+        "post_process_response",
+        "user_id"
+      ],
+      "raw_log": {
+        "timestamp": "2026-01-24T04:00:05",
+        "level": "ERROR",
+        "message": "post_process_response() missing 1 required positional argument: 'user_id'"
+      }
+    },
+    {
+      "type": "key_error",
+      "message": "ERROR: KeyError: 'session_data'",
+      "timestamp": "2026-01-24T04:00:15",
+      "severity": "MEDIUM",
+      "auto_fix": false,
+      "match_groups": [
+        "session_data"
+      ],
+      "raw_log": {
+        "timestamp": "2026-01-24T04:00:15",
+        "level": "ERROR",
+        "message": "KeyError: 'session_data'"
+      }
+    },
+    {
+      "type": "attribute_error",
+      "message": "ERROR: AttributeError: 'NoneType' object has no attribute 'get'",
+      "timestamp": "2026-01-24T04:00:25",
+      "severity": "MEDIUM",
+      "auto_fix": false,
+      "match_groups": [
+        "NoneType",
+        "get"
+      ],
+      "raw_log": {
+        "timestamp": "2026-01-24T04:00:25",
+        "level": "ERROR",
+        "message": "AttributeError: 'NoneType' object has no attribute 'get'"
+      }
+    },
+    {
+      "type": "syntax_error",
+      "message": "CRITICAL: SyntaxError: unexpected EOF while parsing",
+      "timestamp": "2026-01-24T04:00:30",
+      "severity": "CRITICAL",
+      "auto_fix": false,
+      "match_groups": [
+        "unexpected EOF while parsing"
+      ],
+      "raw_log": {
+        "timestamp": "2026-01-24T04:00:30",
+        "level": "CRITICAL",
+        "message": "SyntaxError: unexpected EOF while parsing"
+      }
+    },
+    {
+      "type": "import_error",
+      "message": "ERROR: ImportError: No module named 'requests'",
+      "timestamp": "2026-01-24T04:00:35",
+      "severity": "HIGH",
+      "auto_fix": true,
+      "match_groups": [
+        "No module named 'requests'"
+      ],
+      "raw_log": {
+        "timestamp": "2026-01-24T04:00:35",
+        "level": "ERROR",
+        "message": "ImportError: No module named 'requests'"
+      }
+    }
+  ]
+}
+---
