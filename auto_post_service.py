@@ -121,14 +121,55 @@ async def generate_progress_post(user_id, session):
 - "Ничего не успел сегодня, зато придумал план на завтра! Иногда планирование важнее суеты. Согласны?"
 """
         
-        post_content = await chat_with_ai(prompt, user_id=user_id, db_session=session)
+        # Use direct AI call without task management context
+        import requests
+        from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+        
+        try:
+            response = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": DEEPSEEK_MODEL,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Ты пишешь короткие посты от первого лица для ленты новостей. Стиль неформальный, используешь эмодзи. БЕЗ технических вопросов, БЕЗ упоминания времени, только контент поста."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 200
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                post_content = result['choices'][0]['message']['content'].strip()
+            else:
+                logger.error(f"DeepSeek API error: {response.status_code}")
+                post_content = None
+                
+        except Exception as api_error:
+            logger.error(f"Error calling DeepSeek API: {api_error}")
+            post_content = None
         
         # Clean up AI response
         if post_content:
             # Remove any system messages or markers
             post_content = post_content.strip()
+            # Remove questions about time/tasks
+            if "На какое время" in post_content or "поставить задачу" in post_content:
+                post_content = None
             # Limit length
-            if len(post_content) > 300:
+            elif len(post_content) > 300:
                 post_content = post_content[:297] + "..."
         
         return post_content
