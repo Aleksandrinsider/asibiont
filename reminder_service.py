@@ -226,21 +226,9 @@ class ReminderService:
             if self.bot:
                 logger.info(f"Attempting to send result check via Telegram to chat_id {user_id}...")
                 try:
-                    # Создаем inline-клавиатуру для проверки результата 
-                    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [
-                            InlineKeyboardButton(text="✅ Задача была выполнена", callback_data=f"confirm_done_{task_id}")
-                        ],
-                        [
-                            InlineKeyboardButton(text="❌ Не успел выполнить", callback_data=f"mark_incomplete_{task_id}")
-                        ]
-                    ])
-                    
                     result = await self.bot.send_message(
                         chat_id=user_id,
-                        text=result_text,
-                        reply_markup=keyboard
+                        text=result_text
                     )
                     logger.info(f"✅ Result check sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     result_check_sent_successfully = True
@@ -364,22 +352,9 @@ class ReminderService:
             if self.bot:
                 logger.info(f"Attempting to send reminder via Telegram to chat_id {user_id}...")
                 try:
-                    # Создаем inline-клавиатуру с кнопками управления задачей
-                    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [
-                            InlineKeyboardButton(text="✅ Выполнено", callback_data=f"complete_{task_id}"),
-                            InlineKeyboardButton(text="⏰ Через час", callback_data=f"skip_{task_id}")
-                        ],
-                        [
-                            InlineKeyboardButton(text="🗑️ Удалить", callback_data=f"delete_{task_id}")
-                        ]
-                    ])
-                    
                     result = await self.bot.send_message(
                         chat_id=user_id,
-                        text=reminder_text,
-                        reply_markup=keyboard
+                        text=reminder_text
                     )
                     logger.info(f"✅ Reminder sent successfully to user {user_id} for task {task_id}, message_id: {result.message_id}")
                     reminder_sent_successfully = True
