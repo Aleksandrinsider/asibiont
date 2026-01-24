@@ -1380,37 +1380,37 @@
                 </button>
             </div>
             <div class="rating-modal-body">
-                <p style="font-size: 13px; margin-bottom: 20px;">
+                <p style="font-size: 13px; color: #374151; margin-bottom: 20px;">
                     Заполните базовую информацию о себе, чтобы мы могли найти вам подходящие контакты.
                     Это займет всего минуту!
                 </p>
                 <form id="quick-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Дата рождения</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Дата рождения</label>
                         <input type="text" id="quick-birthdate" placeholder="ДД.ММ.ГГГГ (например: 15.03.1990)" maxlength="10" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Компания</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Компания</label>
                         <input type="text" id="quick-company" placeholder="Название компании" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Должность</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Должность</label>
                         <input type="text" id="quick-position" placeholder="Ваша должность" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Интересы</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы</label>
                         <input type="text" id="quick-interests" placeholder="Например: спорт, программирование, путешествия" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Навыки</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Навыки</label>
                         <input type="text" id="quick-skills" placeholder="Например: Python, менеджмент, дизайн" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">Цели</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Цели</label>
                         <textarea id="quick-goals" placeholder="Чего вы хотите достичь?" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; min-height: 60px; font-family: inherit; resize: vertical;"></textarea>
                     </div>
                 </form>
@@ -5006,10 +5006,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        const displayName = partner.first_name 
-                                            ? '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span> <span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>'
-                                            : '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
-                                        html += '<div class="task-title">' + displayName + '</div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5127,10 +5124,7 @@
                                         } else if (partner.subscription_tier === 'GOLD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
-                                        const displayName = partner.first_name 
-                                            ? '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span> <span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>'
-                                            : '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
-                                        html += '<div class="task-title">' + displayName + '</div>';
+                                        html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span></div>';
                                     } else {
                                         const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
@@ -5361,10 +5355,7 @@
                                     html += '</div>';
                                     
                                     html += '<div style="flex: 1;">';
-                                    const displayNameBlocked = (blockedPartner && blockedPartner.first_name)
-                                        ? '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + blockedPartner.first_name + '</span> <span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span>'
-                                        : '<span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span>';
-                                    html += '<div class="task-title">' + displayNameBlocked + '</div>';
+                                    html += '<div class="task-title"><span onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="cursor: pointer; color: #374151;">@' + username + '</span></div>';
                                     
                                     // Город
                                     if (blockedPartner && blockedPartner.city) {
