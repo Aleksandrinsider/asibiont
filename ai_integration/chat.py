@@ -601,6 +601,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         natural_responses.append(f"TASK_CREATED: {task_title}")
                 else:
                     natural_responses.append("TASK_CREATED: Новая задача")
+            
+            elif "DUPLICATE_TASK:" in result_text:
+                # Дубликат задачи - НЕ добавляем маркер, AI сам обработает
+                pass
 
             elif "Задача выполнена" in result_text or "отмечена как выполненная" in result_text:
                 natural_responses.append("Задача выполнена")
@@ -687,31 +691,17 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 natural_responses.append("Все задачи удалены")
 
             elif "TASK_DELETED_ASK_REASON:" in result_text:
-                # AI должен спросить о причине удаления
-                match = re.search(r"TASK_DELETED_ASK_REASON: Задача '([^']+)' удалена", result_text)
-                if match:
-                    task_title = match.group(1)
-                    natural_responses.append(f"TASK_DELETED_ASK_REASON: {task_title}")
-                else:
-                    natural_responses.append("TASK_DELETED_ASK_REASON")
+                # AI должен спросить о причине удаления - НЕ добавляем в natural_responses,
+                # это инструкция для AI, а не сообщение пользователю
+                pass
             
             elif "TASK_COMPLETED_ASK_RESULT:" in result_text:
-                # AI должен спросить о результате выполнения
-                match = re.search(r"TASK_COMPLETED_ASK_RESULT: Задача '([^']+)' завершена", result_text)
-                if match:
-                    task_title = match.group(1)
-                    natural_responses.append(f"TASK_COMPLETED_ASK_RESULT: {task_title}")
-                else:
-                    natural_responses.append("TASK_COMPLETED_ASK_RESULT")
+                # AI должен спросить о результате выполнения - НЕ добавляем в natural_responses
+                pass
             
             elif "TASK_UPDATED:" in result_text:
-                # AI должен прокомментировать изменение
-                match = re.search(r"TASK_UPDATED: Задача '([^']+)' обновлена", result_text)
-                if match:
-                    task_title = match.group(1)
-                    natural_responses.append(f"TASK_UPDATED: {task_title}")
-                else:
-                    natural_responses.append("TASK_UPDATED")
+                # AI должен прокомментировать изменение - НЕ добавляем в natural_responses
+                pass
 
             elif "Задача удалена" in result_text or "Задача.*удалена" in result_text:
                 natural_responses.append("Задача удалена")
@@ -740,6 +730,13 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
         # УПРОЩЕННАЯ ОБРАБОТКА: Формируем финальный контент на основе результатов
         if natural_responses:
+            # Формируем ДВА контента:
+            # 1. ai_context - для передачи AI (с маркерами и структурой)
+            # 2. fallback_message - для пользователя если AI не ответит (читаемый текст)
+            
+            ai_context = " | ".join(natural_responses)  # Для AI - со всеми маркерами
+            fallback_message = "Действие выполнено"  # Fallback для пользователя
+            
             # Специальная обработка для обновления профиля
             if any("PROFILE_UPDATED" in r for r in natural_responses):
                 profile_responses = [r for r in natural_responses if "PROFILE_UPDATED" in r]
@@ -769,21 +766,23 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     else:
                         details.append("профиль обновлен")
                 if details:
-                    final_content = f"Профиль обновлён — {', '.join(details)}."
+                    ai_context = f"Профиль обновлён — {', '.join(details)}."
+                    fallback_message = f"Профиль обновлён — {', '.join(details)}."
                 else:
-                    final_content = "Профиль обновлен."
+                    ai_context = "Профиль обновлен."
+                    fallback_message = "Профиль обновлен."
             elif any("TASK_ACCEPTED" in r for r in natural_responses):
                 # Обработка принятия делегированной задачи
                 task_accepted_responses = [r for r in natural_responses if "TASK_ACCEPTED" in r]
                 for tr in task_accepted_responses:
                     if ":" in tr:
                         task_title = tr.split(":", 1)[1].strip()
-                        final_content = f"TASK_ACCEPTED: {task_title}"
+                        ai_context = f"TASK_ACCEPTED: {task_title}"
+                        fallback_message = f"Задача '{task_title}' принята в работу"
                     else:
-                        final_content = "TASK_ACCEPTED"
-            else:
-                # ПРОСТАЯ ОБРАБОТКА: объединяем все результаты
-                final_content = " | ".join(natural_responses)
+                        ai_context = "TASK_ACCEPTED"
+                        fallback_message = "Задача принята в работу"
+            # Для других случаев ai_context уже установлен выше
 
             # Добавляем контекст профиля для list_tasks
             profile_context = ""
@@ -807,7 +806,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     logger.warning(f"Failed to get profile context: {e}")
 
             # ФОРМИРУЕМ КОНТЕКСТ ДЛЯ AI: результаты + профиль + инструкции
-            tool_context_msg = f"РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:\n{final_content}{profile_context}\n\nИНСТРУКЦИЯ: На основе результатов дай естественный, ПОЛЕЗНЫЙ ответ с конкретными советами:\n- Если создана задача - дай 1-2 практических совета как ее выполнить\n- Упомяни подходящее время суток и контекст\n- Персонализируй ответ используя данные профиля\n- Будь кратким но полезным (2-3 предложения)\n- Добавь эмоджи где уместно"
+            tool_context_msg = f"РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:\n{ai_context}{profile_context}\n\nИНСТРУКЦИЯ: На основе результатов дай естественный, ПОЛЕЗНЫЙ ответ с конкретными советами:\n- Если создана задача - дай 1-2 практических совета как ее выполнить\n- Упомяни подходящее время суток и контекст\n- Персонализируй ответ используя данные профиля\n- Будь кратким но полезным (2-3 предложения)\n- Добавь эмоджи где уместно"
 
             # Добавляем контекст в messages
             messages = [{"role": "system", "content": system_prompt}]
@@ -822,7 +821,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 "max_tokens": 1200  # Увеличено для полных ответов
             }
 
-            final_content = "Действие выполнено"  # Инициализация на случай ошибок
+            # Используем fallback_message в качестве значения по умолчанию
+            final_content = fallback_message
             max_retries = 2
             for attempt in range(max_retries):
                 try:
@@ -838,8 +838,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 except Exception as e:
                     logger.error(f"[AI NATURAL RESPONSE] Error: {e}")
                     if attempt == max_retries - 1:
-                        # Fallback: используем сырые результаты
-                        final_content = f"Действие выполнено успешно. {final_content}"
+                        # Fallback уже установлен выше (fallback_message)
+                        logger.warning(f"[AI NATURAL RESPONSE] Using fallback: {final_content}")
 
         else:
             # Нет результатов tool calls - обычная обработка
