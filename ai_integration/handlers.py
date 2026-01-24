@@ -1518,9 +1518,9 @@ def list_tasks(user_id=None, session=None, include_completed=False):
             # Показываем последние 20 выполненных задач
             for task in completed_tasks[-20:]:
                 completed_info = ""
-                if task.updated_at:
+                if task.actual_completion_time:
                     try:
-                        completed_dt = task.updated_at.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                        completed_dt = task.actual_completion_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                         completed_info = f" - выполнено {completed_dt.strftime('%d.%m.%Y %H:%M')}"
                     except Exception as e:
                         logger.warning(f"Failed to process completion time for task {task.id}: {e}")
