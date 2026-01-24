@@ -4424,13 +4424,17 @@
         let currentPartnersData = {}; // Store partner access info
         
         async function openContactProfileModal(username, canAccess = true) {
+            console.log('openContactProfileModal called:', {username, canAccess, type: typeof username});
+            
             // Check if this contact has restricted access
             if (!canAccess) {
+                console.log('Access denied, returning');
                 return; // Don't open modal for restricted contacts
             }
             
             // Remove @ symbol if present
             const cleanUsername = username.replace('@', '');
+            console.log('Clean username:', cleanUsername);
             
             currentProfileUsername = cleanUsername;
             const modal = document.getElementById('contact-profile-modal');
