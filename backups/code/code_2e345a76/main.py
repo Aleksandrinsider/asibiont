@@ -1161,7 +1161,7 @@ async def dashboard_handler(request):
             tasks = session_db.query(Task).filter(
                 or_(
                     Task.user_id == user.id,
-                    and_(Task.delegated_to_username.isnot(None), Task.delegated_to_username.ilike(user.username)) if user.username else False
+                    Task.delegated_to_username.ilike(user.username)
                 )
             ).all()
             logger.info(f"Found {len(tasks)} tasks for user {user.id} (telegram_id: {user.telegram_id})")
