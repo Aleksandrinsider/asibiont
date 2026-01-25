@@ -966,10 +966,13 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     return final_content
 
 
-async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None):
+async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     logger = logging.getLogger(__name__)
     logger.info(f"[CHAT_WITH_AI] Called with user_id={user_id}")
+
+    if user_id is None:
+        logger.error(f"[CHAT_WITH_AI] ERROR: user_id is None! This will cause issues with tool calls")
     
     if user_id is None:
         logger.error(f"[CHAT_WITH_AI] ERROR: user_id is None! This will cause issues with tool calls")
@@ -1064,6 +1067,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
+
     # Extract mentions before cleaning message
     mentions = re.findall(r"@[\w]+", message)
     mentions_str = ", ".join(mentions) if mentions else "нет"
@@ -1707,6 +1711,69 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Ограничиваем до 2 последних
         last_responses = last_responses[-2:]
 
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
+        is_system_message = (
+            original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and
+            'ASK_' not in original_message  # Исключаем сообщения, которые требуют вопросов
+        )
+
+        # Определяем тип сообщения для промпта
+        message_type_for_prompt = message_type or ('system' if is_system_message else None)
+
+        # ДОПОЛНИТЕЛЬНЫЙ КОНТЕКСТ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ
+        task_details_context = ""
+        if is_system_message and user_id:
+            try:
+                # Извлекаем информацию о задаче из сообщения
+                if "TASK_COMPLETED" in original_message and "ASK_" not in original_message:
+                    # Ищем завершенные задачи пользователя за последний час
+                    one_hour_ago = datetime.now(pytz.UTC) - timedelta(hours=1)
+                    recent_completed = db_session.query(Task).filter(
+                        Task.user_id == user.id,
+                        Task.status == "completed",
+                        Task.actual_completion_time >= one_hour_ago
+                    ).order_by(Task.actual_completion_time.desc()).first()
+
+                    if recent_completed:
+                        details = []
+                        if recent_completed.completion_notes:
+                            try:
+                                decrypted_notes = decrypt_data(recent_completed.completion_notes)
+                                if decrypted_notes and len(decrypted_notes.strip()) > 0:
+                                    # Берем первые 50 символов заметки
+                                    short_note = decrypted_notes.strip()[:50]
+                                    if len(decrypted_notes) > 50:
+                                        short_note += "..."
+                                    details.append(f"результат: {short_note}")
+                            except:
+                                pass
+
+                        if recent_completed.actual_completion_time and recent_completed.created_at:
+                            completion_duration = recent_completed.actual_completion_time - recent_completed.created_at.replace(tzinfo=pytz.UTC)
+                            hours = completion_duration.total_seconds() / 3600
+                            if hours < 1:
+                                minutes = int(completion_duration.total_seconds() / 60)
+                                details.append(f"выполнена за {minutes} мин")
+                            else:
+                                details.append(f"выполнена за {hours:.1f} ч")
+
+                        if details:
+                            task_details_context = f"\nДЕТАЛИ ЗАДАЧИ: {', '.join(details)}"
+
+                elif "TASK_DELETED" in original_message and "ASK_" not in original_message:
+                    # Ищем недавно удаленные задачи (со статусом deleted или просто удаленные)
+                    # Проверяем skipped_reason в последних взаимодействиях
+                    recent_deleted = db_session.query(Task).filter(
+                        Task.user_id == user.id,
+                        Task.status == "deleted"
+                    ).order_by(Task.created_at.desc()).first()
+
+                    if recent_deleted and recent_deleted.skipped_reason:
+                        task_details_context = f"\nПРИЧИНА УДАЛЕНИЯ: {recent_deleted.skipped_reason}"
+
+            except Exception as e:
+                logger.warning(f"[SYSTEM MESSAGE] Could not extract task details: {e}")
+
         system_prompt = get_extended_system_prompt(
             user_now,
             current_time_str,
@@ -1714,17 +1781,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             user_username,
             mentions_str,
             user_memory,
-            subscription_tier=subscription_tier)
+            subscription_tier=subscription_tier,
+            message_type=message_type_for_prompt)
         logger.info("[PROMPTS] Using extended prompt system")
 
-        # СПЕЦИАЛЬНЫЙ ПРОМПТ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ
-        if is_system_message:
-            system_prompt += "\n\nСПЕЦИАЛЬНЫЙ РЕЖИМ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ:\n"
-            system_prompt += "Это результат выполненного действия (удаление задачи, обновление и т.д.).\n"
-            system_prompt += "ДАЙ КРАТКИЙ ОТВЕТ: ✓ [подтверждение действия] + 1-2 предложения максимум.\n"
-            system_prompt += "НЕ добавляй советы, вопросы или продолжение диалога.\n"
-            system_prompt += "ПРИМЕР: '✓ Задача удалена.' или '✓ Время изменено на 15:00.'\n"
-            logger.info("[SYSTEM MESSAGE] Using special prompt for system message")
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
+        is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and 'ASK_' not in original_message and 'ASK_' not in original_message
 
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
@@ -1803,9 +1865,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task',
             'delegate_task', 'find_partners', 'update_profile', 'profile_info'
         ]
-
-        # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
-        is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:'))
 
         # Умная логика выбора инструментов на основе intent classification
         intent_type = intent.get('type', 'unknown')
@@ -2199,7 +2258,8 @@ async def generate_reminder(user_id, task_title, task_id=None):
             current_date_str,
             user_username,
             mentions_str,
-            user_memory)
+            user_memory,
+            message_type='reminder')
 
         system_prompt = base_prompt
 
@@ -2280,7 +2340,8 @@ async def generate_result_check(user_id, task_title):
             current_date_str,
             user_username,
             mentions_str,
-            user_memory)
+            user_memory,
+            message_type='result_check')
 
         system_prompt = base_prompt
 
@@ -2461,7 +2522,8 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             user_username,
             mentions_str,
             user_memory,
-            subscription_tier=subscription_tier)
+            subscription_tier=subscription_tier,
+            message_type='proactive')
         logger.info("[PROACTIVE] Using extended prompt system")
 
         # Создаем messages как в обычном чате, но с проактивным контекстом
@@ -2527,13 +2589,29 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
             "general": """ПРОАКТИВНОЕ СООБЩЕНИЕ: Общий проактивный контакт.
 
-СИТУАЦИЯ: Стандартное проактивное взаимодействие.
-ТОНАЛЬНОСТЬ: Дружелюбная, универсальная.
-ЗАДАЧА: Общая поддержка продуктивности на основе профиля.
-ФОРМАТ: 1-2 абзаца с персональными рекомендациями."""
+СИТУАЦИЯ: Стандартное проактивное взаимодействие без специального контекста.
+ТОНАЛЬНОСТЬ: Дружелюбная, полезная, конкретная.
+ЗАДАЧА: Дать персонализированный совет по продуктивности на основе профиля пользователя.
+ФОРМАТ: 1-2 абзаца с конкретными предложениями и вопросом в конце.
+
+ОБЯЗАТЕЛЬНО ВКЛЮЧИ:
+- Анализ профиля пользователя (навыки, интересы, цели)
+- Конкретные предложения действий (не просто "посмотрю задачи")
+- Вопрос для вовлечения пользователя
+
+ПРИМЕРЫ ПОЛЕЗНЫХ СОВЕТОВ:
+• "Учитывая твои навыки в [навык], предлагаю поработать над [конкретная задача]"
+• "Для достижения цели [цель] рекомендую начать с [конкретное действие]"
+• "В твоем городе [город] можно найти интересные возможности в [область]"
+• "Пора обновить профиль - добавить [конкретное поле] поможет в [польза]"
+
+НЕ ПИСАТЬ: "Я сейчас посмотрю твои задачи" или общие фразы без конкретных советов."""
         }
 
         # Выбираем подходящий промпт
+        # Убеждаемся, что context - строка
+        if isinstance(context, list):
+            context = "general"  # Если context - список, используем general
         selected_prompt = proactive_prompts.get(context, proactive_prompts["general"])
         
         # Добавляем информацию о задачах, если есть
@@ -2599,7 +2677,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         "few_tasks": f"Привет! У тебя сейчас {task_count} активные задачи - оптимальная загруженность! Может, есть что-то еще, что стоит добавить к планам, или нужна помощь с приоритизацией?",
                         "many_tasks": f"Привет! Вижу, что у тебя много дел ({task_count} задач). Возможно, стоит что-то делегировать или пересмотреть приоритеты? Могу помочь с организацией.",
                         "overdue_tasks": f"Привет! Обратил внимание, что есть {overdue_count} просроченных задач. Не переживай, давай вместе разберем их по приоритетам и составим план действий?",
-                        "general": "Привет! Как дела с задачами? Может, есть что-то, в чем я могу помочь - планирование, поиск контактов или просто обсуждение планов?"
+                        "general": "Привет! Учитывая твой профиль, могу предложить несколько конкретных идей для продуктивного дня. Например, поработать над развитием навыков или планированием целей. Есть ли что-то конкретное, над чем ты хочешь сосредоточиться сегодня?"
                     }
                     return fallback_messages.get(context, fallback_messages["general"])
 
@@ -2612,7 +2690,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             "few_tasks": f"Добрый день! Вижу у тебя {task_count} задач в работе. Как дела с выполнением? Нужна помощь с планированием?",
             "many_tasks": f"Добрый день! У тебя сейчас много задач ({task_count}). Может, стоит что-то делегировать или переосмыслить приоритеты?",
             "overdue_tasks": f"Добрый день! Есть {overdue_count} просроченных задач. Давай разберем их вместе и составим план восстановления?",
-            "general": "Добрый день! Учитывая твой профиль и текущие задачи, могу предложить несколько идей для продуктивного дня. Есть ли что-то конкретное, над чем ты работаешь сейчас?"
+            "general": "Добрый день! Учитывая твой профиль и текущие задачи, могу предложить несколько конкретных идей для продуктивного дня. Например, поработать над развитием навыков или планированием целей. Есть ли что-то конкретное, над чем ты хочешь сосредоточиться?"
         }
         return fallback_messages.get(context, fallback_messages["general"])
 
@@ -2651,7 +2729,7 @@ async def generate_daily_report(user_id):
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, message_type='daily_report')
 
         system_prompt = base_prompt
 
@@ -2757,16 +2835,9 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         user_username = "пользователь"
         mentions_str = ""
 
-        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory)
+        base_prompt = get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, message_type='overdue')
 
-        # УНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:
-        system_prompt = f"{base_prompt}\n\nУНИФИЦИРОВАННЫЕ ПРАВИЛА ДЛЯ ВСЕХ AI-СООБЩЕНИЙ:\n"
-        system_prompt += "Всегда заканчивай вопросом для продолжения диалога\n"
-        system_prompt += "Анализируй ситуацию и давай конкретные рекомендации\n"
-        system_prompt += "Будь персонализированным, используй информацию о пользователе\n"
-        system_prompt += "Демонстрируй ценность: показывай как экономишь время, предотвращаешь проблемы\n"
-        system_prompt += "2-4 предложения, живое общение как с другом\n"
-        system_prompt += "Если есть релевантная информация из памяти пользователя, используй её\n"
+        system_prompt = base_prompt
 
         # Адаптируем тон в зависимости от уровня эскалации
         if escalation_level == 1:

@@ -87,7 +87,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             if close_session:
                 session.close()
             logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
-            return "NEED_TIME: У каждой задачи должно быть время напоминания. Когда напомнить?"
+            return "⏰ У каждой задачи должно быть время напоминания. Когда напомнить?"
         
         task = Task(user_id=user.id, title=title, description=encrypt_data(description))
         if reminder_time:
@@ -116,7 +116,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         logging.warning(f"Could not parse relative time '{reminder_time}' for task {title}")
                         if close_session:
                             session.close()
-                        return f"Не удалось распознать время '{reminder_time}'. Попробуйте 'через 5 минут' или 'через 2 часа'"
+                        return f"❌ Не удалось распознать время '{reminder_time}'. Попробуйте: 'через 5 минут', 'через 2 часа', 'завтра в 10:00'"
                 else:
                     # Try natural time parsing first
                     current_time = datetime.now(user_tz)
@@ -154,7 +154,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                                 # Don't create task without valid time
                                 if close_session:
                                     session.close()
-                                return f"Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
+                                return f"❌ Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
             except Exception as e:
                 logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
         if due_date:
@@ -232,7 +232,7 @@ def delete_all_tasks(user_id=None, session=None):
         if not user:
             if close_session:
                 session.close()
-            return "Пользователь не найден."
+            return "❌ Пользователь не найден"
 
         # Count tasks before deletion
         task_count = session.query(Task).filter_by(user_id=user.id).count()
@@ -251,12 +251,12 @@ def delete_all_tasks(user_id=None, session=None):
 
         if close_session:
             session.close()
-        return f"Удалено {task_count} задач."
+        return f"🗑️ Удалено {task_count} задач"
 
     except Exception as e:
         if close_session:
             session.close()
-        return f"Ошибка удаления задач: {str(e)}"
+        return f"❌ Ошибка удаления задач: {str(e)}"
 
 
 async def complete_task(task_id=None, task_title=None, completion_note=None, user_id=None, session=None):
@@ -338,7 +338,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         if task.status == "completed":
             if close_session:
                 session.close()
-            return f"Задача '{task.title}' уже выполнена."
+            return f"✅ Задача '{task.title}' уже выполнена"
         
         task.status = "completed"
         task.actual_completion_time = datetime.now(timezone.utc)
@@ -453,7 +453,7 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
     if not user:
         if close_session:
             session.close()
-        return "Пользователь не найден."
+        return "❌ Пользователь не найден"
 
     # Find task by ID or title
     if task_id:
