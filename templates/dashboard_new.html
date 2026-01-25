@@ -4290,8 +4290,8 @@
                         return true;
                     };
 
-                    // Для скрытия модального окна достаточно заполненного города
-                    const isIncomplete = isEmpty(profile.city);
+                    // Для скрытия модального окна требуется заполненный город И интересы
+                    const isIncomplete = isEmpty(profile.city) || isEmpty(profile.interests);
 
                     // Показываем модальное окно только если профиль не заполнен
                     if (isIncomplete) {
