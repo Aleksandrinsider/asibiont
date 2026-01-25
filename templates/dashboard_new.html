@@ -251,6 +251,8 @@
                         html += '<li style="text-align: center; padding: 20px; color: #6C727F;">Gold пользователей пока нет</li>';
                     } else {
                         elitePartners.forEach(partner => {
+                            if (!partner.contact_info) return; // Skip partners without contact_info
+                            
                             const telegramUrl = 'https://t.me/' + partner.contact_info;
                             const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                             
