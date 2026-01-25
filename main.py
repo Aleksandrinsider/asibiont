@@ -3504,6 +3504,27 @@ async def api_elite_partners_handler(request):
             user_city = user_profile.city.lower() if user_profile.city else None
             normalized_user_city = normalize_city(user_city)
 
+            def sort_key(partner):
+                partner_city = normalize_city(partner.get('city', ''))
+                same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
+
+                rating = partner.get('average_rating', 0) or 0
+                # Группы рейтинга:
+                # 1. Высокий рейтинг (>= 5): сортируем по убыванию
+                # 2. Нет рейтинга (0): нейтрально, выше плохих
+                # 3. Низкий рейтинг (< 5): сортируем по убыванию
+                if rating >= 5:
+                    rating_group = 0  # Лучшая группа
+                    rating_value = -rating  # Внутри группы по убыванию
+                elif rating == 0:
+                    rating_group = 1  # Средняя группа (нет данных)
+                    rating_value = 0
+                else:  # rating < 5
+                    rating_group = 2  # Худшая группа
+                    rating_value = -rating  # Внутри группы по убыванию
+
+                return (same_city, rating_group, rating_value)
+
             partners_data.sort(key=sort_key)
 
             logger.info(f"Returning {len(partners_data)} elite (Gold) partners for user {user_id}")
