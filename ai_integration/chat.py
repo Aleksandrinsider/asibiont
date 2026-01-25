@@ -168,8 +168,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         if call_signature not in seen_calls:
             unique_tool_calls.append(call)
             seen_calls.add(call_signature)
+            logger.info(f"[TOOL CALLS] ✓ Allowed {func_name}")
         else:
-            logger.warning(f"[TOOL CALLS] Blocked duplicate {func_name}")
+            logger.warning(f"[TOOL CALLS] ✗ Blocked duplicate {func_name} (exact same args)")
     
     tool_calls = unique_tool_calls
     
