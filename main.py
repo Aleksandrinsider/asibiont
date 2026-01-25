@@ -2281,7 +2281,7 @@ async def admin_security_handler(request):
         
         # Количество задач
         total_tasks = session_db.query(Task).count()
-        completed_tasks = session_db.query(Task).filter(Task.completed == True).count()
+        completed_tasks = session_db.query(Task).filter(Task.status == 'completed').count()
         
         # Количество взаимодействий (сообщений в чате)
         total_interactions = session_db.query(Interaction).count()
