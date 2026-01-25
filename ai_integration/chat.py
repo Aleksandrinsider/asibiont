@@ -108,6 +108,48 @@ delegate_task = handlers.delegate_task
 delete_all_tasks = handlers.delete_all_tasks
 delete_task = handlers.delete_task
 edit_task = handlers.edit_task
+
+async def send_error_notification_to_bot(error_message, user_id=None, error_details=None):
+    """Отправляет уведомление об ошибке в Telegram бота @asibiont_bot"""
+    try:
+        from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME
+        
+        if not TELEGRAM_TOKEN:
+            logger.warning("TELEGRAM_TOKEN not configured, skipping error notification")
+            return
+            
+        # Получаем chat_id бота (обычно это отрицательное число для ботов)
+        # Для отправки сообщения боту используем его username
+        bot_chat_id = f"@{TELEGRAM_BOT_USERNAME}"
+        
+        # Формируем сообщение об ошибке
+        notification_text = f"🚨 СИСТЕМНАЯ ОШИБКА\n\n"
+        if user_id:
+            notification_text += f"👤 Пользователь: {user_id}\n"
+        notification_text += f"⏰ Время: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+        if error_details:
+            notification_text += f"📋 Детали: {error_details[:500]}\n"  # Ограничиваем длину
+        notification_text += f"💬 Сообщение: {error_message[:200]}"
+        
+        # Используем Telegram Bot API для отправки сообщения
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        data = {
+            "chat_id": bot_chat_id,
+            "text": notification_text,
+            "parse_mode": "HTML"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    logger.info("Error notification sent to bot successfully")
+                else:
+                    error_text = await response.text()
+                    logger.warning(f"Failed to send error notification to bot: {response.status} - {error_text}")
+                    
+    except Exception as e:
+        logger.error(f"Error sending notification to bot: {e}")
+        # Не выбрасываем исключение, чтобы не прерывать основной поток
 check_subscription_status = handlers.check_subscription_status
 create_subscription_payment = handlers.create_subscription_payment
 cancel_subscription = handlers.cancel_subscription
@@ -2227,6 +2269,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if tb:
             last_frame = tb[-1]
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
+
+        # ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ОБ ОШИБКЕ В БОТА
+        try:
+            error_details = f"{type(e).__name__}: {str(e)}"
+            asyncio.create_task(send_error_notification_to_bot(str(e), user_id, error_details))
+        except Exception as notify_e:
+            logger.error(f"Failed to send error notification: {notify_e}")
 
         # РЕАБИЛИТАЦИЯ: пытаемся дать полезный ответ вместо ошибки
         try:
