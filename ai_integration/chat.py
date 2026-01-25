@@ -115,6 +115,12 @@ brainstorm_ideas = handlers.brainstorm_ideas
 enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 
+# Защита от повторных вызовов опасных команд (3 секунды между вызовами)
+# Формат: {(user_id, func_name): timestamp_last_call}
+_last_call_time = {}
+_COOLDOWN = 3
+# Команды, защищенные от дубликатов
+_PROTECTED_FUNCTIONS = ['add_task', 'delegate_task', 'update_user_memory', 'update_profile']
 
 async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None):
     """Обрабатывает tool calls и возвращает естественный ответ
@@ -148,16 +154,37 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if corrected_tool_calls:
         tool_calls = corrected_tool_calls
 
-    # Убираем дубликаты tool calls по function name и arguments
+    # Убираем дубликаты tool calls - защита от повторов
     seen_calls = set()
     unique_tool_calls = []
+    current_time = time.time()
+    
     for call in tool_calls:
-        call_key = (call.get("function", {}).get("name"), str(call.get("function", {}).get("arguments")))
-        if call_key not in seen_calls:
-            seen_calls.add(call_key)
+        func_name = call.get("function", {}).get("name")
+        args_str = str(call.get("function", {}).get("arguments"))
+        
+        # Для опасных команд (add_task, delegate_task, update_user_memory, update_profile) - временной лимит
+        if func_name in _PROTECTED_FUNCTIONS:
+            # Проверяем последний вызов этой функции для пользователя
+            call_key = (user_id, func_name)
+            last_call_time = _last_call_time.get(call_key, 0)
+            time_since_last = current_time - last_call_time
+            
+            if time_since_last < _COOLDOWN:
+                logger.warning(f"[TOOL CALLS] Blocked {func_name} - cooldown active ({time_since_last:.1f}s / {_COOLDOWN}s)")
+                continue  # Пропускаем этот вызов
+            
+            # Разрешаем вызов и обновляем время
+            _last_call_time[call_key] = current_time
             unique_tool_calls.append(call)
         else:
-            logger.warning(f"[TOOL CALLS] Removed duplicate tool call: {call_key}")
+            # Для остальных функций - обычная дедупликация по аргументам
+            call_key = (func_name, args_str)
+            if call_key not in seen_calls:
+                seen_calls.add(call_key)
+                unique_tool_calls.append(call)
+            else:
+                logger.warning(f"[TOOL CALLS] Removed duplicate tool call: {call_key}")
     
     tool_calls = unique_tool_calls
     
