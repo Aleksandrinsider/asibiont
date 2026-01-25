@@ -1,6 +1,7 @@
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, init_db
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
+from security_monitor import security_monitor
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
@@ -2210,6 +2211,32 @@ async def admin_users_handler(request):
         session_db.close()
 
 
+async def admin_security_handler(request):
+    """Admin endpoint to view security statistics"""
+    # Check admin secret
+    secret = request.query.get('secret')
+    if secret != ADMIN_SECRET:
+        return web.json_response({'error': 'Unauthorized'}, status=403)
+    
+    # Get IP info if requested
+    ip = request.query.get('ip')
+    if ip:
+        ip_info = security_monitor.get_ip_info(ip)
+        return web.json_response(ip_info)
+    
+    # Get statistics
+    stats = security_monitor.get_statistics()
+    
+    # Return JSON or HTML based on accept header
+    if 'text/html' in request.headers.get('Accept', ''):
+        return aiohttp_jinja2.render_template('security_dashboard.html', request, {
+            'stats': stats,
+            'current_time': datetime.now().isoformat()
+        })
+    
+    return web.json_response(stats)
+
+
 async def check_sportfan3_handler(request):
     """Check and fix @sportfan3 subscription"""
     # Check admin secret
@@ -2366,6 +2393,58 @@ async def session_error_middleware(request, handler):
 
 
 @web.middleware
+async def security_middleware(request, handler):
+    """Security monitoring and rate limiting"""
+    remote = request.remote or 'unknown'
+    
+    # Check if IP is blocked
+    if security_monitor.is_blocked(remote):
+        logger.warning(f"Blocked IP attempted access: {remote}")
+        return web.json_response(
+            {'error': 'Too many requests. Your IP has been temporarily blocked.'},
+            status=429
+        )
+    
+    # Check rate limits
+    is_limited, reason = security_monitor.is_rate_limited(remote)
+    if is_limited:
+        logger.warning(f"Rate limit exceeded for {remote}: {reason}")
+        return web.json_response(
+            {'error': f'Rate limit exceeded: {reason}'},
+            status=429
+        )
+    
+    # Get user_id from session if available
+    user_id = None
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+    except:
+        pass
+    
+    # Log request
+    user_agent = request.headers.get('User-Agent', 'unknown')
+    security_monitor.log_request(
+        ip=remote,
+        user_agent=user_agent,
+        path=request.path,
+        method=request.method,
+        user_id=user_id
+    )
+    
+    # Process request
+    try:
+        response = await handler(request)
+        # Log response status
+        security_monitor.request_logs[-1].status_code = response.status
+        return response
+    except Exception as e:
+        # Log error
+        security_monitor.request_logs[-1].status_code = 500
+        raise
+
+
+@web.middleware
 async def logging_middleware(request, handler):
     """Log all incoming requests"""
     logger.info(f"Incoming request: {request.method} {request.path} from {request.remote}")
@@ -2399,6 +2478,7 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
+app.middlewares.append(security_middleware)
 app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(session_error_middleware)
 app.middlewares.append(logging_middleware)
@@ -5981,6 +6061,7 @@ app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
 app.router.add_get('/clear_database', clear_database_handler)
 app.router.add_get('/admin/users', admin_users_handler)
+app.router.add_get('/admin/security', admin_security_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
