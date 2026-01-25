@@ -202,8 +202,64 @@ async def create_auto_post(user_id, content, session, notify=True):
         if notify:
             try:
                 from main import bot
+                import requests
+                from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+                
                 if bot:
-                    notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Поделитесь своими результатами с другими участниками ASI Biont!\n\n🌐 Используйте веб-панель для большего: https://asibiont.ru\n→ Находите контакты по интересам\n→ Управляйте задачами визуально\n→ Удаляйте посты при необходимости"
+                    # Generate varied notification message using AI
+                    notification_prompt = """Напиши короткое уведомление пользователю о том, что был создан автоматический пост о его прогрессе в ленте новостей веб-панели ASI Biont.
+
+Требования:
+- Сообщи факт создания поста (без самого текста поста)
+- Объясни пользу: другие участники увидят его активность и смогут связаться по общим интересам
+- Упомяни что можно посмотреть/удалить пост на https://asibiont.ru
+- 2-3 предложения максимум
+- Неформальный дружелюбный тон
+- Используй 1-2 эмодзи
+- Каждое сообщение должно быть уникальным
+
+Примеры стиля (НЕ копируй, придумай новое):
+- "Создал пост о твоём прогрессе в ленте новостей 📊 Другие участники увидят твою активность и смогут найти тебя по общим интересам. Посмотреть можно на asibiont.ru"
+- "Опубликовал обновление о твоих достижениях! 🚀 Это поможет найти единомышленников и показать свою экспертизу. Управляй постами на asibiont.ru"
+- "Твой прогресс теперь в общей ленте 💪 Пусть другие участники увидят что ты делаешь - возможно найдутся партнёры по интересам! Смотри на asibiont.ru"
+"""
+                    
+                    try:
+                        response = requests.post(
+                            "https://api.deepseek.com/v1/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "model": DEEPSEEK_MODEL,
+                                "messages": [
+                                    {
+                                        "role": "system",
+                                        "content": "Ты пишешь короткие уведомления для пользователей. Стиль дружелюбный, неформальный, с эмодзи."
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": notification_prompt
+                                    }
+                                ],
+                                "temperature": 0.8,
+                                "max_tokens": 150
+                            },
+                            timeout=15
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            notification_text = result['choices'][0]['message']['content'].strip()
+                        else:
+                            # Fallback message
+                            notification_text = "📊 Создал пост о твоём прогрессе в ленте новостей! Другие участники ASI Biont увидят твою активность и смогут связаться по общим интересам. Посмотреть: https://asibiont.ru"
+                            
+                    except Exception as ai_error:
+                        logger.warning(f"Could not generate AI notification, using fallback: {ai_error}")
+                        # Fallback message
+                        notification_text = "📊 Создал пост о твоём прогрессе в ленте новостей! Другие участники ASI Biont увидят твою активность и смогут связаться по общим интересам. Посмотреть: https://asibiont.ru"
                     
                     await bot.send_message(
                         chat_id=user_id,
