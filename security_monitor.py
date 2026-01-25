@@ -79,9 +79,10 @@ class SecurityMonitor:
             self.last_cleanup = now
         
         # Проверка на превышение лимитов
-        if self.is_rate_limited(ip):
+        is_limited, reason = self.is_rate_limited(ip)
+        if is_limited:
             self.suspicious_ips[ip] += 1
-            logger.warning(f"🚨 RATE LIMIT EXCEEDED: IP {ip} | Path: {path} | Suspicious count: {self.suspicious_ips[ip]}")
+            logger.warning(f"🚨 RATE LIMIT EXCEEDED: IP {ip} | Path: {path} | Reason: {reason} | Suspicious count: {self.suspicious_ips[ip]}")
             
             # Блокировка при многократном превышении
             if self.suspicious_ips[ip] >= 5:
@@ -92,8 +93,12 @@ class SecurityMonitor:
         
         return True
     
-    def is_rate_limited(self, ip: str) -> bool:
-        """Проверка на превышение лимитов запросов"""
+    def is_rate_limited(self, ip: str) -> tuple[bool, str]:
+        """Проверка на превышение лимитов запросов
+        
+        Returns:
+            tuple[bool, str]: (is_limited, reason)
+        """
         now = datetime.now()
         requests = self.requests_per_ip[ip]
         
@@ -104,18 +109,18 @@ class SecurityMonitor:
         # Проверка лимита за последнюю секунду
         last_second = [ts for ts in requests if (now - ts).total_seconds() < 1]
         if len(last_second) > self.RATE_LIMITS['per_second']:
-            return True
+            return True, f"Exceeded {self.RATE_LIMITS['per_second']} requests per second"
         
         # Проверка лимита за последнюю минуту
         last_minute = [ts for ts in requests if (now - ts).total_seconds() < 60]
         if len(last_minute) > self.RATE_LIMITS['per_minute']:
-            return True
+            return True, f"Exceeded {self.RATE_LIMITS['per_minute']} requests per minute"
         
         # Проверка лимита за последние 10 минут
         if len(requests) > self.RATE_LIMITS['per_10_minutes']:
-            return True
+            return True, f"Exceeded {self.RATE_LIMITS['per_10_minutes']} requests per 10 minutes"
         
-        return False
+        return False, ""
     
     def is_blocked(self, ip: str) -> bool:
         """Проверка, заблокирован ли IP"""
@@ -171,11 +176,10 @@ class SecurityMonitor:
         return {
             'total_requests': len(self.request_logs),
             'unique_ips': len(self.requests_per_ip),
-            'blocked_ips': len(self.blocked_ips),
-            'suspicious_ips': len([ip for ip, count in self.suspicious_ips.items() if count > 0]),
-            'top_ips': [{'ip': ip, 'requests': count} for ip, count in top_ips],
-            'top_endpoints': [{'path': path, 'requests': count} for path, count in top_endpoints],
-            'blocked_ips_list': list(self.blocked_ips.keys()),
+            'blocked_ips': {ip: time.strftime('%Y-%m-%d %H:%M:%S') for ip, time in self.blocked_ips.items()},
+            'suspicious_ips': {ip: count for ip, count in self.suspicious_ips.items() if count > 0},
+            'top_ips': [{'ip': ip, 'count': count} for ip, count in top_ips],
+            'top_endpoints': [{'path': path, 'count': count} for path, count in top_endpoints],
             'recent_logs': [
                 {
                     'timestamp': log.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
