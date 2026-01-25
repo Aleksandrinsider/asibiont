@@ -2257,8 +2257,16 @@ async def generate_result_check(user_id, task_title):
         return f"Поздравляю с выполнением задачи '{task_title}'! 🎉"
 
 
-async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0):
-    """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI"""
+async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
+    """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI
+    
+    Args:
+        user_id: ID пользователя
+        context: Контекст сообщения
+        task_count: Количество задач
+        overdue_count: Количество просроченных
+        tasks_list: Список задач для анализа
+    """
     try:
         # Используем тот же подход, что и в chat_with_ai
         import json
@@ -2466,7 +2474,26 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 
         # Выбираем подходящий промпт
         selected_prompt = proactive_prompts.get(context, proactive_prompts["general"])
-
+        
+        # Добавляем информацию о задачах, если есть
+        if tasks_list:
+            tasks_info = "\n\nАКТИВНЫЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:\n"
+            for task in tasks_list[:10]:  # Ограничиваем 10 задачами
+                task_time = ""
+                if task.reminder_time:
+                    try:
+                        # Конвертируем в локальное время пользователя
+                        if task.reminder_time.tzinfo is None:
+                            task_time_utc = pytz.UTC.localize(task.reminder_time)
+                        else:
+                            task_time_utc = task.reminder_time
+                        task_time_local = task_time_utc.astimezone(user_tz)
+                        task_time = f" (на {task_time_local.strftime('%H:%M')})"
+                    except:
+                        pass
+                tasks_info += f"• {task.title}{task_time}\n"
+            selected_prompt += tasks_info
+        
         messages.append({"role": "user", "content": selected_prompt})
 
         # Используем параметры для более подробных, но не многословных сообщений

@@ -536,9 +536,15 @@ class ReminderService:
             if user.do_not_disturb_until and datetime.now(pytz.UTC) < user.do_not_disturb_until.replace(tzinfo=pytz.UTC):
                 return
             
+            # Получить активные задачи
+            all_active_tasks = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'in_progress'])
+            ).order_by(Task.reminder_time).all()
+            
             # Отправить чекпоинт-сообщение
             try:
-                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count)
+                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_active_tasks)
                 
                 # Сохранить в таблицу Interaction
                 try:
@@ -1012,9 +1018,15 @@ class ReminderService:
             if tasks_in_60_min > 0 or busy_time > 10:
                 return
             
+            # Получить все активные задачи для передачи в AI
+            all_active_tasks = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'in_progress'])
+            ).order_by(Task.reminder_time).all()
+            
             # Отправить проактивное сообщение с номером для разнообразия
             try:
-                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count)
+                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_active_tasks)
                 
                 # Сохранить проактивное сообщение в таблицу Interaction
                 try:
