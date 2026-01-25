@@ -425,9 +425,14 @@ def parse_relative_time(message, current_time):
     patterns = [
         (r"через\s+(\d+)\s*мин", lambda m: timedelta(minutes=int(m.group(1)))),
         (r"через\s+(\d+)\s*минут", lambda m: timedelta(minutes=int(m.group(1)))),
+        (r"на\s+(\d+)\s*мин", lambda m: timedelta(minutes=int(m.group(1)))),
+        (r"на\s+(\d+)\s*минут", lambda m: timedelta(minutes=int(m.group(1)))),
         (r"через\s+(\d+)\s*час", lambda m: timedelta(hours=int(m.group(1)))),
         (r"через\s+(\d+)\s*часа", lambda m: timedelta(hours=int(m.group(1)))),
         (r"через\s+(\d+)\s*часов", lambda m: timedelta(hours=int(m.group(1)))),
+        (r"на\s+(\d+)\s*час", lambda m: timedelta(hours=int(m.group(1)))),
+        (r"на\s+(\d+)\s*часа", lambda m: timedelta(hours=int(m.group(1)))),
+        (r"на\s+(\d+)\s*часов", lambda m: timedelta(hours=int(m.group(1)))),
         (r"через\s+час", lambda m: timedelta(hours=1)),  # без числа
         (r"через\s+минут", lambda m: timedelta(minutes=1)),  # без числа, но редко
     ]

@@ -1473,14 +1473,13 @@ def edit_task(
                 task.description = description
         if reminder_time:
             try:
-                if "через" in reminder_time.lower():
+                if "через" in reminder_time.lower() or "на" in reminder_time.lower():
                     user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                    # Для переноса существующей задачи используем текущее время напоминания, а не текущее время
-                    base_time = task.reminder_time.astimezone(user_tz) if task.reminder_time else datetime.now(user_tz)
-                    parsed_time = parse_relative_time(reminder_time, base_time)
+                    current_time = datetime.now(user_tz)
+                    parsed_time = parse_relative_time(reminder_time, current_time)
                     if parsed_time:
                         task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                        logger.info(f"Task {task.id} relative time updated: '{reminder_time}' -> {parsed_time} (from {base_time})")
+                        logger.info(f"Task {task.id} relative time updated: '{reminder_time}' -> {parsed_time} (from current time {current_time})")
                     else:
                         session.close()
                         return "Не удалось распарсить относительное время."
