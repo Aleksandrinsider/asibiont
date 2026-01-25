@@ -3674,6 +3674,9 @@
             } else if (task.delegation_status === 'rejected') {
                 statusText = 'Отклонена';
                 statusColor = '#d73a49';
+            } else if (task.delegation_status === 'accepted') {
+                statusText = 'Принята';
+                statusColor = '#238636';
             } else if (task.status === 'completed') {
                 statusText = 'Выполнена';
                 statusColor = '#068487';
