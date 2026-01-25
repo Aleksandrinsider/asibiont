@@ -1406,9 +1406,33 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 # user_id here is telegram_id, need to get database user.id
                 memory_user = db_session.query(User).filter_by(telegram_id=user_id).first()
                 partners = get_partners_list(user_id=memory_user.id if memory_user else None, session=db_session) if memory_user else []
-                if partners:
+                
+                # Get favorite contacts
+                favorite_contacts_info = []
+                if memory_user:
+                    user_profile = db_session.query(UserProfile).filter_by(user_id=memory_user.id).first()
+                    if user_profile and user_profile.favorite_contacts:
+                        try:
+                            import json
+                            favorite_data = json.loads(user_profile.favorite_contacts)
+                            for item in favorite_data:
+                                if isinstance(item, str):
+                                    fav_user = db_session.query(User).filter(
+                                        User.username == item.replace('@', '')
+                                    ).first()
+                                    if fav_user and fav_user.username:
+                                        favorite_contacts_info.append(f"@{fav_user.username} (избранный)")
+                        except Exception as e:
+                            logger.error(f"Error parsing favorite_contacts: {e}")
+                
+                if partners or favorite_contacts_info:
                     # partners - это список объектов UserProfile
                     partners_info = []
+                    
+                    # Add favorite contacts first
+                    partners_info.extend(favorite_contacts_info)
+                    
+                    # Add recommended partners
                     for p in partners[:5]:
                         partner_user = db_session.query(User).filter_by(id=p.user_id).first()
                         if partner_user and partner_user.username:
@@ -1429,7 +1453,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 partners_info.append(f"@{partner_user.username}")
                     
                     if partners_info:
-                        user_memory += f"\nДоступные контакты с общими интересами: {', '.join(partners_info)}"
+                        user_memory += f"\nДоступные контакты: {', '.join(partners_info)}"
             except Exception as e:
                 logger.error(f"Error getting partners: {e}")
 
