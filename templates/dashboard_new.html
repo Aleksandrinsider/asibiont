@@ -4988,6 +4988,8 @@
                             const uniquePartners = {};
                             data.partners.forEach(partner => {
                                 const username = partner.contact_info;
+                                if (!username) return; // Skip partners without contact_info
+                                
                                 if (!uniquePartners[username]) {
                                     uniquePartners[username] = partner;
                                     // Проверяем избранное из кэша, а не из типа партнера
