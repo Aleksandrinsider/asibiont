@@ -390,8 +390,19 @@
                 if (currentContactFilter === 'all') {
                     card.style.display = 'flex';
                 } else if (currentContactFilter === 'favorite') {
-                    // Для favorite проверяем наличие класса contact-favorite
-                    card.style.display = card.classList.contains('contact-favorite') ? 'flex' : 'none';
+                    // Для favorite дедуплицируем контакты по username
+                    const seenUsernames = new Set();
+                    allCards.forEach(card => {
+                        const username = card.getAttribute('data-username');
+                        const isFavorite = card.classList.contains('contact-favorite');
+                        
+                        if (isFavorite && username && !seenUsernames.has(username)) {
+                            seenUsernames.add(username);
+                            card.style.display = 'flex';
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    });
                 } else if (currentContactFilter === 'elite') {
                     // Для elite показываем контакты с type='elite'
                     card.style.display = type === 'elite' ? 'flex' : 'none';
@@ -4994,6 +5005,8 @@
                                 // Delegation контакты сохраняем отдельно, всегда
                                 if (partner.type === 'delegating_to_me' || partner.type === 'delegating_by_me') {
                                     const key = username + '_' + partner.type;
+                                    // Устанавливаем is_favorite для delegation контактов
+                                    partner.is_favorite = favoriteContacts.includes(username);
                                     delegationContacts[key] = partner;
                                     return; // Не добавляем в uniquePartners
                                 }
