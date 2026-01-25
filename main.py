@@ -2286,6 +2286,12 @@ async def admin_security_handler(request):
         # Количество взаимодействий (сообщений в чате)
         total_interactions = session_db.query(Interaction).count()
         
+        # Пользователи онлайн (с активностью за последние 15 минут)
+        last_15min = datetime.now() - timedelta(minutes=15)
+        users_online = session_db.query(User.id).join(Interaction).filter(
+            Interaction.created_at >= last_15min
+        ).distinct().count()
+        
         # Последние зарегистрированные пользователи
         recent_users = session_db.query(User).order_by(User.created_at.desc()).limit(10).all()
         recent_users_list = [{
@@ -2314,6 +2320,7 @@ async def admin_security_handler(request):
         
         user_stats = {
             'total_users': total_users,
+            'users_online': users_online,
             'new_users_24h': new_users_24h,
             'new_users_week': new_users_week,
             'active_subscriptions': active_subscriptions,
@@ -2332,8 +2339,11 @@ async def admin_security_handler(request):
         
     except Exception as e:
         logger.error(f"Error getting user statistics: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         stats['user_stats'] = {
             'total_users': 0,
+            'users_online': 0,
             'error': str(e)
         }
     finally:
