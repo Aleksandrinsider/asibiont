@@ -36,6 +36,24 @@ from aiogram import Bot, Dispatcher
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
 
 
+def normalize_city(city):
+    """Normalize city names for comparison"""
+    if not city:
+        return None
+    city = city.lower().strip()
+    # Маппинг русских названий на английские
+    city_map = {
+        'москва': 'moscow',
+        'санкт-петербург': 'saint petersburg',
+        'петербург': 'saint petersburg',
+        'спб': 'saint petersburg',
+        'екатеринбург': 'yekaterinburg',
+        'новосибирск': 'novosibirsk',
+        'казань': 'kazan'
+    }
+    return city_map.get(city, city)
+
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -3135,23 +3153,6 @@ async def api_partners_handler(request):
         # Сортируем partners_data: сначала по городу (совпадение с пользователем), потом по рейтингу
         user_city = profile.city.lower() if profile and profile.city else None
 
-        # Нормализация названий городов для правильного сравнения
-        def normalize_city(city):
-            if not city:
-                return None
-            city = city.lower().strip()
-            # Маппинг русских названий на английские
-            city_map = {
-                'москва': 'moscow',
-                'санкт-петербург': 'saint petersburg',
-                'петербург': 'saint petersburg',
-                'спб': 'saint petersburg',
-                'екатеринбург': 'yekaterinburg',
-                'новосибирск': 'novosibirsk',
-                'казань': 'kazan'
-            }
-            return city_map.get(city, city)
-
         normalized_user_city = normalize_city(user_city)
 
         def sort_key(partner):
@@ -3286,7 +3287,7 @@ async def api_partners_handler(request):
         filtered_partners_data = []
         blocked_partners_data = []  # Сохраняем информацию о заблокированных
         for partner in partners_data:
-            partner_username = partner.get('contact_info', '').replace('@', '')
+            partner_username = (partner.get('contact_info') or '').replace('@', '')
             if partner_username in blocked_by_me or partner_username in blocked_me:
                 blocked_partners_data.append(partner)  # Сохраняем заблокированные
                 continue  # Skip blocked contacts from main list
