@@ -178,6 +178,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if not tool_calls:
         logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after duplicate check!")
 
+    # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Ограничиваем количество add_task до 1 на сообщение
+    add_task_calls = [call for call in tool_calls if call.get("function", {}).get("name") == "add_task"]
+    if len(add_task_calls) > 1:
+        logger.warning(f"[TOOL CALLS] Multiple add_task calls detected ({len(add_task_calls)}), keeping only the first one")
+        # Убираем все add_task кроме первого
+        tool_calls = [call for call in tool_calls if call.get("function", {}).get("name") != "add_task"]
+        tool_calls.append(add_task_calls[0])  # Добавляем только первый add_task
+        logger.info(f"[TOOL CALLS] Kept first add_task, removed {len(add_task_calls) - 1} duplicates")
+
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
         return None
