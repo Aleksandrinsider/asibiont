@@ -741,158 +741,6 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
     return result
 
 
-def analyze_task(task_id=None, user_id=None, session=None):
-    """Analyze task with AI and provide recommendations"""
-    import asyncio
-
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        if close_session:
-            session.close()
-        return "Пользователь не найден."
-
-    # Find task by ID
-    if task_id:
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-
-        task = (
-            session.query(Task)
-            .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
-            )
-            .first()
-        )
-    else:
-        if close_session:
-            session.close()
-        return "Не указан ID задачи."
-
-    if task:
-        # Get user profile for context
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-
-        # Collect task info for analysis
-        task_info = f"""
-        ЗАДАЧА ДЛЯ АНАЛИЗА:
-        Название: {task.title}
-        Описание: {task.description or 'Не указано'}
-        Статус: {task.status}
-        Время напоминания: {task.reminder_time.strftime('%Y-%m-%d %H:%M') if task.reminder_time else 'Не установлено'}
-        Делегирована: {'Да' if task.delegated_to_username else 'Нет'}
-        """
-
-        # Add profile info
-        profile_info = ""
-        if profile:
-            profile_info = f"""
-        ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ:
-        Навыки: {profile.skills or 'Не указаны'}
-        Интересы: {profile.interests or 'Не указаны'}
-        Цели: {profile.goals or 'Не указаны'}
-        Город: {profile.city or 'Не указан'}
-        """
-
-        # AI analysis prompt
-        analysis_prompt = f"""{task_info}{profile_info}
-
-        Проанализируй эту задачу и дай полезные рекомендации:
-        1. Оцени сложность и реалистичность сроков
-        2. Предложи шаги для выполнения
-        3. Дай советы по оптимизации
-        4. Учитывай навыки и интересы пользователя при рекомендациях
-
-        Будь конкретным и полезным в ответе."""
-
-        try:
-            from .chat import chat_with_ai
-            # Create event loop for sync call of async function
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            analysis_result = loop.run_until_complete(chat_with_ai(analysis_prompt, [], user_id))
-            loop.close()
-
-            # Save result to interaction history
-            interaction = Interaction(
-                user_id=user.id,
-                message_type="ai",
-                content=f"Анализ задачи '{task.title}':\n\n{analysis_result}")
-            session.add(interaction)
-            session.commit()
-
-            result = f"Анализ задачи '{task.title}':\n\n{analysis_result}"
-
-        except Exception as e:
-            logger.error(f"Error analyzing task {task_id}: {e}")
-            result = f"Ошибка при анализе задачи '{task.title}': {str(e)}"
-    else:
-        result = "Задача не найдена."
-
-    if close_session:
-        session.close()
-    return result
-
-
-def set_reminder(task_id, reminder_time, user_id=None):
-    """Set reminder for a task"""
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден."
-
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            return f"Некорректный ID задачи: {task_id}"
-
-        task = session.query(Task).filter_by(id=task_id_int, user_id=user.id).first()
-        if task:
-            try:
-                # Try to parse as absolute time first
-                try:
-                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                    local_dt = user_tz.localize(local_dt)
-                    reminder_time_parsed = local_dt.astimezone(pytz.UTC)
-                except ValueError:
-                    # If that fails, try parsing as relative time
-                    parsed_time = parse_time_to_datetime(reminder_time, user_id)
-                    if parsed_time:
-                        # parse_time_to_datetime returns string, parse it
-                        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                        local_dt = datetime.strptime(parsed_time, "%Y-%m-%d %H:%M")
-                        local_dt = user_tz.localize(local_dt)
-                        reminder_time_parsed = local_dt.astimezone(pytz.UTC)
-                    else:
-                        return f"Не удалось распознать время '{reminder_time}'. Используйте формат 'YYYY-MM-DD HH:MM' или естественный язык ('завтра в 10:00', 'сегодня в 15:30')."
-                
-                task.reminder_time = reminder_time_parsed
-                session.commit()
-                
-                # Format time for display in user's timezone
-                display_time = reminder_time_parsed.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")
-                result = f"Установлено напоминание для '{task.title}' на {display_time}."
-            except Exception as e:
-                logger.error(f"[SET_REMINDER] Error parsing time: {e}")
-                result = f"Ошибка при установке напоминания: {str(e)}"
-        else:
-            result = "Задача не найдена."
-        return result
-    finally:
-        session.close()
-
-
 def delegate_task(
     title, reminder_time=None, delegated_to_username=None, user_id=None, description="", delegation_details=""
 ):
@@ -1089,72 +937,6 @@ def delegate_task(
     except Exception as e:
         session.close()
         return f"Ошибка при создании делегированной задачи: {str(e)}"
-
-
-def suggest_alternatives(task_id, reason="", user_id=None):
-    """Suggest alternatives for uncompleted task via AI"""
-    import asyncio
-    return asyncio.run(_suggest_alternatives_async(task_id, reason, user_id))
-
-
-async def _suggest_alternatives_async(task_id, reason="", user_id=None):
-    """Async implementation of suggest_alternatives"""
-    from config import DEEPSEEK_API_KEY
-    from .prompts import get_optimized_system_prompt
-    from .utils import clean_technical_details
-    import aiohttp
-
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Пользователь не найден."
-
-        task = session.query(Task).filter(Task.id == task_id, Task.user_id == user.id).first()
-        if not task:
-            return "Задача не найдена."
-
-        # Get user memory
-        user_memory = ""
-        if user.memory:
-            try:
-                user_memory = f"\nИнформация о пользователе: {decrypt_data(user.memory)}"
-            except Exception as e:
-                logger.warning(f"Failed to decrypt user memory: {e}")
-                user_memory = ""
-
-        # Generate alternatives via AI
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-
-        system_prompt = get_optimized_system_prompt()
-
-        messages = [
-            {"role": "system", "content": system_prompt + user_memory},
-            {
-                "role": "user",
-                "content": f"Предложи 3-5 альтернативных подходов к задаче '{task.title}'. Причина невыполнения: '{reason}'. Будь практичным и конкретным.",
-            },
-        ]
-
-        data = {"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": 500}
-
-        async with aiohttp.ClientSession() as aio_session:
-            async with aio_session.post(
-                url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-                    content = clean_technical_details(content)
-                    return content
-                else:
-                    return "Не удалось сгенерировать альтернативы."
-
-    except Exception as e:
-        return f"Ошибка при генерации альтернатив: {str(e)}"
-    finally:
-        session.close()
 
 
 
@@ -1504,78 +1286,6 @@ def edit_task(
     if close_session:
         session.close()
     return result
-
-
-def get_task_details(task_id, user_id=None):
-    """Get task details"""
-    session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        session.close()
-        return "Пользователь не найден."
-
-    task = session.query(Task).filter_by(id=int(task_id)).first()
-    if task:
-        # Check access rights
-        has_access = False
-        if task.user_id == user.id:
-            has_access = True
-        elif task.delegated_to_username:
-            recipient_username = task.delegated_to_username.replace("@", "").lower()
-            if user.username and user.username.lower() == recipient_username:
-                has_access = True
-
-        if not has_access:
-            session.close()
-            return "У вас нет прав на просмотр этой задачи."
-
-        session.close()
-        return f"Задача: {task.title}, статус {task.status}, приоритет {task.priority}."
-    session.close()
-    return "Задача не найдена."
-
-
-def set_priority(task_id, priority, user_id=None):
-    """Set task priority - stub function for backward compatibility"""
-    # This function is referenced in __init__.py but not actually used
-    return "Функция set_priority временно недоступна"
-
-
-def brainstorm_ideas(topic, num_ideas=5, user_id=None):
-    """Generate ideas for a problem or improvement"""
-    import requests
-    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-
-    prompt = f"""
-    Сгенерируй {num_ideas} креативных идей для темы: "{topic}"
-
-    Идеи должны быть:
-    - Конкретными и реализуемыми
-    - Разнообразными
-    - Учитывать практические аспекты
-
-    Формат ответа: пронумерованный список идей, каждая с кратким описанием почему она хороша.
-    """
-
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": DEEPSEEK_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1000,
-            "temperature": 0.7
-        }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        response.raise_for_status()
-        result = response.json()
-        ideas = result["choices"][0]["message"]["content"].strip()
-        return f"Идеи для темы '{topic}':\n\n{ideas}"
-    except Exception as e:
-        return f"Ошибка генерации идей: {str(e)}"
 
 
 def list_tasks(user_id=None, session=None, include_completed=False):
@@ -3072,3 +2782,397 @@ def cancel_subscription(user_id=None):
             return "Подписка не найдена или уже отменена."
     except Exception as e:
         return f"Ошибка отмены подписки: {str(e)}"
+
+
+def brainstorm_ideas(topic=None, num_ideas=5, user_id=None, session=None):
+    """Generate creative ideas for a topic using AI"""
+    import asyncio
+    
+    if not topic:
+        return "Не указана тема для генерации идей."
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+
+        # Get user profile for context
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        user_context = ""
+        if profile:
+            skills = profile.skills or ""
+            interests = profile.interests or ""
+            goals = profile.goals or ""
+            user_context = f"Учитывай навыки пользователя: {skills}. Интересы: {interests}. Цели: {goals}."
+
+        # Generate ideas using AI
+        prompt = f"""Сгенерируй {num_ideas} креативных идей для темы: "{topic}"
+
+{user_context}
+
+Требования к идеям:
+1. Будь конкретным и практичным
+2. Учитывай навыки и интересы пользователя
+3. Каждая идея должна быть реализуемой
+4. Формат: номер + краткое название + описание
+
+Примеры хороших идей:
+1. Онлайн-курс по Python - Создать серию видеоуроков на YouTube с практическими заданиями
+2. Фитнес-трекер - Разработать мобильное приложение для отслеживания прогресса тренировок"""
+
+        try:
+            from ..ai_integration import chat_with_ai
+            ideas = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=1000))
+            result = f"💡 Идеи для темы '{topic}':\n\n{ideas}"
+            
+            if close_session:
+                session.close()
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error generating brainstorm ideas: {e}")
+            if close_session:
+                session.close()
+            return f"Не удалось сгенерировать идеи для темы '{topic}'. Попробуйте позже."
+
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка при генерации идей: {str(e)}"
+
+
+def get_task_details(task_id=None, user_id=None, session=None):
+    """Get detailed information about a task"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+
+        # Find task by ID
+        if task_id:
+            try:
+                task_id_int = int(task_id)
+            except (ValueError, TypeError):
+                if close_session:
+                    session.close()
+                return f"Некорректный ID задачи: {task_id}"
+
+            task = (
+                session.query(Task)
+                .filter(
+                    or_(
+                        and_(Task.id == task_id_int, Task.user_id == user.id),
+                        and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
+                    )
+                )
+                .first()
+            )
+        else:
+            if close_session:
+                session.close()
+            return "Не указан ID задачи."
+
+        if task:
+            # Format detailed task information
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            
+            details = f"📋 Подробная информация о задаче:\n\n"
+            details += f"🆔 ID: {task.id}\n"
+            details += f"📝 Название: {task.title}\n"
+            
+            if task.description:
+                description = decrypt_data(task.description) if task.description.startswith('gAAAAA') else task.description
+                details += f"📄 Описание: {description}\n"
+            
+            details += f"📊 Статус: {task.status}\n"
+            
+            if task.reminder_time:
+                local_time = task.reminder_time.astimezone(user_tz)
+                details += f"⏰ Время напоминания: {local_time.strftime('%d.%m.%Y %H:%M')} ({user_tz.zone})\n"
+            
+            if task.due_date:
+                local_due = task.due_date.astimezone(user_tz)
+                details += f"📅 Дедлайн: {local_due.strftime('%d.%m.%Y %H:%M')}\n"
+            
+            if task.delegated_to_username:
+                details += f"👤 Делегирована: @{task.delegated_to_username}\n"
+                details += f"📋 Статус делегирования: {task.delegation_status or 'Не определён'}\n"
+                if task.delegation_details:
+                    details += f"📋 Детали делегирования: {task.delegation_details}\n"
+            
+            if task.completion_notes:
+                completion_notes = decrypt_data(task.completion_notes) if task.completion_notes.startswith('gAAAAA') else task.completion_notes
+                details += f"✅ Заметки о выполнении: {completion_notes}\n"
+            
+            if task.actual_completion_time:
+                local_completion = task.actual_completion_time.astimezone(user_tz)
+                details += f"✅ Фактическое время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
+            
+            if task.recommendations:
+                try:
+                    import json
+                    recs = json.loads(task.recommendations)
+                    if recs:
+                        details += f"💡 Рекомендации AI:\n"
+                        for i, rec in enumerate(recs[:3], 1):
+                            details += f"  {i}. {rec}\n"
+                except:
+                    pass
+            
+            details += f"🕒 Создана: {task.created_at.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}\n"
+            
+            if close_session:
+                session.close()
+            return details
+        else:
+            if close_session:
+                session.close()
+            return "Задача не найдена."
+
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка при получении деталей задачи: {str(e)}"
+
+
+def get_delegation_progress(task_id=None, user_id=None, session=None):
+    """Get progress status of a delegated task for the initiator"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+
+        if not task_id:
+            if close_session:
+                session.close()
+            return "Не указан ID задачи."
+
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        # Find task that was delegated by this user
+        task = session.query(Task).filter(
+            Task.id == task_id_int,
+            Task.user_id == user.id,
+            Task.delegated_to_username.isnot(None)
+        ).first()
+
+        if not task:
+            if close_session:
+                session.close()
+            return "Задача не найдена или не была делегирована вами."
+
+        # Get the delegated user info
+        delegated_user = session.query(User).filter_by(username=task.delegated_to_username.lstrip('@')).first()
+
+        status_info = f"📋 Статус делегированной задачи:\n\n"
+        status_info += f"🆔 ID: {task.id}\n"
+        status_info += f"📝 Название: {task.title}\n"
+        status_info += f"👤 Делегирована: @{task.delegated_to_username}\n"
+        status_info += f"📋 Статус: {task.delegation_status or 'Ожидает принятия'}\n"
+
+        if task.delegation_status == "accepted":
+            status_info += f"✅ Задача принята исполнителем\n"
+        elif task.delegation_status == "rejected":
+            status_info += f"❌ Задача отклонена исполнителем\n"
+        elif task.delegation_status == "completed":
+            status_info += f"✅ Задача выполнена!\n"
+            if task.actual_completion_time:
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                local_completion = task.actual_completion_time.astimezone(user_tz)
+                status_info += f"🕒 Время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
+        else:
+            status_info += f"⏳ Ожидает решения исполнителя\n"
+
+        if task.completion_notes and task.delegation_status == "completed":
+            completion_notes = decrypt_data(task.completion_notes) if task.completion_notes.startswith('gAAAAA') else task.completion_notes
+            status_info += f"📝 Результат выполнения: {completion_notes}\n"
+
+        if close_session:
+            session.close()
+        return status_info
+
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка при получении статуса делегирования: {str(e)}"
+
+
+def cancel_delegation(task_id=None, user_id=None, session=None):
+    """Cancel delegation of a task, returning it to the initiator"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+
+        if not task_id:
+            if close_session:
+                session.close()
+            return "Не указан ID задачи."
+
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        # Find task that was delegated by this user
+        task = session.query(Task).filter(
+            Task.id == task_id_int,
+            Task.user_id == user.id,
+            Task.delegated_to_username.isnot(None)
+        ).first()
+
+        if not task:
+            if close_session:
+                session.close()
+            return "Задача не найдена или не была делегирована вами."
+
+        if task.delegation_status == "completed":
+            if close_session:
+                session.close()
+            return "Нельзя отменить делегирование выполненной задачи."
+
+        # Cancel delegation
+        task.delegated_to_username = None
+        task.delegation_status = None
+        task.delegation_details = None
+
+        session.commit()
+
+        if close_session:
+            session.close()
+        return f"✅ Делегирование задачи '{task.title}' отменено. Задача возвращена вам."
+
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка при отмене делегирования: {str(e)}"
+
+
+def suggest_alternatives(task_id=None, reason=None, user_id=None, session=None):
+    """Suggest alternatives for an uncompleted task: postpone, break down, delegate, find partner"""
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if close_session:
+                session.close()
+            return "Пользователь не найден."
+
+        if not task_id:
+            if close_session:
+                session.close()
+            return "Не указан ID задачи."
+
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        # Find task
+        task = session.query(Task).filter(
+            or_(
+                and_(Task.id == task_id_int, Task.user_id == user.id),
+                and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
+            )
+        ).first()
+
+        if not task:
+            if close_session:
+                session.close()
+            return "Задача не найдена."
+
+        # Generate alternatives based on task characteristics
+        alternatives = []
+        task_title = task.title
+
+        # Alternative 1: Postpone
+        if task.reminder_time:
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            current_time = datetime.now(user_tz)
+            if task.reminder_time > current_time:
+                alternatives.append("⏰ Перенести задачу на более удобное время")
+            else:
+                alternatives.append("⏰ Перенести задачу на завтра или выходные")
+
+        # Alternative 2: Break down
+        if len(task.title.split()) > 3 or (task.description and len(task.description) > 50):
+            alternatives.append("🔨 Разбить задачу на более мелкие подзадачи")
+
+        # Alternative 3: Delegate (if user has appropriate subscription)
+        user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if user_profile and user_profile.subscription_tier in ['silver', 'gold']:
+            alternatives.append("👥 Делегировать задачу другому пользователю")
+        else:
+            alternatives.append("⭐ Рассмотреть премиум-подписку для возможности делегирования")
+
+        # Alternative 4: Find partner
+        alternatives.append("🤝 Найти партнёра для совместного выполнения")
+
+        # Alternative 5: Get AI suggestions
+        alternatives.append("💡 Получить идеи и советы от AI")
+
+        # Alternative 6: Set reminders
+        if not task.reminder_time:
+            alternatives.append("🔔 Настроить напоминания для регулярного выполнения")
+
+        response = f"💡 Альтернативы для невыполненной задачи '{task_title}':\n\n"
+        for i, alt in enumerate(alternatives, 1):
+            response += f"{i}. {alt}\n"
+
+        if reason:
+            response += f"\n📝 Учитывая причину '{reason}', рекомендую начать с наиболее подходящих вариантов."
+
+        if close_session:
+            session.close()
+        return response
+
+    except Exception as e:
+        if close_session:
+            session.close()
+        return f"Ошибка при генерации альтернатив: {str(e)}"

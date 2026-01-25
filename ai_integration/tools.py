@@ -57,21 +57,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "set_reminder",
-            "description": "Установить напоминание для задачи",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer", "description": "ID задачи"},
-                    "reminder_time": {"type": "string", "description": "Время напоминания в формате YYYY-MM-DD HH:MM"},
-                },
-                "required": ["task_id", "reminder_time"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "update_user_memory",
             "description": "Сохранить информацию о пользователе в долговременную память для персонализации",
             "parameters": {
@@ -200,21 +185,6 @@ TOOLS = [
                     },
                 },
                 "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "set_priority",
-            "description": "Установить приоритет задачи",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "integer", "description": "ID задачи"},
-                    "priority": {"type": "string", "description": "Приоритет: high, medium, low"},
-                },
-                "required": ["task_id", "priority"],
             },
         },
     },

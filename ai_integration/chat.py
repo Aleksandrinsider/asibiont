@@ -114,6 +114,10 @@ cancel_subscription = handlers.cancel_subscription
 brainstorm_ideas = handlers.brainstorm_ideas
 enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
+get_task_details = handlers.get_task_details
+get_delegation_progress = handlers.get_delegation_progress
+cancel_delegation = handlers.cancel_delegation
+suggest_alternatives = handlers.suggest_alternatives
 
 # Защита от повторных вызовов опасных команд (3 секунды между вызовами)
 # Формат: {(user_id, func_name): timestamp_last_call}
