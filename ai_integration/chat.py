@@ -1717,6 +1717,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             subscription_tier=subscription_tier)
         logger.info("[PROMPTS] Using extended prompt system")
 
+        # СПЕЦИАЛЬНЫЙ ПРОМПТ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ
+        if is_system_message:
+            system_prompt += "\n\nСПЕЦИАЛЬНЫЙ РЕЖИМ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ:\n"
+            system_prompt += "Это результат выполненного действия (удаление задачи, обновление и т.д.).\n"
+            system_prompt += "ДАЙ КРАТКИЙ ОТВЕТ: ✓ [подтверждение действия] + 1-2 предложения максимум.\n"
+            system_prompt += "НЕ добавляй советы, вопросы или продолжение диалога.\n"
+            system_prompt += "ПРИМЕР: '✓ Задача удалена.' или '✓ Время изменено на 15:00.'\n"
+            logger.info("[SYSTEM MESSAGE] Using special prompt for system message")
+
         # Проверяем контекст последней созданной задачи для edit_task
         last_task_context = ""
         if user_id:
@@ -1795,10 +1804,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'delegate_task', 'find_partners', 'update_profile', 'profile_info'
         ]
 
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
+        is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:'))
+
         # Умная логика выбора инструментов на основе intent classification
         intent_type = intent.get('type', 'unknown')
 
-        if intent_type in ['conversation', 'unknown'] and is_advice_question:
+        if is_system_message:
+            # Системные сообщения (результаты действий) - краткий ответ без инструментов
+            tool_choice = "none"
+            logger.info(f"[TOOL CHOICE] NONE for system message: {original_message[:50]}...")
+        elif intent_type in ['conversation', 'unknown'] and is_advice_question:
             # Вопросы о совете - не используем инструменты, отвечаем текстом
             tool_choice = "none"
         elif intent_type == 'greeting':
