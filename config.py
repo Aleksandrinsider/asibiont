@@ -14,7 +14,6 @@ if CURRENT_DATE_STR:
     CURRENT_DATE = datetime.fromisoformat(CURRENT_DATE_STR)
 else:
     CURRENT_DATE = datetime.now()
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", "your-secret-key-change-this")
 
 # Database
 if LOCAL:

@@ -15,69 +15,6 @@ class SubscriptionTier(enum.Enum):
     GOLD = 'GOLD'      # 27000 RUB/month
 
 
-class AgentLog(Base):
-    """Логирование работы AI агента для анализа и улучшения"""
-    __tablename__ = 'agent_logs'
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    timestamp = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-
-    # Контекст взаимодействия
-    message_type = Column(String(50))  # 'reminder', 'proactive', 'result_check', etc.
-    user_message = Column(Text)  # Что сказал пользователь
-    agent_response = Column(Text)  # Ответ агента
-
-    # Действия агента
-    tools_used = Column(Text)  # JSON array инструментов, которые вызвал агент
-    task_actions = Column(Text)  # JSON array действий с задачами (create, update, delete, complete)
-
-    # Метрики качества
-    response_quality = Column(Integer)  # Самооценка качества ответа 1-10
-    user_satisfaction = Column(Integer)  # Оценка пользователя (если дана)
-    helpfulness_score = Column(Integer)  # Полезность ответа 1-10
-
-    # Анализ паттернов
-    conversation_context = Column(Text)  # Ключевые слова из контекста
-    detected_intent = Column(String(100))  # Распознанное намерение пользователя
-    response_time_ms = Column(Integer)  # Время генерации ответа
-
-    # Обратная связь
-    user_feedback = Column(Text)  # Комментарии пользователя
-    improvement_suggestions = Column(Text)  # Что можно улучшить
-
-    # Связи
-    user = relationship("User", backref="agent_logs")
-
-
-class AgentMetrics(Base):
-    """Агрегированные метрики работы агента"""
-    __tablename__ = 'agent_metrics'
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
-
-    # Статистика использования
-    total_interactions = Column(Integer, default=0)
-    tools_used_count = Column(Integer, default=0)
-    tasks_created = Column(Integer, default=0)
-    tasks_completed = Column(Integer, default=0)
-
-    # Метрики качества
-    avg_response_quality = Column(Integer, default=0)  # Средняя оценка качества
-    avg_helpfulness = Column(Integer, default=0)  # Средняя полезность
-    user_satisfaction_rate = Column(Integer, default=0)  # Процент удовлетворенных пользователей
-
-    # Паттерны поведения
-    common_intents = Column(Text)  # JSON наиболее частые намерения
-    common_tools = Column(Text)  # JSON наиболее используемые инструменты
-    error_patterns = Column(Text)  # JSON паттерны ошибок
-
-    # Связи
-    user = relationship("User", backref="agent_metrics")
-
-
 class User(Base):
     __tablename__ = 'users'
 

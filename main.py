@@ -2,8 +2,7 @@ from models import Base, engine, Session, Subscription, User, Task, UserProfile,
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, ADMIN_SECRET, CURRENT_DATE, DATABASE_URL, LOCAL
-from security_monitor import security_monitor
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL
 from aiohttp_session import SimpleCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
@@ -1595,32 +1594,6 @@ async def dashboard_handler(request):
 
         logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {user_subscription_tier.value if user_subscription_tier else 'BRONZE'}")
 
-        # Check if user is admin (user ID 1, 2, 3 or has admin secret in session)
-        is_admin = user.id in [1, 2, 3] or session_req.get('admin_secret') == ADMIN_SECRET
-        
-        # Get security stats for admin
-        security_stats = None
-        if is_admin:
-            try:
-                from security_monitor import security_monitor
-                security_stats = security_monitor.get_statistics()
-                
-                # Get user stats for admin dashboard
-                user_stats = {
-                    'total_users': session_db.query(User).count(),
-                    'users_online': len([u for u in session_db.query(User).all() if u.last_activity and (datetime.now(pytz.UTC) - u.last_activity.replace(tzinfo=pytz.UTC) if u.last_activity.tzinfo is None else u.last_activity) < timedelta(minutes=15)]),
-                    'new_users_24h': session_db.query(User).filter(User.created_at >= datetime.now() - timedelta(hours=24)).count(),
-                    'new_users_week': session_db.query(User).filter(User.created_at >= datetime.now() - timedelta(days=7)).count(),
-                    'active_subscriptions': session_db.query(Subscription).filter(Subscription.status == 'active').count(),
-                    'total_tasks': session_db.query(Task).count(),
-                    'completed_tasks': session_db.query(Task).filter(Task.status == 'completed').count(),
-                    'total_interactions': session_db.query(Interaction).count()
-                }
-                security_stats['user_stats'] = user_stats
-            except Exception as e:
-                logger.error(f"Error getting security stats: {e}")
-                security_stats = None
-
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
             'tasks': tasks_dict,
@@ -1644,9 +1617,7 @@ async def dashboard_handler(request):
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': 1768857743,
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-            'user_avatar_url': user_avatar_url,
-            'is_admin': is_admin,
-            'security_stats': security_stats
+            'user_avatar_url': user_avatar_url
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -2135,372 +2106,11 @@ async def get_task_advice_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
-async def clear_old_tasks_handler(request):
-    """Admin endpoint to clear old test tasks"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
-
-    session_db = Session()
-    try:
-        cutoff_date = datetime(2026, 1, 1, tzinfo=pytz.UTC)
-        old_tasks = session_db.query(Task).filter(Task.reminder_time < cutoff_date).all()
-
-        count = len(old_tasks)
-        for task in old_tasks:
-            session_db.delete(task)
-
-        session_db.commit()
-        logger.info(f"Cleared {count} old tasks")
-        return web.json_response({'message': f'Cleared {count} old tasks'})
-    except Exception as e:
-        session_db.rollback()
-        logger.error(f"Error clearing old tasks: {e}")
-        return web.json_response({'error': str(e)}, status=500)
-    finally:
-        session_db.close()
 
 
-async def clear_database_handler(request):
-    """Admin endpoint to clear entire database"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
-
-    session_db = Session()
-    try:
-        # Delete all data
-        session_db.query(Interaction).delete()
-        session_db.query(Task).delete()
-        session_db.query(UserProfile).delete()
-        session_db.query(Subscription).delete()
-        session_db.query(User).delete()
-
-        session_db.commit()
-        logger.info("Database cleared successfully")
-        return web.json_response({'message': 'Database cleared successfully'})
-    except Exception as e:
-        session_db.rollback()
-        logger.error(f"Error clearing database: {e}")
-        return web.json_response({'error': str(e)}, status=500)
-    finally:
-        session_db.close()
 
 
-async def admin_users_handler(request):
-    """Admin endpoint to view all users in database"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
 
-    session_db = Session()
-    try:
-        users = session_db.query(User).all()
-        users_data = []
-        for user in users:
-            profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
-            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
-
-            user_data = {
-                'id': user.id,
-                'telegram_id': user.telegram_id,
-                'username': user.username,
-                'first_name': user.first_name,
-                'subscription_tier': user.subscription_tier.value if user.subscription_tier else None,
-                'premium_status': (subscription and subscription.status == 'active') or (user.subscription_tier and user.subscription_tier != SubscriptionTier.BRONZE),
-                'timezone': user.timezone,
-                'created_at': user.created_at.isoformat() if user.created_at else None,
-                'photo_url': user.photo_url,
-                'profile': {
-                    'city': profile.city if profile else None,
-                    'company': profile.company if profile else None,
-                    'position': profile.position if profile else None,
-                    'interests': profile.interests if profile else None,
-                    'average_rating': profile.average_rating if profile else 0,
-                    'rating_count': profile.rating_count if profile else 0
-                } if profile else None,
-                'subscription': {
-                    'status': subscription.status if subscription else None,
-                    'tier': subscription.tier.value if subscription and subscription.tier else None,
-                    'start_date': subscription.start_date.isoformat() if subscription and subscription.start_date else None,
-                    'end_date': subscription.end_date.isoformat() if subscription and subscription.end_date else None
-                } if subscription else None
-            }
-            users_data.append(user_data)
-
-        return web.json_response({
-            'total_users': len(users_data),
-            'users': users_data
-        })
-    except Exception as e:
-        logger.error(f"Error getting users: {e}")
-        return web.json_response({'error': str(e)}, status=500)
-    finally:
-        session_db.close()
-
-
-async def admin_security_handler(request):
-    """Admin endpoint - redirect to main dashboard with admin access"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
-
-    # Set admin secret in session for dashboard access
-    session = await get_session(request)
-    session['admin_secret'] = ADMIN_SECRET
-
-    # Redirect to main dashboard
-    return web.HTTPFound('/dashboard')
-    
-    # Get IP info if requested
-    ip = request.query.get('ip')
-    if ip:
-        ip_info = security_monitor.get_ip_info(ip)
-        return web.json_response(ip_info)
-    
-    # Get security statistics
-    stats = security_monitor.get_statistics()
-    
-    # Get user statistics from database
-    session_db = Session()
-    try:
-        from sqlalchemy import func, case
-        from datetime import datetime, timedelta
-        
-        # Общее количество пользователей
-        total_users = session_db.query(User).count()
-        
-        # Пользователи за последние 24 часа
-        last_24h = datetime.now() - timedelta(hours=24)
-        new_users_24h = session_db.query(User).filter(User.created_at >= last_24h).count()
-        
-        # Пользователи за последнюю неделю
-        last_week = datetime.now() - timedelta(days=7)
-        new_users_week = session_db.query(User).filter(User.created_at >= last_week).count()
-        
-        # Активные подписки (включая пользователей с Silver/Gold тарифами)
-        active_subscriptions_from_table = session_db.query(Subscription).filter(
-            Subscription.status == 'active'
-        ).count()
-        
-        # Пользователи с платными тарифами (могут не иметь записи в Subscription)
-        users_with_paid_tiers = session_db.query(User).filter(
-            or_(
-                User.subscription_tier == SubscriptionTier.SILVER,
-                User.subscription_tier == SubscriptionTier.GOLD
-            )
-        ).count()
-        
-        # Общее количество активных подписок
-        active_subscriptions = max(active_subscriptions_from_table, users_with_paid_tiers)
-        
-        # Количество пользователей по тарифам
-        tier_stats = session_db.query(
-            User.subscription_tier,
-            func.count(User.id).label('count')
-        ).group_by(User.subscription_tier).all()
-        
-        tier_distribution = {}
-        for tier, count in tier_stats:
-            if tier:
-                tier_distribution[tier.value] = count
-            else:
-                tier_distribution['bronze'] = count
-        
-        # Пользователи с заполненным профилем
-        profiles_filled = session_db.query(UserProfile).filter(
-            UserProfile.city.isnot(None),
-            UserProfile.interests.isnot(None)
-        ).count()
-        
-        # Количество задач
-        total_tasks = session_db.query(Task).count()
-        completed_tasks = session_db.query(Task).filter(Task.status == 'completed').count()
-        
-        # Количество взаимодействий (сообщений в чате)
-        total_interactions = session_db.query(Interaction).count()
-        
-        # Пользователи онлайн (с активностью за последние 15 минут)
-        last_15min = datetime.now() - timedelta(minutes=15)
-        users_online = session_db.query(User.id).join(Interaction).filter(
-            Interaction.created_at >= last_15min
-        ).distinct().count()
-        
-        # Последние зарегистрированные пользователи
-        recent_users = session_db.query(User).order_by(User.created_at.desc()).limit(10).all()
-        recent_users_list = [{
-            'id': u.id,
-            'username': u.username,
-            'first_name': u.first_name,
-            'created_at': u.created_at.strftime('%Y-%m-%d %H:%M:%S') if u.created_at else 'N/A',
-            'tier': u.subscription_tier.value if u.subscription_tier else 'bronze'
-        } for u in recent_users]
-        
-        # Активность пользователей (топ-10 по количеству взаимодействий)
-        top_active_users = session_db.query(
-            User.username,
-            User.first_name,
-            func.count(Interaction.id).label('interaction_count')
-        ).join(Interaction, User.id == Interaction.user_id)\
-         .group_by(User.id, User.username, User.first_name)\
-         .order_by(func.count(Interaction.id).desc())\
-         .limit(10).all()
-        
-        active_users_list = [{
-            'username': u[0],
-            'first_name': u[1],
-            'interactions': u[2]
-        } for u in top_active_users]
-        
-        user_stats = {
-            'total_users': total_users,
-            'users_online': users_online,
-            'new_users_24h': new_users_24h,
-            'new_users_week': new_users_week,
-            'active_subscriptions': active_subscriptions,
-            'tier_distribution': tier_distribution,
-            'profiles_filled': profiles_filled,
-            'profile_completion_rate': round((profiles_filled / total_users * 100) if total_users > 0 else 0, 1),
-            'total_tasks': total_tasks,
-            'completed_tasks': completed_tasks,
-            'task_completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 1),
-            'total_interactions': total_interactions,
-            'recent_users': recent_users_list,
-            'top_active_users': active_users_list
-        }
-        
-        stats['user_stats'] = user_stats
-        
-        # Debug logging
-        logger.info(f"User statistics collected: total_users={total_users}, users_online={users_online}, new_24h={new_users_24h}")
-        
-    except Exception as e:
-        logger.error(f"Error getting user statistics: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        stats['user_stats'] = {
-            'total_users': 0,
-            'users_online': 0,
-            'new_users_24h': 0,
-            'new_users_week': 0,
-            'active_subscriptions': 0,
-            'tier_distribution': {},
-            'profiles_filled': 0,
-            'profile_completion_rate': 0,
-            'total_tasks': 0,
-            'completed_tasks': 0,
-            'task_completion_rate': 0,
-            'total_interactions': 0,
-            'recent_users': [],
-            'top_active_users': [],
-            'error': str(e)
-        }
-    finally:
-        session_db.close()
-    
-    # Return JSON or HTML based on accept header
-    if 'text/html' in request.headers.get('Accept', ''):
-        logger.info(f"Rendering template with stats: {stats.get('user_stats', {}).get('total_users', 'N/A')} users")
-        return aiohttp_jinja2.render_template('security_dashboard.html', request, {
-            'stats': stats,
-            'current_time': datetime.now().isoformat()
-        })
-    
-    return web.json_response(stats)
-
-
-async def check_sportfan3_handler(request):
-    """Check and fix @sportfan3 subscription"""
-    # Check admin secret
-    secret = request.query.get('secret')
-    if secret != ADMIN_SECRET:
-        return web.json_response({'error': 'Unauthorized'}, status=403)
-
-    session_db = Session()
-    try:
-        logger.info("=== Проверка подписки @sportfan3 ===")
-
-        # Найдем пользователя
-        user = session_db.query(User).filter(User.username == 'sportfan3').first()
-        if not user:
-            return web.json_response({'error': 'User sportfan3 not found'}, status=404)
-
-        result = {
-            'user_id': user.id,
-            'username': user.username,
-            'current_tier': user.subscription_tier.value if user.subscription_tier else None
-        }
-
-        # Проверим активные подписки
-        subscriptions = session_db.query(Subscription).filter(
-            Subscription.user_id == user.id,
-            Subscription.active == True
-        ).all()
-        result['active_subscriptions'] = len(subscriptions)
-        result['subscriptions'] = []
-        for sub in subscriptions:
-            result['subscriptions'].append({
-                'id': sub.id,
-                'tier': sub.tier.value if sub.tier else None,
-                'active': sub.active,
-                'start_date': sub.start_date.isoformat() if sub.start_date else None,
-                'end_date': sub.end_date.isoformat() if sub.end_date else None
-            })
-
-        # Проверим payment_history
-        payments = session_db.query(PaymentHistory).filter(
-            PaymentHistory.user_id == user.id
-        ).order_by(PaymentHistory.created_at.desc()).all()
-        result['payment_history_count'] = len(payments)
-        result['payments'] = []
-        for payment in payments:
-            result['payments'].append({
-                'id': payment.id,
-                'tier': payment.tier,
-                'action': payment.action,
-                'start_date': payment.start_date.isoformat() if payment.start_date else None,
-                'end_date': payment.end_date.isoformat() if payment.end_date else None,
-                'created_at': payment.created_at.isoformat() if payment.created_at else None
-            })
-
-        # Проверим нужно ли восстановление
-        now = datetime.now(dt_timezone.utc)
-        has_active_gold = any(
-            p.tier == 'gold' and p.end_date and p.end_date > now 
-            for p in payments if p.action in ['subscription_activated', 'subscription_upgraded']
-        )
-
-        result['has_active_gold_payment'] = has_active_gold
-        result['needs_fix'] = has_active_gold and user.subscription_tier != SubscriptionTier.GOLD
-
-        if result['needs_fix']:
-            logger.info(f"❌ НАЙДЕНА ПРОБЛЕМА: Пользователь должен иметь GOLD, но имеет {user.subscription_tier}")
-            # Восстанавливаем подписку В ОБЕИХ ТАБЛИЦАХ
-            user.subscription_tier = SubscriptionTier.GOLD
-            
-            # Обновляем subscriptions.tier тоже
-            subscription = session_db.query(Subscription).filter_by(user_id=user.id, status='active').first()
-            if subscription:
-                subscription.tier = SubscriptionTier.GOLD
-            
-            session_db.commit()
-            result['fixed'] = True
-            result['new_tier'] = 'gold'
-            logger.info("✅ Подписка восстановлена в users и subscriptions!")
-        else:
-            result['fixed'] = False
-
-        return web.json_response(result)
-
-    except Exception as e:
-        logger.error(f"Error checking sportfan3 subscription: {e}")
-        return web.json_response({'error': str(e)}, status=500)
-    finally:
-        session_db.close()
 
 
 async def direct_login_handler(request):
@@ -2569,41 +2179,6 @@ async def session_error_middleware(request, handler):
 
 
 @web.middleware
-async def security_middleware(request, handler):
-    """Security monitoring only (no blocking)"""
-    remote = request.remote or 'unknown'
-
-    # Get user_id from session if available
-    user_id = None
-    try:
-        session = await get_session(request)
-        user_id = session.get('user_id')
-    except:
-        pass
-
-    # Log request only (no blocking)
-    user_agent = request.headers.get('User-Agent', 'unknown')
-    security_monitor.log_request(
-        ip=remote,
-        user_agent=user_agent,
-        path=request.path,
-        method=request.method,
-        user_id=user_id
-    )
-    
-    # Process request
-    try:
-        response = await handler(request)
-        # Log response status
-        security_monitor.request_logs[-1].status_code = response.status
-        return response
-    except Exception as e:
-        # Log error
-        security_monitor.request_logs[-1].status_code = 500
-        raise
-
-
-@web.middleware
 async def logging_middleware(request, handler):
     """Log all incoming requests"""
     logger.info(f"Incoming request: {request.method} {request.path} from {request.remote}")
@@ -2637,7 +2212,7 @@ async def csp_middleware(request, handler):
         response.headers['Expires'] = '0'
     return response
 
-app.middlewares.append(security_middleware)
+# app.middlewares.append(security_middleware)
 app.middlewares.append(redirect_to_root_middleware)
 app.middlewares.append(session_error_middleware)
 app.middlewares.append(logging_middleware)
@@ -6109,86 +5684,6 @@ async def create_payment_handler(request):
         return web.Response(text=f'Ошибка создания платежа: {str(e)}', status=500)
 
 
-async def setup_production_feed_handler(request):
-    """Временный админ-эндпоинт для настройки production ленты"""
-    try:
-        import json
-        from datetime import timezone
-        
-        session = Session()
-        results = []
-        
-        # Находим пользователей
-        aleksandr = session.query(User).filter_by(username='aleksandrinsider').first()
-        test_sport = session.query(User).filter_by(username='test_sport_10').first()
-        
-        if not aleksandr:
-            return web.json_response({'error': 'aleksandrinsider не найден'}, status=404)
-        
-        if not test_sport:
-            return web.json_response({'error': 'test_sport_10 не найден'}, status=404)
-        
-        results.append(f"aleksandrinsider ID: {aleksandr.id}")
-        results.append(f"test_sport_10 ID: {test_sport.id}")
-        
-        # Получаем/создаем профиль aleksandrinsider
-        profile = session.query(UserProfile).filter_by(user_id=aleksandr.id).first()
-        if not profile:
-            profile = UserProfile(user_id=aleksandr.id)
-            session.add(profile)
-            session.flush()
-        
-        # Добавляем test_sport_10 в избранное
-        current_favorites = json.loads(profile.favorite_contacts or '[]')
-        if 'test_sport_10' not in current_favorites:
-            current_favorites.append('test_sport_10')
-            profile.favorite_contacts = json.dumps(current_favorites)
-            session.commit()
-            results.append("test_sport_10 добавлен в избранное aleksandrinsider")
-        else:
-            results.append("test_sport_10 уже в избранном")
-        
-        # Проверяем существующие посты
-        existing_posts = session.query(Post).filter_by(user_id=test_sport.id).count()
-        results.append(f"Текущее количество постов test_sport_10: {existing_posts}")
-        
-        # Создаем посты если их меньше 9
-        posts_to_create = [
-            '🎯 Сегодня пробежал личный рекорд - 10км за 45 минут! Чувствую себя отлично, тренировки дают результат. #бег #спорт #здоровье',
-            '☕️ Утренняя пробежка + кофе = идеальное начало дня. Кто со мной на завтра в 7:00? #утро #пробежка #мотивация'
-        ]
-        
-        created_count = 0
-        for content in posts_to_create:
-            if existing_posts + created_count >= 9:
-                break
-            
-            new_post = Post(
-                user_id=test_sport.id,
-                content=content,
-                created_at=datetime.now(timezone.utc)
-            )
-            session.add(new_post)
-            created_count += 1
-        
-        if created_count > 0:
-            session.commit()
-            results.append(f"Создано {created_count} постов от test_sport_10")
-        else:
-            results.append("Посты не созданы (уже достаточно)")
-        
-        # Итоговая статистика
-        total_posts = session.query(Post).filter_by(user_id=test_sport.id).count()
-        results.append(f"Итого постов test_sport_10: {total_posts}")
-        results.append(f"Избранные aleksandrinsider: {profile.favorite_contacts}")
-        
-        session.close()
-        return web.json_response({'success': True, 'results': results})
-        
-    except Exception as e:
-        logger.error(f"Error in setup_production_feed_handler: {e}", exc_info=True)
-        return web.json_response({'error': str(e)}, status=500)
-
 
 # Routes
 app.router.add_get('/health', health_handler)
@@ -6217,10 +5712,6 @@ app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
 app.router.add_post('/apply_promo_code', apply_promo_code_handler)
 app.router.add_get('/create_payment', create_payment_handler)
-app.router.add_get('/clear_old_tasks', clear_old_tasks_handler)
-app.router.add_get('/clear_database', clear_database_handler)
-app.router.add_get('/admin/users', admin_users_handler)
-app.router.add_get('/admin/security', admin_security_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
 app.router.add_get('/direct_login', direct_login_handler)
 app.router.add_static('/static', 'static')
@@ -6255,7 +5746,7 @@ app.router.add_get('/api/reminders', api_reminders_handler)
 app.router.add_get('/api/delegations', api_delegations_handler)
 app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
-app.router.add_get('/admin/setup_feed', setup_production_feed_handler)
+
 
 # Setup for production
 # dp = Dispatcher()
@@ -6268,11 +5759,6 @@ app.router.add_get('/admin/setup_feed', setup_production_feed_handler)
 # Initialize ReminderService
 reminder_service = ReminderService(bot=bot if not LOCAL else None)
 logger.info("ReminderService initialized")
-
-# Initialize Self-Healing Agent
-from ai_integration.self_healing import get_self_healing_agent
-self_healing_agent = get_self_healing_agent()
-logger.info("Self-Healing Agent initialized")
 
 # Start ReminderService on app startup
 
@@ -6287,13 +5773,6 @@ async def start_reminder_service(app):
     logger.info(f"Scheduled jobs after start: {len(jobs)}")
     for job in jobs[:5]:  # Log first 5 jobs
         logger.info(f"Job: {job.id} at {job.next_run_time}")
-
-    # Create system snapshot after successful startup
-    try:
-        self_healing_agent.create_system_snapshot(is_working=True)
-        logger.info("System snapshot created after successful startup")
-    except Exception as e:
-        logger.error(f"Failed to create startup snapshot: {e}")
 
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)

@@ -22,8 +22,6 @@ from .utils import (
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
-from .logging import get_async_agent_logger
-from .self_healing import get_self_healing_agent
 
 logger = logging.getLogger(__name__)
 
@@ -2212,106 +2210,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.warning("[FINAL FALLBACK] Content empty after processing, using fallback")
             final_content = "Хорошо, понял. Продолжим работу!"
 
-        # ЛОГИРОВАНИЕ ВЗАИМОДЕЙСТВИЯ АГЕНТА
-        try:
-            start_time = time.time()
-            agent_logger = get_async_agent_logger()
-            
-            # Собираем информацию о использованных инструментах
-            tools_used = []
-            task_actions = []
-            
-            # Анализируем tool_calls если они были
-            if 'tool_calls' in locals() and tool_calls:
-                for tool_call in tool_calls:
-                    func_name = tool_call.get("function", {}).get("name")
-                    if func_name:
-                        tools_used.append(func_name)
-                        
-                        # Определяем действия с задачами
-                        if func_name in ['add_task', 'complete_task', 'edit_task', 'delete_task']:
-                            action_type = func_name.replace('_task', 'ed')
-                            task_actions.append({
-                                'type': action_type,
-                                'function': func_name,
-                                'timestamp': datetime.now(timezone.utc).isoformat()
-                            })
-                        elif func_name == 'delegate_task':
-                            task_actions.append({
-                                'type': 'delegated',
-                                'function': func_name,
-                                'timestamp': datetime.now(timezone.utc).isoformat()
-                            })
-            
-            # Определяем намерение пользователя
-            detected_intent = intent.get('type', 'unknown') if 'intent' in locals() else 'unknown'
-            
-            # Логируем взаимодействие (асинхронно, не блокирует)
-            response_time_ms = int((time.time() - start_time) * 1000)
-            
-            # Используем асинхронное логирование
-            import asyncio
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                log_success = loop.run_until_complete(
-                    agent_logger.log_interaction_async(
-                        user_id=user_id,
-                        message_type=message_type_for_prompt or 'conversation',
-                        user_message=original_message,
-                        agent_response=final_content,
-                        tools_used=tools_used,
-                        task_actions=task_actions,
-                        response_time_ms=response_time_ms,
-                        detected_intent=detected_intent,
-                        conversation_context=conversation_context[:200] if 'conversation_context' in locals() else None
-                    )
-                )
-                if log_success:
-                    logger.debug(f"[AGENT LOG] Interaction queued for async logging, tools={len(tools_used)}, intent={detected_intent}")
-                else:
-                    logger.warning("[AGENT LOG] Failed to queue interaction for logging (rate limit or queue full)")
-            except Exception as async_error:
-                logger.error(f"[AGENT LOG] Async logging failed, falling back to sync: {async_error}")
-                # Fallback to sync logging if async fails
-                log_entry = agent_logger.log_interaction_sync(
-                    user_id=user_id,
-                    message_type=message_type_for_prompt or 'conversation',
-                    user_message=original_message,
-                    agent_response=final_content,
-                    tools_used=tools_used,
-                    task_actions=task_actions,
-                    response_time_ms=response_time_ms,
-                    detected_intent=detected_intent,
-                    conversation_context=conversation_context[:200] if 'conversation_context' in locals() else None
-                )
-                if log_entry:
-                    logger.info(f"[AGENT LOG] Interaction logged via sync fallback: id={log_entry.id}")
-            
-        except Exception as log_error:
-            logger.error(f"[AGENT LOG] Failed to log interaction: {log_error}")
-            # Не позволяем ошибке логирования сломать основной функционал
-
-        # Создаем снимок системы при успешном взаимодействии
-        try:
-            healing_agent = get_self_healing_agent()
-            healing_agent.create_system_snapshot(is_working=True)
-        except Exception as snapshot_error:
-            logger.error(f"[SELF-HEALING] Failed to create success snapshot: {snapshot_error}")
-
         return final_content
 
     except Exception as e:
         logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
-
-        # Создаем снимок системы при ошибке (для отката)
-        try:
-            healing_agent = get_self_healing_agent()
-            healing_agent.create_system_snapshot(is_working=False)
-        except Exception as snapshot_error:
-            logger.error(f"[SELF-HEALING] Failed to create error snapshot: {snapshot_error}")
 
         # Добавляем номер строки для отладки
         tb = traceback.extract_tb(e.__traceback__)
