@@ -50,6 +50,19 @@ async def test_delegation():
             session.add(subscription)
             session.commit()
             print("✅ Создана активная подписка Silver для тестового пользователя")
+        else:
+            if subscription.tier != SubscriptionTier.SILVER:
+                subscription.tier = SubscriptionTier.SILVER
+                session.commit()
+                print("✅ Обновлена подписка до Silver")
+            else:
+                print(f"✅ Подписка уже Silver: {subscription.tier.value}")
+
+        # Обновляем поле subscription_tier в таблице User
+        if test_user.subscription_tier != SubscriptionTier.SILVER:
+            test_user.subscription_tier = SubscriptionTier.SILVER
+            session.commit()
+            print("✅ Обновлено поле subscription_tier в таблице User")
 
         # Создание тестового контакта для делегирования
         delegated_user = session.query(User).filter_by(telegram_id=888888).first()
