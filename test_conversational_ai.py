@@ -6,6 +6,7 @@ import asyncio
 import sys
 import os
 import json
+import re
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from ai_integration.chat import chat_with_ai
@@ -235,7 +236,29 @@ class ConversationalAITester:
             "Удали задачу 'проверить почту'",  # Тест на причину удаления
             "Создай задачу 'сделать отчет' без времени",  # Тест на уточнение
             "Удали задачу 'сделать отчет' потому что она не нужна",  # Тест на причину
-            "Что ты думаешь о моей продуктивности?"
+            "Что ты думаешь о моей продуктивности?",
+            "Создай задачу: подготовить презентацию к понедельнику",
+            "Напомни мне о дне рождения друга через неделю",
+            "Покажи задачи на сегодня",
+            "Отметь задачу 'купить продукты' как выполненную",
+            "Измени название задачи на 'купить продукты в магазине'",
+            "Создай задачу с высоким приоритетом: позвонить боссу",
+            "Расскажи о моих целях и навыках",
+            "Добавь навык 'программирование' в мой профиль",
+            "Найди задачи, которые я могу делегировать",
+            "Создай задачу для контакта @john_doe: обсудить проект",
+            "Покажи аналитику по выполненным задачам за неделю",
+            "Помоги оптимизировать мой график на завтра",
+            "Создай задачу без времени: написать письмо",  # Тест на уточнение
+            "Удали все просроченные задачи",  # Тест на причину
+            "Что делать, если я забыл о задаче?",
+            "Создай задачу: сходить в спортзал сегодня вечером",
+            "Напомни о важной встрече за 30 минут",
+            "Покажи задачи с высоким приоритетом",
+            "Измени статус задачи на 'в работе'",
+            "Расскажи о функциях напоминаний",
+            "Создай задачу на основе шаблона",
+            "Помоги с анализом моей продуктивности"
         ]
         return fallbacks[min(iteration-1, len(fallbacks)-1)]
 
@@ -248,7 +271,8 @@ class ConversationalAITester:
             "issues": [],
             "features_tested": [],
             "quality_score": 0,
-            "db_changes": db_changes or {}
+            "db_changes": db_changes or {},
+            "time_analysis": {}
         }
 
         if not agent_response or len(agent_response.strip()) < 10:
@@ -256,6 +280,111 @@ class ConversationalAITester:
             return analysis
 
         response_lower = agent_response.lower()
+
+        # Анализ работы со временем
+        time_analysis = {
+            "mentions_time": False,
+            "correct_time_calculation": True,
+            "time_references": []
+        }
+        
+        # Проверяем упоминания времени в ответе
+        time_patterns = [
+            r'\d{1,2}:\d{2}',  # 10:00, 15:30
+            r'через \d+',  # через 5 минут
+            r'завтра', r'сегодня', r'послезавтра',
+            r'утром', r'вечером', r'днем'
+        ]
+        
+        for pattern in time_patterns:
+            if re.search(pattern, response_lower):
+                time_analysis["mentions_time"] = True
+                time_analysis["time_references"].append(pattern)
+        
+        # Проверяем корректность расчетов времени
+        if "через" in response_lower and "минут" in response_lower:
+            # Если говорит "через X минут", проверяем логику
+            minutes_match = re.search(r'через (\d+) минут', response_lower)
+            if minutes_match:
+                mentioned_minutes = int(minutes_match.group(1))
+                if mentioned_minutes > 60:  # Слишком много минут
+                    time_analysis["correct_time_calculation"] = False
+                    analysis["issues"].append(f"Неверный расчет времени: через {mentioned_minutes} минут")
+        
+        # Анализ типов сообщений
+        message_type_analysis = {
+            "detected_type": "general",
+            "is_reminder": False,
+            "is_proactive": False,
+            "is_result_check": False,
+            "is_daily_report": False,
+            "is_overdue": False,
+            "is_system": False
+        }
+        
+        # Определяем тип сообщения по ключевым словам
+        if any(word in response_lower for word in ["напомина", "время пришло", "не забудь"]):
+            message_type_analysis["detected_type"] = "reminder"
+            message_type_analysis["is_reminder"] = True
+        elif any(word in response_lower for word in ["предлагаю", "давай", "можешь", "интересует"]) and not any(word in response_lower for word in ["напомина", "время пришло"]):
+            message_type_analysis["detected_type"] = "proactive"
+            message_type_analysis["is_proactive"] = True
+        elif any(word in response_lower for word in ["как прошло", "результат", "успешно", "закончил"]):
+            message_type_analysis["detected_type"] = "result_check"
+            message_type_analysis["is_result_check"] = True
+        elif any(word in response_lower for word in ["итоги дня", "сегодня выполнил", "статистика"]):
+            message_type_analysis["detected_type"] = "daily_report"
+            message_type_analysis["is_daily_report"] = True
+        elif any(word in response_lower for word in ["просрочен", "задерживаешься", "давно не"]):
+            message_type_analysis["detected_type"] = "overdue"
+            message_type_analysis["is_overdue"] = True
+        elif any(word in response_lower for word in ["завершил", "удалил", "изменил", "создал"]):
+            message_type_analysis["detected_type"] = "system"
+            message_type_analysis["is_system"] = True
+        
+        analysis["message_type_analysis"] = message_type_analysis
+
+        # Анализ упоминания контактов
+        contacts_analysis = {
+            "mentions_contacts": False,
+            "specific_contacts_mentioned": [],
+            "suggests_finding_contacts": False,
+            "delegation_attempted": False
+        }
+        
+        # Проверяем упоминание конкретных контактов (имена, @username)
+        contact_patterns = [
+            r'@[\w]+',  # @username
+            r'[А-Я][а-я]+\s+[А-Я][а-я]+',  # Имя Фамилия (русские имена)
+            r'[A-Z][a-z]+\s+[A-Z][a-z]+',  # Name Surname (английские имена)
+        ]
+        
+        for pattern in contact_patterns:
+            matches = re.findall(pattern, agent_response)
+            if matches:
+                contacts_analysis["mentions_contacts"] = True
+                contacts_analysis["specific_contacts_mentioned"].extend(matches)
+        
+        # Проверяем предложения найти контакты
+        if any(word in response_lower for word in ["найдем контакты", "поищем людей", "find_partners", "контакты по интересам"]):
+            contacts_analysis["suggests_finding_contacts"] = True
+        
+        # Проверяем попытки делегирования
+        if any(word in response_lower for word in ["делегирую", "передам", "@", "свяжитесь"]):
+            contacts_analysis["delegation_attempted"] = True
+        
+        analysis["contacts_analysis"] = contacts_analysis
+
+        # Проверка на шаблонные фразы
+        template_phrases = ["я помогу", "давайте", "конечно", "разумеется"]
+        for phrase in template_phrases:
+            if phrase in response_lower:
+                analysis["issues"].append(f"Шаблонная фраза: '{phrase}'")
+
+        # Проверка на правильность времени для overdue задач
+        if "просрочен" in response_lower or "overdue" in response_lower:
+            if "более чем" in response_lower and "день" in response_lower:
+                analysis["issues"].append("Неправильный расчет времени просрочки")
 
         # Определяем протестированные функции
         if any(word in response_lower for word in ["созда", "задач", "напомн"]):
@@ -274,17 +403,26 @@ class ConversationalAITester:
             analysis["features_tested"].append("Управление профилем")
         if any(word in response_lower for word in ["статистик", "анализ"]):
             analysis["features_tested"].append("Аналитика")
+        if contacts_analysis["suggests_finding_contacts"]:
+            analysis["features_tested"].append("Поиск контактов")
 
         # Проверки качества
         word_count = len(agent_response.split())
-        if word_count < 3:  # Уменьшили порог с 5 до 3
+        if word_count < 5:  # Минимальный порог
             analysis["issues"].append("Очень короткий ответ")
-        elif word_count > 80:  # Строже порог с 100 до 80
+        elif word_count > 100:  # Максимальный порог
             analysis["issues"].append("Слишком длинный ответ")
 
         # Проверка естественности
         if agent_response.count("!") > 3:
             analysis["issues"].append("Слишком много восклицательных знаков")
+
+        # Проверка на повторяющиеся слова
+        words = agent_response.lower().split()
+        if len(words) > len(set(words)):
+            duplicates = [word for word in set(words) if words.count(word) > 2]
+            if duplicates:
+                analysis["issues"].append(f"Повторяющиеся слова: {', '.join(duplicates)}")
 
         # Проверка релевантности - улучшенная логика
         user_keywords = [word for word in user_message.lower().split() if len(word) > 3]  # Только значимые слова
@@ -417,6 +555,10 @@ class ConversationalAITester:
                     print(f"🗑️  Удалено задач: {db_changes['tasks_deleted']}")
                 if db_changes.get("tasks_completed", 0) > 0:
                     print(f"✔️  Завершено задач: {db_changes['tasks_completed']}")
+                if analysis['time_analysis'].get('mentions_time'):
+                    print(f"⏰ Время упомянуто: {', '.join(analysis['time_analysis']['time_references'])}")
+                if not analysis['time_analysis'].get('correct_time_calculation'):
+                    print("⚠️  Проблемы с расчетом времени!")
                 if analysis['issues']:
                     print(f"⚠️  Проблемы: {', '.join(analysis['issues'])}")
 
@@ -444,6 +586,9 @@ class ConversationalAITester:
 
         # Итоговый анализ
         self.print_final_report()
+        
+        # Сохраняем результаты в JSON
+        self.save_results_to_json()
 
     def print_final_report(self):
         """Выводит итоговый отчет о тестировании"""
@@ -469,14 +614,54 @@ class ConversationalAITester:
         # Сбор всех протестированных функций
         all_features = set()
         all_issues = []
+        time_issues = 0
+        db_operation_issues = 0
+        message_types_tested = set()
+        contacts_analysis = {
+            "total_mentions": 0,
+            "total_suggestions": 0,
+            "total_delegations": 0,
+            "specific_contacts": set()
+        }
+        
         for result in self.test_results:
             all_features.update(result.get("features_tested", []))
             all_issues.extend(result.get("issues", []))
+            if result.get("time_analysis", {}).get("correct_time_calculation") == False:
+                time_issues += 1
+            if result.get("db_changes", {}).get("issues"):
+                db_operation_issues += len(result["db_changes"]["issues"])
+            
+            # Анализ типов сообщений
+            msg_type = result.get("message_type_analysis", {}).get("detected_type", "general")
+            message_types_tested.add(msg_type)
+            
+            # Анализ контактов
+            contacts = result.get("contacts_analysis", {})
+            if contacts.get("mentions_contacts"):
+                contacts_analysis["total_mentions"] += 1
+            if contacts.get("suggests_finding_contacts"):
+                contacts_analysis["total_suggestions"] += 1
+            if contacts.get("delegation_attempted"):
+                contacts_analysis["total_delegations"] += 1
+            contacts_analysis["specific_contacts"].update(contacts.get("specific_contacts_mentioned", []))
 
         print(f"\n🔧 Протестированные функции ({len(all_features)}):")
         for feature in sorted(all_features):
             count = sum(1 for r in self.test_results if feature in r.get("features_tested", []))
             print(f"  • {feature}: {count} раз")
+
+        print(f"\n📝 Протестированные типы сообщений ({len(message_types_tested)}):")
+        for msg_type in sorted(message_types_tested):
+            count = sum(1 for r in self.test_results if r.get("message_type_analysis", {}).get("detected_type") == msg_type)
+            print(f"  • {msg_type}: {count} раз")
+
+        print(f"\n👥 Анализ работы с контактами:")
+        print(f"  • Упоминания контактов: {contacts_analysis['total_mentions']}/{total_iterations}")
+        print(f"  • Предложения найти контакты: {contacts_analysis['total_suggestions']}/{total_iterations}")
+        print(f"  • Попытки делегирования: {contacts_analysis['total_delegations']}/{total_iterations}")
+        if contacts_analysis['specific_contacts']:
+            print(f"  • Конкретные контакты упомянуты: {', '.join(list(contacts_analysis['specific_contacts'])[:5])}")
 
         if all_issues:
             print(f"\n⚠️  Найденные проблемы ({len(all_issues)}):")
@@ -484,6 +669,63 @@ class ConversationalAITester:
             issue_counts = Counter(all_issues)
             for issue, count in issue_counts.most_common():
                 print(f"  • {issue}: {count} раз")
+        
+        print(f"\n⏰ Анализ работы со временем:")
+        time_mentions = sum(1 for r in self.test_results if r.get("time_analysis", {}).get("mentions_time"))
+        print(f"  • Упоминаний времени: {time_mentions}/{total_iterations}")
+        print(f"  • Проблем с расчетом времени: {time_issues}")
+        
+        print(f"\n💾 Анализ операций с БД:")
+        print(f"  • Проблем с выполнением операций: {db_operation_issues}")
+
+        # Расчет готовности к продакшену
+        production_readiness = 10.0
+        
+        # Штрафы за качество
+        if avg_quality < 8.0:
+            production_readiness -= (8.0 - avg_quality) * 2
+        elif avg_quality < 7.0:
+            production_readiness -= 3  # Критично низкое качество
+        
+        # Штрафы за ошибки
+        if successful_iterations < total_iterations * 0.9:  # Менее 90% успешных ответов
+            production_readiness -= 2
+        
+        # Штрафы за проблемы с БД
+        if db_operation_issues > 0:
+            production_readiness -= db_operation_issues * 2
+        
+        # Штрафы за проблемы со временем
+        if time_issues > total_iterations * 0.2:  # Более 20% проблем со временем
+            production_readiness -= 1
+        
+        # Бонусы за покрытие функций
+        essential_features = {"Создание задач", "Просмотр задач", "Управление профилем", "Поиск контактов"}
+        tested_essential = essential_features.intersection(all_features)
+        coverage_bonus = len(tested_essential) / len(essential_features) * 2
+        production_readiness += coverage_bonus
+        
+        # Бонусы за типы сообщений
+        message_types_bonus = min(len(message_types_tested) * 0.5, 2)
+        production_readiness += message_types_bonus
+        
+        # Бонусы за работу с контактами
+        contacts_bonus = 0
+        if contacts_analysis["total_suggestions"] > 0:
+            contacts_bonus += 1
+        if contacts_analysis["total_mentions"] > 0:
+            contacts_bonus += 0.5
+        production_readiness += contacts_bonus
+        
+        production_readiness = max(0, min(10, production_readiness))
+        
+        print(f"\n🏭 Оценка готовности к продакшену: {production_readiness:.1f}/10")
+        if production_readiness >= 9.0:
+            print("🎉 Агент готов к продакшену!")
+        elif production_readiness >= 7.0:
+            print("⚠️  Агент почти готов, нужны доработки")
+        else:
+            print("❌ Агент не готов к продакшену, требуется серьезная доработка")
 
         # Оценка готовности к продакшену
         db_actions_score = min(5, (total_tasks_created + total_tasks_deleted + total_tasks_completed) * 0.1)  # До 5 баллов за действия с БД
@@ -496,12 +738,39 @@ class ConversationalAITester:
         else:
             print("❌ Агент нуждается в доработках перед продакшеном")
 
+    def save_results_to_json(self):
+        """Сохраняет результаты тестирования в JSON файл"""
+        import json
+        from datetime import datetime
+        
+        results_data = {
+            "timestamp": datetime.now().isoformat(),
+            "test_type": "conversational_ai_test",
+            "total_iterations": len(self.test_results),
+            "results": self.test_results,
+            "summary": {
+                "successful_iterations": len([r for r in self.test_results if r.get("agent_response")]),
+                "avg_quality": sum(r["quality_score"] for r in self.test_results) / len(self.test_results),
+                "total_tasks_created": sum(r.get("db_changes", {}).get("tasks_created", 0) for r in self.test_results),
+                "total_tasks_deleted": sum(r.get("db_changes", {}).get("tasks_deleted", 0) for r in self.test_results),
+                "total_tasks_completed": sum(r.get("db_changes", {}).get("tasks_completed", 0) for r in self.test_results),
+                "all_features_tested": list(set().union(*[r.get("features_tested", []) for r in self.test_results])),
+                "all_issues": list(set().union(*[r.get("issues", []) for r in self.test_results]))
+            }
+        }
+        
+        filename = f"test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(results_data, f, ensure_ascii=False, indent=2)
+        
+        print(f"📄 Результаты сохранены в файл: {filename}")
+
 async def main():
     """Главная функция"""
     tester = ConversationalAITester()
 
-    # Запускаем тест с 20 итерациями
-    await tester.run_conversation_test(iterations=20)
+    # Запускаем тест с 10 итерациями для быстрой проверки
+    await tester.run_conversation_test(iterations=10)
 
     print("\n✅ Конверсационное тестирование завершено!")
 

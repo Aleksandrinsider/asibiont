@@ -1029,7 +1029,43 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
     # ВСЕГДА получаем актуальный список задач перед обработкой
     # Это гарантирует, что AI видит свежие данные после операций через веб-интерфейс
     current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
-    fresh_tasks_info = f"\n[АКТУАЛЬНЫЕ ЗАДАЧИ НА МОМЕНТ ЗАПРОСА]\n{current_tasks}\n"
+    
+    # Для proactive режима фильтруем только предстоящие задачи
+    if message_type == 'proactive':
+        # Получаем timezone пользователя
+        user_tz = pytz.UTC
+        if user and user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+            except:
+                user_tz = pytz.UTC
+        
+        # Получаем текущее время пользователя
+        base_now = datetime.now(pytz.UTC)
+        user_now = base_now.astimezone(user_tz) if user_tz != pytz.UTC else base_now
+        
+        # Фильтруем только предстоящие задачи
+        upcoming_tasks = []
+        if current_tasks and "РЈ РІР°СЃ" in current_tasks:  # Проверяем, что есть задачи
+            # Парсим текст задач (это грубый парсинг, но работает для текущего формата)
+            lines = current_tasks.split('\n')
+            for line in lines:
+                if '•' in line and ('на' in line.lower() or 'завтра' in line.lower() or 'через' in line.lower()):
+                    # Это задача с временем - проверяем, не просрочена ли
+                    if '[ПРОСРОЧЕНА]' not in line:
+                        upcoming_tasks.append(line.strip())
+                elif '•' in line and '[ПРОСРОЧЕНА]' not in line and 'на' not in line.lower():
+                    # Задача без времени считается предстоящей
+                    upcoming_tasks.append(line.strip())
+        
+        if upcoming_tasks:
+            filtered_tasks = "РџСЂРµРґСЃС‚РѕСЏС‰РёРµ Р·Р°РґР°С‡Рё:\n" + '\n'.join(upcoming_tasks[:5])
+        else:
+            filtered_tasks = "РќРµС‚ РїСЂРµРґСЃС‚РѕСЏС‰РёС… Р·Р°РґР°С‡. РћС‚Р»РёС‡РЅРѕРµ РІСЂРµРјСЏ РґР»СЏ РїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ!"
+        
+        fresh_tasks_info = f"\n[РђРљРўРЈРђР›Р¬РќР«Р• Р—РђР”РђР§Р РќРђ РњРћРњР•РќРў Р—РђРџР РћРЎРђ]\n{filtered_tasks}\n"
+    else:
+        fresh_tasks_info = f"\n[РђРљРўРЈРђР›Р¬РќР«Р• Р—РђР”РђР§Р РќРђ РњРћРњР•РќРў Р—РђРџР РћРЎРђ]\n{current_tasks}\n"
     
     # Очищаем упоминания задач из старого контекста, чтобы AI не ссылался на выполненные задачи
     # Оставляем только последние 3 сообщения для сохранения контекста разговора
@@ -2618,7 +2654,13 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         if tasks_list:
             tasks_info = "\n\nАКТИВНЫЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:\n"
             now_utc = datetime.now(pytz.UTC)
+            upcoming_tasks = []
+            overdue_tasks = []
+            
             for task in tasks_list[:15]:  # Ограничиваем 15 задачами
+                if task.status != 'pending':
+                    continue  # Пропускаем неактивные задачи
+                    
                 task_time = ""
                 status_marker = ""
                 if task.reminder_time:
@@ -2631,13 +2673,38 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         task_time_local = task_time_utc.astimezone(user_tz)
                         
                         # Проверяем, просрочена ли задача
-                        if task.status == 'pending' and task_time_utc < now_utc:
+                        if task_time_utc < now_utc:
                             status_marker = " [ПРОСРОЧЕНА]"
+                            overdue_tasks.append(task)
+                        else:
+                            upcoming_tasks.append(task)
                         
                         task_time = f" (на {task_time_local.strftime('%H:%M')})"
                     except:
                         pass
-                tasks_info += f"• {task.title}{task_time}{status_marker}\n"
+                else:
+                    upcoming_tasks.append(task)  # Задачи без времени считаем предстоящими
+            
+            # Для proactive режима показываем ТОЛЬКО ПРЕДСТОЯЩИЕ задачи
+            relevant_tasks = upcoming_tasks[:5]  # Ограничиваем 5 задачами для краткости
+            
+            if relevant_tasks:
+                for task in relevant_tasks:
+                    task_time = ""
+                    if task.reminder_time:
+                        try:
+                            if task.reminder_time.tzinfo is None:
+                                task_time_utc = pytz.UTC.localize(task.reminder_time)
+                            else:
+                                task_time_utc = task.reminder_time
+                            task_time_local = task_time_utc.astimezone(user_tz)
+                            task_time = f" (на {task_time_local.strftime('%H:%M')})"
+                        except:
+                            pass
+                    tasks_info += f"• {task.title}{task_time}\n"
+            else:
+                tasks_info += "• Нет предстоящих задач\n"
+                
             selected_prompt += tasks_info
         
         messages.append({"role": "user", "content": selected_prompt})

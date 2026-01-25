@@ -7,10 +7,37 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Устанавливаем LOCAL=1 для использования SQLite в тестах
+os.environ["LOCAL"] = "1"
+
 from ai_integration import chat_with_ai
+from models import Base, engine, Session, User, UserProfile
 
 async def test_all_message_types():
     """Тестируем все типы сообщений с улучшенными требованиями"""
+
+    # Инициализируем базу данных для тестов
+    print("Создание таблиц...")
+    Base.metadata.create_all(engine)
+    print("Готово!")
+
+    # Создаем тестового пользователя
+    session = Session()
+    test_user = session.query(User).filter_by(telegram_id=123456789).first()
+    if not test_user:
+        test_user = User(
+            telegram_id=123456789,
+            username="test_user",
+            timezone="Europe/Moscow"
+        )
+        session.add(test_user)
+        session.commit()
+        
+        # Создаем профиль
+        profile = UserProfile(user_id=test_user.id, city="Москва")
+        session.add(profile)
+        session.commit()
+    session.close()
 
     print("🧪 ТЕСТИРОВАНИЕ УЛУЧШЕННОГО РЕЖИМА ВСЕХ ТИПОВ СООБЩЕНИЙ")
     print("=" * 70)
