@@ -12,15 +12,37 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+
+        *::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+
+        *::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        *::-webkit-scrollbar-thumb {
+            background: #D1D9E0;
+            border-radius: 2px;
+        }
+
+        *::-webkit-scrollbar-thumb:hover {
+            background: #B1BAC4;
         }
 
         body {
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #0D1117;
-            color: #C9D1D9;
+            background-color: #FFFFFF;
+            color: #374151;
             min-height: 100vh;
             padding: 20px;
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 400;
+            line-height: normal;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .container {
@@ -29,22 +51,22 @@
         }
 
         .header {
-            background: #161B22;
-            border: 1px solid #30363D;
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
             border-radius: 6px;
-            padding: 24px;
+            padding: 20px;
             margin-bottom: 16px;
         }
 
         .header h1 {
-            color: #C9D1D9;
+            color: #374151;
             margin-bottom: 8px;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 600;
         }
 
         .header p {
-            color: #8B949E;
+            color: #6C727F;
             font-size: 13px;
         }
 
@@ -56,19 +78,20 @@
         }
 
         .stat-card {
-            background: #161B22;
-            border: 1px solid #30363D;
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
             border-radius: 6px;
             padding: 16px;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
         }
 
         .stat-card:hover {
-            border-color: #58A6FF;
+            border-color: #068487;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .stat-card h3 {
-            color: #8B949E;
+            color: #6C727F;
             font-size: 11px;
             font-weight: 600;
             margin-bottom: 8px;
@@ -77,23 +100,23 @@
         }
 
         .stat-card .value {
-            color: #58A6FF;
+            color: #068487;
             font-size: 28px;
             font-weight: 700;
         }
 
         .section {
-            background: #161B22;
-            border: 1px solid #30363D;
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
             border-radius: 6px;
             padding: 20px;
             margin-bottom: 16px;
         }
 
         .section h2 {
-            color: #C9D1D9;
+            color: #374151;
             margin-bottom: 16px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
         }
 
@@ -103,12 +126,12 @@
         }
 
         th {
-            background: #0D1117;
-            color: #8B949E;
+            background: #F6F8FA;
+            color: #6C727F;
             font-weight: 600;
             text-align: left;
             padding: 10px 12px;
-            border-bottom: 1px solid #30363D;
+            border-bottom: 1px solid #D1D9E0;
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -116,13 +139,13 @@
 
         td {
             padding: 10px 12px;
-            border-bottom: 1px solid #21262D;
-            color: #C9D1D9;
+            border-bottom: 1px solid #E5E7EB;
+            color: #374151;
             font-size: 13px;
         }
 
         tr:hover {
-            background: #0D1117;
+            background: #F6F8FA;
         }
 
         .badge {
@@ -134,24 +157,29 @@
         }
 
         .badge-danger {
-            background: rgba(248, 81, 73, 0.15);
-            color: #F85149;
+            background: #FEE2E2;
+            color: #DC2626;
         }
 
         .badge-warning {
-            background: rgba(187, 128, 9, 0.15);
-            color: #D29922;
+            background: #FEF3C7;
+            color: #D97706;
         }
 
         .badge-success {
-            background: rgba(63, 185, 80, 0.15);
-            color: #3FB950;
+            background: #D1FAE5;
+            color: #059669;
+        }
+
+        .badge-gray {
+            background: #F3F4F6;
+            color: #6B7280;
         }
 
         .progress-bar {
             width: 100%;
             height: 6px;
-            background: #21262D;
+            background: #E5E7EB;
             border-radius: 3px;
             overflow: hidden;
             margin-top: 8px;
@@ -159,29 +187,30 @@
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #58A6FF 0%, #1F6FEB 100%);
+            background: linear-gradient(90deg, #068487 0%, #05666A 100%);
             transition: width 0.3s ease;
         }
 
         .refresh-btn {
-            background: #238636;
+            background: #068487;
             color: white;
-            border: 1px solid rgba(240, 246, 252, 0.1);
+            border: 1px solid #068487;
             padding: 8px 16px;
             border-radius: 6px;
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
         }
 
         .refresh-btn:hover {
-            background: #2EA043;
+            background: #057578;
+            border-color: #057578;
         }
 
         .timestamp {
-            color: #8B949E;
+            color: #6C727F;
             font-size: 11px;
             margin-top: 5px;
         }
@@ -189,17 +218,18 @@
         .empty-state {
             text-align: center;
             padding: 40px;
-            color: #8B949E;
+            color: #6C727F;
             font-size: 13px;
         }
 
         code {
-            background: #0D1117;
+            background: #F6F8FA;
             padding: 3px 6px;
             border-radius: 3px;
             font-family: 'Monaco', 'Menlo', monospace;
             font-size: 11px;
-            color: #79C0FF;
+            color: #068487;
+            border: 1px solid #E5E7EB;
         }
 
         @media (max-width: 768px) {
@@ -225,11 +255,11 @@
             }
 
             .header h1 {
-                font-size: 20px;
+                font-size: 18px;
             }
 
             .section h2 {
-                font-size: 16px;
+                font-size: 14px;
             }
         }
     </style>
@@ -355,7 +385,7 @@
                             {% elif user.tier == 'silver' %}
                             <span class="badge badge-success">SILVER</span>
                             {% else %}
-                            <span class="badge" style="background: rgba(139, 148, 158, 0.15); color: #8B949E;">BRONZE</span>
+                            <span class="badge badge-gray">BRONZE</span>
                             {% endif %}
                         </td>
                         <td>{{ user.created_at }}</td>
