@@ -1566,8 +1566,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         intent = {"type": "conversation", "confidence": 0.5, "params": {}}
         logger.info("[INTENT] Using basic intent classification")
 
-        # Special handling for delegation requests from frontend buttons
-        if mentions and any(word in clean_message.lower() for word in ['делегировать', 'поручить', 'delegate', 'поручить']):
+        # Special handling for delegation requests from frontend buttons OR messages starting with @username
+        if mentions and (any(word in clean_message.lower() for word in ['делегировать', 'поручить', 'delegate', 'поручить']) or original_message.startswith(mentions[0])):
             if 'список' in clean_message.lower() or 'активные' in clean_message.lower():
                 # Request to show task list for delegation
                 intent = {"type": "list_tasks", "confidence": 0.9, "params": {"for_delegation": True, "target_user": mentions[0]}}
