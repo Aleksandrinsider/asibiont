@@ -742,8 +742,11 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif "Задачи с инсайтами:" in result_text:
                 natural_responses.append(result_text)
 
-            elif "Список партнеров:" in result_text:
-                natural_responses.append(result_text)
+            elif "🥉 Делегирование задач доступно только на тарифах" in result_text:
+                natural_responses.append("DELEGATION_BLOCKED_BRONZE: Делегирование недоступно на Bronze")
+
+            elif "Задача.*делегирована" in result_text or "делегирована" in result_text:
+                natural_responses.append("TASK_DELEGATED: Задача успешно делегирована")
 
             elif "NEED_TIME_FOR_TASK:" in result_text:
                 # AI должен спросить о времени для задачи - передаем контекст для естественного ответа
@@ -822,7 +825,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     else:
                         ai_context = "TASK_ACCEPTED"
                         fallback_message = "Задача принята в работу"
-            elif any("TASK_CREATED:" in r for r in natural_responses):
+            elif any("DELEGATION_BLOCKED_BRONZE:" in r for r in natural_responses):
+                ai_context = "Пользователь с тарифом Bronze попытался делегировать задачу. Объясни, что делегирование доступно только на Silver/Gold, расскажи о преимуществах этих тарифов, покажи ссылку https://asibiont.ru/subscription_tiers и предложи обновить подписку."
+                fallback_message = "Делегирование недоступно на вашем тарифе Bronze. Обновите до Silver или Gold для доступа к этой функции."
                 # Обработка создания задачи
                 task_created_responses = [r for r in natural_responses if "TASK_CREATED:" in r]
                 for tr in task_created_responses:
