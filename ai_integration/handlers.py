@@ -2611,7 +2611,7 @@ def update_user_memory(info=None, user_id=None, session=None):
         return f"Ошибка при обновлении памяти: {str(e)}"
 
 
-def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
+def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
     """Delete a task by ID or title"""
     logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', reason='{reason}', user_id={user_id}, confirmed={confirmed}")
     
