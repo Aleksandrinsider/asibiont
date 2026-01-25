@@ -425,7 +425,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "delete_task":
-                result = await delete_task(
+                result = delete_task(
                     task_id=args.get("task_id"),
                     task_title=args.get("task_title"),
                     user_id=user_id,

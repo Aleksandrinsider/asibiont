@@ -2901,6 +2901,154 @@ def update_user_memory(info=None, user_id=None, session=None):
         return f"Ошибка при обновлении памяти: {str(e)}"
 
 
+def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
+    """Delete a task by ID or title"""
+    logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', reason='{reason}', user_id={user_id}, confirmed={confirmed}")
+    
+    if user_id is None:
+        logger.error("[DELETE_TASK] user_id is None")
+        return "ERROR: user_id не может быть None"
+    
+    if task_id is None and (task_title is None or task_title.strip() == ""):
+        logger.error("[DELETE_TASK] Both task_id and task_title are None/empty") 
+        return "ERROR: Не указан идентификатор или название задачи"
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден."
+
+    # Find task by ID or title
+    if task_id:
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+
+        task = (
+            session.query(Task)
+            .filter(
+                or_(
+                    and_(Task.id == task_id_int, Task.user_id == user.id),
+                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
+                )
+            )
+            .first()
+        )
+    elif task_title:
+        # Search by words in title (including delegated tasks)
+        words = task_title.lower().split()
+        conditions = [func.lower(Task.title).like(f"%{word}%") for word in words]
+        
+        # Build query with optional delegated task search
+        query_conditions = [and_(Task.user_id == user.id, or_(*conditions))]
+        
+        if user.username:
+            query_conditions.append(
+                and_(
+                    Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
+                    Task.delegation_status == "accepted",
+                    or_(*conditions)
+                )
+            )
+        
+        task = session.query(Task).filter(or_(*query_conditions)).first()
+    else:
+        if close_session:
+            session.close()
+        return "Не указан ни task_id, ни task_title."
+
+    if task:
+        # Check if task is already completed - allow deletion but with different message
+        was_completed = task.status == "completed"
+        
+        # If not confirmed and task is active, ask for confirmation
+        if not confirmed and task.status in ["pending", "active", "in_progress"]:
+            if close_session:
+                session.close()
+            return f"CONFIRM_DELETE: Вы уверены, что хотите удалить задачу '{task.title}'? Это действие нельзя отменить."
+        
+        # Save deletion reason for analytics
+        deletion_reason = reason or "Пользователь удалил задачу"
+        
+        # Cancel all scheduled jobs for this task
+        try:
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE and REMINDER_SERVICE.scheduler:
+                # Cancel reminder
+                reminder_job_id = f"reminder_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
+                    logger.info(f"[DELETE_TASK] Cancelled reminder job for task {task.id}")
+                
+                # Cancel result check
+                result_check_job_id = f"result_check_{task.id}"
+                if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
+                    logger.info(f"[DELETE_TASK] Cancelled result check job for task {task.id}")
+                
+                # Cancel task checkpoints
+                for checkpoint_type in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
+                    checkpoint_job_id = f"task_overdue_{task.id}_{checkpoint_type}_{user.telegram_id}"
+                    if REMINDER_SERVICE.scheduler.get_job(checkpoint_job_id):
+                        REMINDER_SERVICE.scheduler.remove_job(checkpoint_job_id)
+                        logger.info(f"[DELETE_TASK] Cancelled checkpoint job {checkpoint_type} for task {task.id}")
+                
+                # Cancel 1/3 checkpoint
+                checkpoint_1_3_job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
+                if REMINDER_SERVICE.scheduler.get_job(checkpoint_1_3_job_id):
+                    REMINDER_SERVICE.scheduler.remove_job(checkpoint_1_3_job_id)
+                    logger.info(f"[DELETE_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
+        except Exception as e:
+            logger.warning(f"[DELETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
+
+        # Save reason and mark as deleted
+        task.skipped_reason = deletion_reason
+        task.status = "deleted"
+        session.commit()
+        
+        # Actually delete the task from database
+        task_title = task.title
+        session.delete(task)
+        session.commit()
+
+        # Update profile analytics
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if profile:
+            if was_completed:
+                # If task was completed, decrement completed count
+                if profile.completed_tasks and profile.completed_tasks > 0:
+                    profile.completed_tasks -= 1
+            else:
+                # If task was not completed, decrement created count
+                if profile.total_tasks_created and profile.total_tasks_created > 0:
+                    profile.total_tasks_created -= 1
+            session.commit()
+
+        # Return appropriate message
+        if was_completed:
+            result = f"Задача '{task_title}' удалена из истории выполненных задач."
+        else:
+            result = f"Задача '{task_title}' удалена."
+
+        if close_session:
+            session.close()
+        return result
+    else:
+        if close_session:
+            session.close()
+        return "Задача не найдена."
+
+
 def create_subscription_payment(user_id=None):
     """Create subscription payment"""
     from subscription_service import create_subscription_payment as create_sub_payment
