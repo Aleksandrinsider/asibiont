@@ -1397,7 +1397,7 @@
                 </p>
                 <form id="quick-profile-form" style="display: flex; flex-direction: column; gap: 12px;">
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город <span style="color: #DC2626; font-weight: 500;">*</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Город</label>
                         <input type="text" id="quick-city" placeholder="Например: Москва" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
@@ -1413,7 +1413,7 @@
                         <input type="text" id="quick-position" placeholder="Ваша должность" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Интересы <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <input type="text" id="quick-interests" placeholder="Например: спорт, программирование, путешествия" style="width: 100%; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
@@ -4439,8 +4439,8 @@
             const goals = document.getElementById('quick-goals').value.trim();
 
             // Проверяем обязательные поля
-            if (!city) {
-                showNotification('Укажите город', 'error');
+            if (!interests) {
+                showNotification('Укажите интересы', 'error');
                 return;
             }
             
