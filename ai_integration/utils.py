@@ -361,44 +361,40 @@ def parse_time_to_datetime(time_text, user_id):
         target_dt = user_tz.localize(target_dt)
         return target_dt.strftime("%Y-%m-%d %H:%M")
 
+    # Проверяем дни недели
+    weekdays = {
+        'понедельник': 0, 'вторник': 1, 'среда': 2, 'четверг': 3,
+        'пятница': 4, 'суббота': 5, 'воскресенье': 6
+    }
+    
+    weekday_match = re.search(r"(понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)(?:\s+(?:в\s+)?(\d{1,2}):(\d{2}))?", time_text)
+    if weekday_match:
+        weekday_name = weekday_match.group(1).lower()
+        target_weekday = weekdays[weekday_name]
+        current_weekday = now.weekday()  # 0 = понедельник, 6 = воскресенье
+        
+        # Вычисляем сколько дней добавить
+        days_ahead = (target_weekday - current_weekday) % 7
+        if days_ahead == 0:  # Если это тот же день недели
+            days_ahead = 7  # Следующая неделя
+        
+        target_date = (now + timedelta(days=days_ahead)).date()
+        
+        # Если указано время
+        if weekday_match.group(2) and weekday_match.group(3):
+            hour = int(weekday_match.group(2))
+            minute = int(weekday_match.group(3))
+            target_time = datetime.min.time().replace(hour=hour, minute=minute)
+        else:
+            # Если время не указано, ставим 9:00
+            target_time = datetime.min.time().replace(hour=9, minute=0)
+        
+        target_dt = datetime.combine(target_date, target_time)
+        target_dt = user_tz.localize(target_dt)
+        return target_dt.strftime("%Y-%m-%d %H:%M")
+
     # Проверяем просто "в HH:MM"
     simple_time_match = re.search(r"(?:в\s+)?(\d{1,2}):(\d{2})", time_text)
-    if simple_time_match:
-        hour = int(simple_time_match.group(1))
-        minute = int(simple_time_match.group(2))
-
-        # Если время уже прошло сегодня - ставим на завтра
-        target_time = datetime.min.time().replace(hour=hour, minute=minute)
-        if target_time <= now.time():
-            target_date = (now + timedelta(days=1)).date()
-        else:
-            target_date = now.date()
-
-        target_dt = datetime.combine(target_date, target_time)
-        target_dt = user_tz.localize(target_dt)
-        return target_dt.strftime("%Y-%m-%d %H:%M")
-
-    # Проверяем "утром", "вечером", "днем"
-    time_word_match = re.search(r"(утром|вечером|днем)", time_text)
-    if time_word_match:
-        time_word = time_word_match.group(1).lower()
-        if "утром" in time_word:
-            hour, minute = 8, 0
-        elif "вечером" in time_word:
-            hour, minute = 18, 0
-        elif "днем" in time_word:
-            hour, minute = 12, 0
-
-        target_time = datetime.min.time().replace(hour=hour, minute=minute)
-        # Если время уже прошло сегодня - ставим на завтра
-        if target_time <= now.time():
-            target_date = (now + timedelta(days=1)).date()
-        else:
-            target_date = now.date()
-
-        target_dt = datetime.combine(target_date, target_time)
-        target_dt = user_tz.localize(target_dt)
-        return target_dt.strftime("%Y-%m-%d %H:%M")
 
     return None
 
