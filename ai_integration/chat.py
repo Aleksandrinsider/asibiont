@@ -138,7 +138,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     # Print tool_calls for debugging
     if tool_calls:
         for i, tc in enumerate(tool_calls):
-            logger.info(f"[PROCESS_TOOL_CALLS] Tool call {i}: {tc}")
+            logger.info(f"[PROCESS_TOOL_CALLS] Tool call {i}: function={tc.get('function', {}).get('name')}, args={tc.get('function', {}).get('arguments', '')[:100]}")
     else:
         logger.warning("[PROCESS_TOOL_CALLS] tool_calls is empty or None!")
     
@@ -154,35 +154,28 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if corrected_tool_calls:
         tool_calls = corrected_tool_calls
 
-    # Убираем дубликаты tool calls - только cooldown для опасных команд
+    # Убираем ТОЧНЫЕ дубликаты tool calls (одинаковые функция+аргументы)
     unique_tool_calls = []
-    current_time = time.time()
+    seen_calls = set()
     
     for call in tool_calls:
         func_name = call.get("function", {}).get("name")
+        func_args = call.get("function", {}).get("arguments", "")
         
-        # Для опасных команд (add_task, delegate_task, update_user_memory, update_profile) - временной лимит
-        if func_name in _PROTECTED_FUNCTIONS:
-            # Проверяем последний вызов этой функции для пользователя
-            call_key = (user_id, func_name)
-            last_call_time = _last_call_time.get(call_key, 0)
-            time_since_last = current_time - last_call_time
-            
-            if time_since_last < _COOLDOWN:
-                logger.warning(f"[TOOL CALLS] Blocked {func_name} - cooldown active ({time_since_last:.1f}s / {_COOLDOWN}s)")
-                continue  # Пропускаем этот вызов
-            
-            # Разрешаем вызов и обновляем время
-            _last_call_time[call_key] = current_time
+        # Создаем ключ для проверки дубликатов
+        call_signature = f"{func_name}:{func_args}"
         
-        # Все остальные команды - разрешаем без ограничений
-        unique_tool_calls.append(call)
+        if call_signature not in seen_calls:
+            unique_tool_calls.append(call)
+            seen_calls.add(call_signature)
+        else:
+            logger.warning(f"[TOOL CALLS] Blocked duplicate {func_name}")
     
     tool_calls = unique_tool_calls
     
-    logger.info(f"[PROCESS_TOOL_CALLS] After cooldown check: {len(tool_calls)} tool calls")
+    logger.info(f"[PROCESS_TOOL_CALLS] After duplicate check: {len(tool_calls)} tool calls")
     if not tool_calls:
-        logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after cooldown check!")
+        logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after duplicate check!")
 
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
@@ -262,26 +255,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 if is_duplicate:
                     continue
                 
-                # КРИТИЧЕСКАЯ ПРОВЕРКА: ищем КОНКРЕТНОЕ время в ОРИГИНАЛЬНОМ сообщении пользователя
-                # Только точные форматы времени, неточные формулировки ("завтра с утра") НЕ считаются
-                time_patterns = [
-                    r'\d{1,2}:\d{2}',  # 10:00, 8:30
-                    r'через\s+\d+\s+(минут[уы]?|час[аов]?|дне[йя]|секунд)',  # через 30 минут, через 2 часа
-                    r'завтра\s+в\s+\d{1,2}',  # завтра в 10
-                    r'сегодня\s+в\s+\d{1,2}',  # сегодня в 15
-                    r'в\s+\d{1,2}\s+(час|утра|вечера|дня)',  # в 10 утра, в 15 часов
-                    r'\d{1,2}\s+(утра|вечера|дня|ночи)',  # 10 утра, 15 дня
-                ]
-                
-                has_explicit_time = False
-                for pattern in time_patterns:
-                    if re.search(pattern, original_message.lower()):
-                        has_explicit_time = True
-                        break
-                
-                # Если пользователь НЕ указал время в сообщении - устанавливаем состояние ожидания
-                if not has_explicit_time:
-                    logger.info(f"[ADD TASK] No time specified - setting waiting state for user {user_id}")
+                # КРИТИЧЕСКАЯ ПРОВЕРКА: Если AI вызвал add_task, значит время указано
+                # Проверяем есть ли reminder_time в аргументах
+                if not args.get("reminder_time"):
+                    logger.info(f"[ADD TASK] No reminder_time in args - setting waiting state for user {user_id}")
                     
                     # Получаем пользователя для обновления состояния
                     from models import User
@@ -310,6 +287,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 
                 # Проверяем относительное время в оригинальном сообщении
                 from ai_integration.utils import parse_relative_time
+                logger.info(f"[ADD TASK] About to call parse_relative_time with current_time type: {type(current_time)}, value: {current_time}")
                 relative_time_result = parse_relative_time(original_message, current_time)
                 if relative_time_result:
                     # Если нашли относительное время - ИСПОЛЬЗУЕМ его вместо AI расчета
