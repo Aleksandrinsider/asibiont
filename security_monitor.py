@@ -74,7 +74,7 @@ class SecurityMonitor:
         self.requests_per_ip[ip].append(now)
         
         # Периодическая очистка старых данных
-        if (now - self.last_cleanup).total_seconds() > 300:  # Каждые 5 минут
+        if (now - self.last_cleanup).total_seconds() > 60:  # Каждую минуту для оптимальной производительности
             self.cleanup_old_data()
             self.last_cleanup = now
         

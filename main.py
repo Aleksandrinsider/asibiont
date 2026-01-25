@@ -2244,10 +2244,21 @@ async def admin_security_handler(request):
         last_week = datetime.now() - timedelta(days=7)
         new_users_week = session_db.query(User).filter(User.created_at >= last_week).count()
         
-        # Активные подписки
-        active_subscriptions = session_db.query(Subscription).filter(
+        # Активные подписки (включая пользователей с Silver/Gold тарифами)
+        active_subscriptions_from_table = session_db.query(Subscription).filter(
             Subscription.status == 'active'
         ).count()
+        
+        # Пользователи с платными тарифами (могут не иметь записи в Subscription)
+        users_with_paid_tiers = session_db.query(User).filter(
+            or_(
+                User.subscription_tier == SubscriptionTier.SILVER,
+                User.subscription_tier == SubscriptionTier.GOLD
+            )
+        ).count()
+        
+        # Общее количество активных подписок
+        active_subscriptions = max(active_subscriptions_from_table, users_with_paid_tiers)
         
         # Количество пользователей по тарифам
         tier_stats = session_db.query(
