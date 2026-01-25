@@ -623,6 +623,23 @@
                 padding: 10px;
                 gap: 8px;
             }
+            
+            /* Скрываем чат и ленту новостей на мобильных */
+            .left-column {
+                display: none !important;
+            }
+            
+            /* Центральная колонка занимает всю ширину */
+            .center-column {
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
+            }
+            
+            /* Правая колонка (задачи) на всю ширину */
+            .right-column {
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
+            }
         }
 
         @media (max-width: 480px) {
