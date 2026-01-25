@@ -1118,6 +1118,9 @@ async def dashboard_handler(request):
                 })
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
+            
+            # Get session for admin check
+            session_req = await get_session(request)
 
             # Проверить подписку
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
