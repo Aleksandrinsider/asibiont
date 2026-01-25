@@ -22,6 +22,7 @@ from .utils import (
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
+from .logging import get_agent_logger
 
 logger = logging.getLogger(__name__)
 
@@ -2209,6 +2210,62 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if not final_content or len(final_content.strip()) < 5:
             logger.warning("[FINAL FALLBACK] Content empty after processing, using fallback")
             final_content = "Хорошо, понял. Продолжим работу!"
+
+        # ЛОГИРОВАНИЕ ВЗАИМОДЕЙСТВИЯ АГЕНТА
+        try:
+            start_time = time.time()
+            agent_logger = get_agent_logger(db_session)
+            
+            # Собираем информацию о использованных инструментах
+            tools_used = []
+            task_actions = []
+            
+            # Анализируем tool_calls если они были
+            if 'tool_calls' in locals() and tool_calls:
+                for tool_call in tool_calls:
+                    func_name = tool_call.get("function", {}).get("name")
+                    if func_name:
+                        tools_used.append(func_name)
+                        
+                        # Определяем действия с задачами
+                        if func_name in ['add_task', 'complete_task', 'edit_task', 'delete_task']:
+                            action_type = func_name.replace('_task', '')
+                            task_actions.append({
+                                'type': action_type,
+                                'function': func_name,
+                                'timestamp': datetime.now(timezone.utc).isoformat()
+                            })
+                        elif func_name == 'delegate_task':
+                            task_actions.append({
+                                'type': 'delegated',
+                                'function': func_name,
+                                'timestamp': datetime.now(timezone.utc).isoformat()
+                            })
+            
+            # Определяем намерение пользователя
+            detected_intent = intent.get('type', 'unknown') if 'intent' in locals() else 'unknown'
+            
+            # Логируем взаимодействие
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
+            log_entry = agent_logger.log_interaction(
+                user_id=user_id,
+                message_type=message_type_for_prompt or 'conversation',
+                user_message=original_message,
+                agent_response=final_content,
+                tools_used=tools_used,
+                task_actions=task_actions,
+                response_time_ms=response_time_ms,
+                detected_intent=detected_intent,
+                conversation_context=conversation_context[:200] if 'conversation_context' in locals() else None
+            )
+            
+            if log_entry:
+                logger.info(f"[AGENT LOG] Interaction logged: id={log_entry.id}, tools={len(tools_used)}, intent={detected_intent}")
+            
+        except Exception as log_error:
+            logger.error(f"[AGENT LOG] Failed to log interaction: {log_error}")
+            # Не позволяем ошибке логирования сломать основной функционал
 
         return final_content
 
