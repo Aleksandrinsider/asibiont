@@ -537,17 +537,41 @@ class ReminderService:
                 return
             
             # Получить активные задачи
-            all_active_tasks = db.query(Task).filter(
+            # Основные задачи пользователя
+            user_tasks = db.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status.in_(['pending', 'in_progress'])
-            ).order_by(Task.reminder_time).all()
+            )
             
-            # Добавить просроченные задачи
+            # Задачи, делегированные пользователем другим
+            delegated_by_user = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.delegated_to_username.isnot(None),
+                Task.status.in_(['pending', 'in_progress'])
+            )
+            
+            # Задачи, делегированные пользователю
+            delegated_to_user = db.query(Task).filter(
+                Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                Task.delegation_status == 'accepted',
+                Task.status.in_(['pending', 'in_progress'])
+            )
+            
+            all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
+            
+            # Добавить просроченные задачи (только основные и делегированные пользователю)
             now_utc = datetime.now(pytz.UTC)
             overdue_tasks = db.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status == 'pending',
                 Task.reminder_time < now_utc
+            ).union(
+                db.query(Task).filter(
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                    Task.delegation_status == 'accepted',
+                    Task.status == 'pending',
+                    Task.reminder_time < now_utc
+                )
             ).order_by(Task.reminder_time).all()
             
             all_tasks = all_active_tasks + overdue_tasks
@@ -1029,16 +1053,40 @@ class ReminderService:
                 return
             
             # Получить все активные задачи для передачи в AI
-            all_active_tasks = db.query(Task).filter(
+            # Основные задачи пользователя
+            user_tasks = db.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status.in_(['pending', 'in_progress'])
-            ).order_by(Task.reminder_time).all()
+            )
             
-            # Добавить просроченные задачи
+            # Задачи, делегированные пользователем другим
+            delegated_by_user = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.delegated_to_username.isnot(None),
+                Task.status.in_(['pending', 'in_progress'])
+            )
+            
+            # Задачи, делегированные пользователю
+            delegated_to_user = db.query(Task).filter(
+                Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                Task.delegation_status == 'accepted',
+                Task.status.in_(['pending', 'in_progress'])
+            )
+            
+            all_active_tasks = user_tasks.union(delegated_by_user).union(delegated_to_user).order_by(Task.reminder_time).all()
+            
+            # Добавить просроченные задачи (только основные и делегированные пользователю)
             overdue_tasks = db.query(Task).filter(
                 Task.user_id == user.id,
                 Task.status == 'pending',
                 Task.reminder_time < now_utc
+            ).union(
+                db.query(Task).filter(
+                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
+                    Task.delegation_status == 'accepted',
+                    Task.status == 'pending',
+                    Task.reminder_time < now_utc
+                )
             ).order_by(Task.reminder_time).all()
             
             all_tasks = all_active_tasks + overdue_tasks

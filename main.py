@@ -1866,10 +1866,11 @@ async def complete_task_handler(request):
         result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} completed by user {user_id}: {result}")
         
-        # Отправляем простое уведомление в Telegram о завершении задачи из веб-панели
+        # Отправляем уведомление в Telegram через AI обработку, как будто пользователь написал о выполнении
         try:
             if 'bot' in request.app:
                 from models import Session as DBSession, Task, User
+                from ai_integration.chat import chat_with_ai
                 db_session = DBSession()
                 try:
                     # Находим пользователя по user_id (это telegram_id)
@@ -1877,9 +1878,40 @@ async def complete_task_handler(request):
                     if user:
                         task = db_session.query(Task).filter_by(id=task_id, user_id=user.id).first()
                         if task:
-                            notification_text = f"✅ Задача выполнена: {task.title}"
-                            await request.app['bot'].send_message(chat_id=user_id, text=notification_text)
-                            logger.info(f"Sent task completion notification to Telegram user {user_id}")
+                            # Отправляем сообщение через AI, как будто пользователь написал о выполнении
+                            ai_message = f"я выполнил задачу '{task.title}'"
+                            try:
+                                ai_response = await chat_with_ai(ai_message, user_id=user_id)
+                                await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
+                                
+                                # Сохраняем взаимодействие в базу данных для отображения в веб-панели
+                                interaction = Interaction(
+                                    user_id=user.id,
+                                    message_type='ai',
+                                    content=ai_response,
+                                    created_at=datetime.now(dt_timezone.utc)
+                                )
+                                db_session.add(interaction)
+                                db_session.commit()
+                                
+                                logger.info(f"Sent AI-processed task completion notification to Telegram user {user_id}")
+                            except Exception as ai_error:
+                                # Fallback на простое уведомление, если AI не сработал
+                                logger.warning(f"AI processing failed, using fallback: {ai_error}")
+                                notification_text = f"✅ Задача выполнена: {task.title}"
+                                await request.app['bot'].send_message(chat_id=user_id, text=notification_text)
+                                
+                                # Сохраняем fallback взаимодействие в базу данных
+                                interaction = Interaction(
+                                    user_id=user.id,
+                                    message_type='ai',
+                                    content=notification_text,
+                                    created_at=datetime.now(dt_timezone.utc)
+                                )
+                                db_session.add(interaction)
+                                db_session.commit()
+                                
+                                logger.info(f"Sent fallback task completion notification to Telegram user {user_id}")
                 finally:
                     db_session.close()
         except Exception as notification_error:
@@ -1957,16 +1989,31 @@ async def delete_task_handler(request):
         if result.startswith('TASK_COMPLETED_ASK_RESULT:') or result.startswith('TASK_UPDATED:') or result.startswith('TASK_DELETED_ASK_REASON:'):
             try:
                 from ai_integration.chat import chat_with_ai
-                from models import Session as DBSession
+                from models import Session as DBSession, User
                 db_session = DBSession()
-                # Обработка через AI для генерации естественного ответа
-                ai_response = await chat_with_ai(result, user_id=user_id, db_session=db_session)
-                db_session.close()
-                
-                # Отправляем AI ответ в Telegram если бот доступен
-                if 'bot' in request.app and ai_response:
-                    await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
-                    logger.info(f"Sent AI response to Telegram user {user_id}")
+                try:
+                    # Обработка через AI для генерации естественного ответа
+                    ai_response = await chat_with_ai(result, user_id=user_id, db_session=db_session)
+                    
+                    # Отправляем AI ответ в Telegram если бот доступен
+                    if 'bot' in request.app and ai_response:
+                        await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
+                        
+                        # Сохраняем взаимодействие в базу данных для отображения в веб-панели
+                        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+                        if user:
+                            interaction = Interaction(
+                                user_id=user.id,
+                                message_type='ai',
+                                content=ai_response,
+                                created_at=datetime.now(dt_timezone.utc)
+                            )
+                            db_session.add(interaction)
+                            db_session.commit()
+                        
+                        logger.info(f"Sent AI response to Telegram user {user_id}")
+                finally:
+                    db_session.close()
             except Exception as ai_error:
                 logger.error(f"Error processing result through AI: {ai_error}")
         
