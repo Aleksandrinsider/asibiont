@@ -4397,35 +4397,13 @@
         async function updateProfileDisplay() {
             // Обновляем отображение профиля на странице динамически
             try {
-                const response = await fetch('/api/profile', {
-                    method: 'GET',
-                    credentials: 'include'
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    const profile = data.profile;
-                    
-                    // Обновляем элементы на странице, если они существуют
-                    const cityElement = document.querySelector('[data-profile="city"]');
-                    if (cityElement && profile.city) {
-                        cityElement.textContent = profile.city;
-                    }
-                    
-                    const interestsElement = document.querySelector('[data-profile="interests"]');
-                    if (interestsElement && profile.interests) {
-                        interestsElement.textContent = profile.interests;
-                    }
-                    
-                    // Если нужно полное обновление, перезагружаем через небольшую задержку
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                }
+                // Обновляем профиль и чат параллельно
+                await Promise.all([
+                    updateProfile(),
+                    updateChat()
+                ]);
             } catch (error) {
                 console.error('Error updating profile display:', error);
-                // В случае ошибки просто перезагружаем страницу
-                window.location.reload();
             }
         }
         
