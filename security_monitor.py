@@ -41,15 +41,15 @@ class SecurityMonitor:
         # Подозрительные IP
         self.suspicious_ips: Dict[str, int] = defaultdict(int)
         
-        # Лимиты запросов
+        # Лимиты запросов (увеличены для легитимных пользователей)
         self.RATE_LIMITS = {
-            'per_second': 10,      # Макс 10 запросов в секунду
-            'per_minute': 100,     # Макс 100 запросов в минуту
-            'per_10_minutes': 500  # Макс 500 запросов за 10 минут
+            'per_second': 20,      # Макс 20 запросов в секунду
+            'per_minute': 200,     # Макс 200 запросов в минуту
+            'per_10_minutes': 1000 # Макс 1000 запросов за 10 минут
         }
         
-        # Время блокировки
-        self.BLOCK_DURATION = timedelta(hours=1)
+        # Время блокировки (сокращено до 30 минут)
+        self.BLOCK_DURATION = timedelta(minutes=30)
         
         # Автоматическая очистка старых логов
         self.last_cleanup = datetime.now()
@@ -84,10 +84,10 @@ class SecurityMonitor:
             self.suspicious_ips[ip] += 1
             logger.warning(f"🚨 RATE LIMIT EXCEEDED: IP {ip} | Path: {path} | Reason: {reason} | Suspicious count: {self.suspicious_ips[ip]}")
             
-            # Блокировка при многократном превышении
-            if self.suspicious_ips[ip] >= 5:
+            # Блокировка при многократном превышении (требуется 10 нарушений)
+            if self.suspicious_ips[ip] >= 10:
                 self.block_ip(ip)
-                logger.error(f"🔒 IP BLOCKED: {ip} due to repeated rate limit violations")
+                logger.error(f"🔒 IP BLOCKED: {ip} due to repeated rate limit violations ({self.suspicious_ips[ip]} violations)")
             
             return False
         
