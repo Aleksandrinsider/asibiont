@@ -2570,26 +2570,9 @@ async def session_error_middleware(request, handler):
 
 @web.middleware
 async def security_middleware(request, handler):
-    """Security monitoring and rate limiting"""
+    """Security monitoring only (no blocking)"""
     remote = request.remote or 'unknown'
-    
-    # Check if IP is blocked
-    if security_monitor.is_blocked(remote):
-        logger.warning(f"Blocked IP attempted access: {remote}")
-        return web.json_response(
-            {'error': 'Too many requests. Your IP has been temporarily blocked.'},
-            status=429
-        )
-    
-    # Check rate limits
-    is_limited, reason = security_monitor.is_rate_limited(remote)
-    if is_limited:
-        logger.warning(f"Rate limit exceeded for {remote}: {reason}")
-        return web.json_response(
-            {'error': f'Rate limit exceeded: {reason}'},
-            status=429
-        )
-    
+
     # Get user_id from session if available
     user_id = None
     try:
@@ -2597,8 +2580,8 @@ async def security_middleware(request, handler):
         user_id = session.get('user_id')
     except:
         pass
-    
-    # Log request
+
+    # Log request only (no blocking)
     user_agent = request.headers.get('User-Agent', 'unknown')
     security_monitor.log_request(
         ip=remote,

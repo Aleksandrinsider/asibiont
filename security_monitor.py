@@ -26,21 +26,17 @@ class SecurityMonitor:
         self.max_logs = 1000  # Keep only last 1000 logs
 
     def is_blocked(self, ip):
-        """Check if IP is blocked"""
-        return ip in self.blocked_ips
+        """Check if IP is blocked - DISABLED: always return False"""
+        return False
 
     def is_rate_limited(self, ip):
-        """Check if IP exceeds rate limit"""
+        """Check if IP exceeds rate limit - DISABLED: always return False"""
+        # Still track requests for monitoring, but don't block
         now = time.time()
         # Clean old timestamps (older than 1 minute)
         self.rate_limits[ip] = [t for t in self.rate_limits[ip] if now - t < 60]
 
-        if len(self.rate_limits[ip]) >= self.max_requests_per_minute:
-            # Block the IP
-            self.blocked_ips.add(ip)
-            return True, "Too many requests"
-
-        # Add current timestamp
+        # Add current timestamp for monitoring
         self.rate_limits[ip].append(now)
         return False, None
 
