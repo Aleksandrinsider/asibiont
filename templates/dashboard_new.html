@@ -1737,11 +1737,6 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
-                    if (data.duplicate) {
-                        // Duplicate message, don't add to chat
-                        return;
-                    }
-
                     addMessage(data.response, 'ai');
                     
                     // Сразу помечаем сообщения как отображенные (используем временный ID)
@@ -1844,11 +1839,6 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
-                    if (data.duplicate) {
-                        // Duplicate message, don't add to chat
-
-                        return;
-                    }
                     addMessage(data.response, 'ai');
                     // Обновить профиль и время сразу
                     await updateProfile();
