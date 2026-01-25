@@ -3315,7 +3315,10 @@ async def api_partners_handler(request):
 
         # Установить флаг is_favorite для всех контактов
         for partner in partners_data:
-            contact_username = partner.get('contact_info', '').replace('@', '').lower()
+            contact_info = partner.get('contact_info')
+            if contact_info is None:
+                contact_info = ''
+            contact_username = contact_info.replace('@', '').lower()
             partner['is_favorite'] = contact_username in favorite_usernames
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
