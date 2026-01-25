@@ -177,14 +177,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         
         # Все остальные команды - разрешаем без ограничений
         unique_tool_calls.append(call)
-            else:
-                logger.warning(f"[TOOL CALLS] Removed duplicate tool call: {call_key}")
     
     tool_calls = unique_tool_calls
     
-    logger.info(f"[PROCESS_TOOL_CALLS] After deduplication: {len(tool_calls)} unique tool calls")
+    logger.info(f"[PROCESS_TOOL_CALLS] After cooldown check: {len(tool_calls)} tool calls")
     if not tool_calls:
-        logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after deduplication!")
+        logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after cooldown check!")
 
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
