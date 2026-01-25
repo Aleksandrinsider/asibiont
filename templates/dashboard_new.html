@@ -2343,10 +2343,17 @@
 
                 if (response.ok) {
                     showNotification('Пост удален', 'success');
-                    // Небольшая задержка перед обновлением ленты
+                    
+                    // Немедленно удаляем пост из DOM
+                    const postElement = document.querySelector(`[data-post-id="${postId}"]`);
+                    if (postElement) {
+                        postElement.remove();
+                    }
+                    
+                    // Небольшая задержка перед обновлением ленты для синхронизации с сервером
                     setTimeout(() => {
                         if (typeof loadFeed === 'function') loadFeed();
-                    }, 500);
+                    }, 300);
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
