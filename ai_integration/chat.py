@@ -2478,8 +2478,10 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # Добавляем информацию о задачах, если есть
         if tasks_list:
             tasks_info = "\n\nАКТИВНЫЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:\n"
-            for task in tasks_list[:10]:  # Ограничиваем 10 задачами
+            now_utc = datetime.now(pytz.UTC)
+            for task in tasks_list[:15]:  # Ограничиваем 15 задачами
                 task_time = ""
+                status_marker = ""
                 if task.reminder_time:
                     try:
                         # Конвертируем в локальное время пользователя
@@ -2488,10 +2490,15 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         else:
                             task_time_utc = task.reminder_time
                         task_time_local = task_time_utc.astimezone(user_tz)
+                        
+                        # Проверяем, просрочена ли задача
+                        if task.status == 'pending' and task_time_utc < now_utc:
+                            status_marker = " [ПРОСРОЧЕНА]"
+                        
                         task_time = f" (на {task_time_local.strftime('%H:%M')})"
                     except:
                         pass
-                tasks_info += f"• {task.title}{task_time}\n"
+                tasks_info += f"• {task.title}{task_time}{status_marker}\n"
             selected_prompt += tasks_info
         
         messages.append({"role": "user", "content": selected_prompt})

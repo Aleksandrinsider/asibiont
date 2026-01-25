@@ -542,9 +542,19 @@ class ReminderService:
                 Task.status.in_(['pending', 'in_progress'])
             ).order_by(Task.reminder_time).all()
             
+            # Добавить просроченные задачи
+            now_utc = datetime.now(pytz.UTC)
+            overdue_tasks = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'pending',
+                Task.reminder_time < now_utc
+            ).order_by(Task.reminder_time).all()
+            
+            all_tasks = all_active_tasks + overdue_tasks
+            
             # Отправить чекпоинт-сообщение
             try:
-                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_active_tasks)
+                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_tasks)
                 
                 # Сохранить в таблицу Interaction
                 try:
@@ -1024,9 +1034,18 @@ class ReminderService:
                 Task.status.in_(['pending', 'in_progress'])
             ).order_by(Task.reminder_time).all()
             
+            # Добавить просроченные задачи
+            overdue_tasks = db.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'pending',
+                Task.reminder_time < now_utc
+            ).order_by(Task.reminder_time).all()
+            
+            all_tasks = all_active_tasks + overdue_tasks
+            
             # Отправить проактивное сообщение с номером для разнообразия
             try:
-                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_active_tasks)
+                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_tasks)
                 
                 # Сохранить проактивное сообщение в таблицу Interaction
                 try:
