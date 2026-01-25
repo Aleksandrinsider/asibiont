@@ -18,7 +18,8 @@ import logging
 import pytz
 
 # Import handlers
-from handlers import router as handlers_router
+if not LOCAL:
+    from handlers import router as handlers_router
 import hashlib
 import hmac
 import json
@@ -2339,7 +2340,8 @@ app = web.Application()
 if bot:
     app['bot'] = bot
     dp = Dispatcher()
-    dp.include_router(handlers_router)
+    if not LOCAL:
+        dp.include_router(handlers_router)
     if not LOCAL:
         app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
@@ -3340,6 +3342,19 @@ async def api_partners_handler(request):
 
 async def api_elite_partners_handler(request):
     """Get ALL Gold partners for Gold users (Premium status filter)"""
+    def pluralize_task(count):
+        """Склонение слова 'задача' по числу"""
+        last_digit = count % 10
+        last_two_digits = count % 100
+
+        if 11 <= last_two_digits <= 19:
+            return 'задач'
+        if last_digit == 1:
+            return 'задачу'
+        if 2 <= last_digit <= 4:
+            return 'задачи'
+        return 'задач'
+
     try:
         user_id = await get_user_id_from_request(request)
         logger.info(f"API elite partners handler called for user_id: {user_id}")
@@ -3499,6 +3514,211 @@ async def api_elite_partners_handler(request):
                     'rating_count': gold_profile.rating_count if gold_profile else 0,
                     'type': 'elite'
                 })
+
+            # Add delegation contacts for Gold users
+            delegating_to_me = []
+            delegating_by_me = []
+            
+            try:
+                # Люди, которые делегировали задачи мне (accepted delegation)
+                delegated_tasks = session_db.query(Task).filter(
+                    Task.delegated_to_username.isnot(None),
+                    Task.delegation_status == 'accepted',
+                    Task.status != 'deleted'
+                ).all()
+                
+                for task in delegated_tasks:
+                    # Check if this task is delegated to current user
+                    if task.delegated_to_username:
+                        # Clean username for comparison
+                        task_username_clean = task.delegated_to_username.replace('@', '').lower()
+                        user_username_clean = user.username.replace('@', '').lower() if user.username else ''
+                        
+                        if task_username_clean == user_username_clean:
+                            delegator = session_db.query(User).filter_by(id=task.user_id).first()
+                            if delegator and delegator.id != user.id:
+                                # Skip if already in partners_data
+                                if any(p.get('contact_info') == delegator.username for p in partners_data):
+                                    continue
+                                    
+                                # Skip hidden and blocked contacts
+                                delegator_username_clean = delegator.username.replace('@', '').lower() if delegator.username else ''
+                                if delegator_username_clean in hidden_contacts or delegator.username in blocked_by_me:
+                                    continue
+                                    
+                                delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first()
+                                task_titles = [t.title for t in delegated_tasks if t.user_id == delegator.id and 
+                                             t.delegated_to_username.replace('@', '').lower() == user_username_clean]
+                                
+                                # Update avatar from Telegram if available
+                                photo_url = delegator.photo_url if delegator.photo_url else None
+                                if delegator.telegram_id and 'bot' in request.app:
+                                    try:
+                                        updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id)
+                                        if updated_avatar and updated_avatar != delegator.photo_url:
+                                            delegator.photo_url = updated_avatar
+                                            session_db.commit()
+                                            photo_url = updated_avatar
+                                    except Exception as e:
+                                        logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
+                                
+                                delegating_to_me.append({
+                                    'contact_info': delegator.username,
+                                    'telegram_id': delegator.telegram_id,
+                                    'photo_url': photo_url,
+                                    'can_access': True,
+                                    'required_tier': None,
+                                    'subscription_tier': delegator.subscription_tier.value if delegator.subscription_tier else 'bronze',
+                                    'first_name': delegator.first_name,
+                                    'city': delegator_profile.city if delegator_profile else None,
+                                    'company': delegator_profile.company if delegator_profile else None,
+                                    'position': delegator_profile.position if delegator_profile else None,
+                                    'interests': delegator_profile.interests if delegator_profile else None,
+                                    'skills': delegator_profile.skills if delegator_profile else None,
+                                    'goals': delegator_profile.goals if delegator_profile else None,
+                                    'common_interests': None,  # Will be calculated later
+                                    'common_skills': None,
+                                    'common_goals': None,
+                                    'common_tasks': None,
+                                    'average_rating': delegator_profile.average_rating if delegator_profile else 0,
+                                    'rating_count': delegator_profile.rating_count if delegator_profile else 0,
+                                    'task_count': len(task_titles),
+                                    'reason': f'делегировал {len(task_titles)} {pluralize_task(len(task_titles))}',
+                                    'type': 'delegation'
+                                })
+
+                # Люди, которым я делегировал задачи
+                my_delegated_tasks = session_db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.delegated_to_username.isnot(None),
+                    Task.delegation_status.in_(['pending', 'accepted']),
+                    Task.status != 'deleted'
+                ).all()
+
+                delegatee_usernames = set()
+                for task in my_delegated_tasks:
+                    if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
+                        delegatee_usernames.add(task.delegated_to_username)
+                        delegatee = session_db.query(User).filter(
+                            or_(
+                                User.username.ilike(task.delegated_to_username.replace('@', '')),
+                                User.username.ilike(f'@{task.delegated_to_username.replace("@", "")}')
+                            )
+                        ).first()
+                        if delegatee and delegatee.id != user.id:
+                            # Skip if already in partners_data
+                            if any(p.get('contact_info') == delegatee.username for p in partners_data):
+                                continue
+                                
+                            # Skip hidden and blocked contacts
+                            delegatee_username_clean = delegatee.username.replace('@', '').lower() if delegatee.username else ''
+                            if delegatee_username_clean in hidden_contacts or delegatee.username in blocked_by_me:
+                                continue
+                                
+                            delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first()
+                            task_titles = [
+                                t.title for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
+                            
+                            # Update avatar from Telegram if available
+                            photo_url = delegatee.photo_url if delegatee.photo_url else None
+                            if delegatee.telegram_id and 'bot' in request.app:
+                                try:
+                                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id)
+                                    if updated_avatar and updated_avatar != delegatee.photo_url:
+                                        delegatee.photo_url = updated_avatar
+                                        session_db.commit()
+                                        photo_url = updated_avatar
+                                except Exception as e:
+                                    logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
+                            
+                            delegating_by_me.append({
+                                'contact_info': delegatee.username,
+                                'telegram_id': delegatee.telegram_id,
+                                'photo_url': photo_url,
+                                'can_access': True,
+                                'required_tier': None,
+                                'subscription_tier': delegatee.subscription_tier.value if delegatee.subscription_tier else 'bronze',
+                                'first_name': delegatee.first_name,
+                                'city': delegatee_profile.city if delegatee_profile else None,
+                                'company': delegatee_profile.company if delegatee_profile else None,
+                                'position': delegatee_profile.position if delegatee_profile else None,
+                                'interests': delegatee_profile.interests if delegatee_profile else None,
+                                'skills': delegatee_profile.skills if delegatee_profile else None,
+                                'goals': delegatee_profile.goals if delegatee_profile else None,
+                                'common_interests': None,  # Will be calculated later
+                                'common_skills': None,
+                                'common_goals': None,
+                                'common_tasks': None,
+                                'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
+                                'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
+                                'task_count': len(task_titles),
+                                'reason': f'я делегировал {len(task_titles)} {pluralize_task(len(task_titles))}',
+                                'type': 'delegation'
+                            })
+
+            except Exception as e:
+                logger.error(f"Error getting delegation contacts for elite: {e}")
+                delegating_to_me = []
+                delegating_by_me = []
+
+            # Add delegation contacts to partners_data
+            partners_data.extend(delegating_to_me)
+            partners_data.extend(delegating_by_me)
+
+            # Calculate common interests/skills/goals/tasks for delegation contacts
+            for partner in partners_data:
+                if partner.get('type') == 'delegation':
+                    partner_profile = None
+                    if partner.get('contact_info'):
+                        partner_user = session_db.query(User).filter_by(username=partner['contact_info']).first()
+                        if partner_user:
+                            partner_profile = session_db.query(UserProfile).filter_by(user_id=partner_user.id).first()
+                    
+                    if partner_profile and user_profile:
+                        # Common interests
+                        if partner_profile.interests and user_profile.interests:
+                            user_interests = set(i.strip().lower() for i in user_profile.interests.split(','))
+                            partner_interests = set(i.strip().lower() for i in partner_profile.interests.split(','))
+                            common = user_interests & partner_interests
+                            partner['common_interests'] = ', '.join(common) if common else None
+
+                        # Common skills
+                        if partner_profile.skills and user_profile.skills:
+                            user_skills = set(s.strip().lower() for s in user_profile.skills.split(','))
+                            partner_skills = set(s.strip().lower() for s in partner_profile.skills.split(','))
+                            common_sk = user_skills & partner_skills
+                            partner['common_skills'] = ', '.join(common_sk) if common_sk else None
+
+                        # Common goals
+                        if partner_profile.goals and user_profile.goals:
+                            user_goals = set(g.strip().lower() for g in user_profile.goals.split(','))
+                            partner_goals = set(g.strip().lower() for g in partner_profile.goals.split(','))
+                            common_g = user_goals & partner_goals
+                            partner['common_goals'] = ', '.join(common_g) if common_g else None
+
+                        # Common tasks
+                        user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
+                        partner_tasks = session_db.query(Task).filter_by(user_id=partner_user.id).all() if partner_user else []
+                        
+                        user_task_titles = set(t.title.lower().strip() for t in user_tasks if t.title)
+                        partner_task_titles = set(t.title.lower().strip() for t in partner_tasks if t.title)
+                        
+                        common_task_titles = user_task_titles & partner_task_titles
+                        if not common_task_titles:
+                            partial_matches = set()
+                            for user_task in user_task_titles:
+                                user_words = set(user_task.split())
+                                if len(user_words) < 2:
+                                    continue
+                                for partner_task in partner_task_titles:
+                                    partner_words = set(partner_task.split())
+                                    common_words = user_words & partner_words
+                                    if len(common_words) >= 2:
+                                        partial_matches.add(user_task)
+                            if partial_matches:
+                                common_task_titles = partial_matches
+                        
+                        partner['common_tasks'] = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
 
             # Sort: first by same city, then by rating
             user_city = user_profile.city.lower() if user_profile.city else None
