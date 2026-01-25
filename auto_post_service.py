@@ -203,11 +203,12 @@ async def create_auto_post(user_id, content, session, notify=True):
             try:
                 from main import bot
                 if bot:
-                    notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Это помогает поддерживать активность в ленте. Вы можете отредактировать или удалить пост в веб-панели."
+                    notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Поделитесь своими результатами с другими участниками ASI Biont!\n\n🌐 Используйте веб-панель для большего: https://asibiont.ru\n→ Редактируйте посты\n→ Находите контакты по интересам\n→ Управляйте задачами визуально"
                     
                     await bot.send_message(
                         chat_id=user_id,
-                        text=notification_text
+                        text=notification_text,
+                        disable_web_page_preview=True
                     )
                     logger.info(f"Notification sent to user {user_id} about auto-post")
             except Exception as notify_error:
@@ -240,27 +241,46 @@ async def check_and_create_posts():
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                 user_now = datetime.now(pytz.UTC).astimezone(user_tz)
                 
-                # Create progress post at random time during the day
-                # Only create if user has tasks and hasn't posted today
+                # Create progress posts 2 times per day at random times
+                # Morning: 9:00-12:00, Evening: 17:00-21:00
                 current_hour = user_now.hour
                 
-                # Post between 12:00 and 22:00
-                if 12 <= current_hour <= 22:
-                    today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
+                today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
+                
+                # Count existing posts today
+                posts_today = session.query(Post).filter(
+                    Post.user_id == user.id,
+                    Post.created_at >= today_start
+                ).count()
+                
+                # Allow up to 2 posts per day
+                if posts_today < 2:
+                    # Morning slot (9-12) or Evening slot (17-21)
+                    is_morning_slot = 9 <= current_hour <= 12
+                    is_evening_slot = 17 <= current_hour <= 21
                     
-                    # Check if already posted today
-                    existing_post = session.query(Post).filter(
-                        Post.user_id == user.id,
-                        Post.created_at >= today_start
-                    ).first()
-                    
-                    if not existing_post:
-                        # Random chance to post (20% chance per check)
-                        if random.random() < 0.2:
-                            logger.info(f"Creating progress post for user {user.telegram_id}")
-                            content = await generate_progress_post(user.telegram_id, session)
-                            if content:
-                                await create_auto_post(user.telegram_id, content, session)
+                    if is_morning_slot or is_evening_slot:
+                        # Check if already posted in this time slot today
+                        if is_morning_slot:
+                            slot_start = user_now.replace(hour=9, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
+                            slot_end = user_now.replace(hour=12, minute=59, second=59, microsecond=999999).astimezone(pytz.UTC)
+                        else:
+                            slot_start = user_now.replace(hour=17, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
+                            slot_end = user_now.replace(hour=21, minute=59, second=59, microsecond=999999).astimezone(pytz.UTC)
+                        
+                        existing_post_in_slot = session.query(Post).filter(
+                            Post.user_id == user.id,
+                            Post.created_at >= slot_start,
+                            Post.created_at <= slot_end
+                        ).first()
+                        
+                        if not existing_post_in_slot:
+                            # Random chance to post (25% chance per check for more frequency)
+                            if random.random() < 0.25:
+                                logger.info(f"Creating progress post for user {user.telegram_id} ({'morning' if is_morning_slot else 'evening'} slot)")
+                                content = await generate_progress_post(user.telegram_id, session)
+                                if content:
+                                    await create_auto_post(user.telegram_id, content, session)
                 
             except Exception as e:
                 logger.error(f"Error processing user {user.telegram_id}: {e}")
