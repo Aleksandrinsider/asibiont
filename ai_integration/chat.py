@@ -850,6 +850,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     else:
                         ai_context = "НУЖНО_ВРЕМЯ_ДЛЯ_ЗАДАЧИ: неизвестная задача"
                         fallback_message = "Во сколько тебе удобно выполнить эту задачу?"
+            elif has_list_tasks and list_tasks_result:
+                # Специальная обработка для списка задач - возвращаем результат напрямую
+                ai_context = list_tasks_result
+                fallback_message = list_tasks_result
             # Для других случаев ai_context уже установлен выше
 
             # Добавляем контекст профиля для list_tasks
