@@ -24,7 +24,7 @@
 
     <form id="quick-profile-form">
         <div class="form-group">
-            <label for="quick-city">Город</label>
+            <label for="quick-city">Город <span class="required">*</span></label>
             <input type="text" id="quick-city" placeholder="Например: Москва">
         </div>
 
@@ -94,6 +94,10 @@
             const goals = document.getElementById('quick-goals').value.trim();
 
             // Проверяем обязательные поля
+            if (!city) {
+                showNotification('Укажите город', 'error');
+                return;
+            }
             if (!interests) {
                 showNotification('Укажите интересы', 'error');
                 return;
