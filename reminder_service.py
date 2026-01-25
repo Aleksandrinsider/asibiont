@@ -24,6 +24,17 @@ async def _send_reminder_job(task_id: int):
         if not task:
             logger.warning(f"_send_reminder_job: task {task_id} not found")
             return
+        
+        # Проверяем статус задачи - не отправляем напоминание для завершенных задач
+        if task.status == 'completed':
+            logger.info(f"_send_reminder_job: task {task_id} is already completed, skipping reminder")
+            return
+            
+        # Проверяем, не было ли уже отправлено напоминание
+        if task.reminder_sent:
+            logger.info(f"_send_reminder_job: reminder already sent for task {task_id}")
+            return
+            
         if not task.user:
             logger.warning(f"_send_reminder_job: user not found for task {task_id}")
             return
@@ -32,6 +43,11 @@ async def _send_reminder_job(task_id: int):
             return
         user_id = task.user.telegram_id
         task_title = task.title or "Без названия"
+        
+        # Помечаем, что напоминание отправлено
+        task.reminder_sent = True
+        db.commit()
+        
     finally:
         db.close()
 
@@ -48,6 +64,17 @@ async def _send_result_check_job(task_id: int):
         if not task:
             logger.warning(f"_send_result_check_job: task {task_id} not found")
             return
+        
+        # Проверяем статус задачи - не отправляем проверку результата для завершенных задач
+        if task.status == 'completed':
+            logger.info(f"_send_result_check_job: task {task_id} is already completed, skipping result check")
+            return
+            
+        # Проверяем, не была ли уже отправлена проверка результата
+        if task.result_check_sent:
+            logger.info(f"_send_result_check_job: result check already sent for task {task_id}")
+            return
+            
         if not task.user:
             logger.warning(f"_send_result_check_job: user not found for task {task_id}")
             return
@@ -56,6 +83,11 @@ async def _send_result_check_job(task_id: int):
             return
         user_id = task.user.telegram_id
         task_title = task.title or "Без названия"
+        
+        # Помечаем, что проверка результата отправлена
+        task.result_check_sent = True
+        db.commit()
+        
     finally:
         db.close()
 
@@ -810,17 +842,17 @@ class ReminderService:
             
             # Адаптивные интервалы на основе количества задач
             if urgent:
-                # Просроченные задачи - более частые проверки (каждые 15 минут)
-                interval_minutes = 15
+                # Просроченные задачи - более частые проверки (каждые 30 минут)
+                interval_minutes = 30
             elif task_count == 0:
-                # Нет задач - чаще предлагать создать (каждые 20 минут)
-                interval_minutes = 20
+                # Нет задач - чаще предлагать создать (каждые 60 минут)
+                interval_minutes = 60
             elif task_count <= 2:
                 # Мало задач - обычный интервал
-                interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES
+                interval_minutes = 60
             else:
-                # Много задач - реже беспокоить (каждые 90 минут)
-                interval_minutes = 90
+                # Много задач - реже беспокоить (каждые 180 минут)
+                interval_minutes = 180
             
             # Вычисляем параметры cron триггера на основе интервала
             if interval_minutes >= 60:
