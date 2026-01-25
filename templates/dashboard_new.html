@@ -2061,7 +2061,7 @@
 
         async function loadFeed() {
             try {
-                const response = await fetch('/api/feed', {
+                const response = await fetch('/api/feed?t=' + Date.now(), {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -2343,8 +2343,10 @@
 
                 if (response.ok) {
                     showNotification('Пост удален', 'success');
-                    // Обновляем ленту новостей
-                    if (typeof loadFeed === 'function') loadFeed();
+                    // Небольшая задержка перед обновлением ленты
+                    setTimeout(() => {
+                        if (typeof loadFeed === 'function') loadFeed();
+                    }, 500);
                 } else {
                     showNotification('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }

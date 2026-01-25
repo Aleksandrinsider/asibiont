@@ -30,8 +30,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Aiogram imports
-# from aiogram.webhook.aiohttp_server import SimpleRequestHandler
-# from aiogram import Bot, Dispatcher
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+from aiogram import Bot, Dispatcher
 
 # Скрываем некритичные предупреждения
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
@@ -101,652 +101,328 @@ except Exception as e:
     else:
         logger.warning("Continuing with local mode despite migration issues")
 
-
 # TEMPORARILY COMMENTED OUT MIGRATION CODE
-#     try:
-#         session = Session()
-#         inspector = inspect(engine)
-#
-#         # Migration for user_profiles table columns
-#         if inspector.has_table('user_profiles'):
-#             columns = [col['name'] for col in inspector.get_columns('user_profiles')]
-#
-#             # Migration for activity_streak column
-#             if 'activity_streak' not in columns:
-#                 logger.info("Adding activity_streak column to user_profiles table")
-#                 session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
-#                 session.commit()
-#                 logger.info("Migration: activity_streak column added successfully")
-#             else:
-#                 logger.info("Migration: activity_streak column already exists")
-#
+#     columns = [col['name'] for col in inspector.get_columns('user_profiles')]
+        if 'activity_streak' not in columns:
+            logger.info("Adding activity_streak column to user_profiles table")
+            session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
+            session.commit()
+            logger.info("Migration: activity_streak column added successfully")
+        else:
+            logger.info("Migration: activity_streak column already exists")
+
         # Migration for bio column
-#        logger.info(f"Checking bio column, current columns: {columns}")
-#        if 'bio' not in columns:
-#            try:
-#                logger.info("Adding bio column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN bio TEXT'))
-#                session.commit()
-#                logger.info("Migration: bio column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add bio column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: bio column already exists")
-#
+        logger.info(f"Checking bio column, current columns: {columns}")
+        if 'bio' not in columns:
+            try:
+                logger.info("Adding bio column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN bio TEXT'))
+                session.commit()
+                logger.info("Migration: bio column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add bio column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: bio column already exists")
+
         # Migration for birthdate column
-#        if 'birthdate' not in columns:
-#            logger.info("Adding birthdate column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN birthdate VARCHAR(10)'))
-#            session.commit()
-#            logger.info("Migration: birthdate column added successfully")
-#        else:
-#            logger.info("Migration: birthdate column already exists")
-#
-        # Migration for interests column
-#        if 'interests' not in columns:
-#            logger.info("Adding interests column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN interests TEXT'))
-#            session.commit()
-#            logger.info("Migration: interests column added successfully")
-#        else:
-#            logger.info("Migration: interests column already exists")
-#
-        # Migration for city column
-#        if 'city' not in columns:
-#            logger.info("Adding city column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN city VARCHAR(100)'))
-#            session.commit()
-#            logger.info("Migration: city column added successfully")
-#        else:
-#            logger.info("Migration: city column already exists")
-#
-        # Migration for company column
-#        if 'company' not in columns:
-#            logger.info("Adding company column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN company VARCHAR(200)'))
-#            session.commit()
-#            logger.info("Migration: company column added successfully")
-#        else:
-#            logger.info("Migration: company column already exists")
-#
-        # Migration for position column
-#        if 'position' not in columns:
-#            logger.info("Adding position column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN position VARCHAR(200)'))
-#            session.commit()
-#            logger.info("Migration: position column added successfully")
-#        else:
-#            logger.info("Migration: position column already exists")
-#
-        # Migration for timezone column
-#        if 'timezone' not in columns:
-#            logger.info("Adding timezone column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN timezone VARCHAR(50) DEFAULT \'UTC\''))
-#            session.commit()
-#            logger.info("Migration: timezone column added successfully")
-#        else:
-#            logger.info("Migration: timezone column already exists")
-#
-        # Migration for subscription_tier column
-#        if 'subscription_tier' not in columns:
-#            logger.info("Adding subscription_tier column to user_profiles table")
-#            if LOCAL:
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier TEXT DEFAULT \'FREE\''))
-#            else:
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'FREE\''))
-#            session.commit()
-#            logger.info("Migration: subscription_tier column added successfully")
-#        else:
-#            logger.info("Migration: subscription_tier column already exists")
-#
-        # Migration for subscription_expires_at column
-#        if 'subscription_expires_at' not in columns:
-#            logger.info("Adding subscription_expires_at column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_expires_at TIMESTAMP'))
-#            session.commit()
-#            logger.info("Migration: subscription_expires_at column added successfully")
-#        else:
-#            logger.info("Migration: subscription_expires_at column already exists")
-#
-        # Migration for subscription_renewal_date column
-#        if 'subscription_renewal_date' not in columns:
-#            logger.info("Adding subscription_renewal_date column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_renewal_date TIMESTAMP'))
-#            session.commit()
-#            logger.info("Migration: subscription_renewal_date column added successfully")
-#        else:
-#            logger.info("Migration: subscription_renewal_date column already exists")
-#
-        # Migration for tasks table
-#        if not inspector.has_table('tasks'):
-#            logger.info("Creating tasks table")
-#            if LOCAL:
-#                session.execute(text('''
-#                    CREATE TABLE tasks (
-#                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                        user_id INTEGER NOT NULL,
-#                        title VARCHAR(500) NOT NULL,
-#                        description TEXT,
-#                        status VARCHAR(20) DEFAULT 'pending',
-#                        priority VARCHAR(20) DEFAULT 'medium',
-#                        reminder_time TIMESTAMP,
-#                        actual_completion_time TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        FOREIGN KEY (user_id) REFERENCES users (id)
-#                    )
-#                '''))
-#            else:
-#                session.execute(text('''
-#                    CREATE TABLE tasks (
-#                        id SERIAL PRIMARY KEY,
-#                        user_id INTEGER NOT NULL REFERENCES users(id),
-#                        title VARCHAR(500) NOT NULL,
-#                        description TEXT,
-#                        status VARCHAR(20) DEFAULT 'pending',
-#                        priority VARCHAR(20) DEFAULT 'medium',
-#                        reminder_time TIMESTAMP,
-#                        actual_completion_time TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#                    )
-#                '''))
-#            session.commit()
-#            logger.info("Migration: tasks table created successfully")
-#        else:
-#            logger.info("Migration: tasks table already exists")
-#
-        # Migration for posts table
-#        if not inspector.has_table('posts'):
-#            logger.info("Creating posts table")
-#            if LOCAL:
-#                session.execute(text('''
-#                    CREATE TABLE posts (
-#                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                        user_id INTEGER NOT NULL,
-#                        username VARCHAR(100) NOT NULL,
-#                        content TEXT NOT NULL,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        FOREIGN KEY (user_id) REFERENCES users (id)
-#                    )
-#                '''))
-#            else:
-#                session.execute(text('''
-#                    CREATE TABLE posts (
-#                        id SERIAL PRIMARY KEY,
-#                        user_id INTEGER NOT NULL REFERENCES users(id),
-#                        username VARCHAR(100) NOT NULL,
-#                        content TEXT NOT NULL,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#                    )
-#                '''))
-#            session.commit()
-#            logger.info("Migration: posts table created successfully")
-#        else:
-#            logger.info("Migration: posts table already exists")
-#
-        # Migration for subscriptions table
-#        if not inspector.has_table('subscriptions'):
-#            logger.info("Creating subscriptions table")
-#            if LOCAL:
-#                session.execute(text('''
-#                    CREATE TABLE subscriptions (
-#                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                        user_id INTEGER NOT NULL,
-#                        tier TEXT DEFAULT 'FREE',
-#                        expires_at TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        FOREIGN KEY (user_id) REFERENCES users (id)
-#                    )
-#                '''))
-#            else:
-#                session.execute(text('''
-#                    CREATE TABLE subscriptions (
-#                        id SERIAL PRIMARY KEY,
-#                        user_id INTEGER NOT NULL REFERENCES users(id),
-#                        tier subscription_tier_enum DEFAULT 'FREE',
-#                        expires_at TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#                    )
-#                '''))
-#            session.commit()
-#            logger.info("Migration: subscriptions table created successfully")
-#        else:
-#            logger.info("Migration: subscriptions table already exists")
-#
-        # Migration for payments table
-#        if not inspector.has_table('payments'):
-#            logger.info("Creating payments table")
-#            if LOCAL:
-#                session.execute(text('''
-#                    CREATE TABLE payments (
-#                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                        user_id INTEGER NOT NULL,
-#                        amount DECIMAL(10,2) NOT NULL,
-#                        currency VARCHAR(3) DEFAULT 'RUB',
-#                        status VARCHAR(20) DEFAULT 'pending',
-#                        payment_id VARCHAR(100),
-#                        tier TEXT DEFAULT 'BRONZE',
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        FOREIGN KEY (user_id) REFERENCES users (id)
-#                    )
-#                '''))
-#            else:
-#                session.execute(text('''
-#                    CREATE TABLE payments (
-#                        id SERIAL PRIMARY KEY,
-#                        user_id INTEGER NOT NULL REFERENCES users(id),
-#                        amount DECIMAL(10,2) NOT NULL,
-#                        currency VARCHAR(3) DEFAULT 'RUB',
-#                        status VARCHAR(20) DEFAULT 'pending',
-#                        payment_id VARCHAR(100),
-#                        tier subscription_tier_enum DEFAULT 'BRONZE',
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#                    )
-#                '''))
-#            session.commit()
-#            logger.info("Migration: payments table created successfully")
-#        else:
-#            logger.info("Migration: payments table already exists")
-#
-        # Migration for promo_codes table
-#        if not inspector.has_table('promo_codes'):
-#            logger.info("Creating promo_codes table")
-#            if LOCAL:
-#                session.execute(text('''
-#                    CREATE TABLE promo_codes (
-#                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                        code VARCHAR(50) UNIQUE NOT NULL,
-#                        tier TEXT DEFAULT 'BRONZE',
-#                        duration_days INTEGER DEFAULT 30,
-#                        expires_at TIMESTAMP NOT NULL,
-#                        is_used BOOLEAN DEFAULT FALSE,
-#                        used_by_user_id INTEGER,
-#                        used_at TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        FOREIGN KEY (used_by_user_id) REFERENCES users (id)
-#                    )
-#                '''))
-#            else:
-#                session.execute(text('''
-#                    CREATE TABLE promo_codes (
-#                        id SERIAL PRIMARY KEY,
-#                        code VARCHAR(50) UNIQUE NOT NULL,
-#                        tier subscription_tier_enum DEFAULT 'BRONZE',
-#                        duration_days INTEGER DEFAULT 30,
-#                        expires_at TIMESTAMP NOT NULL,
-#                        is_used BOOLEAN DEFAULT FALSE,
-#                        used_by_user_id INTEGER REFERENCES users(id),
-#                        used_at TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#                    )
-#                '''))
-#            session.commit()
-#            logger.info("Migration: promo_codes table created successfully")
-#        else:
-#            logger.info("Migration: promo_codes table already exists")
-            # Add missing columns if they don't exist
-#            inspector = inspect(engine)
-#            columns = [col['name'] for col in inspector.get_columns('promo_codes')]
-#            if 'discount_percent' not in columns:
-#                logger.info("Adding discount_percent column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN discount_percent INTEGER DEFAULT 0"))
-#            if 'max_uses' not in columns:
-#                logger.info("Adding max_uses column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN max_uses INTEGER"))
-#            if 'used_count' not in columns:
-#                logger.info("Adding used_count column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0"))
-#            if 'used_by_users' not in columns:
-#                logger.info("Adding used_by_users column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
-#            if 'used_by_user_id' not in columns:
-#                logger.info("Adding used_by_user_id column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_user_id INTEGER"))
-#            if 'used_at' not in columns:
-#                logger.info("Adding used_at column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
-#            session.commit()
-#
-#        session.close()
-#        logger.info("Migration session closed successfully")
-#    except Exception as e:
-#        logger.error(f"Migration failed: {e}")
-#        session.close()
-#        raise
-#
-#    logger.info("✅ Database migrations completed")
-#except Exception as e:
-#    logger.error(f"❌ Database migrations failed: {e}")
-#    if not LOCAL:
-#        raise  # Fail hard in production
-#    else:
-#        logger.warning("Continuing with local mode despite migration issues")
-#        if 'activity_streak' not in columns:
-#            logger.info("Adding activity_streak column to user_profiles table")
-#            session.execute(text('ALTER TABLE user_profiles ADD COLUMN activity_streak INTEGER DEFAULT 0'))
-#            session.commit()
-#            logger.info("Migration: activity_streak column added successfully")
-#        else:
-#            logger.info("Migration: activity_streak column already exists")
-#
-        # Migration for bio column
-#        logger.info(f"Checking bio column, current columns: {columns}")
-#        if 'bio' not in columns:
-#            try:
-#                logger.info("Adding bio column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN bio TEXT'))
-#                session.commit()
-#                logger.info("Migration: bio column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add bio column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: bio column already exists")
-#
-        # Migration for birthdate column
-#        if 'birthdate' not in columns:
-#            try:
-#                logger.info("Adding birthdate column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN birthdate VARCHAR(10)'))
-#                session.commit()
-#                logger.info("Migration: birthdate column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add birthdate column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: birthdate column already exists")
-#
+        if 'birthdate' not in columns:
+            try:
+                logger.info("Adding birthdate column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN birthdate VARCHAR(10)'))
+                session.commit()
+                logger.info("Migration: birthdate column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add birthdate column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: birthdate column already exists")
+
         # Migration for zodiac_sign column
-#        if 'zodiac_sign' not in columns:
-#            try:
-#                logger.info("Adding zodiac_sign column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN zodiac_sign VARCHAR(20)'))
-#                session.commit()
-#                logger.info("Migration: zodiac_sign column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add zodiac_sign column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: zodiac_sign column already exists")
-#
+        if 'zodiac_sign' not in columns:
+            try:
+                logger.info("Adding zodiac_sign column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN zodiac_sign VARCHAR(20)'))
+                session.commit()
+                logger.info("Migration: zodiac_sign column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add zodiac_sign column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: zodiac_sign column already exists")
+
         # Migration for favorite_contacts column
-#        if 'favorite_contacts' not in columns:
-#            try:
-#                logger.info("Adding favorite_contacts column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN favorite_contacts TEXT'))
-#                session.commit()
-#                logger.info("Migration: favorite_contacts column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add favorite_contacts column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: favorite_contacts column already exists")
-#
+        if 'favorite_contacts' not in columns:
+            try:
+                logger.info("Adding favorite_contacts column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN favorite_contacts TEXT'))
+                session.commit()
+                logger.info("Migration: favorite_contacts column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add favorite_contacts column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: favorite_contacts column already exists")
+
         # Migration for blocked_contacts column
-#        if 'blocked_contacts' not in columns:
-#            try:
-#                logger.info("Adding blocked_contacts column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN blocked_contacts TEXT'))
-#                session.commit()
-#                logger.info("Migration: blocked_contacts column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add blocked_contacts column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: blocked_contacts column already exists")
-#
+        if 'blocked_contacts' not in columns:
+            try:
+                logger.info("Adding blocked_contacts column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN blocked_contacts TEXT'))
+                session.commit()
+                logger.info("Migration: blocked_contacts column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add blocked_contacts column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: blocked_contacts column already exists")
+
         # Migration for interaction_count column
-#        if 'interaction_count' not in columns:
-#            try:
-#                logger.info("Adding interaction_count column to user_profiles table")
-#                session.execute(text('ALTER TABLE user_profiles ADD COLUMN interaction_count INTEGER DEFAULT 0'))
-#                session.commit()
-#                logger.info("Migration: interaction_count column added successfully")
-#            except Exception as e:
-#                logger.error(f"Failed to add interaction_count column: {e}")
-#                session.rollback()
-#        else:
-#            logger.info("Migration: interaction_count column already exists")
-#
+        if 'interaction_count' not in columns:
+            try:
+                logger.info("Adding interaction_count column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN interaction_count INTEGER DEFAULT 0'))
+                session.commit()
+                logger.info("Migration: interaction_count column added successfully")
+            except Exception as e:
+                logger.error(f"Failed to add interaction_count column: {e}")
+                session.rollback()
+        else:
+            logger.info("Migration: interaction_count column already exists")
+
         # Migration for subscriptions table
-#        if 'subscriptions' in inspector.get_table_names():
-#            sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-#            if 'telegram_username' not in sub_columns:
-#                logger.info("Adding telegram_username column to subscriptions table")
-#                session.execute(text('ALTER TABLE subscriptions ADD COLUMN telegram_username VARCHAR(100)'))
-#                session.commit()
-#                logger.info("Migration: telegram_username column added successfully")
-#            else:
-#                logger.info("Migration: telegram_username column already exists")
-#
+        if 'subscriptions' in inspector.get_table_names():
+            sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+            if 'telegram_username' not in sub_columns:
+                logger.info("Adding telegram_username column to subscriptions table")
+                session.execute(text('ALTER TABLE subscriptions ADD COLUMN telegram_username VARCHAR(100)'))
+                session.commit()
+                logger.info("Migration: telegram_username column added successfully")
+            else:
+                logger.info("Migration: telegram_username column already exists")
+
         # Migration for users table
-#        if 'users' in inspector.get_table_names():
-#            user_columns = [col['name'] for col in inspector.get_columns('users')]
-#            if 'photo_url' not in user_columns:
-#                logger.info("Adding photo_url column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN photo_url VARCHAR(500)'))
-#                session.commit()
-#                logger.info("Migration: photo_url column added successfully")
-#            else:
-#                logger.info("Migration: photo_url column already exists")
-#
-#            if 'conversation_state' not in user_columns:
-#                logger.info("Adding conversation_state column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN conversation_state VARCHAR(100) DEFAULT \'normal\''))
-#                session.commit()
-#                logger.info("Migration: conversation_state column added successfully")
-#            else:
-#                logger.info("Migration: conversation_state column already exists")
-#
-#            if 'pending_task_data' not in user_columns:
-#                logger.info("Adding pending_task_data column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN pending_task_data TEXT'))
-#                session.commit()
-#                logger.info("Migration: pending_task_data column added successfully")
-#            else:
-#                logger.info("Migration: pending_task_data column already exists")
-#
-#            if 'last_interaction_at' not in user_columns:
-#                logger.info("Adding last_interaction_at column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN last_interaction_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
-#                session.commit()
-#                logger.info("Migration: last_interaction_at column added successfully")
-#            else:
-#                logger.info("Migration: last_interaction_at column already exists")
-#
-#            if 'conversation_context' not in user_columns:
-#                logger.info("Adding conversation_context column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN conversation_context TEXT'))
-#                session.commit()
-#                logger.info("Migration: conversation_context column added successfully")
-#            else:
-#                logger.info("Migration: conversation_context column already exists")
-#
-#            if 'updated_at' not in user_columns:
-#                logger.info("Adding updated_at column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN updated_at TIMESTAMP'))
-#                session.commit()
-#                logger.info("Migration: updated_at column added successfully")
-#            else:
-#                logger.info("Migration: updated_at column already exists")
-#
-#            if 'invalid_chat' not in user_columns:
-#                logger.info("Adding invalid_chat column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN invalid_chat BOOLEAN DEFAULT FALSE'))
-#                session.commit()
-#                logger.info("Migration: invalid_chat column added successfully")
-#            else:
-#                logger.info("Migration: invalid_chat column already exists")
-#
-#            if 'history_cleared_at' not in user_columns:
-#                logger.info("Adding history_cleared_at column to users table")
-#                session.execute(text('ALTER TABLE users ADD COLUMN history_cleared_at TIMESTAMP'))
-#                session.commit()
-#                logger.info("Migration: history_cleared_at column added successfully")
-#            else:
-#                logger.info("Migration: history_cleared_at column already exists")
-#
+        if 'users' in inspector.get_table_names():
+            user_columns = [col['name'] for col in inspector.get_columns('users')]
+            if 'photo_url' not in user_columns:
+                logger.info("Adding photo_url column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN photo_url VARCHAR(500)'))
+                session.commit()
+                logger.info("Migration: photo_url column added successfully")
+            else:
+                logger.info("Migration: photo_url column already exists")
+
+            if 'conversation_state' not in user_columns:
+                logger.info("Adding conversation_state column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN conversation_state VARCHAR(100) DEFAULT \'normal\''))
+                session.commit()
+                logger.info("Migration: conversation_state column added successfully")
+            else:
+                logger.info("Migration: conversation_state column already exists")
+
+            if 'pending_task_data' not in user_columns:
+                logger.info("Adding pending_task_data column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN pending_task_data TEXT'))
+                session.commit()
+                logger.info("Migration: pending_task_data column added successfully")
+            else:
+                logger.info("Migration: pending_task_data column already exists")
+
+            if 'last_interaction_at' not in user_columns:
+                logger.info("Adding last_interaction_at column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN last_interaction_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: last_interaction_at column added successfully")
+            else:
+                logger.info("Migration: last_interaction_at column already exists")
+
+            if 'conversation_context' not in user_columns:
+                logger.info("Adding conversation_context column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN conversation_context TEXT'))
+                session.commit()
+                logger.info("Migration: conversation_context column added successfully")
+            else:
+                logger.info("Migration: conversation_context column already exists")
+
+            if 'updated_at' not in user_columns:
+                logger.info("Adding updated_at column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN updated_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: updated_at column added successfully")
+            else:
+                logger.info("Migration: updated_at column already exists")
+
+            if 'invalid_chat' not in user_columns:
+                logger.info("Adding invalid_chat column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN invalid_chat BOOLEAN DEFAULT FALSE'))
+                session.commit()
+                logger.info("Migration: invalid_chat column added successfully")
+            else:
+                logger.info("Migration: invalid_chat column already exists")
+
+            if 'history_cleared_at' not in user_columns:
+                logger.info("Adding history_cleared_at column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN history_cleared_at TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: history_cleared_at column added successfully")
+            else:
+                logger.info("Migration: history_cleared_at column already exists")
+
             # Migration for subscription_tier column
-#            if is_sqlite:
-#                logger.info("Skipping subscription_tier enum migration for SQLite")
-#            else:
+            if is_sqlite:
+                logger.info("Skipping subscription_tier enum migration for SQLite")
+            else:
                 # Check if subscription_tier column exists and has correct type
-#                user_columns = [col['name'] for col in inspector.get_columns('users')]
-#                recreate_needed = False
-#
-#                if 'subscription_tier' in user_columns:
+                user_columns = [col['name'] for col in inspector.get_columns('users')]
+                recreate_needed = False
+
+                if 'subscription_tier' in user_columns:
                     # Check column type
-#                    column_info = next((col for col in inspector.get_columns('users') if col['name'] == 'subscription_tier'), None)
-#                    if column_info:
-#                        column_type = str(column_info['type']).upper()
+                    column_info = next((col for col in inspector.get_columns('users') if col['name'] == 'subscription_tier'), None)
+                    if column_info:
+                        column_type = str(column_info['type']).upper()
                         # If column exists but type is not our enum, need to recreate
-#                        if 'SUBSCRIPTION_TIER_ENUM' not in column_type:
-#                            recreate_needed = True
-#                            logger.info(f"subscription_tier column exists but has wrong type ({column_type}), recreating")
-#                        else:
-#                            logger.info("subscription_tier column already exists with correct enum type, skipping recreation")
-#                    else:
-#                        recreate_needed = True
-#                else:
-#                    recreate_needed = True
-#                    logger.info("subscription_tier column does not exist, creating")
-#
-#                if recreate_needed:
+                        if 'SUBSCRIPTION_TIER_ENUM' not in column_type:
+                            recreate_needed = True
+                            logger.info(f"subscription_tier column exists but has wrong type ({column_type}), recreating")
+                        else:
+                            logger.info("subscription_tier column already exists with correct enum type, skipping recreation")
+                    else:
+                        recreate_needed = True
+                else:
+                    recreate_needed = True
+                    logger.info("subscription_tier column does not exist, creating")
+
+                if recreate_needed:
                     # Migration for subscription_tier column - recreate only if needed
-#                    logger.info("Recreating subscription_tier column to fix enum values")
-#
+                    logger.info("Recreating subscription_tier column to fix enum values")
+
                     # First, change dependent columns to text to allow dropping the enum type
-#                    if 'subscriptions' in inspector.get_table_names():
-#                        sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-#                        if 'tier' in sub_columns:
-#                            logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
-#                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier DROP DEFAULT"))
-#                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
-#
-#                    session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
-#                    session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
-#                    session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
-#                    session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
-#
+                    if 'subscriptions' in inspector.get_table_names():
+                        sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                        if 'tier' in sub_columns:
+                            logger.info("Temporarily changing subscriptions.tier to text to allow enum recreation")
+                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier DROP DEFAULT"))
+                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE TEXT"))
+
+                    session.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS subscription_tier"))
+                    session.execute(text("DROP TYPE IF EXISTS subscription_tier_enum"))
+                    session.execute(text("CREATE TYPE subscription_tier_enum AS ENUM ('BRONZE', 'SILVER', 'GOLD')"))
+                    session.execute(text('ALTER TABLE users ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'BRONZE\''))
+
                     # Update existing users data to match new enum values (after creating the enum)
-#                    session.execute(text("UPDATE users SET subscription_tier = CASE WHEN LOWER(subscription_tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
-#
+                    session.execute(text("UPDATE users SET subscription_tier = CASE WHEN LOWER(subscription_tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(subscription_tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
+
                     # Update subscriptions.tier back to enum type with correct values
-#                    if 'subscriptions' in inspector.get_table_names():
-#                        sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-#                        if 'tier' in sub_columns:
-#                            logger.info("Converting subscriptions.tier back to enum type")
+                    if 'subscriptions' in inspector.get_table_names():
+                        sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                        if 'tier' in sub_columns:
+                            logger.info("Converting subscriptions.tier back to enum type")
                             # Update existing data to match new enum values (after creating the enum)
-#                            session.execute(text("UPDATE subscriptions SET tier = CASE WHEN LOWER(tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
-#                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
-#                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
-#
-#                    session.commit()
-#                    logger.info("Migration: subscription_tier column recreated successfully")
-#                else:
-#                    logger.info("Migration: subscription_tier column already correct, skipping recreation")
-#
+                            session.execute(text("UPDATE subscriptions SET tier = CASE WHEN LOWER(tier::text) = 'bronze' THEN 'BRONZE'::subscription_tier_enum WHEN LOWER(tier::text) = 'silver' THEN 'SILVER'::subscription_tier_enum WHEN LOWER(tier::text) = 'gold' THEN 'GOLD'::subscription_tier_enum ELSE 'BRONZE'::subscription_tier_enum END"))
+                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier TYPE subscription_tier_enum USING tier::subscription_tier_enum"))
+                            session.execute(text("ALTER TABLE subscriptions ALTER COLUMN tier SET DEFAULT 'BRONZE'"))
+
+                    session.commit()
+                    logger.info("Migration: subscription_tier column recreated successfully")
+                else:
+                    logger.info("Migration: subscription_tier column already correct, skipping recreation")
+
             # Migration for tier column in subscriptions table
-#            if 'subscriptions' in inspector.get_table_names():
-#                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
-#                if 'tier' not in sub_columns:
-#                    logger.info("Adding tier column to subscriptions table")
-#                    if is_sqlite:
-#                        session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier TEXT DEFAULT \'BRONZE\''))
-#                    else:
-#                        session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'BRONZE\''))
-#                    session.commit()
-#                    logger.info("Migration: tier column added to subscriptions table successfully")
-#                else:
-#                    logger.info("Migration: tier column already exists in subscriptions table")
-#
+            if 'subscriptions' in inspector.get_table_names():
+                sub_columns = [col['name'] for col in inspector.get_columns('subscriptions')]
+                if 'tier' not in sub_columns:
+                    logger.info("Adding tier column to subscriptions table")
+                    if is_sqlite:
+                        session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier TEXT DEFAULT \'BRONZE\''))
+                    else:
+                        session.execute(text('ALTER TABLE subscriptions ADD COLUMN tier subscription_tier_enum DEFAULT \'BRONZE\''))
+                    session.commit()
+                    logger.info("Migration: tier column added to subscriptions table successfully")
+                else:
+                    logger.info("Migration: tier column already exists in subscriptions table")
+
         # Migration for promo_codes table
-#        if 'promo_codes' not in inspector.get_table_names():
-#            logger.info("Creating promo_codes table")
-#            if is_sqlite:
-#                session.execute(text('''
-#                    CREATE TABLE promo_codes (
-#                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-#                        code VARCHAR(50) UNIQUE NOT NULL,
-#                        tier TEXT DEFAULT 'BRONZE',
-#                        duration_days INTEGER DEFAULT 30,
-#                        expires_at TIMESTAMP NOT NULL,
-#                        is_used BOOLEAN DEFAULT FALSE,
-#                        used_by_user_id INTEGER,
-#                        used_at TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#                        FOREIGN KEY (used_by_user_id) REFERENCES users (id)
-#                    )
-#                '''))
-#            else:
-#                session.execute(text('''
-#                    CREATE TABLE promo_codes (
-#                        id SERIAL PRIMARY KEY,
-#                        code VARCHAR(50) UNIQUE NOT NULL,
-#                        tier subscription_tier_enum DEFAULT 'BRONZE',
-#                        duration_days INTEGER DEFAULT 30,
-#                        expires_at TIMESTAMP NOT NULL,
-#                        is_used BOOLEAN DEFAULT FALSE,
-#                        used_by_user_id INTEGER REFERENCES users(id),
-#                        used_at TIMESTAMP,
-#                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-#                    )
-#                '''))
-#            session.commit()
-#            logger.info("Migration: promo_codes table created successfully")
-#        else:
-#            logger.info("Migration: promo_codes table already exists")
+        if 'promo_codes' not in inspector.get_table_names():
+            logger.info("Creating promo_codes table")
+            if is_sqlite:
+                session.execute(text('''
+                    CREATE TABLE promo_codes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        code VARCHAR(50) UNIQUE NOT NULL,
+                        tier TEXT DEFAULT 'BRONZE',
+                        duration_days INTEGER DEFAULT 30,
+                        expires_at TIMESTAMP NOT NULL,
+                        is_used BOOLEAN DEFAULT FALSE,
+                        used_by_user_id INTEGER,
+                        used_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (used_by_user_id) REFERENCES users (id)
+                    )
+                '''))
+            else:
+                session.execute(text('''
+                    CREATE TABLE promo_codes (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(50) UNIQUE NOT NULL,
+                        tier subscription_tier_enum DEFAULT 'BRONZE',
+                        duration_days INTEGER DEFAULT 30,
+                        expires_at TIMESTAMP NOT NULL,
+                        is_used BOOLEAN DEFAULT FALSE,
+                        used_by_user_id INTEGER REFERENCES users(id),
+                        used_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                '''))
+            session.commit()
+            logger.info("Migration: promo_codes table created successfully")
+        else:
+            logger.info("Migration: promo_codes table already exists")
             # Add missing columns if they don't exist
-#            inspector = inspect(engine)
-#            columns = [col['name'] for col in inspector.get_columns('promo_codes')]
-#            if 'discount_percent' not in columns:
-#                logger.info("Adding discount_percent column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN discount_percent INTEGER DEFAULT 0"))
-#            if 'max_uses' not in columns:
-#                logger.info("Adding max_uses column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN max_uses INTEGER"))
-#            if 'used_count' not in columns:
-#                logger.info("Adding used_count column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0"))
-#            if 'used_by_users' not in columns:
-#                logger.info("Adding used_by_users column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
-#            if 'used_by_user_id' not in columns:
-#                logger.info("Adding used_by_user_id column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_user_id INTEGER"))
-#            if 'used_at' not in columns:
-#                logger.info("Adding used_at column to promo_codes")
-#                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
-#            session.commit()
-#
-#        session.close()
-#        logger.info("Migration session closed successfully")
-#    except Exception as e:
-#        logger.error(f"Migration failed: {e}")
-#        session.close()
-#        raise
-#
-#    logger.info("✅ Database migrations completed")
-# except Exception as e:
-#     logger.error(f"❌ Database migrations failed: {e}")
-#     if not LOCAL:
-#         raise  # Fail hard in production
-#     else:
-#         logger.warning("Continuing with local mode despite migration issues")
-#
+            inspector = inspect(engine)
+            columns = [col['name'] for col in inspector.get_columns('promo_codes')]
+            if 'discount_percent' not in columns:
+                logger.info("Adding discount_percent column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN discount_percent INTEGER DEFAULT 0"))
+            if 'max_uses' not in columns:
+                logger.info("Adding max_uses column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN max_uses INTEGER"))
+            if 'used_count' not in columns:
+                logger.info("Adding used_count column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_count INTEGER DEFAULT 0"))
+            if 'used_by_users' not in columns:
+                logger.info("Adding used_by_users column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_users TEXT DEFAULT '[]'"))
+            if 'used_by_user_id' not in columns:
+                logger.info("Adding used_by_user_id column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_by_user_id INTEGER"))
+            if 'used_at' not in columns:
+                logger.info("Adding used_at column to promo_codes")
+                session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
+            session.commit()
+
+        session.close()
+        logger.info("Migration session closed successfully")
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        session.close()
+        raise
+
+    logger.info("✅ Database migrations completed")
+except Exception as e:
+    logger.error(f"❌ Database migrations failed: {e}")
+    if not LOCAL:
+        raise  # Fail hard in production
+    else:
+        logger.warning("Continuing with local mode despite migration issues")
+
 # Subscription restoration removed for production
-#
-#
-#
-#"""
+
+
+
+"""
 def check_database_connection():
-    """Добавляет тестовых пользователей с интересами 'спорт' если их еще нет"""
+    \"\"\"Добавляет тестовых пользователей с интересами 'спорт' если их еще нет\"\"\"
     try:
         session = Session()
 
@@ -838,12 +514,12 @@ def check_database_connection():
         session.close()
     except Exception as e:
         logger.error(f"Failed to add test sport users: {e}", exc_info=True)
-"""
+\"\"\"
 
 # All test functions below are disabled in production
-"""
+\"\"\"
 def ensure_sport_interest():
-    """Добавляет 'спорт' к интересам всех пользователей если его нет"""
+    \"\"\"Добавляет 'спорт' к интересам всех пользователей если его нет\"\"\"
     try:
         session = Session()
         profiles = session.query(UserProfile).all()
@@ -893,7 +569,7 @@ def ensure_sport_interest():
 #         session.close()
 #     except Exception as e:
 #         logger.error(f"Failed to create test promo codes: {e}")
-# """
+# # """
 
 # Test database connection before starting
 try:
@@ -2452,9 +2128,8 @@ async def direct_login_handler(request):
 
 try:
     if TELEGRAM_TOKEN:
-        # bot = Bot(token=TELEGRAM_TOKEN)
-        bot = None  # Disabled for local testing
-        logger.info("Bot creation disabled for local testing")
+        bot = Bot(token=TELEGRAM_TOKEN)
+        logger.info("Bot created successfully")
     else:
         bot = None
         logger.info("Bot not created (no token)")

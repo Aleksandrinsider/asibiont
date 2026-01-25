@@ -76,39 +76,28 @@ async def generate_progress_post(user_id, session):
             Task.reminder_time < now_utc
         ).count()
         
-        # Generate post using AI
-        prompt = f"""╨Э╨░╨┐╨╕╤И╨╕ ╨║╨╛╤А╨╛╤В╨║╨╕╨╣ ╨┐╨╛╤Б╤В ╨╛╤В ╨┐╨╡╤А╨▓╨╛╨│╨╛ ╨╗╨╕╤Ж╨░ ╨╛ ╨╝╨╛╤С╨╝ ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б╨╡ ╨╖╨░ ╤Б╨╡╨│╨╛╨┤╨╜╤П. 
-
-╨б╤В╨░╤В╨╕╤Б╤В╨╕╨║╨░:
-- ╨б╨╛╨╖╨┤╨░╨╜╨╛ ╨╖╨░╨┤╨░╤З: {total_today}
-- ╨Т╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨╛ ╨╖╨░╨┤╨░╤З: {completed_today}
-- ╨Э╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨╛ ╨▓ ╤Б╤А╨╛╨║: {pending_today}
-
-╨в╤А╨╡╨▒╨╛╨▓╨░╨╜╨╕╤П:
-- ╨Я╨╕╤И╨╕ ╨╛╤В ╨┐╨╡╤А╨▓╨╛╨│╨╛ ╨╗╨╕╤Ж╨░ (╤П, ╨╝╨╜╨╡, ╨╝╨╛╨╣)
-- ╨С╤Г╨┤╤М ╤З╨╡╤Б╤В╨╜╤Л╨╝ - ╨╡╤Б╨╗╨╕ ╨╜╨╡ ╤Б╨┤╨╡╨╗╨░╨╗ ╨╜╨╕╤З╨╡╨│╨╛, ╤В╨░╨║ ╨╕ ╤Б╨║╨░╨╢╨╕
-- ╨С╨╡╨╖ ╨║╨╛╨╜╨║╤А╨╡╤В╨╜╤Л╤Е ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╣ ╨╖╨░╨┤╨░╤З
-- ╨Ф╨╛╨▒╨░╨▓╤М ╤З╤В╨╛-╤В╨╛ ╨╝╨╛╤В╨╕╨▓╨╕╤А╤Г╤О╤Й╨╡╨╡ ╨╕╨╗╨╕ ╨▓╨╛╨┐╤А╨╛╤Б ╨┤╨╗╤П ╨▓╨╛╨▓╨╗╨╡╤З╨╡╨╜╨╕╤П ╨┤╤А╤Г╨│╨╕╤Е
-- ╨Ь╨░╨║╤Б╨╕╨╝╤Г╨╝ 2-3 ╨┐╤А╨╡╨┤╨╗╨╛╨╢╨╡╨╜╨╕╤П
-- ╨Э╨╡╤Д╨╛╤А╨╝╨░╨╗╤М╨╜╤Л╨╣ ╤Б╤В╨╕╨╗╤М
-- ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╣ ╤Н╨╝╨╛╨┤╨╖╨╕ ╨│╨┤╨╡ ╤Г╨╝╨╡╤Б╤В╨╜╨╛
-
-╨Я╤А╨╕╨╝╨╡╤А╤Л ╤Б╤В╨╕╨╗╤П:
-- "╨б╨╡╨│╨╛╨┤╨╜╤П ╨╖╨░╨║╤А╤Л╨╗ 5 ╨╖╨░╨┤╨░╤З ╨╕╨╖ 7, ╨╜╨╡╨┐╨╗╨╛╤Е╨╛! ЁЯТк ╨Ю╤Б╤В╨░╨╗╨╛╤Б╤М ╨┤╨╛╨┤╨╡╨╗╨░╤В╤М ╨┐╨░╤А╤Г ╨╝╨╡╨╗╨╛╤З╨╡╨╣. ╨Ъ╨░╨║ ╤Г ╨▓╨░╤Б ╨┤╨╡╨╜╤М ╨┐╤А╨╛╤И╤С╨╗?"
-- "╨Я╤А╨╕╨╖╨╜╨░╤О╤Б╤М ╤З╨╡╤Б╤В╨╜╨╛ - ╤Б╨╡╨│╨╛╨┤╨╜╤П ╨╜╨╡ ╤Б╨░╨╝╤Л╨╣ ╨┐╤А╨╛╨┤╤Г╨║╤В╨╕╨▓╨╜╤Л╨╣ ╨┤╨╡╨╜╤М, ╨▓╤Л╨┐╨╛╨╗╨╜╨╕╨╗ ╤В╨╛╨╗╤М╨║╨╛ 2 ╨╖╨░╨┤╨░╤З╨╕ ╨╕╨╖ 6 ЁЯШЕ ╨Ч╨░╨▓╤В╤А╨░ ╨▓╨╛╨╖╤М╨╝╤Г ╤А╨╡╨▓╨░╨╜╤И! ╨г ╨║╨╛╨│╨╛ ╨┐╨╛╤Е╨╛╨╢╨░╤П ╤Б╨╕╤В╤Г╨░╤Ж╨╕╤П?"
-- "╨Э╨╕╤З╨╡╨│╨╛ ╨╜╨╡ ╤Г╤Б╨┐╨╡╨╗ ╤Б╨╡╨│╨╛╨┤╨╜╤П, ╨╖╨░╤В╨╛ ╨┐╤А╨╕╨┤╤Г╨╝╨░╨╗ ╨┐╨╗╨░╨╜ ╨╜╨░ ╨╖╨░╨▓╤В╤А╨░! ╨Ш╨╜╨╛╨│╨┤╨░ ╨┐╨╗╨░╨╜╨╕╤А╨╛╨▓╨░╨╜╨╕╨╡ ╨▓╨░╨╢╨╜╨╡╨╡ ╤Б╤Г╨╡╤В╤Л. ╨б╨╛╨│╨╗╨░╤Б╨╜╤Л?"
-"""
+        # Generate simple progress post using template
+        if completed_today > 0:
+            if completed_today == 1:
+                achievement_text = f"Сегодня я выполнил {completed_today} задачу"
+            elif 2 <= completed_today <= 4:
+                achievement_text = f"Сегодня я выполнил {completed_today} задачи"
+            else:
+                achievement_text = f"Сегодня я выполнил {completed_today} задач"
+            
+            if pending_today > 0:
+                advice_text = f"Есть {pending_today} просроченных задач - стоит пересмотреть приоритеты."
+            else:
+                advice_text = "Отличная работа! Продолжай в том же духе."
+            
+            post_content = f"[Автопост] {achievement_text} из {total_today} созданных сегодня.\n\n{advice_text}\n\n#продуктивность #asibiont"
+        else:
+            if total_today > 0:
+                post_content = f"[Автопост] Сегодня создал {total_today} задач. Время браться за работу!\n\n#планирование #asibiont"
+            else:
+                post_content = f"[Автопост] Доброе утро! Сегодня отличный день для новых начинаний.\n\n#мотивация #asibiont"
         
-        post_content = await chat_with_ai(prompt, user_id=user_id, db_session=session)
-        
-        # Clean up AI response
-        if post_content:
-            # Remove any system messages or markers
-            post_content = post_content.strip()
-            # Limit length
-            if len(post_content) > 300:
-                post_content = post_content[:297] + "..."
-        
+        logger.info(f"[AUTO POST] Generated simple progress post: {post_content}")
         return post_content
         
     except Exception as e:
@@ -122,6 +111,13 @@ async def create_auto_post(user_id, content, session, notify=True):
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return False
+        
+        # Generate content if not provided
+        if content is None:
+            content = await generate_progress_post(user_id, session)
+            if content is None:
+                logger.error(f"Failed to generate content for auto-post for user {user_id}")
+                return False
         
         post = Post(
             user_id=user.id,
@@ -140,7 +136,7 @@ async def create_auto_post(user_id, content, session, notify=True):
             try:
                 from main import bot
                 if bot:
-                    notification_text = f"ЁЯУЭ ╨п ╨░╨▓╤В╨╛╨╝╨░╤В╨╕╤З╨╡╤Б╨║╨╕ ╤Б╨╛╨╖╨┤╨░╨╗ ╨┐╨╛╤Б╤В ╨╛ ╨▓╨░╤И╨╡╨╝ ╨┐╤А╨╛╨│╤А╨╡╤Б╤Б╨╡:\n\n{content}\n\nЁЯТб ╨н╤В╨╛ ╨┐╨╛╨╝╨╛╨│╨░╨╡╤В ╨┐╨╛╨┤╨┤╨╡╤А╨╢╨╕╨▓╨░╤В╤М ╨░╨║╤В╨╕╨▓╨╜╨╛╤Б╤В╤М ╨▓ ╨╗╨╡╨╜╤В╨╡. ╨Т╤Л ╨╝╨╛╨╢╨╡╤В╨╡ ╨╛╤В╤А╨╡╨┤╨░╨║╤В╨╕╤А╨╛╨▓╨░╤В╤М ╨╕╨╗╨╕ ╤Г╨┤╨░╨╗╨╕╤В╤М ╨┐╨╛╤Б╤В ╨▓ ╨▓╨╡╨▒-╨┐╨░╨╜╨╡╨╗╨╕."
+                    notification_text = f"🤖 Автопост опубликован!\n\n💡 Пост о вашем прогрессе создан и опубликован в ленте. Вы можете просмотреть его в веб-панели."
                     
                     await bot.send_message(
                         chat_id=user_id,
