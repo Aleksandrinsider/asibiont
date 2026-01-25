@@ -2337,6 +2337,9 @@ async def admin_security_handler(request):
         
         stats['user_stats'] = user_stats
         
+        # Debug logging
+        logger.info(f"User statistics collected: total_users={total_users}, users_online={users_online}, new_24h={new_users_24h}")
+        
     except Exception as e:
         logger.error(f"Error getting user statistics: {e}")
         import traceback
@@ -2344,6 +2347,18 @@ async def admin_security_handler(request):
         stats['user_stats'] = {
             'total_users': 0,
             'users_online': 0,
+            'new_users_24h': 0,
+            'new_users_week': 0,
+            'active_subscriptions': 0,
+            'tier_distribution': {},
+            'profiles_filled': 0,
+            'profile_completion_rate': 0,
+            'total_tasks': 0,
+            'completed_tasks': 0,
+            'task_completion_rate': 0,
+            'total_interactions': 0,
+            'recent_users': [],
+            'top_active_users': [],
             'error': str(e)
         }
     finally:
@@ -2351,6 +2366,7 @@ async def admin_security_handler(request):
     
     # Return JSON or HTML based on accept header
     if 'text/html' in request.headers.get('Accept', ''):
+        logger.info(f"Rendering template with stats: {stats.get('user_stats', {}).get('total_users', 'N/A')} users")
         return aiohttp_jinja2.render_template('security_dashboard.html', request, {
             'stats': stats,
             'current_time': datetime.now().isoformat()
