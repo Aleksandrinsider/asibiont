@@ -226,30 +226,161 @@
             <p>Мониторинг безопасности и защита от атак • Обновлено: {{ current_time }}</p>
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Всего запросов</h3>
-                <div class="value">{{ stats.total_requests }}</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: 100%;"></div>
+        <!-- User Statistics Section -->
+        {% if stats.user_stats %}
+        <div class="section">
+            <h2>👥 Статистика пользователей</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Всего пользователей</h3>
+                    <div class="value">{{ stats.user_stats.total_users }}</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>За 24 часа</h3>
+                    <div class="value">+{{ stats.user_stats.new_users_24h }}</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>За неделю</h3>
+                    <div class="value">+{{ stats.user_stats.new_users_week }}</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Активных подписок</h3>
+                    <div class="value">{{ stats.user_stats.active_subscriptions }}</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Заполненных профилей</h3>
+                    <div class="value">{{ stats.user_stats.profiles_filled }}</div>
+                    <div class="timestamp">{{ stats.user_stats.profile_completion_rate }}% завершенность</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Всего задач</h3>
+                    <div class="value">{{ stats.user_stats.total_tasks }}</div>
+                    <div class="timestamp">{{ stats.user_stats.completed_tasks }} завершено ({{ stats.user_stats.task_completion_rate }}%)</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Взаимодействий с AI</h3>
+                    <div class="value">{{ stats.user_stats.total_interactions }}</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Распределение тарифов</h3>
+                    <div style="margin-top: 8px;">
+                        {% if stats.user_stats.tier_distribution %}
+                            {% for tier, count in stats.user_stats.tier_distribution.items() %}
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="font-size: 12px; color: #8B949E;">{{ tier|upper }}</span>
+                                    <span style="font-size: 14px; color: #C9D1D9; font-weight: 600;">{{ count }}</span>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
+        </div>
+        {% endif %}
 
-            <div class="stat-card">
-                <h3>Уникальных IP</h3>
-                <div class="value">{{ stats.unique_ips }}</div>
-            </div>
+        <!-- Security Statistics -->
+        <div class="section">
+            <h2>🔒 Статистика безопасности</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Всего запросов</h3>
+                    <div class="value">{{ stats.total_requests }}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
 
-            <div class="stat-card">
-                <h3>Заблокировано IP</h3>
-                <div class="value">{{ stats.blocked_ips|length }}</div>
-            </div>
+                <div class="stat-card">
+                    <h3>Уникальных IP</h3>
+                    <div class="value">{{ stats.unique_ips }}</div>
+                </div>
 
-            <div class="stat-card">
-                <h3>Подозрительных IP</h3>
-                <div class="value">{{ stats.suspicious_ips|length }}</div>
+                <div class="stat-card">
+                    <h3>Заблокировано IP</h3>
+                    <div class="value">{{ stats.blocked_ips|length }}</div>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Подозрительных IP</h3>
+                    <div class="value">{{ stats.suspicious_ips|length }}</div>
+                </div>
             </div>
         </div>
+
+        <!-- Recent Users -->
+        {% if stats.user_stats and stats.user_stats.recent_users %}
+        <div class="section">
+            <h2>🆕 Последние регистрации</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Имя</th>
+                        <th>Тариф</th>
+                        <th>Дата регистрации</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in stats.user_stats.recent_users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td><strong>@{{ user.username or 'N/A' }}</strong></td>
+                        <td>{{ user.first_name or 'N/A' }}</td>
+                        <td>
+                            {% if user.tier == 'gold' %}
+                            <span class="badge badge-warning">GOLD</span>
+                            {% elif user.tier == 'silver' %}
+                            <span class="badge badge-success">SILVER</span>
+                            {% else %}
+                            <span class="badge" style="background: rgba(139, 148, 158, 0.15); color: #8B949E;">BRONZE</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Top Active Users -->
+        {% if stats.user_stats and stats.user_stats.top_active_users %}
+        <div class="section">
+            <h2>⚡ Самые активные пользователи</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Имя</th>
+                        <th>Взаимодействий</th>
+                        <th>Активность</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in stats.user_stats.top_active_users %}
+                    <tr>
+                        <td><strong>@{{ user.username or 'N/A' }}</strong></td>
+                        <td>{{ user.first_name or 'N/A' }}</td>
+                        <td>{{ user.interactions }}</td>
+                        <td>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ (user.interactions / stats.user_stats.top_active_users[0].interactions * 100)|round }}%;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
         <!-- Top IPs by Request Count -->
         <div class="section">

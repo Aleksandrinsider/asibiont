@@ -2224,8 +2224,109 @@ async def admin_security_handler(request):
         ip_info = security_monitor.get_ip_info(ip)
         return web.json_response(ip_info)
     
-    # Get statistics
+    # Get security statistics
     stats = security_monitor.get_statistics()
+    
+    # Get user statistics from database
+    session_db = Session()
+    try:
+        from sqlalchemy import func, case
+        from datetime import datetime, timedelta
+        
+        # Общее количество пользователей
+        total_users = session_db.query(User).count()
+        
+        # Пользователи за последние 24 часа
+        last_24h = datetime.now() - timedelta(hours=24)
+        new_users_24h = session_db.query(User).filter(User.created_at >= last_24h).count()
+        
+        # Пользователи за последнюю неделю
+        last_week = datetime.now() - timedelta(days=7)
+        new_users_week = session_db.query(User).filter(User.created_at >= last_week).count()
+        
+        # Активные подписки
+        active_subscriptions = session_db.query(Subscription).filter(
+            Subscription.status == 'active'
+        ).count()
+        
+        # Количество пользователей по тарифам
+        tier_stats = session_db.query(
+            User.subscription_tier,
+            func.count(User.id).label('count')
+        ).group_by(User.subscription_tier).all()
+        
+        tier_distribution = {}
+        for tier, count in tier_stats:
+            if tier:
+                tier_distribution[tier.value] = count
+            else:
+                tier_distribution['bronze'] = count
+        
+        # Пользователи с заполненным профилем
+        profiles_filled = session_db.query(UserProfile).filter(
+            UserProfile.city.isnot(None),
+            UserProfile.interests.isnot(None)
+        ).count()
+        
+        # Количество задач
+        total_tasks = session_db.query(Task).count()
+        completed_tasks = session_db.query(Task).filter(Task.completed == True).count()
+        
+        # Количество взаимодействий (сообщений в чате)
+        total_interactions = session_db.query(Interaction).count()
+        
+        # Последние зарегистрированные пользователи
+        recent_users = session_db.query(User).order_by(User.created_at.desc()).limit(10).all()
+        recent_users_list = [{
+            'id': u.id,
+            'username': u.username,
+            'first_name': u.first_name,
+            'created_at': u.created_at.strftime('%Y-%m-%d %H:%M:%S') if u.created_at else 'N/A',
+            'tier': u.subscription_tier.value if u.subscription_tier else 'bronze'
+        } for u in recent_users]
+        
+        # Активность пользователей (топ-10 по количеству взаимодействий)
+        top_active_users = session_db.query(
+            User.username,
+            User.first_name,
+            func.count(Interaction.id).label('interaction_count')
+        ).join(Interaction, User.id == Interaction.user_id)\
+         .group_by(User.id, User.username, User.first_name)\
+         .order_by(func.count(Interaction.id).desc())\
+         .limit(10).all()
+        
+        active_users_list = [{
+            'username': u[0],
+            'first_name': u[1],
+            'interactions': u[2]
+        } for u in top_active_users]
+        
+        user_stats = {
+            'total_users': total_users,
+            'new_users_24h': new_users_24h,
+            'new_users_week': new_users_week,
+            'active_subscriptions': active_subscriptions,
+            'tier_distribution': tier_distribution,
+            'profiles_filled': profiles_filled,
+            'profile_completion_rate': round((profiles_filled / total_users * 100) if total_users > 0 else 0, 1),
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'task_completion_rate': round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 1),
+            'total_interactions': total_interactions,
+            'recent_users': recent_users_list,
+            'top_active_users': active_users_list
+        }
+        
+        stats['user_stats'] = user_stats
+        
+    except Exception as e:
+        logger.error(f"Error getting user statistics: {e}")
+        stats['user_stats'] = {
+            'total_users': 0,
+            'error': str(e)
+        }
+    finally:
+        session_db.close()
     
     # Return JSON or HTML based on accept header
     if 'text/html' in request.headers.get('Accept', ''):
