@@ -23,6 +23,112 @@ class ConversationalAITester:
         self.user_id = 123456789
         self.conversation_history = []
         self.test_results = []
+        self.db_state_before = {}  # Состояние БД перед каждым запросом
+        self.db_state_after = {}   # Состояние БД после ответа агента
+
+    def check_database_state(self, phase="before"):
+        """Проверяет текущее состояние задач в БД"""
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=self.user_id).first()
+            if not user:
+                return {"error": "User not found"}
+            
+            tasks = session.query(Task).filter_by(user_id=user.id).all()
+            state = {
+                "total_tasks": len(tasks),
+                "active_tasks": len([t for t in tasks if t.status not in ["completed", "deleted"]]),
+                "completed_tasks": len([t for t in tasks if t.status == "completed"]),
+                "deleted_tasks": len([t for t in tasks if t.status == "deleted"]),
+                "tasks": [
+                    {
+                        "id": t.id,
+                        "title": t.title,
+                        "status": t.status,
+                        "reminder_time": t.reminder_time.isoformat() if t.reminder_time else None,
+                        "created_at": t.created_at.isoformat() if t.created_at else None
+                    } for t in tasks
+                ]
+            }
+            
+            if phase == "before":
+                self.db_state_before = state
+            else:
+                self.db_state_after = state
+                
+            return state
+        finally:
+            session.close()
+
+    def analyze_database_changes(self, user_message, agent_response):
+        """Анализирует изменения в БД после ответа агента"""
+        changes = {
+            "tasks_created": 0,
+            "tasks_deleted": 0,
+            "tasks_completed": 0,
+            "tasks_edited": 0,
+            "new_tasks": [],
+            "deleted_tasks": [],
+            "issues": []
+        }
+        
+        if not self.db_state_before or not self.db_state_after:
+            return changes
+            
+        before = self.db_state_before
+        after = self.db_state_after
+        
+        # Находим новые задачи
+        before_ids = {t["id"] for t in before["tasks"]}
+        after_ids = {t["id"] for t in after["tasks"]}
+        
+        new_task_ids = after_ids - before_ids
+        deleted_task_ids = before_ids - after_ids
+        
+        changes["tasks_created"] = len(new_task_ids)
+        changes["tasks_deleted"] = len(deleted_task_ids)
+        
+        # Детали новых задач
+        for task in after["tasks"]:
+            if task["id"] in new_task_ids:
+                changes["new_tasks"].append(task)
+                
+        # Детали удаленных задач
+        for task in before["tasks"]:
+            if task["id"] in deleted_task_ids:
+                changes["deleted_tasks"].append(task)
+        
+        # Проверяем изменения статуса
+        for after_task in after["tasks"]:
+            before_task = next((t for t in before["tasks"] if t["id"] == after_task["id"]), None)
+            if before_task:
+                if before_task["status"] != after_task["status"]:
+                    if after_task["status"] == "completed":
+                        changes["tasks_completed"] += 1
+                    elif after_task["status"] == "deleted":
+                        changes["tasks_deleted"] += 1
+                    else:
+                        changes["tasks_edited"] += 1
+        
+        # Анализируем проблемы
+        user_lower = user_message.lower()
+        response_lower = agent_response.lower() if agent_response else ""
+        
+        # Если пользователь просит создать задачу без времени, агент должен уточнить
+        if any(word in user_lower for word in ["создай", "напомни", "задач"]) and any(word in user_lower for word in ["без времени", "без времени"]):
+            if changes["tasks_created"] > 0 and not any(word in response_lower for word in ["когда", "время", "уточни", "во сколько"]):
+                changes["issues"].append("Агент создал задачу без уточнения времени")
+        
+        # Если пользователь просит удалить задачу, агент должен уточнить причину
+        if any(word in user_lower for word in ["удали", "удалить", "delete"]):
+            if changes["tasks_deleted"] > 0 and not any(word in response_lower for word in ["почему", "причина", "зачем"]):
+                changes["issues"].append("Агент удалил задачу без уточнения причины")
+        
+        # Проверяем дублирование задач
+        if changes["tasks_created"] > 1:
+            changes["issues"].append(f"Агент создал {changes['tasks_created']} задачи вместо одной")
+        
+        return changes
 
     async def generate_user_message(self, agent_response=None, iteration=1):
         """AI генерирует сообщение пользователя на основе ответа агента"""
@@ -33,16 +139,23 @@ class ConversationalAITester:
         Текущая итерация: {iteration}/20
 
         Возможности агента для проверки:
-        1. Создание задач с разными временными параметрами
-        2. Просмотр и управление задачами (активные, просроченные, завершенные)
-        3. Редактирование задач (изменение времени, приоритета, статуса)
-        4. Работа с напоминаниями
-        5. Планирование дня/недели
-        6. Делегирование задач контактам
-        7. Управление профилем (цели, навыки, интересы)
-        8. Поиск и анализ контактов
-        9. Общие вопросы о возможностях
-        10. Обработка ошибок и непонятных запросов
+        1. Создание задач с разными временными параметрами (ОБЯЗАТЕЛЬНО проверять уточнение времени!)
+        2. Создание задач БЕЗ времени (агент ДОЛЖЕН уточнить время)
+        3. Просмотр и управление задачами (активные, просроченные, завершенные)
+        4. Редактирование задач (изменение времени, приоритета, статуса)
+        5. Удаление задач (агент ДОЛЖЕН уточнить причину удаления)
+        6. Работа с напоминаниями
+        7. Планирование дня/недели
+        8. Делегирование задач контактам
+        9. Управление профилем (цели, навыки, интересы)
+        10. Поиск и анализ контактов
+        11. Обработка ошибок и непонятных запросов
+
+        КРИТИЧНЫЕ ТРЕБОВАНИЯ:
+        - Если просишь создать задачу БЕЗ времени - агент ОБЯЗАТЕЛЬНО должен уточнить время
+        - Если просишь удалить задачу - агент ОБЯЗАТЕЛЬНО должен уточнить причину
+        - Проверяй, что агент не создает дубликаты задач
+        - Проверяй, что агент не удаляет задачи без причины
 
         Правила диалога:
         - Веди естественный разговор, как реальный пользователь
@@ -99,10 +212,13 @@ class ConversationalAITester:
         fallbacks = [
             "Привет! Расскажи, что ты умеешь делать?",
             "Создай задачу: позвонить врачу завтра в 10 утра",
-            "Покажи все мои активные задачи",
+            "Создай задачу без времени: купить продукты",  # Тест на уточнение времени
             "Напомни мне через 5 минут выключить чайник",
+            "Создай задачу: заказать продукты на Озон",  # Тест на уточнение времени
+            "Покажи все мои активные задачи",
             "Измени время задачи 'позвонить врачу' на 11 утра",
             "Заверши задачу 'позвонить врачу'",
+            "Удали задачу 'купить продукты'",  # Тест на уточнение причины
             "Создай повторяющуюся задачу 'поливать цветы' каждый день в 9 утра",
             "Помоги спланировать мой день",
             "Расскажи о делегировании задач",
@@ -115,12 +231,15 @@ class ConversationalAITester:
             "Напомни о встрече за час",
             "Покажи статистику выполненных задач",
             "Помоги с планированием на месяц",
-            "Создай задачу без времени",
+            "Создай задачу без времени: проверить почту",  # Еще тест на уточнение
+            "Удали задачу 'проверить почту'",  # Тест на причину удаления
+            "Создай задачу 'сделать отчет' без времени",  # Тест на уточнение
+            "Удали задачу 'сделать отчет' потому что она не нужна",  # Тест на причину
             "Что ты думаешь о моей продуктивности?"
         ]
         return fallbacks[min(iteration-1, len(fallbacks)-1)]
 
-    def _analyze_agent_response(self, user_message, agent_response, iteration):
+    def _analyze_agent_response(self, user_message, agent_response, iteration, db_changes=None):
         """Анализирует ответ агента"""
         analysis = {
             "iteration": iteration,
@@ -128,7 +247,8 @@ class ConversationalAITester:
             "agent_response": agent_response,
             "issues": [],
             "features_tested": [],
-            "quality_score": 0
+            "quality_score": 0,
+            "db_changes": db_changes or {}
         }
 
         if not agent_response or len(agent_response.strip()) < 10:
@@ -184,6 +304,11 @@ class ConversationalAITester:
         base_score = 10
         base_score -= len(analysis["issues"]) * 2
         base_score += len(analysis["features_tested"])
+        
+        # Штрафы за проблемы с БД
+        if db_changes:
+            base_score -= len(db_changes.get("issues", [])) * 3  # Строгий штраф за проблемы с исполнением
+        
         analysis["quality_score"] = max(0, min(10, base_score))
 
         return analysis
@@ -196,6 +321,15 @@ class ConversationalAITester:
         # Инициализация БД
         print("📊 Инициализация базы данных...")
         init_db()
+        
+        # Очищаем старые задачи для чистого теста
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=self.user_id).first()
+        if user:
+            session.query(Task).filter_by(user_id=user.id).delete()
+            session.commit()
+            print("🧹 Очищены старые задачи пользователя")
+        session.close()
 
         # Создаем активную подписку для теста
         session = Session()
@@ -243,16 +377,28 @@ class ConversationalAITester:
 
             # Получаем ответ агента
             try:
+                # Проверяем состояние БД перед запросом
+                self.check_database_state("before")
+                
                 agent_response = await chat_with_ai(
                     user_message,
                     context=self.conversation_history[-10:],  # Последние 10 сообщений
                     user_id=self.user_id
                 )
 
+                # Проверяем состояние БД после ответа
+                self.check_database_state("after")
+                
+                # Анализируем изменения в БД
+                db_changes = self.analyze_database_changes(user_message, agent_response)
+
                 print(f"🤖 Агент: {agent_response[:150]}{'...' if len(agent_response) > 150 else ''}")
 
                 # Анализируем ответ
-                analysis = self._analyze_agent_response(user_message, agent_response, i)
+                analysis = self._analyze_agent_response(user_message, agent_response, i, db_changes)
+                
+                # Добавляем проблемы из БД в анализ
+                analysis["issues"].extend(db_changes.get("issues", []))
                 
                 # Логируем проблемы для анализа
                 if analysis["issues"]:
@@ -265,6 +411,12 @@ class ConversationalAITester:
                 print(f"📊 Качество: {analysis['quality_score']}/10")
                 if analysis['features_tested']:
                     print(f"🔧 Протестировано: {', '.join(analysis['features_tested'])}")
+                if db_changes.get("tasks_created", 0) > 0:
+                    print(f"✅ Создано задач: {db_changes['tasks_created']}")
+                if db_changes.get("tasks_deleted", 0) > 0:
+                    print(f"🗑️  Удалено задач: {db_changes['tasks_deleted']}")
+                if db_changes.get("tasks_completed", 0) > 0:
+                    print(f"✔️  Завершено задач: {db_changes['tasks_completed']}")
                 if analysis['issues']:
                     print(f"⚠️  Проблемы: {', '.join(analysis['issues'])}")
 
@@ -303,9 +455,17 @@ class ConversationalAITester:
         successful_iterations = len([r for r in self.test_results if r.get("agent_response")])
         avg_quality = sum(r["quality_score"] for r in self.test_results) / total_iterations
 
+        # Считаем изменения в БД
+        total_tasks_created = sum(r.get("db_changes", {}).get("tasks_created", 0) for r in self.test_results)
+        total_tasks_deleted = sum(r.get("db_changes", {}).get("tasks_deleted", 0) for r in self.test_results)
+        total_tasks_completed = sum(r.get("db_changes", {}).get("tasks_completed", 0) for r in self.test_results)
+
         print(f"Всего итераций: {total_iterations}")
         print(f"Успешных ответов: {successful_iterations}")
         print(f"Среднее качество ответов: {avg_quality:.1f}/10")
+        print(f"Всего создано задач: {total_tasks_created}")
+        print(f"Всего удалено задач: {total_tasks_deleted}")
+        print(f"Всего завершено задач: {total_tasks_completed}")
         # Сбор всех протестированных функций
         all_features = set()
         all_issues = []
@@ -326,7 +486,8 @@ class ConversationalAITester:
                 print(f"  • {issue}: {count} раз")
 
         # Оценка готовности к продакшену
-        production_score = min(10, avg_quality + len(all_features) * 0.5 - len(set(all_issues)) * 0.3)
+        db_actions_score = min(5, (total_tasks_created + total_tasks_deleted + total_tasks_completed) * 0.1)  # До 5 баллов за действия с БД
+        production_score = min(10, avg_quality + len(all_features) * 0.5 - len(set(all_issues)) * 0.3 + db_actions_score)
         print(f"Оценка готовности к продакшену: {production_score:.1f}/10")
         if production_score >= 8:
             print("🎉 Агент готов к продакшену!")

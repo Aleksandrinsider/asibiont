@@ -231,28 +231,38 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         args["reminder_time"] = user_specified_time
                         logger.info(f"[ADD TASK] Corrected time from '{ai_time}' to '{user_specified_time}' (simple HH:MM format)")
                 
+                # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: блокируем создание задач из одного сообщения
+                # Если в оригинальном сообщении уже есть упоминание о создании задачи - блокируем дубликаты
+                message_lower = original_message.lower()
+                task_creation_keywords = ['создать задачу', 'создай задачу', 'запланируй', 'напомни', 'добавь задачу', 'поставь задачу', 'создать', 'запланировать']
+                has_task_intent = any(keyword in message_lower for keyword in task_creation_keywords)
+                
                 # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
                 existing_tasks = list_tasks(user_id=user_id, session=db_session)
-                
-                # Проверяем, есть ли уже похожая задача (по заголовку)
                 is_duplicate = False
-                if existing_tasks:
-                    from difflib import SequenceMatcher
-                    for line in existing_tasks.split('\n'):
-                        # Извлекаем название задачи из строки (до даты/времени)
-                        if '📌' in line or '✅' in line:
-                            # Формат: "📌 Название задачи (DD.MM.YYYY HH:MM)"
-                            parts = line.split('(')
-                            if len(parts) > 0:
-                                existing_title = parts[0].replace('📌', '').replace('✅', '').strip()
-                                # Fuzzy match: проверяем схожесть названий (>0.87 = очень похожи)
-                                similarity = SequenceMatcher(None, task_title.lower(), existing_title.lower()).ratio()
-                                if similarity > 0.87 and ('В работе' in line or 'Ожидает' in line):
-                                    logger.warning(f"[ADD TASK] DUPLICATE DETECTED - similar task (similarity={similarity:.2f}): '{existing_title}' vs '{task_title}'")
-                                    tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Похожая задача уже существует - '{existing_title}'"})
-                                    is_duplicate = True
-                                    break
-                
+
+                if has_task_intent:
+                    # Проверяем, не пытаемся ли создать задачу из текста, который уже содержит инструкцию создания
+                    if len(task_title.split()) > 7:  # Если title очень длинный - вероятно, это весь текст сообщения
+                        logger.warning(f"[ADD TASK] BLOCKED - message contains task creation intent, title too long ({len(task_title.split())} words)")
+                        tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Задача уже создана из этого сообщения"})
+                        continue
+
+                    # Дополнительная проверка: если уже есть активная задача с похожим названием - блокируем
+                    if existing_tasks:
+                        from difflib import SequenceMatcher
+                        for line in existing_tasks.split('\n'):
+                            if '📌' in line or '✅' in line:
+                                parts = line.split('(')
+                                if len(parts) > 0:
+                                    existing_title = parts[0].replace('📌', '').replace('✅', '').strip()
+                                    similarity = SequenceMatcher(None, task_title.lower(), existing_title.lower()).ratio()
+                                    # Более строгая проверка: блокируем если similarity > 0.8
+                                    if similarity > 0.8 and ('В работе' in line or 'Ожидает' in line or 'АКТУАЛЬНО' in line):
+                                        logger.warning(f"[ADD TASK] BLOCKED - very similar task exists (similarity={similarity:.2f}): '{existing_title}' vs '{task_title}'")
+                                        tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Похожая задача уже существует - '{existing_title}'"})
+                                        is_duplicate = True
+                                        break
                 if is_duplicate:
                     continue
                 
