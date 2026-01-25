@@ -1093,7 +1093,7 @@ class ReminderService:
             
             # Отправить проактивное сообщение с номером для разнообразия
             try:
-                proactive_text = await self.generate_proactive_message(user_id, context, task_count, overdue_count, all_tasks)
+                proactive_text = await self.generate_proactive_message(user_id, "general", task_count, overdue_count, all_tasks)
                 
                 # Сохранить проактивное сообщение в таблицу Interaction
                 try:
@@ -1332,4 +1332,12 @@ class ReminderService:
             replace_existing=True
         )
         logger.info("Scheduled daily delegation deadline checks at 9:00 UTC")
+
+
+async def _send_task_checkpoint_job(user_id: int):
+    """Wrapper function for sending task checkpoint messages (jobstore-safe)"""
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.send_proactive_message(user_id)
+    else:
+        logger.error("_send_task_checkpoint_job: REMINDER_SERVICE not initialized")
 
