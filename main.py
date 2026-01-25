@@ -2654,9 +2654,9 @@ async def api_partners_handler(request):
 
             # Apply hidden contacts to delegation lists as well
             if hidden_contacts:
-                delegating_to_me = [c for c in delegating_to_me if c.get('username') and c.get(
+                delegating_to_me = [c for c in delegating_to_me if not c.get('username') or c.get(
                     'username').replace('@', '').lower() not in hidden_contacts]
-                delegating_by_me = [c for c in delegating_by_me if c.get('username') and c.get(
+                delegating_by_me = [c for c in delegating_by_me if not c.get('username') or c.get(
                     'username').replace('@', '').lower() not in hidden_contacts]
 
         except Exception as e:
@@ -2882,6 +2882,11 @@ async def api_partners_handler(request):
 
         # Add delegating contacts
         for contact in delegating_to_me:
+            # Skip contacts without username
+            if not contact.get('username'):
+                logger.warning(f"Skipping delegating_to_me contact without username: user_id={contact.get('id')}")
+                continue
+                
             # Получить профиль делегатора для расчета общих интересов/навыков/целей
             delegator_profile = session_db.query(UserProfile).filter_by(
                 user_id=contact['id']).first() if 'id' in contact else None
@@ -3008,6 +3013,11 @@ async def api_partners_handler(request):
             })
 
         for contact in delegating_by_me:
+            # Skip contacts without username
+            if not contact.get('username'):
+                logger.warning(f"Skipping delegation contact without username: user_id={contact.get('id')}")
+                continue
+            
             # Получить профиль делегата для расчета общих интересов/навыков/целей
             delegatee_profile = session_db.query(UserProfile).filter_by(
                 user_id=contact['id']).first() if 'id' in contact else None
@@ -3537,6 +3547,11 @@ async def api_elite_partners_handler(request):
                         if task_username_clean == user_username_clean:
                             delegator = session_db.query(User).filter_by(id=task.user_id).first()
                             if delegator and delegator.id != user.id:
+                                # Skip contacts without username
+                                if not delegator.username:
+                                    logger.warning(f"Skipping elite delegation contact without username: user_id={delegator.id}")
+                                    continue
+                                    
                                 # Skip if already in partners_data
                                 if any(p.get('contact_info') == delegator.username for p in partners_data):
                                     continue
@@ -3606,6 +3621,11 @@ async def api_elite_partners_handler(request):
                             )
                         ).first()
                         if delegatee and delegatee.id != user.id:
+                            # Skip contacts without username
+                            if not delegatee.username:
+                                logger.warning(f"Skipping elite delegating_by_me contact without username: user_id={delegatee.id}")
+                                continue
+                                
                             # Skip if already in partners_data
                             if any(p.get('contact_info') == delegatee.username for p in partners_data):
                                 continue
