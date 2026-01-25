@@ -203,7 +203,7 @@ async def create_auto_post(user_id, content, session, notify=True):
             try:
                 from main import bot
                 if bot:
-                    notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Поделитесь своими результатами с другими участниками ASI Biont!\n\n🌐 Используйте веб-панель для большего: https://asibiont.ru\n→ Редактируйте посты\n→ Находите контакты по интересам\n→ Управляйте задачами визуально"
+                    notification_text = f"📝 Я автоматически создал пост о вашем прогрессе:\n\n{content}\n\n💡 Поделитесь своими результатами с другими участниками ASI Biont!\n\n🌐 Используйте веб-панель для большего: https://asibiont.ru\n→ Находите контакты по интересам\n→ Управляйте задачами визуально\n→ Удаляйте посты при необходимости"
                     
                     await bot.send_message(
                         chat_id=user_id,
