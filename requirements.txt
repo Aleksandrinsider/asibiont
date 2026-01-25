@@ -15,3 +15,5 @@ aiohttp-cors==0.7.0
 SpeechRecognition==3.10.0
 pydub==0.25.1
 standard-aifc==3.13.0
+pytest==8.3.4
+pytest-asyncio==0.25.1
