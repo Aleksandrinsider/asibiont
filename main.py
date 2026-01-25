@@ -1046,31 +1046,11 @@ async def logout_handler(request):
 @aiohttp_jinja2.template('dashboard_new.html')
 async def dashboard_handler(request):
     logger.info(f"Dashboard handler called for path: {request.path}")
-    session = await get_session(request)
-    logger.info(f"Session in dashboard: {dict(session) if session else 'None'}")
     try:
-        user_id = session.get('user_id')
-        logger.info(f"User ID from session: {user_id} (type: {type(user_id)})")
+        user_id = await get_user_id_from_request(request)
+        logger.info(f"User ID: {user_id} (type: {type(user_id)})")
 
-        # Check for telegram_id in query parameters (for local testing)
-        if not user_id:
-            telegram_id_param = request.query.get('telegram_id')
-            if telegram_id_param:
-                try:
-                    user_id = int(telegram_id_param)
-                    session['user_id'] = user_id
-                    logger.info(f"Set user_id from query parameter: {user_id}")
-                except ValueError:
-                    logger.error(f"Invalid telegram_id in query: {telegram_id_param}")
-
-        # Преобразуем в int если нужно
-        try:
-            user_id = int(user_id)
-        except (ValueError, TypeError):
-            logger.error(f"Invalid user_id in session: {user_id}")
-            logged_in = False
-        else:
-            logged_in = bool(user_id)
+        logged_in = bool(user_id)
 
         if not logged_in:
             # Show login page in dashboard
@@ -2481,6 +2461,24 @@ async def yookassa_webhook(request):
     return web.Response(text="OK")
 
 
+async def get_user_id_from_request(request):
+    """Helper function to get user_id from session or query parameters"""
+    session_req = await get_session(request)
+    user_id = session_req.get('user_id')
+    
+    # Check for telegram_id in query parameters (for local testing)
+    if not user_id:
+        telegram_id_param = request.query.get('telegram_id')
+        if telegram_id_param:
+            try:
+                user_id = int(telegram_id_param)
+                logger.info(f"Set user_id from query parameter: {user_id}")
+            except ValueError:
+                logger.error(f"Invalid telegram_id in query: {telegram_id_param}")
+    
+    return user_id
+
+
 async def api_partners_handler(request):
     def pluralize_task(count):
         """Склонение слова 'задача' по числу"""
@@ -2496,10 +2494,8 @@ async def api_partners_handler(request):
         return 'задач'
 
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
-        logger.info(
-            f"API partners handler called, session: {dict(session_req) if session_req else 'None'}, user_id: {user_id}")
+        user_id = await get_user_id_from_request(request)
+        logger.info(f"API partners handler called, user_id: {user_id}")
         if not user_id:
             logger.error("No user_id in session for partners API")
             return web.json_response({'error': 'Not logged in'}, status=401)
@@ -3341,8 +3337,7 @@ async def api_partners_handler(request):
 async def api_elite_partners_handler(request):
     """Get ALL Gold partners for Gold users (Premium status filter)"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         logger.info(f"API elite partners handler called for user_id: {user_id}")
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
@@ -3521,8 +3516,7 @@ async def api_elite_partners_handler(request):
 async def api_contact_profile_handler(request):
     """Get detailed profile of a contact"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3630,8 +3624,7 @@ async def api_contact_profile_handler(request):
 async def api_favorite_contacts_handler(request):
     """Get or update favorite contacts"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3692,8 +3685,7 @@ async def api_favorite_contacts_handler(request):
 async def api_blocked_contacts_handler(request):
     """Get or update blocked contacts"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3792,8 +3784,7 @@ async def api_blocked_contacts_handler(request):
 async def rate_user_handler(request):
     """Rate another user (1-10 scale)"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3879,8 +3870,7 @@ async def rate_user_handler(request):
 async def hide_contact_handler(request):
     """Hide contact for specified number of days"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3956,8 +3946,7 @@ async def hide_contact_handler(request):
 async def get_user_rating_handler(request):
     """Get current user rating for another user"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -3994,8 +3983,7 @@ async def get_user_rating_handler(request):
 async def set_user_rating_handler(request):
     """Set user rating for another user"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -4134,8 +4122,7 @@ async def create_post_handler(request):
 async def api_accept_delegated_task_handler(request):
     """Direct API endpoint to accept a delegated task"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -4197,8 +4184,7 @@ async def api_accept_delegated_task_handler(request):
 async def api_reject_delegated_task_handler(request):
     """Direct API endpoint to reject a delegated task"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -4260,8 +4246,7 @@ async def api_reject_delegated_task_handler(request):
 async def api_update_profile_handler(request):
     """API endpoint to update user profile"""
     try:
-        session_req = await get_session(request)
-        user_id = session_req.get('user_id')
+        user_id = await get_user_id_from_request(request)
         if not user_id:
             return web.json_response({'error': 'Not logged in'}, status=401)
 
@@ -4836,10 +4821,8 @@ async def api_avatar_handler(request):
 
 
 async def api_reminders_handler(request):
-    session_req = await get_session(request)
-    user_id = session_req.get('user_id')
-    logger.info(
-        f"API reminders handler called, session: {dict(session_req) if session_req else 'None'}, user_id: {user_id}")
+    user_id = await get_user_id_from_request(request)
+    logger.info(f"API reminders handler called, user_id: {user_id}")
     if not user_id:
         logger.error("No user_id in session for reminders API")
         return web.json_response({'error': 'Not logged in'}, status=401)

@@ -203,6 +203,7 @@
             }
             
             currentContactFilter = filterType;
+            currentContactPage = 1; // Сброс страницы при смене фильтра
             
             // Обновляем стили кнопок фильтров контактов
             document.querySelectorAll('.contact-filter-btn').forEach(btn => {
@@ -690,12 +691,12 @@
         
         input[type="text"]:focus, textarea:focus {
             outline: none;
-            border-color: #0969DA !important;
+            border-color: #068487 !important;
             box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.1) !important;
         }
         
         input[type="text"]:hover, textarea:hover {
-            border-color: #0969DA;
+            border-color: #068487;
         }
         
         .chat-input input[type="text"] {
@@ -708,7 +709,7 @@
         }
         
         .chat-input input[type="text"]:focus {
-            border-color: #0969DA;
+            border-color: #068487;
             box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.1);
         }
 
@@ -3184,6 +3185,8 @@
         let currentFilter = 'all';
         let currentPage = 1;
         const TASKS_PER_PAGE = 10;
+        let currentContactPage = 1;
+        const CONTACTS_PER_PAGE = 12;
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
         let lastMessageCount = 0;
@@ -3395,13 +3398,13 @@
             if (totalPages > 1) {
                 html += '<div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px;">';
                 if (currentPage > 1) {
-                    html += '<button onclick="previousPage()" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 20px; padding: 4px 8px;"><</button>';
+                    html += '<button onclick="previousPage()" style="background: none; border: none; color: #068487; cursor: pointer; font-size: 20px; padding: 4px 8px;"><</button>';
                 } else {
                     html += '<span style="color: #D1D9E0; font-size: 20px; padding: 4px 8px;"><</span>';
                 }
                 html += '<span style="font-size: 13px; color: #374151;">' + currentPage + ' / ' + totalPages + '</span>';
                 if (currentPage < totalPages) {
-                    html += '<button onclick="nextPage()" style="background: none; border: none; color: #0969DA; cursor: pointer; font-size: 20px; padding: 4px 8px;">></button>';
+                    html += '<button onclick="nextPage()" style="background: none; border: none; color: #068487; cursor: pointer; font-size: 20px; padding: 4px 8px;">></button>';
                 } else {
                     html += '<span style="color: #D1D9E0; font-size: 20px; padding: 4px 8px;">></span>';
                 }
@@ -3438,6 +3441,96 @@
             if (currentPage < totalPages) {
                 currentPage++;
                 renderTaskGroups(allTasksFromServer);
+            }
+        }
+        
+        function previousContactPage() {
+            if (currentContactPage > 1) {
+                currentContactPage--;
+                renderContacts();
+            }
+        }
+        
+        function nextContactPage() {
+            // Нужно рассчитать общее количество страниц для текущего фильтра
+            const peopleList = document.getElementById('people-list');
+            if (!peopleList) return;
+            
+            let allContacts = [];
+            // Собираем все контакты аналогично renderContacts
+            const recommendedCards = peopleList.querySelectorAll('.contact-recommended');
+            recommendedCards.forEach(card => {
+                const contactData = {
+                    type: 'recommended',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            const delegatingToMeCards = peopleList.querySelectorAll('.contact-delegating-to-me');
+            delegatingToMeCards.forEach(card => {
+                const contactData = {
+                    type: 'delegating_to_me',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            const delegatingByMeCards = peopleList.querySelectorAll('.contact-delegating-by-me');
+            delegatingByMeCards.forEach(card => {
+                const contactData = {
+                    type: 'delegating_by_me',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            const favoriteCards = peopleList.querySelectorAll('.contact-favorite');
+            favoriteCards.forEach(card => {
+                const contactData = {
+                    type: 'favorite',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            const blockedCards = peopleList.querySelectorAll('.contact-blocked');
+            blockedCards.forEach(card => {
+                const contactData = {
+                    type: 'blocked',
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    element: card
+                };
+                allContacts.push(contactData);
+            });
+            
+            // Дедупликация
+            const uniqueContacts = {};
+            allContacts.forEach(contact => {
+                if (!uniqueContacts[contact.username]) {
+                    uniqueContacts[contact.username] = contact;
+                }
+            });
+            
+            // Фильтруем
+            let filteredContacts = Object.values(uniqueContacts);
+            if (currentContactFilter === 'favorite') {
+                filteredContacts = filteredContacts.filter(contact => {
+                    const isFavorite = cachedFavorites && cachedFavorites.includes(contact.username);
+                    return isFavorite;
+                });
+            } else if (currentContactFilter !== 'all') {
+                filteredContacts = filteredContacts.filter(contact => contact.type === currentContactFilter);
+            }
+            
+            const totalContactPages = Math.ceil(filteredContacts.length / CONTACTS_PER_PAGE);
+            if (currentContactPage < totalContactPages) {
+                currentContactPage++;
+                renderContacts();
             }
         }
         
@@ -3510,9 +3603,9 @@
         function renderContacts() {
             const peopleList = document.getElementById('people-list');
             if (!peopleList) return;
-            
+
             let allContacts = [];
-            
+
             // Собираем все контакты из всех категорий
             const recommendedCards = peopleList.querySelectorAll('.contact-recommended');
             recommendedCards.forEach(card => {
@@ -3525,7 +3618,7 @@
                 };
                 allContacts.push(contactData);
             });
-            
+
             const delegatingToMeCards = peopleList.querySelectorAll('.contact-delegating-to-me');
             delegatingToMeCards.forEach(card => {
                 const contactData = {
@@ -3537,7 +3630,7 @@
                 };
                 allContacts.push(contactData);
             });
-            
+
             const delegatingByMeCards = peopleList.querySelectorAll('.contact-delegating-by-me');
             delegatingByMeCards.forEach(card => {
                 const contactData = {
@@ -3549,7 +3642,7 @@
                 };
                 allContacts.push(contactData);
             });
-            
+
             const favoriteCards = peopleList.querySelectorAll('.contact-favorite');
             favoriteCards.forEach(card => {
                 const contactData = {
@@ -3561,7 +3654,7 @@
                 };
                 allContacts.push(contactData);
             });
-            
+
             const blockedCards = peopleList.querySelectorAll('.contact-blocked');
             blockedCards.forEach(card => {
                 const contactData = {
@@ -3573,7 +3666,7 @@
                 };
                 allContacts.push(contactData);
             });
-            
+
             // Дедупликация контактов по username - оставляем только первый из каждой группы типов
             const uniqueContacts = {};
             allContacts.forEach(contact => {
@@ -3581,26 +3674,55 @@
                     uniqueContacts[contact.username] = contact;
                 }
             });
-            
-            // Применяем фильтр: показываем только соответствующие типу
-            Object.values(uniqueContacts).forEach(contact => {
-                const element = contact.element;
-                if (currentContactFilter === 'all') {
-                    element.style.display = 'flex';
-                } else if (currentContactFilter === 'favorite') {
-                    // Показываем избранные контакты - проверяем по списку избранных
+
+            // Фильтруем контакты по текущему фильтру
+            let filteredContacts = Object.values(uniqueContacts);
+            if (currentContactFilter === 'favorite') {
+                // Показываем только избранные контакты
+                filteredContacts = filteredContacts.filter(contact => {
                     const isFavorite = cachedFavorites && cachedFavorites.includes(contact.username);
-                    if (isFavorite) {
-                        element.style.display = 'flex';
-                    } else {
-                        element.style.display = 'none';
-                    }
-                } else if (contact.type === currentContactFilter) {
-                    element.style.display = 'flex';
-                } else {
-                    element.style.display = 'none';
-                }
+                    return isFavorite;
+                });
+            } else if (currentContactFilter !== 'all') {
+                // Показываем контакты определенного типа
+                filteredContacts = filteredContacts.filter(contact => contact.type === currentContactFilter);
+            }
+
+            // Пагинация контактов
+            const startIdx = (currentContactPage - 1) * CONTACTS_PER_PAGE;
+            const endIdx = currentContactPage * CONTACTS_PER_PAGE;
+            const contactsToShow = filteredContacts.slice(startIdx, endIdx);
+            const totalContactPages = Math.ceil(filteredContacts.length / CONTACTS_PER_PAGE);
+
+            // Сначала скрываем все контакты
+            allContacts.forEach(contact => {
+                contact.element.style.display = 'none';
             });
+
+            // Показываем только контакты текущей страницы
+            contactsToShow.forEach(contact => {
+                contact.element.style.display = 'flex';
+            });
+
+            // Добавляем навигацию для контактов, если нужно
+            const existingNav = document.getElementById('contacts-pagination');
+            if (existingNav) {
+                existingNav.remove();
+            }
+
+            if (totalContactPages > 1) {
+                const navHtml = '<div id="contacts-pagination" style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px;">' +
+                    (currentContactPage > 1 ?
+                        '<button onclick="previousContactPage()" style="background: none; border: none; color: #068487; cursor: pointer; font-size: 20px; padding: 4px 8px;"><</button>' :
+                        '<span style="color: #D1D9E0; font-size: 20px; padding: 4px 8px;"><</span>') +
+                    '<span style="font-size: 13px; color: #374151;">' + currentContactPage + ' / ' + totalContactPages + '</span>' +
+                    (currentContactPage < totalContactPages ?
+                        '<button onclick="nextContactPage()" style="background: none; border: none; color: #068487; cursor: pointer; font-size: 20px; padding: 4px 8px;">></button>' :
+                        '<span style="color: #D1D9E0; font-size: 20px; padding: 4px 8px;">></span>') +
+                    '</div>';
+
+                peopleList.insertAdjacentHTML('afterend', navHtml);
+            }
         }
         
         function renderTaskItem(task) {
@@ -3676,7 +3798,7 @@
                 statusColor = '#d73a49';
             } else if (task.delegation_status === 'accepted') {
                 statusText = 'Принята';
-                statusColor = '#238636';
+                statusColor = '#068487';
             } else if (task.status === 'completed') {
                 statusText = 'Выполнена';
                 statusColor = '#068487';
@@ -4483,7 +4605,7 @@
                         html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; margin-bottom: 8px;">`;
                     } else {
                         const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
                     }
                     
                     // Имя и ник под аватаром
@@ -5853,7 +5975,7 @@
                             html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
                         } else {
                             const initial = (data.profile.username || data.first_name || 'U')[0].toUpperCase();
-                            html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #0969DA; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
+                            html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || 'Пользователь') + '</p>';
                         html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
