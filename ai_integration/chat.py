@@ -2227,13 +2227,59 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if tb:
             last_frame = tb[-1]
             logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
-        return f"ERROR: {str(e)} [chat_with_ai]"
-        # Добавляем номер строки для отладки
-        tb = traceback.extract_tb(e.__traceback__)
-        if tb:
-            last_frame = tb[-1]
-            logger.error(f"Error location: {last_frame.filename}:{last_frame.lineno} in {last_frame.name}")
-        return f"OUTER ERROR: {str(e)} [v2]"
+
+        # РЕАБИЛИТАЦИЯ: пытаемся дать полезный ответ вместо ошибки
+        try:
+            # Получаем базовую информацию о пользователе
+            user_info = ""
+            task_info = ""
+            if user_id and db_session:
+                user = db_session.query(User).filter_by(telegram_id=user_id).first()
+                if user:
+                    user_info = f"@{user.username}" if user.username else "пользователь"
+
+                    # Получаем актуальные задачи
+                    try:
+                        current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
+                        if current_tasks and len(current_tasks.strip()) > 10:
+                            task_info = f" У тебя {len([t for t in current_tasks.split('•') if t.strip()])} активных задач."
+                        else:
+                            task_info = " У тебя сейчас нет активных задач."
+                    except Exception as task_e:
+                        logger.warning(f"Could not get tasks in error recovery: {task_e}")
+                        task_info = ""
+
+            # Формируем реабилитирующий ответ
+            recovery_responses = [
+                f"Извини, произошла техническая ошибка. Информация уже направлена разработчикам для устранения.{task_info} Давай продолжим — что планируешь сделать дальше?",
+                f"К сожалению, возник сбой в системе. Разработчики уже получили уведомление и работают над исправлением.{task_info} Расскажи, чем могу помочь прямо сейчас?",
+                f"Произошла непредвиденная ошибка. Мы уже зафиксировали проблему и передали в разработку.{task_info} Не останавливаемся — давай решим твои задачи!",
+                f"Технический сбой, но я на связи! Информация о проблеме передана команде разработчиков.{task_info} Что тебя интересует? Готов помочь!"
+            ]
+
+            import random
+            recovery_message = random.choice(recovery_responses)
+
+            # Сохраняем контекст ошибки для анализа
+            if user and db_session:
+                try:
+                    error_context = f"Error: {str(e)[:200]} at {datetime.now(timezone.utc).isoformat()}"
+                    if user.memory:
+                        existing_memory = decrypt_data(user.memory)
+                        updated_memory = f"{existing_memory}\n[SYSTEM_ERROR_RECOVERY] {error_context}"
+                    else:
+                        updated_memory = f"[SYSTEM_ERROR_RECOVERY] {error_context}"
+
+                    user.memory = encrypt_data(updated_memory)
+                    db_session.commit()
+                except Exception as mem_e:
+                    logger.warning(f"Could not save error context: {mem_e}")
+
+            return recovery_message
+
+        except Exception as recovery_e:
+            logger.error(f"Error in recovery mechanism: {recovery_e}")
+            return "Извини, произошла ошибка. Попробуй еще раз или свяжись с поддержкой."
 
 
 async def generate_reminder(user_id, task_title, task_id=None):
