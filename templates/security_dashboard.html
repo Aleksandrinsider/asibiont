@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Security Dashboard - ASI Biont</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,11 +15,12 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: #0D1117;
             color: #C9D1D9;
             min-height: 100vh;
             padding: 20px;
+            font-size: 14px;
         }
 
         .container {
@@ -35,13 +39,13 @@
         .header h1 {
             color: #C9D1D9;
             margin-bottom: 8px;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 600;
         }
 
         .header p {
             color: #8B949E;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .stats-grid {
@@ -55,7 +59,7 @@
             background: #161B22;
             border: 1px solid #30363D;
             border-radius: 6px;
-            padding: 20px;
+            padding: 16px;
             transition: border-color 0.2s;
         }
 
@@ -65,7 +69,7 @@
 
         .stat-card h3 {
             color: #8B949E;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             margin-bottom: 8px;
             text-transform: uppercase;
@@ -74,7 +78,7 @@
 
         .stat-card .value {
             color: #58A6FF;
-            font-size: 32px;
+            font-size: 28px;
             font-weight: 700;
         }
 
@@ -82,14 +86,14 @@
             background: #161B22;
             border: 1px solid #30363D;
             border-radius: 6px;
-            padding: 24px;
+            padding: 20px;
             margin-bottom: 16px;
         }
 
         .section h2 {
             color: #C9D1D9;
             margin-bottom: 16px;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
         }
 
@@ -103,18 +107,18 @@
             color: #8B949E;
             font-weight: 600;
             text-align: left;
-            padding: 12px;
+            padding: 10px 12px;
             border-bottom: 1px solid #30363D;
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         td {
-            padding: 12px;
+            padding: 10px 12px;
             border-bottom: 1px solid #21262D;
             color: #C9D1D9;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         tr:hover {
@@ -123,9 +127,9 @@
 
         .badge {
             display: inline-block;
-            padding: 4px 12px;
+            padding: 3px 10px;
             border-radius: 12px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
         }
 
@@ -163,12 +167,13 @@
             background: #238636;
             color: white;
             border: 1px solid rgba(240, 246, 252, 0.1);
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            font-family: 'Plus Jakarta Sans', sans-serif;
         }
 
         .refresh-btn:hover {
@@ -177,7 +182,7 @@
 
         .timestamp {
             color: #8B949E;
-            font-size: 12px;
+            font-size: 11px;
             margin-top: 5px;
         }
 
@@ -185,20 +190,22 @@
             text-align: center;
             padding: 40px;
             color: #8B949E;
+            font-size: 13px;
         }
 
         code {
             background: #0D1117;
-            padding: 4px 8px;
+            padding: 3px 6px;
             border-radius: 3px;
             font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 12px;
+            font-size: 11px;
             color: #79C0FF;
         }
 
         @media (max-width: 768px) {
             body {
                 padding: 10px;
+                font-size: 13px;
             }
 
             .stats-grid {
@@ -215,6 +222,14 @@
 
             .section {
                 padding: 16px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .section h2 {
+                font-size: 16px;
             }
         }
     </style>
