@@ -2143,6 +2143,7 @@ async def admin_users_handler(request):
                 'username': user.username,
                 'first_name': user.first_name,
                 'subscription_tier': user.subscription_tier.value if user.subscription_tier else None,
+                'premium_status': (subscription and subscription.status == 'active') or (user.subscription_tier and user.subscription_tier != SubscriptionTier.BRONZE),
                 'timezone': user.timezone,
                 'created_at': user.created_at.isoformat() if user.created_at else None,
                 'photo_url': user.photo_url,

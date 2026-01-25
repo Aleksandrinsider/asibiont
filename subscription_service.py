@@ -31,6 +31,12 @@ def check_subscription(user_id):
             else:
                 # end_date is offset-aware
                 return sub.end_date > now
+        
+        # Если нет активной подписки в таблице Subscription, проверим subscription_tier
+        if user.subscription_tier and user.subscription_tier != SubscriptionTier.BRONZE:
+            logger.info(f"User {user_id} has subscription_tier {user.subscription_tier.value}, granting access")
+            return True
+            
         return False
     except Exception as e:
         logger.error(f"Error checking subscription for user {user_id}: {e}")
@@ -159,5 +165,43 @@ def activate_subscription(user_id, plan='monthly', tier='bronze'):
         logger.error(f"Error activating subscription for user {user_id}: {e}")
         session.rollback()
         return False, f"Ошибка активации подписки: {str(e)}"
+    finally:
+        session.close()
+
+def get_subscription_status(user_id):
+    """Получить статус подписки пользователя"""
+    session = Session()
+    try:
+        # First find the user by telegram_id
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return None
+        
+        # Then find subscription by user.id
+        sub = session.query(Subscription).filter_by(user_id=user.id).first()
+        if sub:
+            return {
+                'status': sub.status,
+                'plan': sub.plan,
+                'tier': sub.tier.value if sub.tier else 'BRONZE',
+                'start_date': sub.start_date.isoformat() if sub.start_date else None,
+                'end_date': sub.end_date.isoformat() if sub.end_date else None,
+                'login_count': sub.login_count
+            }
+        else:
+            # Если нет записи в Subscription, но есть subscription_tier, используем его
+            if user.subscription_tier and user.subscription_tier != SubscriptionTier.BRONZE:
+                return {
+                    'status': 'active',
+                    'plan': 'manual',
+                    'tier': user.subscription_tier.value,
+                    'start_date': None,
+                    'end_date': None,
+                    'login_count': 0
+                }
+            return None
+    except Exception as e:
+        logger.error(f"Error getting subscription status for user {user_id}: {e}")
+        return None
     finally:
         session.close()
