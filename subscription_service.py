@@ -79,9 +79,9 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
         
         # Определяем tier enum
         tier_enum = SubscriptionTier.LIGHT
-        if tier == 'silver':
+        if tier == 'standard':
             tier_enum = SubscriptionTier.STANDARD
-        elif tier == 'gold':
+        elif tier == 'premium':
             tier_enum = SubscriptionTier.PREMIUM
         
         # Check if subscription already exists

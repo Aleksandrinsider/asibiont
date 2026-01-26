@@ -3166,7 +3166,7 @@ def suggest_alternatives(task_id=None, reason=None, user_id=None, session=None):
 
         # Alternative 3: Delegate (if user has appropriate subscription)
         user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if user_profile and user_profile.subscription_tier in ['silver', 'gold']:
+        if user_profile and user_profile.subscription_tier in ['standard', 'premium']:
             alternatives.append("👥 Делегировать задачу другому пользователю")
         else:
             alternatives.append("⭐ Рассмотреть премиум-подписку для возможности делегирования")
