@@ -10,9 +10,9 @@ Base = declarative_base()
 
 
 class SubscriptionTier(enum.Enum):
-    LIGHT = 'LIGHT'      # Лайт: 3000 RUB/месяц
-    STANDARD = 'STANDARD'  # Стандарт: 9000 RUB/месяц
-    PREMIUM = 'PREMIUM'    # Премиум: 27000 RUB/месяц
+    LIGHT = 'LIGHT'      # 3000 RUB/month
+    STANDARD = 'STANDARD'  # 9000 RUB/month
+    PREMIUM = 'PREMIUM'    # 27000 RUB/month
 
 
 class User(Base):
