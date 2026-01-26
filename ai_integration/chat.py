@@ -1711,44 +1711,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
         is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and 'ASK_' not in original_message and 'ASK_' not in original_message
 
-        # Проверяем контекст последней созданной задачи для edit_task
-        # ВАЖНО: добавляем ТОЛЬКО если пользователь явно редактирует/уточняет, а не при новых задачах
-        last_task_context = ""
-        edit_keywords = ['перенеси', 'перенести', 'изменить', 'измени', 'обнови', 'обновить', 
-                         'исправь', 'исправить', 'поменяй', 'поменять', 'сдвинь', 'сдвинуть',
-                         'я ошибся', 'ошибся', 'неправильно', 'не то время', 'другое время',
-                         'не завтра', 'не сегодня', 'вместо', 'лучше на']
-        message_lower = original_message.lower()
-        is_editing = any(keyword in message_lower for keyword in edit_keywords)
-        
-        if user_id and is_editing:
-            try:
-                # Получаем последнюю созданную задачу из БД
-                last_task = db_session.query(Task).filter(
-                    Task.user_id == user.id,
-                    Task.status == 'pending'  # Только активные задачи
-                ).order_by(Task.created_at.desc()).first()
-                if last_task:
-                    # Конвертируем время в часовой пояс пользователя
-                    task_time_str = ''
-                    if last_task.reminder_time:
-                        try:
-                            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                            reminder_dt = last_task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
-                            tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
-                            task_time_str = f"{reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
-                        except Exception:
-                            task_time_str = str(last_task.reminder_time)
-                    
-                    last_task_context = f"\n\nКОНТЕКСТ ПОСЛЕДНЕЙ ЗАДАЧИ: ID={last_task.id}, название='{last_task.title}', время='{task_time_str}'. Пользователь хочет её изменить - используй edit_task(task_id={last_task.id}, ...)!"
-                    logger.info(f"[LAST_TASK_CONTEXT] Loaded for EDIT user {user_id}: ID={last_task.id}, title={last_task.title}, time={task_time_str}")
-                else:
-                    logger.info(f"[LAST_TASK_CONTEXT] No active task found for editing")
-            except Exception as e:
-                logger.error(f"Error loading last_task from DB: {e}")
-        else:
-            logger.info(f"[LAST_TASK_CONTEXT] Skipped (is_editing={is_editing})")
-
         messages = [{"role": "system", "content": system_prompt}]
         if context and isinstance(context, list):
             for item in context:
@@ -1756,9 +1718,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     messages.append({"role": "user", "content": item["user"]})
                 if "agent" in item:
                     messages.append({"role": "assistant", "content": item["agent"]})
-        # Добавляем текущее сообщение с контекстом последней задачи
-        user_message_with_context = message + last_task_context
-        messages.append({"role": "user", "content": user_message_with_context})
+        # Добавляем текущее сообщение БЕЗ дополнительного контекста - AI сам умный
+        messages.append({"role": "user", "content": message})
 
         # Используем intent classification вместо hardcoded проверок
         is_advice_question = intent.get('type') in [
