@@ -10,9 +10,9 @@ Base = declarative_base()
 
 
 class SubscriptionTier(enum.Enum):
-    LIGHT = 'LIGHT'      # 3000 RUB/month
-    STANDARD = 'STANDARD'  # 9000 RUB/month
-    PREMIUM = 'PREMIUM'    # 27000 RUB/month
+    BRONZE = 'BRONZE'    # 3000 RUB/month
+    SILVER = 'SILVER'  # 9000 RUB/month
+    GOLD = 'GOLD'    # 27000 RUB/month
 
 
 class User(Base):
@@ -32,9 +32,7 @@ class User(Base):
         DateTime, default=datetime.datetime.now(
             datetime.timezone.utc), onupdate=datetime.datetime.now(
             datetime.timezone.utc))
-    invalid_chat = Column(Boolean, default=False)  # Flag set when Telegram chat is invalid (chat not found)
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # User's subscription tier
-    average_rating = Column(Integer, default=0)  # Average rating from other users (synced from UserProfile)
     rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
     history_cleared_at = Column(DateTime)  # When user cleared chat history
     conversation_state = Column(String(100), default='normal')  # Current conversation state
