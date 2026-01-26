@@ -46,6 +46,11 @@ TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "Asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
     TELEGRAM_BOT_USERNAME = "Asibiont_bot"
 
+# Developer notifications
+# Set DEVELOPER_CHAT_ID to your Telegram user ID to receive error notifications
+# You can find your user ID by messaging @userinfobot in Telegram
+DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID", "123456789")  # Replace with actual developer telegram_id
+
 # WEBHOOK_URL теперь хардкодится в main.py для Railway subdomain
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://task-production-1d10.up.railway.app/webhook")
 

@@ -108,19 +108,22 @@ delegate_task = handlers.delegate_task
 delete_task = handlers.delete_task
 edit_task = handlers.edit_task
 
-async def send_error_notification_to_bot(error_message, user_id=None, error_details=None):
-    """Отправляет уведомление об ошибке в Telegram бота @asibiont_bot"""
+async def send_error_notification_to_bot(error_message, user_id=None, error_details=None, target_user_id=None):
+    """Отправляет уведомление об ошибке разработчику в Telegram или указанному пользователю"""
     try:
-        from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME
-        
+        from config import TELEGRAM_TOKEN, DEVELOPER_CHAT_ID
+
         if not TELEGRAM_TOKEN:
             logger.warning("TELEGRAM_TOKEN not configured, skipping error notification")
             return
-            
-        # Получаем chat_id бота (обычно это отрицательное число для ботов)
-        # Для отправки сообщения боту используем его username
-        bot_chat_id = f"@{TELEGRAM_BOT_USERNAME}"
-        
+
+        # Определяем, кому отправлять уведомление
+        chat_id = target_user_id if target_user_id else DEVELOPER_CHAT_ID
+
+        if not chat_id:
+            logger.warning("No chat_id configured (neither target_user_id nor DEVELOPER_CHAT_ID), skipping error notification")
+            return
+
         # Формируем сообщение об ошибке
         notification_text = f"🚨 СИСТЕМНАЯ ОШИБКА\n\n"
         if user_id:
@@ -129,25 +132,25 @@ async def send_error_notification_to_bot(error_message, user_id=None, error_deta
         if error_details:
             notification_text += f"📋 Детали: {error_details[:500]}\n"  # Ограничиваем длину
         notification_text += f"💬 Сообщение: {error_message[:200]}"
-        
+
         # Используем Telegram Bot API для отправки сообщения
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         data = {
-            "chat_id": bot_chat_id,
+            "chat_id": chat_id,
             "text": notification_text,
             "parse_mode": "HTML"
         }
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
-                    logger.info("Error notification sent to bot successfully")
+                    logger.info(f"Error notification sent to {'user ' + str(target_user_id) if target_user_id else 'developer'} successfully")
                 else:
                     error_text = await response.text()
-                    logger.warning(f"Failed to send error notification to bot: {response.status} - {error_text}")
-                    
+                    logger.warning(f"Failed to send error notification to {'user ' + str(target_user_id) if target_user_id else 'developer'}: {response.status} - {error_text}")
+
     except Exception as e:
-        logger.error(f"Error sending notification to bot: {e}")
+        logger.error(f"Error sending notification to {'user ' + str(target_user_id) if target_user_id else 'developer'}: {e}")
         # Не выбрасываем исключение, чтобы не прерывать основной поток
 check_subscription_status = handlers.check_subscription_status
 create_subscription_payment = handlers.create_subscription_payment
@@ -2100,9 +2103,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             if attempt < max_retries:
                                 continue
                             else:
-                                content = "Извините, слишком много запросов. Попробуйте через несколько секунд."
+                                content = "🤖 Извините, сейчас много запросов к ИИ. Подождите немного и попробуйте снова - обычно это занимает 10-20 секунд."
+                                # Отправляем уведомление о rate limit
+                                asyncio.create_task(send_error_notification_to_bot(f"Rate limit exceeded (429) for user {user_id}", user_id, f"Status: {response.status}", target_user_id=146333757))
                                 break
-                        
+
                         elif response.status in [500, 502, 503, 504]:
                             # Server errors - retry
                             error_text = await response.text()
@@ -2111,23 +2116,29 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 logger.info(f"Retrying due to server error ({response.status})")
                                 continue
                             else:
-                                content = "Извините, сервер временно недоступен. Попробуйте позже."
+                                content = "🔧 Сервер ИИ временно недоступен. Это бывает редко, но случается. Попробуйте через 1-2 минуты - обычно всё восстанавливается быстро."
+                                # Отправляем уведомление о server error
+                                asyncio.create_task(send_error_notification_to_bot(f"Server error ({response.status}) for user {user_id}", user_id, f"Error: {error_text[:200]}", target_user_id=146333757))
                                 break
-                        
+
                         elif response.status == 400:
                             # Bad request - не retry, логируем для отладки
                             error_text = await response.text()
                             logger.error(f"Bad request (400): {error_text}")
                             logger.error(f"Request data: {json.dumps(data, ensure_ascii=False, indent=2)}")
-                            content = "Извините, некорректный запрос. Попробуйте переформулировать."
+                            content = "📝 Что-то пошло не так с запросом. Попробуйте переформулировать сообщение по-другому - иногда ИИ лучше понимает другие формулировки."
+                            # Отправляем уведомление о bad request
+                            asyncio.create_task(send_error_notification_to_bot(f"Bad request (400) for user {user_id}", user_id, f"Error: {error_text[:200]}", target_user_id=146333757))
                             break
-                        
+
                         elif response.status == 401:
                             # Unauthorized - критическая ошибка
                             logger.error("API key invalid or expired (401)")
-                            content = "Извините, проблема с авторизацией API. Обратитесь к администратору."
+                            content = "🔐 Проблема с доступом к ИИ. Администраторы уже уведомлены и работают над решением. Попробуйте позже."
+                            # Отправляем уведомление о проблеме с API key
+                            asyncio.create_task(send_error_notification_to_bot(f"API authorization error (401) for user {user_id}", user_id, "API key may be invalid or expired", target_user_id=146333757))
                             break
-                        
+
                         else:
                             # Другие ошибки
                             error_text = await response.text()
@@ -2135,7 +2146,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             if attempt < max_retries:
                                 continue
                             else:
-                                content = "Извините, произошла ошибка. Попробуйте еще раз."
+                                content = "⚠️ Произошла неожиданная ошибка. Разработчики уже получили уведомление. Попробуйте отправить сообщение еще раз."
+                                # Отправляем уведомление о неожиданной ошибке
+                                asyncio.create_task(send_error_notification_to_bot(f"Unexpected API error ({response.status}) for user {user_id}", user_id, f"Error: {error_text[:200]}", target_user_id=146333757))
                                 break
                                 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
@@ -2143,7 +2156,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 if attempt < max_retries:
                     continue
                 else:
-                    content = "Извините, проблема с сетевым соединением. Попробуйте позже."
+                    content = "🌐 Проблема с подключением к ИИ. Проверьте интернет-соединение и попробуйте еще раз через минуту."
+                    # Отправляем уведомление о сетевой ошибке
+                    asyncio.create_task(send_error_notification_to_bot(f"Network error for user {user_id}", user_id, f"Error: {str(e)}", target_user_id=146333757))
                     break
             except Exception as e:
                 logger.error(f"Unexpected error on attempt {attempt + 1}: {e}")
@@ -2158,7 +2173,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if 'success' not in locals() or not success:
             logger.warning("[RETRY FAILED] All retry attempts failed")
             if not content:
-                content = "Извините, не удалось получить ответ. Попробуйте позже."
+                content = "🤖 К сожалению, ИИ временно недоступен после нескольких попыток. Разработчики уведомлены. Попробуйте позже - обычно это решается в течение 5-10 минут."
+                # Отправляем уведомление о полном отказе API
+                asyncio.create_task(send_error_notification_to_bot(f"All API retry attempts failed for user {user_id}", user_id, "Multiple retry attempts exhausted", target_user_id=146333757))
             return content
             
         # Обработка успешного ответа
@@ -2196,7 +2213,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # ОТПРАВЛЯЕМ УВЕДОМЛЕНИЕ ОБ ОШИБКЕ В БОТА
         try:
             error_details = f"{type(e).__name__}: {str(e)}"
+            # Отправляем уведомление разработчику (как прежде)
             asyncio.create_task(send_error_notification_to_bot(str(e), user_id, error_details))
+            # Отправляем уведомление пользователю 146333757
+            asyncio.create_task(send_error_notification_to_bot(str(e), user_id, error_details, target_user_id=146333757))
         except Exception as notify_e:
             logger.error(f"Failed to send error notification: {notify_e}")
 
@@ -2223,10 +2243,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Формируем реабилитирующий ответ
             recovery_responses = [
-                f"Извини, произошла техническая ошибка. Информация уже направлена разработчикам для устранения.{task_info} Давай продолжим — что планируешь сделать дальше?",
-                f"К сожалению, возник сбой в системе. Разработчики уже получили уведомление и работают над исправлением.{task_info} Расскажи, чем могу помочь прямо сейчас?",
-                f"Произошла непредвиденная ошибка. Мы уже зафиксировали проблему и передали в разработку.{task_info} Не останавливаемся — давай решим твои задачи!",
-                f"Технический сбой, но я на связи! Информация о проблеме передана команде разработчиков.{task_info} Что тебя интересует? Готов помочь!"
+                f"🤖 Извини, произошла техническая ошибка в работе ИИ. Команда разработчиков уже получила уведомление и работает над исправлением.{task_info} Давай продолжим работу — что планируешь сделать дальше?",
+                f"🔧 К сожалению, возник временный сбой в системе ИИ. Разработчики уведомлены и уже занимаются решением.{task_info} Расскажи, чем могу помочь прямо сейчас?",
+                f"⚠️ Произошла непредвиденная ошибка в работе ИИ. Мы зафиксировали проблему и передали в разработку.{task_info} Не останавливаемся — давай решим твои текущие задачи!",
+                f"🚨 Технический сбой в ИИ, но я остаюсь на связи! Информация о проблеме передана команде разработчиков.{task_info} Что тебя интересует? Готов помочь с задачами!"
             ]
 
             import random
