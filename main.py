@@ -385,7 +385,7 @@ try:
                         currency VARCHAR(3) DEFAULT 'RUB',
                         status VARCHAR(20) DEFAULT 'pending',
                         payment_id VARCHAR(100),
-                        tier TEXT DEFAULT 'BRONZE',
+                        tier TEXT DEFAULT 'LIGHT',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users (id)
@@ -400,7 +400,7 @@ try:
                         currency VARCHAR(3) DEFAULT 'RUB',
                         status VARCHAR(20) DEFAULT 'pending',
                         payment_id VARCHAR(100),
-                        tier subscription_tier_enum DEFAULT 'BRONZE',
+                        tier subscription_tier_enum DEFAULT 'LIGHT',
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -418,7 +418,7 @@ try:
                     CREATE TABLE promo_codes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         code VARCHAR(50) UNIQUE NOT NULL,
-                        tier TEXT DEFAULT 'BRONZE',
+                        tier TEXT DEFAULT 'LIGHT',
                         duration_days INTEGER DEFAULT 30,
                         expires_at TIMESTAMP NOT NULL,
                         is_used BOOLEAN DEFAULT FALSE,
@@ -433,7 +433,7 @@ try:
                     CREATE TABLE promo_codes (
                         id SERIAL PRIMARY KEY,
                         code VARCHAR(50) UNIQUE NOT NULL,
-                        tier subscription_tier_enum DEFAULT 'BRONZE',
+                        tier subscription_tier_enum DEFAULT 'LIGHT',
                         duration_days INTEGER DEFAULT 30,
                         expires_at TIMESTAMP NOT NULL,
                         is_used BOOLEAN DEFAULT FALSE,
