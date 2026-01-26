@@ -1035,30 +1035,30 @@ try:
 
             test_users_data = [
                 # LIGHT tier users
-                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Алексей Иванов', 'city': 'Москва', 'username': 'alexey_ivanov'},
-                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Мария Петрова', 'city': 'Санкт-Петербург', 'username': 'maria_petrova'},
-                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Дмитрий Сидоров', 'city': 'Екатеринбург', 'username': 'dmitry_sidorov'},
-                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Елена Козлова', 'city': 'Новосибирск', 'username': 'elena_kozlova'},
-                {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Андрей Новиков', 'city': 'Казань', 'username': 'andrey_novikov'},
-                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Ольга Морозова', 'city': 'Нижний Новгород', 'username': 'olga_morozova'},
-                {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Сергей Волков', 'city': 'Челябинск', 'username': 'sergey_volkov'},
-                {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Татьяна Соколова', 'city': 'Омск', 'username': 'tatiana_sokolova'},
+                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'Москва', 'username': 'test1'},
+                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'Санкт-Петербург', 'username': 'test2'},
+                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Екатеринбург', 'username': 'test3'},
+                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'Новосибирск', 'username': 'test4'},
+                {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'Казань', 'username': 'test5'},
+                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'Нижний Новгород', 'username': 'test6'},
+                {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Челябинск', 'username': 'test7'},
+                {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'Омск', 'username': 'test8'},
 
                 # STANDARD tier users
-                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Игорь Лебедев', 'city': 'Ростов-на-Дону', 'username': 'igor_lebedev'},
-                {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Наталья Попова', 'city': 'Уфа', 'username': 'natalya_popova'},
-                {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Владимир Кузнецов', 'city': 'Волгоград', 'username': 'vladimir_kuznetsov'},
-                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Анна Васильева', 'city': 'Красноярск', 'username': 'anna_vasilieva'},
-                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Максим Павлов', 'city': 'Воронеж', 'username': 'maxim_pavlov'},
-                {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Юлия Семенова', 'city': 'Пермь', 'username': 'yulia_semenova'},
+                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Ростов-на-Дону', 'username': 'test9'},
+                {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'Уфа', 'username': 'test10'},
+                {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Волгоград', 'username': 'test11'},
+                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'Красноярск', 'username': 'test12'},
+                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Воронеж', 'username': 'test13'},
+                {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'Пермь', 'username': 'test14'},
 
                 # PREMIUM tier users
-                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Роман Егоров', 'city': 'Краснодар', 'username': 'roman_egorov'},
-                {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Светлана Михайлова', 'city': 'Тюмень', 'username': 'svetlana_mikhailova'},
-                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Артем Николаев', 'city': 'Барнаул', 'username': 'artem_nikolaev'},
-                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Кристина Орлова', 'city': 'Ижевск', 'username': 'kristina_orlova'},
-                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Денис Андреев', 'city': 'Владивосток', 'username': 'denis_andreev'},
-                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Виктория Захарова', 'city': 'Ярославль', 'username': 'viktoriya_zakharova'},
+                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'Краснодар', 'username': 'test15'},
+                {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'Тюмень', 'username': 'test16'},
+                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Барнаул', 'username': 'test17'},
+                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'Ижевск', 'username': 'test18'},
+                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Владивосток', 'username': 'test19'},
+                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'Ярославль', 'username': 'test20'},
             ]
 
             now = datetime.now()
