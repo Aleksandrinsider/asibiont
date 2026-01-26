@@ -21,7 +21,9 @@ TOOLS = [
                     "due_date": {"type": "string", "description": "Опционально. Дедлайн: YYYY-MM-DD HH:MM"},
                 },
                 "required": ["title", "reminder_time"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -29,7 +31,8 @@ TOOLS = [
         "function": {
             "name": "list_tasks",
             "description": "Показать список задач",
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            "strict": True
         },
     },
     {
@@ -51,7 +54,9 @@ TOOLS = [
                     },
                 },
                 "required": [],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -68,7 +73,9 @@ TOOLS = [
                     }
                 },
                 "required": ["info"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -95,7 +102,9 @@ TOOLS = [
                     },
                 },
                 "required": ["title", "reminder_time", "delegated_to_username"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -107,7 +116,9 @@ TOOLS = [
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
                 "required": ["task_id"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -119,19 +130,9 @@ TOOLS = [
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи (опционально если указан task_title)"}, "task_title": {"type": "string", "description": "Название задачи или его часть (опционально если указан task_id)"}},
                 "required": [],
+                "additionalProperties": False
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_delegation_progress",
-            "description": "Получить статус выполнения делегированной задачи для инициатора",
-            "parameters": {
-                "type": "object",
-                "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
-                "required": ["task_id"],
-            },
+            "strict": True
         },
     },
     {
@@ -143,7 +144,9 @@ TOOLS = [
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
                 "required": ["task_id"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -163,7 +166,9 @@ TOOLS = [
                     },
                 },
                 "required": ["task_id"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -185,7 +190,9 @@ TOOLS = [
                     },
                 },
                 "required": [],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -197,7 +204,9 @@ TOOLS = [
                 "type": "object",
                 "properties": {"task_id": {"type": "integer", "description": "ID задачи"}},
                 "required": ["task_id"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -205,7 +214,12 @@ TOOLS = [
         "function": {
             "name": "find_partners",
             "description": "Найти потенциальных людей на основе профиля пользователя",
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            },
+            "strict": True
         },
     },
     {
@@ -224,7 +238,9 @@ TOOLS = [
                     "position": {"type": "string", "description": "ТОЛЬКО название должности. Пример: 'Senior Developer' (ЗАМЕНЯЕТ старое значение)"},
                     "languages": {"type": "string", "description": "ТОЛЬКО языки. Пример: 'Русский (родной), English (B2)' (ЗАМЕНЯЕТ старое значение)"},
                 },
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -239,7 +255,9 @@ TOOLS = [
                     "reason": {"type": "string", "description": "Причина невыполнения (опционально)"},
                 },
                 "required": ["task_id"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -247,7 +265,13 @@ TOOLS = [
         "function": {
             "name": "delete_all_tasks",
             "description": "Удалить все задачи пользователя. КРИТИЧНО: Это необратимая операция! Перед вызовом ОБЯЗАТЕЛЬНО подтверди у пользователя: 'Ты точно хочешь удалить ВСЕ задачи? Это действие нельзя отменить.' и дождись явного подтверждения.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": False
+            },
+            "strict": True
         },
     },
     {
@@ -255,7 +279,12 @@ TOOLS = [
         "function": {
             "name": "create_subscription_payment",
             "description": "Создать платеж для оформления или продления месячной подписки",
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            },
+            "strict": True
         },
     },
     {
@@ -263,7 +292,12 @@ TOOLS = [
         "function": {
             "name": "check_subscription_status",
             "description": "Проверить статус текущей подписки пользователя",
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            },
+            "strict": True
         },
     },
     {
@@ -285,7 +319,9 @@ TOOLS = [
                     },
                 },
                 "required": ["topic"],
+                "additionalProperties": False
             },
+            "strict": True
         },
     },
     {
@@ -307,7 +343,57 @@ TOOLS = [
                     },
                 },
                 "required": ["focus_area"],
+                "additionalProperties": False
             },
+            "strict": True
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_task",
+            "description": "Делегировать задачу другому пользователю (Standard/Premium). Создает задачу и отправляет уведомление получателю. КРИТИЧНО: Используй ТОЛЬКО для передачи задач другим людям через @username, НЕ для создания обычных задач!",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "КРАТКОЕ название задачи (2-5 слов). Пример: 'Написать отчет', 'Проверить код'",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Подробное описание с требованиями, критериями выполнения и ожидаемым результатом. Укажи формат результата и где отправить.",
+                    },
+                    "reminder_time": {
+                        "type": "string", 
+                        "description": "Дедлайн в формате YYYY-MM-DD HH:MM. Вычисляй от current_time.",
+                    },
+                    "delegated_to_username": {
+                        "type": "string",
+                        "description": "Username получателя БЕЗ @. Пример: 'ivanov' для @ivanov",
+                    },
+                    "delegation_details": {
+                        "type": "string",
+                        "description": "Дополнительные детали: формат результата, где получить результат, особые требования",
+                    },
+                },
+                "required": ["title", "description", "reminder_time", "delegated_to_username"],
+                "additionalProperties": False
+            },
+            "strict": True
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_delegation_progress",
+            "description": "Получить отчет о статусе делегированных задач: кто принял, кто отклонил, кто работает, результаты выполнения",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False
+            },
+            "strict": True
         },
     },
 ]

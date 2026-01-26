@@ -102,6 +102,7 @@ cache = SimpleCache()
 
 add_task = handlers.add_task
 complete_task = handlers.complete_task
+delegate_task = handlers.delegate_task
 accept_delegated_task = handlers.accept_delegated_task
 reject_delegated_task = handlers.reject_delegated_task
 list_tasks = handlers.list_tasks
@@ -111,6 +112,7 @@ update_user_memory = handlers.update_user_memory
 delegate_task = handlers.delegate_task
 delete_task = handlers.delete_task
 edit_task = handlers.edit_task
+get_delegation_progress = handlers.get_delegation_progress
 
 async def send_error_notification_to_bot(error_message, user_id=None, error_details=None, target_user_id=None):
     """Отправляет уведомление об ошибке разработчику в Telegram или указанному пользователю"""
@@ -486,7 +488,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "brainstorm_ideas":
                 result = brainstorm_ideas(
                     topic=args.get("topic"),
-                    context=args.get("context"),
+                    num_ideas=args.get("num_ideas", 5),
                     user_id=user_id,
                     session=db_session,
                 )
@@ -695,6 +697,45 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             elif "Платеж создан" in result_text:
                 natural_responses.append("Платеж создан, следуйте инструкциям для оплаты")
+
+            elif "TASK_TIME_UPDATED:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "TIME_PARSE_FAILED:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "NO_ACTIVE_TASKS:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "USER_NOT_FOUND:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "TASK_COMPLETED:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "TASK_DELEGATED:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "COMPLETION_ERROR:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "DELEGATION_ERROR:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "TIME_UPDATE_ERROR:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "TASK_DELEGATED_SUCCESS:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "DELEGATION_REPORT:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "DELEGATION_SUBSCRIPTION_REQUIRED:" in result_text:
+                natural_responses.append(result_text)
+
+            elif "SELF_DELEGATION_ERROR:" in result_text:
+                natural_responses.append(result_text)
 
             elif "Идеи сгенерированы" in result_text or "мозговой штурм" in result_text.lower():
                 natural_responses.append(result_text)
@@ -1594,23 +1635,158 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
             logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
-        # Special handling for time expressions (update existing task)
-        # Только если уже нет более приоритетного intent
-        if intent.get('type') == 'conversation':
-            time_patterns = [
-                r'завтра\s+в\s+\d{1,2}:\d{2}',
-                r'сегодня\s+в\s+\d{1,2}:\d{2}',
-                r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
-                r'в\s+\d{1,2}:\d{2}',
-                r'\d{1,2}:\d{2}'
-            ]
-            if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns):
-                # Check if there are pending tasks to update
-                if user:
-                    pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
-                    if pending_tasks:
-                        intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
-                        logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
+        # Special handling for task creation expressions - DISABLED for pure AI testing
+        # if intent.get('type') == 'conversation':
+        #     add_task_patterns = [
+        #         r'напомни',  # "напомни позвонить"
+        #         r'создай\s+задачу',  # "создай задачу"
+        #         r'запланируй',  # "запланируй встречу"
+        #         r'добавь\s+задачу',  # "добавь задачу"
+        #         r'поставь\s+напоминание',  # "поставь напоминание"
+        #         r'не\s+забудь',  # "не забудь купить"
+        #         r'нужно\s+сделать',  # "нужно сделать отчет"
+        #         r'добавь:',  # "добавь: позвонить маме"
+        #         r'добавь\s+',  # "добавь позвонить"
+        #         r'задача:',  # "задача: подготовить презентацию"
+        #         r'задача\s+',  # "задача позвонить"
+        #         r'нужно:',  # "нужно: сделать уборку"
+        #         r'нужно\s+',  # "нужно сделать"
+        #     ]
+        #     if any(re.search(pattern, original_message.lower()) for pattern in add_task_patterns):
+        #         intent = {"type": "add_task", "confidence": 0.9, "params": {}}
+        #         logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
+
+        # Special handling for delegation expressions
+        # if intent.get('type') == 'conversation':  # DISABLED for pure AI testing - completion patterns
+        # Special handling for task completion expressions
+        #     completion_patterns = [
+#                 r'я\s+только\s+с\s+',  # "я только с пробежки"
+#                 r'я\s+только\s+из\s+',  # "я только из спортзала"
+#                 r'вернулся\s+с\s+',  # "вернулся с тренировки"
+#                 r'вернулся\s+из\s+',  # "вернулся из магазина"
+#                 r'только\s+с\s+',  # "только с работы"
+#                 r'только\s+из\s+',  # "только из банка"
+#                 r'я\s+сделал',  # "я сделал"
+#                 r'я\s+выполнил',  # "я выполнил"
+#                 r'готово',  # "готово"
+#                 r'закончил\s+с\s+',  # "закончил с проектом"
+#                 r'уже\s+сделал',  # "уже сделал"
+#                 r'только\s+что\s+закончил',  # "только что закончил"
+#                 r'только\s+что\s+сделал',  # "только что сделал"
+#                 r'завершил\s+задачу',  # "завершил задачу"
+#                 r'выполнил\s+задачу',  # "выполнил задачу"
+#                 r'закончил\s+работу',  # "закончил работу"
+#                 r'сделано',  # "сделано"
+#                 r'завершено',  # "завершено"
+#                 r'готово!',  # "готово!"
+#                 r'готово\s+',  # "готово, брат"
+#                 r'все,\s+сделал',  # "все, сделал"
+#                 r'все\s+ок,\s+сделал',  # "все ок, сделал"
+#                 r'ок,\s+выполнил',  # "ок, выполнил"
+#                 r'готово,\s+шеф',  # "готово, шеф"
+#                 r'сделал\s+как\s+просил',  # "сделал как просил"
+#                 r'закончил\s+наконец',  # "закончил наконец"
+#                 r'выполнено!',  # "выполнено!"
+#             ]
+            # if any(re.search(pattern, original_message.lower()) for pattern in completion_patterns):  # DISABLED for pure AI testing
+                # Extract task title from completion message
+#                 task_title = None
+#                 if 'пробежк' in clean_message.lower():
+#                     task_title = 'Пробежка'
+#                 elif 'тренировк' in clean_message.lower():
+#                     task_title = 'Тренировка'
+#                 elif 'спортзал' in clean_message.lower():
+#                     task_title = 'Тренировка в зале'
+#                 elif 'прогулк' in clean_message.lower():
+#                     task_title = 'Прогулка'
+#                 elif 'работ' in clean_message.lower():
+#                     task_title = 'Работа'
+#                 elif 'магазин' in clean_message.lower():
+#                     task_title = 'Купить продукты'
+#                 elif 'банк' in clean_message.lower():
+#                     task_title = 'Сходить в банк'
+#                 elif 'дом' in clean_message.lower():
+#                     task_title = 'Вернуться домой'
+                # Add more mappings as needed
+#                 
+#                 intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
+#                 logger.info(f"[COMPLETION DETECTED] Setting intent to complete_task for message: {clean_message[:50]}..., extracted title: {task_title}")
+# 
+        # Special handling for delegation expressions - DISABLED for pure AI testing
+        # if intent.get('type') == 'conversation':
+        #     delegation_patterns = [
+#                 r'@[\w]+\s+',  # "@user сделай" - ищется в оригинальном сообщении
+#                 r'делегируй',  # "делегируй задачу"
+#                 r'поручи\s+@',  # "поручи @user"
+#                 r'передай\s+@',  # "передай @user"
+#                 r'@[\w]+\s+нужно',  # "@user нужно сделать"
+#                 r'поручи\s+[\w]+\s+@',  # "поручи user @user"
+#             ]
+        #     if any(re.search(pattern, message.lower()) for pattern in delegation_patterns):
+        #         # Extract delegation parameters
+        #         task_title = None
+        #         delegate_to = None
+        #         reminder_time = None
+        #
+        #         # Extract @username
+        #         username_match = re.search(r'@(\w+)', message)
+        #         if username_match:
+        #             delegate_to = username_match.group(1)
+        #
+        #         # Try to extract task title and time
+        #         if 'делегируй' in message.lower():
+        #             # "делегируй задачу @user" - task is "задачу"
+        #             task_title = 'задачу'
+        #         elif 'поручи' in message.lower():
+        #             # Extract text after "поручи" and before "@"
+        #             poruchi_match = re.search(r'поручи\s+(.+?)\s*@', message.lower())
+        #             if poruchi_match:
+        #                 task_title = poruchi_match.group(1).strip()
+        #         elif 'передай' in message.lower():
+        #             # Extract text after "передай" and before "@"
+        #             peredai_match = re.search(r'передай\s+(.+?)\s*@', message.lower())
+        #             if peredai_match:
+        #                 task_title = peredai_match.group(1).strip()
+        #         else:
+        #             # For @user patterns, extract text before @
+        #             at_match = re.search(r'(.+?)\s*@', message)
+        #             if at_match:
+        #                 task_title = at_match.group(1).strip()
+        #
+        #         # Try to extract time from message
+        #         time_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2}\s+час|\d+\s+мин|завтра|сегодня|через\s+\d+)', message.lower())
+        #         if time_match:
+        #             # Parse time using existing logic
+        #             from .utils import parse_time_to_datetime
+        #             parsed_time = parse_time_to_datetime(time_match.group(1), user_id)
+        #             if parsed_time:
+        #                 reminder_time = parsed_time
+        #             else:
+        #                 # Default to 1 hour from now if parsing fails
+        #                 reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+        #         else:
+        #             # Default to 1 hour from now if no time specified
+        #             reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+        #
+        #         if task_title and delegate_to:
+        #             intent = {"type": "delegate_task", "confidence": 0.9, "params": {"task_title": task_title, "delegate_to": delegate_to, "reminder_time": reminder_time}}
+        #             logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}..., task: {task_title}, delegate_to: {delegate_to}, time: {reminder_time}")
+
+        # Special handling for time expressions (update existing task) - DISABLED for pure AI testing
+        #     time_patterns = [
+        #         r'завтра\s+в\s+\d{1,2}:\d{2}',
+        #         r'сегодня\s+в\s+\d{1,2}:\d{2}',
+        #         r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
+        #         r'в\s+\d{1,2}:\d{2}',
+        #         r'\d{1,2}:\d{2}'
+        #     ]
+        #     if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns) and intent.get('type') != 'delegate_task':
+        #         # Check if there are pending tasks to update
+        #         if user:
+        #             pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
+        #             if pending_tasks:
+        #                 intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
+        #                 logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
 
         # Убрана специальная обработка приветствий - все через AI промпт
 
@@ -1766,60 +1942,153 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'delegate_task', 'find_partners', 'update_profile', 'profile_info'
         ]
 
-        # Умная логика выбора инструментов на основе intent classification
+        # Умная логика выбора инструментов на основе intent classification и анализа сообщения
         intent_type = intent.get('type', 'unknown')
+
+        # Анализ сообщения на наличие явных команд и действий
+        message_lower = clean_message.lower()
+
+        # Расширенные индикаторы задач для принудительного использования tools
+        task_action_indicators = [
+            # Создание задач
+            'создай', 'сделай', 'добавь', 'поставь', 'напомни', 'нужно', 'надо',
+            'задача', 'задачу', 'задачи', 'задач', 'список задач',
+
+            # Завершение задач
+            'выполнил', 'выполнила', 'закончил', 'закончила', 'завершил', 'завершила',
+            'готово', 'готов', 'сделано', 'сделал', 'сделала', 'отчет готов',
+            'я только', 'только что', 'вернулся', 'вернулась', 'приехал', 'приехала',
+            'добрался', 'добралась', 'уже дома', 'уже в офисе', 'уже на работе',
+
+            # Делегирование
+            'поручи', 'передай', 'делегируй', 'отправь', 'назначь',
+
+            # Редактирование
+            'измени', 'обнови', 'перенеси', 'поменяй', 'исправь',
+
+            # Удаление
+            'удали', 'сними', 'отмени',
+
+            # Просмотр
+            'покажи', 'список', 'мои задачи', 'что у меня', 'что запланировано'
+        ]
+
+        # Индикаторы, требующие обязательного использования tools
+        requires_tools = any(indicator in message_lower for indicator in task_action_indicators)
+
+        # Индикаторы, где tools НЕ нужны (чистый разговор)
+        conversation_only = any(phrase in message_lower for phrase in [
+            'привет', 'здравствуй', 'добрый день', 'доброе утро', 'добрый вечер',
+            'как дела', 'что нового', 'расскажи', 'давай поговорим', 'чем займемся',
+            'что думаешь', 'какое твое мнение', 'посоветуй', 'рекомендуй'
+        ])
 
         if is_system_message:
             # Системные сообщения (результаты действий) - краткий ответ без инструментов
             tool_choice = "none"
+            parallel_tool_calls = False
             logger.info(f"[TOOL CHOICE] NONE for system message: {original_message[:50]}...")
-        elif intent_type in ['conversation', 'unknown'] and is_advice_question:
-            # Вопросы о совете - не используем инструменты, отвечаем текстом
-            tool_choice = "none"
-        elif intent_type == 'greeting':
-            # Приветствия - не используем инструменты, отвечаем текстом
-            tool_choice = "none"
-        elif intent_type in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 'delegate_task']:
-            # Явные запросы на управление задачами - ОБЯЗАТЕЛЬНО используем инструменты
-            tool_choice = "required"
-            logger.info(f"[TOOL CHOICE] REQUIRED for task management: {intent_type}")
-        elif intent_type == 'find_partners':
-            # Поиск партнеров - используем инструменты
-            tool_choice = "auto"
-        elif intent_type in ['update_profile', 'profile_info']:
-            # Обновление профиля или информация о профиле - ОБЯЗАТЕЛЬНО используем инструменты
-            tool_choice = "required"
-            logger.info(f"[TOOL CHOICE] REQUIRED for profile update: {intent_type}")
-        else:
-            # По умолчанию - автоопределение
-            tool_choice = "auto"
 
-        # Динамическая температура в зависимости от типа сообщения
+        elif conversation_only and not requires_tools:
+            # Чистый разговор без действий - отключаем tools
+            tool_choice = "none"
+            parallel_tool_calls = False
+            logger.info(f"[TOOL CHOICE] NONE for pure conversation: {clean_message[:50]}...")
+
+        elif requires_tools:
+            # Явные индикаторы действий - ОБЯЗАТЕЛЬНО используем tools
+            tool_choice = "required"
+            parallel_tool_calls = False  # Для задач лучше последовательное выполнение
+            logger.info(f"[TOOL CHOICE] REQUIRED for action indicators: {clean_message[:50]}...")
+
+        elif intent_type in ['update_profile', 'profile_info']:
+            # Обновление профиля - ОБЯЗАТЕЛЬНО используем инструменты
+            tool_choice = "required"
+            parallel_tool_calls = False
+            logger.info(f"[TOOL CHOICE] REQUIRED for profile operations: {intent_type}")
+
+        elif intent_type == 'find_partners':
+            # Поиск партнеров - используем tools
+            tool_choice = "auto"
+            parallel_tool_calls = True
+
+        elif intent_type in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task']:
+            # Явные типы задач - принудительно используем tools
+            tool_choice = "required"
+            parallel_tool_calls = False
+            logger.info(f"[TOOL CHOICE] REQUIRED for explicit task type: {intent_type}")
+
+        else:
+            # По умолчанию - автоопределение с параллельными вызовами
+            tool_choice = "auto"
+            parallel_tool_calls = True
+            logger.info(f"[TOOL CHOICE] AUTO for intent: {intent_type}, message: {clean_message[:50]}...")
+
+        # Динамическая температура и параметры на основе глубокого анализа сообщения
         temperature = 0.7  # Default
         top_p = 1.0  # Default
+
+        # Анализ сложности и типа сообщения
+        message_length = len(clean_message.split())
+        has_questions = '?' in clean_message
+        has_exclamation = '!' in clean_message
+        has_technical_terms = any(term in message_lower for term in [
+            'api', 'база данных', 'алгоритм', 'код', 'программирование', 'sql', 'python',
+            'анализ', 'отчет', 'презентация', 'проект', 'задача', 'план'
+        ])
+        is_creative_request = any(term in message_lower for term in [
+            'идеи', 'креатив', 'варианты', 'предложения', 'мозговой штурм'
+        ])
+        is_personal_request = any(term in message_lower for term in [
+            'личное', 'персонально', 'мне', 'я', 'мои', 'моя'
+        ])
 
         if intent_type == 'greeting':
             # Для приветствий нужна максимальная вариативность
             temperature = 1.0
-            top_p = 0.95  # Nucleus sampling для разнообразия
-        elif intent_type in ['conversation', 'unknown'] and is_advice_question:
-            # Для советов нужна креативность
-            temperature = 0.85
             top_p = 0.95
-        elif intent_type in ['add_task', 'complete_task', 'list_tasks']:
-            # Для задач нужна точность
-            temperature = 0.6
-            top_p = 1.0
+        elif is_creative_request:
+            # Для креативных запросов нужна высокая вариативность
+            temperature = 0.9
+            top_p = 0.95
+        elif intent_type in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task']:
+            # Для задач нужна максимальная точность и последовательность
+            temperature = 0.2
+            top_p = 0.9
+        elif intent_type == 'delegate_task':
+            # Для делегирования нужна точность в понимании
+            temperature = 0.3
+            top_p = 0.9
         elif intent_type == 'profile_info':
             # Для информации о профиле нужна максимальная точность
             temperature = 0.1
-            top_p = 1.0
+            top_p = 0.8
+        elif has_technical_terms:
+            # Технические темы требуют точности
+            temperature = 0.4
+            top_p = 0.9
+        elif is_personal_request:
+            # Персональные запросы - баланс между точностью и естественностью
+            temperature = 0.6
+            top_p = 0.95
+        elif has_questions:
+            # Вопросы требуют информативности
+            temperature = 0.5
+            top_p = 0.95
+        elif message_length > 50:  # Длинные сообщения
+            # Длинные сообщения могут быть сложными - снижаем вариативность
+            temperature = 0.5
+            top_p = 0.9
+        elif intent_type in ['conversation', 'unknown'] and is_advice_question:
+            # Для советов нужна креативность
+            temperature = 0.8
+            top_p = 0.95
         else:
-            # По умолчанию
+            # По умолчанию для обычных разговоров
             temperature = 0.7
             top_p = 1.0
 
-        logger.info(f"Using temperature {temperature}, top_p {top_p} for intent type '{intent_type}'")
+        logger.info(f"Using temperature {temperature}, top_p {top_p} for intent '{intent_type}', message analysis: length={message_length}, questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
         # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности
@@ -1948,30 +2217,78 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 session=db_session,
                             )
                             logger.info(f"[TIME_ONLY] Task updated: {result}")
-                            return f"Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%H:%M')}."
+                            # Вместо статического ответа передаем маркер для AI
+                            return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
                         else:
-                            return "Не удалось распознать время в сообщении."
+                            return "TIME_PARSE_FAILED: Не удалось распознать время в сообщении."
                     else:
-                        return "Нет активных задач для обновления времени."
+                        return "NO_ACTIVE_TASKS: Нет активных задач для обновления времени."
                 else:
-                    return "Пользователь не найден."
+                    return "USER_NOT_FOUND: Пользователь не найден."
             except Exception as e:
                 logger.error(f"Error in time_only direct execution: {e}")
-                return f"Ошибка обновления времени: {str(e)}"
+                return f"TIME_UPDATE_ERROR: Ошибка обновления времени: {str(e)}"
             finally:
                 temp_session.close()
         
-        # Параметры запроса согласно документации DeepSeek API
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА COMPLETION: выполняем complete_task напрямую без AI
+        if intent.get("type") == "complete_task" and intent.get("params", {}).get("task_title"):
+            logger.info("[COMPLETION] Direct execution without AI call")
+            task_title = intent.get("params", {}).get("task_title")
+            try:
+                result = await complete_task(
+                    task_id=None,
+                    task_title=task_title,
+                    user_id=user_id,
+                    session=db_session,
+                )
+                logger.info(f"[COMPLETION] Task completed: {result}")
+                # Вместо статического ответа передаем маркер для AI
+                return f"TASK_COMPLETED: {result}"
+            except Exception as e:
+                logger.error(f"Error in completion direct execution: {e}")
+                return f"COMPLETION_ERROR: Ошибка завершения задачи: {str(e)}"
+        
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА DELEGATION: выполняем delegate_task напрямую без AI
+        if intent.get("type") == "delegate_task" and intent.get("params", {}).get("task_title") and intent.get("params", {}).get("delegate_to") and intent.get("params", {}).get("reminder_time"):
+            logger.info("[DELEGATION] Direct execution without AI call")
+            task_title = intent.get("params", {}).get("task_title")
+            delegate_to = intent.get("params", {}).get("delegate_to")
+            reminder_time = intent.get("params", {}).get("reminder_time")
+            try:
+                result = delegate_task(
+                    title=task_title,
+                    description="",
+                    reminder_time=reminder_time,
+                    delegated_to_username=delegate_to,
+                    user_id=user_id,
+                    session=db_session,
+                )
+                logger.info(f"[DELEGATION] Task delegated: {result}")
+                # Вместо статического ответа передаем маркер для AI
+                return f"TASK_DELEGATED: {result}"
+            except Exception as e:
+                logger.error(f"Error in delegation direct execution: {e}")
+                return f"DELEGATION_ERROR: Ошибка делегирования задачи: {str(e)}"
+        
+        # Параметры запроса согласно документации DeepSeek API (расширенные настройки)
         data = {
             "model": DEEPSEEK_MODEL,
             "messages": messages,
             "tools": TOOLS,
             "tool_choice": tool_choice,
+            "parallel_tool_calls": parallel_tool_calls,
             "temperature": temperature,
             "top_p": top_p,
             "max_tokens": 4096,  # Максимум токенов для ответа
             "frequency_penalty": 0.0,  # Не повторять одни и те же фразы
             "presence_penalty": 0.0,  # Стимулировать новые темы
+            "stop": None,  # Нет стоп-слов
+            "stream": False,  # Не используем streaming для надежности
+            "logprobs": None,  # Не запрашиваем вероятности токенов
+            "top_logprobs": None,  # Не запрашиваем top вероятности
+            "metadata": None,  # Нет метаданных
+            "safety_instructions": None,  # Безопасность обрабатывается на уровне промпта
         }
         logger.info(f"Sending request to DeepSeek API with {len(messages)} messages, temp={temperature}, top_p={top_p}")
         # Retry loop с exponential backoff

@@ -18,14 +18,14 @@ async def test_delegation():
     print("1. Создание задачи:")
     message1 = "Создай задачу: Подготовить отчет завтра в 10:00"
     print(f"Сообщение: {message1}")
-    response1 = await chat_with_ai(message1, user_id)
+    response1 = await chat_with_ai(message1, user_id=user_id)
     print(f"Ответ AI: {response1}\n")
 
     # Делегируем задачу
     print("2. Делегирование задачи:")
     message2 = 'Делегируй задачу "Подготовить отчет" пользователю @test1'
     print(f"Сообщение: {message2}")
-    response2 = await chat_with_ai(message2, user_id)
+    response2 = await chat_with_ai(message2, user_id=user_id)
     print(f"Ответ AI: {response2}\n")
 
 if __name__ == "__main__":

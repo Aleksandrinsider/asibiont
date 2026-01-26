@@ -313,22 +313,36 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
     elif task_title:
         # Search by words in title (including delegated tasks) - include completed tasks to check status
         words = task_title.lower().split()
-        # Use func.lower() for case-insensitive search
-        conditions = [func.lower(Task.title).like(f"%{word}%") for word in words]
+        logger.info(f"[COMPLETE_TASK] Searching for task with title '{task_title}', words: {words}, user_id: {user.id}")
         
-        # Build query with optional delegated task search - include all statuses
-        query_conditions = [and_(Task.user_id == user.id, or_(*conditions))]
-        
-        if user.username:
-            query_conditions.append(
+        # Get all user tasks and delegated tasks
+        user_tasks = session.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
                 and_(
                     Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
-                    Task.delegation_status == "accepted",
-                    or_(*conditions)
+                    Task.delegation_status == "accepted"
                 )
             )
+        ).all()
         
-        task = session.query(Task).filter(or_(*query_conditions)).first()
+        # Find task by matching words (case-insensitive) - prefer pending tasks
+        task = None
+        pending_task = None
+        for t in user_tasks:
+            task_title_lower = t.title.lower()
+            if any(word in task_title_lower for word in words):
+                if t.status == "pending":
+                    pending_task = t
+                    logger.info(f"[COMPLETE_TASK] Found pending matching task: {t.title}")
+                    break  # Prefer pending tasks, stop at first match
+                elif task is None:  # Keep first completed task as fallback
+                    task = t
+                    logger.info(f"[COMPLETE_TASK] Found completed matching task: {t.title}")
+        
+        # Use pending task if found, otherwise use completed task
+        if pending_task:
+            task = pending_task
     else:
         if close_session:
             session.close()
@@ -773,9 +787,7 @@ def delegate_task(
         
         # Skip subscription check in FREE_ACCESS_MODE
         if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier not in [SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM]:
-            return ("🥉 Делегирование задач доступно только на тарифах **Стандарт** и **Премиум**. "
-                    "На тарифе Лайт вы можете получать делегированные задачи от других пользователей, "
-                    "но не можете делегировать свои задачи. Обновите тариф для доступа к делегированию.")
+            return "DELEGATION_SUBSCRIPTION_REQUIRED: Делегирование задач доступно только на тарифах Standard и Premium. Обновите подписку: https://asibiont.ru/subscription_tiers"
         
         # Validate reminder_time
         if not reminder_time:
@@ -823,43 +835,9 @@ def delegate_task(
             except (json.JSONDecodeError, Exception) as e:
                 logging.error(f"Error checking blocked contacts: {e}")
 
-        # If delegating to self, create regular task
+        # If delegating to self, return error marker
         if recipient.id == delegator.id:
-            task = Task(user_id=delegator.id, title=title, description=encrypt_data(description), status="pending")
-            if reminder_time:
-                try:
-                    user_tz = pytz.timezone(delegator.timezone) if delegator.timezone else pytz.UTC
-                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                    local_dt = user_tz.localize(local_dt)
-                    task.reminder_time = local_dt.astimezone(pytz.UTC)
-                except ValueError:
-                    pass
-            session.add(task)
-            session.commit()
-            task_id = task.id
-
-            # Schedule reminder
-            if task.reminder_time:
-                try:
-                    from reminder_service import REMINDER_SERVICE
-                    if REMINDER_SERVICE:
-                        REMINDER_SERVICE.schedule_reminder(
-                            task_id=task.id,
-                            reminder_time=task.reminder_time,
-                            user_id=delegator.telegram_id,
-                            task_title=task.title,
-                        )
-                except Exception as e:
-                    logging.error(f"Failed to schedule reminder for self-delegated task {task_id}: {e}")
-
-            # Update profile analytics
-            profile = session.query(UserProfile).filter_by(user_id=delegator.id).first()
-            if profile:
-                profile.total_tasks_created = (profile.total_tasks_created or 0) + 1
-                session.commit()
-
-            session.close()
-            return f"Задача '{title}' добавлена для вас с напоминанием на {reminder_time}."
+            return "SELF_DELEGATION_ERROR: Нельзя делегировать задачу самому себе"
 
         # Create task with pending delegation status
         task = Task(
@@ -2971,8 +2949,8 @@ def get_task_details(task_id=None, user_id=None, session=None):
         return f"Ошибка при получении деталей задачи: {str(e)}"
 
 
-def get_delegation_progress(task_id=None, user_id=None, session=None):
-    """Get progress status of a delegated task for the initiator"""
+def get_delegation_progress(user_id=None, session=None):
+    """Get progress status of all delegated tasks for the user"""
     if session is None:
         session = Session()
         close_session = True
@@ -2986,59 +2964,47 @@ def get_delegation_progress(task_id=None, user_id=None, session=None):
                 session.close()
             return "Пользователь не найден."
 
-        if not task_id:
-            if close_session:
-                session.close()
-            return "Не указан ID задачи."
-
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-
-        # Find task that was delegated by this user
-        task = session.query(Task).filter(
-            Task.id == task_id_int,
+        # Find all tasks delegated by this user
+        delegated_tasks = session.query(Task).filter(
             Task.user_id == user.id,
             Task.delegated_to_username.isnot(None)
-        ).first()
+        ).all()
 
-        if not task:
+        if not delegated_tasks:
             if close_session:
                 session.close()
-            return "Задача не найдена или не была делегирована вами."
+            return "DELEGATION_REPORT: У вас нет делегированных задач."
 
-        # Get the delegated user info
-        delegated_user = session.query(User).filter_by(username=task.delegated_to_username.lstrip('@')).first()
+        status_info = "📋 Отчет по делегированным задачам:\n\n"
 
-        status_info = f"📋 Статус делегированной задачи:\n\n"
-        status_info += f"🆔 ID: {task.id}\n"
-        status_info += f"📝 Название: {task.title}\n"
-        status_info += f"👤 Делегирована: @{task.delegated_to_username}\n"
-        status_info += f"📋 Статус: {task.delegation_status or 'Ожидает принятия'}\n"
+        for task in delegated_tasks:
+            status_info += f"🆔 ID: {task.id}\n"
+            status_info += f"📝 Название: {task.title}\n"
+            status_info += f"👤 Делегирована: @{task.delegated_to_username}\n"
+            status_info += f"📋 Статус: {task.delegation_status or 'Ожидает принятия'}\n"
 
-        if task.delegation_status == "accepted":
-            status_info += f"✅ Задача принята исполнителем\n"
-        elif task.delegation_status == "rejected":
-            status_info += f"❌ Задача отклонена исполнителем\n"
-        elif task.delegation_status == "completed":
-            status_info += f"✅ Задача выполнена!\n"
-            if task.actual_completion_time:
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                local_completion = task.actual_completion_time.astimezone(user_tz)
-                status_info += f"🕒 Время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
-        else:
-            status_info += f"⏳ Ожидает решения исполнителя\n"
+            if task.delegation_status == "accepted":
+                status_info += f"✅ Задача принята исполнителем\n"
+            elif task.delegation_status == "rejected":
+                status_info += f"❌ Задача отклонена исполнителем\n"
+            elif task.delegation_status == "completed":
+                status_info += f"✅ Задача выполнена!\n"
+                if task.actual_completion_time:
+                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                    local_completion = task.actual_completion_time.astimezone(user_tz)
+                    status_info += f"🕒 Время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
+            else:
+                status_info += f"⏳ Ожидает решения исполнителя\n"
 
-        if task.completion_notes and task.delegation_status == "completed":
-            completion_notes = decrypt_data(task.completion_notes) if task.completion_notes.startswith('gAAAAA') else task.completion_notes
-            status_info += f"📝 Результат выполнения: {completion_notes}\n"
+            if task.completion_notes and task.delegation_status == "completed":
+                completion_notes = decrypt_data(task.completion_notes) if task.completion_notes.startswith('gAAAAA') else task.completion_notes
+                status_info += f"📝 Результат выполнения: {completion_notes}\n"
+
+            status_info += "---\n"
 
         if close_session:
             session.close()
-        return status_info
+        return f"DELEGATION_REPORT: {status_info}"
 
     except Exception as e:
         if close_session:
