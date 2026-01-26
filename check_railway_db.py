@@ -3,7 +3,7 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from config import DATABASE_URL
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 print('🔍 Checking Railway database connection...')
@@ -21,34 +21,23 @@ try:
         result = session.execute(text('SELECT version()')).fetchone()
         print(f'✅ Connected to PostgreSQL: {result[0][:50]}...')
 
-    # Use inspector for cross-database compatibility
-    inspector = inspect(engine)
-
-    # Check tables exist
-    tables = inspector.get_table_names()
-    print(f'📋 Tables found: {tables}')
-
-    # Check users table structure
-    if 'users' in tables:
-        columns = inspector.get_columns('users')
-        column_names = [col['name'] for col in columns]
-        print('👤 Users table columns:')
-        for col in column_names:
-            print(f'  - {col}')
+    # Simple table check
+    result = session.execute(text("SELECT COUNT(*) FROM users"))
+    user_count = result.fetchone()[0]
+    print(f'👤 Users table: {user_count} records')
 
     # Check subscription tiers
-    if 'users' in tables:
-        result = session.execute(text("SELECT DISTINCT subscription_tier FROM users")).fetchall()
-        print(f'🏷️  Subscription tiers in use: {[t[0] for t in result if t[0]]}')
+    if user_count > 0:
+        result = session.execute(text("SELECT DISTINCT subscription_tier FROM users"))
+        tiers = result.fetchall()
+        print(f'🏷️  Subscription tiers in use: {[t[0] for t in tiers if t[0]]}')
 
-    # Check for average_rating column
-    if 'users' in tables:
-        columns = inspector.get_columns('users')
-        column_names = [col['name'] for col in columns]
-        if 'average_rating' in column_names:
-            print('✅ average_rating column exists')
-        else:
-            print('❌ average_rating column missing')
+    # Check for average_rating column (simple check)
+    try:
+        result = session.execute(text("SELECT average_rating FROM users LIMIT 1"))
+        print('✅ average_rating column exists')
+    except Exception:
+        print('❌ average_rating column missing')
 
     session.close()
     print('🎯 Railway database check completed successfully')
