@@ -248,9 +248,9 @@ try:
             if 'subscription_tier' not in columns:
                 logger.info("Adding subscription_tier column to user_profiles table")
                 if LOCAL:
-                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier TEXT DEFAULT \'FREE\''))
+                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier TEXT DEFAULT \'LIGHT\''))
                 else:
-                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'FREE\''))
+                    session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'LIGHT\''))
                 session.commit()
                 logger.info("Migration: subscription_tier column added successfully")
             else:
