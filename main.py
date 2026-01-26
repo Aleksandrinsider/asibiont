@@ -1,5 +1,6 @@
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, init_db
 # from reminder_service import ReminderService
+from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL
@@ -6109,25 +6110,24 @@ app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 # Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
-# reminder_service = ReminderService(bot=bot if not LOCAL else None)
-# logger.info("ReminderService initialized")
+reminder_service = ReminderService(bot=bot if not LOCAL else None)
+logger.info("ReminderService initialized")
 
 # Start ReminderService on app startup
 
 
-# async def start_reminder_service(app):
-#     logger.info("Starting ReminderService...")
-#     # Temporarily disable scheduling to test chat
-#     # await reminder_service.start()
-#     logger.info("ReminderService started successfully (scheduling disabled)")
+async def start_reminder_service(app):
+    logger.info("Starting ReminderService...")
+    await reminder_service.start()
+    logger.info("ReminderService started successfully")
 
-#     # Log existing jobs
-#     # jobs = reminder_service.scheduler.get_jobs()
-#     # logger.info(f"Scheduled jobs after start: {len(jobs)}")
-#     # for job in jobs[:5]:  # Log first 5 jobs
-#     #     logger.info(f"Job: {job.id} at {job.next_run_time}")
+    # Log existing jobs
+    jobs = reminder_service.scheduler.get_jobs()
+    logger.info(f"Scheduled jobs after start: {len(jobs)}")
+    for job in jobs[:5]:  # Log first 5 jobs
+        logger.info(f"Job: {job.id} at {job.next_run_time}")
 
-# app.on_startup.append(start_reminder_service)
+app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
 # app.on_shutdown.append(on_shutdown)
 
