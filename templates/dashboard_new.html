@@ -1673,6 +1673,12 @@
                 return;
             }
             
+            // Skip empty or undefined messages
+            if (!text || text.trim() === '') {
+                console.warn('Skipping empty message');
+                return;
+            }
+            
             // Normalize sender: 'agent' -> 'ai' for consistent styling
             const normalizedSender = sender === 'agent' ? 'ai' : sender;
             

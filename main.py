@@ -5742,10 +5742,11 @@ async def api_interactions_handler(request):
         if user.history_cleared_at:
             history_cleared_timestamp = user.history_cleared_at.timestamp()
 
-        # Filter interactions based on cleared timestamp
+        # Filter interactions based on cleared timestamp and non-null content
         filtered_interactions = [
             i for i in interactions
             if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() > history_cleared_timestamp
+            and i.content is not None and i.content.strip() != ''
         ]
         
         logger.info(f"After filtering: {len(filtered_interactions)} interactions")
