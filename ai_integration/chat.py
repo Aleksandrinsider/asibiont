@@ -817,8 +817,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         ai_context = "TASK_ACCEPTED"
                         fallback_message = "Задача принята в работу"
             elif any("DELEGATION_BLOCKED_BRONZE:" in r for r in natural_responses):
-                ai_context = "Пользователь с тарифом Bronze попытался делегировать задачу. Объясни, что делегирование доступно только на Silver/Gold, расскажи о преимуществах этих тарифов, покажи ссылку https://asibiont.ru/subscription_tiers и предложи обновить подписку."
-                fallback_message = "Делегирование недоступно на вашем тарифе Bronze. Обновите до Silver или Gold для доступа к этой функции."
+                ai_context = "Пользователь с тарифом Light попытался делегировать задачу. Объясни, что делегирование доступно только на Standard/Premium, расскажи о преимуществах этих тарифов, покажи ссылку https://asibiont.ru/subscription_tiers и предложи обновить подписку."
+                fallback_message = "Делегирование недоступно на вашем тарифе Light. Обновите до Standard или Premium для доступа к этой функции."
                 # Обработка создания задачи
                 task_created_responses = [r for r in natural_responses if "TASK_CREATED:" in r]
                 for tr in task_created_responses:

@@ -763,7 +763,7 @@ def delegate_task(
     
     session = Session()
     try:
-        # Check if delegator has Bronze tier - Bronze users can only receive delegated tasks
+        # Check if delegator has Light tier - Light users can only receive delegated tasks
         delegator = session.query(User).filter_by(telegram_id=user_id).first()
         if not delegator:
             return "Ошибка: Пользователь не найден."
@@ -1647,10 +1647,10 @@ def get_partners_list(user_id=None, session=None):
         )
     )
     
-    # Bronze and Silver tier users cannot see Gold tier users
-    if user.subscription_tier and user.subscription_tier.value in ['BRONZE', 'SILVER']:
+    # Light and Standard tier users cannot see Premium tier users
+    if user.subscription_tier and user.subscription_tier.value in ['LIGHT', 'STANDARD']:
         from models import SubscriptionTier
-        profile_query = profile_query.filter(User.subscription_tier != SubscriptionTier.GOLD)
+        profile_query = profile_query.filter(User.subscription_tier != SubscriptionTier.PREMIUM)
     
     all_profiles = profile_query.all()
 
