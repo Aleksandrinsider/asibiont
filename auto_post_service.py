@@ -54,77 +54,104 @@ async def generate_progress_post(user_id, session):
         user_now = now_utc.astimezone(user_tz)
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.UTC)
         
-        # Count tasks
-        total_today = session.query(Task).filter(
+        # Get actual tasks with their details
+        tasks_today = session.query(Task).filter(
             Task.user_id == user.id,
             Task.created_at >= today_start
-        ).count()
+        ).all()
         
-        completed_today = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status == 'completed',
-            Task.actual_completion_time >= today_start
-        ).count()
+        completed_tasks = [t for t in tasks_today if t.status == 'completed']
+        pending_tasks = [t for t in tasks_today if t.status in ['pending', 'in_progress']]
+        overdue_tasks = [t for t in tasks_today if t.overdue and t.status != 'completed']
         
-        pending_today = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status == 'pending',
-            Task.reminder_time >= today_start,
-            Task.reminder_time < now_utc
-        ).count()
+        # Build context for AI
+        context = f"""Создай живой, естественный пост от лица пользователя {profile.first_name or user.username} о его дне.
+
+Информация о пользователе:
+- Имя: {profile.first_name or user.username}
+- Город: {profile.city}
+- Интересы: {profile.interests}
+- Навыки: {profile.skills}
+- Цели: {profile.goals}
+
+Задачи сегодня:
+"""
         
-        # Generate engaging progress post
-        if completed_today > 0:
-            if completed_today == total_today:
-                # All tasks completed
-                messages = [
-                    f"Сегодня был потрясающий день! Выполнил все {total_today} задач, которые запланировал. Чувствую себя непобедимым!",
-                    f"Отличная работа! Все {total_today} задач на сегодня выполнены. Можно гордиться собой!",
-                    f"Сегодня продуктивность на максимум! Завершил все {total_today} поставленных задач. Отдых заслужен!",
-                    f"Вау, сегодня все по плану! Выполнил все {total_today} задач. Продолжаю в том же духе!"
-                ]
-                post_content = random.choice(messages)
+        if completed_tasks:
+            context += f"\nВыполнено ({len(completed_tasks)}):\n"
+            for task in completed_tasks[:5]:  # Показываем до 5 задач
+                context += f"- {task.description}\n"
+        
+        if pending_tasks:
+            context += f"\nВ работе ({len(pending_tasks)}):\n"
+            for task in pending_tasks[:3]:
+                context += f"- {task.description}\n"
+        
+        if overdue_tasks:
+            context += f"\nПросрочено ({len(overdue_tasks)}):\n"
+            for task in overdue_tasks[:2]:
+                context += f"- {task.description}\n"
+        
+        if not tasks_today:
+            context += "\nСегодня задач не создавалось.\n"
+        
+        context += """
+Требования к посту:
+1. Пиши от первого лица, как будто сам пользователь делится своим днем
+2. Упомяни 1-2 конкретные выполненные задачи (если есть), но естественно, в контексте
+3. Покажи эмоции - радость от достижений, усталость, мотивацию или даже сомнения
+4. Добавь личные детали: что помогло/помешало, какие мысли возникали
+5. Если есть интересы/цели пользователя, можно связать задачи с ними
+6. Если задач мало или нет - расскажи о планах, размышлениях, идеях
+7. Максимум 3-4 предложения
+8. БЕЗ эмодзи, БЕЗ хештегов, БЕЗ призывов к действию
+9. Стиль - живой разговорный, как в обычной соцсети
+
+Пример хорошего поста:
+"Сегодня наконец-то доделал презентацию для клиента, над которой сидел всю неделю. Честно, думал не успею - вечером совещание накладывалось, но взял тайм-аут и сосредоточился. Теперь можно выдохнуть. Правда, статью для блога так и не начал писать - откладываю уже третий день, надо себя заставить."
+
+Создай пост:"""
+        
+        # Use AI to generate natural post
+        try:
+            response = await chat_with_ai(
+                user_id=user_id,
+                message=context,
+                bot=None,
+                session=session
+            )
+            
+            if response and len(response) > 20:
+                # Clean up response - remove quotes if present
+                post_content = response.strip().strip('"').strip("'")
+                logger.info(f"[AUTO POST] Generated AI post for {user_id}: {post_content[:100]}")
+                return post_content
             else:
-                # Some tasks completed
-                if pending_today > 0:
-                    messages = [
-                        f"Сегодня выполнил {completed_today} из {total_today} задач. Есть {pending_today} просроченных - нужно поднажать!",
-                        f"Прогресс есть! {completed_today} задач сделано из {total_today}, но {pending_today} ждут своего часа. Не сдаемся!",
-                        f"Сегодня справился с {completed_today} задачами из {total_today}. {pending_today} просроченных напоминают о приоритетах.",
-                        f"Хороший старт! {completed_today} задач выполнено, но {pending_today} просроченных требуют внимания."
-                    ]
-                else:
-                    messages = [
-                        f"Сегодня выполнил {completed_today} из {total_today} задач. Есть над чем работать, но прогресс заметен!",
-                        f"Неплохо! {completed_today} задач сделано из {total_today}. Завтра будет еще лучше!",
-                        f"Сегодня продуктивный день продолжается - {completed_today} задач выполнено из {total_today}.",
-                        f"Шагаю вперед! {completed_today} задач из {total_today} уже позади."
-                    ]
-                post_content = random.choice(messages)
-        else:
-            if total_today > 0:
-                messages = [
-                    f"Сегодня создал {total_today} задач, но пока не успел взяться. Завтра точно все сделаю!",
-                    f"Планы на сегодня готовы - {total_today} задач ждут выполнения. Время браться за дело!",
-                    f"Сегодня запланировал {total_today} задач. Нужно найти время и силы, чтобы все выполнить.",
-                    f"Задачи на сегодня ({total_today} штук) ждут своего часа. Не откладываю на потом!"
-                ]
-                post_content = random.choice(messages)
-            else:
-                messages = [
-                    "Сегодня отличный день для новых идей! Что будем планировать?",
-                    "Доброе утро! День полон возможностей. Время для новых задач!",
-                    "Сегодня можно начать что-то новое. Какие планы на день?",
-                    "Отличный день для продуктивной работы! Что первым делом?"
-                ]
-                post_content = random.choice(messages)
-        
-        logger.info(f"[AUTO POST] Generated simple progress post: {post_content}")
-        return post_content
+                # Fallback to simple message
+                logger.warning(f"AI response too short for {user_id}, using fallback")
+                return generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks)
+                
+        except Exception as ai_error:
+            logger.error(f"AI generation failed for {user_id}: {ai_error}")
+            return generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks)
         
     except Exception as e:
         logger.error(f"Error generating progress post for user {user_id}: {e}")
         return None
+
+
+def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks):
+    """Generate simple fallback message when AI fails"""
+    if completed_tasks:
+        if len(completed_tasks) >= 3:
+            return f"Сегодня продуктивный день выдался - закрыл {len(completed_tasks)} задач. Приятно видеть прогресс!"
+        else:
+            task_desc = completed_tasks[0].description[:50] + "..." if len(completed_tasks[0].description) > 50 else completed_tasks[0].description
+            return f"Сегодня справился с '{task_desc}'. Маленькие шаги к большим целям."
+    elif pending_tasks:
+        return f"Сегодня в работе {len(pending_tasks)} задач. Шаг за шагом продвигаюсь вперед."
+    else:
+        return "Сегодня планирую задачи на завтра. Главное - не терять фокус."
 
 
 async def create_auto_post(user_id, content, session, notify=True):
