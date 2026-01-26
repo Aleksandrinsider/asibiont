@@ -3404,3 +3404,183 @@ def delete_task_legacy(task_id=None, task_title=None, reason=None, user_id=None,
         response += f" ({reason})"
     
     return response
+
+
+def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggestions=3, session=None):
+    """Предложить новые тренды и возможности развития на основе профиля пользователя"""
+    logger.info(f"[SUGGEST_TRENDS] Called with user_id={user_id}, focus_area='{focus_area}', num_suggestions={num_suggestions}")
+
+    if user_id is None:
+        return "Необходимо указать user_id"
+
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        # Получаем профиль пользователя
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        # Базовые тренды по областям
+        trends_data = {
+            'career': [
+                "Удаленная работа и гибридный формат",
+                "ИИ-инструменты для повышения продуктивности",
+                "Фриланс и цифровой номадизм",
+                "Непрерывное обучение и сертификации",
+                "Экологичное предпринимательство",
+                "Креативные индустрии и NFT",
+                "Блокчейн и криптовалюты",
+                "Кибербезопасность и защита данных"
+            ],
+            'personal': [
+                "Цифровая детоксикация и mindful living",
+                "Экологичный образ жизни",
+                "Саморазвитие через подкасты и книги",
+                "Спорт и здоровье в метaverse",
+                "Путешествия с минимальным воздействием",
+                "Цифровое искусство и творчество",
+                "Медитация и практики осознанности",
+                "Обучение новым навыкам онлайн"
+            ],
+            'business': [
+                "SaaS и облачные сервисы",
+                "Электронная коммерция и маркетплейсы",
+                "Зеленые технологии и устойчивое развитие",
+                "ИИ в бизнес-процессах",
+                "Криптоэкономика и DeFi",
+                "NFT и цифровые активы",
+                "Платформенная экономика",
+                "Социальное предпринимательство"
+            ],
+            'technology': [
+                "Искусственный интеллект и машинное обучение",
+                "Квантовые вычисления",
+                "Блокчейн и Web3",
+                "Расширенная реальность (AR/VR)",
+                "Интернет вещей (IoT)",
+                "Биотехнологии и генная инженерия",
+                "Нейронные интерфейсы",
+                "Космические технологии"
+            ],
+            'health': [
+                "Персонализированная медицина",
+                "Телемедицина и цифровое здоровье",
+                "Функциональное питание",
+                "Ментальное здоровье и приложения",
+                "Биохакинг и longevity",
+                "Спортивные гаджеты и wearables",
+                "Йога и альтернативные практики",
+                "Экологичное питание"
+            ],
+            'finance': [
+                "Криптовалюты и цифровые активы",
+                "DeFi и decentralized finance",
+                "Персональные финансы и приложения",
+                "Зеленые инвестиции",
+                "Краудфандинг и краудинвестинг",
+                "NFT как инвестиционный актив",
+                "Финтех инновации",
+                "Пассивный доход онлайн"
+            ],
+            'education': [
+                "Онлайн-образование и платформы",
+                "Микро-обучение и геймификация",
+                "Виртуальная реальность в обучении",
+                "ИИ-тьюторы и персонализация",
+                "Блокчейн-сертификаты",
+                "Образование для пожилых",
+                "Экологическое образование",
+                "Креативное мышление и дизайн"
+            ],
+            'auto': [
+                "Электромобили и зарядная инфраструктура",
+                "Автопилот и автономный транспорт",
+                "Каршеринг и sharing economy",
+                "Экологичный транспорт",
+                "Умные города и инфраструктура",
+                "Дроны и воздушный транспорт",
+                "Водородные технологии",
+                "Электросамокаты и микромобильность"
+            ]
+        }
+
+        # Получаем тренды для выбранной области
+        if focus_area not in trends_data:
+            focus_area = 'personal'  # дефолт
+
+        available_trends = trends_data[focus_area]
+
+        # Персонализируем на основе профиля
+        personalized_suggestions = []
+        user_interests = []
+        user_skills = []
+
+        if profile:
+            if profile.interests:
+                user_interests = [i.strip().lower() for i in profile.interests.split(',')]
+            if profile.skills:
+                user_skills = [s.strip().lower() for s in profile.skills.split(',')]
+
+        # Фильтруем и ранжируем тренды на основе интересов пользователя
+        scored_trends = []
+        for trend in available_trends:
+            score = 0
+            trend_lower = trend.lower()
+
+            # Проверяем релевантность к интересам
+            for interest in user_interests:
+                if any(word in trend_lower for word in interest.split()):
+                    score += 2
+
+            # Проверяем релевантность к навыкам
+            for skill in user_skills:
+                if any(word in trend_lower for word in skill.split()):
+                    score += 1
+
+            scored_trends.append((trend, score))
+
+        # Сортируем по релевантности
+        scored_trends.sort(key=lambda x: x[1], reverse=True)
+
+        # Выбираем топ предложений
+        selected_trends = [trend for trend, score in scored_trends[:num_suggestions]]
+
+        # Если мало релевантных, добавляем случайные
+        if len(selected_trends) < num_suggestions:
+            remaining = [trend for trend, score in scored_trends[num_suggestions:]]
+            selected_trends.extend(remaining[:num_suggestions - len(selected_trends)])
+
+        # Формируем ответ
+        area_names = {
+            'career': 'карьере',
+            'personal': 'личном развитии',
+            'business': 'бизнесе',
+            'technology': 'технологиях',
+            'health': 'здоровье',
+            'finance': 'финансах',
+            'education': 'образовании',
+            'auto': 'автомобильной сфере'
+        }
+
+        area_name = area_names.get(focus_area, focus_area)
+
+        response = f"Интересные направления в {area_name}:\n\n"
+        for i, trend in enumerate(selected_trends, 1):
+            response += f"{i}. {trend}\n"
+
+        # Добавляем персонализацию если есть профиль
+        if profile and (user_interests or user_skills):
+            response += f"\nРекомендации адаптированы под твои интересы: {', '.join(user_interests[:3])}"
+
+        return response
+
+    finally:
+        if close_session:
+            session.close()

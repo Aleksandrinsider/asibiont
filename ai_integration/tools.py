@@ -288,4 +288,26 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_trends_and_opportunities",
+            "description": "Предложить новые тренды, интересные направления и возможности развития на основе профиля пользователя. Используй для расширения горизонтов и предложения новых идей.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "focus_area": {
+                        "type": "string",
+                        "description": "Область фокуса: 'career' (карьера), 'personal' (личное развитие), 'business' (бизнес), 'technology' (технологии), 'health' (здоровье), 'finance' (финансы), 'education' (образование), 'auto' (авто)",
+                    },
+                    "num_suggestions": {
+                        "type": "integer",
+                        "description": "Количество предложений (по умолчанию 3)",
+                        "default": 3,
+                    },
+                },
+                "required": ["focus_area"],
+            },
+        },
+    },
 ]
