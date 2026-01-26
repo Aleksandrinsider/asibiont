@@ -74,15 +74,15 @@ try:
         # Step 1: Add new enum values using autocommit connection
         with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
             try:
-                conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'LIGHT'"))
+                conn.execute(text("ALTER TYPE subscription_tier_enum ADD VALUE 'LIGHT'"))
             except Exception:
                 pass
             try:
-                conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'STANDARD'"))
+                conn.execute(text("ALTER TYPE subscription_tier_enum ADD VALUE 'STANDARD'"))
             except Exception:
                 pass
             try:
-                conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'PREMIUM'"))
+                conn.execute(text("ALTER TYPE subscription_tier_enum ADD VALUE 'PREMIUM'"))
             except Exception:
                 pass
         
