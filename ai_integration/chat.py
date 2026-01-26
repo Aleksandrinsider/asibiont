@@ -12,7 +12,7 @@ import time
 from functools import lru_cache
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-from models import Session, User, Task, UserProfile
+from models import Session, User, Task, UserProfile, Subscription
 from .memory import encrypt_data, decrypt_data
 from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
@@ -2233,10 +2233,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     # Получаем актуальные задачи
                     try:
                         current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
-                        if current_tasks and len(current_tasks.strip()) > 10:
-                            task_info = f" У тебя {len([t for t in current_tasks.split('•') if t.strip()])} активных задач."
+                        # Извлекаем количество задач из строки ответа
+                        import re
+                        match = re.search(r'У вас (\d+)', current_tasks)
+                        if match:
+                            task_count = int(match.group(1))
+                            if task_count > 0:
+                                task_info = f" У тебя {task_count} активных задач."
+                            else:
+                                task_info = " У тебя сейчас нет активных задач."
                         else:
-                            task_info = " У тебя сейчас нет активных задач."
+                            task_info = ""
                     except Exception as task_e:
                         logger.warning(f"Could not get tasks in error recovery: {task_e}")
                         task_info = ""

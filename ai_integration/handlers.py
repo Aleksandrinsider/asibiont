@@ -5,7 +5,7 @@ import json
 import re
 from datetime import datetime, timezone, timedelta
 import pytz
-from models import Session, Task, User, UserProfile, Interaction
+from models import Session, Task, User, UserProfile, Interaction, Subscription
 from sqlalchemy import or_, and_, func
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
@@ -2761,12 +2761,13 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
         return "Задача не найдена."
 
 
-def create_subscription_payment(user_id=None):
+def create_subscription_payment(tier=None, user_id=None, session=None):
     """Create subscription payment"""
     from subscription_service import create_subscription_payment as create_sub_payment
 
     try:
-        payment_url = create_sub_payment(user_id)
+        tier = tier or 'light'  # Default to light if not specified
+        payment_url = create_sub_payment(user_id, tier)
         return f"Ссылка на оплату месячной подписки создана: {payment_url}"
     except Exception as e:
         return f"Ошибка создания платежа: {str(e)}"
@@ -3354,8 +3355,8 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
         return f"Задача '{task.title}' не была изменена"
 
 
-def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None):
-    """Delete a task"""
+def delete_task_legacy(task_id=None, task_title=None, reason=None, user_id=None, session=None):
+    """Delete a task (legacy version)"""
     logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")
     
     if user_id is None:

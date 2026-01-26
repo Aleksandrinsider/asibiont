@@ -44,11 +44,12 @@ def check_subscription(user_id):
     finally:
         session.close()
 
-def create_subscription_payment(user_id):
+def create_subscription_payment(user_id, tier='light'):
     """Создает платеж для месячной подписки"""
-    amount = "3000.00"  # Цена за месяц
-    description = f"Подписка ASI Biont на месяц"
-    return create_payment(amount, description, user_id)
+    from payments import get_tier_price
+    amount = f"{get_tier_price(tier)}.00"
+    description = f"Подписка ASI Biont на месяц - {tier.capitalize()}"
+    return create_payment(amount, description, user_id, tier)
 
 def cancel_subscription(user_id):
     """Отменяет подписку пользователя"""
