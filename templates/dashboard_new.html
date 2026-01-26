@@ -998,7 +998,13 @@
                     </div>
                     
                     <!-- Тариф -->
-                    <button onclick="window.location.href='/subscription_tiers'" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">{{ subscription_tier.lower() }}</button>
+                    <button onclick="window.location.href='/subscription_tiers'" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
+                        {% if subscription_tier == 'LIGHT' %}Лайт
+                        {% elif subscription_tier == 'STANDARD' %}Стандарт
+                        {% elif subscription_tier == 'PREMIUM' %}Премиум
+                        {% else %}{{ subscription_tier.lower() }}
+                        {% endif %}
+                    </button>
                     
                     <a href="https://t.me/asibiont_bot" target="_blank" style="text-decoration: none;">
                         <button style="padding: 8px 12px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';">
