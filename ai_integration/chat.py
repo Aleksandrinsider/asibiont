@@ -1440,25 +1440,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     # Add favorite contacts first
                     partners_info.extend(favorite_contacts_info)
                     
-                    # Add recommended partners
-                    for p in partners[:5]:
-                        partner_user = db_session.query(User).filter_by(id=p.user_id).first()
-                        if partner_user and partner_user.username:
-                            # Собираем информацию об общем
-                            common_details = []
-                            if hasattr(p, 'common_interests') and p.common_interests:
-                                common_details.append(f"интересы: {p.common_interests}")
-                            if hasattr(p, 'common_skills') and p.common_skills:
-                                common_details.append(f"навыки: {p.common_skills}")
-                            if hasattr(p, 'common_goals') and p.common_goals:
-                                common_details.append(f"цели: {p.common_goals}")
-                            if hasattr(p, 'common_tasks') and p.common_tasks:
-                                common_details.append(f"задачи: {p.common_tasks}")
-                            
-                            if common_details:
-                                partners_info.append(f"@{partner_user.username} (общее: {'; '.join(common_details)})")
-                            else:
-                                partners_info.append(f"@{partner_user.username}")
+                    # NOTE: Only mention favorite contacts, not recommended ones
+                    # Removed recommended partners loop to avoid mentioning non-favorite contacts
                     
                     if partners_info:
                         user_memory += f"\nДоступные контакты: {', '.join(partners_info)}"
