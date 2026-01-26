@@ -1987,9 +1987,6 @@ async def chat_handler(request):
         context = get_context_from_db(user_id, limit=10)
         logger.info(f"Loaded context with {len(context)} message pairs from DB")
 
-        # Save user message WITH PRECISE TIMESTAMP before AI call
-        user_message_timestamp = datetime.now(dt_timezone.utc)
-
         # Check for duplicate via DB (web chat duplicate protection)
         is_duplicate = check_duplicate_message(user_id, message)
         if is_duplicate:
@@ -2003,6 +2000,12 @@ async def chat_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             logger.info(f"User found: {user is not None}")
 
+            # КРИТИЧНО: Сохраняем сообщение пользователя ДО вызова AI
+            # Это гарантирует, что сообщение появится в истории даже если AI упадет
+            # И предотвращает race condition с дубликатами
+            save_context_to_db(user_id, message, None)
+            logger.info("User message saved to DB BEFORE AI call")
+
             # Get AI response (will take time, so agent timestamp will be later)
             try:
                 logger.info(f"Calling chat_with_ai with user_id: {user_id}")
@@ -2011,10 +2014,6 @@ async def chat_handler(request):
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
                 response = f"Ошибка: {str(e)}"
-
-            # Save interaction to DB (only user message here, AI response saved separately)
-            save_context_to_db(user_id, message, None)  # Don't save AI response here
-            logger.info("User message saved to DB")
 
             # Save agent response to Interaction table
             if user:
