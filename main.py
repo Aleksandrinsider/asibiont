@@ -68,84 +68,6 @@ try:
         conn.execute(text("SELECT 1"))
     logger.info("✅ Database connection successful")
 
-    # Migrate subscription tiers if needed
-    try:
-        logger.info("Checking for subscription tier migration...")
-        
-        # Step 1: Add new enum values using autocommit connection
-        with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
-            try:
-                conn.execute(text("ALTER TYPE subscription_tier_enum ADD VALUE 'LIGHT'"))
-            except Exception:
-                pass
-            try:
-                conn.execute(text("ALTER TYPE subscription_tier_enum ADD VALUE 'STANDARD'"))
-            except Exception:
-                pass
-            try:
-                conn.execute(text("ALTER TYPE subscription_tier_enum ADD VALUE 'PREMIUM'"))
-            except Exception:
-                pass
-        
-        # Step 2: Perform data migration in a separate connection with autocommit
-        with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
-            logger.info("Migrating old subscription tier values...")
-            
-            # Migrate users table
-            if 'sqlite' in str(engine.url):
-                conn.execute(text("UPDATE users SET subscription_tier = 'LIGHT' WHERE subscription_tier = 'BRONZE'"))
-                conn.execute(text("UPDATE users SET subscription_tier = 'STANDARD' WHERE subscription_tier = 'SILVER'"))
-                conn.execute(text("UPDATE users SET subscription_tier = 'PREMIUM' WHERE subscription_tier = 'GOLD'"))
-            else:
-                conn.execute(text("UPDATE users SET subscription_tier = 'LIGHT' WHERE subscription_tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE users SET subscription_tier = 'STANDARD' WHERE subscription_tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE users SET subscription_tier = 'PREMIUM' WHERE subscription_tier::text = 'GOLD'"))
-            
-            # Migrate user_profiles table
-            if 'sqlite' in str(engine.url):
-                conn.execute(text("UPDATE user_profiles SET subscription_tier = 'LIGHT' WHERE subscription_tier = 'BRONZE'"))
-                conn.execute(text("UPDATE user_profiles SET subscription_tier = 'STANDARD' WHERE subscription_tier = 'SILVER'"))
-                conn.execute(text("UPDATE user_profiles SET subscription_tier = 'PREMIUM' WHERE subscription_tier = 'GOLD'"))
-            else:
-                conn.execute(text("UPDATE user_profiles SET subscription_tier = 'LIGHT' WHERE subscription_tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE user_profiles SET subscription_tier = 'STANDARD' WHERE subscription_tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE user_profiles SET subscription_tier = 'PREMIUM' WHERE subscription_tier::text = 'GOLD'"))
-            
-            # Migrate subscriptions table
-            if 'sqlite' in str(engine.url):
-                conn.execute(text("UPDATE subscriptions SET tier = 'LIGHT' WHERE tier = 'BRONZE'"))
-                conn.execute(text("UPDATE subscriptions SET tier = 'STANDARD' WHERE tier = 'SILVER'"))
-                conn.execute(text("UPDATE subscriptions SET tier = 'PREMIUM' WHERE tier = 'GOLD'"))
-            else:
-                conn.execute(text("UPDATE subscriptions SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE subscriptions SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE subscriptions SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
-            
-            # Migrate payments table
-            if 'sqlite' in str(engine.url):
-                conn.execute(text("UPDATE payments SET tier = 'LIGHT' WHERE tier = 'BRONZE'"))
-                conn.execute(text("UPDATE payments SET tier = 'STANDARD' WHERE tier = 'SILVER'"))
-                conn.execute(text("UPDATE payments SET tier = 'PREMIUM' WHERE tier = 'GOLD'"))
-            else:
-                conn.execute(text("UPDATE payments SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE payments SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE payments SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
-            
-            # Migrate promo_codes table
-            if 'sqlite' in str(engine.url):
-                conn.execute(text("UPDATE promo_codes SET tier = 'LIGHT' WHERE tier = 'BRONZE'"))
-                conn.execute(text("UPDATE promo_codes SET tier = 'STANDARD' WHERE tier = 'SILVER'"))
-                conn.execute(text("UPDATE promo_codes SET tier = 'PREMIUM' WHERE tier = 'GOLD'"))
-            else:
-                conn.execute(text("UPDATE promo_codes SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE promo_codes SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE promo_codes SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
-            
-            logger.info("✅ Subscription tier migration completed")
-    except Exception as e:
-        logger.error(f"❌ Subscription tier migration failed: {e}")
-        # Continue anyway
-
     # Initialize database tables
     init_db()
 except Exception as e:
@@ -2907,7 +2829,7 @@ async def yookassa_webhook(request):
     if data.get('event') == 'payment.succeeded':
         payment = data['object']
         user_id = payment['metadata']['user_id']
-        tier = payment['metadata'].get('tier', 'bronze')  # Get tier from payment metadata
+        tier = payment['metadata'].get('tier', 'light')  # Get tier from payment metadata
 
         session = Session()
         user = session.query(User).filter_by(telegram_id=int(user_id)).first()
@@ -2926,9 +2848,9 @@ async def yookassa_webhook(request):
 
             # Update tier
             tier_mapping = {
-                'bronze': SubscriptionTier.LIGHT,
-                'silver': SubscriptionTier.STANDARD,
-                'gold': SubscriptionTier.PREMIUM
+                'light': SubscriptionTier.LIGHT,
+                'standard': SubscriptionTier.STANDARD,
+                'premium': SubscriptionTier.PREMIUM
             }
             tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
             subscription.tier = tier_enum

@@ -195,18 +195,18 @@ PREMIUM — 27000₽/месяц
     
     # Создать платежи для всех тарифов
     from payments import create_payment
-    bronze_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id)
-    silver_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id)
-    gold_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id)
+    light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id)
+    standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id)
+    premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id)
     
     payment_message = f"""LIGHT (3000₽/мес):
-{bronze_url}
+{light_url}
 
 STANDARD (9000₽/мес):
-{silver_url}
+{standard_url}
 
 PREMIUM (27000₽/мес):
-{gold_url}"""
+{premium_url}"""
     
     await message.bot.send_message(message.chat.id, payment_message)
     session.close()
