@@ -14,6 +14,30 @@ from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
 
+async def send_delegation_notification_async(chat_id, message_text):
+    """Асинхронная отправка уведомления о делегировании"""
+    try:
+        from config import TELEGRAM_TOKEN
+        import aiohttp
+
+        if not TELEGRAM_TOKEN:
+            return
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        data = {
+            "chat_id": chat_id,
+            "text": message_text,
+            "parse_mode": "HTML"
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status != 200:
+                    logger.warning(f"Failed to send delegation notification: {response.status}")
+
+    except Exception as e:
+        logger.warning(f"Error sending delegation notification: {e}")
+
 PREMIUM_DESCRIPTION = """
 🤖 ASI Biont - ИИ-агент для управления задачами
 
@@ -693,7 +717,11 @@ def delegate_task(title, description, reminder_time, delegated_to_username, user
                     notification_text += f"/accept_{task.id} - принять\n"
                     notification_text += f"/reject_{task.id} - отклонить"
 
-                    await bot.send_message(recipient.telegram_id, notification_text)
+                    # Отправка уведомления в фоне (асинхронно)
+                    import asyncio
+                    from config import TELEGRAM_TOKEN
+                    if TELEGRAM_TOKEN:
+                        asyncio.create_task(send_delegation_notification_async(recipient.telegram_id, notification_text))
         except Exception as e:
             logger.warning(f"Could not send delegation notification: {e}")
 
