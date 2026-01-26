@@ -33,7 +33,7 @@ def check_subscription(user_id):
                 return sub.end_date > now
         
         # Если нет активной подписки в таблице Subscription, проверим subscription_tier
-        if user.subscription_tier and user.subscription_tier != SubscriptionTier.BRONZE:
+        if user.subscription_tier and user.subscription_tier != SubscriptionTier.LIGHT:
             logger.info(f"User {user_id} has subscription_tier {user.subscription_tier.value}, granting access")
             return True
             
@@ -77,11 +77,11 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
             return False, "Пользователь не найден"
         
         # Определяем tier enum
-        tier_enum = SubscriptionTier.BRONZE
+        tier_enum = SubscriptionTier.LIGHT
         if tier == 'silver':
-            tier_enum = SubscriptionTier.SILVER
+            tier_enum = SubscriptionTier.STANDARD
         elif tier == 'gold':
-            tier_enum = SubscriptionTier.GOLD
+            tier_enum = SubscriptionTier.PREMIUM
         
         # Check if subscription already exists
         sub = session.query(Subscription).filter_by(user_id=user.id).first()
@@ -190,7 +190,7 @@ def get_subscription_status(user_id):
             }
         else:
             # Если нет записи в Subscription, но есть subscription_tier, используем его
-            if user.subscription_tier and user.subscription_tier != SubscriptionTier.BRONZE:
+            if user.subscription_tier and user.subscription_tier != SubscriptionTier.LIGHT:
                 return {
                     'status': 'active',
                     'plan': 'manual',

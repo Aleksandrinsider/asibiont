@@ -757,7 +757,7 @@ def check_database_connection():
                             'city': 'Москва',
                             'company': 'Фитнес-клуб',
                             'position': 'Тренер',
-                            'subscription_tier': SubscriptionTier.BRONZE},
+                            'subscription_tier': SubscriptionTier.LIGHT},
                            {'telegram_id': 222222,
                             'username': 'sportfan2',
                             'first_name': 'Дмитрий',
@@ -765,7 +765,7 @@ def check_database_connection():
                             'city': 'Санкт-Петербург',
                             'company': 'Спортивная школа',
                             'position': 'Инструктор',
-                            'subscription_tier': SubscriptionTier.SILVER},
+                            'subscription_tier': SubscriptionTier.STANDARD},
                            {'telegram_id': 333333,
                             'username': 'sportfan3',
                             'first_name': 'Михаил',
@@ -773,7 +773,7 @@ def check_database_connection():
                             'city': 'Москва',
                             'company': 'Теннисный центр',
                             'position': 'Спортсмен',
-                            'subscription_tier': SubscriptionTier.GOLD},
+                            'subscription_tier': SubscriptionTier.PREMIUM},
                            {'telegram_id': 444444,
                             'username': 'sportfan4',
                             'first_name': 'Елена',
@@ -781,7 +781,7 @@ def check_database_connection():
                             'city': 'Казань',
                             'company': 'Спортивный комплекс',
                             'position': 'Администратор',
-                            'subscription_tier': SubscriptionTier.BRONZE},
+                            'subscription_tier': SubscriptionTier.LIGHT},
                            {'telegram_id': 555555,
                             'username': 'sportfan5',
                             'first_name': 'Анна',
@@ -789,7 +789,7 @@ def check_database_connection():
                             'city': 'Москва',
                             'company': 'Студия пилатес',
                             'position': 'Инструктор',
-                            'subscription_tier': SubscriptionTier.SILVER}]
+                            'subscription_tier': SubscriptionTier.STANDARD}]
 
         # Проверяем есть ли хоть один тестовый пользователь
         test_ids = [111111, 222222, 333333, 444444, 555555]
@@ -883,7 +883,7 @@ def ensure_sport_interest():
 #         expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
 #         test_promo = PromoCode(
 #             code='TESTBRONZE',
-#             tier=SubscriptionTier.BRONZE,
+#             tier=SubscriptionTier.LIGHT,
 #             duration_days=30,
 #             expires_at=expires_at
 #         )
@@ -1447,7 +1447,7 @@ async def dashboard_handler(request):
                     subscription.end_date = subscription.end_date.replace(tzinfo=pytz.UTC)
                 if subscription.end_date < now:
                     subscription.status = 'expired'
-                    # user.subscription_tier = SubscriptionTier.BRONZE  # Сбросить тариф на бронзу при истечении - убрано по просьбе пользователя
+                    # user.subscription_tier = SubscriptionTier.LIGHT  # Сбросить тариф на бронзу при истечении - убрано по просьбе пользователя
                     session_db.commit()
                     logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
 
@@ -1458,12 +1458,12 @@ async def dashboard_handler(request):
 
                 if sub_tier != user_tier:
                     logger.info(f"Syncing user tier: {user_tier} -> {sub_tier}")
-                    if sub_tier == 'BRONZE':
-                        user.subscription_tier = SubscriptionTier.BRONZE
-                    elif sub_tier == 'SILVER':
-                        user.subscription_tier = SubscriptionTier.SILVER
-                    elif sub_tier == 'GOLD':
-                        user.subscription_tier = SubscriptionTier.GOLD
+                    if sub_tier == 'LIGHT':
+                        user.subscription_tier = SubscriptionTier.LIGHT
+                    elif sub_tier == 'STANDARD':
+                        user.subscription_tier = SubscriptionTier.STANDARD
+                    elif sub_tier == 'PREMIUM':
+                        user.subscription_tier = SubscriptionTier.PREMIUM
                     session_db.commit()
                     logger.info(f"User {user.username} tier synced to {sub_tier}")
 
@@ -2942,14 +2942,14 @@ async def api_partners_handler(request):
                         logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
 
                 # Check tier access - use user.subscription_tier for now since update script uses it
-                user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.BRONZE
-                partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.BRONZE
+                user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.LIGHT
+                partner_tier = partner_user.subscription_tier if partner_user and hasattr(partner_user, 'subscription_tier') and partner_user.subscription_tier else SubscriptionTier.LIGHT
 
                 # Ensure tiers are proper enum values
                 if not hasattr(user_tier, 'value'):
-                    user_tier = SubscriptionTier.BRONZE
+                    user_tier = SubscriptionTier.LIGHT
                 if not hasattr(partner_tier, 'value'):
-                    partner_tier = SubscriptionTier.BRONZE
+                    partner_tier = SubscriptionTier.LIGHT
 
                 # Convert to string for comparison if needed
                 user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
@@ -3119,11 +3119,11 @@ async def api_partners_handler(request):
 
             # Для контактов "Делегирует мне" НЕ применяем фильтр по тарифу
             # Делегированные задачи должны всегда отображаться независимо от тарифа делегатора
-            delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.BRONZE
+            delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.LIGHT
             
             # Ensure tier is proper enum value
             if not hasattr(delegator_tier, 'value'):
-                delegator_tier = SubscriptionTier.BRONZE
+                delegator_tier = SubscriptionTier.LIGHT
             
             delegator_tier_str = delegator_tier.value if hasattr(delegator_tier, 'value') else str(delegator_tier).lower()
             
@@ -3247,12 +3247,12 @@ async def api_partners_handler(request):
                     logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
 
             # Check tier access
-            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
-            delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.BRONZE
+            user_tier = user.subscription_tier if user else SubscriptionTier.LIGHT
+            delegatee_tier = delegatee.subscription_tier if delegatee and delegatee.subscription_tier else SubscriptionTier.LIGHT
 
             # Ensure tiers are proper enum values
             if not hasattr(user_tier, 'value'):
-                user_tier = SubscriptionTier.BRONZE
+                user_tier = SubscriptionTier.LIGHT
             if not hasattr(delegatee_tier, 'value'):
                 delegatee_tier = SubscriptionTier.BRONZE
 

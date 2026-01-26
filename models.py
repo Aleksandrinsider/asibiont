@@ -10,9 +10,9 @@ Base = declarative_base()
 
 
 class SubscriptionTier(enum.Enum):
-    BRONZE = 'BRONZE'    # 3000 RUB/month
-    SILVER = 'SILVER'  # 9000 RUB/month
-    GOLD = 'GOLD'    # 27000 RUB/month
+    LIGHT = 'LIGHT'      # 3000 RUB/month
+    STANDARD = 'STANDARD'  # 9000 RUB/month
+    PREMIUM = 'PREMIUM'    # 27000 RUB/month
 
 
 class User(Base):
@@ -32,7 +32,7 @@ class User(Base):
         DateTime, default=datetime.datetime.now(
             datetime.timezone.utc), onupdate=datetime.datetime.now(
             datetime.timezone.utc))
-    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # User's subscription tier
+    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # User's subscription tier
     rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
     history_cleared_at = Column(DateTime)  # When user cleared chat history
     conversation_state = Column(String(100), default='normal')  # Current conversation state
@@ -137,7 +137,7 @@ class Subscription(Base):
     username = Column(String(255))  # Username for quick access
     status = Column(String(50), default='inactive')  # active, inactive, expired
     plan = Column(String(50), default='monthly')  # monthly, yearly, etc.
-    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # Subscription tier
+    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # Subscription tier
     start_date = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     end_date = Column(DateTime)
     login_count = Column(Integer, default=0)  # Number of logins
@@ -152,7 +152,7 @@ class PromoCode(Base):
 
     id = Column(Integer, primary_key=True)
     code = Column(String(50), unique=True, nullable=False)  # Promo code string
-    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.BRONZE)  # Tier to grant
+    tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # Tier to grant
     discount_percent = Column(Integer, default=0)  # Discount percentage (0-100)
     max_uses = Column(Integer, nullable=True)  # Maximum uses (None = unlimited)
     duration_days = Column(Integer, default=30)  # Duration in days
