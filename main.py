@@ -1884,7 +1884,7 @@ async def dashboard_handler(request):
                                 'task_count': task_count
                             })
 
-                # Для премиум пользователей (Gold) добавляем все рекомендованные контакты
+                # Для премиум пользователей (Premium) добавляем все рекомендованные контакты
                 if user_subscription_tier and user_subscription_tier.value == 'PREMIUM':
                     # Получаем все рекомендованные контакты
                     all_partners = get_partners_list(user.id, session_db)
@@ -3938,7 +3938,7 @@ async def api_elite_partners_handler(request):
                     'type': 'elite'
                 })
 
-            # Add delegation contacts for Gold users
+            # Add delegation contacts for Premium users
             delegating_to_me = []
             delegating_by_me = []
             
