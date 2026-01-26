@@ -477,7 +477,12 @@ try:
         raise
 
     logger.info("✅ Database migrations completed")
-
+except Exception as e:
+    logger.error(f"❌ Database migrations failed: {e}")
+    if not LOCAL:
+        raise  # Fail hard in production
+    else:
+        logger.warning("Continuing with local mode despite migration issues")
 
 # TEMPORARILY COMMENTED OUT MIGRATION CODE
 #     try:
@@ -1120,51 +1125,51 @@ try:
 # Test data creation removed for production
 
 # Create test promo codes (3 for each tier, valid until Feb 1, 2026, unlimited uses)
-        try:
-            session_db = Session()
+try:
+    session_db = Session()
 
-            # Check if promo codes already exist
-            existing_promos = session_db.query(PromoCode).filter(PromoCode.code.like('SPORT%')).all()
-            if existing_promos:
-                logger.info(f"Test promo codes already exist: {[p.code for p in existing_promos]}")
-            else:
-                # Create promo codes valid until February 1, 2026
-                expires_at = datetime(2026, 2, 1, tzinfo=dt_timezone.utc)
+    # Check if promo codes already exist
+    existing_promos = session_db.query(PromoCode).filter(PromoCode.code.like('SPORT%')).all()
+    if existing_promos:
+        logger.info(f"Test promo codes already exist: {[p.code for p in existing_promos]}")
+    else:
+        # Create promo codes valid until February 1, 2026
+        expires_at = datetime(2026, 2, 1, tzinfo=dt_timezone.utc)
 
-                # LIGHT tier promo codes
-                light_promos = [
-                    PromoCode(code='SPORTLIGHT1', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-                    PromoCode(code='SPORTLIGHT2', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-                    PromoCode(code='SPORTLIGHT3', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-                ]
+        # LIGHT tier promo codes
+        light_promos = [
+            PromoCode(code='SPORTLIGHT1', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+            PromoCode(code='SPORTLIGHT2', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+            PromoCode(code='SPORTLIGHT3', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+        ]
 
-                # STANDARD tier promo codes
-                standard_promos = [
-                    PromoCode(code='SPORTSTAND1', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-                    PromoCode(code='SPORTSTAND2', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-                    PromoCode(code='SPORTSTAND3', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-                ]
+        # STANDARD tier promo codes
+        standard_promos = [
+            PromoCode(code='SPORTSTAND1', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+            PromoCode(code='SPORTSTAND2', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+            PromoCode(code='SPORTSTAND3', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+        ]
 
-                # PREMIUM tier promo codes
-                premium_promos = [
-                    PromoCode(code='SPORTPREM1', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-                    PromoCode(code='SPORTPREM2', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-                    PromoCode(code='SPORTPREM3', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-                ]
+        # PREMIUM tier promo codes
+        premium_promos = [
+            PromoCode(code='SPORTPREM1', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+            PromoCode(code='SPORTPREM2', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+            PromoCode(code='SPORTPREM3', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+        ]
 
-                # Add all promo codes
-                all_promos = light_promos + standard_promos + premium_promos
-                for promo in all_promos:
-                    session_db.add(promo)
+        # Add all promo codes
+        all_promos = light_promos + standard_promos + premium_promos
+        for promo in all_promos:
+            session_db.add(promo)
 
-                session_db.commit()
-                logger.info(f"Created {len(all_promos)} test promo codes valid until {expires_at.date()}")
-                for promo in all_promos:
-                    logger.info(f"  - {promo.code}: {promo.tier.value} tier for {promo.duration_days} days")
+        session_db.commit()
+        logger.info(f"Created {len(all_promos)} test promo codes valid until {expires_at.date()}")
+        for promo in all_promos:
+            logger.info(f"  - {promo.code}: {promo.tier.value} tier for {promo.duration_days} days")
 
-            session_db.close()
-        except Exception as e:
-            logger.error(f"Failed to create test promo codes: {e}")
+    session_db.close()
+except Exception as e:
+    logger.error(f"Failed to create test promo codes: {e}")
 
 # Test database connection before starting
 try:
