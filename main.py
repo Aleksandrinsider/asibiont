@@ -89,24 +89,43 @@ try:
         # Step 2: Perform data migration in a separate connection with autocommit
         with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
             # Check if we have old enum values
-            result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier::text IN ('BRONZE', 'SILVER', 'GOLD')"))
+            # Use different syntax for SQLite vs PostgreSQL
+            if 'sqlite' in str(engine.url):
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier IN ('BRONZE', 'SILVER', 'GOLD')"))
+            else:
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier::text IN ('BRONZE', 'SILVER', 'GOLD')"))
             count = result.scalar()
             if count > 0:
                 logger.info(f"Found {count} records with old subscription tiers, migrating...")
                 # Migrate users table - update one by one
-                conn.execute(text("UPDATE users SET subscription_tier = 'LIGHT' WHERE subscription_tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE users SET subscription_tier = 'STANDARD' WHERE subscription_tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE users SET subscription_tier = 'PREMIUM' WHERE subscription_tier::text = 'GOLD'"))
+                if 'sqlite' in str(engine.url):
+                    conn.execute(text("UPDATE users SET subscription_tier = 'LIGHT' WHERE subscription_tier = 'BRONZE'"))
+                    conn.execute(text("UPDATE users SET subscription_tier = 'STANDARD' WHERE subscription_tier = 'SILVER'"))
+                    conn.execute(text("UPDATE users SET subscription_tier = 'PREMIUM' WHERE subscription_tier = 'GOLD'"))
+                else:
+                    conn.execute(text("UPDATE users SET subscription_tier = 'LIGHT' WHERE subscription_tier::text = 'BRONZE'"))
+                    conn.execute(text("UPDATE users SET subscription_tier = 'STANDARD' WHERE subscription_tier::text = 'SILVER'"))
+                    conn.execute(text("UPDATE users SET subscription_tier = 'PREMIUM' WHERE subscription_tier::text = 'GOLD'"))
                 
                 # Migrate subscriptions table
-                conn.execute(text("UPDATE subscriptions SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE subscriptions SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE subscriptions SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
+                if 'sqlite' in str(engine.url):
+                    conn.execute(text("UPDATE subscriptions SET tier = 'LIGHT' WHERE tier = 'BRONZE'"))
+                    conn.execute(text("UPDATE subscriptions SET tier = 'STANDARD' WHERE tier = 'SILVER'"))
+                    conn.execute(text("UPDATE subscriptions SET tier = 'PREMIUM' WHERE tier = 'GOLD'"))
+                else:
+                    conn.execute(text("UPDATE subscriptions SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
+                    conn.execute(text("UPDATE subscriptions SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
+                    conn.execute(text("UPDATE subscriptions SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
                 
                 # Migrate promo_codes table
-                conn.execute(text("UPDATE promo_codes SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
-                conn.execute(text("UPDATE promo_codes SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
-                conn.execute(text("UPDATE promo_codes SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
+                if 'sqlite' in str(engine.url):
+                    conn.execute(text("UPDATE promo_codes SET tier = 'LIGHT' WHERE tier = 'BRONZE'"))
+                    conn.execute(text("UPDATE promo_codes SET tier = 'STANDARD' WHERE tier = 'SILVER'"))
+                    conn.execute(text("UPDATE promo_codes SET tier = 'PREMIUM' WHERE tier = 'GOLD'"))
+                else:
+                    conn.execute(text("UPDATE promo_codes SET tier = 'LIGHT' WHERE tier::text = 'BRONZE'"))
+                    conn.execute(text("UPDATE promo_codes SET tier = 'STANDARD' WHERE tier::text = 'SILVER'"))
+                    conn.execute(text("UPDATE promo_codes SET tier = 'PREMIUM' WHERE tier::text = 'GOLD'"))
                 
                 logger.info("✅ Subscription tier migration completed")
             else:
