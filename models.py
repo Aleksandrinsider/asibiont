@@ -234,6 +234,24 @@ class Comment(Base):
     user = relationship("User", backref="comments")
 
 
+class PostView(Base):
+    """Tracks which posts user has viewed"""
+    __tablename__ = 'post_views'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    post_id = Column(Integer, ForeignKey('posts.id', ondelete='CASCADE'), nullable=False)
+    viewed_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="post_views")
+    post = relationship("Post", backref="views")
+
+    # Unique constraint: один пользователь может просмотреть пост только один раз
+    __table_args__ = (
+        UniqueConstraint('user_id', 'post_id', name='unique_post_view'),
+    )
+
+
 # Fix DATABASE_URL for psycopg2 compatibility
 db_url = DATABASE_URL
 if db_url and db_url.startswith('postgresql://'):

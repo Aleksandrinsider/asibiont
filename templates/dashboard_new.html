@@ -2224,6 +2224,11 @@
                     // Обновляем lastSeenPostId до последнего поста
                     if (currentView === 'feed') {
                         lastSeenPostId = data.posts[0].id;
+                        // Отмечаем все видимые посты как прочитанные
+                        const postIds = data.posts.map(post => post.id);
+                        if (postIds.length > 0) {
+                            markPostsAsViewed(postIds);
+                        }
                     }
                     
                     // Устанавливаем количество постов для отслеживания новых
@@ -2244,6 +2249,32 @@
             } catch (error) {
                 console.error('Error loading feed:', error);
                 showErrorNotification('Ошибка загрузки ленты новостей: ' + error.message, 'error');
+            }
+        }
+
+        async function markPostsAsViewed(postIds) {
+            if (!postIds || postIds.length === 0) return;
+            
+            try {
+                const response = await fetch('/api/feed/mark-viewed', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ post_ids: postIds })
+                });
+                
+                if (!await checkAuth(response)) return;
+                
+                const data = await response.json();
+                if (data.success) {
+                    console.log('[FEED] Posts marked as viewed:', postIds.length);
+                } else {
+                    console.error('[FEED] Failed to mark posts as viewed');
+                }
+            } catch (error) {
+                console.error('[FEED] Error marking posts as viewed:', error);
             }
         }
 
@@ -6330,8 +6361,8 @@
                     const latestPostId = data.posts[0].id;
                     const indicator = document.getElementById('new-posts-indicator');
                     
-                    // Если есть новые посты и мы не в ленте
-                    if (lastSeenPostId !== null && latestPostId > lastSeenPostId && currentView !== 'feed') {
+                    // Используем новый флаг has_unread_posts из API
+                    if (data.has_unread_posts && currentView !== 'feed') {
                         if (indicator) {
                             indicator.style.display = 'inline-block';
                         }

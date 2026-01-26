@@ -1,4 +1,4 @@
-from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, init_db
+from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, PostView, init_db
 # from reminder_service import ReminderService
 from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
@@ -4883,7 +4883,23 @@ async def get_feed_handler(request):
                     logger.error(f"Error processing post {post.id}: {post_error}")
                     continue
 
-            return web.json_response({'success': True, 'posts': feed})
+            # Проверить, есть ли непрочитанные посты
+            has_unread_posts = False
+            if posts:
+                # Получить ID всех постов
+                post_ids = [p.id for p in posts]
+                # Проверить, сколько из них пользователь уже видел
+                viewed_count = session_db.query(PostView).filter(
+                    PostView.user_id == user.id,
+                    PostView.post_id.in_(post_ids)
+                ).count()
+                has_unread_posts = viewed_count < len(post_ids)
+
+            return web.json_response({
+                'success': True, 
+                'posts': feed,
+                'has_unread_posts': has_unread_posts
+            })
 
         finally:
             session_db.close()
@@ -4891,6 +4907,64 @@ async def get_feed_handler(request):
     except Exception as e:
         logger.error(f"Error getting feed: {e}")
         return web.json_response({'error': str(e)}, status=500)
+
+
+async def mark_posts_viewed_handler(request):
+    """API endpoint to mark posts as viewed"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id')
+
+        if not user_id:
+            logger.warning("mark_posts_viewed_handler: No user_id in session")
+            return web.json_response({'error': 'Unauthorized'}, status=401)
+
+        data = await request.json()
+        post_ids = data.get('post_ids', [])
+
+        if not post_ids:
+            return web.json_response({'error': 'No post_ids provided'}, status=400)
+
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+
+            # Отметить посты как просмотренные (используем on_conflict_do_nothing для избежания дубликатов)
+            for post_id in post_ids:
+                try:
+                    # Проверяем, существует ли пост
+                    post = session_db.query(Post).filter_by(id=post_id).first()
+                    if post:
+                        # Создаем запись о просмотре (если не существует)
+                        existing_view = session_db.query(PostView).filter_by(
+                            user_id=user.id, 
+                            post_id=post_id
+                        ).first()
+                        
+                        if not existing_view:
+                            post_view = PostView(
+                                user_id=user.id,
+                                post_id=post_id,
+                                viewed_at=datetime.now(dt_timezone.utc)
+                            )
+                            session_db.add(post_view)
+                except Exception as e:
+                    logger.error(f"Error marking post {post_id} as viewed: {e}")
+                    continue
+
+            session_db.commit()
+            return web.json_response({'success': True})
+
+        finally:
+            session_db.close()
+
+    except Exception as e:
+        logger.error(f"Error marking posts as viewed: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def delete_post_handler(request):
     """API endpoint to delete a post"""
     try:
@@ -6093,6 +6167,7 @@ app.router.add_post('/api/update_profile', api_update_profile_handler)
 app.router.add_post('/api/accept_delegated_task', api_accept_delegated_task_handler)
 app.router.add_post('/api/reject_delegated_task', api_reject_delegated_task_handler)
 app.router.add_get('/api/feed', get_feed_handler)
+app.router.add_post('/api/feed/mark-viewed', mark_posts_viewed_handler)
 app.router.add_delete('/api/posts/{post_id}', delete_post_handler)
 app.router.add_post('/api/comments', create_comment_handler)
 app.router.add_get('/api/comments/{post_id}', get_comments_handler)
