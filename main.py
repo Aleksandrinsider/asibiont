@@ -70,8 +70,9 @@ try:
     # Migrate subscription tiers if needed
     try:
         logger.info("Checking for subscription tier migration...")
-        with engine.connect() as conn:
-            # First, add the new enum values
+        
+        # Step 1: Add new enum values using autocommit connection
+        with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as conn:
             try:
                 conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'LIGHT'"))
             except Exception:
@@ -84,10 +85,9 @@ try:
                 conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'PREMIUM'"))
             except Exception:
                 pass
-            
-            # Commit the enum additions
-            conn.commit()
-            
+        
+        # Step 2: Perform data migration in a separate connection
+        with engine.connect() as conn:
             # Check if we have old enum values
             result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier::text IN ('BRONZE', 'SILVER', 'GOLD')"))
             count = result.scalar()
