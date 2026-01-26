@@ -73,26 +73,51 @@ async def generate_progress_post(user_id, session):
             Task.reminder_time < now_utc
         ).count()
         
-        # Generate simple progress post using template
+        # Generate engaging progress post
         if completed_today > 0:
-            if completed_today == 1:
-                achievement_text = f"Сегодня я выполнил {completed_today} задачу"
-            elif 2 <= completed_today <= 4:
-                achievement_text = f"Сегодня я выполнил {completed_today} задачи"
+            if completed_today == total_today:
+                # All tasks completed
+                messages = [
+                    f"Сегодня был потрясающий день! Выполнил все {total_today} задач, которые запланировал. Чувствую себя непобедимым!",
+                    f"Отличная работа! Все {total_today} задач на сегодня выполнены. Можно гордиться собой!",
+                    f"Сегодня продуктивность на максимум! Завершил все {total_today} поставленных задач. Отдых заслужен!",
+                    f"Вау, сегодня все по плану! Выполнил все {total_today} задач. Продолжаю в том же духе!"
+                ]
+                post_content = random.choice(messages)
             else:
-                achievement_text = f"Сегодня я выполнил {completed_today} задач"
-            
-            if pending_today > 0:
-                advice_text = f"Есть {pending_today} просроченных задач - стоит пересмотреть приоритеты."
-            else:
-                advice_text = "Отличная работа! Продолжай в том же духе."
-            
-            post_content = f"[Автопост] {achievement_text} из {total_today} созданных сегодня.\n\n{advice_text}\n\n#продуктивность #asibiont"
+                # Some tasks completed
+                if pending_today > 0:
+                    messages = [
+                        f"Сегодня выполнил {completed_today} из {total_today} задач. Есть {pending_today} просроченных - нужно поднажать!",
+                        f"Прогресс есть! {completed_today} задач сделано из {total_today}, но {pending_today} ждут своего часа. Не сдаемся!",
+                        f"Сегодня справился с {completed_today} задачами из {total_today}. {pending_today} просроченных напоминают о приоритетах.",
+                        f"Хороший старт! {completed_today} задач выполнено, но {pending_today} просроченных требуют внимания."
+                    ]
+                else:
+                    messages = [
+                        f"Сегодня выполнил {completed_today} из {total_today} задач. Есть над чем работать, но прогресс заметен!",
+                        f"Неплохо! {completed_today} задач сделано из {total_today}. Завтра будет еще лучше!",
+                        f"Сегодня продуктивный день продолжается - {completed_today} задач выполнено из {total_today}.",
+                        f"Шагаю вперед! {completed_today} задач из {total_today} уже позади."
+                    ]
+                post_content = random.choice(messages)
         else:
             if total_today > 0:
-                post_content = f"[Автопост] Сегодня создал {total_today} задач. Время браться за работу!\n\n#планирование #asibiont"
+                messages = [
+                    f"Сегодня создал {total_today} задач, но пока не успел взяться. Завтра точно все сделаю!",
+                    f"Планы на сегодня готовы - {total_today} задач ждут выполнения. Время браться за дело!",
+                    f"Сегодня запланировал {total_today} задач. Нужно найти время и силы, чтобы все выполнить.",
+                    f"Задачи на сегодня ({total_today} штук) ждут своего часа. Не откладываю на потом!"
+                ]
+                post_content = random.choice(messages)
             else:
-                post_content = f"[Автопост] Доброе утро! Сегодня отличный день для новых начинаний.\n\n#мотивация #asibiont"
+                messages = [
+                    "Сегодня отличный день для новых идей! Что будем планировать?",
+                    "Доброе утро! День полон возможностей. Время для новых задач!",
+                    "Сегодня можно начать что-то новое. Какие планы на день?",
+                    "Отличный день для продуктивной работы! Что первым делом?"
+                ]
+                post_content = random.choice(messages)
         
         logger.info(f"[AUTO POST] Generated simple progress post: {post_content}")
         return post_content
