@@ -168,9 +168,6 @@ except Exception as e:
     else:
         logger.warning("Continuing with local mode despite migration issues")
 
-# Add test users if in local mode or if explicitly requested
-check_database_connection()
-
 
 # TEMPORARILY COMMENTED OUT MIGRATION CODE
 #     try:
@@ -909,6 +906,9 @@ def check_database_connection():
     except Exception as e:
         logger.error(f"Failed to add test sport users: {e}", exc_info=True)
 """
+
+# Add test users
+check_database_connection()
 
 # All test functions below are disabled in production
 """
