@@ -1275,6 +1275,23 @@ def edit_task(
                     # Convert to UTC for storage
                     task.reminder_time = reminder_time_local.astimezone(pytz.UTC)
                     logger.info(f"Task {task.id} absolute time updated: {reminder_time} (local) -> {task.reminder_time} (UTC)")
+                
+                # КРИТИЧНО: Перепланировать напоминание после изменения времени
+                try:
+                    from reminder_service import REMINDER_SERVICE
+                    if REMINDER_SERVICE and task.reminder_time:
+                        REMINDER_SERVICE.schedule_reminder(
+                            task_id=task.id,
+                            reminder_time=task.reminder_time,
+                            user_id=user.telegram_id,
+                            task_title=task.title
+                        )
+                        logger.info(f"[EDIT_TASK] Rescheduled reminder for task {task.id} to {task.reminder_time}")
+                    else:
+                        logger.warning(f"[EDIT_TASK] Cannot reschedule reminder: REMINDER_SERVICE={REMINDER_SERVICE}, reminder_time={task.reminder_time}")
+                except Exception as e:
+                    logger.error(f"[EDIT_TASK] Error rescheduling reminder for task {task.id}: {e}")
+                    
             except ValueError:
                 if close_session:
                     session.close()
