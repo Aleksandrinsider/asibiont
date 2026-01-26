@@ -1,5 +1,5 @@
 from models import Base, engine, Session, Subscription, User, Task, UserProfile, Interaction, UserRating, SubscriptionTier, PromoCode, PaymentHistory, Post, PostLike, Comment, init_db
-from reminder_service import ReminderService
+# from reminder_service import ReminderService
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
 from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL
@@ -6263,26 +6263,27 @@ app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 # Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
-reminder_service = ReminderService(bot=bot if not LOCAL else None)
-logger.info("ReminderService initialized")
+# reminder_service = ReminderService(bot=bot if not LOCAL else None)
+# logger.info("ReminderService initialized")
 
 # Start ReminderService on app startup
 
 
-async def start_reminder_service(app):
-    logger.info("Starting ReminderService...")
-    await reminder_service.start()
-    logger.info("ReminderService started successfully")
+# async def start_reminder_service(app):
+#     logger.info("Starting ReminderService...")
+#     # Temporarily disable scheduling to test chat
+#     # await reminder_service.start()
+#     logger.info("ReminderService started successfully (scheduling disabled)")
 
-    # Log existing jobs
-    jobs = reminder_service.scheduler.get_jobs()
-    logger.info(f"Scheduled jobs after start: {len(jobs)}")
-    for job in jobs[:5]:  # Log first 5 jobs
-        logger.info(f"Job: {job.id} at {job.next_run_time}")
+#     # Log existing jobs
+#     # jobs = reminder_service.scheduler.get_jobs()
+#     # logger.info(f"Scheduled jobs after start: {len(jobs)}")
+#     # for job in jobs[:5]:  # Log first 5 jobs
+#     #     logger.info(f"Job: {job.id} at {job.next_run_time}")
 
-app.on_startup.append(start_reminder_service)
+# app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
-app.on_shutdown.append(on_shutdown)
+# app.on_shutdown.append(on_shutdown)
 
 if bot:
     # webhook_requests_handler = SimpleRequestHandler(
@@ -6325,13 +6326,15 @@ if __name__ == "__main__":
                         # Keep server running indefinitely
                         while True:
                             await asyncio.sleep(3600)
-                    except KeyboardInterrupt:
-                        logger.info("Shutting down server...")
+                    except Exception as e:
+                        logger.info(f"Server interrupted: {e}")
                     finally:
                         await runner.cleanup()
                         logger.info("Server shut down")
 
                 asyncio.run(run_server())
+                import sys
+                sys.exit(0)
             except Exception as serve_error:
                 logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
                 raise

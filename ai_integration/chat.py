@@ -2234,7 +2234,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     try:
                         current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
                         # Извлекаем количество задач из строки ответа
-                        import re
                         match = re.search(r'У вас (\d+)', current_tasks)
                         if match:
                             task_count = int(match.group(1))
