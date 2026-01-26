@@ -905,7 +905,6 @@ def check_database_connection():
         session.close()
     except Exception as e:
         logger.error(f"Failed to add test sport users: {e}", exc_info=True)
-"""
 
 # Add test users
 check_database_connection()
@@ -1051,63 +1050,8 @@ def add_test_posts_and_tasks():
 # Add test posts and tasks
 add_test_posts_and_tasks()
 
-# All test functions below are disabled in production
-"""
-def ensure_sport_interest():
-    """Добавляет 'спорт' к интересам всех пользователей если его нет"""
-    try:
-        session = Session()
-        profiles = session.query(UserProfile).all()
-        updated = 0
-        for profile in profiles:
-            if profile.interests:
-                interests_lower = profile.interests.lower()
-                if 'спорт' not in interests_lower:
-                    profile.interests = profile.interests + ', спорт'
-                    updated += 1
-            else:
-                profile.interests = 'спорт'
-                updated += 1
-
-        if updated > 0:
-            session.commit()
-            logger.info(f"Added 'спорт' interest to {updated} user profiles")
-        else:
-            logger.info("All users already have 'спорт' interest")
-        session.close()
-    except Exception as e:
-        logger.error(f"Failed to add sport interest: {e}")
-
-
-
-#     try:
-#         session = Session()
-
-#         # Проверяем, есть ли уже тестовый промокод
-#         existing_promo = session.query(PromoCode).filter_by(code='TESTBRONZE').first()
-#         if existing_promo:
-#             logger.info("Test promo code TESTBRONZE already exists")
-#             session.close()
-#             return
-
-#         # Создаем тестовый промокод на бронзу на месяц, действующий год
-#         expires_at = datetime.now(dt_timezone.utc) + timedelta(days=365)
-#         test_promo = PromoCode(
-#             code='TESTBRONZE',
-#             tier=SubscriptionTier.LIGHT,
-#             duration_days=30,
-#             expires_at=expires_at
-#         )
-#         session.add(test_promo)
-#         session.commit()
-#         logger.info("Created test promo code: TESTBRONZE (Bronze for 30 days, expires in 1 year)")
-#         session.close()
-#     except Exception as e:
-#         logger.error(f"Failed to create test promo codes: {e}")
-# """
-
-    # Create test promo codes (3 for each tier, valid until Feb 1, 2026, unlimited uses)
-    if os.getenv('LOCAL') == '1' or os.getenv('CREATE_TEST_USERS') == '1':
+# Create test promo codes (3 for each tier, valid until Feb 1, 2026, unlimited uses)
+if os.getenv('LOCAL') == '1' or os.getenv('CREATE_TEST_USERS') == '1':
         try:
             session_db = Session()
 
