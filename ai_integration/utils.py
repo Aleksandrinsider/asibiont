@@ -20,7 +20,6 @@ def analyze_interaction_for_profile_update(user_id, message, ai_response):
     Возвращает предложение обновления профиля или None.
     """
     from models import Session, UserProfile
-    import re
     
     if not user_id or not message:
         return None
