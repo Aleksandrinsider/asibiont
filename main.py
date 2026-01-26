@@ -168,6 +168,9 @@ except Exception as e:
     else:
         logger.warning("Continuing with local mode despite migration issues")
 
+# Add test users if in local mode or if explicitly requested
+check_database_connection()
+
 
 # TEMPORARILY COMMENTED OUT MIGRATION CODE
 #     try:
