@@ -450,27 +450,6 @@
     <link rel="stylesheet" href="/static/style.css?v={{ timestamp }}">
     <!-- Dashboard version: 2026-01-17-glass-auth -->
     <style>
-        /* Main layout styles */
-        .main-layout {
-            display: grid;
-            grid-template-columns: 1.03fr 1.44fr 1.03fr;
-            gap: 2px;
-            align-items: stretch;
-        }
-        
-        .left-column {
-            /* margin-right: -4px; */
-        }
-        
-        .center-column {
-            /* margin-left: -2px;
-            margin-right: -2px; */
-        }
-        
-        .right-column {
-            /* margin-left: -4px; */
-        }
-        
         /* Background SVG for login page */
         body:not(.logged-in)::before {
             content: '';
@@ -660,11 +639,6 @@
                 gap: 8px;
             }
             
-            /* Для мобильных: скрываем левую колонку и делаем две колонки */
-            .main-layout {
-                grid-template-columns: 1fr 1fr !important;
-            }
-            
             /* Скрываем чат и ленту новостей на мобильных */
             .left-column {
                 display: none !important;
@@ -672,14 +646,14 @@
             
             /* Центральная колонка занимает всю ширину */
             .center-column {
-                /* flex: 1 1 100% !important; */
-                /* max-width: 100% !important; */
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
             }
             
             /* Правая колонка (задачи) на всю ширину */
             .right-column {
-                /* flex: 1 1 100% !important; */
-                /* max-width: 100% !important; */
+                flex: 1 1 100% !important;
+                max-width: 100% !important;
             }
         }
 
@@ -1015,7 +989,7 @@
                 </span>
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; margin-right: 30px;">
-                    <div class="header-avatar-small" style="margin-top: 3px;">
+                    <div class="header-avatar-small" style="margin-top: 4px;">
                         {% if user_avatar_url %}
                         <img src="{{ user_avatar_url }}" alt="Аватар" onclick="openContactProfileModal('{{ user.username or '' }}')" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;">
                         {% else %}
@@ -1670,12 +1644,6 @@
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
-                return;
-            }
-            
-            // Skip empty or undefined messages
-            if (!text || text.trim() === '') {
-                console.warn('Skipping empty message');
                 return;
             }
             
@@ -4639,8 +4607,8 @@
                         modal.style.display = 'none';
                     }
 
-                    // Перезагружаем страницу для обновления всех данных
-                    location.reload();
+                    // Обновляем отображение профиля на странице без перезагрузки
+                    await updateProfileDisplay();
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error || 'Не удалось сохранить профиль'}`, 'error');
@@ -5239,8 +5207,8 @@
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
                                     } else {
-                                        const tierNames = {'light': 'Light', 'standard': 'Standard', 'premium': 'Premium'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Standard';
+                                        const tierNames = {'light': '?? Light', 'standard': '?? Standard', 'premium': '?? Premium'};
+                                        const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
                                         html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     

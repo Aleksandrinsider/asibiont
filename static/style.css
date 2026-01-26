@@ -297,7 +297,7 @@ body {
 .main-layout {
     display: flex;
     height: calc((100vh - var(--header-height) - 16px) * 0.98);
-    gap: 3px;
+    gap: 4px;
     overflow: visible;
     align-items: stretch;
     width: 100%;
@@ -896,8 +896,8 @@ details[open] .details-content {
 }
 
 .message {
-    padding: 12px;
-    margin: 4px 0;
+    padding: 8px;
+    margin: 0;
     max-width: 100%;
     width: 100%;
     word-wrap: break-word;
@@ -908,8 +908,7 @@ details[open] .details-content {
     transition: all 0.2s ease;
     animation: message-appear 0.3s ease-out;
     position: relative;
-    border-radius: 8px;
-    border: 1px solid #D1D9E0;
+    border-radius: 0;
 }
 
 @keyframes message-appear {
@@ -1073,7 +1072,7 @@ details[open] .details-content {
 }
 
 .message.user {
-    background-color: #F6F8FA;
+    background-color: transparent;
     color: #374151;
     width: 100%;
 }
@@ -1082,12 +1081,12 @@ details[open] .details-content {
     font-weight: 600;
     font-size: 13px;
     line-height: 1.6;
-    color: #1F2328;
+    color: #374151;
     text-align: justify;
 }
 
 .message.ai {
-    background-color: #FFFFFF;
+    background-color: transparent;
     color: #374151;
     width: 100%;
 }
@@ -1099,7 +1098,7 @@ details[open] .details-content {
 .message.ai .message-text {
     font-weight: 400;
     font-size: 13px;
-    color: #1F2328;
+    color: #374151;
     line-height: 1.6;
     text-align: justify;
 }
