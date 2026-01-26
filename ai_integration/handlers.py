@@ -773,8 +773,8 @@ def delegate_task(
         
         # Skip subscription check in FREE_ACCESS_MODE
         if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier not in [SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM]:
-            return ("🥉 Делегирование задач доступно только на тарифах **Серебро** и **Золото**. "
-                    "На тарифе Бронза вы можете получать делегированные задачи от других пользователей, "
+            return ("🥉 Делегирование задач доступно только на тарифах **Стандарт** и **Премиум**. "
+                    "На тарифе Лайт вы можете получать делегированные задачи от других пользователей, "
                     "но не можете делегировать свои задачи. Обновите тариф для доступа к делегированию.")
         
         # Validate reminder_time

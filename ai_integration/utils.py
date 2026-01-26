@@ -343,7 +343,7 @@ def parse_time_to_datetime(time_text, user_id):
         return target_dt.strftime("%Y-%m-%d %H:%M")
 
     # Проверяем "завтра/сегодня в XX:XX"
-    time_match = re.search(r"(завтра|послезавтра|сегодня)\s+(?:в\s+)?(\d{1,2}):(\d{2})", time_text)
+    time_match = re.search(r"(завтра|послезавтра|сегодня)\s+(?:в\s+|к\s+)?(\d{1,2}):(\d{2})", time_text)
     if time_match:
         day_word = time_match.group(1).lower()
         hour = int(time_match.group(2))

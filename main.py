@@ -2080,6 +2080,9 @@ async def api_send_message_handler(request):
                 response = await chat(message, context=context, user_id=user_id, file_content=None, db_session=session_db)
                 logger.info(f"[API_SEND_MESSAGE] AI response received, length: {len(response) if response else 0}")
                 logger.info(f"[API_SEND_MESSAGE] AI response preview: '{response[:100]}...'")
+                if response is None:
+                    logger.error(f"[API_SEND_MESSAGE] AI response is None!")
+                    response = "Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз."
             except Exception as e:
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
@@ -2089,8 +2092,8 @@ async def api_send_message_handler(request):
                 logger.info(f"[API_SEND_MESSAGE] Tier restriction detected for user {user_id}")
                 return web.json_response({
                     'error': 'tier_restriction',
-                    'message': '🥉 Делегирование задач доступно только на тарифах Серебро и Золото',
-                    'tier': 'BRONZE',
+                    'message': '🥉 Делегирование задач доступно только на тарифах Стандарт и Премиум',
+                    'tier': 'LIGHT',
                     'upgrade_url': '/subscription_tiers'
                 }, status=403)
 

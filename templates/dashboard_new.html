@@ -293,22 +293,6 @@
                                 html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                             }
                             
-                            // Компания и должность
-                            const companyParts = [];
-                            if (partner.company) {
-                                companyParts.push('Компания: ' + partner.company);
-                            }
-                            if (partner.position) {
-                                companyParts.push('Должность: ' + partner.position);
-                            }
-                            if (companyParts.length > 0) {
-                                html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                companyParts.forEach(part => {
-                                    html += '<span class="task-meta">' + part + '</span>';
-                                });
-                                html += '</div>';
-                            }
-                            
                             // Общие интересы/навыки/цели/задачи
                             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                             
@@ -1644,6 +1628,11 @@
             const messages = document.getElementById('chat-messages');
             if (!messages) {
                 console.error('Chat messages container not found');
+                return;
+            }
+            
+            if (!text) {
+                console.error('Message text is undefined or empty');
                 return;
             }
             
@@ -3459,9 +3448,19 @@
                         // Есть новые посты
                         const newPosts = data.posts.slice(0, data.posts.length - lastPostCount);
                         
-                        // Показать индикатор новых постов
+                        // Получить список избранных контактов
+                        const favoriteContacts = await getFavoriteContactsFromServer();
+                        
+                        // Проверить, есть ли новые посты от избранных контактов
+                        const hasNewPostsFromFavorites = newPosts.some(post => {
+                            const username = post.author.username || '';
+                            const usernameClean = username.replace('@', '');
+                            return favoriteContacts.includes(usernameClean);
+                        });
+                        
+                        // Показать индикатор новых постов только если есть посты от избранных
                         const indicator = document.getElementById('new-posts-indicator');
-                        if (indicator && currentView !== 'feed') {
+                        if (indicator && currentView !== 'feed' && hasNewPostsFromFavorites) {
                             indicator.style.display = 'inline-block';
                         }
                         
@@ -5401,22 +5400,6 @@
                                         html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                                     }
                                     
-                                    // Компания и должность на одной строке
-                                    const companyParts = [];
-                                    if (partner.company) {
-                                        companyParts.push('Компания: ' + partner.company);
-                                    }
-                                    if (partner.position) {
-                                        companyParts.push('Должность: ' + partner.position);
-                                    }
-                                    if (companyParts.length > 0) {
-                                        html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                        companyParts.forEach(part => {
-                                            html += '<span class="task-meta">' + part + '</span>';
-                                        });
-                                        html += '</div>';
-                                    }
-                                    
                                     // Остальное на отдельных строках
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
@@ -5513,22 +5496,6 @@
                                     // City
                                     if (partner.city) {
                                         html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
-                                    }
-                                    
-                                    // Company and position
-                                    const companyParts = [];
-                                    if (partner.company) {
-                                        companyParts.push('Компания: ' + partner.company);
-                                    }
-                                    if (partner.position) {
-                                        companyParts.push('Должность: ' + partner.position);
-                                    }
-                                    if (companyParts.length > 0) {
-                                        html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                        companyParts.forEach(part => {
-                                            html += '<span class="task-meta">' + part + '</span>';
-                                        });
-                                        html += '</div>';
                                     }
                                     
                                     // All other fields
@@ -5631,22 +5598,6 @@
                                         html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + blockedPartner.city + '</span></div>';
                                     }
                                     
-                                    // Компания и должность
-                                    const blockedCompanyParts = [];
-                                    if (blockedPartner && blockedPartner.company) {
-                                        blockedCompanyParts.push('Компания: ' + blockedPartner.company);
-                                    }
-                                    if (blockedPartner && blockedPartner.position) {
-                                        blockedCompanyParts.push('Должность: ' + blockedPartner.position);
-                                    }
-                                    if (blockedCompanyParts.length > 0) {
-                                        html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                        blockedCompanyParts.forEach(part => {
-                                            html += '<span class="task-meta">' + part + '</span>';
-                                        });
-                                        html += '</div>';
-                                    }
-                                    
                                     // Общие интересы/навыки/цели/задачи
                                     if (blockedPartner) {
                                         html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
@@ -5742,21 +5693,6 @@
                                         html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
                                     }
                                     
-                                    const companyParts = [];
-                                    if (partner.company) {
-                                        companyParts.push('Компания: ' + partner.company);
-                                    }
-                                    if (partner.position) {
-                                        companyParts.push('Должность: ' + partner.position);
-                                    }
-                                    if (companyParts.length > 0) {
-                                        html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                        companyParts.forEach(part => {
-                                            html += '<span class="task-meta">' + part + '</span>';
-                                        });
-                                        html += '</div>';
-                                    }
-                                    
                                     // Остальное на отдельных строках
                                     html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 4px; flex-wrap: wrap;">';
                                     
@@ -5847,21 +5783,6 @@
                                     }
                                     if (partner.city) {
                                         html += '<div style="margin-top: 4px;"><span class="task-meta">Город: ' + partner.city + '</span></div>';
-                                    }
-                                    
-                                    const companyParts = [];
-                                    if (partner.company) {
-                                        companyParts.push('Компания: ' + partner.company);
-                                    }
-                                    if (partner.position) {
-                                        companyParts.push('Должность: ' + partner.position);
-                                    }
-                                    if (companyParts.length > 0) {
-                                        html += '<div style="margin-top: 2px; display: flex; column-gap: 6px; flex-wrap: wrap;">';
-                                        companyParts.forEach(part => {
-                                            html += '<span class="task-meta">' + part + '</span>';
-                                        });
-                                        html += '</div>';
                                     }
                                     
                                     // Остальное на отдельных строках
