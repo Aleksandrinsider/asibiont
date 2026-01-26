@@ -33,6 +33,7 @@ class User(Base):
             datetime.timezone.utc), onupdate=datetime.datetime.now(
             datetime.timezone.utc))
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # User's subscription tier
+    average_rating = Column(Integer, default=0)  # Average rating from other users (0-10)
     rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
     history_cleared_at = Column(DateTime)  # When user cleared chat history
     conversation_state = Column(String(100), default='normal')  # Current conversation state
