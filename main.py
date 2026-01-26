@@ -910,6 +910,147 @@ def check_database_connection():
 # Add test users
 check_database_connection()
 
+def add_test_posts_and_tasks():
+    """Добавляет тестовые посты и задачи для демонстрации"""
+    try:
+        session = Session()
+        
+        # Получить тестовых пользователей
+        test_user_ids = [111111, 222222, 333333, 444444, 555555]
+        test_users = session.query(User).filter(User.telegram_id.in_(test_user_ids)).all()
+        
+        if not test_users:
+            logger.info("No test users found, skipping test posts/tasks creation")
+            session.close()
+            return
+        
+        # Создать тестовые посты
+        test_posts = [
+            {
+                'user_id': test_users[0].id,
+                'title': 'Ищу партнера для бега по утрам',
+                'content': 'Привет! Я бегаю каждое утро в парке Сокольники. Ищу единомышленника для совместных пробежек. Уровень средний, дистанция 5-7 км.',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(days=2)
+            },
+            {
+                'user_id': test_users[1].id,
+                'title': 'Организуем футбольную команду',
+                'content': 'В Санкт-Петербурге ищем игроков для любительской футбольной команды. Играем по выходным. Опыт приветствуется, но не обязателен.',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(days=1)
+            },
+            {
+                'user_id': test_users[2].id,
+                'title': 'Теннисные тренировки в Москве',
+                'content': 'Ищу партнера для игры в теннис. Есть корт в центре города. Можно проводить уроки для начинающих.',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=12)
+            },
+            {
+                'user_id': test_users[3].id,
+                'title': 'Йога и медитация',
+                'content': 'Проводим групповые занятия по йоге и медитации в Казани. Добро пожаловать все уровни подготовки.',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=6)
+            },
+            {
+                'user_id': test_users[4].id,
+                'title': 'Плавание в бассейне',
+                'content': 'Регулярные заплывы в бассейне. Ищу компанию для тренировок. Стиль кроль, брасс.',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=3)
+            }
+        ]
+        
+        # Проверить существующие посты
+        existing_posts_count = session.query(Post).filter(Post.user_id.in_([u.id for u in test_users])).count()
+        if existing_posts_count >= len(test_posts):
+            logger.info(f"All {len(test_posts)} test posts already exist")
+        else:
+            added_posts = 0
+            for post_data in test_posts:
+                existing = session.query(Post).filter_by(user_id=post_data['user_id'], title=post_data['title']).first()
+                if not existing:
+                    post = Post(
+                        user_id=post_data['user_id'],
+                        title=post_data['title'],
+                        content=post_data['content'],
+                        created_at=post_data['created_at']
+                    )
+                    session.add(post)
+                    added_posts += 1
+                    logger.info(f"Added test post: {post_data['title']}")
+            
+            if added_posts > 0:
+                session.commit()
+                logger.info(f"Successfully added {added_posts} test posts")
+        
+        # Создать тестовые задачи
+        test_tasks = [
+            {
+                'user_id': test_users[0].id,
+                'title': 'Пробежка 5 км утром',
+                'status': 'pending',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(days=1)
+            },
+            {
+                'user_id': test_users[0].id,
+                'title': 'Найти партнера для бега',
+                'status': 'completed',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(days=2)
+            },
+            {
+                'user_id': test_users[1].id,
+                'title': 'Организовать тренировку команды',
+                'status': 'pending',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=12)
+            },
+            {
+                'user_id': test_users[2].id,
+                'title': 'Забронировать теннисный корт',
+                'status': 'completed',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=24)
+            },
+            {
+                'user_id': test_users[3].id,
+                'title': 'Подготовить программу йоги',
+                'status': 'pending',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=6)
+            },
+            {
+                'user_id': test_users[4].id,
+                'title': 'Купить новый купальник',
+                'status': 'completed',
+                'created_at': datetime.now(datetime.timezone.utc) - timedelta(hours=48)
+            }
+        ]
+        
+        # Проверить существующие задачи
+        existing_tasks_count = session.query(Task).filter(Task.user_id.in_([u.id for u in test_users])).count()
+        if existing_tasks_count >= len(test_tasks):
+            logger.info(f"All {len(test_tasks)} test tasks already exist")
+        else:
+            added_tasks = 0
+            for task_data in test_tasks:
+                existing = session.query(Task).filter_by(user_id=task_data['user_id'], title=task_data['title']).first()
+                if not existing:
+                    task = Task(
+                        user_id=task_data['user_id'],
+                        title=task_data['title'],
+                        status=task_data['status'],
+                        created_at=task_data['created_at']
+                    )
+                    session.add(task)
+                    added_tasks += 1
+                    logger.info(f"Added test task: {task_data['title']}")
+            
+            if added_tasks > 0:
+                session.commit()
+                logger.info(f"Successfully added {added_tasks} test tasks")
+        
+        session.close()
+    except Exception as e:
+        logger.error(f"Failed to add test posts and tasks: {e}", exc_info=True)
+
+# Add test posts and tasks
+add_test_posts_and_tasks()
+
 # All test functions below are disabled in production
 """
 def ensure_sport_interest():
