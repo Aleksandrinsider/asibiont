@@ -1533,8 +1533,9 @@ async def dashboard_handler(request):
 
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
 
-            # Store subscription tier before closing session
-            user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.BRONZE
+            # Get user subscription tier
+            user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.LIGHT
+            display_tier = user_subscription_tier.value if user_subscription_tier else 'LIGHT'
 
             # Получить контакты по делегированию
             delegating_to_me = []  # Люди, которые делегировали мне задачи
@@ -1634,7 +1635,7 @@ async def dashboard_handler(request):
                             })
 
                 # Для премиум пользователей (Gold) добавляем все рекомендованные контакты
-                if user_subscription_tier and user_subscription_tier.value == 'GOLD':
+                if user_subscription_tier and user_subscription_tier.value == 'PREMIUM':
                     # Получаем все рекомендованные контакты
                     all_partners = get_partners_list(user.id, session_db)
                     
@@ -1908,7 +1909,7 @@ async def dashboard_handler(request):
             import random
             user_avatar_url += f"?r={random.randint(100000, 999999)}"
 
-        logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {user_subscription_tier.value if user_subscription_tier else 'BRONZE'}")
+        logger.info(f"Rendering dashboard for user {user.id} with subscription_tier: {display_tier}")
 
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': True,
@@ -1921,7 +1922,7 @@ async def dashboard_handler(request):
             'delegating_by_me': delegating_by_me,
             'blocked_contacts': blocked_contacts,
             'subscription': subscription,
-            'subscription_tier': user_subscription_tier.value if user_subscription_tier else 'BRONZE',
+            'subscription_tier': display_tier,
             'total_tasks': total_tasks,
             'completed_tasks': completed_tasks,
             'pending_tasks': pending_tasks,
@@ -2215,10 +2216,23 @@ async def complete_task_handler(request):
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
 
+    logger.info(f"[COMPLETE_TASK_HANDLER] Starting completion for task_id={task_id}, user_id={user_id}")
+
     from ai_integration import complete_task
     try:
         result = await complete_task(task_id=task_id, user_id=user_id)
-        logger.info(f"Task {task_id} completed by user {user_id}: {result}")
+        logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} completed by user {user_id}: {result}")
+        
+        # Проверяем статус задачи после завершения
+        db_session = Session()
+        try:
+            task = db_session.query(Task).filter_by(id=task_id).first()
+            if task:
+                logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} status after completion: {task.status}")
+            else:
+                logger.error(f"[COMPLETE_TASK_HANDLER] Task {task_id} not found after completion")
+        finally:
+            db_session.close()
         
         # Отправляем уведомление в Telegram через AI обработку, как будто пользователь написал о выполнении
         try:
@@ -2561,19 +2575,14 @@ async def yookassa_webhook(request):
             subscription.start_date = datetime.now(pytz.UTC)
 
             # Update tier
-            tier_enum = SubscriptionTier.BRONZE
-            if tier == 'bronze':
-                subscription.tier = SubscriptionTier.BRONZE
-                user.subscription_tier = SubscriptionTier.BRONZE
-                tier_enum = SubscriptionTier.BRONZE
-            elif tier == 'silver':
-                subscription.tier = SubscriptionTier.SILVER
-                user.subscription_tier = SubscriptionTier.SILVER
-                tier_enum = SubscriptionTier.SILVER
-            elif tier == 'gold':
-                subscription.tier = SubscriptionTier.GOLD
-                user.subscription_tier = SubscriptionTier.GOLD
-                tier_enum = SubscriptionTier.GOLD
+            tier_mapping = {
+                'bronze': SubscriptionTier.LIGHT,
+                'silver': SubscriptionTier.STANDARD,
+                'gold': SubscriptionTier.PREMIUM
+            }
+            tier_enum = tier_mapping.get(tier, SubscriptionTier.LIGHT)
+            subscription.tier = tier_enum
+            user.subscription_tier = tier_enum
 
             # Если подписка еще активна, продлеваем от end_date, иначе от текущей даты
             now = datetime.now(pytz.UTC)
@@ -5976,14 +5985,23 @@ async def create_payment_handler(request):
     tier = request.query.get('tier', 'bronze')
     logger.info(f"Creating payment for tier: {tier}")
 
+    # Map display tiers to internal tiers
+    tier_mapping = {
+        'bronze': 'light',
+        'silver': 'standard', 
+        'gold': 'premium'
+    }
+    internal_tier = tier_mapping.get(tier, 'light')
+
     if tier not in ['bronze', 'silver', 'gold']:
         tier = 'bronze'
+        internal_tier = 'light'
 
     try:
         from payments import create_payment, get_tier_price, get_tier_name
 
-        amount = get_tier_price(tier)
-        tier_name = get_tier_name(tier)
+        amount = get_tier_price(internal_tier)
+        tier_name = get_tier_name(internal_tier)
 
         logger.info(f"Creating payment: amount={amount}, tier={tier}, user_id={user_id}")
 
@@ -5991,7 +6009,7 @@ async def create_payment_handler(request):
             amount=str(amount),
             description=f"Подписка ASI Biont - {tier_name} на 30 дней",
             user_id=user_id,
-            tier=tier
+            tier=internal_tier
         )
 
         logger.info(f"Payment URL created: {payment_url}")

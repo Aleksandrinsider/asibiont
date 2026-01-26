@@ -349,6 +349,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             logger.info(f"[COMPLETE_TASK] Saved completion note for task {task.id}")
         
         session.commit()
+        logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
 
         # Отменяем все запланированные джобы для этой задачи
         try:
@@ -771,7 +772,7 @@ def delegate_task(
         logger.info(f"[DELEGATE] User {user_id} tier: {delegator.subscription_tier.value if delegator.subscription_tier else 'None'}")
         
         # Skip subscription check in FREE_ACCESS_MODE
-        if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier.value == 'BRONZE':
+        if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier.value == 'LIGHT':
             return ("🥉 Делегирование задач доступно только на тарифах **Серебро** и **Золото**. "
                     "На тарифе Бронза вы можете получать делегированные задачи от других пользователей, "
                     "но не можете делегировать свои задачи. Обновите тариф для доступа к делегированию.")
@@ -1473,6 +1474,7 @@ def list_tasks(user_id=None, session=None, include_completed=False):
         elif len(active_tasks) > 5:
             result += "\n\nМного задач - приоритизируй"
 
+        logger.info(f"[LIST_TASKS] Returning {len(active_tasks)} active tasks for user {user_id}")
         return result.strip()
     except Exception as e:
         logger.error(f"Error listing tasks: {e}")

@@ -21,12 +21,12 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     tier_info = ""
     if subscription_tier:
         tier_name = {
-            'BRONZE': 'Bronze (базовая)',
-            'SILVER': 'Silver (расширенная)',
-            'GOLD': 'Gold (премиум)',
-            'bronze': 'Bronze (базовая)',
-            'silver': 'Silver (расширенная)',
-            'gold': 'Gold (премиум)'
+            'LIGHT': 'Лайт (базовая)',
+            'STANDARD': 'Стандарт (расширенная)',
+            'PREMIUM': 'Премиум (премиум)',
+            'light': 'Лайт (базовая)',
+            'standard': 'Стандарт (расширенная)',
+            'premium': 'Премиум (премиум)'
         }.get(subscription_tier, subscription_tier)
 
         tier_upper = subscription_tier.upper() if isinstance(subscription_tier, str) else str(subscription_tier).upper()
@@ -34,19 +34,19 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
         # Функции по тарифам
         tier_info += "\n\nДОСТУПНЫЕ ФУНКЦИИ:"
-        if tier_upper in ['BRONZE', 'SILVER', 'GOLD']:
+        if tier_upper in ['LIGHT', 'STANDARD', 'PREMIUM']:
             tier_info += "\n• Управление задачами (создание, редактирование, удаление)"
             tier_info += "\n• Получение делегированных задач от других"
             tier_info += "\n• Поиск контактов по интересам"
 
-        if tier_upper in ['SILVER', 'GOLD']:
+        if tier_upper in ['STANDARD', 'PREMIUM']:
             tier_info += "\n• ДЕЛЕГИРОВАНИЕ ЗАДАЧ другим пользователям"
             tier_info += "\n• ИИ-контроль выполнения делегированных задач"
         else:
-            tier_info += "\n• Делегирование задач (доступно на Silver/Gold)"
+            tier_info += "\n• Делегирование задач (доступно на Standard/Premium)"
 
-        if tier_upper == 'GOLD':
-            tier_info += "\n• Доступ к элитным связям (Gold контакты)"
+        if tier_upper == 'PREMIUM':
+            tier_info += "\n• Доступ к элитным связям (Premium контакты)"
             tier_info += "\n• VIP-поддержка"
 
         # Важно: не рекомендуй повышение тарифа тем, у кого уже Silver или Gold
@@ -286,8 +286,13 @@ update_user_memory(memory_text) - сохранить в долговременн
     if message_type == 'reminder':
         prompt += """
 
-🎯 НАПОМИНАНИЕ: Персонализированное напоминание 2-4 абзаца с мотивацией и практическими советами. Учитывай контекст, время суток, профиль. Закончи вопросом для вовлечения.
-"""
+🎯 НАПОМИНАНИЕ: Пиши ГОТОВОЕ сообщение для отправки пользователю (2-4 абзаца).
+• НЕ пиши промежуточные мысли типа "сейчас посмотрю задачи"
+• Начни сразу с приветствия и напоминания о задаче
+• Добавь мотивацию и 1-2 практических совета
+• Закончи вопросом для вовлечения пользователя
+• Учитывай время суток, профиль и контекст задачи
+• Будь конкретным и полезным"""
     elif message_type == 'proactive':
         prompt += """
 

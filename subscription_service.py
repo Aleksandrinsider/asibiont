@@ -67,7 +67,7 @@ def cancel_subscription(user_id):
     finally:
         session.close()
 
-def activate_subscription(user_id, plan='monthly', tier='bronze'):
+def activate_subscription(user_id, plan='monthly', tier='light'):
     """Активирует подписку для пользователя"""
     session = Session()
     try:
@@ -183,7 +183,7 @@ def get_subscription_status(user_id):
             return {
                 'status': sub.status,
                 'plan': sub.plan,
-                'tier': sub.tier.value if sub.tier else 'BRONZE',
+                'tier': sub.tier.value if sub.tier else 'LIGHT',
                 'start_date': sub.start_date.isoformat() if sub.start_date else None,
                 'end_date': sub.end_date.isoformat() if sub.end_date else None,
                 'login_count': sub.login_count

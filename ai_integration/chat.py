@@ -481,7 +481,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "edit_task":
-                result = edit_task(
+                result = handlers.edit_task(
                     task_id=args.get("task_id"),
                     title=args.get("title"),
                     description=args.get("description"),
@@ -492,65 +492,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "edit_task":
-                # Special handling for time-only updates
-                if intent.get("params", {}).get("time_only"):
-                    # Find the most recent pending task to update
-                    temp_session = Session()
-                    try:
-                        user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
-                        if user_obj:
-                            recent_task = temp_session.query(Task).filter_by(
-                                user_id=user_obj.id, 
-                                status="pending"
-                            ).order_by(Task.created_at.desc()).first()
-                            
-                            if recent_task:
-                                # Parse time from message
-                                time_match = re.search(r'(\d{1,2}):(\d{2})', original_message)
-                                if time_match:
-                                    hours, minutes = time_match.groups()
-                                    # Get user timezone
-                                    user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
-                                    # Assume tomorrow if "завтра" in message, otherwise today
-                                    base_date = datetime.now(user_tz)
-                                    if 'завтра' in original_message.lower():
-                                        base_date += timedelta(days=1)
-                                    
-                                    # Set time in user's timezone, then convert to UTC
-                                    reminder_time = base_date.replace(hour=int(hours), minute=int(minutes), second=0, microsecond=0)
-                                    if reminder_time.tzinfo is None:
-                                        reminder_time = user_tz.localize(reminder_time)
-                                    reminder_time = reminder_time.astimezone(pytz.UTC)
-                                    
-                                    result = edit_task(
-                                        task_id=recent_task.id,
-                                        title=None,
-                                        description=None,
-                                        reminder_time=reminder_time.isoformat(),
-                                        user_id=user_id,
-                                        session=db_session,
-                                    )
-                                else:
-                                    result = "Не удалось распознать время в сообщении"
-                            else:
-                                result = "Нет активных задач для обновления времени"
-                        else:
-                            result = "Пользователь не найден"
-                    except Exception as e:
-                        logger.error(f"Error in edit_task time_only: {e}")
-                        result = f"Ошибка обновления времени: {str(e)}"
-                    finally:
-                        temp_session.close()
-                else:
-                    # Regular edit_task handling
-                    result = edit_task(
-                        task_id=args.get("task_id"),
-                        title=args.get("title"),
-                        description=args.get("description"),
-                        reminder_time=args.get("reminder_time"),
-                        user_id=user_id,
-                        session=db_session,
-                    )
+                result = handlers.edit_task(
+                    task_id=args.get("task_id"),
+                    title=args.get("title"),
+                    description=args.get("description"),
+                    reminder_time=args.get("reminder_time"),
+                    user_id=user_id,
+                    session=db_session,
+                )
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "check_subscription_status":
@@ -763,8 +712,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 pass
             
             elif "TASK_UPDATED:" in result_text:
-                # AI должен прокомментировать изменение - НЕ добавляем в natural_responses
-                pass
+                # AI должен прокомментировать изменение задачи
+                natural_responses.append("Задача обновлена")
 
             elif "Задача удалена" in result_text or "Задача.*удалена" in result_text:
                 natural_responses.append("Задача удалена")
@@ -2058,6 +2007,95 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА TIME_ONLY: выполняем edit_task напрямую без AI
+        if intent.get("params", {}).get("time_only"):
+            logger.info("[TIME_ONLY] Direct execution without AI call")
+            # Find the most relevant pending task to update based on message content
+            temp_session = Session()
+            try:
+                user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
+                if user_obj:
+                    # Get all pending tasks
+                    pending_tasks = temp_session.query(Task).filter_by(
+                        user_id=user_obj.id, 
+                        status="pending"
+                    ).order_by(Task.created_at.desc()).all()
+                    
+                    if pending_tasks:
+                        # Try to find task by keywords in message
+                        target_task = None
+                        message_lower = original_message.lower()
+                        
+                        # Extract keywords from message (remove time-related words)
+                        keywords = re.sub(r'\d{1,2}:\d{2}|завтра|сегодня|через|перенеси|напомни|минут|час|время', '', message_lower)
+                        keywords = re.sub(r'\s+', ' ', keywords).strip()
+                        
+                        # Find task with highest keyword match
+                        best_match_score = 0
+                        for task in pending_tasks:
+                            task_title_lower = task.title.lower()
+                            score = 0
+                            
+                            # Check if keywords appear in task title
+                            for keyword in keywords.split():
+                                if len(keyword) > 2:  # Skip short words
+                                    if keyword in task_title_lower:
+                                        score += 1
+                            
+                            # Bonus for exact phrase match
+                            if keywords and keywords in task_title_lower:
+                                score += 5
+                            
+                            if score > best_match_score:
+                                best_match_score = score
+                                target_task = task
+                        
+                        # If no good keyword match, use most recent task
+                        if not target_task or best_match_score == 0:
+                            target_task = pending_tasks[0]
+                            logger.info(f"[TIME_ONLY] No keyword match, using most recent task: {target_task.title}")
+                        else:
+                            logger.info(f"[TIME_ONLY] Found task by keywords (score {best_match_score}): {target_task.title}")
+                        
+                        # Parse time from message
+                        time_match = re.search(r'(\d{1,2}):(\d{2})', original_message)
+                        if time_match:
+                            hours, minutes = time_match.groups()
+                            # Get user timezone
+                            user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
+                            # Assume tomorrow if "завтра" in message, otherwise today
+                            base_date = datetime.now(user_tz)
+                            if 'завтра' in original_message.lower():
+                                base_date += timedelta(days=1)
+                            
+                            # Set time in user's timezone, then convert to UTC
+                            reminder_time = base_date.replace(hour=int(hours), minute=int(minutes), second=0, microsecond=0)
+                            if reminder_time.tzinfo is None:
+                                reminder_time = user_tz.localize(reminder_time)
+                            reminder_time = reminder_time.astimezone(pytz.UTC)
+                            
+                            result = handlers.edit_task(
+                                task_id=target_task.id,
+                                title=None,
+                                description=None,
+                                reminder_time=reminder_time.isoformat(),
+                                user_id=user_id,
+                                session=db_session,
+                            )
+                            logger.info(f"[TIME_ONLY] Task updated: {result}")
+                            return f"Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%H:%M')}."
+                        else:
+                            return "Не удалось распознать время в сообщении."
+                    else:
+                        return "Нет активных задач для обновления времени."
+                else:
+                    return "Пользователь не найден."
+            except Exception as e:
+                logger.error(f"Error in time_only direct execution: {e}")
+                return f"Ошибка обновления времени: {str(e)}"
+            finally:
+                temp_session.close()
+        
         # Параметры запроса согласно документации DeepSeek API
         data = {
             "model": DEEPSEEK_MODEL,
@@ -2418,12 +2456,16 @@ async def generate_reminder(user_id, task_title, task_id=None):
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        user_prompt = f"Сгенерируй персонализированное напоминание о задаче: '{task_title}'."
-        if task_context:
-            user_prompt += f"\n{task_context}"
-        if profile_context:
-            user_prompt += f"\n{profile_context}"
-        user_prompt += "\n\nДай конкретные практические советы, мотивируй, учитывай контекст пользователя."
+        user_prompt = f"""Сгенерируй персонализированное напоминание о задаче: '{task_title}'.
+
+ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (2-4 абзаца).
+• Начни с приветствия и напоминания о задаче
+• Добавь мотивацию и практические советы
+• Закончи вопросом для вовлечения
+• НЕ пиши промежуточные мысли или "сейчас посмотрю задачи"
+
+КОНТЕКСТ ЗАДАЧИ:{task_context if task_context else 'Нет дополнительного контекста'}
+КОНТЕКСТ ПРОФИЛЯ:{profile_context if profile_context else 'Нет информации о профиле'}"""
 
         messages = [
             {"role": "system", "content": system_prompt},

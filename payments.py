@@ -16,25 +16,25 @@ else:
 
 # Pricing for subscription tiers (RUB/month)
 TIER_PRICES = {
-    'bronze': 3000,
-    'silver': 9000,
-    'gold': 27000
+    'light': 3000,
+    'standard': 9000,
+    'premium': 27000
 }
 
 TIER_NAMES = {
-    'bronze': '🥉 Бронза',
-    'silver': '🥈 Серебро',
-    'gold': '🥇 Золото'
+    'light': '🥉 Бронза',
+    'standard': '🥈 Серебро',
+    'premium': '🥇 Золото'
 }
 
-def create_payment(amount, description, user_id, tier='bronze'):
+def create_payment(amount, description, user_id, tier='light'):
     """Create payment for subscription
     
     Args:
         amount: Payment amount in RUB
         description: Payment description
         user_id: User ID for metadata
-        tier: Subscription tier (bronze, silver, gold)
+        tier: Subscription tier (light, standard, premium)
     """
     if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
         logger.error("Cannot create payment: Yookassa credentials not configured")

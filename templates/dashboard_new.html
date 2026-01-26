@@ -352,11 +352,11 @@
                             const favoriteTitleElite = isFavoriteElite ? 'Удалить из избранного' : 'Добавить в избранное';
                             html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColorElite + '" title="' + favoriteTitleElite + '">' + starSvgElite + '</button>';
                             
-                            // Delegate button with Bronze tier check
-                            const isBronzeElite = userSubscriptionTier === 'BRONZE';
-                            const delegateClassElite = isBronzeElite ? 'quick-action disabled' : 'quick-action';
-                            const delegateTitleElite = isBronzeElite ? 'Функция доступна на других тарифах' : 'Делегировать';
-                            const delegateOnclickElite = isBronzeElite ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';const delegateDisabledElite = isBronzeElite ? ' disabled' : '';
+                            // Delegate button with Light tier check
+                            const isLightElite = userSubscriptionTier === 'LIGHT';
+                            const delegateClassElite = isLightElite ? 'quick-action disabled' : 'quick-action';
+                            const delegateTitleElite = isLightElite ? 'Функция доступна на других тарифах' : 'Делегировать';
+                            const delegateOnclickElite = isLightElite ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';const delegateDisabledElite = isLightElite ? ' disabled' : '';
                             html += '<button onclick="' + delegateOnclickElite + '" class="' + delegateClassElite + '"' + delegateDisabledElite + ' title="' + delegateTitleElite + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                             
                             html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
@@ -715,14 +715,14 @@
             text-decoration: none;
             white-space: nowrap;
         }
-        .tier-badge-bronze {
+        .tier-badge-light {
             color: #6b7280;
             font-weight: normal;
         }
-        .tier-badge-silver {
+        .tier-badge-standard {
             color: #57606a;
         }
-        .tier-badge-gold {
+        .tier-badge-premium {
             color: #7D4E00;
         }
 
@@ -804,6 +804,18 @@
         
         button[disabled] * {
             pointer-events: none;
+        }
+        
+        /* Hide duplicate restriction signs on disabled buttons */
+        button[disabled]:hover::after,
+        button[disabled]:hover::before {
+            display: none !important;
+        }
+        
+        /* Hide restriction signs over center column when hovering disabled buttons */
+        .center-column:hover::after,
+        .center-column:hover::before {
+            display: none !important;
         }
 
         /* Мигающая точка для задач, ожидающих принятия */
@@ -1128,9 +1140,9 @@
                                 <div style="position: relative; margin-bottom: 8px; margin-top: 20px; display: flex; align-items: center; justify-content: center;">
                                     <div>
                                         {% set tier_glow = '#CD7F32' %}
-                                        {% if subscription_tier.lower() == 'silver' %}
+                                        {% if subscription_tier.lower() == 'standard' %}
                                             {% set tier_glow = '#C0C0C0' %}
-                                        {% elif subscription_tier.lower() == 'gold' %}
+                                        {% elif subscription_tier.lower() == 'premium' %}
                                             {% set tier_glow = '#FFD700' %}
                                         {% endif %}
                                         {% if user_avatar_url %}
@@ -1187,7 +1199,7 @@
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" title="">Рекомендуемые</button>
                         <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %} title="">Премиум статус</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" title="">Делегирует мне</button>
-                        <button class="contact-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %} title="">Делегирую я</button>
+                        <button class="contact-filter-btn{% if subscription_tier == 'LIGHT' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'LIGHT' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'LIGHT' %} disabled{% endif %} title="">Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')" title="">Заблокированные</button>
                     </div>
                     <div class="people-list" id="people-list" style="padding: 0 4px;">
@@ -1226,9 +1238,9 @@
                             <button onclick="login()">Войти</button>
                             <div style="margin-top: 10px; font-size: 12px; color: #6B7280;">
                                 Локальное тестирование:
-                                <button onclick="testLogin(1001)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1001 (Bronze)</button>
-                                <button onclick="testLogin(1002)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1002 (Silver)</button>
-                                <button onclick="testLogin(1003)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1003 (Gold)</button>
+                                <button onclick="testLogin(1001)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1001 (Light)</button>
+                                <button onclick="testLogin(1002)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1002 (Standard)</button>
+                                <button onclick="testLogin(1003)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1003 (Premium)</button>
                             </div>
                         </div>
                         {% endif %}
@@ -1324,7 +1336,7 @@
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')">Все задачи</button>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')">Личные задачи</button>
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')">Назначенные мне</button>
-                        <button class="task-filter-btn{% if subscription_tier == 'BRONZE' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'BRONZE' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'BRONZE' %} disabled{% endif %}>Назначенные мной</button>
+                        <button class="task-filter-btn{% if subscription_tier == 'LIGHT' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'LIGHT' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Назначенные мной</button>
                         <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')">С отставанием</button>
                         <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')">Выполненные</button>
                     </div>
@@ -1542,7 +1554,7 @@
     <script>
 
         // Version: 2026-01-14 fix overlay errors - timestamp: 1768857743
-        const userSubscriptionTier = '{{ subscription_tier }}'; // Bronze/SILVER/GOLD
+        const userSubscriptionTier = '{{ subscription_tier }}'; // LIGHT/STANDARD/PREMIUM
 
         // Функция для создания единообразного значка тарифа
         function createTierBadge(tier) {
@@ -5176,9 +5188,9 @@
                                     // Show username or tier requirement
                                     if (canAccess) {
                                         let nameStyle = 'cursor: pointer; color: #068487;';
-                                        if (partner.subscription_tier === 'SILVER') {
+                                        if (partner.subscription_tier === 'STANDARD') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
-                                        } else if (partner.subscription_tier === 'GOLD') {
+                                        } else if (partner.subscription_tier === 'PREMIUM') {
                                             nameStyle = 'cursor: pointer; color: #068487;';
                                         }
                                         // Display first_name and username separately like in news feed

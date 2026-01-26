@@ -386,12 +386,12 @@
                         <td><strong>@{{ user.username or 'N/A' }}</strong></td>
                         <td>{{ user.first_name or 'N/A' }}</td>
                         <td>
-                            {% if user.tier == 'gold' %}
-                            <span class="badge badge-warning">GOLD</span>
-                            {% elif user.tier == 'silver' %}
-                            <span class="badge badge-success">SILVER</span>
+                            {% if user.tier == 'premium' %}
+                            <span class="badge badge-warning">PREMIUM</span>
+                            {% elif user.tier == 'standard' %}
+                            <span class="badge badge-success">STANDARD</span>
                             {% else %}
-                            <span class="badge badge-gray">BRONZE</span>
+                            <span class="badge badge-gray">LIGHT</span>
                             {% endif %}
                         </td>
                         <td>{{ user.created_at }}</td>
