@@ -19,8 +19,7 @@ import logging
 import pytz
 
 # Import handlers
-if not LOCAL:
-    from handlers import router as handlers_router
+from handlers import router as handlers_router
 import hashlib
 import hmac
 import json
@@ -2756,8 +2755,7 @@ app = web.Application()
 if bot:
     app['bot'] = bot
     dp = Dispatcher()
-    if not LOCAL:
-        dp.include_router(handlers_router)
+    dp.include_router(handlers_router)
     if not LOCAL:
         app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
@@ -6498,11 +6496,19 @@ if __name__ == "__main__":
                     logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
                     logger.info("Server is ready to accept connections")
 
+                    # Start polling for bot in local mode
+                    polling_task = None
+                    if LOCAL and bot and dp:
+                        logger.info("Starting Telegram bot polling for local mode")
+                        polling_task = asyncio.create_task(dp.start_polling(bot))
+                    
                     # Keep the server running
                     try:
-                        # Keep server running indefinitely
-                        while True:
-                            await asyncio.sleep(3600)
+                        if polling_task:
+                            await polling_task
+                        else:
+                            while True:
+                                await asyncio.sleep(3600)
                     except Exception as e:
                         logger.info(f"Server interrupted: {e}")
                     finally:
