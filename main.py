@@ -1961,11 +1961,11 @@ async def dashboard_handler(request):
             # Apply subscription-based contact limits
             if partners and user_subscription_tier:
                 tier = user_subscription_tier.value
-                if tier == 'BRONZE':
-                    partners = partners[:1]  # Bronze: 1 contact
-                elif tier == 'SILVER':
-                    partners = partners[:5]  # Silver: 5 contacts
-                # Gold: unlimited (already limited to 20 in get_partners_list)
+                if tier == 'LIGHT':
+                    partners = partners[:1]  # Light: 1 contact
+                elif tier == 'STANDARD':
+                    partners = partners[:5]  # Standard: 5 contacts
+                # Premium: unlimited (already limited to 20 in get_partners_list)
 
         except Exception as e:
             logger.error(f"Error getting partners: {e}", exc_info=True)
@@ -3633,14 +3633,14 @@ async def api_partners_handler(request):
                             favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
 
                             # Check tier access
-                            user_tier = user.subscription_tier if user else SubscriptionTier.BRONZE
-                            favorite_tier = favorite_user.subscription_tier if favorite_user.subscription_tier else SubscriptionTier.BRONZE
+                            user_tier = user.subscription_tier if user else SubscriptionTier.LIGHT
+                            favorite_tier = favorite_user.subscription_tier if favorite_user.subscription_tier else SubscriptionTier.LIGHT
 
                             # Ensure tiers are proper enum values
                             if not hasattr(user_tier, 'value'):
-                                user_tier = SubscriptionTier.BRONZE
+                                user_tier = SubscriptionTier.LIGHT
                             if not hasattr(favorite_tier, 'value'):
-                                favorite_tier = SubscriptionTier.BRONZE
+                                favorite_tier = SubscriptionTier.LIGHT
 
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
                             favorite_tier_str = favorite_tier.value if hasattr(favorite_tier, 'value') else str(favorite_tier).lower()
@@ -3791,15 +3791,15 @@ async def api_elite_partners_handler(request):
                 logger.warning(f"User not found for telegram_id: {user_id}")
                 return web.json_response({'error': 'User not found'}, status=404)
 
-            # Check if user has Gold tier
-            user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') else SubscriptionTier.BRONZE
+            # Check if user has Premium tier
+            user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') else SubscriptionTier.LIGHT
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
             
             logger.info(f"User {user.username} has tier: {user_tier_str}")
             
-            if user_tier_str.lower() != 'gold':
-                # Only Gold users can access elite partners
-                logger.info(f"User {user.username} does not have Gold tier, returning empty partners list")
+            if user_tier_str.lower() != 'premium':
+                # Only Premium users can access elite partners
+                logger.info(f"User {user.username} does not have Premium tier, returning empty partners list")
                 return web.json_response({'partners': []})
 
             # Get user profile for comparison
@@ -3831,37 +3831,37 @@ async def api_elite_partners_handler(request):
                 except json.JSONDecodeError:
                     pass
 
-            # Get all Gold users (except self)
-            gold_users = session_db.query(User).filter(
-                User.subscription_tier == SubscriptionTier.GOLD,
+            # Get all Premium users (except self)
+            premium_users = session_db.query(User).filter(
+                User.subscription_tier == SubscriptionTier.PREMIUM,
                 User.id != user.id
             ).all()
             
-            logger.info(f"Found {len(gold_users)} other Gold users for user {user.username}")
+            logger.info(f"Found {len(premium_users)} other Premium users for user {user.username}")
 
             partners_data = []
-            for gold_user in gold_users:
+            for premium_user in premium_users:
                 # Skip hidden and blocked contacts
-                username_clean = gold_user.username.replace('@', '').lower() if gold_user.username else ''
-                if username_clean in hidden_contacts or gold_user.username in blocked_by_me:
-                    logger.info(f"Skipping Gold user {gold_user.username} - hidden or blocked")
+                username_clean = premium_user.username.replace('@', '').lower() if premium_user.username else ''
+                if username_clean in hidden_contacts or premium_user.username in blocked_by_me:
+                    logger.info(f"Skipping Premium user {premium_user.username} - hidden or blocked")
                     continue
 
-                gold_profile = session_db.query(UserProfile).filter_by(user_id=gold_user.id).first()
+                premium_profile = session_db.query(UserProfile).filter_by(user_id=premium_user.id).first()
                 
-                logger.info(f"Adding Gold user to elite partners: {gold_user.username}")
+                logger.info(f"Adding Premium user to elite partners: {premium_user.username}")
 
                 # Update avatar from Telegram if available
-                photo_url = gold_user.photo_url if gold_user.photo_url else None
-                if gold_user.telegram_id and 'bot' in request.app:
+                photo_url = premium_user.photo_url if premium_user.photo_url else None
+                if premium_user.telegram_id and 'bot' in request.app:
                     try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], gold_user.telegram_id)
-                        if updated_avatar and updated_avatar != gold_user.photo_url:
-                            gold_user.photo_url = updated_avatar
+                        updated_avatar = await get_user_avatar_url(request.app['bot'], premium_user.telegram_id)
+                        if updated_avatar and updated_avatar != premium_user.photo_url:
+                            premium_user.photo_url = updated_avatar
                             session_db.commit()
                             photo_url = updated_avatar
                     except Exception as e:
-                        logger.error(f"Error updating Gold user avatar for {gold_user.telegram_id}: {e}")
+                        logger.error(f"Error updating Premium user avatar for {premium_user.telegram_id}: {e}")
 
                 # Calculate common interests/skills/goals/tasks
                 common_interests = None
@@ -3869,45 +3869,45 @@ async def api_elite_partners_handler(request):
                 common_goals = None
                 common_tasks = None
 
-                if gold_profile:
+                if premium_profile:
                     # Common interests
-                    if gold_profile.interests and user_profile.interests:
+                    if premium_profile.interests and user_profile.interests:
                         user_interests = set(i.strip().lower() for i in user_profile.interests.split(','))
-                        gold_interests = set(i.strip().lower() for i in gold_profile.interests.split(','))
-                        common = user_interests & gold_interests
+                        premium_interests = set(i.strip().lower() for i in premium_profile.interests.split(','))
+                        common = user_interests & premium_interests
                         common_interests = ', '.join(common) if common else None
 
                     # Common skills
-                    if gold_profile.skills and user_profile.skills:
+                    if premium_profile.skills and user_profile.skills:
                         user_skills = set(s.strip().lower() for s in user_profile.skills.split(','))
-                        gold_skills = set(s.strip().lower() for s in gold_profile.skills.split(','))
-                        common_sk = user_skills & gold_skills
+                        premium_skills = set(s.strip().lower() for s in premium_profile.skills.split(','))
+                        common_sk = user_skills & premium_skills
                         common_skills = ', '.join(common_sk) if common_sk else None
 
                     # Common goals
-                    if gold_profile.goals and user_profile.goals:
+                    if premium_profile.goals and user_profile.goals:
                         user_goals = set(g.strip().lower() for g in user_profile.goals.split(','))
-                        gold_goals = set(g.strip().lower() for g in gold_profile.goals.split(','))
-                        common_g = user_goals & gold_goals
+                        premium_goals = set(g.strip().lower() for g in premium_profile.goals.split(','))
+                        common_g = user_goals & premium_goals
                         common_goals = ', '.join(common_g) if common_g else None
 
                     # Common tasks
                     user_tasks = session_db.query(Task).filter_by(user_id=user.id).all()
-                    gold_tasks = session_db.query(Task).filter_by(user_id=gold_user.id).all()
+                    premium_tasks = session_db.query(Task).filter_by(user_id=premium_user.id).all()
                     
                     user_task_titles = set(t.title.lower().strip() for t in user_tasks if t.title)
-                    gold_task_titles = set(t.title.lower().strip() for t in gold_tasks if t.title)
+                    premium_task_titles = set(t.title.lower().strip() for t in premium_tasks if t.title)
                     
-                    common_task_titles = user_task_titles & gold_task_titles
+                    common_task_titles = user_task_titles & premium_task_titles
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
                             user_words = set(user_task.split())
                             if len(user_words) < 2:
                                 continue
-                            for gold_task in gold_task_titles:
-                                gold_words = set(gold_task.split())
-                                common_words = user_words & gold_words
+                            for premium_task in premium_task_titles:
+                                premium_words = set(premium_task.split())
+                                common_words = user_words & premium_words
                                 if len(common_words) >= 2:
                                     partial_matches.add(user_task)
                         if partial_matches:
@@ -3916,25 +3916,25 @@ async def api_elite_partners_handler(request):
                     common_tasks = ', '.join(list(common_task_titles)[:5]) if common_task_titles else None
 
                 partners_data.append({
-                    'contact_info': gold_user.username if gold_user.username else None,
-                    'telegram_id': gold_user.telegram_id,
+                    'contact_info': premium_user.username if premium_user.username else None,
+                    'telegram_id': premium_user.telegram_id,
                     'photo_url': photo_url,
-                    'can_access': True,  # Gold users can access all Gold users
+                    'can_access': True,  # Premium users can access all Premium users
                     'required_tier': None,
-                    'subscription_tier': 'gold',
-                    'first_name': gold_user.first_name,
-                    'city': gold_profile.city if gold_profile else None,
-                    'company': gold_profile.company if gold_profile else None,
-                    'position': gold_profile.position if gold_profile else None,
-                    'interests': gold_profile.interests if gold_profile else None,
-                    'skills': gold_profile.skills if gold_profile else None,
-                    'goals': gold_profile.goals if gold_profile else None,
+                    'subscription_tier': 'premium',
+                    'first_name': premium_user.first_name,
+                    'city': premium_profile.city if premium_profile else None,
+                    'company': premium_profile.company if premium_profile else None,
+                    'position': premium_profile.position if premium_profile else None,
+                    'interests': premium_profile.interests if premium_profile else None,
+                    'skills': premium_profile.skills if premium_profile else None,
+                    'goals': premium_profile.goals if premium_profile else None,
                     'common_interests': common_interests,
                     'common_skills': common_skills,
                     'common_goals': common_goals,
                     'common_tasks': common_tasks,
-                    'average_rating': gold_profile.average_rating if gold_profile else 0,
-                    'rating_count': gold_profile.rating_count if gold_profile else 0,
+                    'average_rating': premium_profile.average_rating if premium_profile else 0,
+                    'rating_count': premium_profile.rating_count if premium_profile else 0,
                     'type': 'elite'
                 })
 
