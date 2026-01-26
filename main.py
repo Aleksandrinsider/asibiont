@@ -2042,18 +2042,27 @@ async def api_send_message_handler(request):
     try:
         session = await get_session(request)
         user_id = session.get('user_id')
-        logger.info(f"API send_message handler called, session user_id: {user_id}")
+        logger.info(f"[API_SEND_MESSAGE] Called, session user_id: {user_id}")
 
         if not user_id:
-            logger.warning("No user_id in session for api_send_message")
+            logger.warning("[API_SEND_MESSAGE] No user_id in session")
             return web.json_response({'error': 'Not authenticated'}, status=401)
 
         data = await request.json()
         message = data.get('message', '')
-        logger.info(f"API Message received: {message}")
+        logger.info(f"[API_SEND_MESSAGE] Message received from user {user_id}: '{message}'")
+
+        # Check for duplicate first
+        if check_duplicate_message(user_id, message):
+            logger.warning(f"[API_SEND_MESSAGE] DUPLICATE detected for user {user_id}, message: '{message[:50]}...'")
+            return web.json_response({
+                'error': 'duplicate',
+                'message': 'Это сообщение уже обрабатывается'
+            }, status=409)
 
         # Load context from DB
         context = get_context_from_db(user_id, limit=20)
+        logger.info(f"[API_SEND_MESSAGE] Loaded context: {len(context)} messages")
 
         # Import chat function
         from ai_integration.chat import chat_with_ai as chat
@@ -2063,18 +2072,22 @@ async def api_send_message_handler(request):
         try:
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             if not user:
+                logger.error(f"[API_SEND_MESSAGE] User not found: {user_id}")
                 return web.json_response({'error': 'User not found'}, status=404)
 
+            logger.info(f"[API_SEND_MESSAGE] Calling AI for user {user_id}...")
             # Call AI chat
             try:
                 response = await chat(message, context=context, user_id=user_id, file_content=None, db_session=session_db)
-                logger.info("AI response: %s...", response[:100])
+                logger.info(f"[API_SEND_MESSAGE] AI response received, length: {len(response) if response else 0}")
+                logger.info(f"[API_SEND_MESSAGE] AI response preview: '{response[:100]}...'")
             except Exception as e:
-                logger.error(f"Error calling AI chat: {e}", exc_info=True)
+                logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
 
             # Check if response contains tier restriction error
             if "Делегирование задач доступно только на тарифах" in response:
+                logger.info(f"[API_SEND_MESSAGE] Tier restriction detected for user {user_id}")
                 return web.json_response({
                     'error': 'tier_restriction',
                     'message': '🥉 Делегирование задач доступно только на тарифах Серебро и Золото',
@@ -2082,12 +2095,18 @@ async def api_send_message_handler(request):
                     'upgrade_url': '/subscription_tiers'
                 }, status=403)
 
-            # Save context to DB
-            save_context_to_db(user_id, message, response)
-            logger.info("Context saved to DB")
+            # Check for duplicate message before saving
+            if check_duplicate_message(user_id, message):
+                logger.warning(f"[API_SEND_MESSAGE] Duplicate message detected for user {user_id}, skipping save to DB")
+            else:
+                # Save context to DB
+                save_context_to_db(user_id, message, response)
+                logger.info(f"[API_SEND_MESSAGE] Context saved to DB: user_msg='{message[:50]}...', ai_response='{response[:50]}...'")
         finally:
             session_db.close()
+            logger.info(f"[API_SEND_MESSAGE] DB session closed for user {user_id}")
 
+        logger.info(f"[API_SEND_MESSAGE] Returning success response for user {user_id}")
         return web.json_response({'response': response, 'success': True})
     except Exception as e:
         logger.error(f"Unexpected error in api_send_message_handler: {e}", exc_info=True)
