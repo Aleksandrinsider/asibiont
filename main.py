@@ -85,6 +85,9 @@ try:
             except Exception:
                 pass
             
+            # Commit the enum additions
+            conn.commit()
+            
             # Check if we have old enum values
             result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier::text IN ('BRONZE', 'SILVER', 'GOLD')"))
             count = result.scalar()
