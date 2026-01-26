@@ -50,9 +50,14 @@ def cleanup_database():
         
         logger.info("Удаление рейтингов...")
         if preserved_user_id:
+            # Удаляем рейтинги где пользователь не является ни оценивающим, ни оцениваемым
             session.query(UserRating).filter(
-                (UserRating.rater_id != preserved_user_id) & 
-                (UserRating.rated_user_id != preserved_user_id)
+                UserRating.rater_user_id != preserved_user_id,
+                UserRating.rated_user_id != preserved_user_id
+            ).delete(synchronize_session=False)
+            # Удаляем рейтинги где пользователь оценивал других (не сохраненных)
+            session.query(UserRating).filter(
+                UserRating.rater_user_id == preserved_user_id
             ).delete(synchronize_session=False)
         else:
             session.query(UserRating).delete(synchronize_session=False)
