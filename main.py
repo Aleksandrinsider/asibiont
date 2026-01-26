@@ -2962,31 +2962,26 @@ async def api_partners_handler(request):
                 logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
 
                 # Determine if user can access this contact
-                # LIGHT видит только LIGHT контакты
+                # LIGHT видит LIGHT и STANDARD контакты
                 # STANDARD видит LIGHT и STANDARD контакты
                 # PREMIUM видит все контакты (LIGHT, STANDARD, PREMIUM)
                 can_access = False
-                required_tier = None
 
                 if user_tier_str.lower() == 'light':
-                    # LIGHT видит только LIGHT контакты
-                    can_access = (partner_tier_str.lower() == 'light')
+                    # LIGHT видит LIGHT и STANDARD контакты
+                    can_access = (partner_tier_str.lower() in ['light', 'standard'])
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
-                    if not can_access:
-                        required_tier = 'standard'
                 elif user_tier_str.lower() == 'standard':
                     # STANDARD видит LIGHT и STANDARD контакты
                     can_access = (partner_tier_str.lower() in ['light', 'standard'])
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
-                    if not can_access:
-                        required_tier = 'premium'
                 elif user_tier_str.lower() == 'premium':
                     # PREMIUM видит всех
                     can_access = True
                     logger.info(f"User {user_tier_str} can access all partners")
 
-                # Add ALL contacts, including those user cannot access yet (for "Premium status" filter)
-                if partner_user:
+                # Add only contacts that user can access (hide inaccessible contacts)
+                if partner_user and can_access:
                     # Get partner's profile for rating info
                     partner_profile = session_db.query(UserProfile).filter_by(user_id=partner_user.id).first()
                     
@@ -2998,7 +2993,6 @@ async def api_partners_handler(request):
                             'photo_url': photo_url,
                             'first_name': partner_user.first_name,
                             'can_access': can_access,
-                            'required_tier': required_tier,
                             'subscription_tier': (partner_tier.value if partner_tier and hasattr(partner_tier, 'value') else 'bronze').lower(),
                             'city': getattr(
                                 p,
@@ -3272,20 +3266,15 @@ async def api_partners_handler(request):
             delegatee_tier_str = delegatee_tier.value if hasattr(delegatee_tier, 'value') else str(delegatee_tier).lower()
 
             can_access = False
-            required_tier = None
 
             if user_tier_str.lower() == 'light':
-                # LIGHT видит только LIGHT контакты
-                can_access = (delegatee_tier_str.lower() == 'light')
+                # LIGHT видит LIGHT и STANDARD контакты
+                can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
-                if not can_access:
-                    required_tier = 'standard'
             elif user_tier_str.lower() == 'standard':
                 # STANDARD видит LIGHT и STANDARD контакты
                 can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
-                if not can_access:
-                    required_tier = 'premium'
             elif user_tier_str.lower() == 'premium':
                 can_access = True
                 logger.info(f"Delegatee check: User {user_tier_str} can access all delegatees")
@@ -3295,10 +3284,9 @@ async def api_partners_handler(request):
                 logger.info(f"Adding delegating_by_me contact {contact['username']} with tier {delegatee_tier_str} for user {user.username} with tier {user_tier_str}")
                 delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first() if delegatee else None
                 partners_data.append({
-                    'contact_info': contact['username'] if can_access else None,
+                    'contact_info': contact['username'],
                     'telegram_id': delegatee.telegram_id if delegatee else None,
                     'can_access': can_access,
-                    'required_tier': required_tier,
                     'subscription_tier': delegatee_tier.value if delegatee_tier else 'bronze',
                     'photo_url': photo_url,
                     'first_name': contact['first_name'],
