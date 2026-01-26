@@ -22,8 +22,12 @@ from .utils import (
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
+from .handlers import delete_all_tasks, delete_task_sync
 
 logger = logging.getLogger(__name__)
+
+# Базовый системный промпт для простых сообщений
+system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
 
 # ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
 class SimpleCache:
@@ -330,9 +334,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     reminder_time = intent.get("params", {}).get("reminder_time")
                 
                 # Валидация reminder_time
-                has_time = intent.get("params", {}).get("has_time", False)
                 # logger.info(f"[ADD TASK] reminder_time={reminder_time}, has_time={has_time}")
-                
+
                 # Если reminder_time не валиден - устанавливаем состояние ожидания
                 if not reminder_time or reminder_time in ['', 'None', 'null', '@unknown']:
                     logger.info(f"[ADD TASK] Invalid reminder_time - setting waiting state for user {user_id}")
@@ -2766,7 +2769,6 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                     continue  # Пропускаем неактивные задачи
                     
                 task_time = ""
-                status_marker = ""
                 if task.reminder_time:
                     try:
                         # Конвертируем в локальное время пользователя
@@ -2778,7 +2780,6 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         
                         # Проверяем, просрочена ли задача
                         if task_time_utc < now_utc:
-                            status_marker = " [ПРОСРОЧЕНА]"
                             overdue_tasks.append(task)
                         else:
                             upcoming_tasks.append(task)
