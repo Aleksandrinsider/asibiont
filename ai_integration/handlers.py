@@ -5,7 +5,7 @@ import json
 import re
 from datetime import datetime, timezone, timedelta
 import pytz
-from models import Session, Task, User, UserProfile, Interaction, Subscription
+from models import Session, Task, User, UserProfile, Interaction, Subscription, SubscriptionTier
 from sqlalchemy import or_, and_, func
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
@@ -772,7 +772,7 @@ def delegate_task(
         logger.info(f"[DELEGATE] User {user_id} tier: {delegator.subscription_tier.value if delegator.subscription_tier else 'None'}")
         
         # Skip subscription check in FREE_ACCESS_MODE
-        if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier.value == 'LIGHT':
+        if not FREE_ACCESS_MODE and delegator.subscription_tier and delegator.subscription_tier not in [SubscriptionTier.STANDARD, SubscriptionTier.PREMIUM]:
             return ("🥉 Делегирование задач доступно только на тарифах **Серебро** и **Золото**. "
                     "На тарифе Бронза вы можете получать делегированные задачи от других пользователей, "
                     "но не можете делегировать свои задачи. Обновите тариф для доступа к делегированию.")
@@ -3219,11 +3219,31 @@ def delegate_task(title, description, reminder_time, delegated_to_username, dele
             session.close()
         return "Пользователь не найден"
     
-    # Check subscription tier
-    if str(user.subscription_tier).upper() not in ['STANDARD', 'PREMIUM']:
-        if close_session:
-            session.close()
-        return "Делегирование задач доступно только на тарифах Standard и Premium. Обновите подписку для доступа к этой функции."
+    # Validate input parameters
+    if not title or title.strip() == "":
+        logger.error("[DELEGATE_TASK] title is empty or None")
+        return "ERROR: Название задачи не может быть пустым"
+    
+    if not delegated_to_username or delegated_to_username.strip() == "":
+        logger.error("[DELEGATE_TASK] delegated_to_username is empty or None")
+        return "ERROR: Получатель не указан"
+    
+    # Validate reminder_time
+    if not reminder_time:
+        return "Для делегирования задачи требуется точная дата и время дедлайна. Пожалуйста, уточните: на какое точное время и дату поставить дедлайн? (Например: '2026-01-10 15:00' или 'завтра в 14:30')"
+    
+    # Validate reminder_time format
+    if reminder_time:
+        try:
+            datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+        except ValueError:
+            logger.info(f"[DELEGATE_TASK] Parsing relative time: {reminder_time}")
+            parsed_time = parse_time_to_datetime(reminder_time, user_id)
+            if parsed_time:
+                reminder_time = parsed_time
+                logger.info(f"[DELEGATE_TASK] Parsed to: {reminder_time}")
+            else:
+                return f"Некорректный формат времени '{reminder_time}'. Укажите точное время в формате YYYY-MM-DD HH:MM (например: 2026-01-10 15:00)"
     
     # Find delegated user
     delegated_username = delegated_to_username.lstrip('@')
@@ -3238,9 +3258,10 @@ def delegate_task(title, description, reminder_time, delegated_to_username, dele
         user_id=user.id,
         title=title,
         description=encrypt_data(description),
-        delegated_to=delegated_user.id,
+        delegated_to_username=delegated_to_username,
         delegation_details=encrypt_data(delegation_details) if delegation_details else None,
-        status="delegated"
+        status="pending",
+        delegation_status="pending"
     )
     
     # Parse reminder_time

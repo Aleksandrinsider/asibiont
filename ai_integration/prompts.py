@@ -305,7 +305,7 @@ delete_task(task_id, task_title) - удалить задачу
   • КРИТИЧНО: Всегда спрашивай причину перед удалением!
 update_profile(city, interests, skills, goals, company, position) - обновить профиль
 find_partners() - найти контакты по интересам/навыкам по интересам/навыкам
-delegate_task(title, description, delegated_to_username, reminder_time) - делегировать (Silver/Gold)
+delegate_task(title, description, delegated_to_username, reminder_time) - делегировать (Standard/Premium)
   • title: краткое название задачи
   • description: подробное описание с требованиями и ожидаемым результатом
   • delegated_to_username: @username получателя
