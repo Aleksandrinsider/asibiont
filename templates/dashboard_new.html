@@ -452,24 +452,25 @@
     <style>
         /* Main layout styles */
         .main-layout {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1.03fr 1.44fr 1.03fr;
             gap: 8px;
             align-items: stretch;
         }
         
         .left-column {
-            flex: 0 0 280px;
-            min-width: 280px;
+            /* flex: 0 0 280px; */
+            /* min-width: 280px; */
         }
         
         .center-column {
-            flex: 1 1 auto;
-            min-width: 400px;
+            /* flex: 1 1 auto; */
+            /* min-width: 400px; */
         }
         
         .right-column {
-            flex: 0 0 320px;
-            min-width: 320px;
+            /* flex: 0 0 320px; */
+            /* min-width: 320px; */
         }
         
         /* Background SVG for login page */
@@ -661,6 +662,11 @@
                 gap: 8px;
             }
             
+            /* Для мобильных: скрываем левую колонку и делаем две колонки */
+            .main-layout {
+                grid-template-columns: 1fr 1fr !important;
+            }
+            
             /* Скрываем чат и ленту новостей на мобильных */
             .left-column {
                 display: none !important;
@@ -668,14 +674,14 @@
             
             /* Центральная колонка занимает всю ширину */
             .center-column {
-                flex: 1 1 100% !important;
-                max-width: 100% !important;
+                /* flex: 1 1 100% !important; */
+                /* max-width: 100% !important; */
             }
             
             /* Правая колонка (задачи) на всю ширину */
             .right-column {
-                flex: 1 1 100% !important;
-                max-width: 100% !important;
+                /* flex: 1 1 100% !important; */
+                /* max-width: 100% !important; */
             }
         }
 
