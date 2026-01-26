@@ -67,6 +67,53 @@ try:
         conn.execute(text("SELECT 1"))
     logger.info("✅ Database connection successful")
 
+    # Migrate subscription tiers if needed
+    try:
+        logger.info("Checking for subscription tier migration...")
+        with engine.connect() as conn:
+            # Check if we have old enum values
+            result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier::text IN ('BRONZE', 'SILVER', 'GOLD')"))
+            count = result.scalar()
+            if count > 0:
+                logger.info(f"Found {count} records with old subscription tiers, migrating...")
+                # Migrate users table
+                conn.execute(text("""
+                    UPDATE users
+                    SET subscription_tier = CASE
+                        WHEN subscription_tier::text = 'BRONZE' THEN 'LIGHT'::subscriptiontier
+                        WHEN subscription_tier::text = 'SILVER' THEN 'STANDARD'::subscriptiontier
+                        WHEN subscription_tier::text = 'GOLD' THEN 'PREMIUM'::subscriptiontier
+                        ELSE subscription_tier
+                    END
+                """))
+                # Migrate subscriptions table
+                conn.execute(text("""
+                    UPDATE subscriptions
+                    SET tier = CASE
+                        WHEN tier::text = 'BRONZE' THEN 'LIGHT'::subscriptiontier
+                        WHEN tier::text = 'SILVER' THEN 'STANDARD'::subscriptiontier
+                        WHEN tier::text = 'GOLD' THEN 'PREMIUM'::subscriptiontier
+                        ELSE tier
+                    END
+                """))
+                # Migrate promo_codes table
+                conn.execute(text("""
+                    UPDATE promo_codes
+                    SET tier = CASE
+                        WHEN tier::text = 'BRONZE' THEN 'LIGHT'::subscriptiontier
+                        WHEN tier::text = 'SILVER' THEN 'STANDARD'::subscriptiontier
+                        WHEN tier::text = 'GOLD' THEN 'PREMIUM'::subscriptiontier
+                        ELSE tier
+                    END
+                """))
+                conn.commit()
+                logger.info("✅ Subscription tier migration completed")
+            else:
+                logger.info("No old subscription tiers found, skipping migration")
+    except Exception as e:
+        logger.error(f"❌ Subscription tier migration failed: {e}")
+        # Continue anyway
+
     # Initialize database tables
     init_db()
 except Exception as e:
