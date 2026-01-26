@@ -3859,7 +3859,7 @@
         function renderTaskItem(task) {
             let html = '';
             html += '<div style="flex: 1;">';
-            const titleStyle = task.status === 'completed' ? ' style="text-decoration: line-through; opacity: 0.6;"' : '';
+            const titleStyle = task.status === 'completed' ? ' style="opacity: 0.6;"' : '';
             const overdueIndicator = task.overdue ? '<span class="overdue-pulse"></span>' : '';
             
             // Извлекаем чистый заголовок и информацию о делегировании
