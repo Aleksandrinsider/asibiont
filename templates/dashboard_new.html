@@ -229,7 +229,7 @@
                 }
             });
             
-            // Если фильтр elite, загружаем Gold контакты
+            // Если фильтр elite, загружаем Premium контакты
             if (filterType === 'elite') {
                 await loadEliteContacts();
             } else if (filterType === 'blocked') {
@@ -259,11 +259,11 @@
                     const data = await response.json();
                     const elitePartners = data.partners || [];
                     
-                    // Очищаем список и рендерим Gold контакты
+                    // Очищаем список и рендерим Premium контакты
                     let html = '<ul style="list-style: none; padding: 0; margin: 0;">';
                     
                     if (elitePartners.length === 0) {
-                        html += '<li style="text-align: center; padding: 20px; color: #6C727F;">Gold пользователей пока нет</li>';
+                        html += '<li style="text-align: center; padding: 20px; color: #6C727F;">Premium пользователей пока нет</li>';
                     } else {
                         elitePartners.forEach(partner => {
                             if (!partner.contact_info) return; // Skip partners without contact_info
@@ -271,7 +271,7 @@
                             const telegramUrl = 'https://t.me/' + partner.contact_info;
                             const contactInfoEscaped = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
                             
-                            html += '<li class="task-item contact-elite" data-username="' + contactInfoEscaped + '" data-type="elite" data-tier="gold" style="display: flex; margin-bottom: 8px; align-items: center;">';
+                            html += '<li class="task-item contact-elite" data-username="' + contactInfoEscaped + '" data-type="elite" data-tier="premium" style="display: flex; margin-bottom: 8px; align-items: center;">';
                             
                             // Аватар
                             if (partner.photo_url) {
@@ -285,7 +285,7 @@
                             
                             html += '<div style="flex: 1;">';
                             
-                            // Имя пользователя с Gold цветом
+                            // Имя пользователя с Premium цветом
                             html += '<div class="task-title"><span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="cursor: pointer; color: #068487;">@' + contactInfoEscaped + '</span></div>';
                             
                             // Город
@@ -1197,7 +1197,7 @@
                     <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 13px;">
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" title="">Избранное</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" title="">Рекомендуемые</button>
-                        <button class="contact-filter-btn{% if subscription_tier not in ['GOLD'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['GOLD'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['GOLD'] %} disabled{% endif %} title="">Премиум статус</button>
+                        <button class="contact-filter-btn{% if subscription_tier not in ['PREMIUM'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['PREMIUM'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %} title="">Премиум статус</button>
                         <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" title="">Делегирует мне</button>
                         <button class="contact-filter-btn{% if subscription_tier == 'LIGHT' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'LIGHT' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'LIGHT' %} disabled{% endif %} title="">Делегирую я</button>
                         <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')" title="">Заблокированные</button>
@@ -5201,7 +5201,7 @@
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
                                     } else {
-                                        const tierNames = {'bronze': '?? Бронза', 'silver': '?? Серебро', 'gold': '?? Золото'};
+                                        const tierNames = {'light': '?? Light', 'standard': '?? Standard', 'premium': '?? Premium'};
                                         const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
                                         html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
@@ -5276,13 +5276,13 @@
                                     const favoriteTitle = isFavorite ? 'Удалить из избранного' : 'Добавить в избранное';
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
-                                    // Delegate button with Bronze tier check
-                                    const isBronze = userSubscriptionTier === 'BRONZE';
+                                    // Delegate button with Light tier check
+                                    const isLight = userSubscriptionTier === 'LIGHT';
                                     
-                                    const delegateClass = isBronze ? 'quick-action disabled' : 'quick-action';
-                                    const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Делегировать';
-                                    const delegateOnclick = isBronze ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
-                                    const delegateDisabled = isBronze ? ' disabled' : '';
+                                    const delegateClass = isLight ? 'quick-action disabled' : 'quick-action';
+                                    const delegateTitle = isLight ? 'Функция доступна на других тарифах' : 'Делегировать';
+                                    const delegateOnclick = isLight ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
+                                    const delegateDisabled = isLight ? ' disabled' : '';
                                     html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
@@ -5387,13 +5387,13 @@
                                     const favoriteTitle = isFavorite ? 'Удалить из избранного' : 'Добавить в избранное';
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
-                                    // Delegate button with Bronze tier check
-                                    const isBronze = userSubscriptionTier === 'BRONZE';
+                                    // Delegate button with Light tier check
+                                    const isLight = userSubscriptionTier === 'LIGHT';
                                     
-                                    const delegateClass = isBronze ? 'quick-action disabled' : 'quick-action';
-                                    const delegateTitle = isBronze ? 'Функция доступна на других тарифах' : 'Делегировать';
-                                    const delegateOnclick = isBronze ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
-                                    const delegateDisabled = isBronze ? ' disabled' : '';
+                                    const delegateClass = isLight ? 'quick-action disabled' : 'quick-action';
+                                    const delegateTitle = isLight ? 'Функция доступна на других тарифах' : 'Делегировать';
+                                    const delegateOnclick = isLight ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
+                                    const delegateDisabled = isLight ? ' disabled' : '';
                                     html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
                                     
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
@@ -5543,8 +5543,8 @@
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
                                     } else {
-                                        const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                        const tierNames = {'light': 'Лайт', 'standard': 'Стандарт', 'premium': 'Премиум'};
+                                        const requiredTierName = tierNames[partner.required_tier] || 'Стандарт';
                                         html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
@@ -5650,8 +5650,8 @@
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
                                     } else {
-                                        const tierNames = {'bronze': 'Бронза', 'silver': 'Серебро', 'gold': 'Золото'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                        const tierNames = {'light': 'Лайт', 'standard': 'Стандарт', 'premium': 'Премиум'};
+                                        const requiredTierName = tierNames[partner.required_tier] || 'Стандарт';
                                         html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     
