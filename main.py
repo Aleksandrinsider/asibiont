@@ -30,8 +30,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Aiogram imports
-# from aiogram.webhook.aiohttp_server import SimpleRequestHandler
-# from aiogram import Bot, Dispatcher
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+from aiogram import Bot, Dispatcher
 
 # Скрываем некритичные предупреждения
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
@@ -962,6 +962,54 @@ def ensure_sport_interest():
 #         logger.error(f"Failed to create test promo codes: {e}")
 # """
 
+    # Create test promo codes (3 for each tier, valid until Feb 1, 2026, unlimited uses)
+    if os.getenv('LOCAL') == '1' or os.getenv('CREATE_TEST_USERS') == '1':
+        try:
+            session_db = Session()
+
+            # Check if promo codes already exist
+            existing_promos = session_db.query(PromoCode).filter(PromoCode.code.like('SPORT%')).all()
+            if existing_promos:
+                logger.info(f"Test promo codes already exist: {[p.code for p in existing_promos]}")
+            else:
+                # Create promo codes valid until February 1, 2026
+                expires_at = datetime(2026, 2, 1, tzinfo=dt_timezone.utc)
+
+                # LIGHT tier promo codes
+                light_promos = [
+                    PromoCode(code='SPORTLIGHT1', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+                    PromoCode(code='SPORTLIGHT2', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+                    PromoCode(code='SPORTLIGHT3', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+                ]
+
+                # STANDARD tier promo codes
+                standard_promos = [
+                    PromoCode(code='SPORTSTAND1', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+                    PromoCode(code='SPORTSTAND2', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+                    PromoCode(code='SPORTSTAND3', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+                ]
+
+                # PREMIUM tier promo codes
+                premium_promos = [
+                    PromoCode(code='SPORTPREM1', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+                    PromoCode(code='SPORTPREM2', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+                    PromoCode(code='SPORTPREM3', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+                ]
+
+                # Add all promo codes
+                all_promos = light_promos + standard_promos + premium_promos
+                for promo in all_promos:
+                    session_db.add(promo)
+
+                session_db.commit()
+                logger.info(f"Created {len(all_promos)} test promo codes valid until {expires_at.date()}")
+                for promo in all_promos:
+                    logger.info(f"  - {promo.code}: {promo.tier.value} tier for {promo.duration_days} days")
+
+            session_db.close()
+        except Exception as e:
+            logger.error(f"Failed to create test promo codes: {e}")
+
 # Test database connection before starting
 try:
     test_session = Session()
@@ -979,22 +1027,38 @@ try:
     # Production mode: Test users and promo codes disabled
     logger.info("Production mode: Test data creation disabled")
 
-    # Create test users with different tiers and sport interests (only in local mode)
-    if os.getenv('LOCAL') == '1':
+    # Create test users with different tiers and sport interests (only in local mode or when explicitly enabled)
+    if os.getenv('LOCAL') == '1' or os.getenv('CREATE_TEST_USERS') == '1':
         try:
             session_db = Session()
             logger.info("Creating test users with different subscription tiers")
 
             test_users_data = [
-                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User Light'},
-                {'telegram_id': 1002, 'tier': 'STANDARD', 'name': 'Test User Standard'},
-                {'telegram_id': 1003, 'tier': 'PREMIUM', 'name': 'Test User Premium'},
-                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User Light 2'},
-                {'telegram_id': 1005, 'tier': 'STANDARD', 'name': 'Test User Standard 2'},
-                {'telegram_id': 1006, 'tier': 'STANDARD', 'name': 'Test User Standard 3'},
-                {'telegram_id': 1007, 'tier': 'PREMIUM', 'name': 'Test User Premium 2'},
-                {'telegram_id': 1008, 'tier': 'STANDARD', 'name': 'Test User Standard 4'},
-                {'telegram_id': 1009, 'tier': 'PREMIUM', 'name': 'Test User Premium 3'},
+                # LIGHT tier users
+                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Алексей Иванов', 'city': 'Москва', 'username': 'alexey_ivanov'},
+                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Мария Петрова', 'city': 'Санкт-Петербург', 'username': 'maria_petrova'},
+                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Дмитрий Сидоров', 'city': 'Екатеринбург', 'username': 'dmitry_sidorov'},
+                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Елена Козлова', 'city': 'Новосибирск', 'username': 'elena_kozlova'},
+                {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Андрей Новиков', 'city': 'Казань', 'username': 'andrey_novikov'},
+                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Ольга Морозова', 'city': 'Нижний Новгород', 'username': 'olga_morozova'},
+                {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Сергей Волков', 'city': 'Челябинск', 'username': 'sergey_volkov'},
+                {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Татьяна Соколова', 'city': 'Омск', 'username': 'tatiana_sokolova'},
+
+                # STANDARD tier users
+                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Игорь Лебедев', 'city': 'Ростов-на-Дону', 'username': 'igor_lebedev'},
+                {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Наталья Попова', 'city': 'Уфа', 'username': 'natalya_popova'},
+                {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Владимир Кузнецов', 'city': 'Волгоград', 'username': 'vladimir_kuznetsov'},
+                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Анна Васильева', 'city': 'Красноярск', 'username': 'anna_vasilieva'},
+                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Максим Павлов', 'city': 'Воронеж', 'username': 'maxim_pavlov'},
+                {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Юлия Семенова', 'city': 'Пермь', 'username': 'yulia_semenova'},
+
+                # PREMIUM tier users
+                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Роман Егоров', 'city': 'Краснодар', 'username': 'roman_egorov'},
+                {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Светлана Михайлова', 'city': 'Тюмень', 'username': 'svetlana_mikhailova'},
+                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Артем Николаев', 'city': 'Барнаул', 'username': 'artem_nikolaev'},
+                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Кристина Орлова', 'city': 'Ижевск', 'username': 'kristina_orlova'},
+                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Денис Андреев', 'city': 'Владивосток', 'username': 'denis_andreev'},
+                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Виктория Захарова', 'city': 'Ярославль', 'username': 'viktoriya_zakharova'},
             ]
 
             now = datetime.now()
@@ -1010,7 +1074,9 @@ try:
                 # Create user
                 user = User(
                     telegram_id=user_data['telegram_id'],
+                    username=user_data['username'],
                     first_name=user_data['name'],
+                    photo_url=f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN or 'fake_token'}/photos/file_test_{user_data['telegram_id']}.jpg?r={user_data['telegram_id']}",  # Fake avatar URL for testing
                     subscription_tier=user_data['tier'],  # Set subscription tier
                     created_at=now
                 )
@@ -1018,10 +1084,33 @@ try:
                 session_db.flush()  # Get user.id
 
                 # Create profile with sport interests
+                sport_interests = [
+                    'футбол, баскетбол, теннис',
+                    'бег, плавание, йога',
+                    'волейбол, гандбол, фитнес',
+                    'лыжи, сноуборд, горные лыжи',
+                    'бокс, карате, единоборства',
+                    'велоспорт, триатлон, марафон',
+                    'теннис, бадминтон, сквош',
+                    'плавание, водное поло, дайвинг',
+                    'баскетбол, волейбол, гандбол',
+                    'футбол, хоккей, биатлон',
+                    'бег, кроссфит, силовые тренировки',
+                    'йога, пилатес, растяжка',
+                    'теннис, гольф, бильярд',
+                    'плавание, серфинг, виндсерфинг',
+                    'баскетбол, футбол, волейбол',
+                    'бег, велоспорт, туризм',
+                    'фитнес, бодибилдинг, пауэрлифтинг',
+                    'йога, медитация, здоровый образ жизни',
+                    'теннис, сквош, настольный теннис',
+                    'плавание, водные виды спорта, аквааэробика'
+                ]
+
                 profile = UserProfile(
                     user_id=user.id,
-                    interests='спорт, фитнес, здоровый образ жизни',
-                    city='Москва',
+                    interests=sport_interests[user_data['telegram_id'] - 1001],  # Use different interests for each user
+                    city=user_data['city'],  # Use city from user data
                     contact_info=f'user{user_data["telegram_id"]}@test.com'
                 )
                 session_db.add(profile)
@@ -2291,6 +2380,7 @@ async def complete_task_handler(request):
         logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} completed by user {user_id}: {result}")
         
         # Проверяем статус задачи после завершения
+        from models import Task
         db_session = Session()
         try:
             task = db_session.query(Task).filter_by(id=task_id).first()
@@ -2304,13 +2394,14 @@ async def complete_task_handler(request):
         # Отправляем уведомление в Telegram через AI обработку, как будто пользователь написал о выполнении
         try:
             if 'bot' in request.app:
-                from models import Session as DBSession, Task, User
+                from models import Session as DBSession, User
                 from ai_integration.chat import chat_with_ai
                 db_session = DBSession()
                 try:
                     # Находим пользователя по user_id (это telegram_id)
                     user = db_session.query(User).filter_by(telegram_id=user_id).first()
                     if user:
+                        from models import Task
                         task = db_session.query(Task).filter_by(id=task_id, user_id=user.id).first()
                         if task:
                             # Отправляем сообщение через AI, как будто пользователь написал о выполнении
@@ -2533,9 +2624,8 @@ async def direct_login_handler(request):
 
 try:
     if TELEGRAM_TOKEN:
-        # bot = Bot(token=TELEGRAM_TOKEN)
-        bot = None  # Disabled for local testing
-        logger.info("Bot creation disabled for local testing")
+        bot = Bot(token=TELEGRAM_TOKEN)
+        logger.info("Bot created successfully")
     else:
         bot = None
         logger.info("Bot not created (no token)")
@@ -3025,19 +3115,26 @@ async def api_partners_handler(request):
                 logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
 
                 # Determine if user can access this contact
-                # Bronze и Silver видят друг друга (Bronze видит Bronze+Silver, Silver видит Bronze+Silver)
-                # Gold видит всех (Bronze, Silver, Gold)
+                # LIGHT видит только LIGHT контакты
+                # STANDARD видит LIGHT и STANDARD контакты
+                # PREMIUM видит все контакты (LIGHT, STANDARD, PREMIUM)
                 can_access = False
                 required_tier = None
 
-                if user_tier_str.lower() in ['bronze', 'silver']:
-                    # Bronze и Silver видят только Bronze и Silver контакты
-                    can_access = (partner_tier_str.lower() in ['bronze', 'silver'])
+                if user_tier_str.lower() == 'light':
+                    # LIGHT видит только LIGHT контакты
+                    can_access = (partner_tier_str.lower() == 'light')
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                     if not can_access:
-                        required_tier = 'gold'
-                elif user_tier_str.lower() == 'gold':
-                    # Gold видит всех
+                        required_tier = 'standard'
+                elif user_tier_str.lower() == 'standard':
+                    # STANDARD видит LIGHT и STANDARD контакты
+                    can_access = (partner_tier_str.lower() in ['light', 'standard'])
+                    logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
+                    if not can_access:
+                        required_tier = 'premium'
+                elif user_tier_str.lower() == 'premium':
+                    # PREMIUM видит всех
                     can_access = True
                     logger.info(f"User {user_tier_str} can access all partners")
 
@@ -3321,7 +3418,7 @@ async def api_partners_handler(request):
             if not hasattr(user_tier, 'value'):
                 user_tier = SubscriptionTier.LIGHT
             if not hasattr(delegatee_tier, 'value'):
-                delegatee_tier = SubscriptionTier.BRONZE
+                delegatee_tier = SubscriptionTier.LIGHT
 
             # Convert to string for comparison
             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
@@ -3330,13 +3427,19 @@ async def api_partners_handler(request):
             can_access = False
             required_tier = None
 
-            if user_tier_str.lower() in ['bronze', 'silver']:
-                # Bronze и Silver видят только Bronze и Silver контакты
-                can_access = (delegatee_tier_str.lower() in ['bronze', 'silver'])
+            if user_tier_str.lower() == 'light':
+                # LIGHT видит только LIGHT контакты
+                can_access = (delegatee_tier_str.lower() == 'light')
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
                 if not can_access:
-                    required_tier = 'gold'
-            elif user_tier_str.lower() == 'gold':
+                    required_tier = 'standard'
+            elif user_tier_str.lower() == 'standard':
+                # STANDARD видит LIGHT и STANDARD контакты
+                can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
+                logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
+                if not can_access:
+                    required_tier = 'premium'
+            elif user_tier_str.lower() == 'premium':
                 can_access = True
                 logger.info(f"Delegatee check: User {user_tier_str} can access all delegatees")
 

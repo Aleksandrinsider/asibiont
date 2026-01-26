@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 REMINDER_SERVICE = None
 
 async def _send_reminder_job(task_id: int):
-    from models import Session, Task
     db = Session()
     try:
         task = db.query(Task).filter_by(id=task_id).first()
@@ -57,7 +56,6 @@ async def _send_reminder_job(task_id: int):
         logger.error("REMINDER_SERVICE not initialized; cannot send reminder")
 
 async def _send_result_check_job(task_id: int):
-    from models import Session, Task
     db = Session()
     try:
         task = db.query(Task).filter_by(id=task_id).first()
@@ -115,6 +113,14 @@ async def _check_and_send_overdue_reminder_job(user_id: int):
         logger.error("REMINDER_SERVICE not initialized; cannot check overdue")
 
 
+async def _update_user_avatars_job():
+    """Jobstore-safe wrapper for updating user avatars from Telegram"""
+    if REMINDER_SERVICE:
+        await REMINDER_SERVICE.update_user_avatars()
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot update avatars")
+
+
 async def _send_task_checkpoint_job(user_id: int, checkpoint_type: str = "general"):
     """Jobstore-safe wrapper for task checkpoint messages"""
     if REMINDER_SERVICE:
@@ -159,9 +165,9 @@ class ReminderService:
         self.schedule_proactive_checks()
         self.schedule_overdue_checks()
         self.schedule_delegation_checks()
+        self.schedule_avatar_updates()
 
     def schedule_existing_reminders(self):
-        import logging
         logger = logging.getLogger(__name__)
         db = Session()
         try:
@@ -195,7 +201,6 @@ class ReminderService:
             db.close()
 
     def schedule_reminder(self, task_id: int, reminder_time: datetime, user_id: int, task_title: str):
-        import logging
         logger = logging.getLogger(__name__)
         # Конвертируем naive datetime в aware с UTC
         if reminder_time.tzinfo is None:
@@ -235,7 +240,6 @@ class ReminderService:
         )
 
     async def send_result_check(self, user_id: int, task_title: str, task_id: int):
-        import logging
         import traceback
         logger = logging.getLogger(__name__)
         logger.info("=== STARTING RESULT CHECK SEND ===")
@@ -314,7 +318,6 @@ class ReminderService:
             logger.warning(f"Task {task_id} NOT marked as result_check_sent due to delivery failure")
 
     async def send_reminder(self, user_id: int, task_title: str, task_id: int):
-        import logging
         import traceback
         logger = logging.getLogger(__name__)
         logger.info("=== STARTING REMINDER SEND ===")
@@ -464,7 +467,6 @@ class ReminderService:
             else:
                 logger.info(f"[DAILY REPORT] To user {user_id}: {report_text}")
         except Exception as e:
-            import logging
             logging.error(f"Failed to send daily report to user {user_id}: {e}")    
     async def send_delegation_progress_update(self, task_id: int, update_type: str = "status"):
         """Send simple progress update about delegated task to delegator"""
@@ -489,14 +491,11 @@ class ReminderService:
             if self.bot:
                 await self.bot.send_message(delegator.telegram_id, message)
         except Exception as e:
-            import logging
             logging.error(f"Failed to send delegation progress update: {e}")
         finally:
             db.close()
     def schedule_proactive_checks(self):
         """Планирование чекпоинтов для задач по принципу 1/3-2/3 времени вместо периодических проверок"""
-        from models import Session
-        from models import User
         
         db = Session()
         try:
@@ -603,15 +602,12 @@ class ReminderService:
                 else:
                     logger.info(f"[CHECKPOINT] To user {user_id}: {proactive_text}")
             except Exception as e:
-                import logging
                 logging.error(f"Failed to send checkpoint message to user {user_id}: {e}")
         finally:
             db.close()
 
     async def check_and_send_proactive(self, user_id: int):
         """Проверка и отправка проактивного сообщения, если нет задач на ближайший час"""
-        from models import Session
-        from models import Task, User, Interaction
         from datetime import timedelta
         from config import FREE_ACCESS_MODE
         
@@ -748,9 +744,6 @@ class ReminderService:
         Для задач с приближающимся дедлайном:
         - 1/3 времени до reminder_time: предварительный чекпоинт
         """
-        from models import Session
-        from models import Task, User
-        
         db = Session()
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
@@ -868,9 +861,6 @@ class ReminderService:
             task_count: Количество активных задач
             urgent: Задачи в urgent состоянии (осталось <1/3 времени до дедлайна)
         """
-        from models import Session
-        from models import User
-        
         db = Session()
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
@@ -921,8 +911,6 @@ class ReminderService:
 
     def schedule_overdue_checks(self):
         """Планирование проверок просроченных задач каждые 15 минут"""
-        from models import Session
-        from models import User
         from apscheduler.triggers.interval import IntervalTrigger
         
         db = Session()
@@ -979,8 +967,6 @@ class ReminderService:
             task_count: Количество задач
             overdue_count: Количество просроченных задач
         """
-        from models import Session
-        from models import Task, User, Interaction
         from datetime import timedelta
         from config import FREE_ACCESS_MODE
         
@@ -1117,15 +1103,12 @@ class ReminderService:
                 else:
                     logger.info(f"[PROACTIVE] To user {user_id}: {proactive_text}")
             except Exception as e:
-                import logging
                 logging.error(f"Failed to send proactive message to user {user_id}: {e}")
         finally:
             db.close()
 
     async def check_and_send_overdue_reminder(self, user_id: int):
         """Проверка и отправка напоминания о просроченных задачах"""
-        from models import Session
-        from models import Task
         from datetime import datetime
         
         db = Session()
@@ -1152,7 +1135,6 @@ class ReminderService:
 
     async def send_overdue_reminder(self, user_id: int, overdue_tasks: list):
         """Отправка напоминания о просроченных задачах с эскалацией"""
-        from models import Session, Task
         from datetime import datetime
         
         db = Session()
@@ -1191,14 +1173,12 @@ class ReminderService:
             else:
                 logger.info(f"[OVERDUE] To user {user_id}: {overdue_text}")
         except Exception as e:
-            import logging
             logging.error(f"Failed to send overdue reminder to user {user_id}: {e}")
         finally:
             db.close()
 
     def schedule_delegation_check(self, task_id: int, check_time: datetime, delegator_id: int, recipient_id: int, task_title: str, check_type: str = "progress_request"):
         """Schedule delegation progress check"""
-        import logging
         logger = logging.getLogger(__name__)
 
         # Конвертируем naive datetime в aware с UTC
@@ -1226,12 +1206,10 @@ class ReminderService:
 
     async def send_delegation_check(self, task_id: int, delegator_id: int, recipient_id: int, check_type: str = "progress_request"):
         """Send delegation progress check/reminder"""
-        import logging
         import traceback
         logger = logging.getLogger(__name__)
         logger.info(f"=== STARTING DELEGATION CHECK for task {task_id}, type: {check_type} ===")
 
-        from models import Session, Task
         from ai_integration.handlers import check_delegation_deadlines, generate_progress_request
         from ai_integration import chat_with_ai
         import asyncio
@@ -1309,10 +1287,64 @@ class ReminderService:
         finally:
             db.close()
 
+    async def update_user_avatars(self):
+        """Update avatars for all users from Telegram API"""
+        from main import get_user_avatar_url
+        logger = logging.getLogger(__name__)
+
+        if not self.bot:
+            logger.debug("Bot not available, skipping avatar updates")
+            return
+
+        db = Session()
+        try:
+            users = db.query(User).filter(User.telegram_id.isnot(None)).all()
+            logger.info(f"Updating avatars for {len(users)} users")
+
+            updated_count = 0
+            for user in users:
+                try:
+                    updated_avatar_url = await get_user_avatar_url(self.bot, user.telegram_id)
+                    if updated_avatar_url and updated_avatar_url != user.photo_url:
+                        user.photo_url = updated_avatar_url
+                        db.commit()
+                        updated_count += 1
+                        logger.info(f"Updated avatar for user {user.telegram_id}")
+                except Exception as e:
+                    logger.error(f"Error updating avatar for user {user.telegram_id}: {e}")
+
+            logger.info(f"Avatar update completed: {updated_count} users updated")
+
+        except Exception as e:
+            logger.error(f"Error in update_user_avatars: {e}")
+        finally:
+            db.close()
+
+    def schedule_avatar_updates(self):
+        """Schedule periodic avatar updates from Telegram"""
+        from apscheduler.triggers.interval import IntervalTrigger
+        logger = logging.getLogger(__name__)
+
+        job_id = "avatar_update"
+
+        # Проверяем, существует ли уже такой джоб
+        if self.scheduler.get_job(job_id):
+            logger.debug(f"Avatar update job {job_id} already exists, skipping")
+            return
+
+        # Schedule avatar updates every hour
+        self.scheduler.add_job(
+            _update_user_avatars_job,
+            trigger=IntervalTrigger(hours=1),
+            id=job_id,
+            name="Update user avatars from Telegram",
+            replace_existing=True
+        )
+        logger.info("Scheduled avatar updates every hour")
+
     def schedule_delegation_checks(self):
         """Schedule periodic delegation deadline checks"""
         from apscheduler.triggers.interval import IntervalTrigger
-        import logging
         logger = logging.getLogger(__name__)
 
         job_id = "delegation_deadline_check"

@@ -13,7 +13,6 @@ def encrypt_data(data):
 def decrypt_data(data):
     """Return data as is (no decryption)"""
     return data
-    return data
 
 
 def update_user_memory(info, user_id=None):

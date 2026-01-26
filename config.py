@@ -17,7 +17,6 @@ else:
 
 # Database
 if LOCAL:
-    import os
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:

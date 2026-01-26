@@ -12,8 +12,8 @@ import time
 from functools import lru_cache
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-from models import Session, User, Task, UserProfile, Subscription
-from .memory import decrypt_data
+from models import Session, User, Task, UserProfile
+from .memory import encrypt_data, decrypt_data
 from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
     replace_placeholders, clean_technical_details,
@@ -105,7 +105,6 @@ find_partners = handlers.find_partners
 update_profile = handlers.update_profile
 update_user_memory = handlers.update_user_memory
 delegate_task = handlers.delegate_task
-delete_all_tasks = handlers.delete_all_tasks
 delete_task = handlers.delete_task
 edit_task = handlers.edit_task
 
@@ -161,13 +160,6 @@ get_delegation_progress = handlers.get_delegation_progress
 cancel_delegation = handlers.cancel_delegation
 suggest_alternatives = handlers.suggest_alternatives
 
-# Защита от повторных вызовов опасных команд (3 секунды между вызовами)
-# Формат: {(user_id, func_name): timestamp_last_call}
-_last_call_time = {}
-_COOLDOWN = 3
-# Команды, защищенные от дубликатов
-_PROTECTED_FUNCTIONS = ['add_task', 'delegate_task', 'update_user_memory', 'update_profile']
-
 async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None):
     """Обрабатывает tool calls и возвращает естественный ответ
     
@@ -200,38 +192,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if corrected_tool_calls:
         tool_calls = corrected_tool_calls
 
-    # Убираем ТОЧНЫЕ дубликаты tool calls (одинаковые функция+аргументы)
-    unique_tool_calls = []
-    seen_calls = set()
-    
-    for call in tool_calls:
-        func_name = call.get("function", {}).get("name")
-        func_args = call.get("function", {}).get("arguments", "")
-        
-        # Создаем ключ для проверки дубликатов
-        call_signature = f"{func_name}:{func_args}"
-        
-        if call_signature not in seen_calls:
-            unique_tool_calls.append(call)
-            seen_calls.add(call_signature)
-            logger.info(f"[TOOL CALLS] ✓ Allowed {func_name}")
-        else:
-            logger.warning(f"[TOOL CALLS] ✗ Blocked duplicate {func_name} (exact same args)")
-    
-    tool_calls = unique_tool_calls
-    
     logger.info(f"[PROCESS_TOOL_CALLS] After duplicate check: {len(tool_calls)} tool calls")
     if not tool_calls:
         logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after duplicate check!")
-
-    # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Ограничиваем количество add_task до 1 на сообщение
-    add_task_calls = [call for call in tool_calls if call.get("function", {}).get("name") == "add_task"]
-    if len(add_task_calls) > 1:
-        logger.warning(f"[TOOL CALLS] Multiple add_task calls detected ({len(add_task_calls)}), keeping only the first one")
-        # Убираем все add_task кроме первого
-        tool_calls = [call for call in tool_calls if call.get("function", {}).get("name") != "add_task"]
-        tool_calls.append(add_task_calls[0])  # Добавляем только первый add_task
-        logger.info(f"[TOOL CALLS] Kept first add_task, removed {len(add_task_calls) - 1} duplicates")
 
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
@@ -1604,105 +1567,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # Use basic intent classification
+        # Use basic intent classification - REMOVED keyword matching for more natural AI understanding
         intent = {"type": "conversation", "confidence": 0.5, "params": {}}
-        logger.info("[INTENT] Using basic intent classification")
-
-        # Special handling for delegation requests from frontend buttons OR messages starting with @username
-        if mentions and (any(word in clean_message.lower() for word in ['делегировать', 'поручить', 'delegate', 'поручить']) or original_message.startswith(mentions[0])):
-            if 'список' in clean_message.lower() or 'активные' in clean_message.lower():
-                # Request to show task list for delegation
-                intent = {"type": "list_tasks", "confidence": 0.9, "params": {"for_delegation": True, "target_user": mentions[0]}}
-                logger.info(f"[DELEGATION LIST] Setting intent to list_tasks for delegation to {mentions[0]}")
-            else:
-                # Direct delegation request
-                intent = {"type": "delegate_task", "confidence": 0.9, "params": {"delegated_to_username": mentions[0]}}
-                logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}...")
-
-        # Special handling for delete task requests
-        if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            if any(word in clean_message.lower() for word in ['удали', 'удалить', 'delete', 'remove', 'сними', 'отмени']):
-                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']):
-                    intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
-                    logger.info(f"[DELETE TASK DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
-
-        # Special handling for add task requests - EXPLICIT (добавь задачу, создай задачу)
-        if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            if any(word in clean_message.lower() for word in ['добавь', 'добавить', 'создай', 'создать', 'запланируй', 'запланировать', 'запланируем', 'add', 'create', 'schedule']):
-                if any(word in clean_message.lower() for word in ['задачу', 'задачи', 'task', 'tasks']) or not any(word in clean_message.lower() for word in ['профиль', 'контакт', 'profile', 'contact']):
-                    intent = {"type": "add_task", "confidence": 0.9, "params": {}}
-                    logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
-
-        # Special handling for IMPLICIT task creation (нужно сходить, надо купить)
-        if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            implicit_indicators = ['нужно', 'надо', 'должен', 'планирую', 'собираюсь', 'need to', 'have to']
-            action_words = ['сходить', 'купить', 'позвонить', 'написать', 'встретиться', 'подготовить', 'сделать', 'закончить']
-            
-            has_implicit = any(word in clean_message.lower() for word in implicit_indicators)
-            has_action = any(word in clean_message.lower() for word in action_words)
-            
-            # Добавим обработку для напоминаний
-            reminder_words = ['напомни', 'напомнить', 'remind']
-            has_reminder = any(word in clean_message.lower() for word in reminder_words)
-            
-            if (has_implicit and has_action) or has_reminder:
-                intent = {"type": "add_task", "confidence": 0.85, "params": {}}
-                logger.info(f"[IMPLICIT TASK DETECTED] Setting intent to add_task for implicit request: {clean_message[:50]}...")
-
-        # Special handling for complete task requests
-        if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            if any(word in clean_message.lower() for word in ['заверши', 'выполни', 'завершил', 'выполнил', 'сделал', 'проверил', 'закончил', 'complete', 'finish', 'done']):
-                intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[COMPLETE TASK DETECTED] Setting intent to complete_task for message: {clean_message[:50]}...")
-
-        # Special handling for list tasks requests
-        if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            if any(word in clean_message.lower() for word in ['покажи', 'список', 'list', 'show']):
-                if any(word in clean_message.lower() for word in ['задачи', 'задач', 'tasks']):
-                    intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
-                    logger.info(f"[LIST TASKS DETECTED] Setting intent to list_tasks for message: {clean_message[:50]}...")
-
-        # Special handling for update profile requests - ONLY if not a task-related request
-        if intent.get('type') == 'conversation':  # Проверяем, что intent еще не определен как задача
-            profile_explicit = ['обнови профиль', 'измени профиль', 'заполни профиль', 'update profile']
-            is_explicit_profile = any(phrase in clean_message.lower() for phrase in profile_explicit)
-            
-            if is_explicit_profile or (
-                any(word in clean_message.lower() for word in ['обнови', 'измени', 'оставь', 'очистить']) 
-                and not any(word in clean_message.lower() for word in ['задач', 'task'])
-            ):
-                intent = {"type": "update_profile", "confidence": 0.8, "params": {}}
-                logger.info(f"[UPDATE PROFILE DETECTED] Setting intent to update_profile for message: {clean_message[:50]}...")
-
-        # Special handling for profile information sharing - расширенная версия
-        if intent.get('type') == 'conversation':  # Только если intent еще не определен
-            # Личные местоимения + профессиональная информация
-            personal_pronouns = ['я', 'мне', 'мой', 'моя', 'мои', 'i am', 'i work', 'работаю']
-            professional_info = ['директор', 'менеджер', 'разработчик', 'аналитик', 'компания', 'фирма', 
-                               'навыки', 'умею', 'знаю', 'занимаюсь', 'специализируюсь',
-                               'python', 'sql', 'java', 'javascript', 'react', 'программирую',
-                               'живу', 'город', 'москва', 'петербург', 'екатеринбург',
-                               'интересы', 'увлечения', 'интересуюсь', 'люблю',
-                               'director', 'manager', 'developer', 'company', 'analyst', 'skills']
-            
-            # Интересы и увлечения - расширенная детекция
-            interests_keywords = ['хочу заняться', 'начну заниматься', 'планирую заняться', 'буду заниматься',
-                                'интересуюсь', 'увлекаюсь', 'нравится', 'люблю', 'хочу изучить', 'изучаю',
-                                'спорт', 'фитнес', 'тренажерный зал', 'бег', 'плавание', 'йога',
-                                'программирование', 'дизайн', 'музыка', 'рисование', 'чтение',
-                                'путешествия', 'кулинария', 'танцы', 'фотография']
-            
-            has_personal = any(word in clean_message.lower() for word in personal_pronouns)
-            has_professional = any(word in clean_message.lower() for word in professional_info)
-            has_interests = any(phrase in clean_message.lower() for phrase in interests_keywords)
-            
-            # Также проверим, есть ли явная просьба заполнить профиль
-            profile_fill_request = any(phrase in clean_message.lower() for phrase in 
-                                      ['заполн', 'давай заполн', 'обнов', 'расскаж о себе'])
-            
-            if (has_personal and has_professional) or has_interests or profile_fill_request:
-                intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
-                logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
+        logger.info("[INTENT] Using AI-powered intent classification (no keyword matching)")
+        
+        # Define keyword lists for basic intent detection
+        personal_pronouns = ['я', 'мне', 'мой', 'моя', 'мои', 'моё', 'меня', 'мной']
+        professional_info = ['работаю', 'компания', 'должность', 'профессия', 'карьера', 'бизнес']
+        interests_keywords = ['интересует', 'увлекаюсь', 'хобби', 'спорт', 'музыка', 'книги', 'фильмы', 'путешествия']
+        
+        has_personal = any(word in clean_message.lower() for word in personal_pronouns)
+        has_professional = any(word in clean_message.lower() for word in professional_info)
+        has_interests = any(phrase in clean_message.lower() for phrase in interests_keywords)
+        
+        # Также проверим, есть ли явная просьба заполнить профиль
+        profile_fill_request = any(phrase in clean_message.lower() for phrase in 
+                                  ['заполн', 'давай заполн', 'обнов', 'расскаж о себе'])
+        
+        if (has_personal and has_professional) or has_interests or profile_fill_request:
+            intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
+            logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
         # Special handling for time expressions (update existing task)
         # Только если уже нет более приоритетного intent
@@ -2011,7 +1895,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if intent.get("params", {}).get("time_only"):
             logger.info("[TIME_ONLY] Direct execution without AI call")
             # Find the most relevant pending task to update based on message content
-            temp_session = Session()
+            from models import Session as TempSession
+            temp_session = TempSession()
             try:
                 user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
                 if user_obj:
@@ -2429,15 +2314,37 @@ async def generate_reminder(user_id, task_title, task_id=None):
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         
-        # Get user timezone if available
-        if user and user.timezone:
+        months = [
+            'января',
+            'февраля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'августа',
+            'сентября',
+            'октября',
+            'ноября',
+            'декабря']
+        
+        # Get user timezone if available, default to Moscow if not set
+        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_now = base_now.astimezone(user_tz)
+            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        except Exception as e:
+            logger.error(f"Error setting user timezone for reminder: {e}")
+            # Fallback to Moscow time
             try:
-                user_tz = pytz.timezone(user.timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user.timezone})"
+                moscow_tz = pytz.timezone('Europe/Moscow')
+                user_now = base_now.astimezone(moscow_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.error(f"Error setting user timezone for reminder: {e}")
+            except:
+                pass  # Keep UTC if all fails
         
         user_username = user.username if user and user.username else "пользователь"
         mentions_str = ""
@@ -2526,15 +2433,37 @@ async def generate_result_check(user_id, task_title):
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         
-        # Get user timezone if available
-        if user and user.timezone:
+        months = [
+            'января',
+            'февраля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'августа',
+            'сентября',
+            'октября',
+            'ноября',
+            'декабря']
+        
+        # Get user timezone if available, default to Moscow if not set
+        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_now = base_now.astimezone(user_tz)
+            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        except Exception as e:
+            logger.error(f"Error setting user timezone for result_check: {e}")
+            # Fallback to Moscow time
             try:
-                user_tz = pytz.timezone(user.timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user.timezone})"
+                moscow_tz = pytz.timezone('Europe/Moscow')
+                user_now = base_now.astimezone(moscow_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.error(f"Error setting user timezone for result_check: {e}")
+            except:
+                pass  # Keep UTC if all fails
         
         user_username = "пользователь"
         mentions_str = ""
@@ -2623,10 +2552,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                 # Получаем время пользователя
                 base_now = datetime.now(pytz.UTC)
                 user_now = base_now
-                # Формат времени С ТАЙМЗОНОЙ для промпта
-                current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+                # Default to Moscow time instead of UTC
+                user_tz = pytz.timezone('Europe/Moscow')
+                user_now = base_now.astimezone(user_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                user_tz = pytz.UTC
 
                 if user.timezone:
                     try:
@@ -2637,6 +2567,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                     except Exception as e:
                         logger.error(f"Error setting user timezone: {e}")
+                        # Fallback to Moscow
+                        user_tz = pytz.timezone('Europe/Moscow')
+                        user_now = base_now.astimezone(user_tz)
+                        current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
 
                 # Получаем память пользователя
                 if user.memory:
@@ -2934,6 +2869,11 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
 async def generate_daily_report(user_id):
     """Генерирует ежедневный отчет о задачах"""
     try:
+        # Получить пользователя для timezone
+        db_session = Session()
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        db_session.close()
+
         # Получить задачи пользователя
         db_session = Session()
         tasks = db_session.query(Task).filter_by(user_id=user_id).all()
@@ -2944,16 +2884,12 @@ async def generate_daily_report(user_id):
 
         # Получить память пользователя
         user_memory = ""
-        if user_id:
-            db_session = Session()
-            user = db_session.query(User).filter_by(telegram_id=user_id).first()
-            if user and user.memory:
-                try:
-                    decrypted = decrypt_data(user.memory)
-                    user_memory = f"\nИнформация о пользователе: {decrypted}"
-                except (Exception,):
-                    user_memory = ""
-            db_session.close()
+        if user and user.memory:
+            try:
+                decrypted = decrypt_data(user.memory)
+                user_memory = f"\nИнформация о пользователе: {decrypted}"
+            except (Exception,):
+                user_memory = ""
 
         # Используем единый унифицированный промпт для всех AI-сообщений
         from datetime import datetime
@@ -2963,15 +2899,37 @@ async def generate_daily_report(user_id):
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         
-        # Get user timezone if available
-        if user and user.timezone:
+        months = [
+            'января',
+            'февраля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'августа',
+            'сентября',
+            'октября',
+            'ноября',
+            'декабря']
+        
+        # Get user timezone if available, default to Moscow if not set
+        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_now = base_now.astimezone(user_tz)
+            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        except Exception as e:
+            logger.error(f"Error setting user timezone for daily_report: {e}")
+            # Fallback to Moscow time
             try:
-                user_tz = pytz.timezone(user.timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user.timezone})"
+                moscow_tz = pytz.timezone('Europe/Moscow')
+                user_now = base_now.astimezone(moscow_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.error(f"Error setting user timezone for daily_report: {e}")
+            except:
+                pass  # Keep UTC if all fails
         
         user_username = "пользователь"
         mentions_str = ""
@@ -3080,15 +3038,37 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
         current_date_str = user_now.strftime("%Y-%m-%d")
         
-        # Get user timezone if available
-        if user and user.timezone:
+        months = [
+            'января',
+            'февраля',
+            'марта',
+            'апреля',
+            'мая',
+            'июня',
+            'июля',
+            'августа',
+            'сентября',
+            'октября',
+            'ноября',
+            'декабря']
+        
+        # Get user timezone if available, default to Moscow if not set
+        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_now = base_now.astimezone(user_tz)
+            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+            current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        except Exception as e:
+            logger.error(f"Error setting user timezone for overdue: {e}")
+            # Fallback to Moscow time
             try:
-                user_tz = pytz.timezone(user.timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user.timezone})"
+                moscow_tz = pytz.timezone('Europe/Moscow')
+                user_now = base_now.astimezone(moscow_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.error(f"Error setting user timezone for overdue: {e}")
+            except:
+                pass  # Keep UTC if all fails
         
         user_username = "пользователь"
         mentions_str = ""

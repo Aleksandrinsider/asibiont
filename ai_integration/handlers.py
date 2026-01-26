@@ -3178,3 +3178,228 @@ def suggest_alternatives(task_id=None, reason=None, user_id=None, session=None):
         if close_session:
             session.close()
         return f"Ошибка при генерации альтернатив: {str(e)}"
+
+
+def delegate_task(title, description, reminder_time, delegated_to_username, delegation_details="", user_id=None, session=None):
+    """Delegate a task to another user"""
+    logger.info(f"[DELEGATE_TASK] Called with title='{title}', delegated_to='{delegated_to_username}', user_id={user_id}")
+    
+    if user_id is None:
+        logger.error("[DELEGATE_TASK] ERROR: user_id is None!")
+        return "ERROR: user_id is required"
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    # Check user subscription for delegation
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден"
+    
+    # Check subscription tier
+    if str(user.subscription_tier).upper() not in ['STANDARD', 'PREMIUM']:
+        if close_session:
+            session.close()
+        return "Делегирование задач доступно только на тарифах Standard и Premium. Обновите подписку для доступа к этой функции."
+    
+    # Find delegated user
+    delegated_username = delegated_to_username.lstrip('@')
+    delegated_user = session.query(User).filter_by(username=delegated_username).first()
+    if not delegated_user:
+        if close_session:
+            session.close()
+        return f"Пользователь @{delegated_username} не найден в системе"
+    
+    # Create delegated task
+    task = Task(
+        user_id=user.id,
+        title=title,
+        description=encrypt_data(description),
+        delegated_to=delegated_user.id,
+        delegation_details=encrypt_data(delegation_details) if delegation_details else None,
+        status="delegated"
+    )
+    
+    # Parse reminder_time
+    if reminder_time:
+        try:
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            # Try different formats
+            for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
+                try:
+                    if "завтра" in reminder_time.lower():
+                        local_dt = datetime.now(user_tz) + timedelta(days=1)
+                        time_part = reminder_time.lower().replace("завтра", "").strip()
+                        if time_part:
+                            time_dt = datetime.strptime(time_part, "%H:%M")
+                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
+                    elif "сегодня" in reminder_time.lower():
+                        local_dt = datetime.now(user_tz)
+                        time_part = reminder_time.lower().replace("сегодня", "").strip()
+                        if time_part:
+                            time_dt = datetime.strptime(time_part, "%H:%M")
+                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
+                    else:
+                        local_dt = datetime.strptime(reminder_time, fmt)
+                        if user.timezone:
+                            local_dt = user_tz.localize(local_dt)
+                    
+                    task.reminder_time = local_dt.astimezone(pytz.UTC)
+                    break
+                except ValueError:
+                    continue
+        except Exception as e:
+            logger.warning(f"[DELEGATE_TASK] Could not parse reminder_time '{reminder_time}': {e}")
+    
+    session.add(task)
+    session.commit()
+    
+    if close_session:
+        session.close()
+    
+    return f"Задача '{title}' делегирована пользователю @{delegated_username}"
+
+
+def edit_task(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None, session=None):
+    """Edit an existing task"""
+    logger.info(f"[EDIT_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")
+    
+    if user_id is None:
+        logger.error("[EDIT_TASK] ERROR: user_id is None!")
+        return "ERROR: user_id is required"
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    # Find task
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден"
+    
+    task = None
+    if task_id:
+        task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
+    elif task_title:
+        # Find by title (case insensitive partial match)
+        from sqlalchemy import func
+        task = session.query(Task).filter(
+            Task.user_id == user.id,
+            func.lower(Task.title).contains(func.lower(task_title))
+        ).first()
+    
+    if not task:
+        if close_session:
+            session.close()
+        return f"Задача не найдена: {task_title or f'ID {task_id}'}"
+    
+    # Update fields
+    updated_fields = []
+    if title:
+        task.title = title
+        updated_fields.append("название")
+    
+    if description:
+        task.description = encrypt_data(description)
+        updated_fields.append("описание")
+    
+    if reminder_time:
+        try:
+            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            # Try to parse reminder_time
+            for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
+                try:
+                    if "завтра" in reminder_time.lower():
+                        local_dt = datetime.now(user_tz) + timedelta(days=1)
+                        time_part = reminder_time.lower().replace("завтра", "").strip()
+                        if time_part:
+                            time_dt = datetime.strptime(time_part, "%H:%M")
+                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
+                    elif "сегодня" in reminder_time.lower():
+                        local_dt = datetime.now(user_tz)
+                        time_part = reminder_time.lower().replace("сегодня", "").strip()
+                        if time_part:
+                            time_dt = datetime.strptime(time_part, "%H:%M")
+                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
+                    else:
+                        local_dt = datetime.strptime(reminder_time, fmt)
+                        if user.timezone:
+                            local_dt = user_tz.localize(local_dt)
+                    
+                    task.reminder_time = local_dt.astimezone(pytz.UTC)
+                    updated_fields.append("время")
+                    break
+                except ValueError:
+                    continue
+        except Exception as e:
+            logger.warning(f"[EDIT_TASK] Could not parse reminder_time '{reminder_time}': {e}")
+    
+    session.commit()
+    
+    if close_session:
+        session.close()
+    
+    if updated_fields:
+        return f"Задача '{task.title}' обновлена: {', '.join(updated_fields)}"
+    else:
+        return f"Задача '{task.title}' не была изменена"
+
+
+def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None):
+    """Delete a task"""
+    logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")
+    
+    if user_id is None:
+        logger.error("[DELETE_TASK] ERROR: user_id is None!")
+        return "ERROR: user_id is required"
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    # Find task
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "Пользователь не найден"
+    
+    task = None
+    if task_id:
+        task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
+    elif task_title:
+        # Find by title (case insensitive partial match)
+        from sqlalchemy import func
+        task = session.query(Task).filter(
+            Task.user_id == user.id,
+            func.lower(Task.title).contains(func.lower(task_title))
+        ).first()
+    
+    if not task:
+        if close_session:
+            session.close()
+        return f"Задача не найдена: {task_title or f'ID {task_id}'}"
+    
+    task_title_saved = task.title
+    session.delete(task)
+    session.commit()
+    
+    if close_session:
+        session.close()
+    
+    response = f"Задача '{task_title_saved}' удалена"
+    if reason:
+        response += f" ({reason})"
+    
+    return response

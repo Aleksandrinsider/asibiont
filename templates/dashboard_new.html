@@ -450,6 +450,28 @@
     <link rel="stylesheet" href="/static/style.css?v={{ timestamp }}">
     <!-- Dashboard version: 2026-01-17-glass-auth -->
     <style>
+        /* Main layout styles */
+        .main-layout {
+            display: flex;
+            gap: 8px;
+            align-items: stretch;
+        }
+        
+        .left-column {
+            flex: 0 0 280px;
+            min-width: 280px;
+        }
+        
+        .center-column {
+            flex: 1 1 auto;
+            min-width: 400px;
+        }
+        
+        .right-column {
+            flex: 0 0 320px;
+            min-width: 320px;
+        }
+        
         /* Background SVG for login page */
         body:not(.logged-in)::before {
             content: '';
@@ -989,7 +1011,7 @@
                 </span>
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; margin-right: 30px;">
-                    <div class="header-avatar-small" style="margin-top: 4px;">
+                    <div class="header-avatar-small" style="margin-top: 3px;">
                         {% if user_avatar_url %}
                         <img src="{{ user_avatar_url }}" alt="Аватар" onclick="openContactProfileModal('{{ user.username or '' }}')" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;">
                         {% else %}
@@ -4607,8 +4629,8 @@
                         modal.style.display = 'none';
                     }
 
-                    // Обновляем отображение профиля на странице без перезагрузки
-                    await updateProfileDisplay();
+                    // Перезагружаем страницу для обновления всех данных
+                    location.reload();
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error || 'Не удалось сохранить профиль'}`, 'error');
@@ -5207,8 +5229,8 @@
                                         html += '<span onclick="event.stopPropagation(); openContactProfileModal(\'' + contactInfoEscaped + '\')" style="' + nameStyle + '">@' + contactInfoHtml + '</span>';
                                         html += '</div>';
                                     } else {
-                                        const tierNames = {'light': '?? Light', 'standard': '?? Standard', 'premium': '?? Premium'};
-                                        const requiredTierName = tierNames[partner.required_tier] || 'Серебро';
+                                        const tierNames = {'light': 'Light', 'standard': 'Standard', 'premium': 'Premium'};
+                                        const requiredTierName = tierNames[partner.required_tier] || 'Standard';
                                         html += '<div class="task-title" style="color: #6C727F; cursor: default;">Требуется тариф ' + requiredTierName + '</div>';
                                     }
                                     

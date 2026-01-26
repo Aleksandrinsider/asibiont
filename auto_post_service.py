@@ -6,14 +6,11 @@ Automatic post generation service - creates daily progress posts and birthday po
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta
 import pytz
 import random
-import json
 
 from models import Session, User, UserProfile, Task, Post
-from sqlalchemy import func, and_
 from ai_integration.chat import chat_with_ai
 
 logging.basicConfig(level=logging.INFO)
