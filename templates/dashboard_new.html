@@ -1178,7 +1178,7 @@
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 8 %}style="color: #068487;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}
-                            <p>Рекомендация: нет рекомендаций</p>
+                            <p>Нет рекомендаций</p>
                             {% endif %}
                             {% if formatted_end_date %}
                             <p style="margin: 0; margin-bottom: -4px;">Подписка: активна до {{ formatted_end_date }} 
@@ -3171,7 +3171,7 @@
                 const rating = contact.average_rating || 0;
                 const initials = contact.first_name ? contact.first_name[0].toUpperCase() : '@';
                 const ratingColor = rating < 5 ? '#d73a49' : (rating >= 8 ? '#068487' : '#1F2328');
-                const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Рекомендация: нет рекомендаций';
+                const ratingText = rating > 0 ? `Рекомендация: ${rating}/10` : 'Нет рекомендаций';
                 const heartColor = isFavorite ? '#068487' : '#374151';
                 
                 html += `
@@ -4898,7 +4898,7 @@
                         }
                         html += `<p style="${ratingStyle}">Рекомендация: ${partner.average_rating}/10</p>`;
                     } else {
-                        html += `<p style="text-align: left;">Рекомендация: нет рекомендаций</p>`;
+                        html += `<p style="text-align: left;">Нет рекомендаций</p>`;
                     }
                     
                     // Активные задачи с отступом снизу
@@ -5420,7 +5420,7 @@
                                         const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
-                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
+                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
@@ -5531,7 +5531,7 @@
                                         const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
-                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
+                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
@@ -5757,7 +5757,7 @@
                                         const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
-                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
+                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
@@ -5864,7 +5864,7 @@
                                         const ratingColor = partner.average_rating < 5 ? '#d73a49' : (partner.average_rating >= 8 ? '#068487' : '#1F2328');
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: ' + ratingColor + ';">Рекомендация: ' + partner.average_rating + '/10</span></div>';
                                     } else {
-                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Рекомендация: нет рекомендаций</span></div>';
+                                        html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
                                     html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
@@ -6266,7 +6266,7 @@
                             const ratingColor = data.profile.average_rating < 5 ? 'color: #d73a49;' : (data.profile.average_rating >= 8 ? 'color: #068487;' : '');
                             html += '<p style="' + ratingColor + '">Рекомендация: ' + data.profile.average_rating + '/10</p>';
                         } else {
-                            html += '<p>Рекомендация: нет рекомендаций</p>';
+                            html += '<p>Нет рекомендаций</p>';
                         }
                         if (data.formatted_end_date) {
                             html += '<p style="margin-bottom: 16px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
