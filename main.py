@@ -71,6 +71,20 @@ try:
     try:
         logger.info("Checking for subscription tier migration...")
         with engine.connect() as conn:
+            # First, add the new enum values
+            try:
+                conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'LIGHT'"))
+            except Exception:
+                pass
+            try:
+                conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'STANDARD'"))
+            except Exception:
+                pass
+            try:
+                conn.execute(text("ALTER TYPE subscriptiontier ADD VALUE 'PREMIUM'"))
+            except Exception:
+                pass
+            
             # Check if we have old enum values
             result = conn.execute(text("SELECT COUNT(*) FROM users WHERE subscription_tier::text IN ('BRONZE', 'SILVER', 'GOLD')"))
             count = result.scalar()
