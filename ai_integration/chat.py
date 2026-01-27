@@ -1743,7 +1743,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 # If no specific match, let AI handle it
                 intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
                 logger.info(f"[COMPLETION DETECTED] Setting intent to complete_task for message: {clean_message[:50]}..., extracted title: {task_title}")
-# 
+
+        # Special handling for task editing expressions
+        if intent.get('type') == 'conversation':
+            edit_patterns = [
+                r'изменить?\s+задачу', r'отредактировать?\s+задачу', r'обновить?\s+задачу',
+                r'исправить?\s+задачу', r'поменять?\s+задачу', r'редактировать?\s+задачу'
+            ]
+            if any(re.search(pattern, original_message.lower()) for pattern in edit_patterns):
+                intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[EDIT DETECTED] Setting intent to edit_task for message: {clean_message[:50]}...")
+
+        # Special handling for task deletion expressions
+        if intent.get('type') == 'conversation':
+            delete_patterns = [
+                r'удалить?\s+задачу', r'удалить?\s+задачи', r'убрать?\s+задачу',
+                r'стереть?\s+задачу', r'вычеркнуть?\s+задачу'
+            ]
+            if any(re.search(pattern, original_message.lower()) for pattern in delete_patterns):
+                intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[DELETE DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
+
         # Special handling for delegation expressions
         if intent.get('type') == 'conversation':
             if any(re.search(pattern, message.lower()) for pattern in DELEGATION_PATTERNS):
@@ -1995,11 +2015,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             parallel_tool_calls = False
             logger.info(f"[TOOL CHOICE] NONE for conversation: {clean_message[:50]}")
 
-        elif requires_tools or intent_type in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task', 'update_profile']:
+        elif requires_tools or intent.get('type') in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task', 'update_profile']:
             # ЛЮБЫЕ действия - ОБЯЗАТЕЛЬНЫЙ вызов tool
             tool_choice = "required"
             parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] REQUIRED for action: {intent_type or 'indicators detected'}")
+            logger.info(f"[TOOL CHOICE] REQUIRED for action: {intent.get('type') or 'indicators detected'}")
 
         else:
             # По умолчанию - auto
@@ -2026,7 +2046,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'личное', 'персонально', 'мне', 'я', 'мои', 'моя'
         ])
 
-        if intent_type == 'greeting':
+        if intent.get('type') == 'greeting':
             # Для приветствий нужна максимальная вариативность
             temperature = 1.0
             top_p = 0.95
@@ -2034,15 +2054,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Для креативных запросов нужна высокая вариативность
             temperature = 0.9
             top_p = 0.95
-        elif intent_type in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task']:
+        elif intent.get('type') in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task']:
             # Для задач нужна максимальная точность и последовательность
             temperature = 0.2
             top_p = 0.9
-        elif intent_type == 'delegate_task':
+        elif intent.get('type') == 'delegate_task':
             # Для делегирования нужна точность в понимании
             temperature = 0.3
             top_p = 0.9
-        elif intent_type == 'profile_info':
+        elif intent.get('type') == 'profile_info':
             # Для информации о профиле нужна максимальная точность
             temperature = 0.1
             top_p = 0.8
@@ -2062,7 +2082,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Длинные сообщения могут быть сложными - снижаем вариативность
             temperature = 0.5
             top_p = 0.9
-        elif intent_type in ['conversation', 'unknown'] and is_advice_question:
+        elif intent.get('type') in ['conversation', 'unknown'] and is_advice_question:
             # Для советов нужна креативность
             temperature = 0.8
             top_p = 0.95
@@ -2071,12 +2091,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             temperature = 0.7
             top_p = 1.0
 
-        logger.info(f"Using temperature {temperature}, top_p {top_p} for intent '{intent_type}', message analysis: length={message_length}, questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
+        logger.info(f"Using temperature {temperature}, top_p {top_p} for intent '{intent.get('type')}', message analysis: length={message_length}, questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
         # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности
-        should_cache = intent_type not in [
-            'conversation', 'unknown', 'greeting', 'find_partners', 'profile_info'
+        should_cache = intent.get('type') not in [
+            'conversation', 'unknown', 'greeting', 'find_partners', 'profile_info', 'edit_task', 'delete_task'
         ] and not is_advice_question  # Вопросы совета тоже не кэшируем
 
         if should_cache:
@@ -2093,7 +2113,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             cache_key_components = [
                 str(user_id or "anonymous"),
                 clean_message[:200],  # Ограничиваем длину сообщения
-                intent_type,
+                intent.get('type'),
                 str(temperature),
                 str(top_p),
                 tool_choice,
@@ -2117,7 +2137,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         db_session.commit()
                 return cached_response
         else:
-            logger.info(f"Skipping cache for intent_type '{intent_type}' (requires freshness)")
+            logger.info(f"Skipping cache for intent_type '{intent.get('type')}' (requires freshness)")
             cache_key = None  # Для сохранения в кэш позже
 
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -2392,7 +2412,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # ПРОВЕРКА: Если tool_choice был REQUIRED, но AI не вызвал tool - критическая ошибка
                             if tool_choice == "required" and not tool_calls:
                                 logger.error(f"[VALIDATION FAILED] tool_choice=required but no tools called!")
-                                logger.error(f"[VALIDATION] Intent: {intent_type}, Message: {clean_message[:100]}")
+                                logger.error(f"[VALIDATION] Intent: {intent.get('type')}, Message: {clean_message[:100]}")
                                 logger.error(f"[VALIDATION] AI response: {content[:200]}")
                                 
                                 # Пытаемся понять какой tool должен был вызваться
