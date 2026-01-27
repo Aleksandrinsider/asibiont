@@ -1722,12 +1722,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Special handling for task completion expressions - ENABLED as fallback
         if intent.get('type') == 'conversation':
             completion_patterns = [
-                r'я\s+только\s+с\s+',  # "я только с пробежки"
-                r'я\s+только\s+из\s+',  # "я только из спортзала"
-                r'вернулся\s+с\s+',  # "вернулся с тренировки"
-                r'вернулся\s+из\s+',  # "вернулся из магазина"
-                r'только\s+с\s+',  # "только с работы"
-                r'только\s+из\s+',  # "только из банка"
                 r'я\s+сделал',  # "я сделал"
                 r'я\s+выполнил',  # "я выполнил"
                 r'готово',  # "готово"

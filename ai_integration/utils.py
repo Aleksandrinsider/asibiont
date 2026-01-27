@@ -959,6 +959,136 @@ def analyze_user_context_for_advice(user_id, message, context=None):
         session.close()
 
 
+def parse_multiple_tasks(message):
+    """
+    Parse multiple tasks from a message.
+    Returns list of dicts with 'title' and optional 'reminder_time' keys.
+    """
+    tasks = []
+
+    # First, check if this is a single task with time
+    single_task_patterns = [
+        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+через\s+\d+.*$',
+        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+(?:завтра|сегодня).*$'
+    ]
+
+    is_single_task_with_time = any(re.match(pattern, message.lower()) for pattern in single_task_patterns)
+
+    if is_single_task_with_time:
+        # Handle as single task
+        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', message, flags=re.IGNORECASE)
+
+        reminder_time = None
+        # Extract time
+        time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", cleaned_message)
+        if time_match:
+            reminder_time = time_match.group(1)
+            cleaned_message = re.sub(r"\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}", "", cleaned_message).strip()
+        else:
+            relative_patterns = [
+                r"(через\s+\d+\s+(?:мин|минут|час|часа|часов)(?:\s|$))",
+                r"(завтра\s+в\s+\d{1,2}:\d{2})",
+                r"(сегодня\s+в\s+\d{1,2}:\d{2})"
+            ]
+            for pattern in relative_patterns:
+                match = re.search(pattern, cleaned_message, re.IGNORECASE)
+                if match:
+                    reminder_time = match.group(1)
+                    cleaned_message = re.sub(re.escape(match.group(1)), "", cleaned_message).strip()
+                    break
+
+        if cleaned_message:
+            tasks.append({
+                "title": cleaned_message,
+                "reminder_time": reminder_time
+            })
+        return tasks
+
+    # Check for multiple tasks
+    task_strings = []
+
+    # Try splitting by "и" (and)
+    if re.search(r'\s+и\s+', message, re.IGNORECASE):
+        parts = re.split(r'\s+и\s+', message, flags=re.IGNORECASE)
+        # Remove command from first part only
+        if parts:
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+        task_strings = [p.strip() for p in parts if p.strip()]
+    # Try splitting by commas
+    elif ',' in message:
+        parts = [p.strip() for p in message.split(',') if p.strip()]
+        # Remove command from first part only
+        if parts:
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+        task_strings = parts
+    # Try splitting by semicolons
+    elif ';' in message:
+        parts = [p.strip() for p in message.split(';') if p.strip()]
+        # Remove command from first part only
+        if parts:
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+        task_strings = parts
+    # Try splitting by newlines
+    elif '\n' in message:
+        parts = [p.strip() for p in message.split('\n') if p.strip()]
+        # Remove command from first part only
+        if parts:
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+        task_strings = parts
+    else:
+        # Single task
+        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', message, flags=re.IGNORECASE)
+        task_strings = [cleaned_message] if cleaned_message else []
+
+    # Process each task string
+    for task_str in task_strings:
+        task_str = task_str.strip()
+        if not task_str or len(task_str) < 2:
+            continue
+
+        # Extract time if present
+        reminder_time = None
+
+        # Try to extract absolute time
+        time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", task_str)
+        if time_match:
+            reminder_time = time_match.group(1)
+            task_str = re.sub(r"\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}", "", task_str).strip()
+        else:
+            # Try to extract relative time
+            relative_patterns = [
+                r"(через\s+\d+\s+(?:мин|минут|час|часа|часов)(?:\s|$))",
+                r"(завтра\s+в\s+\d{1,2}:\d{2})",
+                r"(сегодня\s+в\s+\d{1,2}:\d{2})"
+            ]
+            for pattern in relative_patterns:
+                match = re.search(pattern, task_str, re.IGNORECASE)
+                if match:
+                    reminder_time = match.group(1)
+                    task_str = re.sub(re.escape(match.group(1)), "", task_str).strip()
+                    break
+
+        # Clean up the title
+        task_str = re.sub(r'\s+', ' ', task_str).strip()
+
+        if task_str:
+            tasks.append({
+                "title": task_str,
+                "reminder_time": reminder_time
+            })
+
+    # If no tasks found, treat as single task
+    if not tasks and message.strip():
+        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', message, flags=re.IGNORECASE)
+        if cleaned_message:
+            tasks.append({
+                "title": cleaned_message.strip(),
+                "reminder_time": None
+            })
+
+    return tasks
+
+
 def post_process_tool_calls(intent, tool_calls, message):
     """
     Пост-обработка tool calls для коррекции ошибок AI.
@@ -1057,63 +1187,72 @@ def post_process_tool_calls(intent, tool_calls, message):
 
         # 2. ДОБАВЛЕНИЕ ЗАДАЧ: если intent add_task, но нет add_task - добавляем
         elif intent["type"] == "add_task" and function_name != "add_task":
-            # Извлекаем задачу из сообщения
-            task_title = message
-            
-            # Удаляем команды в начале
-            task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', task_title, flags=re.IGNORECASE)
-            
-            # Удаляем временные указания с контекстом ("через 5 минут", "завтра в 10:00" и т.д.)
-            task_title = re.sub(r'\bчерез\s+\d+\s*(?:мин(?:ут)?|час(?:а|ов)?|дн(?:я|ей)?|недел(?:ю|и|ь)?|месяц(?:а|ев)?|год(?:а)?)', '', task_title, flags=re.IGNORECASE)
-            task_title = re.sub(r'\b(?:завтра|сегодня|послезавтра)(?:\s+в\s+\d{1,2}:\d{2})?', '', task_title, flags=re.IGNORECASE)
-            task_title = re.sub(r'\bв\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
-            task_title = re.sub(r'\bна\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
-            
-            # Очищаем от лишних пробелов
-            task_title = ' '.join(task_title.split()).strip()
-            
-            # Если title пустой или слишком короткий, используем оригинальное сообщение
-            if not task_title or len(task_title) < 3:
-                task_title = message
-            
-            time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
-            for indicator in time_indicators:
-                if indicator in message.lower():
-                    # Сначала попробуем найти абсолютное время
-                    time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
-                    if time_match:
-                        args_dict["reminder_time"] = time_match.group(1)
-                    else:
-                        # Если абсолютного нет, попробуем извлечь относительное время
-                        relative_patterns = [
-                            r"через\s+(\d+)\s*мин",
-                            r"через\s+(\d+)\s*минут",
-                            r"через\s+(\d+)\s*час",
-                            r"через\s+(\d+)\s*часа",
-                            r"через\s+(\d+)\s*часов"
-                        ]
-                        for pattern in relative_patterns:
-                            rel_match = re.search(pattern, message, re.IGNORECASE)
-                            if rel_match:
-                                # Извлекаем всю фразу относительного времени
-                                full_match = re.search(r"(через\s+\d+\s*(?:мин|минут|час|часа|часов))", message, re.IGNORECASE)
-                                if full_match:
-                                    args_dict["reminder_time"] = full_match.group(1)
-                                break
-                    break
-
-            corrected_calls.append({
-                "index": len(corrected_calls),
-                "id": f"call_corrected_{len(corrected_calls)}",
-                "type": "function",
-                "function": {
-                    "name": "add_task",
-                    "arguments": json.dumps({
-                        "title": task_title,
-                        "reminder_time": args_dict.get("reminder_time")
+            # Extract multiple tasks from message
+            tasks = parse_multiple_tasks(message)
+            if tasks:
+                for task_info in tasks:
+                    corrected_calls.append({
+                        "index": len(corrected_calls),
+                        "id": f"call_corrected_{len(corrected_calls)}",
+                        "type": "function",
+                        "function": {
+                            "name": "add_task",
+                            "arguments": json.dumps({
+                                "title": task_info["title"],
+                                "reminder_time": task_info.get("reminder_time")
+                            })
+                        }
                     })
-                }
-            })
+            else:
+                # Fallback to single task parsing
+                task_title = message
+                # Remove commands at the beginning
+                task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', task_title, flags=re.IGNORECASE)
+                # Remove time indications
+                task_title = re.sub(r'\bчерез\s+\d+\s*(?:мин(?:ут)?|час(?:а|ов)?|дн(?:я|ей)?|недел(?:ю|и|ь)?|месяц(?:а|ев)?|год(?:а)?)', '', task_title, flags=re.IGNORECASE)
+                task_title = re.sub(r'\b(?:завтра|сегодня|послезавтра)(?:\s+в\s+\d{1,2}:\d{2})?', '', task_title, flags=re.IGNORECASE)
+                task_title = re.sub(r'\bв\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
+                task_title = re.sub(r'\bна\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
+                task_title = ' '.join(task_title.split()).strip()
+                if not task_title or len(task_title) < 3:
+                    task_title = message
+
+                args_dict = {}
+                time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
+                for indicator in time_indicators:
+                    if indicator in message.lower():
+                        time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
+                        if time_match:
+                            args_dict["reminder_time"] = time_match.group(1)
+                        else:
+                            relative_patterns = [
+                                r"через\s+(\d+)\s*мин",
+                                r"через\s+(\d+)\s*минут",
+                                r"через\s+(\d+)\s*час",
+                                r"через\s+(\d+)\s*часа",
+                                r"через\s+(\d+)\s*часов"
+                            ]
+                            for pattern in relative_patterns:
+                                rel_match = re.search(pattern, message, re.IGNORECASE)
+                                if rel_match:
+                                    full_match = re.search(r"(через\s+\d+\s+(?:мин|минут|час|часа|часов)(?:\s|$))", message, re.IGNORECASE)
+                                    if full_match:
+                                        args_dict["reminder_time"] = full_match.group(1)
+                                    break
+                        break
+
+                corrected_calls.append({
+                    "index": len(corrected_calls),
+                    "id": f"call_corrected_{len(corrected_calls)}",
+                    "type": "function",
+                    "function": {
+                        "name": "add_task",
+                        "arguments": json.dumps({
+                            "title": task_title,
+                            "reminder_time": args_dict.get("reminder_time")
+                        })
+                    }
+                })
 
         # 3. ЗАВЕРШЕНИЕ: если intent complete_task, но нет complete_task - добавляем
         elif intent["type"] == "complete_task" and function_name != "complete_task":
@@ -1189,27 +1328,43 @@ def post_process_tool_calls(intent, tool_calls, message):
                 }
             })
         elif intent["type"] == "add_task":
-            # Извлекаем задачу из сообщения
-            task_title = message.strip()
-            if task_title:
-                # Ищем время в сообщении
-                args_dict = {}
-                time_match = re.search(r"(?:напоминание|напомни|в|через)\s+(.+)", message, re.IGNORECASE)
-                if time_match:
-                    time_str = time_match.group(1).strip()
-                    args_dict["reminder_time"] = time_str
-                corrected_calls.append({
-                    "index": len(corrected_calls),
-                    "id": f"call_corrected_{len(corrected_calls)}",
-                    "type": "function",
-                    "function": {
-                        "name": "add_task",
-                        "arguments": json.dumps({
-                            "title": task_title,
-                            "reminder_time": args_dict.get("reminder_time")
-                        })
-                    }
-                })
+            # Extract multiple tasks from message
+            tasks = parse_multiple_tasks(message)
+            if tasks:
+                for task_info in tasks:
+                    corrected_calls.append({
+                        "index": len(corrected_calls),
+                        "id": f"call_corrected_{len(corrected_calls)}",
+                        "type": "function",
+                        "function": {
+                            "name": "add_task",
+                            "arguments": json.dumps({
+                                "title": task_info["title"],
+                                "reminder_time": task_info.get("reminder_time")
+                            })
+                        }
+                    })
+            else:
+                # Fallback to single task parsing
+                task_title = message.strip()
+                if task_title:
+                    args_dict = {}
+                    time_match = re.search(r"(?:напоминание|напомни|в|через)\s+(.+)", message, re.IGNORECASE)
+                    if time_match:
+                        time_str = time_match.group(1).strip()
+                        args_dict["reminder_time"] = time_str
+                    corrected_calls.append({
+                        "index": len(corrected_calls),
+                        "id": f"call_corrected_{len(corrected_calls)}",
+                        "type": "function",
+                        "function": {
+                            "name": "add_task",
+                            "arguments": json.dumps({
+                                "title": task_title,
+                                "reminder_time": args_dict.get("reminder_time")
+                            })
+                        }
+                    })
         elif intent["type"] == "complete_task":
             task_title = intent.get("params", {}).get("task_title", "")
             if task_title:
