@@ -2205,6 +2205,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     content = re.sub(
                                         r'\{.*?"name":\s*"".*?"arguments".*?\}', "", content, flags=re.DOTALL
                                     ).strip()
+                                    # КРИТИЧЕСКИ ВАЖНО: Удаляем явные упоминания функций в тексте
+                                    # AI не должен писать add_task(...) в своём ответе пользователю
+                                    content = re.sub(
+                                        r'(add_task|delete_task|complete_task|list_tasks|edit_task|delegate_task)\s*\([^)]*\)',
+                                        '',
+                                        content
+                                    ).strip()
 
                                     # Проверяем tool_calls в API response
                                     tool_calls = message_response.get("tool_calls")
@@ -2265,39 +2272,48 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # ИЛИ если валидация tool calls не прошла
                             if (not tool_calls or validation_failed) and content:
                                 content_lower = content.lower()
-                                # Детектируем галлюцинации для разных типов действий
-                                hallucination_patterns = {
-                                    'add_task': ['добавил задачу', 'создал задачу', 'поставил напоминание',
-                                                 'задача добавлена', 'задача создана', 'напоминание поставлено',
-                                                 'напоминание установлено', 'запланировал', 'запланирована'],
-                                    'delete_task': ['удалил задачу', 'задача удалена', 'убрал задачу',
-                                                    'задача убрана', 'удалил напоминание', 'убрал напоминание'],
-                                    'complete_task': ['задача выполнена', 'отметил выполненной', 'завершил задачу',
-                                                      'задача завершена', 'отметил как выполненную'],
-                                    'list_tasks': ['вот твои задачи', 'список задач', 'твои задачи',
-                                                   'показываю задачи', 'у тебя задачи'],
-                                    'edit_task': ['изменил задачу', 'обновил задачу', 'перенес на',
-                                                  'задача изменена', 'задача обновлена', 'время изменено'],
-                                    'delegate_task': ['делегировал задачу', 'поручил задачу', 'передал задачу',
-                                                      'задача делегирована', 'задача поручена']
-                                }
                                 
-                                # Добавляем intent-based detection
-                                detected_action = None
-                                
-                                # Если валидация не прошла, используем intent как источник правды
-                                if validation_failed:
-                                    intent_type = intent.get('type')
-                                    if intent_type in ['add_task', 'delete_task', 'complete_task', 'list_tasks', 'edit_task', 'delegate_task']:
-                                        detected_action = intent_type
-                                        logger.error(f"[VALIDATION-BASED DETECTION] Validation failed for intent: {intent_type}")
-                                
-                                # Если intent не помог, проверяем текстовые паттерны
-                                if not detected_action:
-                                    for action_type, phrases in hallucination_patterns.items():
-                                        if any(phrase in content_lower for phrase in phrases):
-                                            detected_action = action_type
-                                            break
+                                # ДЕТЕКЦИЯ ЯВНЫХ УПОМИНАНИЙ ФУНКЦИЙ В ТЕКСТЕ (критическая галлюцинация!)
+                                # AI не должен писать имена функций в своём ответе
+                                function_mentions = re.findall(r'(add_task|delete_task|complete_task|list_tasks|edit_task|delegate_task)\s*\(', content)
+                                if function_mentions:
+                                    detected_action = function_mentions[0]
+                                    logger.error(f"[FUNCTION HALLUCINATION] AI wrote function call '{detected_action}()' in text without executing it!")
+                                    logger.error(f"[FUNCTION HALLUCINATION] Content: {content[:200]}")
+                                else:
+                                    # Детектируем галлюцинации для разных типов действий
+                                    hallucination_patterns = {
+                                        'add_task': ['добавил задачу', 'создал задачу', 'поставил напоминание',
+                                                     'задача добавлена', 'задача создана', 'напоминание поставлено',
+                                                     'напоминание установлено', 'запланировал', 'запланирована'],
+                                        'delete_task': ['удалил задачу', 'задача удалена', 'убрал задачу',
+                                                        'задача убрана', 'удалил напоминание', 'убрал напоминание'],
+                                        'complete_task': ['задача выполнена', 'отметил выполненной', 'завершил задачу',
+                                                          'задача завершена', 'отметил как выполненную'],
+                                        'list_tasks': ['вот твои задачи', 'список задач', 'твои задачи',
+                                                       'показываю задачи', 'у тебя задачи'],
+                                        'edit_task': ['изменил задачу', 'обновил задачу', 'перенес на',
+                                                      'задача изменена', 'задача обновлена', 'время изменено'],
+                                        'delegate_task': ['делегировал задачу', 'поручил задачу', 'передал задачу',
+                                                          'задача делегирована', 'задача поручена']
+                                    }
+                                    
+                                    # Добавляем intent-based detection
+                                    detected_action = None
+                                    
+                                    # Если валидация не прошла, используем intent как источник правды
+                                    if validation_failed:
+                                        intent_type = intent.get('type')
+                                        if intent_type in ['add_task', 'delete_task', 'complete_task', 'list_tasks', 'edit_task', 'delegate_task']:
+                                            detected_action = intent_type
+                                            logger.error(f"[VALIDATION-BASED DETECTION] Validation failed for intent: {intent_type}")
+                                    
+                                    # Если intent не помог, проверяем текстовые паттерны
+                                    if not detected_action:
+                                        for action_type, phrases in hallucination_patterns.items():
+                                            if any(phrase in content_lower for phrase in phrases):
+                                                detected_action = action_type
+                                                break
                                 
                                 if detected_action:
                                     logger.error(f"[HALLUCINATION DETECTED] AI claimed '{detected_action}' but no tool calls!")
