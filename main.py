@@ -5251,6 +5251,10 @@ async def delete_post_handler(request):
             from models import Comment
             session_db.query(Comment).filter_by(post_id=post_id).delete()
             
+            # Delete all post views first to avoid constraint violation
+            from models import PostView
+            session_db.query(PostView).filter_by(post_id=post_id).delete()
+            
             session_db.delete(post)
             session_db.commit()
             

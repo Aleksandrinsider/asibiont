@@ -2106,6 +2106,9 @@
 
                             postDiv.innerHTML = timelineContent;
                             feedContainer.appendChild(postDiv);
+                            
+                            // Загружаем комментарии для поста
+                            loadComments(post.id);
                         } catch(e) {
                             console.error('[FEED] Error rendering post:', post.id, e);
                         }
