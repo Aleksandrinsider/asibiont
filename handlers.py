@@ -4,7 +4,7 @@ import os
 import tempfile
 from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 router = Router()
 from ai_integration import chat_with_ai
@@ -126,7 +126,6 @@ async def start_handler(message: Message):
     session.close()
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎤 Голосовой ввод", callback_data="voice_help")],
         [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
     await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
@@ -750,35 +749,5 @@ async def dashboard_handler(message: Message):
         f"🌐 Ваш личный дашборд:\n{dashboard_url}", 
         reply_markup=keyboard
     )
-
-
-@router.callback_query(lambda c: c.data == "voice_help")
-async def voice_help_callback(callback_query: CallbackQuery):
-    """Обработчик кнопки голосового ввода"""
-    await callback_query.bot.send_message(
-        callback_query.message.chat.id,
-        """🎤 **Голосовой ввод в ASI Biont**
-
-**Проблема быстрого окончания записи:**
-В Telegram голосовые сообщения отправляются автоматически после паузы в речи.
-
-**Решения:**
-1. **Говорите непрерывно** - избегайте пауз дольше 1-2 секунд
-2. **Разбивайте на части** - отправляйте длинные сообщения по частям
-3. **Используйте текст** - для сложных запросов лучше писать
-
-**Советы:**
-• Делайте короткие паузы между словами
-• Говорите четко и в нормальном темпе
-• Если сообщение обрывается - доскажите в следующем голосовом
-
-**Пример:** Вместо "напомни мне позвонить боссу через 2 часа и потом проверить почту" скажите:
-"напомни позвонить боссу через 2 часа" → отправить
-"и проверить почту" → отправить вторым сообщением
-
-Готов помочь! 🤖""",
-        parse_mode="Markdown"
-    )
-    await callback_query.answer()
 
 
