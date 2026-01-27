@@ -7,7 +7,6 @@ from datetime import datetime, timezone, timedelta
 import pytz
 from models import Session, Task, User, UserProfile, SubscriptionTier
 from sqlalchemy import or_, and_, func
-from config import
 
 from .memory import encrypt_data, decrypt_data
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
