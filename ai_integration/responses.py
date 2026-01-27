@@ -5,8 +5,8 @@ async def generate_response(action: str, **kwargs):
     TODO: Integrate with AI for better responses.
     """
     if action == 'task_created':
-        task = kwargs.get('task')
-        return f"✅ Задача создана: {task.title if hasattr(task, 'title') else 'новая задача'}"
+        message = kwargs.get('message', 'Задача создана')
+        return f"✅ {message}"
     elif action == 'task_completed':
         return "✅ Задача выполнена!"
     elif action == 'task_deleted':

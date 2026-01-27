@@ -8,6 +8,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 
 router = Router()
 from ai_integration import chat_with_ai
+from ai_integration.router import CommandRouter
 from models import Session, User, Subscription, Task
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
@@ -375,17 +376,21 @@ async def process_text_message(user_id, text, message, state):
             return
 
         context = []  # Simplified: no context in bot
-        response = await chat_with_ai(text, context, user_id)
-
-        if response and response.strip():
-            try:
-                await message.bot.send_message(message.chat.id, response.strip())
-            except Exception as e:
-                logger.error(f"Error sending message to {message.chat.id}: {e}")
-                await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при отправке ответа.")
-        else:
-            logger.warning(f"Empty response from AI for user {user_id}, sending error message")
-            await message.bot.send_message(message.chat.id, "Извините, не удалось сгенерировать ответ. Попробуйте переформулировать вопрос.")
+        
+        # Use new command-based architecture
+        router = CommandRouter()
+        command = router.route(text)
+        
+        # Create session for command execution
+        db_session = Session()
+        try:
+            result = await command.execute(user_id, db_session)
+            await message.bot.send_message(message.chat.id, result)
+        except Exception as e:
+            logger.error(f"Error executing command for user {user_id}: {e}", exc_info=True)
+            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке команды.")
+        finally:
+            db_session.close()
         # Записать взаимодействие для проактивных проверок
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()

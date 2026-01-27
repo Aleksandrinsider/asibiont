@@ -18,4 +18,4 @@ class CreateTaskCommand(BaseCommand):
         )
 
         # Generate response
-        return await generate_response('task_created', task=result)
+        return await generate_response('task_created', message=result)
