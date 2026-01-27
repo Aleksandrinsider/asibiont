@@ -3803,9 +3803,9 @@ async def get_task_details_async(task_title: str, user_id: int = None, session=N
 
         # Completion info
         completion_info = ""
-        if task.completed_at:
-            completion_note = decrypt_data(task.completion_note) if task.completion_note else ""
-            completion_info = f"\nВыполнена: {task.completed_at.strftime('%d.%m.%Y %H:%M')}"
+        if task.actual_completion_time:
+            completion_note = decrypt_data(task.completion_notes) if task.completion_notes else ""
+            completion_info = f"\nВыполнена: {task.actual_completion_time.strftime('%d.%m.%Y %H:%M')}"
             if completion_note:
                 completion_info += f"\nЗаметка: {completion_note}"
 

@@ -7,11 +7,11 @@ from .chat import chat_with_ai, generate_reminder, generate_result_check, genera
 from .memory import update_user_memory, encrypt_data, decrypt_data
 from .handlers import (
     add_task, list_tasks, complete_task, reschedule_task, get_task_advice,
-    delegate_task, accept_delegated_task, reject_delegated_task, get_delegation_progress, cancel_delegation,
+    delegate_task_with_session, accept_delegated_task, reject_delegated_task, get_delegation_progress_for_task, cancel_delegation,
     edit_task, delete_task, get_task_details,
     find_partners, update_profile, suggest_alternatives,
     create_subscription_payment, check_subscription_status, brainstorm_ideas,
-    cancel_subscription, get_partners_list, enrich_task_list_with_insights, check_delegation_deadlines, restore_task
+    cancel_subscription, get_partners_list, enrich_task_list_with_insights, check_delegation_deadlines, restore_task, update_user_memory_async
 )
 
 __all__ = [
@@ -28,13 +28,13 @@ __all__ = [
     'reschedule_task',
     'get_task_advice',
     'set_reminder',
-    'update_user_memory',
+    'update_user_memory_async',
     'encrypt_data',
     'decrypt_data',
-    'delegate_task',
+    'delegate_task_with_session',
     'accept_delegated_task',
     'reject_delegated_task',
-    'get_delegation_progress',
+    'get_delegation_progress_for_task',
     'cancel_delegation',
     'edit_task',
     'delete_task',
