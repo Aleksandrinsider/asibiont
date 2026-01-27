@@ -1850,16 +1850,23 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'delegate_task', 'find_partners', 'update_profile', 'profile_info'
         ]
 
-        # МИНИМАЛЬНАЯ ЛОГИКА: Полный AI-first подход
+        # МИНИМАЛЬНАЯ ЛОГИКА: Полный AI-first подход с умными подсказками
         if is_system_message:
             # Системные сообщения - без tools
             tool_choice = "none"
             parallel_tool_calls = False
             logger.info(f"[TOOL CHOICE] NONE for system message")
         else:
-            # AI сам решает все
+            # AI сам решает, но мы логируем намерение для отладки
             tool_choice = "auto"
             parallel_tool_calls = True
+            
+            # Детектируем тип команды для логирования
+            if "удали" in clean_message.lower() or "убери" in clean_message.lower():
+                logger.info(f"[TOOL HINT] DELETE detected: {clean_message[:50]}")
+            elif any(kw in clean_message.lower() for kw in ["напомни", "через", "нужно", "надо"]):
+                logger.info(f"[TOOL HINT] CREATE detected: {clean_message[:50]}")
+            
             logger.info(f"[TOOL CHOICE] AUTO for: {clean_message[:50]}")
 
         # УПРОЩЕННЫЙ АНАЛИЗ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ AI
@@ -2203,6 +2210,67 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 if result:
                                     return result
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
+                            
+                            # КРИТИЧЕСКАЯ ПРОВЕРКА: AI НЕ ДОЛЖЕН ГАЛЛЮЦИНИРОВАТЬ ДЕЙСТВИЯ
+                            # Если AI говорит о выполненном действии, но не вызвал tool - это ошибка
+                            if not tool_calls and content:
+                                content_lower = content.lower()
+                                # Детектируем галлюцинации действий
+                                hallucination_phrases = [
+                                    'добавил задачу', 'создал задачу', 'поставил напоминание',
+                                    'задача добавлена', 'задача создана', 'напоминание поставлено',
+                                    'удалил задачу', 'задача удалена', 'задача выполнена',
+                                    'отметил выполненной', 'завершил задачу'
+                                ]
+                                
+                                is_hallucinating = any(phrase in content_lower for phrase in hallucination_phrases)
+                                
+                                if is_hallucinating:
+                                    logger.error(f"[HALLUCINATION DETECTED] AI claimed action but no tool calls!")
+                                    logger.error(f"[HALLUCINATION] Message: {clean_message[:100]}")
+                                    logger.error(f"[HALLUCINATION] Response: {content[:200]}")
+                                    
+                                    # Пересылаем запрос с усиленным промптом
+                                    enhanced_message = f"""КРИТИЧЕСКИ ВАЖНО: Пользователь написал: "{original_message}"
+
+ТЫ ОБЯЗАН ВЫЗВАТЬ СООТВЕТСТВУЮЩИЙ TOOL! ГАЛЛЮЦИНАЦИЯ ЗАПРЕЩЕНА!
+
+Если пользователь хочет создать задачу - вызови add_task()
+Если пользователь хочет удалить задачу - вызови delete_task()
+Если пользователь хочет завершить задачу - вызови complete_task()
+
+ОТВЕТЬ ТОЛЬКО ВЫЗОВОМ TOOL! НЕ ПИШИ ТЕКСТ БЕЗ TOOL CALL!"""
+                                    
+                                    retry_messages = [{"role": "system", "content": system_prompt}]
+                                    retry_messages.append({"role": "user", "content": enhanced_message})
+                                    
+                                    retry_data = {
+                                        "model": DEEPSEEK_MODEL,
+                                        "messages": retry_messages,
+                                        "tools": TOOLS,
+                                        "tool_choice": "auto",
+                                        "parallel_tool_calls": True,
+                                        "temperature": 0.3,  # Снижаем температуру для точности
+                                        "max_tokens": 4096
+                                    }
+                                    
+                                    try:
+                                        async with aiohttp.ClientSession() as retry_session:
+                                            async with retry_session.post(url, headers=headers, json=retry_data, timeout=aiohttp.ClientTimeout(total=30)) as retry_response:
+                                                if retry_response.status == 200:
+                                                    retry_result = await retry_response.json()
+                                                    retry_message = retry_result["choices"][0]["message"]
+                                                    retry_tool_calls = retry_message.get("tool_calls")
+                                                    
+                                                    if retry_tool_calls:
+                                                        logger.info(f"[HALLUCINATION FIX] Retry successful, got {len(retry_tool_calls)} tool calls")
+                                                        result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
+                                                        if result:
+                                                            return result
+                                                    else:
+                                                        logger.warning(f"[HALLUCINATION FIX] Retry failed - still no tool calls")
+                                    except Exception as retry_e:
+                                        logger.error(f"[HALLUCINATION FIX] Retry failed with error: {retry_e}")
                             
                             # Успех - выходим из retry loop
                             logger.info(f"[SUCCESS] API call successful, content length: {len(content) if content else 0}")
