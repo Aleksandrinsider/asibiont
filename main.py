@@ -2627,25 +2627,25 @@ async def delete_task_handler(request):
 
 
 async def reschedule_task_handler(request):
-    """Переносит задачу на новую дату"""
+    """Переносит задачу на новое время"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     data = await request.json()
-    task_id = data.get('task_id')
-    new_date = data.get('new_date')
-    if not task_id or not new_date:
-        return web.json_response({'error': 'Task ID and new date required'}, status=400)
+    task_title = data.get('task_title')
+    new_time = data.get('new_time')
+    if not task_title or not new_time:
+        return web.json_response({'error': 'Task title and new time required'}, status=400)
 
     from ai_integration import reschedule_task
     try:
-        result = await reschedule_task(task_id=task_id, new_date=new_date, user_id=user_id)
-        logger.info(f"Task {task_id} rescheduled by user {user_id}: {result}")
+        result = await reschedule_task(task_title=task_title, new_time=new_time, user_id=user_id)
+        logger.info(f"Task '{task_title}' rescheduled by user {user_id}: {result}")
         return web.json_response({'message': result})
     except Exception as e:
-        logger.error(f"Error rescheduling task {task_id}: {e}")
+        logger.error(f"Error rescheduling task '{task_title}': {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 

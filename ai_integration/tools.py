@@ -95,6 +95,27 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "reschedule_task",
+            "description": "Перенести существующую задачу на новое время. Используй когда пользователь хочет изменить время напоминания задачи.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название задачи для переноса",
+                    },
+                    "new_time": {
+                        "type": "string",
+                        "description": "Новое время в формате YYYY-MM-DD HH:MM или HH:MM (если сегодня)",
+                    },
+                },
+                "required": ["task_title", "new_time"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_task",
             "description": "Удалить задачу",
             "parameters": {

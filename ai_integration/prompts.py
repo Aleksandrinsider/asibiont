@@ -121,6 +121,10 @@ edit_task - Изменить существующую задачу
   • task_id или task_title: Идентификатор задачи
   • title, description, reminder_time: Новые значения (опционально)
 
+reschedule_task - Перенести существующую задачу на новое время
+  • task_title: Название задачи для переноса
+  • new_time: Новое время в формате "YYYY-MM-DD HH:MM" или "HH:MM"
+
 delete_task - Удалить задачу
   • task_id или task_title: Идентификатор задачи
   • reason: Причина удаления (опционально)

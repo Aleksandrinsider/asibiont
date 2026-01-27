@@ -492,6 +492,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 )
                 tool_results.append({"function": func_name, "result": result})
 
+            elif func_name == "reschedule_task":
+                result = await handlers.reschedule_task(
+                    task_title=args.get("task_title"),
+                    new_time=args.get("new_time"),
+                    user_id=user_id,
+                    session=db_session,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
             elif func_name == "check_subscription_status":
                 result = check_subscription_status(user_id=user_id)
                 tool_results.append({"function": func_name, "result": result})
@@ -1764,65 +1773,65 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
                 logger.info(f"[COMPLETION DETECTED] Setting intent to complete_task for message: {clean_message[:50]}..., extracted title: {task_title}")
 # 
-        # Special handling for delegation expressions - DISABLED for pure AI testing
-        # if intent.get('type') == 'conversation':
-        #     delegation_patterns = [
-#                 r'@[\w]+\s+',  # "@user сделай" - ищется в оригинальном сообщении
-#                 r'делегируй',  # "делегируй задачу"
-#                 r'поручи\s+@',  # "поручи @user"
-#                 r'передай\s+@',  # "передай @user"
-#                 r'@[\w]+\s+нужно',  # "@user нужно сделать"
-#                 r'поручи\s+[\w]+\s+@',  # "поручи user @user"
-#             ]
-        #     if any(re.search(pattern, message.lower()) for pattern in delegation_patterns):
-        #         # Extract delegation parameters
-        #         task_title = None
-        #         delegate_to = None
-        #         reminder_time = None
-        #
-        #         # Extract @username
-        #         username_match = re.search(r'@(\w+)', message)
-        #         if username_match:
-        #             delegate_to = username_match.group(1)
-        #
-        #         # Try to extract task title and time
-        #         if 'делегируй' in message.lower():
-        #             # "делегируй задачу @user" - task is "задачу"
-        #             task_title = 'задачу'
-        #         elif 'поручи' in message.lower():
-        #             # Extract text after "поручи" and before "@"
-        #             poruchi_match = re.search(r'поручи\s+(.+?)\s*@', message.lower())
-        #             if poruchi_match:
-        #                 task_title = poruchi_match.group(1).strip()
-        #         elif 'передай' in message.lower():
-        #             # Extract text after "передай" and before "@"
-        #             peredai_match = re.search(r'передай\s+(.+?)\s*@', message.lower())
-        #             if peredai_match:
-        #                 task_title = peredai_match.group(1).strip()
-        #         else:
-        #             # For @user patterns, extract text before @
-        #             at_match = re.search(r'(.+?)\s*@', message)
-        #             if at_match:
-        #                 task_title = at_match.group(1).strip()
-        #
-        #         # Try to extract time from message
-        #         time_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2}\s+час|\d+\s+мин|завтра|сегодня|через\s+\d+)', message.lower())
-        #         if time_match:
-        #             # Parse time using existing logic
-        #             from .utils import parse_time_to_datetime
-        #             parsed_time = parse_time_to_datetime(time_match.group(1), user_id)
-        #             if parsed_time:
-        #                 reminder_time = parsed_time
-        #             else:
-        #                 # Default to 1 hour from now if parsing fails
-        #                 reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
-        #         else:
-        #             # Default to 1 hour from now if no time specified
-        #             reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
-        #
-        #         if task_title and delegate_to:
-        #             intent = {"type": "delegate_task", "confidence": 0.9, "params": {"task_title": task_title, "delegate_to": delegate_to, "reminder_time": reminder_time}}
-        #             logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}..., task: {task_title}, delegate_to: {delegate_to}, time: {reminder_time}")
+        # Special handling for delegation expressions
+        if intent.get('type') == 'conversation':
+            delegation_patterns = [
+                r'@[\w]+\s+',  # "@user сделай" - ищется в оригинальном сообщении
+                r'делегируй',  # "делегируй задачу"
+                r'поручи\s+@',  # "поручи @user"
+                r'передай\s+@',  # "передай @user"
+                r'@[\w]+\s+нужно',  # "@user нужно сделать"
+                r'поручи\s+[\w]+\s+@',  # "поручи user @user"
+            ]
+            if any(re.search(pattern, message.lower()) for pattern in delegation_patterns):
+                # Extract delegation parameters
+                task_title = None
+                delegate_to = None
+                reminder_time = None
+
+                # Extract @username
+                username_match = re.search(r'@(\w+)', message)
+                if username_match:
+                    delegate_to = username_match.group(1)
+
+                # Try to extract task title and time
+                if 'делегируй' in message.lower():
+                    # "делегируй задачу @user" - task is "задачу"
+                    task_title = 'задачу'
+                elif 'поручи' in message.lower():
+                    # Extract text after "поручи" and before "@"
+                    poruchi_match = re.search(r'поручи\s+(.+?)\s*@', message.lower())
+                    if poruchi_match:
+                        task_title = poruchi_match.group(1).strip()
+                elif 'передай' in message.lower():
+                    # Extract text after "передай" and before "@"
+                    peredai_match = re.search(r'передай\s+(.+?)\s*@', message.lower())
+                    if peredai_match:
+                        task_title = peredai_match.group(1).strip()
+                else:
+                    # For @user patterns, extract text before @
+                    at_match = re.search(r'(.+?)\s*@', message)
+                    if at_match:
+                        task_title = at_match.group(1).strip()
+
+                # Try to extract time from message
+                time_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2}\s+час|\d+\s+мин|завтра|сегодня|через\s+\d+)', message.lower())
+                if time_match:
+                    # Parse time using existing logic
+                    from .utils import parse_time_to_datetime
+                    parsed_time = parse_time_to_datetime(time_match.group(1), user_id)
+                    if parsed_time:
+                        reminder_time = parsed_time
+                    else:
+                        # Default to 1 hour from now if parsing fails
+                        reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+                else:
+                    # Default to 1 hour from now if no time specified
+                    reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
+
+                if task_title and delegate_to:
+                    intent = {"type": "delegate_task", "confidence": 0.9, "params": {"task_title": task_title, "delegate_to": delegate_to, "reminder_time": reminder_time}}
+                    logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}..., task: {task_title}, delegate_to: {delegate_to}, time: {reminder_time}")
 
         # Special handling for time expressions (update existing task) - ENABLED as fallback
         time_patterns = [
@@ -1834,12 +1843,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)',  # Added for relative time only
         ]
         if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns) and intent.get('type') != 'delegate_task':
-            # Check if there are pending tasks to update
-            if user:
-                pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
-                if pending_tasks:
-                    intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
-                    logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
+            # Check if this is a reschedule request (not just time update)
+            is_reschedule = any(word in clean_message.lower() for word in ['перенеси', 'перенести', 'reschedule', 'переместить'])
+            if not is_reschedule:
+                # Check if there are pending tasks to update
+                if user:
+                    pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
+                    if pending_tasks:
+                        intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
+                        logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
 
         # Убрана специальная обработка приветствий - все через AI промпт
 

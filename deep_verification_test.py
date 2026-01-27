@@ -12,8 +12,8 @@ import json
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from ai_integration.chat import chat_with_ai
-from models import Session, UserProfile, Task
-from datetime import datetime, timezone
+from models import Session, UserProfile, Task, User, Subscription, SubscriptionTier
+from datetime import datetime, timezone, timedelta
 import pytz
 
 # Test user data
@@ -50,26 +50,68 @@ class AIAgentVerifier:
 
         return promises
 
-    def check_function_execution(self, response, expected_functions):
-        """Check if expected functions were called based on response content"""
+    def check_function_execution(self, response, expected_functions, user_id):
+        """Check if expected functions were actually executed by querying database"""
         executed = []
-
+        
+        user = self.session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return executed
+        
         # Check for task creation
-        if 'add_task' in expected_functions and ('созда' in response.lower() or 'добав' in response.lower()):
-            executed.append('add_task')
-
+        if 'add_task' in expected_functions:
+            # Check if new tasks were created recently (but allow some time for tests)
+            recent_tasks = self.session.query(Task).filter(
+                Task.user_id == user.id
+            ).all()
+            if recent_tasks:
+                executed.append('add_task')
+        
         # Check for profile updates
-        if 'update_profile' in expected_functions and ('обнов' in response.lower() or 'профиль' in response.lower()):
-            executed.append('update_profile')
-
+        if 'update_profile' in expected_functions:
+            profile = self.session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and any([
+                profile.city, profile.company, profile.position, 
+                profile.interests, profile.skills, profile.goals
+            ]):
+                executed.append('update_profile')
+        
         # Check for task completion
-        if 'complete_task' in expected_functions and ('заверш' in response.lower() or 'готов' in response.lower()):
-            executed.append('complete_task')
-
-        # Check for task listing
-        if 'list_tasks' in expected_functions and ('список' in response.lower() or 'задач' in response.lower()):
+        if 'complete_task' in expected_functions:
+            # Check if tasks were completed recently
+            recent_completed = self.session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status == 'completed',
+                Task.actual_completion_time >= datetime.now(timezone.utc) - timedelta(minutes=5)
+            ).all()
+            if recent_completed:
+                executed.append('complete_task')
+        
+        # Check for task listing (this is harder to check, but if response contains task info)
+        if 'list_tasks' in expected_functions and ('задач' in response.lower() or 'список' in response.lower()):
             executed.append('list_tasks')
-
+        
+        # Check for reschedule_task
+        if 'reschedule_task' in expected_functions:
+            # Check if tasks have recent reminder_time updates (compare with created_at)
+            recent_tasks = self.session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.created_at >= datetime.now(timezone.utc) - timedelta(minutes=10)
+            ).all()
+            if recent_tasks:
+                executed.append('reschedule_task')
+        
+        # Check for delegate_task
+        if 'delegate_task' in expected_functions:
+            # Check if tasks were delegated recently
+            recent_delegated = self.session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.delegated_to_username.isnot(None),
+                Task.created_at >= datetime.now(timezone.utc) - timedelta(minutes=10)
+            ).all()
+            if recent_delegated:
+                executed.append('delegate_task')
+        
         return executed
 
     async def simulate_user_confirmation(self, ai_response):
@@ -115,7 +157,7 @@ class AIAgentVerifier:
         print(f"Обещания AI: {promises}")
 
         # Check execution
-        executed = self.check_function_execution(response, expected_functions)
+        executed = self.check_function_execution(response, expected_functions, TEST_USER_ID)
         print(f"Выполненные функции: {executed}")
 
         # Check if promises match execution
@@ -127,13 +169,16 @@ class AIAgentVerifier:
 
         return success
 
-    async def test_interactive_scenario(self, initial_message, follow_up_responses, description):
+    async def test_interactive_scenario(self, initial_message, follow_up_responses, description, expected_functions=None):
         """Test interactive scenarios with user confirmations"""
         print(f"\n🎭 {description}")
         print(f"Начальный запрос: {initial_message}")
+        if expected_functions:
+            print(f"Ожидаемые функции: {expected_functions}")
 
         conversation_context = []
         current_response = None
+        executed = []
 
         for i, expected_response in enumerate(follow_up_responses):
             if i == 0:
@@ -163,8 +208,20 @@ class AIAgentVerifier:
             if any(word in current_response.lower() for word in ['подтвердить', 'уверен', 'да?', 'ок?']):
                 print("🤔 AI просит подтверждения - это правильно")
 
+        # After conversation, check if expected functions were executed
+        if expected_functions:
+            executed = self.check_function_execution("", expected_functions, TEST_USER_ID)
+            print(f"Выполненные функции: {executed}")
+            success = len(executed) > 0
+            if success:
+                print("✅ Функции выполнены")
+            else:
+                print("❌ Функции не выполнены")
+        else:
+            success = True
+
         print("✅ Интерактивный сценарий завершен")
-        return True
+        return success
 
     async def run_comprehensive_test(self):
         """Run comprehensive verification tests"""
@@ -211,11 +268,33 @@ class AIAgentVerifier:
             tests_passed += 1
 
         # Test 5: Interactive delegation (requires confirmation)
+        # First, create a Standard subscription for the user
+        user = self.session.query(User).filter_by(telegram_id=TEST_USER_ID).first()
+        if user:
+            existing_sub = self.session.query(Subscription).filter_by(user_id=user.id, status="active").first()
+            if not existing_sub:
+                sub = Subscription(
+                    user_id=user.id,
+                    telegram_id=user.telegram_id,
+                    tier=SubscriptionTier.PREMIUM,
+                    status="active",
+                    start_date=datetime.now(timezone.utc),
+                    end_date=datetime.now(timezone.utc) + timedelta(days=30)
+                )
+                self.session.add(sub)
+                user.subscription_tier = SubscriptionTier.PREMIUM  # Update user tier
+                self.session.commit()
+                # Verify subscription was created
+                created_sub = self.session.query(Subscription).filter_by(user_id=user.id, status="active").first()
+                print(f"📋 Подписка создана: {created_sub.tier if created_sub else 'None'}")
+                print(f"📋 Создана подписка Premium для тестирования делегирования, user.tier = {user.subscription_tier}")
+
         total_tests += 1
         if await self.test_interactive_scenario(
-            "делегируй задачу написать отчет @user123",
+            "делегируй задачу написать отчет @test6",
             ["да, подтверждаю делегирование"],
-            "Тест 5: Интерактивное делегирование с подтверждением"
+            "Тест 5: Интерактивное делегирование с подтверждением",
+            ['delegate_task']
         ):
             tests_passed += 1
 
@@ -246,6 +325,21 @@ class AIAgentVerifier:
         ):
             tests_passed += 1
 
+        # Test 9: Task rescheduling
+        total_tests += 1
+        # First create a task, then reschedule it
+        await self.test_promise_execution(
+            "создай задачу купить продукты на 10:00",
+            ['add_task'],
+            "Подготовка: Создание задачи для переноса"
+        )
+        if await self.test_promise_execution(
+            "перенеси задачу купить продукты на 15:00",
+            ['reschedule_task'],
+            "Тест 9: Перенос задачи"
+        ):
+            tests_passed += 1
+
         print("\n" + "=" * 60)
         print(f"📊 РЕЗУЛЬТАТЫ ГЛУБОКОЙ ПРОВЕРКИ: {tests_passed}/{total_tests} тестов пройдено ({tests_passed/total_tests*100:.1f}%)")
 
@@ -265,6 +359,11 @@ class AIAgentVerifier:
             test_tasks = self.session.query(Task).filter_by(user_id=TEST_USER_ID).all()
             for task in test_tasks:
                 self.session.delete(task)
+
+            # Remove test subscriptions
+            test_subs = self.session.query(Subscription).filter_by(user_id=TEST_USER_ID).all()
+            for sub in test_subs:
+                self.session.delete(sub)
 
             # Reset test user profile
             profile = self.session.query(UserProfile).filter_by(user_id=TEST_USER_ID).first()

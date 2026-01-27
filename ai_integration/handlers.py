@@ -628,8 +628,14 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
     return result
 
 
-async def reschedule_task(task_id=None, new_date=None, user_id=None, session=None):
-    """Reschedule task to a new date"""
+async def reschedule_task(task_title=None, new_time=None, user_id=None, session=None):
+    """Reschedule task to a new time"""
+    logger.info(f"[RESCHEDULE_TASK] Called with task_title='{task_title}', new_time='{new_time}', user_id={user_id}")
+    
+    if user_id is None:
+        logger.error("[RESCHEDULE_TASK] ERROR: user_id is None!")
+        return "ERROR: user_id is required"
+    
     if session is None:
         session = Session()
         close_session = True
@@ -642,34 +648,36 @@ async def reschedule_task(task_id=None, new_date=None, user_id=None, session=Non
             session.close()
         return "Пользователь не найден."
 
-    # Find task by ID
-    if task_id:
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-
-        task = session.query(Task).filter(Task.id == task_id_int, Task.user_id == user.id).first()
+    # Find task by title
+    if task_title:
+        from sqlalchemy import func
+        task = session.query(Task).filter(
+            Task.user_id == user.id,
+            func.lower(Task.title).contains(func.lower(task_title))
+        ).first()
     else:
         if close_session:
             session.close()
-        return "Не указан task_id."
+        return "Не указано название задачи."
 
     if task:
         try:
-            # Parse new date
+            # Parse new time
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-            if " " in new_date:  # Full datetime
-                local_dt = datetime.strptime(new_date, "%Y-%m-%d %H:%M")
-            else:  # Date only, keep existing time
-                local_dt = datetime.strptime(new_date, "%Y-%m-%d")
-                if task.reminder_time:
-                    existing_time = task.reminder_time.astimezone(user_tz).time()
-                    local_dt = datetime.combine(local_dt.date(), existing_time)
-                else:
-                    local_dt = local_dt.replace(hour=9, minute=0)  # Default to 9 AM
+            
+            # Support various formats
+            if " " in new_time:  # Full datetime
+                local_dt = datetime.strptime(new_time, "%Y-%m-%d %H:%M")
+            elif ":" in new_time:  # Time only, assume today
+                time_dt = datetime.strptime(new_time, "%H:%M")
+                now = datetime.now(user_tz)
+                local_dt = now.replace(hour=time_dt.hour, minute=time_dt.minute)
+                if local_dt < now:
+                    local_dt += timedelta(days=1)  # Next day if time has passed
+            else:
+                if close_session:
+                    session.close()
+                return "Некорректный формат времени. Используйте HH:MM или YYYY-MM-DD HH:MM."
 
             local_dt = user_tz.localize(local_dt)
             task.reminder_time = local_dt.astimezone(pytz.UTC)
@@ -677,11 +685,10 @@ async def reschedule_task(task_id=None, new_date=None, user_id=None, session=Non
 
             result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
 
-            # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
         except ValueError as e:
-            result = f"Ошибка формата даты: {e}. Используйте формат YYYY-MM-DD или YYYY-MM-DD HH:MM."
+            result = f"Ошибка формата времени: {e}. Используйте формат HH:MM или YYYY-MM-DD HH:MM."
     else:
-        result = "Задача не найдена."
+        result = f"Задача '{task_title}' не найдена."
 
     if close_session:
         session.close()
