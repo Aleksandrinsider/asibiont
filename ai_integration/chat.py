@@ -1932,9 +1932,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.info(f"[TOOL DETECTOR] Testing message: '{clean_message.lower()[:100]}'")
             if "удали" in clean_message.lower() or "убери" in clean_message.lower():
                 logger.info(f"[TOOL HINT] DELETE detected: {clean_message[:50]}")
-            elif any(kw in clean_message.lower() for kw in ["напомни", "через", "нужно", "надо"]):
+            elif any(kw in clean_message.lower() for kw in ["сделал", "выполнил", "завершил", "закончил", "готов", "закрыл"]):
+                logger.info(f"[TOOL HINT] COMPLETE detected: {clean_message[:50]} - FORCING tool call")
+                tool_choice = "required"  # ФОРСИРУЕМ вызов complete_task
+            elif any(kw in clean_message.lower() for kw in ["напомни", "через", "нужно", "надо", "создай", "добавь"]):
                 logger.info(f"[TOOL HINT] CREATE detected: {clean_message[:50]}")
-            elif any(kw in clean_message.lower() for kw in ["перенеси", "измени время", "обнови"]):
+            elif any(kw in clean_message.lower() for kw in ["перенеси", "измени время", "обнови", "сдвинь"]):
                 logger.info(f"[TOOL HINT] RESCHEDULE detected: {clean_message[:50]} - FORCING tool call")
                 tool_choice = "required"  # ФОРСИРУЕМ вызов reschedule_task для переноса
             
