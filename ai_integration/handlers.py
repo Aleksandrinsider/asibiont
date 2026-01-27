@@ -2164,6 +2164,9 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
 
     except Exception as e:
         logging.error(f"Failed to send delegation notification: {e}")
+
+
+async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
     """Generate personalized delegation notification using AI"""
     import aiohttp
     from config import DEEPSEEK_API_KEY
@@ -2275,6 +2278,30 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
     except Exception as e:
         logger.error(f"Error generating progress request: {e}")
         return None
+
+
+async def generate_delegation_response_notification_async(task_title, response, delegator_telegram_id, delegatee_username):
+    """Send notification to delegator about task acceptance/rejection"""
+    try:
+        from main import bot
+        if not bot:
+            return
+
+        if response == "accepted":
+            message = f"🎉 Отлично! Пользователь @{delegatee_username} принял вашу задачу '{task_title}' и добавил её в свой список задач."
+        elif response.startswith("rejected"):
+            reason = response.replace("rejected", "").strip()
+            if reason:
+                message = f"❌ Пользователь @{delegatee_username} отклонил задачу '{task_title}'. Причина: {reason}"
+            else:
+                message = f"❌ Пользователь @{delegatee_username} отклонил задачу '{task_title}'."
+        else:
+            message = f"📝 Статус задачи '{task_title}' изменён пользователем @{delegatee_username}: {response}"
+
+        await bot.send_message(delegator_telegram_id, message)
+
+    except Exception as e:
+        logging.error(f"Failed to send delegation response notification: {e}")
 
 
 def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline):
@@ -3950,3 +3977,307 @@ async def get_task_details_async(task_title: str, user_id: int = None, session=N
     finally:
         if close_session:
             session.close()
+
+
+def delegate_task(title, description="", reminder_time=None, delegated_to_username=None, delegation_details="", user_id=None):
+    """Делегировать задачу другому пользователю"""
+    logger.info(f"[DELEGATE_TASK] Called with title='{title}', delegated_to='{delegated_to_username}', user_id={user_id}")
+
+    if not user_id:
+        return "❌ Ошибка: пользователь не найден"
+
+    if not delegated_to_username:
+        return "❌ Ошибка: укажите username получателя"
+
+    if not title:
+        return "❌ Ошибка: укажите название задачи"
+
+    session = Session()
+    try:
+        # Найти пользователя-отправителя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Ошибка: пользователь не найден"
+
+        logger.info(f"[DELEGATE_TASK] Delegator found: {user.username} (ID: {user.telegram_id})")
+
+        # Проверить, существует ли уже такая задача
+        existing_task = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.title == title,
+            Task.status == 'pending'
+        ).first()
+
+        if existing_task:
+            # Обновить существующую задачу
+            existing_task.delegated_by = user.id
+            existing_task.delegated_to_username = delegated_to_username
+            existing_task.delegation_status = 'pending'
+            if delegation_details:
+                existing_task.delegation_details = encrypt_data(delegation_details)
+            if description:
+                existing_task.description = encrypt_data(description)
+            if reminder_time:
+                try:
+                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                    local_dt = user_tz.localize(local_dt)
+                    existing_task.reminder_time = local_dt.astimezone(pytz.UTC)
+                except ValueError:
+                    pass
+            session.commit()
+            task = existing_task
+        else:
+            # Создать новую задачу
+            if not reminder_time:
+                return "❌ Ошибка: укажите время выполнения задачи"
+
+            task = Task(
+                user_id=user.id,
+                title=title,
+                description=encrypt_data(description),
+                delegated_by=user.id,
+                delegated_to_username=delegated_to_username,
+                delegation_status='pending',
+                delegation_details=encrypt_data(delegation_details) if delegation_details else None
+            )
+
+            if reminder_time:
+                try:
+                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                    local_dt = user_tz.localize(local_dt)
+                    task.reminder_time = local_dt.astimezone(pytz.UTC)
+                except ValueError:
+                    return f"❌ Ошибка: неверный формат времени '{reminder_time}'. Используйте формат YYYY-MM-DD HH:MM"
+
+            session.add(task)
+            session.commit()
+
+        # Отправить уведомление получателю (асинхронно)
+        try:
+            # Найти telegram_id получателя
+            recipient = session.query(User).filter_by(username=delegated_to_username).first()
+            if recipient:
+                from .handlers import generate_delegation_notification_async
+                import asyncio
+                asyncio.create_task(generate_delegation_notification_async(
+                    delegator_username=user.username or f"ID:{user.telegram_id}",
+                    recipient_username=delegated_to_username,
+                    task_title=title,
+                    task_description=description,
+                    deadline=reminder_time,
+                    delegation_details=delegation_details,
+                    recipient_telegram_id=recipient.telegram_id
+                ))
+        except Exception as e:
+            logger.warning(f"[DELEGATE_TASK] Could not send notification: {e}")
+
+        return f"✅ Задача '{title}' успешно делегирована пользователю @{delegated_to_username}. Ожидается подтверждение от получателя."
+
+    except Exception as e:
+        logger.error(f"[DELEGATE_TASK] Error: {e}")
+        session.rollback()
+        return f"❌ Ошибка при делегировании задачи: {e}"
+    finally:
+        session.close()
+
+
+def get_delegation_progress(user_id=None, session=None):
+    """Показать статус делегированных задач"""
+    logger.info(f"[GET_DELEGATION_PROGRESS] Called for user_id={user_id}")
+
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        if not user_id:
+            return "❌ Ошибка: пользователь не найден"
+
+        # Найти делегированные задачи (отправленные)
+        delegated_tasks = session.query(Task).filter(
+            Task.delegated_by == user_id,
+            Task.delegation_status.isnot(None)
+        ).all()
+
+        # Найти полученные делегированные задачи
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if user and user.username:
+            received_tasks = session.query(Task).filter(
+                Task.delegated_to_username == user.username,
+                Task.delegation_status.isnot(None)
+            ).all()
+        else:
+            received_tasks = []
+
+        if not delegated_tasks and not received_tasks:
+            return "У вас нет делегированных задач."
+
+        result = "📋 Статус делегирования задач:\n\n"
+
+        if delegated_tasks:
+            result += "📤 Отправленные задачи:\n"
+            for task in delegated_tasks:
+                status_emoji = {
+                    'pending': '⏳',
+                    'accepted': '✅',
+                    'rejected': '❌',
+                    'completed': '🎉'
+                }.get(task.delegation_status, '❓')
+
+                result += f"{status_emoji} '{task.title}' → @{task.delegated_to_username}\n"
+
+        if received_tasks:
+            result += "\n📥 Полученные задачи:\n"
+            for task in received_tasks:
+                status_emoji = {
+                    'pending': '⏳',
+                    'accepted': '✅',
+                    'rejected': '❌',
+                    'completed': '🎉'
+                }.get(task.delegation_status, '❓')
+
+                delegator = session.query(User).filter_by(id=task.delegated_by).first()
+                delegator_name = delegator.username or f"ID:{delegator.telegram_id}" if delegator else "Неизвестен"
+
+                result += f"{status_emoji} '{task.title}' от @{delegator_name}\n"
+
+        return result
+
+    except Exception as e:
+        logger.error(f"[GET_DELEGATION_PROGRESS] Error: {e}")
+        return f"❌ Ошибка при получении статуса делегирования: {e}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def accept_delegated_task(task_title, user_id=None):
+    """Принять делегированную задачу"""
+    logger.info(f"[ACCEPT_DELEGATED_TASK] Called with task_title='{task_title}', user_id={user_id}")
+
+    if not user_id:
+        return "❌ Ошибка: пользователь не найден"
+
+    if not task_title:
+        return "❌ Ошибка: укажите название задачи"
+
+    session = Session()
+    try:
+        # Найти пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Ошибка: пользователь не найден"
+
+        # Найти задачу, делегированную этому пользователю
+        task = session.query(Task).filter(
+            Task.delegated_to_username == user.username,
+            Task.delegation_status == 'pending'
+        ).filter(
+            func.lower(Task.title).like(f'%{task_title.lower()}%')
+        ).first()
+
+        if not task:
+            return f"❌ Задача '{task_title}' не найдена среди делегированных вам задач."
+
+        # Принять задачу
+        task.delegation_status = 'accepted'
+        task.user_id = user.id  # Передать задачу пользователю
+        task.delegated_to_username = None  # Очистить поле делегирования
+        task.delegated_by = None
+        session.commit()
+
+        # Отправить уведомление отправителю
+        try:
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            if delegator:
+                from .handlers import generate_delegation_response_notification_async
+                import asyncio
+                asyncio.create_task(generate_delegation_response_notification_async(
+                    task_title=task.title,
+                    response="accepted",
+                    delegator_telegram_id=delegator.telegram_id,
+                    delegatee_username=user.username or f"ID:{user.telegram_id}"
+                ))
+        except Exception as e:
+            logger.warning(f"[ACCEPT_DELEGATED_TASK] Could not send notification: {e}")
+
+        return f"✅ Задача '{task.title}' принята! Она добавлена в ваш список задач."
+
+    except Exception as e:
+        logger.error(f"[ACCEPT_DELEGATED_TASK] Error: {e}")
+        session.rollback()
+        return f"❌ Ошибка при принятии задачи: {e}"
+    finally:
+        session.close()
+
+
+def reject_delegated_task(task_title, reason="", user_id=None):
+    """Отклонить делегированную задачу"""
+    logger.info(f"[REJECT_DELEGATED_TASK] Called with task_title='{task_title}', user_id={user_id}")
+
+    if not user_id:
+        return "❌ Ошибка: пользователь не найден"
+
+    if not task_title:
+        return "❌ Ошибка: укажите название задачи"
+
+    session = Session()
+    try:
+        # Найти пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Ошибка: пользователь не найден"
+
+        # Найти задачу, делегированную этому пользователю
+        task = session.query(Task).filter(
+            Task.delegated_to_username == user.username,
+            Task.delegation_status == 'pending'
+        ).filter(
+            func.lower(Task.title).like(f'%{task_title.lower()}%')
+        ).first()
+
+        if not task:
+            return f"❌ Задача '{task_title}' не найдена среди делегированных вам задач."
+
+        # Отклонить задачу
+        task.delegation_status = 'rejected'
+        if reason:
+            task.completion_notes = encrypt_data(f"Отклонено: {reason}")
+        session.commit()
+
+        # Удалить задачу, так как она отклонена
+        session.delete(task)
+        session.commit()
+
+        # Отправить уведомление отправителю
+        try:
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            if delegator:
+                from .handlers import generate_delegation_response_notification_async
+                import asyncio
+                rejection_reason = f" (причина: {reason})" if reason else ""
+                asyncio.create_task(generate_delegation_response_notification_async(
+                    task_title=task.title,
+                    response=f"rejected{rejection_reason}",
+                    delegator_telegram_id=delegator.telegram_id,
+                    delegatee_username=user.username or f"ID:{user.telegram_id}"
+                ))
+        except Exception as e:
+            logger.warning(f"[REJECT_DELEGATED_TASK] Could not send notification: {e}")
+
+        rejection_msg = f"✅ Задача '{task.title}' отклонена."
+        if reason:
+            rejection_msg += f" Причина: {reason}"
+
+        return rejection_msg
+
+    except Exception as e:
+        logger.error(f"[REJECT_DELEGATED_TASK] Error: {e}")
+        session.rollback()
+        return f"❌ Ошибка при отклонении задачи: {e}"
+    finally:
+        session.close()

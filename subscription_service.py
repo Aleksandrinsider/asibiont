@@ -55,7 +55,12 @@ def cancel_subscription(user_id):
     """Отменяет подписку пользователя"""
     session = Session()
     try:
-        sub = session.query(Subscription).filter_by(user_id=user_id).first()
+        # First find the user by telegram_id
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return False
+            
+        sub = session.query(Subscription).filter_by(user_id=user.id).first()
         if sub:
             sub.status = 'cancelled'
             session.commit()
