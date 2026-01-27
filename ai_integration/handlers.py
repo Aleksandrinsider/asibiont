@@ -101,7 +101,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                         user_tz = pytz.UTC
 
                 # Check if time is relative
-                if "через" in reminder_time.lower():
+                if isinstance(reminder_time, str) and "через" in reminder_time.lower():
                     current_time = datetime.now(user_tz)
                     parsed_time = parse_relative_time(reminder_time, current_time)
                     if parsed_time:
@@ -128,32 +128,38 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                             f"Task {title} natural time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
                     else:
                         # Try simple HH:MM format first
-                        simple_time_match = re.match(r'^(\d{1,2}):(\d{2})$', reminder_time.strip())
-                        if simple_time_match:
-                            h, m = int(simple_time_match.group(1)), int(simple_time_match.group(2))
-                            current_time = datetime.now(user_tz)
-                            # Create time for today
-                            today_time = current_time.replace(hour=h, minute=m, second=0, microsecond=0)
-                            # If time has passed, schedule for tomorrow
-                            if today_time <= current_time:
-                                today_time = today_time + timedelta(days=1)
-                            task.reminder_time = today_time.astimezone(pytz.UTC)
-                            logging.info(
-                                f"Task {title} simple time parsed: '{reminder_time}' -> local: {today_time} -> UTC: {task.reminder_time}")
-                        else:
-                            # Fallback to absolute time format
-                            try:
-                                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                                local_dt = user_tz.localize(local_dt)
-                                task.reminder_time = local_dt.astimezone(pytz.UTC)
+                        if isinstance(reminder_time, str):
+                            simple_time_match = re.match(r'^(\d{1,2}):(\d{2})$', reminder_time.strip())
+                            if simple_time_match:
+                                h, m = int(simple_time_match.group(1)), int(simple_time_match.group(2))
+                                current_time = datetime.now(user_tz)
+                                # Create time for today
+                                today_time = current_time.replace(hour=h, minute=m, second=0, microsecond=0)
+                                # If time has passed, schedule for tomorrow
+                                if today_time <= current_time:
+                                    today_time = today_time + timedelta(days=1)
+                                task.reminder_time = today_time.astimezone(pytz.UTC)
                                 logging.info(
-                                    f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
-                            except ValueError:
-                                logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
-                                # Don't create task without valid time
-                                if close_session:
-                                    session.close()
-                                return f"❌ Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
+                                    f"Task {title} simple time parsed: '{reminder_time}' -> local: {today_time} -> UTC: {task.reminder_time}")
+                        else:
+                            # If reminder_time is already a datetime object, use it directly
+                            if isinstance(reminder_time, datetime):
+                                task.reminder_time = reminder_time.astimezone(pytz.UTC) if reminder_time.tzinfo else user_tz.localize(reminder_time).astimezone(pytz.UTC)
+                                logging.info(f"Task {title} datetime used directly: {reminder_time} -> UTC: {task.reminder_time}")
+                            else:
+                                # Fallback to absolute time format
+                                try:
+                                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                                    local_dt = user_tz.localize(local_dt)
+                                    task.reminder_time = local_dt.astimezone(pytz.UTC)
+                                    logging.info(
+                                        f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+                                except ValueError:
+                                    logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
+                                    # Don't create task without valid time
+                                    if close_session:
+                                        session.close()
+                                    return f"❌ Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
             except Exception as e:
                 logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
         if due_date:
@@ -1326,7 +1332,7 @@ def edit_task(
                 task.description = description
         if reminder_time:
             try:
-                if "через" in reminder_time.lower() or "на" in reminder_time.lower():
+                if isinstance(reminder_time, str) and ("через" in reminder_time.lower() or "на" in reminder_time.lower()):
                     user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
                     current_time = datetime.now(user_tz)
                     parsed_time = parse_relative_time(reminder_time, current_time)
@@ -3081,13 +3087,13 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
             # Try different formats
             for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
                 try:
-                    if "завтра" in reminder_time.lower():
+                    if isinstance(reminder_time, str) and "завтра" in reminder_time.lower():
                         local_dt = datetime.now(user_tz) + timedelta(days=1)
                         time_part = reminder_time.lower().replace("завтра", "").strip()
                         if time_part:
                             time_dt = datetime.strptime(time_part, "%H:%M")
                             local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
-                    elif "сегодня" in reminder_time.lower():
+                    elif isinstance(reminder_time, str) and "сегодня" in reminder_time.lower():
                         local_dt = datetime.now(user_tz)
                         time_part = reminder_time.lower().replace("сегодня", "").strip()
                         if time_part:
@@ -3167,13 +3173,13 @@ def edit_task_with_session(task_id=None, task_title=None, title=None, descriptio
             # Try to parse reminder_time - add ISO format support
             for fmt in ["%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
                 try:
-                    if "завтра" in reminder_time.lower():
+                    if isinstance(reminder_time, str) and "завтра" in reminder_time.lower():
                         local_dt = datetime.now(user_tz) + timedelta(days=1)
                         time_part = reminder_time.lower().replace("завтра", "").strip()
                         if time_part:
                             time_dt = datetime.strptime(time_part, "%H:%M")
                             local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
-                    elif "сегодня" in reminder_time.lower():
+                    elif isinstance(reminder_time, str) and "сегодня" in reminder_time.lower():
                         local_dt = datetime.now(user_tz)
                         time_part = reminder_time.lower().replace("сегодня", "").strip()
                         if time_part:
