@@ -3320,8 +3320,8 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
     if reminder_time:
         try:
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-            # Try to parse reminder_time
-            for fmt in ["%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
+            # Try to parse reminder_time - add ISO format support
+            for fmt in ["%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
                 try:
                     if "завтра" in reminder_time.lower():
                         local_dt = datetime.now(user_tz) + timedelta(days=1)
@@ -3337,7 +3337,7 @@ def edit_task(task_id=None, task_title=None, title=None, description=None, remin
                             local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
                     else:
                         local_dt = datetime.strptime(reminder_time, fmt)
-                        if user.timezone:
+                        if user.timezone and fmt != "%Y-%m-%dT%H:%M:%S%z":  # ISO already has timezone
                             local_dt = user_tz.localize(local_dt)
                     
                     task.reminder_time = local_dt.astimezone(pytz.UTC)
