@@ -1734,6 +1734,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent = {"type": "complete_all_tasks", "confidence": 0.95, "params": {}}
             else:
                 intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+        elif any(kw in message_lower for kw in ['делегируй', 'поручи', 'передай']):
+            intent = {"type": "delegate_task", "confidence": 0.9, "params": {}}
         elif any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что у меня']):
             intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
         elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'закончил']):
@@ -1854,7 +1856,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         
         # КРИТИЧНО: Для команд создания/изменения задач НЕ используем контекст
         # Это предотвращает путаницу когда AI пытается выполнить все команды из истории
-        is_task_command = intent.get('type') in ['add_task', 'complete_task', 'delete_task', 'edit_task', 'delete_all_tasks', 'complete_all_tasks']
+        is_task_command = intent.get('type') in ['add_task', 'complete_task', 'delete_task', 'edit_task', 'delete_all_tasks', 'complete_all_tasks', 'delegate_task']
         
         # Используем conversation_context для истории разговора, но ТОЛЬКО для разговорных команд
         if conversation_context and isinstance(conversation_context, list) and not is_task_command:
