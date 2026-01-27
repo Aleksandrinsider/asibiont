@@ -3843,15 +3843,13 @@ async def get_task_details(task_title: str, user_id: int = None, session=None, c
         created_at = task.created_at.strftime("%d.%m.%Y %H:%M") if task.created_at else "Неизвестно"
         due_date = task.due_date.strftime("%d.%m.%Y %H:%M") if task.due_date else "Не установлена"
         reminder_time = task.reminder_time.strftime("%d.%m.%Y %H:%M") if task.reminder_time else "Не установлено"
-        priority = task.priority or "Обычный"
-        category = task.category or "Без категории"
-        
+
         # Delegation info
         delegation_info = ""
         if task.delegated_to_username:
             delegation_status = task.delegation_status or "pending"
             delegation_info = f"\nДелегирована: @{task.delegated_to_username} (статус: {delegation_status})"
-        
+
         # Completion info
         completion_info = ""
         if task.completed_at:
@@ -3859,14 +3857,12 @@ async def get_task_details(task_title: str, user_id: int = None, session=None, c
             completion_info = f"\nВыполнена: {task.completed_at.strftime('%d.%m.%Y %H:%M')}"
             if completion_note:
                 completion_info += f"\nЗаметка: {completion_note}"
-        
+
         details = f"""📋 Детали задачи:
 
 Название: {title}
 Описание: {description}
 Статус: {status}
-Приоритет: {priority}
-Категория: {category}
 Создана: {created_at}
 Срок выполнения: {due_date}
 Напоминание: {reminder_time}{delegation_info}{completion_info}"""
