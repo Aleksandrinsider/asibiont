@@ -1581,7 +1581,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 partners_info.append(f"@{partner_user.username}")
                     
                     if partners_info:
-                        user_memory += f"\nДоступные контакты: {', '.join(partners_info)}"
+                        user_memory += f"\n\n🤝 ДОСТУПНЫЕ КОНТАКТЫ: {', '.join(partners_info)}"
+                        user_memory += f"\n💡 ПРЕДЛАГАЙ СВЯЗАТЬСЯ: Если пользователь ищет партнеров или хочет пообщаться, активно предлагай эти контакты!"
             except Exception as e:
                 logger.error(f"Error getting partners: {e}")
 
