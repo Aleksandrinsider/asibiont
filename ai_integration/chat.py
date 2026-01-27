@@ -1974,57 +1974,38 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         ]
 
         # Умная логика выбора инструментов на основе intent classification и анализа сообщения
-        intent_type = intent.get('type', 'unknown')
-
-        # Анализ сообщения на наличие явных команд и действий
+        # СТАНДАРТНАЯ ЛОГИКА: ВСЕ действия с задачами → REQUIRED
         message_lower = clean_message.lower()
 
-        # Расширенные индикаторы задач для принудительного использования tools
+        # Индикаторы действий с задачами
         requires_tools = any(indicator in message_lower for indicator in TASK_ACTION_INDICATORS)
-
-        # Индикаторы, где tools НЕ нужны (чистый разговор)
+        
+        # Чистый разговор (привет, как дела)
         conversation_only = any(phrase in message_lower for phrase in CONVERSATION_ONLY_PHRASES)
 
         if is_system_message:
-            # Системные сообщения (результаты действий) - краткий ответ без инструментов
+            # Системные сообщения - без tools
             tool_choice = "none"
             parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] NONE for system message: {original_message[:50]}...")
+            logger.info(f"[TOOL CHOICE] NONE for system message")
 
         elif conversation_only and not requires_tools:
-            # Чистый разговор без действий - отключаем tools
+            # Чистый разговор
             tool_choice = "none"
             parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] NONE for pure conversation: {clean_message[:50]}...")
+            logger.info(f"[TOOL CHOICE] NONE for conversation: {clean_message[:50]}")
 
-        elif requires_tools:
-            # Явные индикаторы действий - ОБЯЗАТЕЛЬНО используем tools
-            tool_choice = "required"
-            parallel_tool_calls = False  # Для задач лучше последовательное выполнение
-            logger.info(f"[TOOL CHOICE] REQUIRED for action indicators: {clean_message[:50]}...")
-
-        elif intent_type in ['update_profile', 'profile_info']:
-            # Обновление профиля - ОБЯЗАТЕЛЬНО используем инструменты
+        elif requires_tools or intent_type in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task', 'update_profile']:
+            # ЛЮБЫЕ действия - ОБЯЗАТЕЛЬНЫЙ вызов tool
             tool_choice = "required"
             parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] REQUIRED for profile operations: {intent_type}")
-
-        elif intent_type == 'find_partners':
-            # Поиск партнеров - используем tools
-            tool_choice = "auto"
-            parallel_tool_calls = True
-
-        elif intent_type in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task']:
-            # Для задач даём AI свободу выбора - он лучше понимает контекст
-            tool_choice = "auto"
-            parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] AUTO for task type: {intent_type} - AI decides based on context")
+            logger.info(f"[TOOL CHOICE] REQUIRED for action: {intent_type or 'indicators detected'}")
 
         else:
-            # По умолчанию - автоопределение с параллельными вызовами
+            # По умолчанию - auto
             tool_choice = "auto"
             parallel_tool_calls = True
-            logger.info(f"[TOOL CHOICE] AUTO for intent: {intent_type}, message: {clean_message[:50]}...")
+            logger.info(f"[TOOL CHOICE] AUTO for: {clean_message[:50]}")
 
         # Динамическая температура и параметры на основе глубокого анализа сообщения
         temperature = 0.7  # Default
@@ -2407,6 +2388,28 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # Успех - выходим из retry loop
                             logger.info(f"[SUCCESS] API call successful, content length: {len(content) if content else 0}")
                             logger.info(f"[SUCCESS] Tool calls found: {len(tool_calls) if tool_calls else 0}")
+                            
+                            # ПРОВЕРКА: Если tool_choice был REQUIRED, но AI не вызвал tool - критическая ошибка
+                            if tool_choice == "required" and not tool_calls:
+                                logger.error(f"[VALIDATION FAILED] tool_choice=required but no tools called!")
+                                logger.error(f"[VALIDATION] Intent: {intent_type}, Message: {clean_message[:100]}")
+                                logger.error(f"[VALIDATION] AI response: {content[:200]}")
+                                
+                                # Пытаемся понять какой tool должен был вызваться
+                                fallback_tool = None
+                                if any(word in message_lower for word in ['создай', 'добавь', 'напомни', 'запланируй']):
+                                    content = "NEED_TIME_FOR_TASK: Когда напомнить? (завтра в 10:00, через час, сегодня в 15:00)"
+                                elif any(word in message_lower for word in ['готово', 'сделал', 'выполнил', 'закончил']):
+                                    content = "Отлично! Какую именно задачу завершили? Уточните название."
+                                elif any(word in message_lower for word in ['покажи', 'список', 'какие', 'мои задачи']):
+                                    # Принудительно вызываем list_tasks
+                                    tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
+                                    content = tasks
+                                elif any(word in message_lower for word in ['удали', 'убери']):
+                                    content = "Какую задачу удалить? Уточните название."
+                                else:
+                                    content = "Понял ваше намерение, но мне нужно больше информации. Уточните детали."
+                            
                             # Устанавливаем флаг успешного выполнения
                             success = True
                             break
