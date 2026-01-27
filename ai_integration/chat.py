@@ -13,6 +13,14 @@ from functools import lru_cache
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
+from ai_integration.patterns import (
+    ADD_TASK_PATTERNS,
+    COMPLETION_PATTERNS,
+    DELEGATION_PATTERNS,
+    TASK_ACTION_INDICATORS,
+    CONVERSATION_ONLY_PHRASES,
+    QUESTION_INDICATORS
+)
 from .memory import encrypt_data, decrypt_data
 from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
@@ -1700,55 +1708,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Special handling for task creation expressions - ENABLED as fallback
         if intent.get('type') == 'conversation':
-            add_task_patterns = [
-                r'напомни',  # "напомни позвонить"
-                r'создай\s+задачу',  # "создай задачу"
-                r'запланируй',  # "запланируй встречу"
-                r'добавь\s+задачу',  # "добавь задачу"
-                r'поставь\s+напоминание',  # "поставь напоминание"
-                r'не\s+забудь',  # "не забудь купить"
-                r'нужно\s+сделать',  # "нужно сделать отчет"
-                r'добавь:',  # "добавь: позвонить маме"
-                r'добавь\s+',  # "добавь позвонить"
-                r'задача:',  # "задача: подготовить презентацию"
-                r'задача\s+',  # "задача позвонить"
-                r'нужно:',  # "нужно: сделать уборку"
-                r'нужно\s+',  # "нужно сделать"
-            ]
-            if any(re.search(pattern, original_message.lower()) for pattern in add_task_patterns):
+            if any(re.search(pattern, original_message.lower()) for pattern in ADD_TASK_PATTERNS):
                 intent = {"type": "add_task", "confidence": 0.9, "params": {}}
                 logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
 
         # Special handling for task completion expressions - ENABLED as fallback
         if intent.get('type') == 'conversation':
-            completion_patterns = [
-                r'я\s+сделал',  # "я сделал"
-                r'я\s+выполнил',  # "я выполнил"
-                r'^сделал\s+',  # "сделал задачу"
-                r'^выполнил\s+',  # "выполнил тренировку"
-                r'готово',  # "готово"
-                r'закончил\s+с\s+',  # "закончил с проектом"
-                r'^закончил\s+',  # "закончил работу"
-                r'^завершил\s+',  # "завершил задачу"
-                r'уже\s+сделал',  # "уже сделал"
-                r'только\s+что\s+закончил',  # "только что закончил"
-                r'только\s+что\s+сделал',  # "только что сделал"
-                r'завершил\s+задачу',  # "завершил задачу"
-                r'выполнил\s+задачу',  # "выполнил задачу"
-                r'закончил\s+работу',  # "закончил работу"
-                r'сделано',  # "сделано"
-                r'завершено',  # "завершено"
-                r'готово!',  # "готово!"
-                r'готово\s+',  # "готово, брат"
-                r'все,\s+сделал',  # "все, сделал"
-                r'все\s+ок,\s+сделал',  # "все ок, сделал"
-                r'ок,\s+выполнил',  # "ок, выполнил"
-                r'готово,\s+шеф',  # "готово, шеф"
-                r'сделал\s+как\s+просил',  # "сделал как просил"
-                r'закончил\s+наконец',  # "закончил наконец"
-                r'выполнено!',  # "выполнено!"
-            ]
-            if any(re.search(pattern, original_message.lower()) for pattern in completion_patterns):
+            if any(re.search(pattern, original_message.lower()) for pattern in COMPLETION_PATTERNS):
                 # Extract task title from completion message - simplified
                 task_title = None
                 message_lower = clean_message.lower()
@@ -1773,15 +1739,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 # 
         # Special handling for delegation expressions
         if intent.get('type') == 'conversation':
-            delegation_patterns = [
-                r'@[\w]+\s+',  # "@user сделай" - ищется в оригинальном сообщении
-                r'делегируй',  # "делегируй задачу"
-                r'поручи\s+@',  # "поручи @user"
-                r'передай\s+@',  # "передай @user"
-                r'@[\w]+\s+нужно',  # "@user нужно сделать"
-                r'поручи\s+[\w]+\s+@',  # "поручи user @user"
-            ]
-            if any(re.search(pattern, message.lower()) for pattern in delegation_patterns):
+            if any(re.search(pattern, message.lower()) for pattern in DELEGATION_PATTERNS):
                 # Extract delegation parameters
                 task_title = None
                 delegate_to = None
@@ -2015,39 +1973,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         message_lower = clean_message.lower()
 
         # Расширенные индикаторы задач для принудительного использования tools
-        task_action_indicators = [
-            # Создание задач
-            'создай', 'сделай', 'добавь', 'поставь', 'напомни', 'нужно', 'надо',
-            'задача', 'задачу', 'задачи', 'задач', 'список задач',
-
-            # Завершение задач
-            'выполнил', 'выполнила', 'закончил', 'закончила', 'завершил', 'завершила',
-            'готово', 'готов', 'сделано', 'сделал', 'сделала', 'отчет готов',
-            'я только', 'только что', 'вернулся', 'вернулась', 'приехал', 'приехала',
-            'добрался', 'добралась', 'уже дома', 'уже в офисе', 'уже на работе',
-
-            # Делегирование
-            'поручи', 'передай', 'делегируй', 'отправь', 'назначь',
-
-            # Редактирование
-            'измени', 'обнови', 'перенеси', 'поменяй', 'исправь',
-
-            # Удаление
-            'удали', 'сними', 'отмени',
-
-            # Просмотр
-            'покажи', 'список', 'мои задачи', 'что у меня', 'что запланировано'
-        ]
-
-        # Индикаторы, требующие обязательного использования tools
-        requires_tools = any(indicator in message_lower for indicator in task_action_indicators)
+        requires_tools = any(indicator in message_lower for indicator in TASK_ACTION_INDICATORS)
 
         # Индикаторы, где tools НЕ нужны (чистый разговор)
-        conversation_only = any(phrase in message_lower for phrase in [
-            'привет', 'здравствуй', 'добрый день', 'доброе утро', 'добрый вечер',
-            'как дела', 'что нового', 'расскажи', 'давай поговорим', 'чем займемся',
-            'что думаешь', 'какое твое мнение', 'посоветуй', 'рекомендуй'
-        ])
+        conversation_only = any(phrase in message_lower for phrase in CONVERSATION_ONLY_PHRASES)
 
         if is_system_message:
             # Системные сообщения (результаты действий) - краткий ответ без инструментов

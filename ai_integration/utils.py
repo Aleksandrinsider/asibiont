@@ -10,11 +10,14 @@ from config import (
 import json
 import requests
 import hashlib
+from ai_integration.patterns import (
+    TASK_COMMAND_PATTERN,
+    BAD_TITLE_WORDS,
+    BAD_TITLE_SHORT_WORDS,
+    COMMAND_ONLY_WORDS
+)
 
 logger = logging.getLogger(__name__)
-
-# Стандартный паттерн для команд создания задач
-TASK_COMMAND_PATTERN = r'напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай|создай'
 
 
 def analyze_interaction_for_profile_update(user_id, message, ai_response):
@@ -1018,8 +1021,7 @@ def parse_multiple_tasks(message):
         return tasks
     
     # Check if result is just command words
-    command_only_words = ['напомни', 'напомнить', 'добавь', 'запомни', 'создай', 'задачу', 'задача', 'новая', 'да']
-    if cleaned_message.lower() in command_only_words:
+    if cleaned_message.lower() in COMMAND_ONLY_WORDS:
         return tasks
 
     # Try splitting by commas first, then by "и" within each part
@@ -1199,8 +1201,8 @@ def post_process_tool_calls(intent, tool_calls, message):
                     title = task_info["title"].strip()
                     # Skip if title is too short, contains commands, or is unclear
                     if (len(title) < 3 or
-                        any(word in title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) or
-                        title.lower() in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                        any(word in title.lower() for word in BAD_TITLE_WORDS) or
+                        title.lower() in BAD_TITLE_SHORT_WORDS):
                         continue
                     valid_tasks.append(task_info)
 
@@ -1228,8 +1230,8 @@ def post_process_tool_calls(intent, tool_calls, message):
 
                 # Check if the remaining title is meaningful
                 if (task_title and len(task_title) >= 3 and
-                    not any(word in task_title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) and
-                    task_title.lower() not in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                    not any(word in task_title.lower() for word in BAD_TITLE_WORDS) and
+                    task_title.lower() not in BAD_TITLE_SHORT_WORDS):
                     # Extract time
                     args_dict = {}
                     time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
@@ -1353,8 +1355,8 @@ def post_process_tool_calls(intent, tool_calls, message):
                     title = task_info["title"].strip()
                     # Skip if title is too short, contains commands, or is unclear
                     if (len(title) < 3 or
-                        any(word in title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) or
-                        title.lower() in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                        any(word in title.lower() for word in BAD_TITLE_WORDS) or
+                        title.lower() in BAD_TITLE_SHORT_WORDS):
                         continue
                     valid_tasks.append(task_info)
 
@@ -1382,8 +1384,8 @@ def post_process_tool_calls(intent, tool_calls, message):
 
                 # Check if the remaining title is meaningful
                 if (task_title and len(task_title) >= 3 and
-                    not any(word in task_title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) and
-                    task_title.lower() not in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                    not any(word in task_title.lower() for word in BAD_TITLE_WORDS) and
+                    task_title.lower() not in BAD_TITLE_SHORT_WORDS):
                     args_dict = {}
                     time_match = re.search(r"(?:напоминание|напомни|в|через)\s+(.+)", message, re.IGNORECASE)
                     if time_match:
