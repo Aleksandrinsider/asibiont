@@ -2099,28 +2099,77 @@ def find_partners(user_id=None, session=None):
             session.close()
         return "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"
 
-    # Format response
-    response = "Нашёл подходящих людей:\n"
-    for idx, p in enumerate(partners[:3], 1):
-        info_parts = []
-        if p.interests:
-            info_parts.append(f"интересы: {p.interests}")
-        if hasattr(p, "bio") and p.bio:
-            bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
-            info_parts.append(f"сфера деятельности: {bio_short}")
-        if hasattr(p, "position") and p.position:
-            info_parts.append(f"{p.position}")
-        if hasattr(p, "company") and p.company:
-            info_parts.append(f"компания: {p.company}")
-        if p.city:
-            info_parts.append(f"город: {p.city}")
-
-        info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-
-        # Get username
+    # Разделяем партнеров на избранные и рекомендованные
+    favorite_partners = []
+    recommended_partners = []
+    
+    for p in partners:
         partner_user = session.query(User).filter_by(id=p.user_id).first()
         if partner_user and partner_user.username:
-            response += f"{idx}. @{partner_user.username}\n   {info_str}\n"
+            # Проверяем, является ли контакт избранным
+            is_favorite = False
+            if user_profile.favorite_contacts:
+                favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
+                if partner_user.username.replace('@', '').lower() in favorite_usernames:
+                    is_favorite = True
+            
+            if is_favorite:
+                favorite_partners.append(p)
+            else:
+                recommended_partners.append(p)
+
+    # Format response
+    response = ""
+    
+    # Сначала показываем избранные контакты
+    if favorite_partners:
+        response += "⭐ Избранные контакты:\n"
+        for idx, p in enumerate(favorite_partners[:2], 1):  # Максимум 2 избранных
+            partner_user = session.query(User).filter_by(id=p.user_id).first()
+            if partner_user and partner_user.username:
+                info_parts = []
+                if p.interests:
+                    info_parts.append(f"интересы: {p.interests}")
+                if hasattr(p, "bio") and p.bio:
+                    bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
+                    info_parts.append(f"сфера деятельности: {bio_short}")
+                if hasattr(p, "position") and p.position:
+                    info_parts.append(f"{p.position}")
+                if hasattr(p, "company") and p.company:
+                    info_parts.append(f"компания: {p.company}")
+                if p.city:
+                    info_parts.append(f"город: {p.city}")
+
+                info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
+                response += f"⭐ @{partner_user.username}\n   {info_str}\n"
+        
+        if recommended_partners:
+            response += "\n"
+    
+    # Затем показываем рекомендованных
+    if recommended_partners:
+        response += "💡 Рекомендованные контакты:\n"
+        for idx, p in enumerate(recommended_partners[:3], 1):  # Максимум 3 рекомендованных
+            partner_user = session.query(User).filter_by(id=p.user_id).first()
+            if partner_user and partner_user.username:
+                info_parts = []
+                if p.interests:
+                    info_parts.append(f"интересы: {p.interests}")
+                if hasattr(p, "bio") and p.bio:
+                    bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
+                    info_parts.append(f"сфера деятельности: {bio_short}")
+                if hasattr(p, "position") and p.position:
+                    info_parts.append(f"{p.position}")
+                if hasattr(p, "company") and p.company:
+                    info_parts.append(f"компания: {p.company}")
+                if p.city:
+                    info_parts.append(f"город: {p.city}")
+
+                info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
+                response += f"{idx}. @{partner_user.username}\n   {info_str}\n"
+    
+    if not favorite_partners and not recommended_partners:
+        response = "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"
 
     if close_session:
         session.close()
