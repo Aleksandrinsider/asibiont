@@ -24,11 +24,15 @@ async def test_ai_behavior():
     print(f"Запрос: {test_message}")
 
     try:
+        # Очищаем задачи перед тестом
+        session.query(Task).filter_by(user_id=user.id).delete()
+        session.commit()
+        
         result = await chat_with_ai(test_message, user_id=user.telegram_id, db_session=session)
         print(f"Ответ AI: {result[:200]}...")
 
         # Проверяем создалась ли задача
-        tasks = session.query(Task).filter_by(user_id=user.id, status='active').all()
+        tasks = session.query(Task).filter_by(user_id=user.id).filter(Task.status.in_(['active', 'pending'])).all()
         task_titles = [t.title for t in tasks]
         if any('почту' in title.lower() for title in task_titles):
             print("✅ ЗАДАЧА СОЗДАНА: Найдена задача с 'почту'")
@@ -58,7 +62,7 @@ async def test_ai_behavior():
     # Тест 3: Проактивная помощь
     print("\n3️⃣ ТЕСТ: Проактивная помощь при отсутствии задач")
     # Сначала удалим все активные задачи
-    session.query(Task).filter_by(user_id=user.id, status='active').update({'status': 'completed'})
+    session.query(Task).filter_by(user_id=user.id).delete()
     session.commit()
 
     test_message = "привет"
