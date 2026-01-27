@@ -1774,21 +1774,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         #             intent = {"type": "delegate_task", "confidence": 0.9, "params": {"task_title": task_title, "delegate_to": delegate_to, "reminder_time": reminder_time}}
         #             logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}..., task: {task_title}, delegate_to: {delegate_to}, time: {reminder_time}")
 
-        # Special handling for time expressions (update existing task) - DISABLED for pure AI testing
-        #     time_patterns = [
-        #         r'завтра\s+в\s+\d{1,2}:\d{2}',
-        #         r'сегодня\s+в\s+\d{1,2}:\d{2}',
-        #         r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
-        #         r'в\s+\d{1,2}:\d{2}',
-        #         r'\d{1,2}:\d{2}'
-        #     ]
-        #     if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns) and intent.get('type') != 'delegate_task':
-        #         # Check if there are pending tasks to update
-        #         if user:
-        #             pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
-        #             if pending_tasks:
-        #                 intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
-        #                 logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
+        # Special handling for time expressions (update existing task) - ENABLED as fallback
+        time_patterns = [
+            r'завтра\s+в\s+\d{1,2}:\d{2}',
+            r'сегодня\s+в\s+\d{1,2}:\d{2}',
+            r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
+            r'в\s+\d{1,2}:\d{2}',
+            r'\d{1,2}:\d{2}',
+            r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)',  # Added for relative time only
+        ]
+        if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns) and intent.get('type') != 'delegate_task':
+            # Check if there are pending tasks to update
+            if user:
+                pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
+                if pending_tasks:
+                    intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
+                    logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
 
         # Убрана специальная обработка приветствий - все через AI промпт
 
@@ -2222,7 +2223,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # Вместо статического ответа передаем маркер для AI
                             return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
                         else:
-                            return "TIME_PARSE_FAILED: Не удалось распознать время в сообщении."
+                            # Try relative time parsing
+                            from ai_integration.utils import parse_relative_time
+                            user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
+                            current_time = datetime.now(user_tz)
+                            relative_time = parse_relative_time(original_message, current_time)
+                            if relative_time:
+                                reminder_time = relative_time.astimezone(pytz.UTC)
+                                result = handlers.edit_task(
+                                    task_id=target_task.id,
+                                    title=None,
+                                    description=None,
+                                    reminder_time=reminder_time.isoformat(),
+                                    user_id=user_id,
+                                    session=db_session,
+                                )
+                                logger.info(f"[TIME_ONLY] Task updated with relative time: {result}")
+                                return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
+                            else:
+                                return "TIME_PARSE_FAILED: Не удалось распознать время в сообщении."
                     else:
                         return "NO_ACTIVE_TASKS: Нет активных задач для обновления времени."
                 else:
