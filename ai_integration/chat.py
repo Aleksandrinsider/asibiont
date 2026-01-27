@@ -204,6 +204,29 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         
     if not tool_calls:
         return None
+    
+    # КРИТИЧЕСКАЯ ВАЛИДАЦИЯ: Проверяем соответствие tool calls команде пользователя
+    message_lower = message.lower()
+    tool_names = [tc.get('function', {}).get('name') for tc in tool_calls]
+    
+    # Определяем ожидаемые tools на основе команды
+    expected_tools = None
+    if any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи']):
+        expected_tools = ['list_tasks']
+    elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена']):
+        expected_tools = ['complete_task']
+    elif any(kw in message_lower for kw in ['удали', 'убери']):
+        expected_tools = ['delete_task']
+    elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови']):
+        expected_tools = ['edit_task', 'reschedule_task']
+    
+    # Если есть ожидаемые tools, проверяем соответствие
+    if expected_tools:
+        if not any(tool in expected_tools for tool in tool_names):
+            logger.error(f"[TOOL VALIDATION FAILED] Expected {expected_tools}, got {tool_names}")
+            logger.error(f"[TOOL VALIDATION] Message: {message[:100]}")
+            # Возвращаем None, чтобы сработала антигаллюцинация
+            return None
         
     # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
     corrected_tool_calls = post_process_tool_calls(intent, tool_calls, message)
@@ -1691,9 +1714,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # AI-FIRST APPROACH: Убраны все паттерны, полный контроль за AI
+        # БАЗОВАЯ INTENT CLASSIFICATION для антигаллюцинационной системы
+        # Нужна для корректной работы валидации tool calls
+        message_lower = original_message.lower()
         intent = {"type": "conversation", "confidence": 0.5, "params": {}}
-        logger.info("[INTENT] Pure AI-first approach: no patterns, AI handles everything")
+        
+        # Определяем intent для основных команд
+        if any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что у меня']):
+            intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+        elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'закончил']):
+            intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
+        elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить задачу']):
+            intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
+        elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови', 'перенести на']):
+            intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
+        elif any(kw in message_lower for kw in ['напомни', 'создай задачу', 'добавь задачу', 'нужно', 'надо']):
+            intent = {"type": "add_task", "confidence": 0.9, "params": {}}
+        
+        logger.info(f"[INTENT] Detected: {intent['type']} (confidence: {intent['confidence']})")
+
+        # AI-FIRST APPROACH: Полный контроль за AI с базовым intent для валидации
+        logger.info("[INTENT] AI-first approach with basic intent classification for validation")
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         # context_analysis = analyze_user_context_for_advice(user_id, db_session)
@@ -2205,39 +2246,82 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     logger.warning(f"Could not parse JSON in content: {e}")
                                     pass
 
+                            # ПЕРВИЧНАЯ ОБРАБОТКА TOOL CALLS
+                            validation_failed = False
                             if tool_calls:
                                 result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
                                 if result:
                                     return result
+                                elif result is None and tool_calls:
+                                    # Если process_tool_calls вернул None при наличии tool_calls - значит валидация не прошла
+                                    # Заменяем tool_calls на пустой список, чтобы сработала антигаллюцинация
+                                    logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
+                                    tool_calls = []
+                                    validation_failed = True
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
                             
                             # КРИТИЧЕСКАЯ ПРОВЕРКА: AI НЕ ДОЛЖЕН ГАЛЛЮЦИНИРОВАТЬ ДЕЙСТВИЯ
                             # Если AI говорит о выполненном действии, но не вызвал tool - это ошибка
-                            if not tool_calls and content:
+                            # ИЛИ если валидация tool calls не прошла
+                            if (not tool_calls or validation_failed) and content:
                                 content_lower = content.lower()
-                                # Детектируем галлюцинации действий
-                                hallucination_phrases = [
-                                    'добавил задачу', 'создал задачу', 'поставил напоминание',
-                                    'задача добавлена', 'задача создана', 'напоминание поставлено',
-                                    'удалил задачу', 'задача удалена', 'задача выполнена',
-                                    'отметил выполненной', 'завершил задачу'
-                                ]
+                                # Детектируем галлюцинации для разных типов действий
+                                hallucination_patterns = {
+                                    'add_task': ['добавил задачу', 'создал задачу', 'поставил напоминание',
+                                                 'задача добавлена', 'задача создана', 'напоминание поставлено',
+                                                 'напоминание установлено', 'запланировал', 'запланирована'],
+                                    'delete_task': ['удалил задачу', 'задача удалена', 'убрал задачу',
+                                                    'задача убрана', 'удалил напоминание', 'убрал напоминание'],
+                                    'complete_task': ['задача выполнена', 'отметил выполненной', 'завершил задачу',
+                                                      'задача завершена', 'отметил как выполненную'],
+                                    'list_tasks': ['вот твои задачи', 'список задач', 'твои задачи',
+                                                   'показываю задачи', 'у тебя задачи'],
+                                    'edit_task': ['изменил задачу', 'обновил задачу', 'перенес на',
+                                                  'задача изменена', 'задача обновлена', 'время изменено'],
+                                    'delegate_task': ['делегировал задачу', 'поручил задачу', 'передал задачу',
+                                                      'задача делегирована', 'задача поручена']
+                                }
                                 
-                                is_hallucinating = any(phrase in content_lower for phrase in hallucination_phrases)
+                                # Добавляем intent-based detection
+                                detected_action = None
                                 
-                                if is_hallucinating:
-                                    logger.error(f"[HALLUCINATION DETECTED] AI claimed action but no tool calls!")
+                                # Если валидация не прошла, используем intent как источник правды
+                                if validation_failed:
+                                    intent_type = intent.get('type')
+                                    if intent_type in ['add_task', 'delete_task', 'complete_task', 'list_tasks', 'edit_task', 'delegate_task']:
+                                        detected_action = intent_type
+                                        logger.error(f"[VALIDATION-BASED DETECTION] Validation failed for intent: {intent_type}")
+                                
+                                # Если intent не помог, проверяем текстовые паттерны
+                                if not detected_action:
+                                    for action_type, phrases in hallucination_patterns.items():
+                                        if any(phrase in content_lower for phrase in phrases):
+                                            detected_action = action_type
+                                            break
+                                
+                                if detected_action:
+                                    logger.error(f"[HALLUCINATION DETECTED] AI claimed '{detected_action}' but no tool calls!")
                                     logger.error(f"[HALLUCINATION] Message: {clean_message[:100]}")
                                     logger.error(f"[HALLUCINATION] Response: {content[:200]}")
+                                    
+                                    # Формируем усиленный промпт в зависимости от типа действия
+                                    action_instructions = {
+                                        'add_task': 'вызови add_task() с правильным title и reminder_time',
+                                        'delete_task': 'вызови delete_task() с правильным task_title',
+                                        'complete_task': 'вызови complete_task() с правильным task_title',
+                                        'list_tasks': 'вызови list_tasks()',
+                                        'edit_task': 'вызови edit_task() с правильными параметрами',
+                                        'delegate_task': 'вызови delegate_task() с правильными параметрами'
+                                    }
+                                    
+                                    instruction = action_instructions.get(detected_action, 'вызови соответствующий tool')
                                     
                                     # Пересылаем запрос с усиленным промптом
                                     enhanced_message = f"""КРИТИЧЕСКИ ВАЖНО: Пользователь написал: "{original_message}"
 
 ТЫ ОБЯЗАН ВЫЗВАТЬ СООТВЕТСТВУЮЩИЙ TOOL! ГАЛЛЮЦИНАЦИЯ ЗАПРЕЩЕНА!
 
-Если пользователь хочет создать задачу - вызови add_task()
-Если пользователь хочет удалить задачу - вызови delete_task()
-Если пользователь хочет завершить задачу - вызови complete_task()
+Ты должен {instruction}
 
 ОТВЕТЬ ТОЛЬКО ВЫЗОВОМ TOOL! НЕ ПИШИ ТЕКСТ БЕЗ TOOL CALL!"""
                                     
