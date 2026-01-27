@@ -81,7 +81,13 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         task_id = existing_task.id
         task = existing_task
     else:
-        # Create new task - время напоминания опционально
+        # Create new task - ОБЯЗАТЕЛЬНО требуется время
+        if not reminder_time:
+            if close_session:
+                session.close()
+            logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
+            return "NEED_TIME_FOR_TASK: Когда напомнить? Укажи время: завтра в 10:00, через час, сегодня в 15:00"
+        
         task = Task(user_id=user.id, title=title, description=encrypt_data(description))
         if reminder_time:
             try:
