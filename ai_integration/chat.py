@@ -1708,9 +1708,31 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Special handling for task creation expressions - ENABLED as fallback
         if intent.get('type') == 'conversation':
+            # Проверка 1: Точное совпадение с паттернами
             if any(re.search(pattern, original_message.lower()) for pattern in ADD_TASK_PATTERNS):
                 intent = {"type": "add_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
+                logger.info(f"[ADD TASK DETECTED] Pattern match for: {clean_message[:50]}...")
+            
+            # Проверка 2: Гибкая проверка - "давай/да/ок" + команда создания (даже с опечатками)
+            elif re.search(r'\b(давай|да|ок|ладно|хорошо)\b.*(добав|создай|напомни|запомни|постав)', original_message.lower()):
+                intent = {"type": "add_task", "confidence": 0.85, "params": {}}
+                logger.info(f"[ADD TASK DETECTED] Flexible match (agreement + action) for: {clean_message[:50]}...")
+            
+            # Проверка 3: Контекстный анализ - если в предыдущем сообщении говорили о задачах
+            elif conversation_context and len(conversation_context) > 1:
+                last_assistant_msg = None
+                for item in reversed(conversation_context[-3:]):
+                    if item.get('role') == 'assistant':
+                        last_assistant_msg = item.get('content', '').lower()
+                        break
+                
+                # Если в прошлом ответе упоминались задачи/планирование
+                if last_assistant_msg and any(word in last_assistant_msg for word in ['задач', 'доба вим', 'список', 'планирование', 'напомин']):
+                    # И пользователь соглашается или что-то конкретное называет
+                    if re.search(r'\b(давай|да|ок|хорошо|ладно|конечно)\b', original_message.lower()) or \
+                       (len(original_message.split()) >= 2 and not any(word in original_message.lower() for word in ['как', 'что', 'когда', 'где', 'почему'])):
+                        intent = {"type": "add_task", "confidence": 0.75, "params": {}}
+                        logger.info(f"[ADD TASK DETECTED] Context-based match for: {clean_message[:50]}...")
 
         # Special handling for task completion expressions - ENABLED as fallback
         if intent.get('type') == 'conversation':
