@@ -1427,8 +1427,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 if not (hasattr(profile, 'languages') and not is_empty_field(profile.languages)):
                     empty_fields.append("языки")
 
+                # СТРУКТУРИРОВАННАЯ ИНФОРМАЦИЯ О ПРОФИЛЕ ДЛЯ AI
                 if profile_info:
-                    user_memory += f"\nПрофиль: {', '.join(profile_info)}"
+                    user_memory += f"\n\n📋 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:"
+                    for info in profile_info:
+                        user_memory += f"\n• {info}"
+                    user_memory += f"\n\n🎯 ИСПОЛЬЗУЙ ЭТУ ИНФОРМАЦИЮ ДЛЯ ПЕРСОНАЛИЗАЦИИ: адаптируй советы под навыки, интересы и профессиональную сферу пользователя. Каждый ответ должен учитывать профиль!"
                     logger.info(f"[PROFILE DEBUG] Profile info added to prompt: {profile_info}")
 
                 # Проактивное заполнение при незаполненных полях
@@ -1448,7 +1452,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     if priority_fields:
                         # Спрашиваем только об одном поле за раз, естественно в контексте
                         field_to_ask = priority_fields[0]  # Берем первое по приоритету
-                        user_memory += f"\nЕСЛИ ПОДХОДИТ КОНТЕКСТ: можешь ненавязчиво спросить о {field_to_ask}е для персонализации советов (только если разговор естественным образом к этому ведет)"
+                        user_memory += f"\n💡 ЕСЛИ ПОДХОДИТ КОНТЕКСТ: можешь ненавязчиво спросить о {field_to_ask}е для персонализации советов (только если разговор естественным образом к этому ведет)"
                     else:
                         # Если основные поля заполнены, не спрашиваем вообще
                         pass
@@ -1459,13 +1463,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 # ДЕМОНСТРАЦИЯ ВОЗМОЖНОСТЕЙ: каждые 5-7 взаимодействий
                 interaction_count = getattr(profile, 'interaction_count', 0) or 0
                 if interaction_count > 0 and interaction_count % 6 == 0:  # Каждые 6 взаимодействий
-                    user_memory += "\nДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Расскажи о полезных функциях - поиске контактов, делегировании задач, анализе прогресса. Сделай это естественно в контексте ответа!"
+                    user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Расскажи о полезных функциях - поиске контактов, делегировании задач, анализе прогресса. Сделай это естественно в контексте ответа!"
 
                 # Если профиль совсем пустой - мягко предложи заполнить в первом сообщении
                 if not profile_filled and (len(context) if context else 0 < 2):
-                    user_memory += "\nПЕРВОЕ ЗНАКОМСТВО: Если пользователь здоровается, можешь ненавязчиво предложить рассказать о себе (город, интересы) для персонализации, но только если разговор естественно к этому ведет"
+                    user_memory += "\n👋 ПЕРВОЕ ЗНАКОМСТВО: Если пользователь здоровается, можешь ненавязчиво предложить рассказать о себе (город, интересы) для персонализации, но только если разговор естественно к этому ведет"
             else:
-                user_memory += "\nПрофиль не заполнен - начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели)"
+                user_memory += "\n❌ ПРОФИЛЬ НЕ ЗАПОЛНЕН: начни диалог для заполнения профиля (спроси по очереди: город, компанию, должность, навыки, интересы, цели). Это критически важно для персонализации!"
                 logger.info("[PROFILE DEBUG] No profile found, will request profile filling")
 
             # ЗАГРУЖАЕМ ПОЛНЫЙ СПИСОК ЗАДАЧ ДЛЯ ПРЕДОТВРАЩЕНИЯ ВЫДУМЫВАНИЯ
@@ -1473,9 +1477,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Используем свежие данные, полученные в начале функции
             logger.info(f"[TASKS DEBUG] Using fresh tasks: {fresh_tasks_info[:100] if fresh_tasks_info else 'None'}...")
             if fresh_tasks_info and "У вас" in fresh_tasks_info:
-                user_memory += f"\n\n{fresh_tasks_info}\n\nВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
+                user_memory += f"\n\n📝 АКТИВНЫЕ ЗАДАЧИ:\n{fresh_tasks_info}\n\n⚠️  ВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
             else:
-                user_memory += "\n\nУ пользователя нет активных задач."
+                user_memory += "\n\n📝 ЗАДАЧИ: У пользователя нет активных задач."
+                # ДОБАВЛЯЕМ ПРЕДЛОЖЕНИЯ НА ОСНОВЕ ПРОФИЛЯ
+                if profile and profile_filled:
+                    suggestions = []
+                    if profile.skills:
+                        suggestions.append(f"учитывая навыки в {profile.skills}")
+                    if profile.interests:
+                        suggestions.append(f"связанные с интересами в {profile.interests}")
+                    if profile.goals:
+                        suggestions.append(f"для достижения целей в {profile.goals}")
+                    if profile.company or profile.position:
+                        job_info = []
+                        if profile.company: job_info.append(profile.company)
+                        if profile.position: job_info.append(profile.position)
+                        suggestions.append(f"по работе в {' '.join(job_info)}")
+                    
+                    if suggestions:
+                        user_memory += f"\n💡 ПРЕДЛОЖЕНИЯ: Можешь предложить задачи {', '.join(suggestions[:2])}"
 
             # Add delegated tasks info
             if user.username:
