@@ -1,29 +1,28 @@
 import re
 from typing import Union
 from .commands import *
+from .intent_classifier import IntentClassifier
 
 class CommandRouter:
-    PATTERNS = {
-        'create': r'(напомни|создай|добавь|нужно|надо|давай|сыграем|встретимся|сходим|позвони|напиши|через|сегодня|завтра|вечером|утром|в \d+:\d+|в \d+ |в \d+час)',
-        'delete': r'(удали|убери|отмени)\s+задачу',
-        'complete': r'(готово|сделал|выполнил|завершил)',
-        'list': r'(покажи|список|какие|мои|все)\s+(задач|дел|задачи|дела)',
-    }
+    """AI-powered command routing for unlimited variations"""
 
-    def route(self, message: str):
+    def __init__(self):
+        # Keep some simple patterns for performance
+        self.simple_patterns = {
+            'list': r'(покажи|список|какие|мои)\s+(задач|дел|задачи|дела)',
+        }
+
+    async def route(self, message: str, user_id: int = None):
+        """Route message to appropriate command using AI classification"""
         message_lower = message.lower()
 
-        for cmd_type, pattern in self.PATTERNS.items():
+        # Fast check for simple patterns first
+        for intent, pattern in self.simple_patterns.items():
             if re.search(pattern, message_lower):
-                return self._create_command(cmd_type, message)
+                return IntentClassifier.get_command_class(f'{intent}_tasks')(message)
 
-        return ConversationCommand(message)
+        # Use AI for complex classification
+        intent = await IntentClassifier.classify_intent(message, user_id)
+        command_class = IntentClassifier.get_command_class(intent)
 
-    def _create_command(self, cmd_type, message):
-        commands = {
-            'create': CreateTaskCommand,
-            'delete': DeleteTaskCommand,
-            'complete': CompleteTaskCommand,
-            'list': ListTasksCommand,
-        }
-        return commands[cmd_type](message)
+        return command_class(message)

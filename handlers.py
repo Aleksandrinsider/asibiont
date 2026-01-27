@@ -379,7 +379,7 @@ async def process_text_message(user_id, text, message, state):
         
         # Use new command-based architecture
         router = CommandRouter()
-        command = router.route(text)
+        command = await router.route(text, user_id)
         
         # Create session for command execution
         db_session = Session()
