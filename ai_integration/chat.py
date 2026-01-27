@@ -431,8 +431,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "delegate_task":
                 result = delegate_task(
                     title=args.get("title"),
-                    delegated_to_username=args.get("delegated_to_username"),
+                    description=args.get("description", ""),
                     reminder_time=args.get("reminder_time"),
+                    delegated_to_username=args.get("delegated_to_username"),
                     user_id=user_id,
                 )
                 tool_results.append({"function": func_name, "result": result})
@@ -514,6 +515,23 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "update_user_memory":
                 result = update_user_memory(
                     info=args.get("info"),
+                    user_id=user_id,
+                    session=db_session,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "get_task_details":
+                result = get_task_details(
+                    task_id=args.get("task_id"),
+                    user_id=user_id,
+                    session=db_session,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "suggest_alternatives":
+                result = suggest_alternatives(
+                    task_id=args.get("task_id"),
+                    reason=args.get("reason"),
                     user_id=user_id,
                     session=db_session,
                 )
