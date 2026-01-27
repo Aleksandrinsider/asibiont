@@ -211,14 +211,31 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     
     # Определяем ожидаемые tools на основе команды
     expected_tools = None
+    disallowed_tools = []  # Инструменты, которые точно НЕ должны вызываться
+    
     if any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи']):
         expected_tools = ['list_tasks']
+        disallowed_tools = ['add_task', 'complete_task', 'delete_task']  # Не создавать/удалять при просмотре
     elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена']):
         expected_tools = ['complete_task']
+        disallowed_tools = ['add_task', 'delete_task']  # Не создавать при завершении
     elif any(kw in message_lower for kw in ['удали', 'убери']):
         expected_tools = ['delete_task']
+        disallowed_tools = ['add_task', 'complete_task']  # Не создавать при удалении
     elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови']):
         expected_tools = ['edit_task', 'reschedule_task']
+        disallowed_tools = ['add_task']  # Не создавать новую при переносе
+    elif any(kw in message_lower for kw in ['напомни', 'создай', 'добавь', 'нужно', 'надо']) and any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня']):
+        expected_tools = ['add_task']
+        disallowed_tools = ['edit_task', 'reschedule_task']  # Не переносить при создании
+    
+    # Проверяем недопустимые tools
+    if disallowed_tools:
+        for tool_name in tool_names:
+            if tool_name in disallowed_tools:
+                logger.error(f"[TOOL VALIDATION FAILED] Disallowed tool {tool_name} for message: {message[:100]}")
+                logger.error(f"[TOOL VALIDATION] Expected one of {expected_tools}, got disallowed {tool_name}")
+                return None
     
     # Если есть ожидаемые tools, проверяем соответствие
     if expected_tools:
@@ -289,41 +306,6 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         # Handler в add_task правильно обработает такой формат с учётом текущего времени
                         args["reminder_time"] = user_specified_time
                         logger.info(f"[ADD TASK] Corrected time from '{ai_time}' to '{user_specified_time}' (simple HH:MM format)")
-                
-                # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: блокируем создание задач из одного сообщения
-                # Если в оригинальном сообщении уже есть упоминание о создании задачи - блокируем дубликаты
-                message_lower = original_message.lower()
-                task_creation_keywords = ['создать задачу', 'создай задачу', 'запланируй', 'напомни', 'добавь задачу', 'поставь задачу', 'создать', 'запланировать']
-                has_task_intent = any(keyword in message_lower for keyword in task_creation_keywords)
-                
-                # ПРОВЕРКА СУЩЕСТВУЮЩИХ ЗАДАЧ: ищем похожие задачи
-                existing_tasks = list_tasks(user_id=user_id, session=db_session)
-                is_duplicate = False
-
-                if has_task_intent:
-                    # Проверяем, не пытаемся ли создать задачу из текста, который уже содержит инструкцию создания
-                    if len(task_title.split()) > 7:  # Если title очень длинный - вероятно, это весь текст сообщения
-                        logger.warning(f"[ADD TASK] BLOCKED - message contains task creation intent, title too long ({len(task_title.split())} words)")
-                        tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Задача уже создана из этого сообщения"})
-                        continue
-
-                    # Дополнительная проверка: если уже есть активная задача с похожим названием - блокируем
-                    if existing_tasks:
-                        from difflib import SequenceMatcher
-                        for line in existing_tasks.split('\n'):
-                            if '📌' in line or '✅' in line:
-                                parts = line.split('(')
-                                if len(parts) > 0:
-                                    existing_title = parts[0].replace('📌', '').replace('✅', '').strip()
-                                    similarity = SequenceMatcher(None, task_title.lower(), existing_title.lower()).ratio()
-                                    # Более строгая проверка: блокируем если similarity > 0.8
-                                    if similarity > 0.8 and ('В работе' in line or 'Ожидает' in line or 'АКТУАЛЬНО' in line):
-                                        logger.warning(f"[ADD TASK] BLOCKED - very similar task exists (similarity={similarity:.2f}): '{existing_title}' vs '{task_title}'")
-                                        tool_results.append({"function": func_name, "result": f"DUPLICATE_TASK: Похожая задача уже существует - '{existing_title}'"})
-                                        is_duplicate = True
-                                        break
-                if is_duplicate:
-                    continue
                 
                 # КРИТИЧЕСКАЯ ПРОВЕРКА: Если AI вызвал add_task, значит время указано
                 # Проверяем есть ли reminder_time в аргументах
@@ -1839,8 +1821,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         messages = [{"role": "system", "content": system_prompt}]
         # Используем conversation_context для истории разговора вместо context параметра
         if conversation_context and isinstance(conversation_context, list):
-            # Берем последние 6 сообщений для контекста (3 пары вопрос-ответ)
-            recent_context = conversation_context[-6:] if len(conversation_context) > 6 else conversation_context
+            # Берем последние 4 сообщения для контекста (2 пары вопрос-ответ) - УМЕНЬШЕНО для предотвращения галлюцинаций
+            recent_context = conversation_context[-4:] if len(conversation_context) > 4 else conversation_context
             for item in recent_context:
                 if item.get("role") == "user":
                     messages.append({"role": "user", "content": item["content"]})
