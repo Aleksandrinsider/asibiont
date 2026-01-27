@@ -1677,9 +1677,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # Use basic intent classification - REMOVED keyword matching for more natural AI understanding
-        intent = {"type": "conversation", "confidence": 0.5, "params": {}}
-        logger.info("[INTENT] Using AI-powered intent classification (no keyword matching)")
+        # AI-FIRST intent classification - minimal keyword pre-filtering, rely on AI
+        intent = {"type": "conversation", "confidence": 0.3, "params": {}}
+        logger.info("[INTENT] Using AI-first approach: keywords as hints, AI determines actual intent")
         
         # Define keyword lists for basic intent detection
         personal_pronouns = ['я', 'мне', 'мой', 'моя', 'мои', 'моё', 'меня', 'мной']
@@ -1706,33 +1706,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
             logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
-        # Special handling for task creation expressions - ENABLED as fallback
+        # Minimal keyword hints - AI will decide based on context
         if intent.get('type') == 'conversation':
-            # Проверка 1: Точное совпадение с паттернами
-            if any(re.search(pattern, original_message.lower()) for pattern in ADD_TASK_PATTERNS):
-                intent = {"type": "add_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[ADD TASK DETECTED] Pattern match for: {clean_message[:50]}...")
+            # Только явные индикаторы как подсказки для tool_choice
+            task_hints = ['напомни', 'создай задачу', 'добавь задачу', 'запланируй']
+            has_task_keyword = any(hint in original_message.lower() for hint in task_hints)
             
-            # Проверка 2: Гибкая проверка - "давай/да/ок" + команда создания (даже с опечатками)
-            elif re.search(r'\b(давай|да|ок|ладно|хорошо)\b.*(добав|создай|напомни|запомни|постав)', original_message.lower()):
-                intent = {"type": "add_task", "confidence": 0.85, "params": {}}
-                logger.info(f"[ADD TASK DETECTED] Flexible match (agreement + action) for: {clean_message[:50]}...")
-            
-            # Проверка 3: Контекстный анализ - если в предыдущем сообщении говорили о задачах
-            elif conversation_context and len(conversation_context) > 1:
-                last_assistant_msg = None
-                for item in reversed(conversation_context[-3:]):
-                    if item.get('role') == 'assistant':
-                        last_assistant_msg = item.get('content', '').lower()
-                        break
-                
-                # Если в прошлом ответе упоминались задачи/планирование
-                if last_assistant_msg and any(word in last_assistant_msg for word in ['задач', 'доба вим', 'список', 'планирование', 'напомин']):
-                    # И пользователь соглашается или что-то конкретное называет
-                    if re.search(r'\b(давай|да|ок|хорошо|ладно|конечно)\b', original_message.lower()) or \
-                       (len(original_message.split()) >= 2 and not any(word in original_message.lower() for word in ['как', 'что', 'когда', 'где', 'почему'])):
-                        intent = {"type": "add_task", "confidence": 0.75, "params": {}}
-                        logger.info(f"[ADD TASK DETECTED] Context-based match for: {clean_message[:50]}...")
+            if has_task_keyword:
+                # Даём низкий confidence - AI сам решит нужно ли создавать
+                intent = {"type": "add_task", "confidence": 0.6, "params": {}}
+                logger.info(f"[TASK HINT] Found task keyword, AI will decide intent")
+            else:
+                logger.info(f"[NO HINTS] Pure AI interpretation for: {clean_message[:50]}...")
 
         # Special handling for task completion expressions - ENABLED as fallback
         if intent.get('type') == 'conversation':
@@ -2030,10 +2015,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             parallel_tool_calls = True
 
         elif intent_type in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task']:
-            # Явные типы задач - принудительно используем tools
-            tool_choice = "required"
+            # Для задач даём AI свободу выбора - он лучше понимает контекст
+            tool_choice = "auto"
             parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] REQUIRED for explicit task type: {intent_type}")
+            logger.info(f"[TOOL CHOICE] AUTO for task type: {intent_type} - AI decides based on context")
 
         else:
             # По умолчанию - автоопределение с параллельными вызовами
