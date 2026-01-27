@@ -1637,82 +1637,80 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
             logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 
-        # Special handling for task creation expressions - DISABLED for pure AI testing
-        # if intent.get('type') == 'conversation':
-        #     add_task_patterns = [
-        #         r'напомни',  # "напомни позвонить"
-        #         r'создай\s+задачу',  # "создай задачу"
-        #         r'запланируй',  # "запланируй встречу"
-        #         r'добавь\s+задачу',  # "добавь задачу"
-        #         r'поставь\s+напоминание',  # "поставь напоминание"
-        #         r'не\s+забудь',  # "не забудь купить"
-        #         r'нужно\s+сделать',  # "нужно сделать отчет"
-        #         r'добавь:',  # "добавь: позвонить маме"
-        #         r'добавь\s+',  # "добавь позвонить"
-        #         r'задача:',  # "задача: подготовить презентацию"
-        #         r'задача\s+',  # "задача позвонить"
-        #         r'нужно:',  # "нужно: сделать уборку"
-        #         r'нужно\s+',  # "нужно сделать"
-        #     ]
-        #     if any(re.search(pattern, original_message.lower()) for pattern in add_task_patterns):
-        #         intent = {"type": "add_task", "confidence": 0.9, "params": {}}
-        #         logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
+        # Special handling for task creation expressions - ENABLED as fallback
+        if intent.get('type') == 'conversation':
+            add_task_patterns = [
+                r'напомни',  # "напомни позвонить"
+                r'создай\s+задачу',  # "создай задачу"
+                r'запланируй',  # "запланируй встречу"
+                r'добавь\s+задачу',  # "добавь задачу"
+                r'поставь\s+напоминание',  # "поставь напоминание"
+                r'не\s+забудь',  # "не забудь купить"
+                r'нужно\s+сделать',  # "нужно сделать отчет"
+                r'добавь:',  # "добавь: позвонить маме"
+                r'добавь\s+',  # "добавь позвонить"
+                r'задача:',  # "задача: подготовить презентацию"
+                r'задача\s+',  # "задача позвонить"
+                r'нужно:',  # "нужно: сделать уборку"
+                r'нужно\s+',  # "нужно сделать"
+            ]
+            if any(re.search(pattern, original_message.lower()) for pattern in add_task_patterns):
+                intent = {"type": "add_task", "confidence": 0.9, "params": {}}
+                logger.info(f"[ADD TASK DETECTED] Setting intent to add_task for message: {clean_message[:50]}...")
 
-        # Special handling for delegation expressions
-        # if intent.get('type') == 'conversation':  # DISABLED for pure AI testing - completion patterns
-        # Special handling for task completion expressions
-        #     completion_patterns = [
-#                 r'я\s+только\s+с\s+',  # "я только с пробежки"
-#                 r'я\s+только\s+из\s+',  # "я только из спортзала"
-#                 r'вернулся\s+с\s+',  # "вернулся с тренировки"
-#                 r'вернулся\s+из\s+',  # "вернулся из магазина"
-#                 r'только\s+с\s+',  # "только с работы"
-#                 r'только\s+из\s+',  # "только из банка"
-#                 r'я\s+сделал',  # "я сделал"
-#                 r'я\s+выполнил',  # "я выполнил"
-#                 r'готово',  # "готово"
-#                 r'закончил\s+с\s+',  # "закончил с проектом"
-#                 r'уже\s+сделал',  # "уже сделал"
-#                 r'только\s+что\s+закончил',  # "только что закончил"
-#                 r'только\s+что\s+сделал',  # "только что сделал"
-#                 r'завершил\s+задачу',  # "завершил задачу"
-#                 r'выполнил\s+задачу',  # "выполнил задачу"
-#                 r'закончил\s+работу',  # "закончил работу"
-#                 r'сделано',  # "сделано"
-#                 r'завершено',  # "завершено"
-#                 r'готово!',  # "готово!"
-#                 r'готово\s+',  # "готово, брат"
-#                 r'все,\s+сделал',  # "все, сделал"
-#                 r'все\s+ок,\s+сделал',  # "все ок, сделал"
-#                 r'ок,\s+выполнил',  # "ок, выполнил"
-#                 r'готово,\s+шеф',  # "готово, шеф"
-#                 r'сделал\s+как\s+просил',  # "сделал как просил"
-#                 r'закончил\s+наконец',  # "закончил наконец"
-#                 r'выполнено!',  # "выполнено!"
-#             ]
-            # if any(re.search(pattern, original_message.lower()) for pattern in completion_patterns):  # DISABLED for pure AI testing
-                # Extract task title from completion message
-#                 task_title = None
-#                 if 'пробежк' in clean_message.lower():
-#                     task_title = 'Пробежка'
-#                 elif 'тренировк' in clean_message.lower():
-#                     task_title = 'Тренировка'
-#                 elif 'спортзал' in clean_message.lower():
-#                     task_title = 'Тренировка в зале'
-#                 elif 'прогулк' in clean_message.lower():
-#                     task_title = 'Прогулка'
-#                 elif 'работ' in clean_message.lower():
-#                     task_title = 'Работа'
-#                 elif 'магазин' in clean_message.lower():
-#                     task_title = 'Купить продукты'
-#                 elif 'банк' in clean_message.lower():
-#                     task_title = 'Сходить в банк'
-#                 elif 'дом' in clean_message.lower():
-#                     task_title = 'Вернуться домой'
-                # Add more mappings as needed
-#                 
-#                 intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
-#                 logger.info(f"[COMPLETION DETECTED] Setting intent to complete_task for message: {clean_message[:50]}..., extracted title: {task_title}")
+        # Special handling for task completion expressions - ENABLED as fallback
+        if intent.get('type') == 'conversation':
+            completion_patterns = [
+                r'я\s+только\s+с\s+',  # "я только с пробежки"
+                r'я\s+только\s+из\s+',  # "я только из спортзала"
+                r'вернулся\s+с\s+',  # "вернулся с тренировки"
+                r'вернулся\s+из\s+',  # "вернулся из магазина"
+                r'только\s+с\s+',  # "только с работы"
+                r'только\s+из\s+',  # "только из банка"
+                r'я\s+сделал',  # "я сделал"
+                r'я\s+выполнил',  # "я выполнил"
+                r'готово',  # "готово"
+                r'закончил\s+с\s+',  # "закончил с проектом"
+                r'уже\s+сделал',  # "уже сделал"
+                r'только\s+что\s+закончил',  # "только что закончил"
+                r'только\s+что\s+сделал',  # "только что сделал"
+                r'завершил\s+задачу',  # "завершил задачу"
+                r'выполнил\s+задачу',  # "выполнил задачу"
+                r'закончил\s+работу',  # "закончил работу"
+                r'сделано',  # "сделано"
+                r'завершено',  # "завершено"
+                r'готово!',  # "готово!"
+                r'готово\s+',  # "готово, брат"
+                r'все,\s+сделал',  # "все, сделал"
+                r'все\s+ок,\s+сделал',  # "все ок, сделал"
+                r'ок,\s+выполнил',  # "ок, выполнил"
+                r'готово,\s+шеф',  # "готово, шеф"
+                r'сделал\s+как\s+просил',  # "сделал как просил"
+                r'закончил\s+наконец',  # "закончил наконец"
+                r'выполнено!',  # "выполнено!"
+            ]
+            if any(re.search(pattern, original_message.lower()) for pattern in completion_patterns):
+                # Extract task title from completion message - simplified
+                task_title = None
+                message_lower = clean_message.lower()
+                # Try to extract from common patterns
+                if 'пробежк' in message_lower:
+                    task_title = 'Пробежка'
+                elif 'тренировк' in message_lower or 'спортзал' in message_lower:
+                    task_title = 'Тренировка'
+                elif 'прогулк' in message_lower:
+                    task_title = 'Прогулка'
+                elif 'работ' in message_lower:
+                    task_title = 'Работа'
+                elif 'магазин' in message_lower:
+                    task_title = 'Купить продукты'
+                elif 'банк' in message_lower:
+                    task_title = 'Сходить в банк'
+                elif 'дом' in message_lower:
+                    task_title = 'Вернуться домой'
+                # If no specific match, let AI handle it
+                intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
+                logger.info(f"[COMPLETION DETECTED] Setting intent to complete_task for message: {clean_message[:50]}..., extracted title: {task_title}")
 # 
         # Special handling for delegation expressions - DISABLED for pure AI testing
         # if intent.get('type') == 'conversation':
