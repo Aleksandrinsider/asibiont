@@ -22,7 +22,16 @@ from .utils import (
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
-from .handlers import delete_all_tasks, delete_task_sync
+from .handlers import (
+    add_task, delete_all_tasks, complete_task, skip_task, restore_task, reschedule_task,
+    get_task_advice, delegate_task, check_subscription_status, accept_delegated_task,
+    reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
+    list_tasks, enrich_task_list_with_insights, get_partners_list, find_partners,
+    generate_delegation_notification, generate_progress_request, schedule_delegation_monitoring,
+    check_delegation_deadlines, update_user_memory, delete_task_sync, create_subscription_payment,
+    cancel_subscription, brainstorm_ideas, get_task_details, suggest_alternatives,
+    suggest_trends_and_opportunities, update_profile, delete_task
+)
 
 logger = logging.getLogger(__name__)
 
@@ -416,7 +425,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "update_profile":
-                result = update_profile(
+                # ВАЛИДАЦИЯ: Для неявных обновлений профиля обязательно уведомляем пользователя
+                is_explicit_update = intent.get("type") == "update_profile"
+                result = await update_profile(
                     city=args.get("city"),
                     company=args.get("company"),
                     position=args.get("position"),
@@ -426,6 +437,11 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     user_id=user_id,
                     session=db_session,
                 )
+
+                # Если это не явное обновление профиля, добавляем уведомление
+                if not is_explicit_update:
+                    result += "\n\n📝 Профиль автоматически обновлен на основе нашего разговора. Если информация не верна, скажите 'исправь мой профиль'."
+
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "delegate_task":
@@ -489,9 +505,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "brainstorm_ideas":
-                result = brainstorm_ideas(
+                result = await brainstorm_ideas(
                     topic=args.get("topic"),
-                    num_ideas=args.get("num_ideas", 5),
+                    context=args.get("context"),
                     user_id=user_id,
                     session=db_session,
                 )
@@ -513,25 +529,35 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "update_user_memory":
-                result = update_user_memory(
-                    info=args.get("info"),
+                result = await update_user_memory(
+                    memory_type=args.get("memory_type"),
+                    content=args.get("content"),
                     user_id=user_id,
                     session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "get_task_details":
-                result = get_task_details(
-                    task_id=args.get("task_id"),
+                result = await get_task_details(
+                    task_title=args.get("task_title"),
                     user_id=user_id,
                     session=db_session,
                 )
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "suggest_alternatives":
-                result = suggest_alternatives(
-                    task_id=args.get("task_id"),
+                result = await suggest_alternatives(
+                    task_title=args.get("task_title"),
                     reason=args.get("reason"),
+                    user_id=user_id,
+                    session=db_session,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "suggest_trends_and_opportunities":
+                result = await suggest_trends_and_opportunities(
+                    focus_area=args.get("focus_area"),
+                    num_suggestions=args.get("num_suggestions", 3),
                     user_id=user_id,
                     session=db_session,
                 )

@@ -912,14 +912,11 @@ def delegate_task(
             logging.error(f"Failed to schedule delegation monitoring: {e}")
 
         session.close()
-        return f"Предложение задачи отправлено @{recipient_username}. Ожидается подтверждение."
     except Exception as e:
-        session.close()
-        return f"Ошибка при создании делегированной задачи: {str(e)}"
-
-
-
-
+        logger.error(f"[DELEGATE] Unexpected error in delegate_task: {e}")
+        if 'session' in locals():
+            session.close()
+        return f"ERROR: Произошла ошибка при делегировании задачи: {str(e)}"
 
 def check_subscription_status(user_id=None):
     """Check subscription status"""
@@ -2293,138 +2290,6 @@ def check_delegation_deadlines():
         session.close()
 
 
-async def delete_task(task_id=None, task_title=None, user_id=None, session=None, confirmed=False, deletion_reason=None):
-    """Delete a task by ID or title. Requires confirmation unless confirmed=True.
-    
-    Args:
-        confirmed: If True, skip confirmation and delete immediately (for API calls with user confirmation)
-        deletion_reason: Optional reason for deletion to save for AI analysis
-    """
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        if close_session:
-            session.close()
-        return "Пользователь не найден."
-
-    # Find task by ID or title
-    if task_id:
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-
-        task = (
-            session.query(Task)
-            .filter(
-                Task.id == task_id_int, or_(Task.user_id == user.id, Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
-            )
-            .first()
-        )
-    elif task_title:
-        # Search by words in title (including delegated tasks)
-        words = task_title.lower().split()
-        conditions = [Task.title.ilike(f"%{word}%") for word in words]
-        task = session.query(Task).filter(
-            or_(
-                and_(Task.user_id == user.id, Task.status != "completed", or_(*conditions)),
-                and_(
-                    Task.delegated_to_username.ilike((user.username or "").replace('@', '')),
-                    Task.status != "completed",
-                    or_(*conditions)
-                )
-            )
-        ).first()
-    else:
-        if close_session:
-            session.close()
-        return "Не указан ни task_id, ни task_title."
-
-    if task:
-        # КРИТИЧЕСКИ ВАЖНО: AI АГЕНТ ДОЛЖЕН СПРОСИТЬ ПОДТВЕРЖДЕНИЕ
-        # Если confirmed=False - возвращаем специальный код для AI
-        if not confirmed:
-            task_info = f"{task.title} (время: {task.reminder_time.strftime('%d.%m %H:%M') if task.reminder_time else 'не указано'})"
-            result = f"CONFIRMATION_REQUIRED: {task_info}"
-            if close_session:
-                session.close()
-            return result
-        
-        # Confirmed - сохраняем причину удаления, затем удаляем
-        task_title = task.title
-        
-        # Сохраняем причину удаления в историю (для будущего анализа AI)
-        if deletion_reason:
-            task.skipped_reason = deletion_reason
-            task.status = "deleted"
-            session.commit()
-        
-        # Отменяем все запланированные джобы для этой задачи
-        try:
-            from reminder_service import REMINDER_SERVICE
-            if REMINDER_SERVICE and REMINDER_SERVICE.scheduler:
-                # Отменяем напоминание
-                reminder_job_id = f"reminder_{task.id}"
-                if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
-                    REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
-                    logger.info(f"[DELETE_TASK] Cancelled reminder job for task {task.id}")
-                
-                # Отменяем проверку результата
-                result_check_job_id = f"result_check_{task.id}"
-                if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
-                    REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
-                    logger.info(f"[DELETE_TASK] Cancelled result check job for task {task.id}")
-                
-                # Отменяем чекпоинты задач
-                for checkpoint_type in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
-                    checkpoint_job_id = f"task_overdue_{task.id}_{checkpoint_type}_{user.telegram_id}"
-                    if REMINDER_SERVICE.scheduler.get_job(checkpoint_job_id):
-                        REMINDER_SERVICE.scheduler.remove_job(checkpoint_job_id)
-                        logger.info(f"[DELETE_TASK] Cancelled checkpoint job {checkpoint_type} for task {task.id}")
-                
-                # Отменяем чекпоинт 1/3
-                checkpoint_1_3_job_id = f"task_checkpoint_{task.id}_1_3_{user.telegram_id}"
-                if REMINDER_SERVICE.scheduler.get_job(checkpoint_1_3_job_id):
-                    REMINDER_SERVICE.scheduler.remove_job(checkpoint_1_3_job_id)
-                    logger.info(f"[DELETE_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
-        except Exception as e:
-            logger.warning(f"[DELETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
-
-        session.delete(task)
-        session.commit()
-
-        # Update profile analytics
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile:
-            profile.total_tasks_created = (profile.total_tasks_created or 0) - 1  # Decrement created tasks when deleting
-            session.commit()
-
-        # Возвращаем ответ с флагом для AI
-        if task.status == "completed":
-            result = ""  # Не отправлять сообщение для выполненных задач при удалении
-        elif not deletion_reason:
-            result = f"TASK_DELETED_ASK_REASON: Задача '{task_title}' удалена."
-        else:
-            result = f"Задача '{task_title}' удалена. Понял, что причина: {deletion_reason}."
-
-        # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
-    else:
-        result = "Задача не найдена."
-
-    if close_session:
-        session.close()
-    return result
-
-
-
-
 def update_user_memory(info=None, user_id=None, session=None):
     """Обновить память пользователя"""
     try:
@@ -2454,9 +2319,6 @@ def update_user_memory(info=None, user_id=None, session=None):
         logger.error(f"Error updating user memory for user {user_id}: {e}")
         if should_close and 'session' in locals():
             session.close()
-        return f"Ошибка при обновлении памяти: {str(e)}"
-
-
 def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
     """Delete a task by ID or title"""
     logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', reason='{reason}', user_id={user_id}, confirmed={confirmed}")
@@ -2693,9 +2555,6 @@ def brainstorm_ideas(topic=None, num_ideas=5, user_id=None, session=None):
     except Exception as e:
         if close_session:
             session.close()
-        return f"Ошибка при генерации идей: {str(e)}"
-
-
 def get_task_details(task_id=None, user_id=None, session=None):
     """Get detailed information about a task"""
     if session is None:
@@ -2790,13 +2649,13 @@ def get_task_details(task_id=None, user_id=None, session=None):
         else:
             if close_session:
                 session.close()
-            return "Задача не найдена."
+            return f"Задача с ID {task_id} не найдена."
 
     except Exception as e:
-        if close_session:
+        logger.error(f"Error in get_task_details: {e}")
+        if close_session and 'session' in locals():
             session.close()
         return f"Ошибка при получении деталей задачи: {str(e)}"
-
 
 def get_delegation_progress(user_id=None, session=None):
     """Get progress status of all delegated tasks for the user"""
