@@ -747,7 +747,7 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
 Ответ должен быть кратким и полезным."""
 
         try:
-            from ..ai_integration import chat_with_ai
+            from .chat import chat_with_ai
             advice = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=500))
             result = f"Совет по задаче '{title}':\n\n{advice}"
 
@@ -2252,41 +2252,41 @@ def check_delegation_deadlines():
                 recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
 
                 if delegator and recipient:
-                    # Generate AI-powered reminder
-                    import asyncio
-                    reminder_text = asyncio.run(generate_progress_reminder(
-                        task.title,
-                        delegator.username,
-                        days_overdue,
-                        recipient.telegram_id
-                    ))
+                    # Generate AI-powered reminder - DISABLED: function doesn't exist
+                    # import asyncio
+                    # reminder_text = asyncio.run(generate_progress_reminder(
+                    #     task.title,
+                    #     delegator.username,
+                    #     days_overdue,
+                    #     recipient.telegram_id
+                    # ))
 
-                    if reminder_text:
-                        # Send reminder to recipient
-                        from main import bot
-                        if bot:
-                            try:
-                                asyncio.run(bot.send_message(
-                                    recipient.telegram_id,
-                                    f"🔔 Напоминание о делегированной задаче:\n\n{reminder_text}\n\nЗадача: {task.title}"
-                                ))
-                                logger.info(f"Sent overdue reminder for task {task.id} to @{recipient.username}")
-                            except Exception as e:
-                                logger.error(f"Failed to send reminder to recipient: {e}")
+                    # if reminder_text:
+                    #     # Send reminder to recipient
+                    #     from main import bot
+                    #     if bot:
+                    #         try:
+                    #             asyncio.run(bot.send_message(
+                    #             recipient.telegram_id,
+                    #             f"🔔 Напоминание о делегированной задаче:\n\n{reminder_text}\n\nЗадача: {task.title}"
+                    #         ))
+                    #         logger.info(f"Sent overdue reminder for task {task.id} to @{recipient.username}")
+                    #         except Exception as e:
+                    #             logger.error(f"Failed to send reminder to recipient: {e}")
 
-                        # Notify delegator about overdue task
-                        try:
-                            asyncio.run(bot.send_message(
-                                delegator.telegram_id,
+                    # Notify delegator about overdue task
+                    try:
+                        asyncio.run(bot.send_message(
+                            delegator.telegram_id,
                                 f"⚠️ Делегированная задача просрочена!\n\n"
                                 f"Задача: {task.title}\n"
                                 f"Исполнитель: @{recipient.username}\n"
                                 f"Просрочена на: {days_overdue} дней\n\n"
                                 f"Рекомендую связаться с исполнителем для уточнения статуса."
                             ))
-                            logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
-                        except Exception as e:
-                            logger.error(f"Failed to notify delegator: {e}")
+                        logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
+                    except Exception as e:
+                        logger.error(f"Failed to notify delegator: {e}")
 
             except Exception as e:
                 logger.error(f"Error processing overdue task {task.id}: {e}")
@@ -2545,7 +2545,7 @@ def brainstorm_ideas(topic=None, num_ideas=5, user_id=None, session=None):
 2. Фитнес-трекер - Разработать мобильное приложение для отслеживания прогресса тренировок"""
 
         try:
-            from ..ai_integration import chat_with_ai
+            from .chat import chat_with_ai
             ideas = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=1000))
             result = f"💡 Идеи для темы '{topic}':\n\n{ideas}"
             
@@ -2726,66 +2726,6 @@ def get_delegation_progress(user_id=None, session=None):
             session.close()
         return f"Ошибка при получении статуса делегирования: {str(e)}"
 
-
-def cancel_delegation(task_id=None, user_id=None, session=None):
-    """Cancel delegation of a task, returning it to the initiator"""
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if close_session:
-                session.close()
-            return "Пользователь не найден."
-
-        if not task_id:
-            if close_session:
-                session.close()
-            return "Не указан ID задачи."
-
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-
-        # Find task that was delegated by this user
-        task = session.query(Task).filter(
-            Task.id == task_id_int,
-            Task.user_id == user.id,
-            Task.delegated_to_username.isnot(None)
-        ).first()
-
-        if not task:
-            if close_session:
-                session.close()
-            return "Задача не найдена или не была делегирована вами."
-
-        if task.delegation_status == "completed":
-            if close_session:
-                session.close()
-            return "Нельзя отменить делегирование выполненной задачи."
-
-        # Cancel delegation
-        task.delegated_to_username = None
-        task.delegation_status = None
-        task.delegation_details = None
-
-        session.commit()
-
-        if close_session:
-            session.close()
-        return f"✅ Делегирование задачи '{task.title}' отменено. Задача возвращена вам."
-
-    except Exception as e:
-        if close_session:
-            session.close()
-        return f"Ошибка при отмене делегирования: {str(e)}"
 
 
 def suggest_alternatives(task_id=None, reason=None, user_id=None, session=None):
@@ -3735,12 +3675,13 @@ async def brainstorm_ideas(topic: str, context: str = None, user_id: int = None,
             session.close()
 
 
-async def delete_task(task_title: str, reason: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
     """
-    Удалить задачу по названию.
+    Удалить задачу по ID или названию.
 
     Args:
-        task_title: Название задачи для удаления
+        task_id: ID задачи для удаления (опционально)
+        task_title: Название задачи для удаления (опционально)
         reason: Причина удаления (опционально)
         user_id: ID пользователя (опционально)
         session: Сессия базы данных (опционально)
@@ -3764,20 +3705,34 @@ async def delete_task(task_title: str, reason: str = None, user_id: int = None, 
         if not user:
             return "Пользователь не найден"
 
-        # Найти задачу по названию
-        task = session.query(Task).filter_by(
-            user_id=user.id,
-            title=task_title
-        ).first()
+        # Найти задачу по ID или названию
+        task = None
+        if task_id:
+            try:
+                task_id_int = int(task_id)
+                task = session.query(Task).filter_by(
+                    id=task_id_int,
+                    user_id=user.id
+                ).first()
+            except (ValueError, TypeError):
+                return f"Некорректный ID задачи: {task_id}"
+        elif task_title:
+            task = session.query(Task).filter_by(
+                user_id=user.id,
+                title=task_title
+            ).first()
+        else:
+            return "Необходимо указать ID или название задачи"
 
         if not task:
-            return f"Задача '{task_title}' не найдена"
+            identifier = task_id or task_title
+            return f"Задача '{identifier}' не найдена"
 
         # Удалить задачу
         session.delete(task)
         session.commit()
 
-        response = f"✅ Задача '{task_title}' удалена"
+        response = f"✅ Задача '{task.title}' удалена"
         if reason:
             response += f" (причина: {reason})"
 
@@ -3785,7 +3740,7 @@ async def delete_task(task_title: str, reason: str = None, user_id: int = None, 
 
     except Exception as e:
         session.rollback()
-        logger.error(f"Ошибка при удалении задачи {task_title}: {e}")
+        logger.error(f"Ошибка при удалении задачи {task_id or task_title}: {e}")
         return f"❌ Ошибка при удалении задачи: {e}"
 
     finally:

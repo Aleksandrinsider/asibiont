@@ -2451,7 +2451,7 @@ async def complete_task_handler(request):
 
     logger.info(f"[COMPLETE_TASK_HANDLER] Starting completion for task_id={task_id}, user_id={user_id}")
 
-    from ai_integration import complete_task
+    from ai_integration.handlers import complete_task
     try:
         result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} completed by user {user_id}: {result}")
@@ -2538,7 +2538,7 @@ async def restore_task_handler(request):
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
 
-    from ai_integration import restore_task
+    from ai_integration.handlers import restore_task
     try:
         result = await restore_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} restored by user {user_id}: {result}")
@@ -2560,7 +2560,7 @@ async def skip_task_handler(request):
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
 
-    from ai_integration import skip_task
+    from ai_integration.handlers import skip_task
     try:
         result = await skip_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} skipped by user {user_id}: {result}")
@@ -2582,10 +2582,10 @@ async def delete_task_handler(request):
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
 
-    from ai_integration import delete_task
+    from ai_integration.handlers import delete_task
     try:
         # Передаём confirmed=True, поскольку пользователь уже подтвердил удаление в UI
-        result = await delete_task(task_id=task_id, user_id=user_id, confirmed=True)
+        result = await delete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
         
         # Если результат содержит флаг, обработаем через AI и отправим в Telegram
@@ -2639,7 +2639,7 @@ async def reschedule_task_handler(request):
     if not task_title or not new_time:
         return web.json_response({'error': 'Task title and new time required'}, status=400)
 
-    from ai_integration import reschedule_task
+    from ai_integration.handlers import reschedule_task
     try:
         result = await reschedule_task(task_title=task_title, new_time=new_time, user_id=user_id)
         logger.info(f"Task '{task_title}' rescheduled by user {user_id}: {result}")
@@ -2661,7 +2661,7 @@ async def get_task_advice_handler(request):
     if not task_id:
         return web.json_response({'error': 'Task ID required'}, status=400)
 
-    from ai_integration import get_task_advice
+    from ai_integration.handlers import get_task_advice
     try:
         result = await get_task_advice(task_id=task_id, user_id=user_id)
         logger.info(f"Task advice requested for task {task_id} by user {user_id}: {result}")
@@ -4910,12 +4910,9 @@ async def api_update_profile_handler(request):
                 city=city,
                 company=company,
                 position=position,
-                bio=bio,
                 skills=skills,
                 interests=interests,
                 goals=goals,
-                languages=languages,
-                timezone=timezone,
                 user_id=user_id,
                 session=session_db
             )
