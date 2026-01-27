@@ -452,22 +452,24 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "edit_task":
+                # КРИТИЧЕСКИ ВАЖНО: Правильно обрабатываем относительное время для edit_task
+                # Если в сообщении "через X минут/часов" - ВСЕГДА пересчитываем от current_time
+                reminder_time = args.get("reminder_time")
+                
+                # Проверяем относительное время в оригинальном сообщении
+                from ai_integration.utils import parse_relative_time
+                logger.info(f"[EDIT TASK] About to call parse_relative_time with current_time type: {type(current_time)}, value: {current_time}")
+                relative_time_result = parse_relative_time(original_message, current_time)
+                if relative_time_result:
+                    # Если нашли относительное время - ИСПОЛЬЗУЕМ его вместо AI расчета
+                    reminder_time = relative_time_result.strftime("%Y-%m-%d %H:%M")
+                    logger.info(f"[EDIT TASK] Recalculated relative time: {reminder_time} (current_time: {current_time.strftime('%H:%M')})")
+                
                 result = handlers.edit_task(
                     task_id=args.get("task_id"),
                     title=args.get("title"),
                     description=args.get("description"),
-                    reminder_time=args.get("reminder_time"),
-                    user_id=user_id,
-                    session=db_session,
-                )
-                tool_results.append({"function": func_name, "result": result})
-
-            elif func_name == "edit_task":
-                result = handlers.edit_task(
-                    task_id=args.get("task_id"),
-                    title=args.get("title"),
-                    description=args.get("description"),
-                    reminder_time=args.get("reminder_time"),
+                    reminder_time=reminder_time,
                     user_id=user_id,
                     session=db_session,
                 )
