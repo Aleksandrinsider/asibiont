@@ -81,66 +81,28 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                     logging.warning(f"Unknown timezone {user.timezone}, using UTC")
                     user_tz = pytz.UTC
 
-            # Check if time is relative
-            if isinstance(reminder_time, str) and "через" in reminder_time.lower():
-                current_time = datetime.now(user_tz)
-                parsed_time = parse_relative_time(reminder_time, current_time)
-                if parsed_time:
-                    # parsed_time уже в правильной timezone от parse_relative_time
-                    if parsed_time.tzinfo is None:
-                        parsed_time = user_tz.localize(parsed_time)
-                    task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                    logging.info(
-                        f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
-                else:
-                    logging.warning(f"Could not parse relative time '{reminder_time}' for task {title}")
-                    if close_session:
-                        session.close()
-                    return f"❌ Не удалось распознать время '{reminder_time}'. Попробуйте: 'через 5 минут', 'через 2 часа', 'завтра в 10:00'"
+            # Use AI-powered flexible time parser
+            from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
+            
+            current_time = datetime.now(user_tz)
+            logger.info(f"[ADD_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
+            
+            parsed_time = parse_time_with_ai(reminder_time, current_time)
+            
+            # Fallback to simple parser if AI fails
+            if not parsed_time:
+                logger.info(f"[ADD_TASK] AI parsing failed, trying simple fallback")
+                parsed_time = parse_time_simple_fallback(reminder_time, current_time)
+            
+            if parsed_time:
+                # Convert to UTC for storage
+                task.reminder_time = parsed_time.astimezone(pytz.UTC)
+                logger.info(f"[ADD_TASK] Time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
             else:
-                # Try natural time parsing first
-                current_time = datetime.now(user_tz)
-                parsed_time = parse_natural_time(reminder_time, current_time)
-                if parsed_time:
-                    if parsed_time.tzinfo is None:
-                        parsed_time = user_tz.localize(parsed_time)
-                    task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                    logging.info(
-                        f"Task {title} natural time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
-                else:
-                    # Try simple HH:MM format first
-                    if isinstance(reminder_time, str):
-                        simple_time_match = re.match(r'^(\d{1,2}):(\d{2})$', reminder_time.strip())
-                        if simple_time_match:
-                            h, m = int(simple_time_match.group(1)), int(simple_time_match.group(2))
-                            current_time = datetime.now(user_tz)
-                            # Create time for today
-                            today_time = current_time.replace(hour=h, minute=m, second=0, microsecond=0)
-                            # If time has passed, schedule for tomorrow
-                            if today_time <= current_time:
-                                today_time = today_time + timedelta(days=1)
-                            task.reminder_time = today_time.astimezone(pytz.UTC)
-                            logging.info(
-                                f"Task {title} simple time parsed: '{reminder_time}' -> local: {today_time} -> UTC: {task.reminder_time}")
-                    else:
-                        # If reminder_time is already a datetime object, use it directly
-                        if isinstance(reminder_time, datetime):
-                            task.reminder_time = reminder_time.astimezone(pytz.UTC) if reminder_time.tzinfo else user_tz.localize(reminder_time).astimezone(pytz.UTC)
-                            logging.info(f"Task {title} datetime used directly: {reminder_time} -> UTC: {task.reminder_time}")
-                        else:
-                            # Fallback to absolute time format
-                            try:
-                                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                                local_dt = user_tz.localize(local_dt)
-                                task.reminder_time = local_dt.astimezone(pytz.UTC)
-                                logging.info(
-                                    f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
-                            except ValueError:
-                                logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
-                                # Don't create task without valid time
-                                if close_session:
-                                    session.close()
-                                return f"❌ Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
+                logger.warning(f"[ADD_TASK] Could not parse time '{reminder_time}'")
+                if close_session:
+                    session.close()
+                return f"❌ Не удалось распознать время '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         except Exception as e:
             logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
         if due_date:
@@ -277,7 +239,10 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             session.close()
         return "Пользователь не найден."
 
-    # Find task by ID or title
+    # Find task using flexible search with stemming
+    from ai_integration.task_search import find_task_flexible
+    
+    task_id_int = None
     if task_id:
         try:
             task_id_int = int(task_id)
@@ -285,54 +250,20 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             if close_session:
                 session.close()
             return f"Некорректный ID задачи: {task_id}"
-
-        task = (
-            session.query(Task)
-            .filter(
-                or_(
-                    and_(Task.id == task_id_int, Task.user_id == user.id),
-                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
-                )
-            )
-            .first()
-        )
-    elif task_title:
-        # Search by words in title (including delegated tasks) - include completed tasks to check status
-        words = task_title.lower().split()
-        logger.info(f"[COMPLETE_TASK] Searching for task with title '{task_title}', words: {words}, user_id: {user.id}")
-        
-        # Get all user tasks and delegated tasks
-        user_tasks = session.query(Task).filter(
-            or_(
-                Task.user_id == user.id,
-                and_(
-                    Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
-                    Task.delegation_status == "accepted"
-                )
-            )
-        ).all()
-        
-        # Find task by matching words (case-insensitive) - prefer pending tasks
-        task = None
-        pending_task = None
-        for t in user_tasks:
-            task_title_lower = t.title.lower()
-            if any(word in task_title_lower for word in words):
-                if t.status == "pending":
-                    pending_task = t
-                    logger.info(f"[COMPLETE_TASK] Found pending matching task: {t.title}")
-                    break  # Prefer pending tasks, stop at first match
-                elif task is None:  # Keep first completed task as fallback
-                    task = t
-                    logger.info(f"[COMPLETE_TASK] Found completed matching task: {t.title}")
-        
-        # Use pending task if found, otherwise use completed task
-        if pending_task:
-            task = pending_task
-    else:
+    
+    task = find_task_flexible(
+        session=session,
+        user=user,
+        task_id=task_id_int,
+        task_title=task_title,
+        include_completed=True,  # Include to check status
+        include_delegated=True
+    )
+    
+    if not task:
         if close_session:
             session.close()
-        return "Не указан ни task_id, ни task_title."
+        return f"Задача не найдена: {task_title or task_id}"
 
     if task:
         if task.status == "completed":
@@ -673,33 +604,30 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
 
     if task:
         try:
-            # Parse new time
+            # Parse new time with AI (flexible!)
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             current_time = datetime.now(user_tz)
+            logger.info(f"[RESCHEDULE_TASK] Parsing time '{new_time}', current time: {current_time}")
             
-            # Try parsing relative time first ("через 2 часа", "завтра в 10:00")
-            from ai_integration.utils import parse_relative_time
-            parsed_relative = parse_relative_time(new_time, current_time)
+            # Use AI for flexible time parsing
+            from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
             
-            if parsed_relative:
-                # Relative time parsed successfully
-                local_dt = parsed_relative
-                logger.info(f"[RESCHEDULE_TASK] Parsed relative time '{new_time}' to {local_dt}")
-            elif " " in new_time:  # Full datetime
-                local_dt = datetime.strptime(new_time, "%Y-%m-%d %H:%M")
-                local_dt = user_tz.localize(local_dt)
-            elif ":" in new_time:  # Time only, assume today
-                time_dt = datetime.strptime(new_time, "%H:%M")
-                local_dt = current_time.replace(hour=time_dt.hour, minute=time_dt.minute, second=0, microsecond=0)
-                if local_dt < current_time:
-                    local_dt += timedelta(days=1)  # Next day if time has passed
-            else:
+            local_dt = parse_time_with_ai(new_time, current_time)
+            
+            # Fallback to simple HH:MM parsing if AI fails
+            if not local_dt:
+                logger.info(f"[RESCHEDULE_TASK] AI parsing failed, trying simple fallback...")
+                local_dt = parse_time_simple_fallback(new_time, current_time)
+            
+            if not local_dt:
+                logger.error(f"[RESCHEDULE_TASK] ❌ Cannot parse time format: '{new_time}'")
                 if close_session:
                     session.close()
-                return "Некорректный формат времени. Используйте HH:MM, YYYY-MM-DD HH:MM, или относительное время ('через 2 часа', 'завтра в 10:00')."
+                return "Не могу понять формат времени. Попробуй указать точнее, например: 'завтра в 10:00', 'через 2 часа', '15:30'."
 
             task.reminder_time = local_dt.astimezone(pytz.UTC)
             session.commit()
+            logger.info(f"[RESCHEDULE_TASK] ✅ Task {task.id} updated, new time (UTC): {task.reminder_time}")
 
             result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
 
@@ -1311,15 +1239,26 @@ def edit_task(
             session.close()
         return "Пользователь не найден."
 
-    # Find task by ID or title
-    task = None
+    # Find task using flexible search with stemming
+    from ai_integration.task_search import find_task_flexible
+    
+    task_id_int = None
     if task_id:
-        task = session.query(Task).filter_by(id=int(task_id)).first()
-    elif task_title:
-        task = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.title.ilike(f"%{task_title}%")
-        ).first()
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            if close_session:
+                session.close()
+            return f"Некорректный ID задачи: {task_id}"
+    
+    task = find_task_flexible(
+        session=session,
+        user=user,
+        task_id=task_id_int,
+        task_title=task_title,
+        include_completed=False,
+        include_delegated=True
+    )
 
     if task:
         # Check access rights
@@ -1345,25 +1284,27 @@ def edit_task(
                 task.description = description
         if reminder_time:
             try:
-                if isinstance(reminder_time, str) and ("через" in reminder_time.lower() or "на" in reminder_time.lower()):
-                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                    current_time = datetime.now(user_tz)
-                    parsed_time = parse_relative_time(reminder_time, current_time)
-                    if parsed_time:
-                        task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                        logger.info(f"Task {task.id} relative time updated: '{reminder_time}' -> {parsed_time} (from current time {current_time})")
-                    else:
-                        session.close()
-                        return "Не удалось распарсить относительное время."
+                # Use AI-powered flexible time parser
+                from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
+                
+                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+                current_time = datetime.now(user_tz)
+                logger.info(f"[EDIT_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
+                
+                parsed_time = parse_time_with_ai(reminder_time, current_time)
+                
+                # Fallback to simple parser if AI fails
+                if not parsed_time:
+                    logger.info(f"[EDIT_TASK] AI parsing failed, trying simple fallback")
+                    parsed_time = parse_time_simple_fallback(reminder_time, current_time)
+                
+                if parsed_time:
+                    task.reminder_time = parsed_time.astimezone(pytz.UTC)
+                    logger.info(f"[EDIT_TASK] Time updated: '{reminder_time}' -> {task.reminder_time} UTC")
                 else:
-                    # Parse time as local time in user's timezone, then convert to UTC
-                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                    reminder_time_parsed = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                    # Localize to user timezone
-                    reminder_time_local = user_tz.localize(reminder_time_parsed)
-                    # Convert to UTC for storage
-                    task.reminder_time = reminder_time_local.astimezone(pytz.UTC)
-                    logger.info(f"Task {task.id} absolute time updated: {reminder_time} (local) -> {task.reminder_time} (UTC)")
+                    if close_session:
+                        session.close()
+                    return f"Не могу понять формат времени '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
                 
                 # КРИТИЧНО: Перепланировать напоминание после изменения времени
                 try:
@@ -1381,10 +1322,11 @@ def edit_task(
                 except Exception as e:
                     logger.error(f"[EDIT_TASK] Error rescheduling reminder for task {task.id}: {e}")
                     
-            except ValueError:
+            except Exception as e:
+                logger.error(f"[EDIT_TASK] Error parsing time: {e}")
                 if close_session:
                     session.close()
-                return "Неверный формат времени. Используйте YYYY-MM-DD HH:MM или 'через X минут'."
+                return f"Ошибка при обработке времени: {e}"
         session.commit()
         result = f"TASK_UPDATED: Задача '{task.title}' обновлена."
     else:
@@ -2557,7 +2499,10 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
             session.close()
         return "Пользователь не найден."
 
-    # Find task by ID or title
+    # Find task using flexible search with stemming
+    from ai_integration.task_search import find_task_flexible
+    
+    task_id_int = None
     if task_id:
         try:
             task_id_int = int(task_id)
@@ -2565,39 +2510,20 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
             if close_session:
                 session.close()
             return f"Некорректный ID задачи: {task_id}"
-
-        task = (
-            session.query(Task)
-            .filter(
-                or_(
-                    and_(Task.id == task_id_int, Task.user_id == user.id),
-                    and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
-                )
-            )
-            .first()
-        )
-    elif task_title:
-        # Search by words in title (including delegated tasks)
-        words = task_title.lower().split()
-        conditions = [func.lower(Task.title).like(f"%{word}%") for word in words]
-        
-        # Build query with optional delegated task search
-        query_conditions = [and_(Task.user_id == user.id, or_(*conditions))]
-        
-        if user.username:
-            query_conditions.append(
-                and_(
-                    Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
-                    Task.delegation_status == "accepted",
-                    or_(*conditions)
-                )
-            )
-        
-        task = session.query(Task).filter(or_(*query_conditions)).first()
-    else:
+    
+    task = find_task_flexible(
+        session=session,
+        user=user,
+        task_id=task_id_int,
+        task_title=task_title,
+        include_completed=True,
+        include_delegated=True
+    )
+    
+    if not task:
         if close_session:
             session.close()
-        return "Не указан ни task_id, ни task_title."
+        return f"Задача не найдена: {task_title or task_id}"
 
     if task:
         # Check if task is already completed - allow deletion but with different message
