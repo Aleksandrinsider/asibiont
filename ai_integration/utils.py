@@ -1024,8 +1024,21 @@ def parse_multiple_tasks(message):
     if cleaned_message.lower() in COMMAND_ONLY_WORDS:
         return tasks
 
-    # Try splitting by commas first, then by "и" within each part
-    if ',' in cleaned_message:
+    # Try splitting by various delimiters in priority order:
+    # 1. Semicolon (highest priority)
+    # 2. Comma
+    # 3. "и" (and)
+    # 4. Newlines
+    
+    if ';' in cleaned_message:
+        # Split by semicolons first
+        parts = [p.strip() for p in cleaned_message.split(';') if p.strip()]
+        for part in parts:
+            # Further split by command pattern if present
+            part = re.sub(rf'({TASK_COMMAND_PATTERN})[:\s]+', '', part, flags=re.IGNORECASE).strip()
+            if part:
+                task_strings.append(part)
+    elif ',' in cleaned_message:
         parts = [p.strip() for p in cleaned_message.split(',') if p.strip()]
         
         # Further split each part by "и"
@@ -1040,10 +1053,6 @@ def parse_multiple_tasks(message):
     elif re.search(r'\s+и\s+', cleaned_message, re.IGNORECASE):
         parts = re.split(r'\s+и\s+', cleaned_message, flags=re.IGNORECASE)
         task_strings = [p.strip() for p in parts if p.strip()]
-    # Try splitting by semicolons
-    elif ';' in cleaned_message:
-        parts = [p.strip() for p in cleaned_message.split(';') if p.strip()]
-        task_strings = parts
     # Try splitting by newlines
     elif '\n' in cleaned_message:
         parts = [p.strip() for p in cleaned_message.split('\n') if p.strip()]
@@ -1057,6 +1066,10 @@ def parse_multiple_tasks(message):
         task_str = task_str.strip()
         if not task_str:
             continue
+        
+        # Remove redundant command words from individual task titles
+        # e.g. "задачу 1" -> "1", but keep at start for single tasks
+        task_str = re.sub(r'^\s*(задач[уа]|задание)\s+', '', task_str, flags=re.IGNORECASE).strip()
 
         # Extract time if present
         reminder_time = None
@@ -1080,10 +1093,24 @@ def parse_multiple_tasks(message):
                     task_str = re.sub(re.escape(match.group(1)), "", task_str).strip()
                     break
 
-        # Clean up the title
+        # Clean up the title - normalize spaces but preserve content
         task_str = re.sub(r'\s+', ' ', task_str).strip()
+        
+        # Remove empty parentheses or brackets if they're all that's left
+        task_str = re.sub(r'^\(\s*\)$', '', task_str).strip()
+        task_str = re.sub(r'^\[\s*\]$', '', task_str).strip()
 
+        # Quality filter: skip bad titles
         if task_str:
+            # Skip if contains command words or is a bad short word
+            is_bad_word = task_str.lower() in BAD_TITLE_SHORT_WORDS
+            has_command_words = any(word in task_str.lower() for word in BAD_TITLE_WORDS)
+            
+            # Allow short titles (1-2 chars) if they're not bad words
+            # Reject titles with command words regardless of length
+            if is_bad_word or has_command_words:
+                continue  # Skip this task
+            
             tasks.append({
                 "title": task_str,
                 "reminder_time": reminder_time
