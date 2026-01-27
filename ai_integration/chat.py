@@ -213,35 +213,48 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     expected_tools = None
     disallowed_tools = []  # Инструменты, которые точно НЕ должны вызываться
     
-    if any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи']):
-        expected_tools = ['list_tasks']
-        disallowed_tools = ['add_task', 'complete_task', 'delete_task']  # Не создавать/удалять при просмотре
-    elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена']):
+    # ПРИОРИТЕТНАЯ детекция: проверяем сначала самые специфичные паттерны
+    # 1. ЗАВЕРШЕНИЕ (высокий приоритет)
+    if any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'выполнена']):
         expected_tools = ['complete_task']
-        disallowed_tools = ['add_task', 'delete_task']  # Не создавать при завершении
-    elif any(kw in message_lower for kw in ['удали', 'убери']):
+        disallowed_tools = ['add_task', 'delete_task', 'edit_task']  # Не создавать/удалять при завершении
+    # 2. УДАЛЕНИЕ (высокий приоритет)
+    elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']):
         expected_tools = ['delete_task']
-        disallowed_tools = ['add_task', 'complete_task']  # Не создавать при удалении
-    elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови']):
+        disallowed_tools = ['add_task', 'complete_task', 'edit_task']  # Не создавать при удалении
+    # 3. ПРОСМОТР (высокий приоритет)
+    elif any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что запланировано']):
+        expected_tools = ['list_tasks']
+        disallowed_tools = ['add_task', 'complete_task', 'delete_task', 'edit_task']  # Не изменять при просмотре
+    # 4. ПЕРЕНОС/ИЗМЕНЕНИЕ (средний приоритет)
+    elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови', 'перенести']):
         expected_tools = ['edit_task', 'reschedule_task']
         disallowed_tools = ['add_task']  # Не создавать новую при переносе
-    elif any(kw in message_lower for kw in ['напомни', 'создай', 'добавь', 'нужно', 'надо']) and any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня']):
+    # 5. СОЗДАНИЕ (низкий приоритет - только если есть явное указание времени)
+    elif any(kw in message_lower for kw in ['напомни', 'создай', 'добавь']) and any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня', 'час', 'минут']):
         expected_tools = ['add_task']
-        disallowed_tools = ['edit_task', 'reschedule_task']  # Не переносить при создании
+        disallowed_tools = ['edit_task', 'reschedule_task', 'complete_task', 'delete_task']  # Не переносить/завершать при создании
     
     # Проверяем недопустимые tools
     if disallowed_tools:
+        has_disallowed = False
         for tool_name in tool_names:
             if tool_name in disallowed_tools:
                 logger.error(f"[TOOL VALIDATION FAILED] Disallowed tool {tool_name} for message: {message[:100]}")
                 logger.error(f"[TOOL VALIDATION] Expected one of {expected_tools}, got disallowed {tool_name}")
-                return None
+                has_disallowed = True
+        
+        if has_disallowed:
+            logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
+            # Возвращаем пустой список вместо None для правильной обработки
+            return None
     
     # Если есть ожидаемые tools, проверяем соответствие
     if expected_tools:
         if not any(tool in expected_tools for tool in tool_names):
             logger.error(f"[TOOL VALIDATION FAILED] Expected {expected_tools}, got {tool_names}")
             logger.error(f"[TOOL VALIDATION] Message: {message[:100]}")
+            logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
             # Возвращаем None, чтобы сработала антигаллюцинация
             return None
         
