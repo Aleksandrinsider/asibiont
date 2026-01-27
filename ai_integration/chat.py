@@ -1375,16 +1375,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 except (Exception,):
                     user_memory = ""  # If decryption fails, skip
 
-            # Добавляем информацию о времени суток для персонализации
+            # Добавляем информацию о времени суток для персонализации (без автоматических предложений задач)
             current_hour = user_now.hour
             if 6 <= current_hour < 12:
-                time_context = "УТРО: Предлагай планирование дня, утренние задачи, зарядку"
+                time_context = "Утро - время для начала дня"
             elif 12 <= current_hour < 18:
-                time_context = "ДЕНЬ: Предлагай текущие задачи, встречи, активную работу"
+                time_context = "День - время активной работы"
             elif 18 <= current_hour < 22:
-                time_context = "ВЕЧЕР: Предлагай подведение итогов дня, отдых, планирование завтра"
+                time_context = "Вечер - время подведения итогов"
             else:
-                time_context = "НОЧЬ: Предлагай отдых, подготовку ко сну, легкие задачи"
+                time_context = "Ночь - время отдыха"
             
             user_memory += f"\nВРЕМЯ СУТОК: {time_context}"
             profile_filled = False
