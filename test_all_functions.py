@@ -39,7 +39,7 @@ async def test_function_execution():
 
         # Delegation (requires Standard/Premium)
         ("делегируй задачу написать отчет пользователю @otheruser", "delegate_task"),
-        ("покажи статус делегированных задач", "get_delegation_progress_for_task"),
+        ("покажи статус делегированных задач", "get_delegation_progress"),
 
         # Advanced features
         ("найди контакты по интересам спорт", "find_partners"),

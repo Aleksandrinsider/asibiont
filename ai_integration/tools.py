@@ -170,7 +170,7 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_delegation_progress_for_task",
+            "name": "get_delegation_progress",
             "description": "Показать статус делегированных задач",
             "parameters": {
                 "type": "object",

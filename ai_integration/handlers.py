@@ -1144,6 +1144,109 @@ def get_delegation_progress_for_task(task_id, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
+def get_delegation_progress(user_id, session=None):
+    """Получить отчет о статусе делегированных задач"""
+    should_close = False
+    if session is None:
+        session = Session()
+        should_close = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            if should_close:
+                session.close()
+            return "Пользователь не найден"
+
+        # Задачи, делегированные ОТ пользователя (кому он делегировал)
+        delegated_by_user = session.query(Task).filter(
+            Task.delegated_by == user.id
+        ).order_by(Task.created_at.desc()).all()
+
+        # Задачи, делегированные ПОЛЬЗОВАТЕЛЮ (кто делегировал ему)
+        delegated_to_user = session.query(Task).filter(
+            Task.delegated_to_username.ilike(user.username.replace('@', '') if user.username else ''),
+            Task.delegation_status.isnot(None)
+        ).order_by(Task.created_at.desc()).all()
+
+        report = []
+
+        if delegated_by_user:
+            report.append("📤 ВАШИ ДЕЛЕГИРОВАННЫЕ ЗАДАЧИ:")
+            for task in delegated_by_user[:10]:  # Ограничим 10 задачами
+                status_emoji = {
+                    None: "⏳",
+                    "pending": "⏳",
+                    "accepted": "✅",
+                    "rejected": "❌",
+                    "completed": "🎉"
+                }.get(task.delegation_status, "❓")
+
+                status_text = {
+                    None: "ожидает принятия",
+                    "pending": "ожидает принятия",
+                    "accepted": "принята в работу",
+                    "rejected": "отклонена",
+                    "completed": "завершена"
+                }.get(task.delegation_status, "неизвестный статус")
+
+                report.append(f"{status_emoji} '{task.title}' → @{task.delegated_to_username}")
+                report.append(f"   Статус: {status_text}")
+
+                if task.completion_notes:
+                    report.append(f"   Результат: {task.completion_notes[:100]}...")
+
+                if task.due_date:
+                    report.append(f"   Дедлайн: {task.due_date.strftime('%d.%m.%Y %H:%M')}")
+
+                report.append("")  # Пустая строка между задачами
+
+        if delegated_to_user:
+            report.append("📥 ЗАДАЧИ, ДЕЛЕГИРОВАННЫЕ ВАМ:")
+            for task in delegated_to_user[:10]:
+                delegator = session.query(User).filter_by(id=task.delegated_by).first()
+                delegator_name = f"@{delegator.username}" if delegator and delegator.username else "неизвестный"
+
+                status_emoji = {
+                    "pending": "⏳",
+                    "accepted": "✅",
+                    "rejected": "❌",
+                    "completed": "🎉"
+                }.get(task.delegation_status, "❓")
+
+                status_text = {
+                    "pending": "ожидает вашего решения",
+                    "accepted": "вы работаете над ней",
+                    "rejected": "вы отклонили",
+                    "completed": "завершена"
+                }.get(task.delegation_status, "неизвестный статус")
+
+                report.append(f"{status_emoji} '{task.title}' от {delegator_name}")
+                report.append(f"   Статус: {status_text}")
+
+                if task.completion_notes:
+                    report.append(f"   Результат: {task.completion_notes[:100]}...")
+
+                if task.due_date:
+                    report.append(f"   Дедлайн: {task.due_date.strftime('%d.%m.%Y %H:%M')}")
+
+                report.append("")
+
+        if not delegated_by_user and not delegated_to_user:
+            report.append("У вас нет делегированных задач.")
+
+        if should_close:
+            session.close()
+
+        return f"DELEGATION_REPORT: {report}"
+
+    except Exception as e:
+        logger.error(f"Error getting delegation progress for user {user_id}: {e}")
+        if should_close:
+            session.close()
+        return f"Ошибка при получении отчета о делегировании: {str(e)}"
+
+
 def cancel_delegation(task_id, user_id=None):
     """Cancel delegation of a task, returning it to the initiator"""
     session = Session()

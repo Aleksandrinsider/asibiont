@@ -25,7 +25,7 @@ from .tools import TOOLS
 from .handlers import (
     add_task, delete_all_tasks, complete_task, skip_task, restore_task, reschedule_task,
     get_task_advice, delegate_task_with_session, check_subscription_status, accept_delegated_task,
-    reject_delegated_task, get_delegation_progress_for_task, cancel_delegation, edit_task,
+    reject_delegated_task, get_delegation_progress, get_delegation_progress_for_task, cancel_delegation, edit_task,
     list_tasks, enrich_task_list_with_insights, get_partners_list, find_partners,
     generate_delegation_notification, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
@@ -121,7 +121,7 @@ update_user_memory = handlers.update_user_memory_async
 delegate_task = handlers.delegate_task_with_session
 delete_task = handlers.delete_task
 edit_task = handlers.edit_task
-get_delegation_progress = handlers.get_delegation_progress_for_task
+get_delegation_progress = handlers.get_delegation_progress
 
 async def send_error_notification_to_bot(error_message, user_id=None, error_details=None, target_user_id=None):
     """Отправляет уведомление об ошибке разработчику в Telegram или указанному пользователю"""
@@ -174,7 +174,7 @@ brainstorm_ideas = handlers.brainstorm_ideas_async
 enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 get_task_details = handlers.get_task_details_async
-get_delegation_progress = handlers.get_delegation_progress_for_task
+get_delegation_progress = handlers.get_delegation_progress
 cancel_delegation = handlers.cancel_delegation
 suggest_alternatives = handlers.suggest_alternatives_async
 
