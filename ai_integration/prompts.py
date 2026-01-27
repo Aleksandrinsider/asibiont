@@ -43,8 +43,11 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    ⚠️ НЕ ЗАВЕРШАЙ complete_task и НЕ СОЗДАВАЙ add_task!
 
 3. ПЕРЕНОС (если видишь - ОБЯЗАТЕЛЬНО ВЫЗОВИ edit_task):
-   ✓ "Перенеси X" → ВЫЗОВИ edit_task(task_title="X", new_time=...)
-   ✓ "Измени время X" → ВЫЗОВИ edit_task(task_title="X", new_time=...)
+   ✓ "Перенеси X" → ВЫЗОВИ edit_task(task_title="X", reminder_time="...")
+   ✓ "Измени время X" → ВЫЗОВИ edit_task(task_title="X", reminder_time="...")
+   ⚠️ ЗАПРЕЩЕНО вызывать list_tasks перед edit_task - делай НАПРЯМУЮ!
+   ⚠️ task_title - это КЛЮЧЕВЫЕ СЛОВА (например, "Перенеси проверить почту" → task_title="почта")
+   ⚠️ Если видишь "перенеси X" - СРАЗУ вызывай edit_task с ключевыми словами из X, НЕ ищи точное название!
    ⚠️ НЕ ПРОСТО ПИШИ "задача перенесена" - ВЫЗЫВАЙ edit_task!
    ⚠️ НЕ СОЗДАВАЙ add_task при переносе!
 
@@ -73,15 +76,18 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    ⚠️ ВСЕ после запятой/тире/точки = description!
 
 8. ДЕЛЕГИРОВАНИЕ (если видишь "делегируй/поручи/передай"):
-   ✓ "Делегируй Ивану X через 1 час" → ВЫЗОВИ delegate_task(title="X", delegated_to_username="Иван", reminder_time="через 1 час")
-   ✓ "Поручи @maria X завтра в 10:00" → ВЫЗОВИ delegate_task(title="X", delegated_to_username="maria", reminder_time="завтра в 10:00")
+   ✓ "Делегируй Ивану задачу X через 1 час" → ВЫЗОВИ delegate_task(title="X", delegated_to_username="Иван", reminder_time="через 1 час")
+   ✓ "Поручи @maria задачу X завтра в 10:00" → ВЫЗОВИ delegate_task(title="X", delegated_to_username="maria", reminder_time="завтра в 10:00")
    ✓ "Передай Петрову задачу X" → ВЫЗОВИ delegate_task(title="X", delegated_to_username="Петров")
-   ⚠️ Имя человека идет СРАЗУ после делегируй/поручи/передай!
+   ⚠️ delegate_task СОЗДАЕТ НОВУЮ делегированную задачу (НЕ передает существующую!)
+   ⚠️ НЕ ПРОСИ дополнительную информацию - вызывай с тем что есть!
 
 9. ПЕРЕНОС ЗАДАЧ (если видишь "перенеси/измени время"):
-   ✓ "Перенеси X на завтра в 10:00" → ВЫЗОВИ edit_task(найти X, new_time="завтра в 10:00")
-   ✓ "Измени время X на 15:30" → ВЫЗОВИ edit_task(найти X, new_time="15:30")
+   ✓ "Перенеси X на завтра в 10:00" → ВЫЗОВИ edit_task(task_title="X", reminder_time="завтра в 10:00")
+   ✓ "Измени время X на 15:30" → ВЫЗОВИ edit_task(task_title="X", reminder_time="15:30")
+   ✓ "Перенеси X на послезавтра" → ВЫЗОВИ edit_task(task_title="X", reminder_time="послезавтра в 10:00")
    ⚠️ ПЕРЕНОС = edit_task, НЕ add_task!
+   ⚠️ task_title = ключевые слова из названия (не обязательно полное название)
 
 ⚠️ КРИТИЧЕСКОЕ ПРАВИЛО: ВСЕ ДЕЙСТВИЯ ВЫПОЛНЯЙ ЧЕРЕЗ TOOL CALLS!
    - ВСЕГДА вызывай соответствующую функцию через tool_call
@@ -105,6 +111,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    Пользователь: "Делегируй Ивану проверить отчет через 2 часа"
    Ты: 1) ВЫЗОВ delegate_task(title="проверить отчет", delegated_to_username="Иван", reminder_time="через 2 часа")
        2) ОТВЕТ: "Задача делегирована Ивану."
+   
+   Пользователь: "Перенеси встречу на завтра в 10:00"
+   Ты: 1) ВЫЗОВ edit_task(task_title="встреча", reminder_time="завтра в 10:00") через tool_call
+       2) ОТВЕТ: "Встреча перенесена на завтра в 10:00."
 
 6. НЕ ГАЛЛЮЦИНИРУЙ:
    • ТОЛЬКО информация из профиля/памяти

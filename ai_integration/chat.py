@@ -513,6 +513,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 
                 result = handlers.edit_task(
                     task_id=args.get("task_id"),
+                    task_title=args.get("task_title"),  # КРИТИЧНО: поиск задачи по ключевым словам
                     title=args.get("title"),
                     description=args.get("description"),
                     reminder_time=reminder_time,
@@ -1928,12 +1929,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             parallel_tool_calls = True
             
             # Детектируем тип команды для логирования
+            logger.info(f"[TOOL DETECTOR] Testing message: '{clean_message.lower()[:100]}'")
             if "удали" in clean_message.lower() or "убери" in clean_message.lower():
                 logger.info(f"[TOOL HINT] DELETE detected: {clean_message[:50]}")
             elif any(kw in clean_message.lower() for kw in ["напомни", "через", "нужно", "надо"]):
                 logger.info(f"[TOOL HINT] CREATE detected: {clean_message[:50]}")
+            elif any(kw in clean_message.lower() for kw in ["перенеси", "измени время", "обнови"]):
+                logger.info(f"[TOOL HINT] EDIT detected: {clean_message[:50]} - FORCING tool call")
+                tool_choice = "required"  # ФОРСИРУЕМ вызов функции для переноса
             
-            logger.info(f"[TOOL CHOICE] AUTO for: {clean_message[:50]}")
+            logger.info(f"[TOOL CHOICE] {tool_choice.upper()} for: {clean_message[:50]}")
 
         # УПРОЩЕННЫЙ АНАЛИЗ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ AI
         message_lower = clean_message.lower()

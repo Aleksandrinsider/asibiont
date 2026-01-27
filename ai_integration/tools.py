@@ -67,13 +67,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "edit_task",
-            "description": "Изменить существующую задачу (время, название, описание)",
+            "description": "ИСПОЛЬЗОВАТЬ ДЛЯ ПЕРЕНОСА ВРЕМЕНИ ЗАДАЧ. Вызывай когда видишь 'перенеси', 'измени время', 'обнови'. Примеры: 'перенеси X на завтра в 10:00' → edit_task(task_title='X', reminder_time='завтра в 10:00')",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_title": {
                         "type": "string",
-                        "description": "Название задачи для изменения",
+                        "description": "Ключевые слова для поиска задачи. НЕ точное название! Примеры: 'почта' найдёт 'Проверить почту', 'молоко' найдёт 'Купить молоко'",
                     },
                     "title": {
                         "type": "string",
@@ -85,7 +85,7 @@ TOOLS = [
                     },
                     "reminder_time": {
                         "type": "string",
-                        "description": "Новое время в формате YYYY-MM-DD HH:MM (опционально)",
+                        "description": "Новое время. Поддерживается: 'YYYY-MM-DD HH:MM', 'HH:MM', 'через 2 часа', 'завтра в 10:00', 'послезавтра в 14:00' (опционально)",
                     },
                 },
                 "required": ["task_title"],
@@ -96,17 +96,17 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "reschedule_task",
-            "description": "Перенести существующую задачу на новое время. Используй когда пользователь хочет изменить время напоминания задачи.",
+            "description": "Перенести задачу на новое время. Используй этот инструмент когда пользователь хочет изменить время напоминания. Примеры: 'перенеси X на завтра', 'измени время X', 'перенеси на послезавтра'",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_title": {
                         "type": "string",
-                        "description": "Название задачи для переноса",
+                        "description": "Ключевые слова из названия задачи. Примеры: 'почта', 'встреча с командой'",
                     },
                     "new_time": {
                         "type": "string",
-                        "description": "Новое время в формате YYYY-MM-DD HH:MM или HH:MM (если сегодня)",
+                        "description": "Новое время. Поддерживается: 'YYYY-MM-DD HH:MM', 'HH:MM', 'через 2 часа', 'завтра в 10:00', 'послезавтра в 14:00'",
                     },
                 },
                 "required": ["task_title", "new_time"],
@@ -138,32 +138,32 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delegate_task",
-            "description": "Делегировать задачу другому пользователю",
+            "description": "Делегировать задачу другому пользователю. Используй когда видишь 'делегируй', 'поручи', 'передай'. Примеры: 'делегируй Ивану X', 'поручи @maria X завтра в 10:00'",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Название задачи",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Подробное описание",
-                    },
-                    "reminder_time": {
-                        "type": "string",
-                        "description": "Дедлайн в формате YYYY-MM-DD HH:MM",
+                        "description": "Название задачи. Примеры: 'проверить документы', 'подготовить отчет'",
                     },
                     "delegated_to_username": {
                         "type": "string",
-                        "description": "Username получателя без @",
+                        "description": "Имя или username получателя (без @). Примеры: 'Иван', 'maria', 'Петров'",
+                    },
+                    "reminder_time": {
+                        "type": "string",
+                        "description": "Дедлайн. Поддерживается: 'YYYY-MM-DD HH:MM', 'через 2 часа', 'завтра в 10:00' (опционально)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Подробное описание задачи (опционально)",
                     },
                     "delegation_details": {
                         "type": "string",
-                        "description": "Формат результата и детали",
+                        "description": "Формат результата и детали (опционально)",
                     },
                 },
-                "required": ["title", "description", "reminder_time", "delegated_to_username"],
+                "required": ["title", "delegated_to_username"],
             },
         },
     },
