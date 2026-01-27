@@ -84,3 +84,20 @@ PROACTIVE_NO_SEND_START_HOUR = int(os.getenv("PROACTIVE_NO_SEND_START_HOUR", 22)
 PROACTIVE_NO_SEND_END_HOUR = int(os.getenv("PROACTIVE_NO_SEND_END_HOUR", 10))    # End hour for no-send period (10:00)
 PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES", 180))  # Каждые 3 часа если есть задачи
 PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES", 120))  # Каждые 2 часа если нет задач
+
+# Subscription descriptions
+PREMIUM_DESCRIPTION = """
+🤖 ASI Biont - ИИ-агент для управления задачами
+
+Я ваш персональный ИИ-ассистент для эффективного управления задачами и временем.
+
+✨ Возможности:
+• Создание и управление задачами через естественный язык
+• Умные напоминания и дедлайны
+• Делегирование задач партнерам
+• Анализ прогресса и рекомендации
+• Интеграция с календарем и уведомлениями
+
+Для доступа ко всем функциям нужна активная подписка.
+Выберите тариф в веб-приложении или используйте команду /subscription
+"""

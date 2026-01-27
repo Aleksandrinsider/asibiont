@@ -27,7 +27,7 @@ from .handlers import (
     get_task_advice, delegate_task_with_session, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, get_delegation_progress_for_task, cancel_delegation, edit_task,
     list_tasks, enrich_task_list_with_insights, get_partners_list, find_partners,
-    generate_delegation_notification, generate_progress_request, schedule_delegation_monitoring,
+    generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, brainstorm_ideas_async, get_task_details_async, suggest_alternatives_async,
     suggest_trends_and_opportunities_async as suggest_trends_and_opportunities, update_profile, delete_task
@@ -2375,6 +2375,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 db_session.commit()
             except Exception as e:
                 logger.warning(f"Failed to save conversation context: {e}")
+
+        # Сохраняем взаимодействие в таблицу Interaction для dashboard
+        try:
+            from main import save_context_to_db
+            save_context_to_db(user_id, message, final_content)
+            logger.info(f"Saved interaction to database: user={user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to save interaction to database: {e}")
 
         return final_content
 

@@ -877,7 +877,7 @@ def delegate_task(
             if bot:
                 # Generate AI-powered personalized notification
                 import asyncio
-                notification_text = asyncio.run(generate_delegation_notification(
+                asyncio.create_task(generate_delegation_notification_async(
                     delegator.username,
                     recipient_username,
                     title,
@@ -886,23 +886,6 @@ def delegate_task(
                     delegation_details,
                     recipient.telegram_id
                 ))
-
-                if notification_text:
-                    message = notification_text
-                else:
-                    # Fallback to template if AI generation fails
-                    message = f"Новое предложение задачи от @{delegator.username}:\n\n"
-                    message += f"Задача: {title}\n"
-                    if description:
-                        message += f"Описание: {description}\n"
-                    if reminder_time:
-                        message += f"Дедлайн: {reminder_time}\n"
-                    if delegation_details:
-                        message += f"Детали: {delegation_details}\n"
-                    message += f"\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
-
-                import asyncio
-                asyncio.create_task(bot.send_message(recipient.telegram_id, message))
 
         except Exception as e:
             logging.error(f"Failed to send delegation notification: {e}")
@@ -917,6 +900,8 @@ def delegate_task(
             )
         except Exception as e:
             logging.error(f"Failed to schedule delegation monitoring: {e}")
+
+        return f"Задача '{title}' успешно делегирована пользователю @{recipient_username}. Ожидается подтверждение от получателя."
 
         session.close()
     except Exception as e:
@@ -2143,7 +2128,42 @@ def find_partners(user_id=None, session=None):
     return response
 
 
-async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
+async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
+    """Async wrapper for delegation notification generation and sending"""
+    try:
+        from main import bot
+        if not bot:
+            return
+
+        # Generate AI-powered personalized notification
+        notification_text = await generate_delegation_notification(
+            delegator_username,
+            recipient_username,
+            task_title,
+            task_description,
+            deadline,
+            delegation_details,
+            recipient_telegram_id
+        )
+
+        if notification_text:
+            message = notification_text
+        else:
+            # Fallback to template if AI generation fails
+            message = f"Новое предложение задачи от @{delegator_username}:\n\n"
+            message += f"Задача: {task_title}\n"
+            if task_description:
+                message += f"Описание: {task_description}\n"
+            if deadline:
+                message += f"Дедлайн: {deadline}\n"
+            if delegation_details:
+                message += f"Детали: {delegation_details}\n"
+            message += f"\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
+
+        await bot.send_message(recipient_telegram_id, message)
+
+    except Exception as e:
+        logging.error(f"Failed to send delegation notification: {e}")
     """Generate personalized delegation notification using AI"""
     import aiohttp
     from config import DEEPSEEK_API_KEY
