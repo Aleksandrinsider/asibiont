@@ -13,6 +13,9 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
+# Стандартный паттерн для команд создания задач
+TASK_COMMAND_PATTERN = r'напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай|создай'
+
 
 def analyze_interaction_for_profile_update(user_id, message, ai_response):
     """
@@ -968,15 +971,15 @@ def parse_multiple_tasks(message):
 
     # First, check if this is a single task with time
     single_task_patterns = [
-        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+через\s+\d+.*$',
-        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+(?:завтра|сегодня).*$'
+        rf'^({TASK_COMMAND_PATTERN})\s+через\s+\d+.*$',
+        rf'^({TASK_COMMAND_PATTERN})\s+(?:завтра|сегодня).*$'
     ]
 
     is_single_task_with_time = any(re.match(pattern, message.lower()) for pattern in single_task_patterns)
 
     if is_single_task_with_time:
         # Handle as single task
-        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+', '', message, flags=re.IGNORECASE)
+        cleaned_message = re.sub(rf'^({TASK_COMMAND_PATTERN})[:\s]+', '', message, flags=re.IGNORECASE)
 
         reminder_time = None
         # Extract time
@@ -1006,44 +1009,51 @@ def parse_multiple_tasks(message):
 
     # Check for multiple tasks
     task_strings = []
+    
+    # First, remove command from the beginning
+    cleaned_message = re.sub(rf'^({TASK_COMMAND_PATTERN})[:\s]+', '', message, flags=re.IGNORECASE).strip()
+    
+    # If nothing left after removing command, return empty
+    if not cleaned_message:
+        return tasks
+    
+    # Check if result is just command words
+    command_only_words = ['напомни', 'напомнить', 'добавь', 'запомни', 'создай', 'задачу', 'задача', 'новая', 'да']
+    if cleaned_message.lower() in command_only_words:
+        return tasks
 
+    # Try splitting by commas first, then by "и" within each part
+    if ',' in cleaned_message:
+        parts = [p.strip() for p in cleaned_message.split(',') if p.strip()]
+        
+        # Further split each part by "и"
+        for part in parts:
+            if part.strip():  # Skip empty parts
+                if re.search(r'\s+и\s+', part, re.IGNORECASE):
+                    sub_parts = re.split(r'\s+и\s+', part, flags=re.IGNORECASE)
+                    task_strings.extend([sp.strip() for sp in sub_parts if sp.strip()])
+                else:
+                    task_strings.append(part.strip())
     # Try splitting by "и" (and)
-    if re.search(r'\s+и\s+', message, re.IGNORECASE):
-        parts = re.split(r'\s+и\s+', message, flags=re.IGNORECASE)
-        # Remove command from first part only
-        if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+    elif re.search(r'\s+и\s+', cleaned_message, re.IGNORECASE):
+        parts = re.split(r'\s+и\s+', cleaned_message, flags=re.IGNORECASE)
         task_strings = [p.strip() for p in parts if p.strip()]
-    # Try splitting by commas
-    elif ',' in message:
-        parts = [p.strip() for p in message.split(',') if p.strip()]
-        # Remove command from first part only
-        if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
-        task_strings = parts
     # Try splitting by semicolons
-    elif ';' in message:
-        parts = [p.strip() for p in message.split(';') if p.strip()]
-        # Remove command from first part only
-        if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+    elif ';' in cleaned_message:
+        parts = [p.strip() for p in cleaned_message.split(';') if p.strip()]
         task_strings = parts
     # Try splitting by newlines
-    elif '\n' in message:
-        parts = [p.strip() for p in message.split('\n') if p.strip()]
-        # Remove command from first part only
-        if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+    elif '\n' in cleaned_message:
+        parts = [p.strip() for p in cleaned_message.split('\n') if p.strip()]
         task_strings = parts
     else:
         # Single task
-        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+', '', message, flags=re.IGNORECASE)
         task_strings = [cleaned_message] if cleaned_message else []
 
     # Process each task string
     for task_str in task_strings:
         task_str = task_str.strip()
-        if not task_str or len(task_str) < 2:
+        if not task_str:
             continue
 
         # Extract time if present
@@ -1075,15 +1085,6 @@ def parse_multiple_tasks(message):
             tasks.append({
                 "title": task_str,
                 "reminder_time": reminder_time
-            })
-
-    # If no tasks found, treat as single task
-    if not tasks and message.strip():
-        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+', '', message, flags=re.IGNORECASE)
-        if cleaned_message:
-            tasks.append({
-                "title": cleaned_message.strip(),
-                "reminder_time": None
             })
 
     return tasks
@@ -1222,7 +1223,7 @@ def post_process_tool_calls(intent, tool_calls, message):
                 # Fallback to single task parsing
                 task_title = message
                 # Remove commands at the beginning
-                task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай|создай)\s+', '', task_title, flags=re.IGNORECASE)
+                task_title = re.sub(rf'^({TASK_COMMAND_PATTERN})[:\s]+', '', task_title, flags=re.IGNORECASE)
                 task_title = ' '.join(task_title.split()).strip()
 
                 # Check if the remaining title is meaningful
@@ -1376,7 +1377,7 @@ def post_process_tool_calls(intent, tool_calls, message):
                 # Fallback to single task parsing
                 task_title = message.strip()
                 # Remove commands
-                task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай|создай)\s+', '', task_title, flags=re.IGNORECASE)
+                task_title = re.sub(rf'^({TASK_COMMAND_PATTERN})[:\s]+', '', task_title, flags=re.IGNORECASE)
                 task_title = ' '.join(task_title.split()).strip()
 
                 # Check if the remaining title is meaningful
