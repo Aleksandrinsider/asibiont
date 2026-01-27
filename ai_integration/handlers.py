@@ -58,110 +58,91 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.add(user)
         session.commit()
 
-    # Check if task with same title exists (case insensitive)
-    from sqlalchemy import func
-    existing_task = session.query(Task).filter(
-        Task.user_id == user.id,
-        func.lower(Task.title) == func.lower(title)
-    ).first()
-    if existing_task:
-        # Update existing task
-        if reminder_time:
-            try:
-                user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                local_dt = user_tz.localize(local_dt)
-                existing_task.reminder_time = local_dt.astimezone(pytz.UTC)
-            except ValueError:
-                pass
-        if description:
-            existing_task.description = encrypt_data(description)
-        existing_task.status = "pending"  # Reset to pending when updating
-        session.commit()
-        task_id = existing_task.id
-        task = existing_task
-    else:
-        # Create new task - ОБЯЗАТЕЛЬНО требуется время
-        if not reminder_time:
-            if close_session:
-                session.close()
-            logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
-            return "NEED_TIME_FOR_TASK: Когда напомнить? Укажи время: завтра в 10:00, через час, сегодня в 15:00"
-        
-        task = Task(user_id=user.id, title=title, description=encrypt_data(description))
-        if reminder_time:
-            try:
-                # Get user timezone
-                user_tz = pytz.UTC
-                if user.timezone:
-                    try:
-                        user_tz = pytz.timezone(user.timezone)
-                    except pytz.exceptions.UnknownTimeZoneError:
-                        logging.warning(f"Unknown timezone {user.timezone}, using UTC")
-                        user_tz = pytz.UTC
+    # ПРОВЕРКА ДУБЛИКАТОВ ОТКЛЮЧЕНА - создаем задачи даже с одинаковыми названиями
+    # Это позволяет создавать несколько задач подряд без конфликтов
+    # Если пользователь действительно хочет обновить задачу - он может использовать edit_task
+    
+    # Create new task - ОБЯЗАТЕЛЬНО требуется время
+    if not reminder_time:
+        if close_session:
+            session.close()
+        logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
+        return "NEED_TIME_FOR_TASK: Когда напомнить? Укажи время: завтра в 10:00, через час, сегодня в 15:00"
+    
+    task = Task(user_id=user.id, title=title, description=encrypt_data(description))
+    if reminder_time:
+        try:
+            # Get user timezone
+            user_tz = pytz.UTC
+            if user.timezone:
+                try:
+                    user_tz = pytz.timezone(user.timezone)
+                except pytz.exceptions.UnknownTimeZoneError:
+                    logging.warning(f"Unknown timezone {user.timezone}, using UTC")
+                    user_tz = pytz.UTC
 
-                # Check if time is relative
-                if isinstance(reminder_time, str) and "через" in reminder_time.lower():
-                    current_time = datetime.now(user_tz)
-                    parsed_time = parse_relative_time(reminder_time, current_time)
-                    if parsed_time:
-                        # parsed_time уже в правильной timezone от parse_relative_time
-                        if parsed_time.tzinfo is None:
-                            parsed_time = user_tz.localize(parsed_time)
-                        task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                        logging.info(
-                            f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
-                    else:
-                        logging.warning(f"Could not parse relative time '{reminder_time}' for task {title}")
-                        if close_session:
-                            session.close()
-                        return f"❌ Не удалось распознать время '{reminder_time}'. Попробуйте: 'через 5 минут', 'через 2 часа', 'завтра в 10:00'"
+            # Check if time is relative
+            if isinstance(reminder_time, str) and "через" in reminder_time.lower():
+                current_time = datetime.now(user_tz)
+                parsed_time = parse_relative_time(reminder_time, current_time)
+                if parsed_time:
+                    # parsed_time уже в правильной timezone от parse_relative_time
+                    if parsed_time.tzinfo is None:
+                        parsed_time = user_tz.localize(parsed_time)
+                    task.reminder_time = parsed_time.astimezone(pytz.UTC)
+                    logging.info(
+                        f"Task {title} relative time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
                 else:
-                    # Try natural time parsing first
-                    current_time = datetime.now(user_tz)
-                    parsed_time = parse_natural_time(reminder_time, current_time)
-                    if parsed_time:
-                        if parsed_time.tzinfo is None:
-                            parsed_time = user_tz.localize(parsed_time)
-                        task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                        logging.info(
-                            f"Task {title} natural time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+                    logging.warning(f"Could not parse relative time '{reminder_time}' for task {title}")
+                    if close_session:
+                        session.close()
+                    return f"❌ Не удалось распознать время '{reminder_time}'. Попробуйте: 'через 5 минут', 'через 2 часа', 'завтра в 10:00'"
+            else:
+                # Try natural time parsing first
+                current_time = datetime.now(user_tz)
+                parsed_time = parse_natural_time(reminder_time, current_time)
+                if parsed_time:
+                    if parsed_time.tzinfo is None:
+                        parsed_time = user_tz.localize(parsed_time)
+                    task.reminder_time = parsed_time.astimezone(pytz.UTC)
+                    logging.info(
+                        f"Task {title} natural time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+                else:
+                    # Try simple HH:MM format first
+                    if isinstance(reminder_time, str):
+                        simple_time_match = re.match(r'^(\d{1,2}):(\d{2})$', reminder_time.strip())
+                        if simple_time_match:
+                            h, m = int(simple_time_match.group(1)), int(simple_time_match.group(2))
+                            current_time = datetime.now(user_tz)
+                            # Create time for today
+                            today_time = current_time.replace(hour=h, minute=m, second=0, microsecond=0)
+                            # If time has passed, schedule for tomorrow
+                            if today_time <= current_time:
+                                today_time = today_time + timedelta(days=1)
+                            task.reminder_time = today_time.astimezone(pytz.UTC)
+                            logging.info(
+                                f"Task {title} simple time parsed: '{reminder_time}' -> local: {today_time} -> UTC: {task.reminder_time}")
                     else:
-                        # Try simple HH:MM format first
-                        if isinstance(reminder_time, str):
-                            simple_time_match = re.match(r'^(\d{1,2}):(\d{2})$', reminder_time.strip())
-                            if simple_time_match:
-                                h, m = int(simple_time_match.group(1)), int(simple_time_match.group(2))
-                                current_time = datetime.now(user_tz)
-                                # Create time for today
-                                today_time = current_time.replace(hour=h, minute=m, second=0, microsecond=0)
-                                # If time has passed, schedule for tomorrow
-                                if today_time <= current_time:
-                                    today_time = today_time + timedelta(days=1)
-                                task.reminder_time = today_time.astimezone(pytz.UTC)
-                                logging.info(
-                                    f"Task {title} simple time parsed: '{reminder_time}' -> local: {today_time} -> UTC: {task.reminder_time}")
+                        # If reminder_time is already a datetime object, use it directly
+                        if isinstance(reminder_time, datetime):
+                            task.reminder_time = reminder_time.astimezone(pytz.UTC) if reminder_time.tzinfo else user_tz.localize(reminder_time).astimezone(pytz.UTC)
+                            logging.info(f"Task {title} datetime used directly: {reminder_time} -> UTC: {task.reminder_time}")
                         else:
-                            # If reminder_time is already a datetime object, use it directly
-                            if isinstance(reminder_time, datetime):
-                                task.reminder_time = reminder_time.astimezone(pytz.UTC) if reminder_time.tzinfo else user_tz.localize(reminder_time).astimezone(pytz.UTC)
-                                logging.info(f"Task {title} datetime used directly: {reminder_time} -> UTC: {task.reminder_time}")
-                            else:
-                                # Fallback to absolute time format
-                                try:
-                                    local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
-                                    local_dt = user_tz.localize(local_dt)
-                                    task.reminder_time = local_dt.astimezone(pytz.UTC)
-                                    logging.info(
-                                        f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
-                                except ValueError:
-                                    logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
-                                    # Don't create task without valid time
-                                    if close_session:
-                                        session.close()
-                                    return f"❌ Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
-            except Exception as e:
-                logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
+                            # Fallback to absolute time format
+                            try:
+                                local_dt = datetime.strptime(reminder_time, "%Y-%m-%d %H:%M")
+                                local_dt = user_tz.localize(local_dt)
+                                task.reminder_time = local_dt.astimezone(pytz.UTC)
+                                logging.info(
+                                    f"Task {title} absolute time parsed: {reminder_time} -> local: {local_dt} -> UTC: {task.reminder_time}")
+                            except ValueError:
+                                logging.warning(f"Could not parse reminder_time '{reminder_time}' for task {title}")
+                                # Don't create task without valid time
+                                if close_session:
+                                    session.close()
+                                return f"❌ Неизвестная ошибка: не удалось распознать время '{reminder_time}'"
+        except Exception as e:
+            logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
         if due_date:
             try:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
@@ -3911,10 +3892,24 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
             except (ValueError, TypeError):
                 return f"Некорректный ID задачи: {task_id}"
         elif task_title:
-            task = session.query(Task).filter_by(
-                user_id=user.id,
-                title=task_title
-            ).first()
+            # Search by words in title (like complete_task)
+            words = task_title.lower().split()
+            logger.info(f"[DELETE_TASK] Searching for task with title '{task_title}', words: {words}, user_id: {user.id}")
+            
+            # Get all user tasks
+            user_tasks = session.query(Task).filter(
+                Task.user_id == user.id
+            ).all()
+            
+            # Find task by matching words (case-insensitive) - prefer pending tasks
+            for t in user_tasks:
+                task_title_lower = t.title.lower()
+                if any(word in task_title_lower for word in words):
+                    if t.status == 'pending':
+                        task = t
+                        break
+                    elif not task:
+                        task = t
         else:
             return "Необходимо указать ID или название задачи"
 

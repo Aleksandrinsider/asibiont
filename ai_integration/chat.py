@@ -1832,8 +1832,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and 'ASK_' not in original_message and 'ASK_' not in original_message
 
         messages = [{"role": "system", "content": system_prompt}]
-        # Используем conversation_context для истории разговора вместо context параметра
-        if conversation_context and isinstance(conversation_context, list):
+        
+        # КРИТИЧНО: Для команд создания/изменения задач НЕ используем контекст
+        # Это предотвращает путаницу когда AI пытается выполнить все команды из истории
+        is_task_command = intent.get('type') in ['add_task', 'complete_task', 'delete_task', 'edit_task']
+        
+        # Используем conversation_context для истории разговора, но ТОЛЬКО для разговорных команд
+        if conversation_context and isinstance(conversation_context, list) and not is_task_command:
             # Берем последние 4 сообщения для контекста (2 пары вопрос-ответ) - УМЕНЬШЕНО для предотвращения галлюцинаций
             recent_context = conversation_context[-4:] if len(conversation_context) > 4 else conversation_context
             for item in recent_context:
@@ -1841,6 +1846,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     messages.append({"role": "user", "content": item["content"]})
                 elif item.get("role") == "assistant":
                     messages.append({"role": "assistant", "content": item["content"]})
+            logger.info(f"[CONTEXT] Added {len(recent_context)} context messages for conversation")
+        elif is_task_command:
+            logger.info(f"[CONTEXT] SKIPPED context for task command: {intent.get('type')}")
+        
         # Добавляем текущее сообщение
         messages.append({"role": "user", "content": message})
 
@@ -2210,6 +2219,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
                                     # Проверяем tool_calls в API response
                                     tool_calls = message_response.get("tool_calls")
+                                    
+                                    # КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: Что отправил AI?
+                                    logger.info(f"[AI RESPONSE] Content: {content[:200]}")
+                                    logger.info(f"[AI RESPONSE] Tool calls: {tool_calls}")
+                                    if tool_calls:
+                                        for tc in tool_calls:
+                                            func_name = tc.get('function', {}).get('name')
+                                            logger.info(f"[AI RESPONSE] Calling tool: {func_name}")
                                 else:
                                     logger.error(f"No choices in API response: {result}")
                                     content = "Извините, произошла ошибка при обработке запроса."
