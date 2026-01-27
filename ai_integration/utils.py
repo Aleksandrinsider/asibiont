@@ -968,15 +968,15 @@ def parse_multiple_tasks(message):
 
     # First, check if this is a single task with time
     single_task_patterns = [
-        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+через\s+\d+.*$',
-        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+(?:завтра|сегодня).*$'
+        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+через\s+\d+.*$',
+        r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+(?:завтра|сегодня).*$'
     ]
 
     is_single_task_with_time = any(re.match(pattern, message.lower()) for pattern in single_task_patterns)
 
     if is_single_task_with_time:
         # Handle as single task
-        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', message, flags=re.IGNORECASE)
+        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+', '', message, flags=re.IGNORECASE)
 
         reminder_time = None
         # Extract time
@@ -1012,32 +1012,32 @@ def parse_multiple_tasks(message):
         parts = re.split(r'\s+и\s+', message, flags=re.IGNORECASE)
         # Remove command from first part only
         if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
         task_strings = [p.strip() for p in parts if p.strip()]
     # Try splitting by commas
     elif ',' in message:
         parts = [p.strip() for p in message.split(',') if p.strip()]
         # Remove command from first part only
         if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
         task_strings = parts
     # Try splitting by semicolons
     elif ';' in message:
         parts = [p.strip() for p in message.split(';') if p.strip()]
         # Remove command from first part only
         if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
         task_strings = parts
     # Try splitting by newlines
     elif '\n' in message:
         parts = [p.strip() for p in message.split('\n') if p.strip()]
         # Remove command from first part only
         if parts:
-            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
+            parts[0] = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)[:\s]*', '', parts[0], flags=re.IGNORECASE).strip()
         task_strings = parts
     else:
         # Single task
-        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', message, flags=re.IGNORECASE)
+        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+', '', message, flags=re.IGNORECASE)
         task_strings = [cleaned_message] if cleaned_message else []
 
     # Process each task string
@@ -1079,7 +1079,7 @@ def parse_multiple_tasks(message):
 
     # If no tasks found, treat as single task
     if not tasks and message.strip():
-        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', message, flags=re.IGNORECASE)
+        cleaned_message = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай)\s+', '', message, flags=re.IGNORECASE)
         if cleaned_message:
             tasks.append({
                 "title": cleaned_message.strip(),
@@ -1188,7 +1188,7 @@ def post_process_tool_calls(intent, tool_calls, message):
         #     })
 
         # 2. ДОБАВЛЕНИЕ ЗАДАЧ: если intent add_task, но нет add_task - добавляем
-        elif intent["type"] == "add_task" and function_name != "add_task":
+        if intent["type"] == "add_task" and function_name != "add_task":
             # Extract multiple tasks from message
             tasks = parse_multiple_tasks(message)
             if tasks:
