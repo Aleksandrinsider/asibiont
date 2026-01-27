@@ -2,14 +2,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from models import Session
-from models import Task, User
+from models import Task, User, Interaction
 from config import DATABASE_URL
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import logging
 import json
 from config import DAILY_REPORT_HOUR, PROACTIVE_CHECK_INTERVAL_MINUTES, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_NO_SEND_END_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
-from ai_integration import check_delegation_deadlines
+from ai_integration import check_delegation_deadlines, generate_proactive_message
 
 logger = logging.getLogger(__name__)
 
@@ -295,7 +295,6 @@ class ReminderService:
                     # Установить pending_action для обработки ответа пользователя
                     user = db.query(User).filter(User.telegram_id == user_id).first()
                     if user:
-                        from datetime import datetime, timezone
                         pending_data = {
                             "type": "result_check_response",
                             "task_id": task_id,
@@ -323,7 +322,6 @@ class ReminderService:
         logger.info("=== STARTING REMINDER SEND ===")
         logger.info(f"Sending reminder for task {task_id}, user telegram_id {user_id}, title: {task_title}")
         from subscription_service import check_subscription
-        from models import Interaction
         
         # Для напоминаний всегда отправляем, независимо от подписки
         # if not check_subscription(user_id):
@@ -509,7 +507,6 @@ class ReminderService:
     async def send_task_checkpoint_message(self, user_id: int, checkpoint_type: str = "general"):
         """Отправка сообщения для чекпоинта задачи (1/3, 2/3, overdue)"""
         from subscription_service import check_subscription
-        from models import Interaction
         
         # Проверить подписку
         if not check_subscription(user_id):
@@ -574,6 +571,11 @@ class ReminderService:
             ).order_by(Task.reminder_time).all()
             
             all_tasks = all_active_tasks + overdue_tasks
+            
+            # Определить параметры для генерации сообщения
+            task_count = len(all_active_tasks)
+            overdue_count = len(overdue_tasks)
+            context = checkpoint_type
             
             # Отправить чекпоинт-сообщение
             try:
@@ -686,6 +688,7 @@ class ReminderService:
             
             # Новая адаптивная логика: частота зависит от количества задач
             total_pending_tasks = len(pending_tasks)
+            total_active_tasks = total_pending_tasks
             
             # 1. Если есть задачи в ближайший час - не отправлять (пользователь активен)
             if tasks_in_60_min > 0:
@@ -967,7 +970,6 @@ class ReminderService:
             task_count: Количество задач
             overdue_count: Количество просроченных задач
         """
-        from datetime import timedelta
         from config import FREE_ACCESS_MODE
         
         # Проверить подписку - если нет доступа, не отправлять проактивное сообщение

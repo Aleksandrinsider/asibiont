@@ -1,15 +1,14 @@
-import json
 import logging
 import asyncio
 import os
 import tempfile
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 router = Router()
 from ai_integration import chat_with_ai
-from models import Session, User, Subscription
+from models import Session, User, Subscription, Task
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder

@@ -2224,7 +2224,7 @@ async def chat_handler(request):
             # Get AI response (will take time, so agent timestamp will be later)
             try:
                 logger.info(f"Calling chat_with_ai with user_id: {user_id}")
-                response = await chat_with_ai(message, context, user_id, file_content)
+                response = await chat_with_ai(message, context, user_id, file_content, db_session=session_db)
                 logger.info("AI response: %s...", response[:100])
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)

@@ -6,7 +6,7 @@ Automatic post generation service - creates daily progress posts and birthday po
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import random
 
@@ -117,8 +117,7 @@ async def generate_progress_post(user_id, session):
             response = await chat_with_ai(
                 user_id=user_id,
                 message=context,
-                bot=None,
-                session=session
+                db_session=session
             )
             
             if response and len(response) > 20:
