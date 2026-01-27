@@ -747,8 +747,9 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
 Ответ должен быть кратким и полезным."""
 
         try:
+            import asyncio
             from .chat import chat_with_ai
-            advice = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=500))
+            advice = asyncio.run(chat_with_ai(user_id, prompt))
             result = f"Совет по задаче '{title}':\n\n{advice}"
 
             # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
@@ -1111,7 +1112,7 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
         return f"Ошибка: {str(e)}"
 
 
-def get_delegation_progress(task_id, user_id=None):
+def get_delegation_progress_for_task(task_id, user_id=None):
     """Get progress report for a delegated task"""
     session = Session()
     try:
@@ -2251,42 +2252,46 @@ def check_delegation_deadlines():
                 delegator = session.query(User).filter_by(id=task.user_id).first()
                 recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
 
-                if delegator and recipient:
-                    # Generate AI-powered reminder - DISABLED: function doesn't exist
-                    # import asyncio
-                    # reminder_text = asyncio.run(generate_progress_reminder(
-                    #     task.title,
-                    #     delegator.username,
-                    #     days_overdue,
-                    #     recipient.telegram_id
-                    # ))
+                # Reminder functionality disabled - function doesn't exist
+                # if delegator and recipient:
+                #     # Generate AI-powered reminder - DISABLED: function doesn't exist
+                #     # import asyncio
+                #     # reminder_text = asyncio.run(generate_progress_reminder(
+                #     #     task.title,
+                #     #     delegator.username,
+                #     #     days_overdue,
+                #     #     recipient.telegram_id
+                #     # ))
 
-                    # if reminder_text:
-                    #     # Send reminder to recipient
-                    #     from main import bot
-                    #     if bot:
-                    #         try:
-                    #             asyncio.run(bot.send_message(
-                    #             recipient.telegram_id,
-                    #             f"🔔 Напоминание о делегированной задаче:\n\n{reminder_text}\n\nЗадача: {task.title}"
-                    #         ))
-                    #         logger.info(f"Sent overdue reminder for task {task.id} to @{recipient.username}")
-                    #         except Exception as e:
-                    #             logger.error(f"Failed to send reminder to recipient: {e}")
+                #     # if reminder_text:
+                #     #     # Send reminder to recipient
+                #     #     from main import bot
+                #     #     if bot:
+                #     #         try:
+                #     #             asyncio.run(bot.send_message(
+                #     #         recipient.telegram_id,
+                #     #         f"🔔 Напоминание о делегированной задаче:\n\n{reminder_text}\n\nЗадача: {task.title}"
+                #     #     ))
+                #     #         logger.info(f"Sent overdue reminder for task {task.id} to @{recipient.username}")
+                #     #         except Exception as e:
+                #     #             logger.error(f"Failed to send reminder to recipient: {e}")
 
-                    # Notify delegator about overdue task
-                    try:
-                        asyncio.run(bot.send_message(
-                            delegator.telegram_id,
-                                f"⚠️ Делегированная задача просрочена!\n\n"
-                                f"Задача: {task.title}\n"
-                                f"Исполнитель: @{recipient.username}\n"
-                                f"Просрочена на: {days_overdue} дней\n\n"
-                                f"Рекомендую связаться с исполнителем для уточнения статуса."
-                            ))
-                        logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
-                    except Exception as e:
-                        logger.error(f"Failed to notify delegator: {e}")
+                #     # # Notify delegator about overdue task
+                #     # try:
+                #     #     asyncio.run(bot.send_message(
+                #     #         delegator.telegram_id,
+                #     #             f"⚠️ Делегированная задача просрочена!\n\n"
+                #     #             f"Задача: {task.title}\n"
+                #     #             f"Исполнитель: @{recipient.username}\n"
+                #     #             f"Просрочена на: {days_overdue} дней\n\n"
+                #     #             f"Рекомендую связаться с исполнителем для уточнения статуса."
+                #     #         ))
+                #     #     logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
+                #     # except Exception as e:
+                #     #     logger.error(f"Failed to notify delegator: {e}")
+
+                # End of task processing
+                pass
 
             except Exception as e:
                 logger.error(f"Error processing overdue task {task.id}: {e}")
@@ -2545,8 +2550,9 @@ def brainstorm_ideas(topic=None, num_ideas=5, user_id=None, session=None):
 2. Фитнес-трекер - Разработать мобильное приложение для отслеживания прогресса тренировок"""
 
         try:
+            import asyncio
             from .chat import chat_with_ai
-            ideas = asyncio.run(chat_with_ai(user_id, prompt, max_tokens=1000))
+            ideas = asyncio.run(chat_with_ai(user_id, prompt))
             result = f"💡 Идеи для темы '{topic}':\n\n{ideas}"
             
             if close_session:
@@ -2664,7 +2670,7 @@ def get_task_details(task_id=None, user_id=None, session=None):
             session.close()
         return f"Ошибка при получении деталей задачи: {str(e)}"
 
-def get_delegation_progress(user_id=None, session=None):
+def get_all_delegation_progress(user_id=None, session=None):
     """Get progress status of all delegated tasks for the user"""
     if session is None:
         session = Session()
@@ -2819,7 +2825,7 @@ def suggest_alternatives(task_id=None, reason=None, user_id=None, session=None):
         return f"Ошибка при генерации альтернатив: {str(e)}"
 
 
-def delegate_task(title, description, reminder_time, delegated_to_username, delegation_details="", user_id=None, session=None):
+def delegate_task_with_session(title, description, reminder_time, delegated_to_username, delegation_details="", user_id=None, session=None):
     """Delegate a task to another user"""
     logger.info(f"[DELEGATE_TASK] Called with title='{title}', delegated_to='{delegated_to_username}', user_id={user_id}")
     
@@ -2925,7 +2931,7 @@ def delegate_task(title, description, reminder_time, delegated_to_username, dele
     return f"Задача '{title}' делегирована пользователю @{delegated_username}"
 
 
-def edit_task(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None, session=None):
+def edit_task_with_session(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None, session=None):
     """Edit an existing task"""
     logger.info(f"[EDIT_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")
     
@@ -3322,7 +3328,7 @@ async def update_profile(user_id: int, city: str = None, interests: str = None, 
             session.close()
 
 
-async def suggest_alternatives(task_title: str, reason: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def suggest_alternatives_async(task_title: str, reason: str, user_id: int = None, session=None, close_session: bool = True) -> str:
     """
     Предложить альтернативы при проблемах с задачей.
 
@@ -3414,7 +3420,7 @@ async def suggest_alternatives(task_title: str, reason: str, user_id: int = None
             session.close()
 
 
-async def update_user_memory(memory_type: str, content: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def update_user_memory_async(memory_type: str, content: str, user_id: int = None, session=None, close_session: bool = True) -> str:
     """
     Сохранить информацию в память пользователя.
 
@@ -3469,7 +3475,7 @@ async def update_user_memory(memory_type: str, content: str, user_id: int = None
             session.close()
 
 
-async def suggest_trends_and_opportunities(focus_area: str, num_suggestions: int = 3, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def suggest_trends_and_opportunities_async(focus_area: str, num_suggestions: int = 3, user_id: int = None, session=None, close_session: bool = True) -> str:
     """
     Предложить тренды и возможности в определенной области.
 
@@ -3571,7 +3577,7 @@ async def suggest_trends_and_opportunities(focus_area: str, num_suggestions: int
             session.close()
 
 
-async def brainstorm_ideas(topic: str, context: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def brainstorm_ideas_async(topic: str, context: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
     """
     Мозговой штурм идей по теме.
 
@@ -3748,7 +3754,7 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
             session.close()
 
 
-async def get_task_details(task_title: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def get_task_details_async(task_title: str, user_id: int = None, session=None, close_session: bool = True) -> str:
     """Показать детали конкретной задачи"""
     logger.info(f"[GET_TASK_DETAILS] Called with task_title='{task_title}', user_id={user_id}")
     
