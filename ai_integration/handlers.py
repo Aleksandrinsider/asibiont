@@ -5,9 +5,9 @@ import json
 import re
 from datetime import datetime, timezone, timedelta
 import pytz
-from models import Session, Task, User, UserProfile, Interaction, Subscription, SubscriptionTier
+from models import Session, Task, User, UserProfile, SubscriptionTier
 from sqlalchemy import or_, and_, func
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from config import
 
 from .memory import encrypt_data, decrypt_data
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
@@ -1356,11 +1356,6 @@ def list_tasks(user_id=None, session=None, include_completed=False):
             for t in active_tasks
             if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() == user_username_lower
         ]
-        delegated_by_me = [
-            t
-            for t in active_tasks
-            if t.delegated_to_username and user_username_lower and t.delegated_to_username.lower() != user_username_lower
-        ]
         my_tasks = [t for t in active_tasks if not t.delegated_to_username]
 
         # Determine user timezone
@@ -1784,20 +1779,16 @@ def get_partners_list(user_id=None, session=None):
                     match_reasons.append(f"company: {profile.company}")
 
         # ВАЖНО: Всегда показывать избранные и заблокированные контакты
-        is_favorite = False
-        is_blocked = False
         
         if user_profile.favorite_contacts:
             favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
             if profile_user.username and profile_user.username.replace('@', '').lower() in favorite_usernames:
-                is_favorite = True
                 has_match = True  # Принудительно показываем избранных
                 match_reasons.append("favorite contact")
                 
         if user_profile.blocked_contacts:
             blocked_usernames = [u.strip().lower().replace('@', '') for u in user_profile.blocked_contacts.split(',')]
             if profile_user.username and profile_user.username.replace('@', '').lower() in blocked_usernames:
-                is_blocked = True
                 has_match = True  # Принудительно показываем заблокированных
                 match_reasons.append("blocked contact")
 
@@ -2245,13 +2236,7 @@ def check_delegation_deadlines():
 
         for task in overdue_tasks:
             try:
-                # Calculate days overdue
-                days_overdue = (current_time - task.reminder_time).days
-
                 # Get delegator and recipient info
-                delegator = session.query(User).filter_by(id=task.user_id).first()
-                recipient = session.query(User).filter(User.username.ilike(task.delegated_to_username)).first()
-
                 # Reminder functionality disabled - function doesn't exist
                 # if delegator and recipient:
                 #     # Generate AI-powered reminder - DISABLED: function doesn't exist
@@ -2565,7 +2550,7 @@ def brainstorm_ideas(topic=None, num_ideas=5, user_id=None, session=None):
                 session.close()
             return f"Не удалось сгенерировать идеи для темы '{topic}'. Попробуйте позже."
 
-    except Exception as e:
+    except Exception:
         if close_session:
             session.close()
 def get_task_details(task_id=None, user_id=None, session=None):
@@ -3183,7 +3168,6 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
         available_trends = trends_data[focus_area]
 
         # Персонализируем на основе профиля
-        personalized_suggestions = []
         user_interests = []
         user_skills = []
 

@@ -1661,9 +1661,6 @@ async def dashboard_handler(request):
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
             
-            # Get session for admin check
-            session_req = await get_session(request)
-
             # Проверить подписку
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
 
@@ -3604,7 +3601,6 @@ async def api_partners_handler(request):
                                 favorite_tier = SubscriptionTier.LIGHT
 
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
-                            favorite_tier_str = favorite_tier.value if hasattr(favorite_tier, 'value') else str(favorite_tier).lower()
 
                             # Избранные контакты всегда доступны независимо от тарифа
                             can_access = True
@@ -4893,12 +4889,9 @@ async def api_update_profile_handler(request):
         city = data.get('city')
         company = data.get('company')
         position = data.get('position')
-        bio = data.get('bio')
         skills = data.get('skills')
         interests = data.get('interests')
         goals = data.get('goals')
-        languages = data.get('languages')
-        timezone = data.get('timezone')
 
         session_db = Session()
         try:
@@ -5418,7 +5411,6 @@ async def delete_comment_handler(request):
             return web.json_response({'error': 'Forbidden'}, status=403)
 
         # Delete the comment - expunge first to avoid relationship issues
-        post_id = comment.post_id
         db_session.expunge(comment)
         db_session.query(Comment).filter_by(id=comment_id).delete()
         db_session.commit()
