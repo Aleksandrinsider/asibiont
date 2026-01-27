@@ -2045,157 +2045,6 @@ def find_partners(user_id=None, session=None):
     return response
 
 
-def update_profile(
-    skills=None,
-    interests=None,
-    goals=None,
-    city=None,
-    current_plans=None,
-    timezone=None,
-    company=None,
-    position=None,
-    bio=None,
-    languages=None,
-    user_id=None,
-    session=None,
-):
-    """Update user profile"""
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"[UPDATE_PROFILE] Called with: skills={skills}, interests={interests}, goals={goals}, city={city}, user_id={user_id}")
-    
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        user = User(telegram_id=user_id)
-        session.add(user)
-        session.commit()
-
-    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-    if not profile:
-        profile = UserProfile(user_id=user.id)
-        session.add(profile)
-
-    updates_made = []
-
-    def update_list_field(field, value, field_name):
-        logger.info(f"[UPDATE_LIST_FIELD] field_name={field_name}, field='{field}', value='{value}', type(value)={type(value)}")
-        if value is None:
-            logger.info(f"[UPDATE_LIST_FIELD] value is None, returning field unchanged")
-            return field, None, False
-        if value == "":
-            logger.info(f"[UPDATE_LIST_FIELD] value is empty string, clearing {field_name}")
-            return None, f"cleared_{field_name}", False
-
-        current = set((field or "").split(", ")) - {""}
-        logger.info(f"[UPDATE_LIST_FIELD] current before update: {current}")
-        action = None
-
-        if value.startswith("только "):
-            current = set()
-            value = value[7:].strip()
-            new_items_list = [item.strip() for item in value.split(",") if item.strip()]
-            for item in new_items_list:
-                current.add(item)
-            if new_items_list:
-                action = f"cleared_and_added_{field_name}:{', '.join(new_items_list)}"
-        elif value.startswith("+"):
-            new_item = value[1:].strip()
-            if new_item:
-                current.add(new_item)
-                action = f"added_{field_name}:{new_item}"
-        elif value.startswith("-"):
-            remove_item = value[1:].strip()
-            if remove_item in current:
-                current.discard(remove_item)
-                action = f"removed_{field_name}:{remove_item}"
-        else:
-            new_items_list = [item.strip() for item in value.split(",") if item.strip()]
-            logger.info(f"[UPDATE_LIST_FIELD] new_items_list: {new_items_list}")
-            for item in new_items_list:
-                if item not in current:
-                    current.add(item)
-            if new_items_list:
-                action = f"added_{field_name}:{', '.join(new_items_list)}"
-
-        result = ", ".join(sorted(current)) if current else None
-        logger.info(f"[UPDATE_LIST_FIELD] result: '{result}', action: {action}")
-        return result, action, False
-
-    if skills is not None:
-        new_value, action, _ = update_list_field(profile.skills, skills, "skills")
-        profile.skills = new_value
-        if action:
-            updates_made.append(action)
-
-    if interests is not None:
-        old_interests = profile.interests
-        new_value, action, _ = update_list_field(profile.interests, interests, "interests")
-        profile.interests = new_value
-        logger.info(f"[UPDATE_PROFILE] Interests updated: old='{old_interests}', new='{new_value}', action={action}, input={interests}")
-        if action:
-            updates_made.append(action)
-
-    if goals is not None:
-        new_value, action, _ = update_list_field(profile.goals, goals, "goals")
-        profile.goals = new_value
-        if action:
-            updates_made.append(action)
-
-    if city is not None:
-        old_city = profile.city
-        # Не сохраняем пустые строки и строки из пробелов
-        if city and city.strip():
-            profile.city = city.strip()
-        else:
-            profile.city = None
-        logger.info(f"[UPDATE_PROFILE] City updated: old='{old_city}', new='{profile.city}', input='{city}'")
-        updates_made.append(f"changed_city:{old_city}->{profile.city if profile.city else 'cleared'}")
-
-    if current_plans:
-        profile.current_plans = current_plans
-        updates_made.append("updated_plans")
-
-    if hasattr(profile, "company") and company is not None:
-        old_company = profile.company
-        profile.company = company.strip() if company and company.strip() else None
-        updates_made.append(f"changed_company:{old_company}->{profile.company if profile.company else 'cleared'}")
-
-    if hasattr(profile, "position") and position is not None:
-        old_position = profile.position
-        profile.position = position.strip() if position and position.strip() else None
-        updates_made.append(f"changed_position:{old_position}->{profile.position if profile.position else 'cleared'}")
-
-    if hasattr(profile, "bio") and bio is not None:
-        old_bio = profile.bio
-        profile.bio = bio.strip() if bio and bio.strip() else None
-        updates_made.append(f"changed_bio:{old_bio}->{profile.bio if profile.bio else 'cleared'}")
-
-    if hasattr(profile, "languages") and languages is not None:
-        old_languages = profile.languages
-        profile.languages = languages.strip() if languages and languages.strip() else None
-        updates_made.append(f"changed_languages:{old_languages}->{profile.languages if profile.languages else 'cleared'}")
-
-    if timezone:
-        user.timezone = timezone
-        updates_made.append(f"updated_timezone:{timezone}")
-
-    session.commit()
-
-    if close_session:
-        session.close()
-
-    if updates_made:
-        return f"Профиль обновлен: {'; '.join(updates_made)}"
-    else:
-        return "Профиль не изменен."
-
-
 async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
     """Generate personalized delegation notification using AI"""
     import aiohttp
@@ -3584,6 +3433,590 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
             response += f"\nРекомендации адаптированы под твои интересы: {', '.join(user_interests[:3])}"
 
         return response
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def update_profile(user_id: int, city: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, session=None, close_session: bool = True) -> str:
+    """
+    Обновляет профиль пользователя с новыми данными.
+
+    Args:
+        user_id: ID пользователя (telegram_id)
+        city: Город пользователя (опционально)
+        interests: Интересы пользователя (опционально)
+        skills: Навыки пользователя (опционально)
+        goals: Цели пользователя (опционально)
+        company: Компания пользователя (опционально)
+        position: Должность пользователя (опционально)
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Сообщение об успешном обновлении
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Получаем пользователя по telegram_id
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return f"Пользователь с ID {user_id} не найден"
+
+        # Получаем или создаем профиль пользователя
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+
+        # Обновляем поля если они переданы
+        updates = []
+        if city is not None:
+            profile.city = city
+            updates.append(f"город: {city}")
+        if interests is not None:
+            profile.interests = interests
+            updates.append(f"интересы: {interests}")
+        if skills is not None:
+            profile.skills = skills
+            updates.append(f"навыки: {skills}")
+        if goals is not None:
+            profile.goals = goals
+            updates.append(f"цели: {goals}")
+        if company is not None:
+            profile.company = company
+            updates.append(f"компания: {company}")
+        if position is not None:
+            profile.position = position
+            updates.append(f"должность: {position}")
+
+        # Обновляем время последнего обновления
+        profile.updated_at = datetime.utcnow()
+
+        session.commit()
+
+        if updates:
+            return f"Профиль успешно обновлен: {', '.join(updates)}"
+        else:
+            return "Профиль проверен, изменений не требуется"
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Ошибка при обновлении профиля пользователя {user_id}: {e}")
+        raise
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def suggest_alternatives(task_title: str, reason: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+    """
+    Предложить альтернативы при проблемах с задачей.
+
+    Args:
+        task_title: Название проблемной задачи
+        reason: Причина проблемы
+        user_id: ID пользователя (опционально)
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Предложения альтернатив
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Получить профиль пользователя для персонализации
+        profile = None
+        if user_id:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        # Сгенерировать предложения на основе причины проблемы
+        alternatives = []
+
+        if "время" in reason.lower() or "задержка" in reason.lower():
+            alternatives.extend([
+                "Разбить задачу на меньшие подзадачи с отдельными дедлайнами",
+                "Делегировать часть работы коллегам или фрилансерам",
+                "Перенести дедлайн с уведомлением заинтересованных сторон",
+                "Найти более эффективный инструмент или метод выполнения"
+            ])
+
+        elif "ресурсы" in reason.lower() or "деньги" in reason.lower():
+            alternatives.extend([
+                "Найти бесплатные или более дешевые альтернативы",
+                "Обратиться за спонсорством или грантами",
+                "Использовать существующие ресурсы более эффективно",
+                "Отложить задачу до лучших времен"
+            ])
+
+        elif "навыки" in reason.lower() or "знания" in reason.lower():
+            alternatives.extend([
+                "Пройти онлайн-курс или обучение по теме",
+                "Найти ментора или консультанта",
+                "Начать с более простой версии задачи",
+                "Объединиться с кем-то, кто имеет нужные навыки"
+            ])
+
+        else:
+            alternatives.extend([
+                "Проанализировать причину более детально",
+                "Обратиться за советом к экспертам",
+                "Искать похожие кейсы и их решения",
+                "Рассмотреть полную отмену задачи, если она не критична"
+            ])
+
+        # Добавить персонализацию на основе профиля
+        personalized_suggestions = ""
+        if profile and profile.interests:
+            personalized_suggestions = f"\n\nУчитывая твои интересы ({profile.interests}), рекомендую также рассмотреть:"
+
+            if "технологии" in profile.interests.lower() or "программирование" in profile.interests.lower():
+                personalized_suggestions += "\n- Использовать автоматизацию или скрипты для упрощения процесса"
+            elif "бизнес" in profile.interests.lower():
+                personalized_suggestions += "\n- Провести анализ ROI перед продолжением"
+            elif "творчество" in profile.interests.lower():
+                personalized_suggestions += "\n- Взять творческий перерыв для свежих идей"
+
+        response = f"Проблема с задачей '{task_title}': {reason}\n\nПредлагаю следующие альтернативы:\n"
+        for i, alt in enumerate(alternatives[:5], 1):  # Ограничим до 5 предложений
+            response += f"{i}. {alt}\n"
+
+        response += personalized_suggestions
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Ошибка при генерации альтернатив для задачи {task_title}: {e}")
+        return f"Не удалось сгенерировать альтернативы: {e}"
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def update_user_memory(memory_type: str, content: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+    """
+    Сохранить информацию в память пользователя.
+
+    Args:
+        memory_type: Тип информации (preference, project, contact, etc.)
+        content: Что запомнить
+        user_id: ID пользователя (опционально)
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Сообщение об успешном сохранении
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        if not user_id:
+            return "Необходимо указать ID пользователя"
+
+        # Получить пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        # Обновить память пользователя
+        current_memory = user.memory or ""
+
+        # Добавить новую информацию с типом
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        new_memory_entry = f"[{timestamp}] {memory_type.upper()}: {content}"
+
+        if current_memory:
+            user.memory = current_memory + "\n" + new_memory_entry
+        else:
+            user.memory = new_memory_entry
+
+        session.commit()
+
+        return f"✅ Запомнил: {memory_type} - {content}"
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Ошибка при сохранении памяти пользователя {user_id}: {e}")
+        return f"❌ Ошибка при сохранении: {e}"
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def suggest_trends_and_opportunities(focus_area: str, num_suggestions: int = 3, user_id: int = None, session=None, close_session: bool = True) -> str:
+    """
+    Предложить тренды и возможности в определенной области.
+
+    Args:
+        focus_area: Область интереса (career, technology, business, etc.)
+        num_suggestions: Количество предложений
+        user_id: ID пользователя (опционально)
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Предложения трендов и возможностей
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Получить профиль пользователя для персонализации
+        profile = None
+        if user_id:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        # Генерировать тренды на основе области
+        trends = []
+
+        if focus_area.lower() in ["технологии", "technology", "it", "программирование"]:
+            trends = [
+                "Искусственный интеллект и машинное обучение - особенно в автоматизации рутинных задач",
+                "Веб3 и блокчейн технологии - децентрализованные приложения и NFT",
+                "Кибербезопасность - растущий спрос на специалистов по защите данных",
+                "Облачные технологии и serverless архитектуры",
+                "Интернет вещей (IoT) and edge computing",
+                "Низко-кодовая/без-кодовая разработка для быстрого прототипирования"
+            ]
+
+        elif focus_area.lower() in ["бизнес", "business", "предпринимательство"]:
+            trends = [
+                "Электронная коммерция и омниканальные продажи",
+                "Устойчивый бизнес и ESG (экология, социальная ответственность, управление)",
+                "Гиг-экономика и фриланс-платформы",
+                "Цифровая трансформация традиционных отраслей",
+                "Персонализация продуктов и услуг с помощью данных",
+                "Социальное предпринимательство и impact-инвестиции"
+            ]
+
+        elif focus_area.lower() in ["карьера", "career", "работа"]:
+            trends = [
+                "Удаленная работа и гибридные форматы",
+                "Непрерывное обучение и переквалификация",
+                "Фриланс и портфельная карьера",
+                "Софт-скиллы: эмоциональный интеллект, адаптивность, креативность",
+                "Международная мобильность и remote-first компании",
+                "Этический ИИ и ответственное развитие технологий"
+            ]
+
+        elif focus_area.lower() in ["покер", "poker", "игры"]:
+            trends = [
+                "Онлайн-покер с мобильными приложениями для коротких сессий",
+                "ИИ-ассистенты для анализа раздач и стратегий",
+                "Живые турниры с элементами развлечений",
+                "Образовательный контент: стримы, подкасты, курсы",
+                "Благотворительные турниры и социальная ответственность",
+                "Кроссоверы с другими играми и развлечениями"
+            ]
+
+        else:
+            trends = [
+                f"Цифровая трансформация в области {focus_area}",
+                f"Устойчивость и экологичность в {focus_area}",
+                f"Персонализация и клиентский опыт в {focus_area}",
+                f"Автоматизация и ИИ в {focus_area}",
+                f"Глобализация и международное сотрудничество в {focus_area}"
+            ]
+
+        # Ограничить количество предложений
+        selected_trends = trends[:num_suggestions]
+
+        response = f"🔥 Тренды и возможности в области '{focus_area}':\n\n"
+        for i, trend in enumerate(selected_trends, 1):
+            response += f"{i}. {trend}\n"
+
+        # Добавить персонализацию
+        if profile and profile.interests:
+            response += f"\n💡 Учитывая твои интересы ({profile.interests}), рекомендую обратить внимание на пересечения с этой областью."
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Ошибка при генерации трендов для области {focus_area}: {e}")
+        return f"Не удалось сгенерировать тренды: {e}"
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def brainstorm_ideas(topic: str, context: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
+    """
+    Мозговой штурм идей по теме.
+
+    Args:
+        topic: Тема для мозгового штурма
+        context: Дополнительный контекст
+        user_id: ID пользователя (опционально)
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Список идей по теме
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Получить профиль пользователя для персонализации
+        profile = None
+        if user_id:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        # Генерировать идеи на основе темы и контекста
+        ideas = []
+
+        # Общие идеи для мозгового штурма
+        base_ideas = [
+            "Комбинировать существующие подходы новыми способами",
+            "Посмотреть на проблему с другой стороны или перспективы",
+            "Упростить сложное до основных элементов",
+            "Добавить элемент неожиданности или креативности",
+            "Использовать аналогии из других областей",
+            "Обратиться к первоисточникам и фундаментальным принципам",
+            "Рассмотреть крайние случаи и сценарии",
+            "Привлечь разные точки зрения и мнения"
+        ]
+
+        # Специфические идеи в зависимости от темы
+        if "бизнес" in topic.lower() or "стартап" in topic.lower():
+            ideas.extend([
+                "Создать MVP и протестировать на небольшой аудитории",
+                "Найти нишевый рынок с меньшей конкуренцией",
+                "Партнерство с существующими игроками рынка",
+                "Фокус на проблеме, а не на решении",
+                "Бутстрэппинг вместо привлечения инвестиций"
+            ])
+
+        elif "технологии" in topic.lower() or "продукт" in topic.lower():
+            ideas.extend([
+                "Открытый исходный код для привлечения контрибьюторов",
+                "API-first подход для интеграций",
+                "Модульная архитектура для гибкости",
+                "Фокус на UX/UI для лучшего пользовательского опыта",
+                "Автоматизация рутинных процессов"
+            ])
+
+        elif "маркетинг" in topic.lower() or "продвижение" in topic.lower():
+            ideas.extend([
+                "Контент-маркетинг с ценным и полезным контентом",
+                "Сторителлинг и эмоциональная связь с аудиторией",
+                "Вовлечение сообщества и пользовательского контента",
+                "Персонализация коммуникаций",
+                "Омниканальность - интеграция всех каналов"
+            ])
+
+        else:
+            ideas.extend(base_ideas)
+
+        # Добавить контекст, если он есть
+        if context:
+            ideas.append(f"Учитывая контекст '{context}': адаптировать идеи под конкретные условия")
+
+        # Ограничить до 8 идей
+        selected_ideas = ideas[:8]
+
+        response = f"🧠 Мозговой штурм по теме '{topic}'"
+        if context:
+            response += f" (контекст: {context})"
+        response += ":\n\n"
+
+        for i, idea in enumerate(selected_ideas, 1):
+            response += f"{i}. {idea}\n"
+
+        # Добавить персонализацию
+        if profile and profile.interests:
+            response += f"\n💡 Учитывая твои интересы ({profile.interests}), некоторые идеи могут быть особенно актуальными."
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Ошибка при мозговом штурме по теме {topic}: {e}")
+        return f"Не удалось сгенерировать идеи: {e}"
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def delete_task(task_title: str, reason: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
+    """
+    Удалить задачу по названию.
+
+    Args:
+        task_title: Название задачи для удаления
+        reason: Причина удаления (опционально)
+        user_id: ID пользователя (опционально)
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Сообщение об успешном удалении
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        if not user_id:
+            return "Необходимо указать ID пользователя"
+
+        # Получить пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        # Найти задачу по названию
+        task = session.query(Task).filter_by(
+            user_id=user.id,
+            title=task_title
+        ).first()
+
+        if not task:
+            return f"Задача '{task_title}' не найдена"
+
+        # Удалить задачу
+        session.delete(task)
+        session.commit()
+
+        response = f"✅ Задача '{task_title}' удалена"
+        if reason:
+            response += f" (причина: {reason})"
+
+        return response
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Ошибка при удалении задачи {task_title}: {e}")
+        return f"❌ Ошибка при удалении задачи: {e}"
+
+    finally:
+        if close_session:
+            session.close()
+
+
+async def get_task_details(task_title: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+    """Показать детали конкретной задачи"""
+    logger.info(f"[GET_TASK_DETAILS] Called with task_title='{task_title}', user_id={user_id}")
+    
+    if user_id is None:
+        logger.error("[GET_TASK_DETAILS] user_id is None")
+        return "❌ Ошибка: user_id не может быть None"
+    
+    if not task_title or task_title.strip() == "":
+        logger.error("[GET_TASK_DETAILS] task_title is empty")
+        return "❌ Ошибка: Не указано название задачи"
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "❌ Пользователь не найден."
+
+        # Search by words in title (including delegated tasks)
+        words = task_title.lower().split()
+        logger.info(f"[GET_TASK_DETAILS] Searching for task with title '{task_title}', words: {words}, user_id: {user.id}")
+        
+        # Get all user tasks and delegated tasks
+        user_tasks = session.query(Task).filter(
+            or_(
+                Task.user_id == user.id,
+                and_(
+                    Task.delegated_to_username.ilike((user.username or '').replace('@', '')),
+                    Task.delegation_status == "accepted"
+                )
+            )
+        ).all()
+        
+        # Find task by matching words (case-insensitive)
+        task = None
+        for t in user_tasks:
+            task_title_lower = t.title.lower()
+            if any(word in task_title_lower for word in words):
+                task = t
+                logger.info(f"[GET_TASK_DETAILS] Found matching task: {t.title}")
+                break
+        
+        if not task:
+            return f"❌ Задача с названием '{task_title}' не найдена."
+
+        # Format task details
+        title = task.title
+        description = decrypt_data(task.description) if task.description else "Нет описания"
+        status = task.status
+        created_at = task.created_at.strftime("%d.%m.%Y %H:%M") if task.created_at else "Неизвестно"
+        due_date = task.due_date.strftime("%d.%m.%Y %H:%M") if task.due_date else "Не установлена"
+        reminder_time = task.reminder_time.strftime("%d.%m.%Y %H:%M") if task.reminder_time else "Не установлено"
+        priority = task.priority or "Обычный"
+        category = task.category or "Без категории"
+        
+        # Delegation info
+        delegation_info = ""
+        if task.delegated_to_username:
+            delegation_status = task.delegation_status or "pending"
+            delegation_info = f"\nДелегирована: @{task.delegated_to_username} (статус: {delegation_status})"
+        
+        # Completion info
+        completion_info = ""
+        if task.completed_at:
+            completion_note = decrypt_data(task.completion_note) if task.completion_note else ""
+            completion_info = f"\nВыполнена: {task.completed_at.strftime('%d.%m.%Y %H:%M')}"
+            if completion_note:
+                completion_info += f"\nЗаметка: {completion_note}"
+        
+        details = f"""📋 Детали задачи:
+
+Название: {title}
+Описание: {description}
+Статус: {status}
+Приоритет: {priority}
+Категория: {category}
+Создана: {created_at}
+Срок выполнения: {due_date}
+Напоминание: {reminder_time}{delegation_info}{completion_info}"""
+
+        return details
+
+    except Exception as e:
+        logger.error(f"[GET_TASK_DETAILS] Error: {e}")
+        return f"❌ Ошибка при получении деталей задачи: {e}"
 
     finally:
         if close_session:

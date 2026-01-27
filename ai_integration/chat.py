@@ -1651,7 +1651,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         profile_fill_request = any(phrase in clean_message.lower() for phrase in 
                                   ['заполн', 'давай заполн', 'обнов', 'расскаж о себе'])
         
-        if (has_personal and has_professional) or has_interests or profile_fill_request:
+        # Распознавание обновления профиля (интересы, навыки, цели)
+        profile_update_keywords = [
+            'хочу заняться', 'интересуюсь', 'увлекаюсь', 'люблю', 'нравится',
+            'мне нравится', 'мне интересно', 'мои интересы', 'мои хобби',
+            'занимаюсь', 'изучаю', 'развиваюсь в', 'работаю над'
+        ]
+        has_profile_update = any(phrase in clean_message.lower() for phrase in profile_update_keywords)
+        
+        if (has_personal and has_professional) or has_interests or profile_fill_request or has_profile_update:
             intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
             logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
 

@@ -23,22 +23,29 @@ async def test_chat():
             session.commit()
             print(f"Created test user {user.telegram_id}")
 
-        # Test message
-        message = "да напомни проверить почту"
-        print(f"Testing message: {message}")
+        # Test multiple messages to check conversation history
+        messages = [
+            "привет",
+            "да напомни проверить почту",
+            "я только что проверил почту, все ок",
+            "хочу заняться покером"
+        ]
+        
+        for i, message in enumerate(messages):
+            print(f"\n--- Message {i+1}: {message} ---")
+            
+            # Call chat_with_ai
+            response = await chat_with_ai(
+                message=message,
+                user_id=user.telegram_id,
+                db_session=session
+            )
 
-        # Call chat_with_ai
-        response = await chat_with_ai(
-            message=message,
-            user_id=user.telegram_id,
-            db_session=session
-        )
-
-        print(f"AI Response: {response}")
+            print(f"AI Response: {response}")
 
         # Check tasks after
         tasks = session.query(Task).filter_by(user_id=user.id).all()
-        print(f"User has {len(tasks)} tasks:")
+        print(f"\nUser has {len(tasks)} tasks:")
         for task in tasks:
             print(f"  - {task.title}: {task.reminder_time}")
 
