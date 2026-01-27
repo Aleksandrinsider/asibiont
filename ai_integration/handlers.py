@@ -634,12 +634,11 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             session.close()
         return "Пользователь не найден."
 
-    # Find task by title
+    # Find task by title using ILIKE for flexible search
     if task_title:
-        from sqlalchemy import func
         task = session.query(Task).filter(
             Task.user_id == user.id,
-            func.lower(Task.title).contains(func.lower(task_title))
+            Task.title.ilike(f"%{task_title}%")
         ).first()
     else:
         if close_session:
@@ -650,22 +649,29 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
         try:
             # Parse new time
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+            current_time = datetime.now(user_tz)
             
-            # Support various formats
-            if " " in new_time:  # Full datetime
+            # Try parsing relative time first ("через 2 часа", "завтра в 10:00")
+            from ai_integration.utils import parse_relative_time
+            parsed_relative = parse_relative_time(new_time, current_time)
+            
+            if parsed_relative:
+                # Relative time parsed successfully
+                local_dt = parsed_relative
+                logger.info(f"[RESCHEDULE_TASK] Parsed relative time '{new_time}' to {local_dt}")
+            elif " " in new_time:  # Full datetime
                 local_dt = datetime.strptime(new_time, "%Y-%m-%d %H:%M")
+                local_dt = user_tz.localize(local_dt)
             elif ":" in new_time:  # Time only, assume today
                 time_dt = datetime.strptime(new_time, "%H:%M")
-                now = datetime.now(user_tz)
-                local_dt = now.replace(hour=time_dt.hour, minute=time_dt.minute)
-                if local_dt < now:
+                local_dt = current_time.replace(hour=time_dt.hour, minute=time_dt.minute, second=0, microsecond=0)
+                if local_dt < current_time:
                     local_dt += timedelta(days=1)  # Next day if time has passed
             else:
                 if close_session:
                     session.close()
-                return "Некорректный формат времени. Используйте HH:MM или YYYY-MM-DD HH:MM."
+                return "Некорректный формат времени. Используйте HH:MM, YYYY-MM-DD HH:MM, или относительное время ('через 2 часа', 'завтра в 10:00')."
 
-            local_dt = user_tz.localize(local_dt)
             task.reminder_time = local_dt.astimezone(pytz.UTC)
             session.commit()
 

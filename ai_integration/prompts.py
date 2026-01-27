@@ -42,13 +42,14 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    ⚠️ НЕ ПРОСТО ПИШИ "задача удалена" - ВЫЗЫВАЙ delete_task!
    ⚠️ НЕ ЗАВЕРШАЙ complete_task и НЕ СОЗДАВАЙ add_task!
 
-3. ПЕРЕНОС (если видишь - ОБЯЗАТЕЛЬНО ВЫЗОВИ edit_task):
-   ✓ "Перенеси X" → ВЫЗОВИ edit_task(task_title="X", reminder_time="...")
-   ✓ "Измени время X" → ВЫЗОВИ edit_task(task_title="X", reminder_time="...")
-   ⚠️ ЗАПРЕЩЕНО вызывать list_tasks перед edit_task - делай НАПРЯМУЮ!
-   ⚠️ task_title - это КЛЮЧЕВЫЕ СЛОВА (например, "Перенеси проверить почту" → task_title="почта")
-   ⚠️ Если видишь "перенеси X" - СРАЗУ вызывай edit_task с ключевыми словами из X, НЕ ищи точное название!
-   ⚠️ НЕ ПРОСТО ПИШИ "задача перенесена" - ВЫЗЫВАЙ edit_task!
+3. ПЕРЕНОС (если видишь - ОБЯЗАТЕЛЬНО ВЫЗОВИ reschedule_task):
+   ✓ "Перенеси X на Y" → ВЫЗОВИ reschedule_task(task_title="X", new_time="Y")
+   ✓ "Измени время X на Y" → ВЫЗОВИ reschedule_task(task_title="X", new_time="Y")
+   ⚠️ ИСПОЛЬЗУЙ ТОЛЬКО reschedule_task ДЛЯ ПЕРЕНОСА - НЕ edit_task!
+   ⚠️ ЗАПРЕЩЕНО вызывать list_tasks перед reschedule_task - делай НАПРЯМУЮ!
+   ⚠️ task_title - это КЛЮЧЕВЫЕ СЛОВА ("Перенеси почту" → task_title="почта", "перенеси встречу" → task_title="встреч")
+   ⚠️ НЕ ищи точное название - используй ключевые слова напрямую!
+   ⚠️ НЕ ПРОСТО ПИШИ "задача перенесена" - ВЫЗЫВАЙ reschedule_task!
    ⚠️ НЕ СОЗДАВАЙ add_task при переносе!
 
 4. ПРОСМОТР (если видишь - ОБЯЗАТЕЛЬНО ВЫЗОВИ list_tasks):
@@ -113,8 +114,12 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
        2) ОТВЕТ: "Задача делегирована Ивану."
    
    Пользователь: "Перенеси встречу на завтра в 10:00"
-   Ты: 1) ВЫЗОВ edit_task(task_title="встреча", reminder_time="завтра в 10:00") через tool_call
+   Ты: 1) ВЫЗОВ reschedule_task(task_title="встречу", new_time="завтра в 10:00") через tool_call
        2) ОТВЕТ: "Встреча перенесена на завтра в 10:00."
+   
+   Пользователь: "Перенеси молоко на 15:30"
+   Ты: 1) ВЫЗОВ reschedule_task(task_title="молоко", new_time="15:30") через tool_call
+       2) ОТВЕТ: "Задача перенесена на 15:30."
 
 6. НЕ ГАЛЛЮЦИНИРУЙ:
    • ТОЛЬКО информация из профиля/памяти

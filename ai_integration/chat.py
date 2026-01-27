@@ -1935,8 +1935,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             elif any(kw in clean_message.lower() for kw in ["напомни", "через", "нужно", "надо"]):
                 logger.info(f"[TOOL HINT] CREATE detected: {clean_message[:50]}")
             elif any(kw in clean_message.lower() for kw in ["перенеси", "измени время", "обнови"]):
-                logger.info(f"[TOOL HINT] EDIT detected: {clean_message[:50]} - FORCING tool call")
-                tool_choice = "required"  # ФОРСИРУЕМ вызов функции для переноса
+                logger.info(f"[TOOL HINT] RESCHEDULE detected: {clean_message[:50]} - FORCING tool call")
+                tool_choice = "required"  # ФОРСИРУЕМ вызов reschedule_task для переноса
             
             logger.info(f"[TOOL CHOICE] {tool_choice.upper()} for: {clean_message[:50]}")
 
