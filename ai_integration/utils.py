@@ -1173,8 +1173,11 @@ def post_process_tool_calls(intent, tool_calls, message):
             logger.warning(f"Failed to parse tool call arguments: {e}")
             args_dict = {}
 
-        # 1. ЭМОЦИИ: если intent эмоция, но нет list_tasks - добавляем
-        if intent["type"].startswith("emotion_") and function_name != "list_tasks":
+        # 1. ЭМОЦИИ: если intent эмоция, но нет list_tasks - добавляем ТОЛЬКО для значимых эмоций
+        # НЕ добавляем для простых приветствий типа "привет"
+        significant_emotions = ['positive', 'negative', 'excited', 'sad', 'angry', 'worried', 'happy', 'frustrated']
+        is_significant_emotion = any(emotion in intent["type"] for emotion in significant_emotions)
+        if intent["type"].startswith("emotion_") and is_significant_emotion and function_name != "list_tasks":
             corrected_calls.append({
                 "index": len(corrected_calls),
                 "id": f"call_corrected_{len(corrected_calls)}",
