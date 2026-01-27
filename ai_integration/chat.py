@@ -1910,13 +1910,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and 'ASK_' not in original_message and 'ASK_' not in original_message
 
         messages = [{"role": "system", "content": system_prompt}]
-        if context and isinstance(context, list):
-            for item in context:
-                if "user" in item:
-                    messages.append({"role": "user", "content": item["user"]})
-                if "agent" in item:
-                    messages.append({"role": "assistant", "content": item["agent"]})
-        # Добавляем текущее сообщение БЕЗ дополнительного контекста - AI сам умный
+        # Используем conversation_context для истории разговора вместо context параметра
+        if conversation_context and isinstance(conversation_context, list):
+            # Берем последние 6 сообщений для контекста (3 пары вопрос-ответ)
+            recent_context = conversation_context[-6:] if len(conversation_context) > 6 else conversation_context
+            for item in recent_context:
+                if item.get("role") == "user":
+                    messages.append({"role": "user", "content": item["content"]})
+                elif item.get("role") == "assistant":
+                    messages.append({"role": "assistant", "content": item["content"]})
+        # Добавляем текущее сообщение
         messages.append({"role": "user", "content": message})
 
         # Используем intent classification вместо hardcoded проверок
@@ -2527,6 +2530,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if not final_content or len(final_content.strip()) < 5:
             logger.warning("[FINAL FALLBACK] Content empty after processing, using fallback")
             final_content = "Хорошо, понял. Продолжим работу!"
+
+        # Сохраняем ответ AI в контекст разговора
+        if user:
+            conversation_context.append({
+                'role': 'assistant',
+                'content': final_content,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
+            # Ограничиваем контекст до последних 20 сообщений
+            if len(conversation_context) > 20:
+                conversation_context = conversation_context[-20:]
+            try:
+                user.conversation_context = json.dumps(conversation_context)
+                db_session.commit()
+            except Exception as e:
+                logger.warning(f"Failed to save conversation context: {e}")
 
         return final_content
 
