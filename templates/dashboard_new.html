@@ -1737,17 +1737,11 @@
                 return;
             }
 
-            // Add user message immediately
-            if (message) {
-                addMessage(message, 'user');
-            }
-            if (file) {
-                addMessage(`📎 ${file.name}`, 'user');
-            }
+            // Clear input first
             input.value = '';
             fileInput.value = '';
 
-            // Show loading animation after user message
+            // Show loading animation
             showTypingIndicator();
 
             try {
@@ -1771,6 +1765,14 @@
                 if (!await checkAuth(response)) return;
                 const data = await response.json();
                 if (response.ok) {
+                    // Add user message
+                    if (message) {
+                        addMessage(message, 'user');
+                    }
+                    if (file) {
+                        addMessage(`📎 ${file.name}`, 'user');
+                    }
+                    
                     addMessage(data.response, 'ai');
                     
                     // Сразу помечаем сообщения как отображенные (используем временный ID)

@@ -322,23 +322,12 @@ async def chat_handler(message: Message):
 async def process_text_message(user_id, text, message, state):
     message_id = message.message_id
 
-    # Проверка на дублированные сообщения
+    # Проверка на пустые сообщения
     if not text or text.strip() == "":
-        logger.info(f"[DUPLICATE] Empty message from user {user_id}, ignoring")
+        logger.info(f"Empty message from user {user_id}, ignoring")
         return
 
-    # Простая защита от дублированных сообщений (если текст такой же в течение 5 секунд)
-    import time
-    current_time = time.time()
-    if hasattr(process_text_message, 'last_messages'):
-        last_msg = process_text_message.last_messages.get(user_id)
-        if last_msg and last_msg['text'] == text.strip() and (current_time - last_msg['time']) < 5:
-            logger.info(f"[DUPLICATE] Duplicate message from user {user_id}: '{text[:30]}...', ignoring")
-            return
-    else:
-        process_text_message.last_messages = {}
-
-    process_text_message.last_messages[user_id] = {'text': text.strip(), 'time': current_time}
+    # Duplicate protection removed
 
     try:
         session = Session()

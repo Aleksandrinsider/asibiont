@@ -1359,28 +1359,6 @@ def save_context_to_db(user_id, user_message, ai_message):
         session.close()
 
 
-def check_duplicate_message(user_id, message_text):
-    """Check for duplicate message in last 30 seconds"""
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return False
-        
-        # Check if same message exists in last 30 seconds
-        threshold = datetime.now(dt_timezone.utc) - timedelta(seconds=30)
-        duplicate = session.query(Interaction).filter(
-            Interaction.user_id == user.id,
-            Interaction.message_type == 'user',
-            Interaction.content == message_text,
-            Interaction.created_at > threshold
-        ).first()
-        
-        return duplicate is not None
-    finally:
-        session.close()
-
-
 async def get_timezone_from_ip(ip_address):
     """Определяет timezone по IP адресу через ipapi.co"""
     # Маппинг английских названий городов на русские
@@ -2233,12 +2211,6 @@ async def chat_handler(request):
         context = get_context_from_db(user_id, limit=10)
         logger.info(f"Loaded context with {len(context)} message pairs from DB")
 
-        # Check for duplicate via DB (web chat duplicate protection)
-        is_duplicate = check_duplicate_message(user_id, message)
-        if is_duplicate:
-            logger.warning(f"[WEB DUPLICATE] Message from user {user_id} IGNORED (already processed): '{message[:100]}...'")
-            return web.json_response({'duplicate': True, 'message': 'Message already processed'})
-        
         logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
 
         session_db = Session()
@@ -2298,12 +2270,7 @@ async def api_send_message_handler(request):
         logger.info(f"[API_SEND_MESSAGE] Message received from user {user_id}: '{message}'")
 
         # Check for duplicate first
-        if check_duplicate_message(user_id, message):
-            logger.warning(f"[API_SEND_MESSAGE] DUPLICATE detected for user {user_id}, message: '{message[:50]}...'")
-            return web.json_response({
-                'error': 'duplicate',
-                'message': 'Это сообщение уже обрабатывается'
-            }, status=409)
+        # Duplicate check removed
 
         # Load context from DB
         context = get_context_from_db(user_id, limit=20)
@@ -2344,11 +2311,7 @@ async def api_send_message_handler(request):
                 }, status=403)
 
             # Check for duplicate message before saving
-            if check_duplicate_message(user_id, message):
-                logger.warning(f"[API_SEND_MESSAGE] Duplicate message detected for user {user_id}, skipping save to DB")
-            else:
-                # Save context to DB
-                save_context_to_db(user_id, message, response)
+            # Duplicate check removed - always save
                 logger.info(f"[API_SEND_MESSAGE] Context saved to DB: user_msg='{message[:50]}...', ai_response='{response[:50]}...'")
         finally:
             session_db.close()
