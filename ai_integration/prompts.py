@@ -54,7 +54,14 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    ⚠️ НЕ ПРОСТО ПИШИ список задач - ВЫЗЫВАЙ list_tasks!
    ⚠️ НЕ СОЗДАВАЙ, НЕ ИЗМЕНЯЙ, НЕ УДАЛЯЙ!
 
-5. СОЗДАНИЕ (ТОЛЬКО если есть "напомни/создай/добавь" + время):
+5. МАССОВЫЕ ОПЕРАЦИИ (если видишь "все задачи"):
+   ✓ "Удали все задачи" → ВЫЗОВИ delete_all_tasks()
+   ✓ "Закрой все задачи" → ВЫЗОВИ delete_all_tasks()
+   ✓ "Очисти все задачи" → ВЫЗОВИ delete_all_tasks()
+   ✓ "Убери все задачи" → ВЫЗОВИ delete_all_tasks()
+   ⚠️ МАССОВЫЕ операции = delete_all_tasks, НЕ delete_task!
+
+6. СОЗДАНИЕ (ТОЛЬКО если есть "напомни/создай/добавь" + время):
    ✓ "Напомни X через 5 минут" → ВЫЗОВИ add_task(title="X", reminder_time="через 5 минут")
    ✓ "Создай задачу X завтра в 10:00" → ВЫЗОВИ add_task(title="X", reminder_time="завтра в 10:00")
    ⚠️ "Готово X" → НЕ create! Это complete_task!
@@ -73,6 +80,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    Пользователь: "Удали задачу подготовить отчет"
    Ты: 1) ВЫЗОВ delete_task(task_title="подготовить отчет") через tool_call
        2) ОТВЕТ: "Задача удалена из списка."
+   
+   Пользователь: "Закрой все мои задачи"
+   Ты: 1) ВЫЗОВ delete_all_tasks() через tool_call
+       2) ОТВЕТ: "Все задачи удалены из списка."
 
 6. НЕ ГАЛЛЮЦИНИРУЙ:
    • ТОЛЬКО информация из профиля/памяти
@@ -102,6 +113,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 add_task(title, description, reminder_time) - Создать задачу
 complete_task(task_title) - Завершить задачу
 delete_task(task_title) - Удалить задачу
+delete_all_tasks() - Удалить ВСЕ задачи (массовая операция)
 list_tasks() - Показать все задачи
 edit_task(task_id, title, reminder_time) - Изменить задачу
 delegate_task(title, delegated_to_username, reminder_time) - Делегировать

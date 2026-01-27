@@ -214,8 +214,19 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     disallowed_tools = []  # Инструменты, которые точно НЕ должны вызываться
     
     # ПРИОРИТЕТНАЯ детекция: проверяем сначала самые специфичные паттерны
+    # 0. МАССОВЫЕ ОПЕРАЦИИ (наивысший приоритет)
+    if any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']):
+        if any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'закрой', 'удалить']):
+            expected_tools = ['delete_all_tasks']
+            disallowed_tools = ['add_task', 'delete_task', 'complete_task', 'edit_task']
+        elif any(kw in message_lower for kw in ['готово', 'завершил', 'выполнил', 'сделал', 'завершить', 'закончил']):
+            expected_tools = ['complete_all_tasks', 'delete_all_tasks']  # Может быть любой массовой операцией
+            disallowed_tools = ['add_task', 'delete_task', 'complete_task', 'edit_task']
+        else:
+            expected_tools = ['list_tasks']
+            disallowed_tools = ['add_task', 'delete_task', 'complete_task', 'edit_task']
     # 1. ЗАВЕРШЕНИЕ (высокий приоритет)
-    if any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'выполнена']):
+    elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'выполнена']):
         expected_tools = ['complete_task']
         disallowed_tools = ['add_task', 'delete_task', 'edit_task']  # Не создавать/удалять при завершении
     # 2. УДАЛЕНИЕ (высокий приоритет)
@@ -1715,7 +1726,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         intent = {"type": "conversation", "confidence": 0.5, "params": {}}
         
         # Определяем intent для основных команд
-        if any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что у меня']):
+        # Сначала проверяем массовые операции
+        if any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']):
+            if any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'закрой', 'удалить']):
+                intent = {"type": "delete_all_tasks", "confidence": 0.95, "params": {}}
+            elif any(kw in message_lower for kw in ['готово', 'завершил', 'выполнил', 'сделал']):
+                intent = {"type": "complete_all_tasks", "confidence": 0.95, "params": {}}
+            else:
+                intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+        elif any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что у меня']):
             intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
         elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'закончил']):
             intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
@@ -1835,7 +1854,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         
         # КРИТИЧНО: Для команд создания/изменения задач НЕ используем контекст
         # Это предотвращает путаницу когда AI пытается выполнить все команды из истории
-        is_task_command = intent.get('type') in ['add_task', 'complete_task', 'delete_task', 'edit_task']
+        is_task_command = intent.get('type') in ['add_task', 'complete_task', 'delete_task', 'edit_task', 'delete_all_tasks', 'complete_all_tasks']
         
         # Используем conversation_context для истории разговора, но ТОЛЬКО для разговорных команд
         if conversation_context and isinstance(conversation_context, list) and not is_task_command:
