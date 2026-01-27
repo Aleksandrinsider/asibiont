@@ -1173,27 +1173,87 @@ def post_process_tool_calls(intent, tool_calls, message):
             logger.warning(f"Failed to parse tool call arguments: {e}")
             args_dict = {}
 
-        # 1. ЭМОЦИИ: если intent эмоция, но нет list_tasks - добавляем ТОЛЬКО для значимых эмоций
-        # НЕ добавляем для простых приветствий типа "привет"
-        significant_emotions = ['positive', 'negative', 'excited', 'sad', 'angry', 'worried', 'happy', 'frustrated']
-        is_significant_emotion = any(emotion in intent["type"] for emotion in significant_emotions)
-        if intent["type"].startswith("emotion_") and is_significant_emotion and function_name != "list_tasks":
-            corrected_calls.append({
-                "index": len(corrected_calls),
-                "id": f"call_corrected_{len(corrected_calls)}",
-                "type": "function",
-                "function": {
-                    "name": "list_tasks",
-                    "arguments": "{}"
-                }
-            })
+        # 1. ЭМОЦИИ: УБРАНО автоматическое добавление list_tasks для сокращения болтливости
+        # significant_emotions = ['positive', 'negative', 'excited', 'sad', 'angry', 'worried', 'happy', 'frustrated']
+        # is_significant_emotion = any(emotion in intent["type"] for emotion in significant_emotions)
+        # if intent["type"].startswith("emotion_") and is_significant_emotion and function_name != "list_tasks":
+        #     corrected_calls.append({
+        #         "index": len(corrected_calls),
+        #         "id": f"call_corrected_{len(corrected_calls)}",
+        #         "type": "function",
+        #         "function": {
+        #             "name": "list_tasks",
+        #             "arguments": "{}"
+        #         }
+        #     })
 
         # 2. ДОБАВЛЕНИЕ ЗАДАЧ: если intent add_task, но нет add_task - добавляем
         elif intent["type"] == "add_task" and function_name != "add_task":
             # Extract multiple tasks from message
             tasks = parse_multiple_tasks(message)
             if tasks:
+                # Filter out low-quality task titles
+                valid_tasks = []
                 for task_info in tasks:
+                    title = task_info["title"].strip()
+                    # Skip if title is too short, contains commands, or is unclear
+                    if (len(title) < 3 or
+                        any(word in title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) or
+                        title.lower() in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                        continue
+                    valid_tasks.append(task_info)
+
+                if valid_tasks:
+                    for task_info in valid_tasks:
+                        corrected_calls.append({
+                            "index": len(corrected_calls),
+                            "id": f"call_corrected_{len(corrected_calls)}",
+                            "type": "function",
+                            "function": {
+                                "name": "add_task",
+                                "arguments": json.dumps({
+                                    "title": task_info["title"],
+                                    "reminder_time": task_info.get("reminder_time")
+                                })
+                            }
+                        })
+                # If no valid tasks found, don't create any - let AI ask for clarification
+            else:
+                # Fallback to single task parsing
+                task_title = message
+                # Remove commands at the beginning
+                task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай|создай)\s+', '', task_title, flags=re.IGNORECASE)
+                task_title = ' '.join(task_title.split()).strip()
+
+                # Check if the remaining title is meaningful
+                if (task_title and len(task_title) >= 3 and
+                    not any(word in task_title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) and
+                    task_title.lower() not in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                    # Extract time
+                    args_dict = {}
+                    time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
+                    for indicator in time_indicators:
+                        if indicator in message.lower():
+                            time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
+                            if time_match:
+                                args_dict["reminder_time"] = time_match.group(1)
+                            else:
+                                relative_patterns = [
+                                    r"через\s+(\d+)\s*мин",
+                                    r"через\s+(\d+)\s*минут",
+                                    r"через\s+(\d+)\s*час",
+                                    r"через\s+(\d+)\s*часа",
+                                    r"через\s+(\d+)\s*часов"
+                                ]
+                                for pattern in relative_patterns:
+                                    rel_match = re.search(pattern, message, re.IGNORECASE)
+                                    if rel_match:
+                                        full_match = re.search(r"(через\s+\d+\s+(?:мин|минут|час|часа|часов)(?:\s|$))", message, re.IGNORECASE)
+                                        if full_match:
+                                            args_dict["reminder_time"] = full_match.group(1)
+                                        break
+                            break
+
                     corrected_calls.append({
                         "index": len(corrected_calls),
                         "id": f"call_corrected_{len(corrected_calls)}",
@@ -1201,61 +1261,12 @@ def post_process_tool_calls(intent, tool_calls, message):
                         "function": {
                             "name": "add_task",
                             "arguments": json.dumps({
-                                "title": task_info["title"],
-                                "reminder_time": task_info.get("reminder_time")
+                                "title": task_title,
+                                "reminder_time": args_dict.get("reminder_time")
                             })
                         }
                     })
-            else:
-                # Fallback to single task parsing
-                task_title = message
-                # Remove commands at the beginning
-                task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача)\s+', '', task_title, flags=re.IGNORECASE)
-                # Remove time indications
-                task_title = re.sub(r'\bчерез\s+\d+\s*(?:мин(?:ут)?|час(?:а|ов)?|дн(?:я|ей)?|недел(?:ю|и|ь)?|месяц(?:а|ев)?|год(?:а)?)', '', task_title, flags=re.IGNORECASE)
-                task_title = re.sub(r'\b(?:завтра|сегодня|послезавтра)(?:\s+в\s+\d{1,2}:\d{2})?', '', task_title, flags=re.IGNORECASE)
-                task_title = re.sub(r'\bв\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
-                task_title = re.sub(r'\bна\s+\d{1,2}:\d{2}', '', task_title, flags=re.IGNORECASE)
-                task_title = ' '.join(task_title.split()).strip()
-                if not task_title or len(task_title) < 3:
-                    task_title = message
-
-                args_dict = {}
-                time_indicators = ["завтра", "сегодня", "через", "в", "на", "к", "до"]
-                for indicator in time_indicators:
-                    if indicator in message.lower():
-                        time_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2})", message)
-                        if time_match:
-                            args_dict["reminder_time"] = time_match.group(1)
-                        else:
-                            relative_patterns = [
-                                r"через\s+(\d+)\s*мин",
-                                r"через\s+(\d+)\s*минут",
-                                r"через\s+(\d+)\s*час",
-                                r"через\s+(\d+)\s*часа",
-                                r"через\s+(\d+)\s*часов"
-                            ]
-                            for pattern in relative_patterns:
-                                rel_match = re.search(pattern, message, re.IGNORECASE)
-                                if rel_match:
-                                    full_match = re.search(r"(через\s+\d+\s+(?:мин|минут|час|часа|часов)(?:\s|$))", message, re.IGNORECASE)
-                                    if full_match:
-                                        args_dict["reminder_time"] = full_match.group(1)
-                                    break
-                        break
-
-                corrected_calls.append({
-                    "index": len(corrected_calls),
-                    "id": f"call_corrected_{len(corrected_calls)}",
-                    "type": "function",
-                    "function": {
-                        "name": "add_task",
-                        "arguments": json.dumps({
-                            "title": task_title,
-                            "reminder_time": args_dict.get("reminder_time")
-                        })
-                    }
-                })
+                # If title is not meaningful, don't create task - let AI ask for clarification
 
         # 3. ЗАВЕРШЕНИЕ: если intent complete_task, но нет complete_task - добавляем
         elif intent["type"] == "complete_task" and function_name != "complete_task":
@@ -1320,37 +1331,58 @@ def post_process_tool_calls(intent, tool_calls, message):
 
     # Handle cases where no tool calls but intent requires action
     if not tool_calls:
-        if intent["type"].startswith("emotion_"):
-            corrected_calls.append({
-                "index": len(corrected_calls),
-                "id": f"call_corrected_{len(corrected_calls)}",
-                "type": "function",
-                "function": {
-                    "name": "list_tasks",
-                    "arguments": "{}"
-                }
-            })
-        elif intent["type"] == "add_task":
+        # Removed automatic list_tasks for emotional messages to reduce verbosity
+        # if intent["type"].startswith("emotion_"):
+        #     corrected_calls.append({
+        #         "index": len(corrected_calls),
+        #         "id": f"call_corrected_{len(corrected_calls)}",
+        #         "type": "function",
+        #         "function": {
+        #             "name": "list_tasks",
+        #             "arguments": "{}"
+        #         }
+        #     })
+        if intent["type"] == "add_task":
             # Extract multiple tasks from message
             tasks = parse_multiple_tasks(message)
             if tasks:
+                # Filter out low-quality task titles
+                valid_tasks = []
                 for task_info in tasks:
-                    corrected_calls.append({
-                        "index": len(corrected_calls),
-                        "id": f"call_corrected_{len(corrected_calls)}",
-                        "type": "function",
-                        "function": {
-                            "name": "add_task",
-                            "arguments": json.dumps({
-                                "title": task_info["title"],
-                                "reminder_time": task_info.get("reminder_time")
-                            })
-                        }
-                    })
+                    title = task_info["title"].strip()
+                    # Skip if title is too short, contains commands, or is unclear
+                    if (len(title) < 3 or
+                        any(word in title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) or
+                        title.lower() in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
+                        continue
+                    valid_tasks.append(task_info)
+
+                if valid_tasks:
+                    for task_info in valid_tasks:
+                        corrected_calls.append({
+                            "index": len(corrected_calls),
+                            "id": f"call_corrected_{len(corrected_calls)}",
+                            "type": "function",
+                            "function": {
+                                "name": "add_task",
+                                "arguments": json.dumps({
+                                    "title": task_info["title"],
+                                    "reminder_time": task_info.get("reminder_time")
+                                })
+                            }
+                        })
+                # If no valid tasks found, don't create any - let AI ask for clarification
             else:
                 # Fallback to single task parsing
                 task_title = message.strip()
-                if task_title:
+                # Remove commands
+                task_title = re.sub(r'^(напомни(?:ть)?|добавь|запомни|создай задачу|новая задача|да\s+создай|создай)\s+', '', task_title, flags=re.IGNORECASE)
+                task_title = ' '.join(task_title.split()).strip()
+
+                # Check if the remaining title is meaningful
+                if (task_title and len(task_title) >= 3 and
+                    not any(word in task_title.lower() for word in ['создай', 'задачу', 'задач', 'добавь', 'напомни', 'сделай', 'таким', 'этим']) and
+                    task_title.lower() not in ['да', 'нет', 'ок', 'хорошо', 'ладно']):
                     args_dict = {}
                     time_match = re.search(r"(?:напоминание|напомни|в|через)\s+(.+)", message, re.IGNORECASE)
                     if time_match:
@@ -1368,6 +1400,7 @@ def post_process_tool_calls(intent, tool_calls, message):
                             })
                         }
                     })
+                # If title is not meaningful, don't create task - let AI ask for clarification
         elif intent["type"] == "complete_task":
             task_title = intent.get("params", {}).get("task_title", "")
             if task_title:
