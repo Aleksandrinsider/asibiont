@@ -2188,7 +2188,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             "metadata": None,  # Нет метаданных
             "safety_instructions": None,  # Безопасность обрабатывается на уровне промпта
         }
-        logger.info(f"Sending request to DeepSeek API with {len(messages)} messages, temp={temperature}, top_p={top_p}")
+        logger.info(f"[API REQUEST] Sending to DeepSeek with tool_choice='{tool_choice}', messages={len(messages)}, temp={temperature}, top_p={top_p}")
+        logger.info(f"[API REQUEST] Available tools: {[t['function']['name'] for t in TOOLS]}")
+        logger.info(f"[API REQUEST] Last user message: {messages[-1]['content'][:100]}")
         # Retry loop с exponential backoff
         max_retries = 3  # Увеличиваем до 3 попыток
         message_response = {"content": ""}  # Initialize with default
@@ -2249,10 +2251,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     # КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ: Что отправил AI?
                                     logger.info(f"[AI RESPONSE] Content: {content[:200]}")
                                     logger.info(f"[AI RESPONSE] Tool calls: {tool_calls}")
+                                    logger.info(f"[AI RESPONSE] Full message_response keys: {message_response.keys()}")
                                     if tool_calls:
                                         for tc in tool_calls:
                                             func_name = tc.get('function', {}).get('name')
                                             logger.info(f"[AI RESPONSE] Calling tool: {func_name}")
+                                    else:
+                                        logger.warning(f"[AI RESPONSE] No tool_calls in response! Expected tool for message: {original_message[:100]}")
                                 else:
                                     logger.error(f"No choices in API response: {result}")
                                     content = "Извините, произошла ошибка при обработке запроса."

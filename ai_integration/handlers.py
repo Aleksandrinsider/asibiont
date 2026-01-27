@@ -617,6 +617,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
 async def reschedule_task(task_title=None, new_time=None, user_id=None, session=None):
     """Reschedule task to a new time"""
     logger.info(f"[RESCHEDULE_TASK] Called with task_title='{task_title}', new_time='{new_time}', user_id={user_id}")
+    logger.info(f"[RESCHEDULE_TASK] task_title type: {type(task_title)}, repr: {repr(task_title)}, bytes: {task_title.encode('utf-8') if task_title else None}")
     
     if user_id is None:
         logger.error("[RESCHEDULE_TASK] ERROR: user_id is None!")
@@ -634,12 +635,37 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             session.close()
         return "Пользователь не найден."
 
-    # Find task by title using ILIKE for flexible search
+    # Find task by title using case-insensitive search
     if task_title:
-        task = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.title.ilike(f"%{task_title}%")
-        ).first()
+        logger.info(f"[RESCHEDULE_TASK] Searching for task containing '{task_title}' for user {user.id}")
+        
+        # Получаем все задачи пользователя и ищем на уровне Python (для надёжности с кириллицей)
+        all_user_tasks = session.query(Task).filter(Task.user_id == user.id).all()
+        
+        task = None
+        search_lower = task_title.lower().strip()
+        
+        # Убираем окончания для лучшего поиска (простой стемминг)
+        # "почта" -> "почт", "почту" -> "почт"
+        if len(search_lower) > 3:
+            search_stem = search_lower[:-1] if search_lower[-1] in 'аяуюыи' else search_lower
+        else:
+            search_stem = search_lower
+            
+        logger.info(f"[RESCHEDULE_TASK] Searching with stem: '{search_stem}'")
+        
+        for t in all_user_tasks:
+            title_lower = t.title.lower()
+            # Проверяем и полное совпадение, и стемминг
+            if search_lower in title_lower or search_stem in title_lower:
+                task = t
+                logger.info(f"[RESCHEDULE_TASK] Found task: id={t.id}, title='{t.title}'")
+                break
+        
+        if not task:
+            logger.warning(f"[RESCHEDULE_TASK] Task not found with search '{task_title}'! User has {len(all_user_tasks)} tasks:")
+            for t in all_user_tasks:
+                logger.warning(f"[RESCHEDULE_TASK]   - Task #{t.id}: '{t.title}'")
     else:
         if close_session:
             session.close()
