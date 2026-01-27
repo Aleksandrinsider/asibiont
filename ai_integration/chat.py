@@ -13,14 +13,6 @@ from functools import lru_cache
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
-from ai_integration.patterns import (
-    ADD_TASK_PATTERNS,
-    COMPLETION_PATTERNS,
-    DELEGATION_PATTERNS,
-    TASK_ACTION_INDICATORS,
-    CONVERSATION_ONLY_PHRASES,
-    QUESTION_INDICATORS
-)
 from .memory import encrypt_data, decrypt_data
 from .utils import (
     determine_timezone_from_time, analyze_user_context_for_advice,
@@ -1677,166 +1669,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # AI-FIRST intent classification - minimal keyword pre-filtering, rely on AI
-        intent = {"type": "conversation", "confidence": 0.3, "params": {}}
-        logger.info("[INTENT] Using AI-first approach: keywords as hints, AI determines actual intent")
-        
-        # Define keyword lists for basic intent detection
-        personal_pronouns = ['я', 'мне', 'мой', 'моя', 'мои', 'моё', 'меня', 'мной']
-        professional_info = ['работаю', 'компания', 'должность', 'профессия', 'карьера', 'бизнес']
-        interests_keywords = ['интересует', 'увлекаюсь', 'хобби', 'спорт', 'музыка', 'книги', 'фильмы', 'путешествия']
-        
-        has_personal = any(word in clean_message.lower() for word in personal_pronouns)
-        has_professional = any(word in clean_message.lower() for word in professional_info)
-        has_interests = any(phrase in clean_message.lower() for phrase in interests_keywords)
-        
-        # Также проверим, есть ли явная просьба заполнить профиль
-        profile_fill_request = any(phrase in clean_message.lower() for phrase in 
-                                  ['заполн', 'давай заполн', 'обнов', 'расскаж о себе'])
-        
-        # Распознавание обновления профиля (интересы, навыки, цели)
-        profile_update_keywords = [
-            'хочу заняться', 'интересуюсь', 'увлекаюсь', 'люблю', 'нравится',
-            'мне нравится', 'мне интересно', 'мои интересы', 'мои хобби',
-            'занимаюсь', 'изучаю', 'развиваюсь в', 'работаю над'
-        ]
-        has_profile_update = any(phrase in clean_message.lower() for phrase in profile_update_keywords)
-        
-        if (has_personal and has_professional) or has_interests or profile_fill_request or has_profile_update:
-            intent = {"type": "profile_info", "confidence": 0.85, "params": {}}
-            logger.info(f"[PROFILE INFO DETECTED] Setting intent to profile_info for message: {clean_message[:50]}...")
-
-        # Minimal keyword hints - AI will decide based on context
-        if intent.get('type') == 'conversation':
-            # Только явные индикаторы как подсказки для tool_choice
-            task_hints = ['напомни', 'создай задачу', 'добавь задачу', 'запланируй']
-            has_task_keyword = any(hint in original_message.lower() for hint in task_hints)
-            
-            if has_task_keyword:
-                # Даём низкий confidence - AI сам решит нужно ли создавать
-                intent = {"type": "add_task", "confidence": 0.6, "params": {}}
-                logger.info(f"[TASK HINT] Found task keyword, AI will decide intent")
-            else:
-                logger.info(f"[NO HINTS] Pure AI interpretation for: {clean_message[:50]}...")
-
-        # Special handling for task completion expressions - ENABLED as fallback
-        if intent.get('type') == 'conversation':
-            if any(re.search(pattern, original_message.lower()) for pattern in COMPLETION_PATTERNS):
-                # Extract task title from completion message - simplified
-                task_title = None
-                message_lower = clean_message.lower()
-                # Try to extract from common patterns
-                if 'пробежк' in message_lower:
-                    task_title = 'Пробежка'
-                elif 'тренировк' in message_lower or 'спортзал' in message_lower:
-                    task_title = 'Тренировка'
-                elif 'прогулк' in message_lower:
-                    task_title = 'Прогулка'
-                elif 'работ' in message_lower:
-                    task_title = 'Работа'
-                elif 'магазин' in message_lower:
-                    task_title = 'Купить продукты'
-                elif 'банк' in message_lower:
-                    task_title = 'Сходить в банк'
-                elif 'дом' in message_lower:
-                    task_title = 'Вернуться домой'
-                # If no specific match, let AI handle it
-                intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
-                logger.info(f"[COMPLETION DETECTED] Setting intent to complete_task for message: {clean_message[:50]}..., extracted title: {task_title}")
-
-        # Special handling for task editing expressions
-        if intent.get('type') == 'conversation':
-            edit_patterns = [
-                r'изменить?\s+задачу', r'отредактировать?\s+задачу', r'обновить?\s+задачу',
-                r'исправить?\s+задачу', r'поменять?\s+задачу', r'редактировать?\s+задачу'
-            ]
-            if any(re.search(pattern, original_message.lower()) for pattern in edit_patterns):
-                intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[EDIT DETECTED] Setting intent to edit_task for message: {clean_message[:50]}...")
-
-        # Special handling for task deletion expressions
-        if intent.get('type') == 'conversation':
-            delete_patterns = [
-                r'удалить?\s+задачу', r'удалить?\s+задачи', r'убрать?\s+задачу',
-                r'стереть?\s+задачу', r'вычеркнуть?\s+задачу'
-            ]
-            if any(re.search(pattern, original_message.lower()) for pattern in delete_patterns):
-                intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
-                logger.info(f"[DELETE DETECTED] Setting intent to delete_task for message: {clean_message[:50]}...")
-
-        # Special handling for delegation expressions
-        if intent.get('type') == 'conversation':
-            if any(re.search(pattern, message.lower()) for pattern in DELEGATION_PATTERNS):
-                # Extract delegation parameters
-                task_title = None
-                delegate_to = None
-                reminder_time = None
-
-                # Extract @username
-                username_match = re.search(r'@(\w+)', message)
-                if username_match:
-                    delegate_to = username_match.group(1)
-
-                # Try to extract task title and time
-                if 'делегируй' in message.lower():
-                    # "делегируй задачу @user" - task is "задачу"
-                    task_title = 'задачу'
-                elif 'поручи' in message.lower():
-                    # Extract text after "поручи" and before "@"
-                    poruchi_match = re.search(r'поручи\s+(.+?)\s*@', message.lower())
-                    if poruchi_match:
-                        task_title = poruchi_match.group(1).strip()
-                elif 'передай' in message.lower():
-                    # Extract text after "передай" and before "@"
-                    peredai_match = re.search(r'передай\s+(.+?)\s*@', message.lower())
-                    if peredai_match:
-                        task_title = peredai_match.group(1).strip()
-                else:
-                    # For @user patterns, extract text before @
-                    at_match = re.search(r'(.+?)\s*@', message)
-                    if at_match:
-                        task_title = at_match.group(1).strip()
-
-                # Try to extract time from message
-                time_match = re.search(r'(\d{1,2}:\d{2}|\d{1,2}\s+час|\d+\s+мин|завтра|сегодня|через\s+\d+)', message.lower())
-                if time_match:
-                    # Parse time using existing logic
-                    from .utils import parse_time_to_datetime
-                    parsed_time = parse_time_to_datetime(time_match.group(1), user_id)
-                    if parsed_time:
-                        reminder_time = parsed_time
-                    else:
-                        # Default to 1 hour from now if parsing fails
-                        reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
-                else:
-                    # Default to 1 hour from now if no time specified
-                    reminder_time = (datetime.now(pytz.UTC) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M")
-
-                if task_title and delegate_to:
-                    intent = {"type": "delegate_task", "confidence": 0.9, "params": {"task_title": task_title, "delegate_to": delegate_to, "reminder_time": reminder_time}}
-                    logger.info(f"[DELEGATION DETECTED] Setting intent to delegate_task for message: {clean_message[:50]}..., task: {task_title}, delegate_to: {delegate_to}, time: {reminder_time}")
-
-        # Special handling for time expressions (update existing task) - ENABLED as fallback
-        time_patterns = [
-            r'завтра\s+в\s+\d{1,2}:\d{2}',
-            r'сегодня\s+в\s+\d{1,2}:\d{2}',
-            r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)\s+в\s+\d{1,2}:\d{2}',
-            r'в\s+\d{1,2}:\d{2}',
-            r'\d{1,2}:\d{2}',
-            r'через\s+\d+\s+(час|часа|часов|мин|минуту|минут|минуты)',  # Added for relative time only
-        ]
-        if any(re.search(pattern, clean_message.lower()) for pattern in time_patterns) and intent.get('type') != 'delegate_task':
-            # Check if this is a reschedule request (not just time update)
-            is_reschedule = any(word in clean_message.lower() for word in ['перенеси', 'перенести', 'reschedule', 'переместить'])
-            if not is_reschedule:
-                # Check if there are pending tasks to update
-                if user:
-                    pending_tasks = db_session.query(Task).filter_by(user_id=user.id, status="pending").all()
-                    if pending_tasks:
-                        intent = {"type": "edit_task", "confidence": 0.8, "params": {"time_only": True}}
-                        logger.info(f"[TIME EXPRESSION DETECTED] Setting intent to edit_task for time update: {clean_message[:50]}...")
-
-        # Убрана специальная обработка приветствий - все через AI промпт
+        # AI-FIRST APPROACH: Убраны все паттерны, полный контроль за AI
+        intent = {"type": "conversation", "confidence": 0.5, "params": {}}
+        logger.info("[INTENT] Pure AI-first approach: no patterns, AI handles everything")
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         # context_analysis = analyze_user_context_for_advice(user_id, db_session)
@@ -1993,48 +1828,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'delegate_task', 'find_partners', 'update_profile', 'profile_info'
         ]
 
-        # Умная логика выбора инструментов на основе intent classification и анализа сообщения
-        # СТАНДАРТНАЯ ЛОГИКА: ВСЕ действия с задачами → REQUIRED
-        message_lower = clean_message.lower()
-
-        # Индикаторы действий с задачами
-        requires_tools = any(indicator in message_lower for indicator in TASK_ACTION_INDICATORS)
-        
-        # Чистый разговор (привет, как дела)
-        conversation_only = any(phrase in message_lower for phrase in CONVERSATION_ONLY_PHRASES)
-
+        # МИНИМАЛЬНАЯ ЛОГИКА: Полный AI-first подход
         if is_system_message:
             # Системные сообщения - без tools
             tool_choice = "none"
             parallel_tool_calls = False
             logger.info(f"[TOOL CHOICE] NONE for system message")
-
-        elif conversation_only and not requires_tools:
-            # Чистый разговор
-            tool_choice = "none"
-            parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] NONE for conversation: {clean_message[:50]}")
-
-        elif requires_tools or intent.get('type') in ['add_task', 'complete_task', 'edit_task', 'delete_task', 'delegate_task', 'update_profile']:
-            # ЛЮБЫЕ действия - ОБЯЗАТЕЛЬНЫЙ вызов tool
-            tool_choice = "required"
-            parallel_tool_calls = False
-            logger.info(f"[TOOL CHOICE] REQUIRED for action: {intent.get('type') or 'indicators detected'}")
-
         else:
-            # По умолчанию - auto
+            # AI сам решает все
             tool_choice = "auto"
             parallel_tool_calls = True
             logger.info(f"[TOOL CHOICE] AUTO for: {clean_message[:50]}")
 
-        # Динамическая температура и параметры на основе глубокого анализа сообщения
-        temperature = 0.7  # Default
-        top_p = 1.0  # Default
-
-        # Анализ сложности и типа сообщения
-        message_length = len(clean_message.split())
+        # УПРОЩЕННЫЙ АНАЛИЗ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ AI
+        message_lower = clean_message.lower()
         has_questions = '?' in clean_message
-        has_exclamation = '!' in clean_message
         has_technical_terms = any(term in message_lower for term in [
             'api', 'база данных', 'алгоритм', 'код', 'программирование', 'sql', 'python',
             'анализ', 'отчет', 'презентация', 'проект', 'задача', 'план'
@@ -2042,56 +1850,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         is_creative_request = any(term in message_lower for term in [
             'идеи', 'креатив', 'варианты', 'предложения', 'мозговой штурм'
         ])
-        is_personal_request = any(term in message_lower for term in [
-            'личное', 'персонально', 'мне', 'я', 'мои', 'моя'
-        ])
 
-        if intent.get('type') == 'greeting':
-            # Для приветствий нужна максимальная вариативность
-            temperature = 1.0
-            top_p = 0.95
-        elif is_creative_request:
+        # Упрощенная логика температуры на основе типа сообщения
+        if is_creative_request:
             # Для креативных запросов нужна высокая вариативность
             temperature = 0.9
             top_p = 0.95
-        elif intent.get('type') in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task']:
-            # Для задач нужна максимальная точность и последовательность
-            temperature = 0.2
-            top_p = 0.9
-        elif intent.get('type') == 'delegate_task':
-            # Для делегирования нужна точность в понимании
-            temperature = 0.3
-            top_p = 0.9
-        elif intent.get('type') == 'profile_info':
-            # Для информации о профиле нужна максимальная точность
-            temperature = 0.1
-            top_p = 0.8
         elif has_technical_terms:
             # Технические темы требуют точности
             temperature = 0.4
             top_p = 0.9
-        elif is_personal_request:
-            # Персональные запросы - баланс между точностью и естественностью
-            temperature = 0.6
-            top_p = 0.95
-        elif has_questions:
-            # Вопросы требуют информативности
-            temperature = 0.5
-            top_p = 0.95
-        elif message_length > 50:  # Длинные сообщения
-            # Длинные сообщения могут быть сложными - снижаем вариативность
-            temperature = 0.5
-            top_p = 0.9
-        elif intent.get('type') in ['conversation', 'unknown'] and is_advice_question:
-            # Для советов нужна креативность
-            temperature = 0.8
-            top_p = 0.95
         else:
-            # По умолчанию для обычных разговоров
+            # По умолчанию средняя вариативность
             temperature = 0.7
             top_p = 1.0
 
-        logger.info(f"Using temperature {temperature}, top_p {top_p} for intent '{intent.get('type')}', message analysis: length={message_length}, questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
+        logger.info(f"Using temperature {temperature}, top_p {top_p} for message analysis: questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
         # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности
@@ -2144,153 +1918,156 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
         
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА TIME_ONLY: выполняем edit_task напрямую без AI
-        if intent.get("params", {}).get("time_only"):
-            logger.info("[TIME_ONLY] Direct execution without AI call")
-            # Find the most relevant pending task to update based on message content
-            from models import Session as TempSession
-            temp_session = TempSession()
-            try:
-                user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
-                if user_obj:
-                    # Get all pending tasks
-                    pending_tasks = temp_session.query(Task).filter_by(
-                        user_id=user_obj.id, 
-                        status="pending"
-                    ).order_by(Task.created_at.desc()).all()
-                    
-                    if pending_tasks:
-                        # Try to find task by keywords in message
-                        target_task = None
-                        message_lower = original_message.lower()
-                        
-                        # Extract keywords from message (remove time-related words)
-                        keywords = re.sub(r'\d{1,2}:\d{2}|завтра|сегодня|через|перенеси|напомни|минут|час|время', '', message_lower)
-                        keywords = re.sub(r'\s+', ' ', keywords).strip()
-                        
-                        # Find task with highest keyword match
-                        best_match_score = 0
-                        for task in pending_tasks:
-                            task_title_lower = task.title.lower()
-                            score = 0
-                            
-                            # Check if keywords appear in task title
-                            for keyword in keywords.split():
-                                if len(keyword) > 2:  # Skip short words
-                                    if keyword in task_title_lower:
-                                        score += 1
-                            
-                            # Bonus for exact phrase match
-                            if keywords and keywords in task_title_lower:
-                                score += 5
-                            
-                            if score > best_match_score:
-                                best_match_score = score
-                                target_task = task
-                        
-                        # If no good keyword match, use most recent task
-                        if not target_task or best_match_score == 0:
-                            target_task = pending_tasks[0]
-                            logger.info(f"[TIME_ONLY] No keyword match, using most recent task: {target_task.title}")
-                        else:
-                            logger.info(f"[TIME_ONLY] Found task by keywords (score {best_match_score}): {target_task.title}")
-                        
-                        # Parse time from message
-                        time_match = re.search(r'(\d{1,2}):(\d{2})', original_message)
-                        if time_match:
-                            hours, minutes = time_match.groups()
-                            # Get user timezone
-                            user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
-                            # Assume tomorrow if "завтра" in message, otherwise today
-                            base_date = datetime.now(user_tz)
-                            if 'завтра' in original_message.lower():
-                                base_date += timedelta(days=1)
-                            
-                            # Set time in user's timezone, then convert to UTC
-                            reminder_time = base_date.replace(hour=int(hours), minute=int(minutes), second=0, microsecond=0)
-                            if reminder_time.tzinfo is None:
-                                reminder_time = user_tz.localize(reminder_time)
-                            reminder_time = reminder_time.astimezone(pytz.UTC)
-                            
-                            result = handlers.edit_task(
-                                task_id=target_task.id,
-                                title=None,
-                                description=None,
-                                reminder_time=reminder_time.isoformat(),
-                                user_id=user_id,
-                                session=db_session,
-                            )
-                            logger.info(f"[TIME_ONLY] Task updated: {result}")
-                            # Вместо статического ответа передаем маркер для AI
-                            return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
-                        else:
-                            # Try relative time parsing
-                            from ai_integration.utils import parse_relative_time
-                            user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
-                            current_time = datetime.now(user_tz)
-                            relative_time = parse_relative_time(original_message, current_time)
-                            if relative_time:
-                                reminder_time = relative_time.astimezone(pytz.UTC)
-                                result = handlers.edit_task(
-                                    task_id=target_task.id,
-                                    title=None,
-                                    description=None,
-                                    reminder_time=reminder_time.isoformat(),
-                                    user_id=user_id,
-                                    session=db_session,
-                                )
-                                logger.info(f"[TIME_ONLY] Task updated with relative time: {result}")
-                                return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
-                            else:
-                                return "TIME_PARSE_FAILED: Не удалось распознать время в сообщении."
-                    else:
-                        return "NO_ACTIVE_TASKS: Нет активных задач для обновления времени."
-                else:
-                    return "USER_NOT_FOUND: Пользователь не найден."
-            except Exception as e:
-                logger.error(f"Error in time_only direct execution: {e}")
-                return f"TIME_UPDATE_ERROR: Ошибка обновления времени: {str(e)}"
-            finally:
-                temp_session.close()
+        # УБРАНА - теперь все через AI с tool calls
+        # if intent.get("params", {}).get("time_only"):
+        #     logger.info("[TIME_ONLY] Direct execution without AI call")
+        #     # Find the most relevant pending task to update based on message content
+        #     from models import Session as TempSession
+        #     temp_session = TempSession()
+        #     try:
+        #         user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
+        #         if user_obj:
+        #             # Get all pending tasks
+        #             pending_tasks = temp_session.query(Task).filter_by(
+        #                 user_id=user_obj.id, 
+        #                 status="pending"
+        #             ).order_by(Task.created_at.desc()).all()
+        #             
+        #             if pending_tasks:
+        #                 # Try to find task by keywords in message
+        #                 target_task = None
+        #                 message_lower = original_message.lower()
+        #                 
+        #                 # Extract keywords from message (remove time-related words)
+        #                 keywords = re.sub(r'\d{1,2}:\d{2}|завтра|сегодня|через|перенеси|напомни|минут|час|время', '', message_lower)
+        #                 keywords = re.sub(r'\s+', ' ', keywords).strip()
+        #                 
+        #                 # Find task with highest keyword match
+        #                 best_match_score = 0
+        #                 for task in pending_tasks:
+        #                     task_title_lower = task.title.lower()
+        #                     score = 0
+        #                     
+        #                     # Check if keywords appear in task title
+        #                     for keyword in keywords.split():
+        #                         if len(keyword) > 2:  # Skip short words
+        #                             if keyword in task_title_lower:
+        #                                 score += 1
+        #                     
+        #                     # Bonus for exact phrase match
+        #                     if keywords and keywords in task_title_lower:
+        #                         score += 5
+        #                     
+        #                     if score > best_match_score:
+        #                         best_match_score = score
+        #                         target_task = task
+        #                 
+        #                 # If no good keyword match, use most recent task
+        #                 if not target_task or best_match_score == 0:
+        #                     target_task = pending_tasks[0]
+        #                     logger.info(f"[TIME_ONLY] No keyword match, using most recent task: {target_task.title}")
+        #                 else:
+        #                     logger.info(f"[TIME_ONLY] Found task by keywords (score {best_match_score}): {target_task.title}")
+        #                 
+        #                 # Parse time from message
+        #                 time_match = re.search(r'(\d{1,2}):(\d{2})', original_message)
+        #                 if time_match:
+        #                     hours, minutes = time_match.groups()
+        #                     # Get user timezone
+        #                     user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
+        #                     # Assume tomorrow if "завтра" in message, otherwise today
+        #                     base_date = datetime.now(user_tz)
+        #                     if 'завтра' in original_message.lower():
+        #                         base_date += timedelta(days=1)
+        #                     
+        #                     # Set time in user's timezone, then convert to UTC
+        #                     reminder_time = base_date.replace(hour=int(hours), minute=int(minutes), second=0, microsecond=0)
+        #                     if reminder_time.tzinfo is None:
+        #                         reminder_time = user_tz.localize(reminder_time)
+        #                     reminder_time = reminder_time.astimezone(pytz.UTC)
+        #                     
+        #                     result = handlers.edit_task(
+        #                         task_id=target_task.id,
+        #                         title=None,
+        #                         description=None,
+        #                         reminder_time=reminder_time.isoformat(),
+        #                         user_id=user_id,
+        #                         session=db_session,
+        #                     )
+        #                     logger.info(f"[TIME_ONLY] Task updated: {result}")
+        #                     # Вместо статического ответа передаем маркер для AI
+        #                     return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
+        #                 else:
+        #                     # Try relative time parsing
+        #                     from ai_integration.utils import parse_relative_time
+        #                     user_tz = pytz.timezone(user_obj.timezone) if user_obj.timezone else pytz.UTC
+        #                     current_time = datetime.now(user_tz)
+        #                     relative_time = parse_relative_time(original_message, current_time)
+        #                     if relative_time:
+        #                         reminder_time = relative_time.astimezone(pytz.UTC)
+        #                         result = handlers.edit_task(
+        #                             task_id=target_task.id,
+        #                             title=None,
+        #                             description=None,
+        #                             reminder_time=reminder_time.isoformat(),
+        #                             user_id=user_id,
+        #                             session=db_session,
+        #                         )
+        #                         logger.info(f"[TIME_ONLY] Task updated with relative time: {result}")
+        #                         return f"TASK_TIME_UPDATED: Задача '{target_task.title}' перенесена на {reminder_time.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}."
+        #                     else:
+        #                         return "TIME_PARSE_FAILED: Не удалось распознать время в сообщении."
+        #             else:
+        #                 return "NO_ACTIVE_TASKS: Нет активных задач для обновления времени."
+        #         else:
+        #             return "USER_NOT_FOUND: Пользователь не найден."
+        #     except Exception as e:
+        #         logger.error(f"Error in time_only direct execution: {e}")
+        #         return f"TIME_UPDATE_ERROR: Ошибка обновления времени: {str(e)}"
+        #     finally:
+        #         temp_session.close()
         
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА COMPLETION: выполняем complete_task напрямую без AI
-        if intent.get("type") == "complete_task" and intent.get("params", {}).get("task_title"):
-            logger.info("[COMPLETION] Direct execution without AI call")
-            task_title = intent.get("params", {}).get("task_title")
-            try:
-                result = await complete_task(
-                    task_id=None,
-                    task_title=task_title,
-                    user_id=user_id,
-                    session=db_session,
-                )
-                logger.info(f"[COMPLETION] Task completed: {result}")
-                # Вместо статического ответа передаем маркер для AI
-                return f"TASK_COMPLETED: {result}"
-            except Exception as e:
-                logger.error(f"Error in completion direct execution: {e}")
-                return f"COMPLETION_ERROR: Ошибка завершения задачи: {str(e)}"
+        # УБРАНА - теперь все через AI с tool calls
+        # if intent.get("type") == "complete_task" and intent.get("params", {}).get("task_title"):
+        #     logger.info("[COMPLETION] Direct execution without AI call")
+        #     task_title = intent.get("params", {}).get("task_title")
+        #     try:
+        #         result = await complete_task(
+        #             task_id=None,
+        #             task_title=task_title,
+        #             user_id=user_id,
+        #             session=db_session,
+        #         )
+        #         logger.info(f"[COMPLETION] Task completed: {result}")
+        #         # Вместо статического ответа передаем маркер для AI
+        #         return f"TASK_COMPLETED: {result}"
+        #     except Exception as e:
+        #         logger.error(f"Error in completion direct execution: {e}")
+        #         return f"COMPLETION_ERROR: Ошибка завершения задачи: {str(e)}"
         
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА DELEGATION: выполняем delegate_task напрямую без AI
-        if intent.get("type") == "delegate_task" and intent.get("params", {}).get("task_title") and intent.get("params", {}).get("delegate_to") and intent.get("params", {}).get("reminder_time"):
-            logger.info("[DELEGATION] Direct execution without AI call")
-            task_title = intent.get("params", {}).get("task_title")
-            delegate_to = intent.get("params", {}).get("delegate_to")
-            reminder_time = intent.get("params", {}).get("reminder_time")
-            try:
-                result = delegate_task(
-                    title=task_title,
-                    description="",
-                    reminder_time=reminder_time,
-                    delegated_to_username=delegate_to,
-                    user_id=user_id,
-                    session=db_session,
-                )
-                logger.info(f"[DELEGATION] Task delegated: {result}")
-                # Вместо статического ответа передаем маркер для AI
-                return f"TASK_DELEGATED: {result}"
-            except Exception as e:
-                logger.error(f"Error in delegation direct execution: {e}")
-                return f"DELEGATION_ERROR: Ошибка делегирования задачи: {str(e)}"
+        # УБРАНА - теперь все через AI с tool calls
+        # if intent.get("type") == "delegate_task" and intent.get("params", {}).get("task_title") and intent.get("params", {}).get("delegate_to") and intent.get("params", {}).get("reminder_time"):
+        #     logger.info("[DELEGATION] Direct execution without AI call")
+        #     task_title = intent.get("params", {}).get("task_title")
+        #     delegate_to = intent.get("params", {}).get("delegate_to")
+        #     reminder_time = intent.get("params", {}).get("reminder_time")
+        #     try:
+        #         result = delegate_task(
+        #             title=task_title,
+        #             description="",
+        #             reminder_time=reminder_time,
+        #             delegated_to_username=delegate_to,
+        #             user_id=user_id,
+        #             session=db_session,
+        #         )
+        #         logger.info(f"[DELEGATION] Task delegated: {result}")
+        #         # Вместо статического ответа передаем маркер для AI
+        #         return f"TASK_DELEGATED: {result}"
+        #     except Exception as e:
+        #         logger.error(f"Error in delegation direct execution: {e}")
+        #         return f"DELEGATION_ERROR: Ошибка делегирования задачи: {str(e)}"
         
         # Параметры запроса согласно документации DeepSeek API (расширенные настройки)
         data = {
@@ -2419,7 +2196,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 fallback_tool = None
                                 if any(word in message_lower for word in ['создай', 'добавь', 'напомни', 'запланируй']):
                                     content = "NEED_TIME_FOR_TASK: Когда напомнить? (завтра в 10:00, через час, сегодня в 15:00)"
-                                elif any(word in message_lower for word in ['готово', 'сделал', 'выполнил', 'закончил']):
+                                elif any(word in message_lower for word in ['готово', 'сделал', 'выполнил', 'закончил', 'задача выполнена']):
                                     content = "Отлично! Какую именно задачу завершили? Уточните название."
                                 elif any(word in message_lower for word in ['покажи', 'список', 'какие', 'мои задачи']):
                                     # Принудительно вызываем list_tasks
@@ -2429,6 +2206,55 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     content = "Какую задачу удалить? Уточните название."
                                 else:
                                     content = "Понял ваше намерение, но мне нужно больше информации. Уточните детали."
+                            
+                            # ПРОВЕРКА: Если tool_choice был REQUIRED, но AI вызвал неправильный tool
+                            elif tool_choice == "required" and tool_calls:
+                                expected_tools = {
+                                    'add_task': ['add_task'],
+                                    'complete_task': ['complete_task', 'list_tasks'],  # complete_task может вызывать list_tasks для обновления
+                                    'edit_task': ['edit_task'],
+                                    'delete_task': ['delete_task'],
+                                    'delegate_task': ['delegate_task'],
+                                    'update_profile': ['update_profile']
+                                }
+                                
+                                intent_type = intent.get('type')
+                                if intent_type in expected_tools:
+                                    actual_tools = [tc.get('function', {}).get('name') for tc in tool_calls]
+                                    expected = expected_tools[intent_type]
+                                    
+                                    # Проверяем, что хотя бы один ожидаемый tool вызван
+                                    if not any(tool in expected for tool in actual_tools):
+                                        logger.error(f"[VALIDATION FAILED] Intent '{intent_type}' expects tools {expected}, but got {actual_tools}")
+                                        logger.error(f"[VALIDATION] Message: {clean_message[:100]}")
+                                        
+                                        # Fallback для неправильных tool calls
+                                        if intent_type == 'complete_task':
+                                            content = "Отлично! Какую именно задачу завершили? Уточните название."
+                                        elif intent_type == 'edit_task':
+                                            content = "Какую задачу изменить и на какое время?"
+                                        elif intent_type == 'add_task':
+                                            content = "NEED_TIME_FOR_TASK: Когда напомнить? (завтра в 10:00, через час, сегодня в 15:00)"
+                                        elif intent_type == 'delegate_task':
+                                            # Для делегирования - принудительно вызываем delegate_task
+                                            logger.info(f"[FORCED DELEGATION] Intent was delegate_task, forcing delegate_task call")
+                                            try:
+                                                from .handlers import delegate_task
+                                                result = delegate_task(
+                                                    title=intent.get('params', {}).get('task_title', 'Задача'),
+                                                    description="",
+                                                    reminder_time=intent.get('params', {}).get('reminder_time'),
+                                                    delegated_to_username=intent.get('params', {}).get('delegate_to'),
+                                                    user_id=user_id,
+                                                    session=db_session,
+                                                )
+                                                content = f"TASK_DELEGATED: {result}"
+                                                logger.info(f"[FORCED DELEGATION] Successfully delegated task: {result}")
+                                            except Exception as e:
+                                                logger.error(f"[FORCED DELEGATION] Failed: {e}")
+                                                content = f"DELEGATION_ERROR: Ошибка делегирования: {str(e)}"
+                                        else:
+                                            content = f"Понял намерение '{intent_type}', но нужно больше деталей."
                             
                             # Устанавливаем флаг успешного выполнения
                             success = True
