@@ -181,7 +181,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     Args:
         current_time: Текущее время пользователя (datetime object с timezone)
     """
+    from models import User  # Явный импорт для избежания конфликтов области видимости
     logger = logging.getLogger(__name__)
+    logger.info(f"[PROCESS_TOOL_CALLS] Called with user_id={user_id}, tool_calls count={len(tool_calls) if tool_calls else 0}")
     
     # Если current_time не передан, используем user_now
     if current_time is None:
@@ -297,6 +299,29 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             func_name = tool_call["function"]["name"]
             args = json.loads(tool_call["function"]["arguments"])
             logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
+
+            if "task_title" in args and args["task_title"]:
+                print(f"[DEBUG] Before pronoun replacement: task_title = '{args['task_title']}'")
+                from .task_context import extract_task_reference_from_message, get_user_current_task
+                task_ref = extract_task_reference_from_message(args["task_title"])
+                print(f"[DEBUG] task_ref = '{task_ref}'")
+                if task_ref == "__CURRENT_TASK__":
+                    # Получаем пользователя для получения текущей задачи
+                    temp_session = Session()
+                    try:
+                        user_obj = temp_session.query(User).filter_by(telegram_id=user_id).first()
+                        if user_obj:
+                            current_task = get_user_current_task(user_obj)
+                            if current_task:
+                                logger.info(f"[CONTEXT] Replacing pronoun '{args['task_title']}' with current task: '{current_task.title}'")
+                                print(f"[DEBUG] Replacing '{args['task_title']}' with '{current_task.title}'")
+                                args["task_title"] = current_task.title
+                            else:
+                                logger.warning(f"[CONTEXT] No current task set for pronoun '{args['task_title']}'")
+                                print(f"[DEBUG] No current task set")
+                    finally:
+                        temp_session.close()
+                print(f"[DEBUG] After pronoun replacement: task_title = '{args['task_title']}'")
 
             if func_name == "add_task":
                 # logger.info(
@@ -1204,7 +1229,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         detected_timezone = determine_timezone_from_time(user_time_str, user_id)
         if detected_timezone:
             logger.info(f"Detected timezone {detected_timezone} from time {user_time_str}")
-            update_profile(timezone=detected_timezone, user_id=user_id, session=db_session)
+            user.timezone = detected_timezone
+            db_session.commit()
 
     # Сохраняем оригинальное сообщение ДО очистки
     original_message = message
@@ -1385,6 +1411,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
             logger.info(f"[SUBSCRIPTION] User {user_id} tier from DB: {user.subscription_tier if user else 'None'}, value: {subscription_tier}")
 
+            # ОБНОВЛЯЕМ КОНТЕКСТ ТЕКУЩЕЙ ЗАДАЧИ при упоминании задач в сообщении
+            if user:
+                try:
+                    from .task_context import extract_task_reference_from_message, update_user_current_task
+                    task_reference = extract_task_reference_from_message(original_message)
+                    if task_reference:
+                        logger.info(f"[CONTEXT] Detected task reference in message: '{task_reference}'")
+                        updated_task = update_user_current_task(user, task_reference, db_session)
+                        if updated_task:
+                            logger.info(f"[CONTEXT] Updated current task context to: {updated_task.title}")
+                        else:
+                            logger.info(f"[CONTEXT] Could not find task for reference: '{task_reference}'")
+                except Exception as e:
+                    logger.warning(f"[CONTEXT] Error updating task context: {e}")
+
             # Check subscription
             from config import FREE_ACCESS_MODE
             logger.info(f"[SUBSCRIPTION] FREE_ACCESS_MODE = {FREE_ACCESS_MODE}")
@@ -1522,6 +1563,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.info(f"[TASKS DEBUG] Using fresh tasks: {fresh_tasks_info[:100] if fresh_tasks_info else 'None'}...")
             if fresh_tasks_info and "У вас" in fresh_tasks_info:
                 user_memory += f"\n\n📝 АКТИВНЫЕ ЗАДАЧИ:\n{fresh_tasks_info}\n\n⚠️  ВАЖНО: НЕ выдумывай задачи! Используй ТОЛЬКО те задачи которые указаны выше. Если говоришь о задаче, ОБЯЗАТЕЛЬНО проверь что она есть в списке."
+                
+                # ДОБАВЛЯЕМ ИНФОРМАЦИЮ О ТЕКУЩЕЙ ЗАДАЧЕ (ТОЛЬКО АКТИВНЫЕ)
+                from .task_context import get_user_current_task
+                current_task = get_user_current_task(user)
+                if current_task and current_task.status != 'completed':
+                    user_memory += f"\n\n🎯 ТЕКУЩАЯ ОБСУЖДАЕМАЯ ЗАДАЧА: '{current_task.title}'"
+                    user_memory += f"\n💡 ПРИ ССЫЛКАХ: Когда пользователь говорит 'её', 'эту', 'ту', 'перенеси' и т.д. - ИМЕЕТСЯ В ВИДУ эта задача!"
+                elif current_task and current_task.status == 'completed':
+                    user_memory += f"\n\n📝 ПОСЛЕДНЯЯ ОБСУЖДАЕМАЯ ЗАДАЧА: '{current_task.title}' (выполнена)"
             else:
                 user_memory += "\n\n📝 ЗАДАЧИ: У пользователя нет активных задач."
                 # ДОБАВЛЯЕМ ПРЕДЛОЖЕНИЯ НА ОСНОВЕ ПРОФИЛЯ
@@ -1739,9 +1789,22 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Сначала пробуем AI классификацию для точного извлечения параметров
         try:
             from .intent_classifier import IntentClassifier
-            ai_intent_str = await IntentClassifier.classify_intent(original_message, user_id)
-            intent = {'type': ai_intent_str, 'confidence': 0.9, 'params': {}}
-            logger.info(f"[AI INTENT] Classified as {intent['type']} with confidence {intent['confidence']}")
+            ai_result = await IntentClassifier.classify_intent(original_message, user_id)
+            
+            # Парсим результат: КОМАНДА|УВЕРЕННОСТЬ
+            if '|' in ai_result:
+                parts = ai_result.split('|')
+                intent_type = parts[0].strip()
+                try:
+                    confidence = float(parts[1].strip())
+                except:
+                    confidence = 0.5
+            else:
+                intent_type = ai_result.strip()
+                confidence = 0.5
+            
+            intent = {'type': intent_type, 'confidence': confidence, 'params': {}}
+            logger.info(f"[AI INTENT] Classified as {intent['type']} with confidence {intent['confidence']} - RAW: {ai_result}")
         except Exception as e:
             logger.warning(f"[AI INTENT] Failed to use AI classification: {e}, falling back to static")
             intent = {'type': 'conversation', 'confidence': 0.5, 'params': {}}
@@ -1874,8 +1937,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         logger.info(f"[INTENT] Detected: {intent['type']} (confidence: {intent['confidence']})")
 
-        # AI-FIRST APPROACH: Полный контроль за AI с базовым intent для валидации
-        logger.info("[INTENT] AI-first approach with basic intent classification for validation")
+        # ЕСЛИ УВЕРЕННОСТЬ НИЗКАЯ - ПЕРЕКЛЮЧАЕМСЯ НА КОНВЕРСАЦИЮ ДЛЯ УТОЧНЕНИЯ
+        # Делаем это ПОСЛЕ всей классификации, чтобы переопределить даже статическую
+        if intent['confidence'] < 0.85:
+            logger.info(f"[INTENT] Low confidence ({intent['confidence']}) - switching to conversation for clarification")
+            intent['type'] = 'conversation'
+            intent['confidence'] = 0.5
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         # context_analysis = analyze_user_context_for_advice(user_id, db_session)
@@ -1974,6 +2041,33 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             message_type=message_type_for_prompt)
         logger.info("[PROMPTS] Using extended prompt system")
 
+        # ДОБАВЛЯЕМ ИНСТРУКЦИЮ ДЛЯ УТОЧНЯЮЩИХ ВОПРОСОВ ПРИ НИЗКОЙ УВЕРЕННОСТИ
+        if intent.get('confidence', 1.0) < 0.85:
+            clarification_instruction = f"""
+
+🚨 КРИТИЧНО: НИЗКАЯ УВЕРЕННОСТЬ В НАМЕРЕНИИ ({intent.get('confidence', 0):.2f})
+Намерение было классифицировано как '{intent.get('type')}', но уверенность низкая.
+
+❌ ЗАПРЕЩЕНО: Выполнять любые команды или инструменты
+❌ ЗАПРЕЩЕНО: Предлагать помощь без уточнения
+✅ ОБЯЗАТЕЛЬНО: Задать 1-2 конкретных уточняющих вопроса пользователю
+
+ПРАВИЛА УТОЧНЕНИЯ:
+1. Задай конкретный вопрос о том, что пользователь имеет в виду
+2. Не выполняй никаких действий
+3. Не предлагай помощь - только вопросы
+4. Будь краток и дружелюбен
+
+ПРИМЕРЫ ВОПРОСОВ:
+- "Ты хочешь найти партнеров для работы или просто познакомиться?"
+- "Что именно ты хочешь обновить в профиле?"
+- "Ты имеешь в виду создать новую задачу или посмотреть существующие?"
+
+ТВОЙ ОТВЕТ ДОЛЖЕН СОДЕРЖАТЬ ТОЛЬКО УТОЧНЯЮЩИЙ ВОПРОС!
+"""
+            system_prompt += clarification_instruction
+            logger.info(f"[CLARIFICATION] Added STRICT clarification instruction for low confidence {intent.get('confidence')}")
+
         # ДОБАВЛЯЕМ ИНСТРУКЦИЮ ПО УНИКАЛЬНОСТИ ОТВЕТОВ
         # Проверяем последние 3 ответа AI для предотвращения повторений
         if user:
@@ -2011,6 +2105,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Каждый запрос обрабатывается независимо, без учета предыдущих сообщений
         # Это предотвращает галлюцинации и путаницу инструментов
         logger.info(f"[CONTEXT] SKIPPED context for all commands to prevent hallucinations")
+        
+        # ЗАМЕНА МЕСТОИМЕНИЙ В СООБЩЕНИИ ДЛЯ AI
+        # Чтобы AI понимал, о какой задаче идет речь
+        if db_session:
+            from .task_context import replace_pronouns_in_message
+            message = replace_pronouns_in_message(message, user_id, db_session)
+            logger.info(f"[CONTEXT] Message after pronoun replacement: '{message}'")
         
         # Добавляем текущее сообщение
         messages.append({"role": "user", "content": message})
@@ -2068,15 +2169,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             tool_choice = "auto"
             parallel_tool_calls = True
             
-            # Принудительный вызов инструментов для определенных intent
+            # Принудительный вызов инструментов для определенных intent ТОЛЬКО при высокой уверенности
             action_intents = [
                 'add_task', 'get_task_details', 'set_recurring_task', 'complete_task', 
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
                 'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
             ]
-            if intent.get('type') in action_intents:
-                tool_choice = 'required'
-                logger.info(f"[TOOL CHOICE] REQUIRED for {intent.get('type')} intent")
+            if intent.get('type') in action_intents and intent.get('confidence', 0) >= 0.85:
+                tool_choice = {"type": "function", "function": {"name": intent['type']}}
+                logger.info(f"[TOOL CHOICE] REQUIRED for {intent.get('type')} intent (confidence: {intent.get('confidence')})")
+            elif intent.get('confidence', 1.0) < 0.85:
+                # При низкой уверенности - только разговор, без инструментов
+                tool_choice = "none"
+                logger.info(f"[TOOL CHOICE] NONE for clarification (low confidence: {intent.get('confidence')})")
             
             # Детектируем тип команды для логирования
             logger.info(f"[TOOL DETECTOR] Testing message: '{clean_message.lower()[:100]}'")
@@ -2091,7 +2196,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[TOOL HINT] RESCHEDULE detected: {clean_message[:50]} - FORCING tool call")
                 tool_choice = "required"  # ФОРСИРУЕМ вызов reschedule_task для переноса
             
-            logger.info(f"[TOOL CHOICE] {tool_choice.upper()} for: {clean_message[:50]}")
+            logger.info(f"[TOOL CHOICE] {str(tool_choice).upper()} for: {clean_message[:50]}")
 
         # УПРОЩЕННЫЙ АНАЛИЗ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ AI
         message_lower = clean_message.lower()
@@ -2125,7 +2230,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if any(trigger in message_lower for trigger in delete_triggers) and tool_choice == 'auto':
             # Исключаем случаи удаления ВСЕХ задач - для них есть delete_all_tasks
             if not any(word in message_lower for word in ['все', 'всё', 'all']):
-                tool_choice = 'required'
+                tool_choice = {"type": "function", "function": {"name": "delete_task"}}
                 logger.info(f"[TOOL CHOICE] REQUIRED for delete_task trigger: {message[:50]}")
         
         # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ add_task при явных триггерах создания
@@ -2137,18 +2242,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if has_create_trigger and has_time_indicator and tool_choice == 'auto':
             # Исключаем случаи делегирования - для них есть delegate_task
             if not any(word in message_lower for word in ['делегируй', 'поручи', '@']):
-                tool_choice = 'required'
+                tool_choice = {"type": "function", "function": {"name": "add_task"}}
                 logger.info(f"[TOOL CHOICE] REQUIRED for add_task trigger: {message[:50]}")
         
         # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ для других критичных команд
         complete_triggers = ['сделал', 'выполнил', 'завершил', 'готово', 'закончил', 'всё', 'закрывать', 'закрыть', 'можно', 'сдачу', 'приемку']
         if any(trigger in message_lower for trigger in complete_triggers) and tool_choice == 'auto':
-            tool_choice = 'required'
+            tool_choice = {"type": "function", "function": {"name": "complete_task"}}
             logger.info(f"[TOOL CHOICE] REQUIRED for complete_task trigger: {message[:50]}")
         
         reschedule_triggers = ['перенеси', 'измени время', 'поменяй время', 'сдвинь']
         if any(trigger in message_lower for trigger in reschedule_triggers) and tool_choice == 'auto':
-            tool_choice = 'required'
+            tool_choice = {"type": "function", "function": {"name": "reschedule_task"}}
             logger.info(f"[TOOL CHOICE] REQUIRED for reschedule_task trigger: {message[:50]}")
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
@@ -2174,7 +2279,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent.get('type'),
                 str(temperature),
                 str(top_p),
-                tool_choice,
+                str(tool_choice),
                 current_time_str,  # Время влияет на ответы
                 subscription_tier or "free",
                 str(tasks_count),  # Количество активных задач
@@ -3010,10 +3115,10 @@ async def generate_reminder(user_id, task_title, task_id=None):
         user_prompt = f"""Сгенерируй персонализированное напоминание о задаче: '{task_title}'.
 
 ФОРМАТ ОТВЕТА: Напиши готовое сообщение для отправки пользователю (1-2 абзаца максимум).
-• Начни с приветствия и напоминания о задаче
-• Добавь мотивацию и практические советы
-• Закончи вопросом для вовлечения
-• НЕ пиши промежуточные мысли или "сейчас посмотрю задачи"
+- Начни с приветствия и напоминания о задаче
+- Добавь мотивацию и практические советы
+- ОБЯЗАТЕЛЬНО ЗАКОНЧИ ВОПРОСОМ О СТАТУСЕ ЗАДАЧИ: "Задача выполнена?" или "Как продвигается выполнение?" или подобным
+- НЕ пиши промежуточные мысли или "сейчас посмотрю задачи"
 
 КОНТЕКСТ ЗАДАЧИ:{task_context if task_context else 'Нет дополнительного контекста'}
 КОНТЕКСТ ПРОФИЛЯ:{profile_context if profile_context else 'Нет информации о профиле'}"""

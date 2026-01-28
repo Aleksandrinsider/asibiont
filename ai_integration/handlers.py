@@ -10,6 +10,7 @@ from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
+from .task_search import find_task_flexible
 
 logger = logging.getLogger(__name__)
 
@@ -480,7 +481,16 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         user_id: ID пользователя
         session: Сессия БД
     """
+    from models import User  # Явный импорт для избежания конфликтов области видимости
     logger.info(f"[COMPLETE_TASK] Called with task_id={task_id}, completion_note='{completion_note}', user_id={user_id}")
+    
+    # Преобразуем task_id в int если нужно
+    task_id_int = None
+    if task_id is not None:
+        try:
+            task_id_int = int(task_id)
+        except (ValueError, TypeError):
+            logger.warning(f"[COMPLETE_TASK] Invalid task_id format: {task_id}, ignoring")
     
     if user_id is None:
         logger.error("[COMPLETE_TASK] user_id is None")
@@ -502,44 +512,52 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             session.close()
         return "Пользователь не найден."
 
-    # Find task using flexible search with stemming
-    from ai_integration.task_search import find_task_flexible
-    
-    task_id_int = None
-    if task_id:
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-    
-    # Если task_title не указан, завершаем последнюю активную задачу
-    if not task_title or not task_title.strip():
-        logger.info("[COMPLETE_TASK] No task_title provided, completing the most recent active task")
-        
-        # Найти последнюю активную задачу пользователя
-        recent_task = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status != "completed"
-        ).order_by(Task.created_at.desc()).first()
-        
-        if recent_task:
-            task = recent_task
-            logger.info(f"[COMPLETE_TASK] Completing most recent task: '{task.title}' (ID: {task.id})")
+    # СПЕЦИАЛЬНАЯ ОБРАБОТКА МЕСТОИМЕНИЙ - используем текущую задачу
+    if task_title:
+        from .task_context import extract_task_reference_from_message, get_user_current_task
+        task_reference = extract_task_reference_from_message(task_title)
+        if task_reference == "__CURRENT_TASK__":
+            current_task = get_user_current_task(user)
+            if current_task:
+                logger.info(f"[COMPLETE_TASK] Using current task: '{current_task.title}' for pronoun '{task_title}'")
+                task = current_task
+                # Пропускаем обычный поиск
+            else:
+                logger.warning(f"[COMPLETE_TASK] No current task set for pronoun '{task_title}'")
+                task = None
         else:
-            if close_session:
-                session.close()
-            return "Нет активных задач для завершения"
+            task = None  # Будет найден через find_task_flexible
     else:
-        task = find_task_flexible(
-            session=session,
-            user=user,
-            task_id=task_id_int,
-            task_title=task_title,
-            include_completed=True,  # Include to check status
-            include_delegated=True
-        )
+        task = None
+
+    # Если задача не найдена через контекст, используем обычный поиск
+    if task is None:
+        # Если task_title не указан, завершаем последнюю активную задачу
+        if not task_title or not task_title.strip():
+            logger.info("[COMPLETE_TASK] No task_title provided, completing the most recent active task")
+            
+            # Найти последнюю активную задачу пользователя
+            recent_task = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status != "completed"
+            ).order_by(Task.created_at.desc()).first()
+            
+            if recent_task:
+                task = recent_task
+                logger.info(f"[COMPLETE_TASK] Completing most recent task: '{task.title}' (ID: {task.id})")
+            else:
+                if close_session:
+                    session.close()
+                return "Нет активных задач для завершения"
+        else:
+            task = find_task_flexible(
+                session=session,
+                user=user,
+                task_id=task_id_int,
+                task_title=task_title,
+                include_completed=True,  # Include to check status
+                include_delegated=True
+            )
     
     if not task:
         if close_session:
@@ -560,8 +578,15 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             task.completion_notes = encrypt_data(completion_note)
             logger.info(f"[COMPLETE_TASK] Saved completion note for task {task.id}")
         
-        session.commit()
-        logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
+        try:
+            session.commit()
+            logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
+        except Exception as e:
+            logger.error(f"[COMPLETE_TASK] Commit failed: {e}")
+            session.rollback()
+            if close_session:
+                session.close()
+            return f"Ошибка при сохранении: {e}"
 
         # Отменяем все запланированные джобы для этой задачи
         try:
@@ -825,6 +850,7 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
 
 
 async def reschedule_task(task_title=None, new_time=None, user_id=None, session=None):
+    from models import User  # Явный импорт для избежания конфликтов области видимости
     logger.info(f"[RESCHEDULE_TASK] Called with task_title='{task_title}', new_time='{new_time}', user_id={user_id}")
     logger.info(f"[RESCHEDULE_TASK] task_title type: {type(task_title)}, repr: {repr(task_title)}, bytes: {task_title.encode('utf-8') if task_title else None}")
     
@@ -848,33 +874,46 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
     if task_title:
         logger.info(f"[RESCHEDULE_TASK] Searching for task containing '{task_title}' for user {user.id}")
         
-        # Получаем все задачи пользователя и ищем на уровне Python (для надёжности с кириллицей)
-        all_user_tasks = session.query(Task).filter(Task.user_id == user.id).all()
-        
-        task = None
-        search_lower = task_title.lower().strip()
-        
-        # Убираем окончания для лучшего поиска (простой стемминг)
-        # "почта" -> "почт", "почту" -> "почт"
-        if len(search_lower) > 3:
-            search_stem = search_lower[:-1] if search_lower[-1] in 'аяуюыи' else search_lower
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА МЕСТОИМЕНИЙ - используем текущую задачу
+        from .task_context import extract_task_reference_from_message, get_user_current_task
+        task_reference = extract_task_reference_from_message(task_title)
+        if task_reference == "__CURRENT_TASK__":
+            current_task = get_user_current_task(user)
+            if current_task:
+                logger.info(f"[RESCHEDULE_TASK] Using current task: '{current_task.title}' for pronoun '{task_title}'")
+                task = current_task
+            else:
+                logger.warning(f"[RESCHEDULE_TASK] No current task set for pronoun '{task_title}'")
+                task = None
         else:
-            search_stem = search_lower
+            # Обычный поиск по названию
+            # Получаем все задачи пользователя и ищем на уровне Python (для надёжности с кириллицей)
+            all_user_tasks = session.query(Task).filter(Task.user_id == user.id).all()
             
-        logger.info(f"[RESCHEDULE_TASK] Searching with stem: '{search_stem}'")
-        
-        for t in all_user_tasks:
-            title_lower = t.title.lower()
-            # Проверяем и полное совпадение, и стемминг
-            if search_lower in title_lower or search_stem in title_lower:
-                task = t
-                logger.info(f"[RESCHEDULE_TASK] Found task: id={t.id}, title='{t.title}'")
-                break
-        
-        if not task:
-            logger.warning(f"[RESCHEDULE_TASK] Task not found with search '{task_title}'! User has {len(all_user_tasks)} tasks:")
+            task = None
+            search_lower = task_title.lower().strip()
+            
+            # Убираем окончания для лучшего поиска (простой стемминг)
+            # "почта" -> "почт", "почту" -> "почт"
+            if len(search_lower) > 3:
+                search_stem = search_lower[:-1] if search_lower[-1] in 'аяуюыи' else search_lower
+            else:
+                search_stem = search_lower
+                
+            logger.info(f"[RESCHEDULE_TASK] Searching with stem: '{search_stem}'")
+            
             for t in all_user_tasks:
-                logger.warning(f"[RESCHEDULE_TASK]   - Task #{t.id}: '{t.title}'")
+                title_lower = t.title.lower()
+                # Проверяем и полное совпадение, и стемминг
+                if search_lower in title_lower or search_stem in title_lower:
+                    task = t
+                    logger.info(f"[RESCHEDULE_TASK] Found task: id={t.id}, title='{t.title}'")
+                    break
+            
+            if not task:
+                logger.warning(f"[RESCHEDULE_TASK] Task not found with search '{task_title}'! User has {len(all_user_tasks)} tasks:")
+                for t in all_user_tasks:
+                    logger.warning(f"[RESCHEDULE_TASK]   - Task #{t.id}: '{t.title}'")
     else:
         if close_session:
             session.close()
@@ -2626,6 +2665,7 @@ def update_user_memory(info=None, user_id=None, session=None):
             session.close()
 def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
     """Delete a task by ID or title"""
+    from models import User  # Явный импорт для избежания конфликтов области видимости
     logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', reason='{reason}', user_id={user_id}, confirmed={confirmed}")
     
     if user_id is None:
@@ -2648,32 +2688,46 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
             session.close()
         return "Пользователь не найден."
 
-    # Find task using flexible search with stemming
-    from ai_integration.task_search import find_task_flexible
-    
-    task_id_int = None
-    if task_id:
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-    
-    task = find_task_flexible(
-        session=session,
-        user=user,
-        task_id=task_id_int,
-        task_title=task_title,
-        include_completed=True,
-        include_delegated=True
-    )
-    
-    if not task:
-        if close_session:
-            session.close()
-        return f"Задача не найдена: {task_title or task_id}"
+    # СПЕЦИАЛЬНАЯ ОБРАБОТКА МЕСТОИМЕНИЙ - используем текущую задачу
+    if task_title:
+        from .task_context import extract_task_reference_from_message, get_user_current_task
+        task_reference = extract_task_reference_from_message(task_title)
+        if task_reference == "__CURRENT_TASK__":
+            current_task = get_user_current_task(user)
+            if current_task:
+                logger.info(f"[DELETE_TASK] Using current task: '{current_task.title}' for pronoun '{task_title}'")
+                task = current_task
+                # Пропускаем обычный поиск
+            else:
+                logger.warning(f"[DELETE_TASK] No current task set for pronoun '{task_title}'")
+                task = None
+        else:
+            task = None  # Будет найден через find_task_flexible
+    else:
+        task = None
 
+    # Если задача не найдена через контекст, используем обычный поиск
+    if task is None:
+        # Find task using flexible search with stemming
+        from ai_integration.task_search import find_task_flexible
+        
+        task_id_int = None
+        if task_id:
+            try:
+                task_id_int = int(task_id)
+            except (ValueError, TypeError):
+                if close_session:
+                    session.close()
+                return f"Некорректный ID задачи: {task_id}"
+
+        task = find_task_flexible(
+            session=session,
+            user=user,
+            task_id=task_id_int,
+            task_title=task_title,
+            include_completed=True,
+            include_delegated=True
+        )
     if task:
         # Check if task is already completed - allow deletion but with different message
         was_completed = task.status == "completed"
@@ -2718,15 +2772,12 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
         except Exception as e:
             logger.warning(f"[DELETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
 
-        # Save reason and mark as deleted
-        task.skipped_reason = deletion_reason
-        task.status = "deleted"
-        session.commit()
-        
-        # Actually delete the task from database
+        # Delete the task from database
         task_title = task.title
+        print(f"[DEBUG] delete_task_sync: deleting task {task.id} '{task.title}'")
         session.delete(task)
         session.commit()
+        print(f"[DEBUG] delete_task_sync: committed deletion")
 
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -3501,17 +3552,24 @@ async def get_task_details_async(task_title: str, user_id: int = None, session=N
             )
         ).all()
         
-        # Find task by matching words (case-insensitive)
+        # Find task by matching words (case-insensitive) - choose the one with most matches
         task = None
+        best_match_count = 0
         for t in user_tasks:
             task_title_lower = t.title.lower()
-            if any(word in task_title_lower for word in words):
+            match_count = sum(1 for word in words if word in task_title_lower)
+            if match_count > best_match_count:
+                best_match_count = match_count
                 task = t
-                logger.info(f"[GET_TASK_DETAILS] Found matching task: {t.title}")
-                break
+                logger.info(f"[GET_TASK_DETAILS] Better match found: {t.title} (matches: {match_count})")
         
         if not task:
             return f"❌ Задача с названием '{task_title}' не найдена."
+
+        # Update current task context
+        from .task_context import update_user_current_task
+        print(f"[DEBUG] get_task_details: updating current_task to {task.title}")
+        update_user_current_task(user, task.title, session)
 
         # Format task details
         title = task.title

@@ -51,15 +51,52 @@ class IntentClassifier:
 Ты - эксперт по анализу намерений в системе управления задачами.
 
 Проанализируй сообщение пользователя и определи его основное намерение.
-Верни ТОЛЬКО одно слово - название функции из доступных команд.
+Верни ТОЛЬКО в формате: КОМАНДА|УВЕРЕННОСТЬ
+
+Где:
+- КОМАНДА: одно слово из доступных команд
+- УВЕРЕННОСТЬ: число от 0.0 до 1.0
+
+Правила оценки уверенности:
+- 0.9-1.0: Явное намерение (прямые команды: "создай задачу", "удали задачу", "покажи задачи")
+- 0.7-0.8: Вероятное намерение (косвенные указания: "нужно сделать", "хочу найти", "я живу в")
+- 0.5-0.6: Неоднозначное (может быть разное толкование)
+- 0.0-0.4: Слишком неясно или не подходит
 
 Доступные команды: add_task, complete_task, list_tasks, delete_task, reschedule_task, edit_task, set_recurring_task, update_profile, find_partners, get_task_details, update_user_memory, delete_all_tasks, delegate_task, get_delegation_progress, conversation
 
-Если сообщение не подходит ни под одну команду - верни "conversation".
+Примеры классификации:
+"Создай задачу на завтра в 10 утра" → add_task|0.95
+"Нужно сделать отчет к вечеру" → add_task|0.85
+"Добавь напоминание о встрече" → add_task|0.9
+"Я закончил с отчетом" → complete_task|0.9
+"Уже выполнил задачу по уборке" → complete_task|0.85
+"Покажи мои задачи" → list_tasks|0.95
+"Какие у меня задачи" → list_tasks|0.9
+"Удали задачу о покупке молока" → delete_task|0.9
+"Сотри напоминание про встречу" → delete_task|0.85
+"Измени время задачи на завтра" → reschedule_task|0.9
+"Перенеси задачу на вечер" → reschedule_task|0.85
+"Каждую неделю по средам напоминай" → set_recurring_task|0.95
+"Ежедневно в 7 утра" → set_recurring_task|0.9
+"Я живу в Санкт-Петербурге" → update_profile|0.75
+"Мои хобби - фотография и путешествия" → update_profile|0.8
+"Ищу единомышленников по дизайну" → find_partners|0.8
+"Хочу найти коллег для приложений" → find_partners|0.85
+"Расскажи подробнее о задаче" → get_task_details|0.9
+"Что в задаче с презентацией" → get_task_details|0.85
+"Запомни что я предпочитаю чай" → update_user_memory|0.9
+"У меня аллергия на орехи" → update_user_memory|0.85
+"Очисти все задачи" → delete_all_tasks|0.95
+"Удали все напоминания" → delete_all_tasks|0.9
+"Поручи задачу @user" → delegate_task|0.9
+"Как продвигается делегированная задача" → get_delegation_progress|0.9
+"Привет, как дела?" → conversation|0.95
+"Спасибо за помощь" → conversation|0.9
 
 Сообщение: "{message}"
 
-Ответ (только одно слово):
+Ответ (ТОЛЬКО в формате КОМАНДА|УВЕРЕННОСТЬ):
 """
 
         try:
@@ -67,17 +104,32 @@ class IntentClassifier:
 
             # Clean response and check if it's a valid intent
             if response:
-                intent = response.strip().lower()
-                # Remove any extra text, keep only the first word
-                intent = intent.split()[0] if intent else "conversation"
+                response = response.strip().lower()
+                if '|' in response:
+                    parts = response.split('|')
+                    if len(parts) == 2:
+                        intent = parts[0].strip()
+                        try:
+                            confidence = float(parts[1].strip())
+                        except:
+                            confidence = 0.5
+                    else:
+                        intent = response.split()[0] if response else "conversation"
+                        confidence = 0.5
+                else:
+                    intent = response.split()[0] if response else "conversation"
+                    confidence = 0.5
+                
                 if intent in cls.INTENTS:
-                    return intent
+                    return f"{intent}|{confidence}"
+                else:
+                    return f"conversation|0.5"
 
-            return 'conversation'
+            return "conversation|0.5"
 
         except Exception as e:
             print(f"Intent classification error: {e}")
-            return 'conversation'
+            return "conversation|0.5"
 
     @classmethod
     def get_command_class(cls, intent: str):

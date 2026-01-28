@@ -40,6 +40,9 @@ class User(Base):
     pending_task_data = Column(Text)  # JSON for pending task creation data
     last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     conversation_context = Column(Text)  # JSON array of recent messages for context
+    current_task_id = Column(Integer, ForeignKey('tasks.id'))  # Currently discussed task
+
+    current_task = relationship("Task", foreign_keys=[current_task_id])
 
 
 class Task(Base):

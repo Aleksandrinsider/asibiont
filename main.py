@@ -458,6 +458,17 @@ try:
                 session.execute(text("ALTER TABLE promo_codes ADD COLUMN used_at TIMESTAMP"))
             session.commit()
 
+        # Migration for users table - current_task_id column
+        if inspector.has_table('users'):
+            user_columns = [col['name'] for col in inspector.get_columns('users')]
+            if 'current_task_id' not in user_columns:
+                logger.info("Adding current_task_id column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN current_task_id INTEGER REFERENCES tasks(id)'))
+                session.commit()
+                logger.info("Migration: current_task_id column added successfully")
+            else:
+                logger.info("Migration: current_task_id column already exists")
+
         session.close()
         logger.info("Migration session closed successfully")
     except Exception as e:
