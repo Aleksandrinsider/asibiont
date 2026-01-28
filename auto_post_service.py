@@ -17,26 +17,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def calculate_zodiac_sign(birthdate_str):
-    """Calculate zodiac sign from birthdate (DD.MM.YYYY)"""
-    try:
-        day, month, year = map(int, birthdate_str.split('.'))
-        
-        zodiac_dates = [
-            (20, '╨Ъ╨╛╨╖╨╡╤А╨╛╨│', '╨Т╨╛╨┤╨╛╨╗╨╡╨╣'), (19, '╨Т╨╛╨┤╨╛╨╗╨╡╨╣', '╨а╤Л╨▒╤Л'),
-            (21, '╨а╤Л╨▒╤Л', '╨Ю╨▓╨╡╨╜'), (20, '╨Ю╨▓╨╡╨╜', '╨в╨╡╨╗╨╡╤Ж'),
-            (21, '╨в╨╡╨╗╨╡╤Ж', '╨С╨╗╨╕╨╖╨╜╨╡╤Ж╤Л'), (21, '╨С╨╗╨╕╨╖╨╜╨╡╤Ж╤Л', '╨а╨░╨║'),
-            (23, '╨а╨░╨║', '╨Ы╨╡╨▓'), (23, '╨Ы╨╡╨▓', '╨Ф╨╡╨▓╨░'),
-            (23, '╨Ф╨╡╨▓╨░', '╨Т╨╡╤Б╤Л'), (23, '╨Т╨╡╤Б╤Л', '╨б╨║╨╛╤А╨┐╨╕╨╛╨╜'),
-            (22, '╨б╨║╨╛╤А╨┐╨╕╨╛╨╜', '╨б╤В╤А╨╡╨╗╨╡╤Ж'), (22, '╨б╤В╤А╨╡╨╗╨╡╤Ж', '╨Ъ╨╛╨╖╨╡╤А╨╛╨│')
-        ]
-        
-        cutoff_day, sign1, sign2 = zodiac_dates[month - 1]
-        return sign2 if day >= cutoff_day else sign1
-    except:
-        return None
-
-
 async def generate_progress_post(user_id, session):
     """Generate daily progress post using AI"""
     try:

@@ -64,6 +64,11 @@ class Task(Base):
     skipped_reason = Column(String(255))  # Reason if task was skipped/cancelled
     overdue_reminders_sent = Column(Integer, default=0)  # Number of overdue reminders sent
     recommendations = Column(Text)  # JSON array of AI-generated recommendations
+    is_recurring = Column(Boolean, default=False)  # Whether this is a recurring task
+    recurrence_pattern = Column(String(50))  # daily, weekly, monthly, yearly
+    recurrence_interval = Column(Integer, default=1)  # Every N days/weeks/months
+    recurrence_end_date = Column(DateTime)  # When to stop recurring
+    parent_task_id = Column(Integer, ForeignKey('tasks.id'))  # For recurring task instances
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])

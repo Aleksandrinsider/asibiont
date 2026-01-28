@@ -87,6 +87,35 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "edit_task",
+            "description": "✏️ Изменить существующую задачу (название, описание, время). Вызывай когда видишь 'измени', 'исправь', 'обнови' задачу. Примеры: 'измени название задачи на X', 'добавь описание к задаче Y', 'измени время задачи Z'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Ключевые слова для поиска задачи (НЕ точное название). Примеры: 'почта' найдёт 'Проверить почту', 'встреч' найдёт 'Встреча с командой'",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Новое название задачи (опционально)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Новое описание задачи (опционально)",
+                    },
+                    "reminder_time": {
+                        "type": "string",
+                        "description": "Новое время напоминания в ЛЮБОМ формате (опционально): 'завтра в 10:00', 'через 2 часа', '15:30'",
+                    },
+                },
+                "required": ["task_title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_task",
             "description": "🗑️ Удалить задачу из списка. ВСЕГДА используй когда: 'удали', 'убери', 'сотри', 'больше не нужна'. Примеры: 'удали купить хлеб', 'убери задачу про встречу', 'больше не нужна задача X'",
             "parameters": {
@@ -236,27 +265,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "suggest_alternatives",
-            "description": "Предложить альтернативы при проблемах с задачей",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_title": {
-                        "type": "string",
-                        "description": "Название проблемной задачи",
-                    },
-                    "reason": {
-                        "type": "string",
-                        "description": "Причина проблемы",
-                    },
-                },
-                "required": ["task_title", "reason"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "update_user_memory",
             "description": "Сохранить информацию в память пользователя",
             "parameters": {
@@ -278,32 +286,50 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "suggest_trends_and_opportunities",
-            "description": "Предложить тренды и возможности в определенной области",
+            "name": "delete_all_tasks",
+            "description": "Удалить все задачи (опасная операция)",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "focus_area": {
-                        "type": "string",
-                        "description": "Область интереса (career, technology, business, etc.)",
-                    },
-                    "num_suggestions": {
-                        "type": "integer",
-                        "description": "Количество предложений",
-                    },
-                },
-                "required": ["focus_area"],
+                "properties": {},
             },
         },
     },
     {
         "type": "function",
         "function": {
-            "name": "delete_all_tasks",
-            "description": "Удалить все задачи (опасная операция)",
+            "name": "set_recurring_task",
+            "description": "Создать повторяющуюся задачу. Вызывай когда видишь 'каждый день', 'еженедельно', 'каждую неделю', 'повторять', 'регулярно'. Примеры: 'напоминать о зарядке каждый день в 8:00', 'проверять почту каждую неделю по понедельникам', 'звонить родителям каждое воскресенье в 18:00'",
             "parameters": {
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Название задачи (без указания повторения)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Подробности задачи (опционально)",
+                    },
+                    "recurrence_pattern": {
+                        "type": "string",
+                        "description": "Паттерн повторения: 'daily' (каждый день), 'weekly' (каждую неделю), 'monthly' (каждый месяц), 'yearly' (каждый год)",
+                        "enum": ["daily", "weekly", "monthly", "yearly"]
+                    },
+                    "recurrence_interval": {
+                        "type": "integer",
+                        "description": "Интервал повторения (опционально, по умолчанию 1). Например: 2 для 'каждые 2 дня/недели/месяца'",
+                        "default": 1
+                    },
+                    "first_reminder_time": {
+                        "type": "string",
+                        "description": "Время первого напоминания в ЛЮБОМ формате: 'завтра в 9:00', 'через 2 часа', '15:00'"
+                    },
+                    "recurrence_end_date": {
+                        "type": "string",
+                        "description": "Когда прекратить повторения (опционально): 'через месяц', 'до конца года', 'YYYY-MM-DD'"
+                    }
+                },
+                "required": ["title", "recurrence_pattern", "first_reminder_time"],
             },
         },
     },

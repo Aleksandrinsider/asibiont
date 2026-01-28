@@ -26,11 +26,11 @@ from .handlers import (
     add_task, delete_all_tasks, complete_task, skip_task, restore_task, reschedule_task,
     get_task_advice, delegate_task_with_session, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, get_delegation_progress_for_task, cancel_delegation, edit_task,
-    list_tasks, enrich_task_list_with_insights, get_partners_list, find_partners,
+    list_tasks, get_partners_list, find_partners,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
-    cancel_subscription, get_task_details_async, suggest_alternatives_async,
-    suggest_trends_and_opportunities_async as suggest_trends_and_opportunities, update_profile, delete_task
+    cancel_subscription, get_task_details_async,
+    update_profile, delete_task, set_recurring_task
 )
 
 logger = logging.getLogger(__name__)
@@ -170,12 +170,10 @@ async def send_error_notification_to_bot(error_message, user_id=None, error_deta
 check_subscription_status = handlers.check_subscription_status
 create_subscription_payment = handlers.create_subscription_payment
 cancel_subscription = handlers.cancel_subscription
-enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 get_task_details = handlers.get_task_details_async
 get_delegation_progress = handlers.get_delegation_progress
 cancel_delegation = handlers.cancel_delegation
-suggest_alternatives = handlers.suggest_alternatives_async
 
 async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None):
     """Обрабатывает tool calls и возвращает естественный ответ
@@ -379,6 +377,19 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     )
                     tool_results.append({"function": func_name, "result": result})
 
+            elif func_name == "set_recurring_task":
+                result = set_recurring_task(
+                    title=args.get("title"),
+                    description=args.get("description", ""),
+                    recurrence_pattern=args.get("recurrence_pattern"),
+                    recurrence_interval=args.get("recurrence_interval", 1),
+                    first_reminder_time=args.get("first_reminder_time"),
+                    recurrence_end_date=args.get("recurrence_end_date"),
+                    user_id=user_id,
+                    session=db_session,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
             elif func_name == "complete_task":
                 task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
                 result = await complete_task(
@@ -426,22 +437,28 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "update_profile":
                 # ВАЛИДАЦИЯ: Для неявных обновлений профиля обязательно уведомляем пользователя
                 is_explicit_update = intent.get("type") == "update_profile"
-                result = await update_profile(
-                    city=args.get("city"),
-                    company=args.get("company"),
-                    position=args.get("position"),
-                    interests=args.get("interests"),
-                    skills=args.get("skills"),
-                    goals=args.get("goals"),
-                    user_id=user_id,
-                    session=db_session,
-                )
+                try:
+                    result = update_profile(
+                        city=args.get("city"),
+                        company=args.get("company"),
+                        position=args.get("position"),
+                        interests=args.get("interests"),
+                        skills=args.get("skills"),
+                        goals=args.get("goals"),
+                        user_id=user_id,
+                        session=db_session,
+                    )
+                    logger.info(f"[UPDATE_PROFILE] Result: {result}")
+                except Exception as e:
+                    logger.error(f"[UPDATE_PROFILE] Exception: {e}")
+                    result = f"Ошибка обновления профиля: {str(e)}"
 
                 # Если это не явное обновление профиля, добавляем уведомление
                 if not is_explicit_update:
                     result += "\n\n📝 Профиль автоматически обновлен на основе нашего разговора. Если информация не верна, скажите 'исправь мой профиль'."
 
                 tool_results.append({"function": func_name, "result": result})
+                logger.info(f"[UPDATE_PROFILE] Added to tool_results: {result[:100]}")
 
             elif func_name == "delegate_task":
                 result = delegate_task(
@@ -513,10 +530,6 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 )
                 tool_results.append({"function": func_name, "result": result})
 
-            elif func_name == "enrich_task_list_with_insights":
-                result = enrich_task_list_with_insights(user_id=user_id, session=db_session)
-                tool_results.append({"function": func_name, "result": result})
-
             elif func_name == "get_partners_list":
                 # Convert telegram_id to database user.id
                 temp_session = Session()
@@ -540,24 +553,6 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "get_task_details":
                 result = await get_task_details(
                     task_title=args.get("task_title"),
-                    user_id=user_id,
-                    session=db_session,
-                )
-                tool_results.append({"function": func_name, "result": result})
-
-            elif func_name == "suggest_alternatives":
-                result = await suggest_alternatives(
-                    task_title=args.get("task_title"),
-                    reason=args.get("reason"),
-                    user_id=user_id,
-                    session=db_session,
-                )
-                tool_results.append({"function": func_name, "result": result})
-
-            elif func_name == "suggest_trends_and_opportunities":
-                result = await suggest_trends_and_opportunities(
-                    focus_area=args.get("focus_area"),
-                    num_suggestions=args.get("num_suggestions", 3),
                     user_id=user_id,
                     session=db_session,
                 )
@@ -650,7 +645,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif "Найдены партнеры:" in result_text or "партнеры найдены" in result_text.lower():
                 natural_responses.append(result_text)
 
-            elif "Профиль обновлен" in result_text:
+            elif "Профиль успешно обновлен" in result_text or "Профиль обновлен" in result_text:
                 # Парсим детали обновления и передаем AI только факты
                 if "added_interests:" in result_text:
                     match = re.search(r"added_interests:([^;]+)", result_text)
@@ -1940,8 +1935,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[TOOL CHOICE] REQUIRED for delete_task trigger: {message[:50]}")
         
         # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ add_task при явных триггерах создания
-        create_triggers = ['напомни', 'создай', 'добавь', 'запланируй', 'поставь задачу']
-        time_indicators = ['через', 'в ', 'завтра', 'сегодня', ' час', 'минут', 'послезавтра', ':00', ':30', ':15', ':45']
+        create_triggers = ['напомни', 'создай', 'добавь', 'запланируй', 'поставь задачу', 'встреча', 'задача']
+        time_indicators = ['через', 'в ', 'завтра', 'сегодня', ' час', 'минут', 'послезавтра', ':00', ':30', ':15', ':45', 'утром', 'вечером', 'днём']
         has_create_trigger = any(trigger in message_lower for trigger in create_triggers)
         has_time_indicator = any(indicator in message_lower for indicator in time_indicators)
         
@@ -1950,6 +1945,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             if not any(word in message_lower for word in ['делегируй', 'поручи', '@']):
                 tool_choice = 'required'
                 logger.info(f"[TOOL CHOICE] REQUIRED for add_task trigger: {message[:50]}")
+        
+        # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ для других критичных команд
+        complete_triggers = ['сделал', 'выполнил', 'завершил', 'готово', 'закончил']
+        if any(trigger in message_lower for trigger in complete_triggers) and tool_choice == 'auto':
+            tool_choice = 'required'
+            logger.info(f"[TOOL CHOICE] REQUIRED for complete_task trigger: {message[:50]}")
+        
+        reschedule_triggers = ['перенеси', 'измени время', 'поменяй время', 'сдвинь']
+        if any(trigger in message_lower for trigger in reschedule_triggers) and tool_choice == 'auto':
+            tool_choice = 'required'
+            logger.info(f"[TOOL CHOICE] REQUIRED for reschedule_task trigger: {message[:50]}")
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
         # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности

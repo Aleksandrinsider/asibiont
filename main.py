@@ -245,6 +245,54 @@ try:
         else:
             logger.info("Migration: tasks table already exists")
 
+            # Migration for recurring task columns in tasks table
+            task_columns = [col['name'] for col in inspector.get_columns('tasks')]
+            
+            # Migration for is_recurring column
+            if 'is_recurring' not in task_columns:
+                logger.info("Adding is_recurring column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN is_recurring BOOLEAN DEFAULT FALSE'))
+                session.commit()
+                logger.info("Migration: is_recurring column added successfully")
+            else:
+                logger.info("Migration: is_recurring column already exists")
+
+            # Migration for recurrence_pattern column
+            if 'recurrence_pattern' not in task_columns:
+                logger.info("Adding recurrence_pattern column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN recurrence_pattern VARCHAR(50)'))
+                session.commit()
+                logger.info("Migration: recurrence_pattern column added successfully")
+            else:
+                logger.info("Migration: recurrence_pattern column already exists")
+
+            # Migration for recurrence_interval column
+            if 'recurrence_interval' not in task_columns:
+                logger.info("Adding recurrence_interval column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN recurrence_interval INTEGER DEFAULT 1'))
+                session.commit()
+                logger.info("Migration: recurrence_interval column added successfully")
+            else:
+                logger.info("Migration: recurrence_interval column already exists")
+
+            # Migration for recurrence_end_date column
+            if 'recurrence_end_date' not in task_columns:
+                logger.info("Adding recurrence_end_date column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN recurrence_end_date TIMESTAMP'))
+                session.commit()
+                logger.info("Migration: recurrence_end_date column added successfully")
+            else:
+                logger.info("Migration: recurrence_end_date column already exists")
+
+            # Migration for parent_task_id column
+            if 'parent_task_id' not in task_columns:
+                logger.info("Adding parent_task_id column to tasks table")
+                session.execute(text('ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id)'))
+                session.commit()
+                logger.info("Migration: parent_task_id column added successfully")
+            else:
+                logger.info("Migration: parent_task_id column already exists")
+
         # Migration for posts table
         if not inspector.has_table('posts'):
             logger.info("Creating posts table")

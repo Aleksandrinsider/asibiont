@@ -166,6 +166,7 @@ class ReminderService:
         self.schedule_overdue_checks()
         self.schedule_delegation_checks()
         self.schedule_avatar_updates()
+        self.schedule_recurring_task_checks()
 
     def schedule_existing_reminders(self):
         logger = logging.getLogger(__name__)
@@ -1366,4 +1367,128 @@ class ReminderService:
             replace_existing=True
         )
         logger.info("Scheduled daily delegation deadline checks at 9:00 UTC")
+
+    def schedule_recurring_tasks(self):
+        """Schedule creation of new instances for recurring tasks"""
+        logger = logging.getLogger(__name__)
+        db = Session()
+        try:
+            # Find all recurring tasks that are still active
+            recurring_tasks = db.query(Task).filter(
+                Task.is_recurring == True,
+                Task.recurrence_end_date.is_(None) | (Task.recurrence_end_date > datetime.now(pytz.UTC))
+            ).all()
+
+            logger.info(f"Found {len(recurring_tasks)} active recurring tasks")
+
+            for recurring_task in recurring_tasks:
+                try:
+                    self._schedule_next_recurring_instance(recurring_task, db)
+                except Exception as e:
+                    logger.error(f"Error scheduling recurring task {recurring_task.id}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in schedule_recurring_tasks: {e}")
+        finally:
+            db.close()
+
+    def _schedule_next_recurring_instance(self, recurring_task, db):
+        """Schedule the next instance of a recurring task"""
+        logger = logging.getLogger(__name__)
+
+        # Find the last created instance of this recurring task
+        last_instance = db.query(Task).filter(
+            Task.parent_task_id == recurring_task.id
+        ).order_by(Task.reminder_time.desc()).first()
+
+        if not last_instance:
+            # No instances yet, create first one
+            next_time = recurring_task.reminder_time
+        else:
+            # Calculate next time based on recurrence pattern
+            next_time = self._calculate_next_recurrence_time(
+                last_instance.reminder_time,
+                recurring_task.recurrence_pattern,
+                recurring_task.recurrence_interval
+            )
+
+        # Check if we're still within the recurrence period
+        if recurring_task.recurrence_end_date and next_time > recurring_task.recurrence_end_date:
+            logger.info(f"Recurring task {recurring_task.id} has reached end date")
+            return
+
+        # Check if instance already exists for this time
+        existing_instance = db.query(Task).filter(
+            Task.parent_task_id == recurring_task.id,
+            Task.reminder_time == next_time
+        ).first()
+
+        if existing_instance:
+            logger.info(f"Instance already exists for recurring task {recurring_task.id} at {next_time}")
+            return
+
+        # Create new instance
+        new_instance = Task(
+            user_id=recurring_task.user_id,
+            title=recurring_task.title,
+            description=recurring_task.description,
+            reminder_time=next_time,
+            parent_task_id=recurring_task.id
+        )
+
+        db.add(new_instance)
+        db.commit()
+
+        # Schedule reminder for the new instance
+        if recurring_task.user and recurring_task.user.telegram_id:
+            self.schedule_reminder(
+                new_instance.id,
+                next_time,
+                recurring_task.user.telegram_id,
+                new_instance.title
+            )
+
+        logger.info(f"Created new instance {new_instance.id} for recurring task {recurring_task.id} at {next_time}")
+
+    def _calculate_next_recurrence_time(self, last_time, pattern, interval):
+        """Calculate the next occurrence time based on pattern"""
+        if pattern == 'daily':
+            return last_time + timedelta(days=interval)
+        elif pattern == 'weekly':
+            return last_time + timedelta(weeks=interval)
+        elif pattern == 'monthly':
+            # Simple monthly calculation - add interval months
+            year = last_time.year
+            month = last_time.month + interval
+            day = last_time.day
+
+            # Handle month overflow
+            while month > 12:
+                year += 1
+                month -= 12
+
+            # Handle invalid days (e.g., Feb 30 -> Feb 28/29)
+            import calendar
+            last_day = calendar.monthrange(year, month)[1]
+            if day > last_day:
+                day = last_day
+
+            return last_time.replace(year=year, month=month, day=day)
+        elif pattern == 'yearly':
+            return last_time.replace(year=last_time.year + interval)
+        else:
+            # Default to daily
+            return last_time + timedelta(days=interval)
+
+    def schedule_recurring_task_checks(self):
+        """Schedule periodic checks for creating new recurring task instances"""
+        job_id = "recurring_tasks_check"
+        self.scheduler.add_job(
+            self.schedule_recurring_tasks,
+            trigger="interval",
+            hours=1,  # Check every hour
+            id=job_id,
+            replace_existing=True
+        )
+        logger.info("Scheduled recurring tasks check every hour")
 

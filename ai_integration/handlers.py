@@ -167,6 +167,136 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     return result_msg
 
 
+def set_recurring_task(title, description="", recurrence_pattern=None, recurrence_interval=1, first_reminder_time=None, recurrence_end_date=None, user_id=None, session=None):
+    """Create a recurring task that generates instances automatically"""
+    logger.info(f"[SET_RECURRING_TASK] Called with title='{title}', pattern='{recurrence_pattern}', interval={recurrence_interval}, user_id={user_id}")
+
+    if user_id is None:
+        logger.error("[SET_RECURRING_TASK] ERROR: user_id is None!")
+        return "ERROR: user_id is required"
+
+    if not recurrence_pattern:
+        logger.error("[SET_RECURRING_TASK] ERROR: recurrence_pattern is required!")
+        return "ERROR: Не указан паттерн повторения (daily/weekly/monthly/yearly)"
+
+    if not first_reminder_time:
+        logger.error("[SET_RECURRING_TASK] ERROR: first_reminder_time is required!")
+        return "ERROR: Не указано время первого напоминания"
+
+    # Validate recurrence pattern
+    valid_patterns = ['daily', 'weekly', 'monthly', 'yearly']
+    if recurrence_pattern not in valid_patterns:
+        logger.error(f"[SET_RECURRING_TASK] Invalid pattern: {recurrence_pattern}")
+        return f"ERROR: Неправильный паттерн повторения. Допустимые: {', '.join(valid_patterns)}"
+
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Check if user exists
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(telegram_id=user_id)
+            session.add(user)
+            session.commit()
+
+        # Parse first reminder time
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        current_time = datetime.now(user_tz)
+
+        from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
+
+        parsed_time = parse_time_with_ai(first_reminder_time, current_time)
+        if not parsed_time:
+            parsed_time = parse_time_simple_fallback(first_reminder_time, current_time)
+
+        if not parsed_time:
+            if close_session:
+                session.close()
+            return f"ERROR: Не удалось распарсить время '{first_reminder_time}'"
+
+        # Parse recurrence end date if provided
+        end_date = None
+        if recurrence_end_date:
+            end_parsed = parse_time_with_ai(recurrence_end_date, current_time)
+            if not end_parsed:
+                end_parsed = parse_time_simple_fallback(recurrence_end_date, current_time)
+            if end_parsed:
+                end_date = end_parsed.astimezone(pytz.UTC)
+
+        # Create the recurring task template
+        recurring_task = Task(
+            user_id=user.id,
+            title=title,
+            description=encrypt_data(description),
+            is_recurring=True,
+            recurrence_pattern=recurrence_pattern,
+            recurrence_interval=recurrence_interval,
+            recurrence_end_date=end_date,
+            reminder_time=parsed_time.astimezone(pytz.UTC)
+        )
+
+        session.add(recurring_task)
+        session.commit()
+
+        # Create first instance immediately
+        first_instance = Task(
+            user_id=user.id,
+            title=title,
+            description=encrypt_data(description),
+            reminder_time=parsed_time.astimezone(pytz.UTC),
+            parent_task_id=recurring_task.id
+        )
+
+        session.add(first_instance)
+        session.commit()
+
+        # Schedule reminder for first instance
+        try:
+            from reminder_service import REMINDER_SERVICE
+            if REMINDER_SERVICE:
+                REMINDER_SERVICE.schedule_reminder(
+                    task_id=first_instance.id,
+                    reminder_time=first_instance.reminder_time,
+                    user_id=user.telegram_id,
+                    task_title=first_instance.title
+                )
+                logger.info(f"[SET_RECURRING_TASK] Scheduled first reminder for recurring task {first_instance.id}")
+        except Exception as e:
+            logger.warning(f"Could not schedule reminder for recurring task instance {first_instance.id}: {e}")
+
+        # Format result message
+        pattern_text = {
+            'daily': f'каждый {recurrence_interval} день' if recurrence_interval > 1 else 'каждый день',
+            'weekly': f'каждые {recurrence_interval} недели' if recurrence_interval > 1 else 'каждую неделю',
+            'monthly': f'каждые {recurrence_interval} месяца' if recurrence_interval > 1 else 'каждый месяц',
+            'yearly': f'каждый {recurrence_interval} год' if recurrence_interval > 1 else 'каждый год'
+        }.get(recurrence_pattern, recurrence_pattern)
+
+        result_msg = f"Создана повторяющаяся задача '{title}' ({pattern_text})"
+
+        if end_date:
+            end_local = end_date.astimezone(user_tz)
+            end_str = end_local.strftime('%d.%m.%Y')
+            result_msg += f" до {end_str}"
+
+        logger.info(f"[SET_RECURRING_TASK] Recurring task created successfully: {result_msg}")
+
+        if close_session:
+            session.close()
+
+        return result_msg
+
+    except Exception as e:
+        logger.error(f"[SET_RECURRING_TASK] Error creating recurring task: {e}")
+        if close_session:
+            session.close()
+        return f"ERROR: Не удалось создать повторяющуюся задачу: {str(e)}"
+
+
 def delete_all_tasks(user_id=None, session=None):
     """Delete all tasks for a user"""
     if session is None:
@@ -209,7 +339,7 @@ def delete_all_tasks(user_id=None, session=None):
 
 async def complete_task(task_id=None, task_title=None, completion_note=None, user_id=None, session=None):
     """Mark task as completed
-    
+
     Args:
         task_id: ID задачи
         task_title: Название задачи (если нет ID)
@@ -1527,97 +1657,7 @@ def list_tasks(user_id=None, session=None, include_completed=False):
             session.close()
 
 
-def enrich_task_list_with_insights(task_list_text, user_id):
-    """Enrich task list with valuable insights and analysis"""
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return task_list_text
-
-        # Get tasks for analysis
-        tasks = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.status != "completed"
-        ).all()
-
-        # Analyze patterns
-        insights = []
-
-        # 1. Analyze workload
-        task_count = len(tasks)
-        if task_count == 0:
-            insights.append(
-                "Отличная работа - все задачи выполнены! Раньше ты мог часами вспоминать, что нужно сделать, теперь все под контролем.")
-        elif task_count == 1:
-            insights.append(
-                "Одна задача - идеально для фокуса. Раньше ты мог теряться в длинных списках, теперь приоритет ясен.")
-        elif task_count > 5:
-            insights.append(
-                f"{task_count} задач - стоит приоритизировать. Я помогу организовать, чтобы не терять время на хаос.")
-
-        # 2. Analyze overdue tasks
-        overdue_count = 0
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-        now = datetime.now(user_tz)
-
-        for task in tasks:
-            if task.reminder_time:
-                try:
-                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
-                    if reminder_dt < now:
-                        overdue_count += 1
-                except Exception as e:
-                    logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
-                    pass
-
-        if overdue_count > 0:
-            insights.append(
-                f"{overdue_count} просроченных задач. Раньше это могло вызвать стресс и потерю времени - теперь давай исправим ситуацию.")
-
-        # 3. Analyze delegation
-        delegated_count = sum(1 for t in tasks if t.delegated_to_username)
-        if delegated_count > 0:
-            insights.append(
-                f"Ты делегируешь {delegated_count} задач - умный подход! Раньше все приходилось делать самому, теперь команда помогает.")
-
-        # 4. Optimization suggestions
-        tasks_without_time = sum(1 for t in tasks if not t.reminder_time)
-        if tasks_without_time > 0:
-            insights.append(
-                f"{tasks_without_time} задач без времени - добавим сроки, чтобы избежать спешки в последний момент.")
-
-        # Format final response
-        result = task_list_text
-        if insights:
-            result += "\n\nАнализ ситуации: " + ", ".join(insights[:3])
-            result += "\n\nЧто приоритизируем? Или может найдем партнеров для совместной работы над похожими задачами?"
-
-        # Add social suggestions based on profile
-        user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if user_profile and (user_profile.interests or user_profile.skills):
-            social_suggestions = []
-
-            if user_profile.interests:
-                interests_list = [i.strip() for i in user_profile.interests.split(',')]
-                if any(i.lower() in ['бег', 'спорт', 'фитнес', 'йога'] for i in interests_list):
-                    social_suggestions.append("Вижу интерес к спорту - могу найти партнеров для совместных тренировок")
-                if any(i.lower() in ['программирование', 'it', 'разработка'] for i in interests_list):
-                    social_suggestions.append(
-                        "Занимаешься IT - найдем коллег для обмена опытом или совместных проектов")
-                if any(i.lower() in ['путешествия', 'кино', 'театр', 'музыка'] for i in interests_list):
-                    social_suggestions.append(
-                        "Любишь культурные мероприятия - подберу компанию для походов в кино или театр")
-
-            if social_suggestions:
-                result += "\n\nСоциальные возможности: " + ", ".join(social_suggestions[:2])
-                result += "\n\nХочешь найти единомышленников прямо сейчас?"
-
-        return result
-
-    except Exception as e:
-        logger.error(f"Error enriching task list: {e}")
-        return task_list_text
+# Function removed
     finally:
         session.close()
 
@@ -2180,14 +2220,14 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
     """Generate personalized delegation notification using AI"""
     import aiohttp
     from config import DEEPSEEK_API_KEY
-    from .prompts import get_optimized_system_prompt
+    from .prompts import get_extended_system_prompt
     from .utils import clean_technical_details
 
     try:
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_optimized_system_prompt()
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None)
 
         prompt = f"""Создай персонализированное и мотивирующее уведомление о делегированной задаче.
 
@@ -2239,14 +2279,14 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
     """Generate AI-powered progress request for delegated task"""
     import aiohttp
     from config import DEEPSEEK_API_KEY
-    from .prompts import get_optimized_system_prompt
+    from .prompts import get_extended_system_prompt
     from .utils import clean_technical_details
 
     try:
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
-        system_prompt = get_optimized_system_prompt()
+        system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None)
 
         prompt = f"""Создай запрос о прогрессе выполнения делегированной задачи.
 
@@ -2799,95 +2839,7 @@ def get_all_delegation_progress(user_id=None, session=None):
 
 
 
-def suggest_alternatives(task_id=None, reason=None, user_id=None, session=None):
-    """Suggest alternatives for an uncompleted task: postpone, break down, delegate, find partner"""
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if close_session:
-                session.close()
-            return "Пользователь не найден."
-
-        if not task_id:
-            if close_session:
-                session.close()
-            return "Не указан ID задачи."
-
-        try:
-            task_id_int = int(task_id)
-        except (ValueError, TypeError):
-            if close_session:
-                session.close()
-            return f"Некорректный ID задачи: {task_id}"
-
-        # Find task
-        task = session.query(Task).filter(
-            or_(
-                and_(Task.id == task_id_int, Task.user_id == user.id),
-                and_(Task.id == task_id_int, Task.delegated_to_username.ilike((user.username or '').replace('@', '')), Task.delegation_status == "accepted")
-            )
-        ).first()
-
-        if not task:
-            if close_session:
-                session.close()
-            return "Задача не найдена."
-
-        # Generate alternatives based on task characteristics
-        alternatives = []
-        task_title = task.title
-
-        # Alternative 1: Postpone
-        if task.reminder_time:
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-            current_time = datetime.now(user_tz)
-            if task.reminder_time > current_time:
-                alternatives.append("⏰ Перенести задачу на более удобное время")
-            else:
-                alternatives.append("⏰ Перенести задачу на завтра или выходные")
-
-        # Alternative 2: Break down
-        if len(task.title.split()) > 3 or (task.description and len(task.description) > 50):
-            alternatives.append("🔨 Разбить задачу на более мелкие подзадачи")
-
-        # Alternative 3: Delegate (if user has appropriate subscription)
-        user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if user_profile and user_profile.subscription_tier in ['standard', 'premium']:
-            alternatives.append("👥 Делегировать задачу другому пользователю")
-        else:
-            alternatives.append("⭐ Рассмотреть премиум-подписку для возможности делегирования")
-
-        # Alternative 4: Find partner
-        alternatives.append("🤝 Найти партнёра для совместного выполнения")
-
-        # Alternative 5: Get AI suggestions
-        alternatives.append("💡 Получить идеи и советы от AI")
-
-        # Alternative 6: Set reminders
-        if not task.reminder_time:
-            alternatives.append("🔔 Настроить напоминания для регулярного выполнения")
-
-        response = f"💡 Альтернативы для невыполненной задачи '{task_title}':\n\n"
-        for i, alt in enumerate(alternatives, 1):
-            response += f"{i}. {alt}\n"
-
-        if reason:
-            response += f"\n📝 Учитывая причину '{reason}', рекомендую начать с наиболее подходящих вариантов."
-
-        if close_session:
-            session.close()
-        return response
-
-    except Exception as e:
-        if close_session:
-            session.close()
-        return f"Ошибка при генерации альтернатив: {str(e)}"
+# Function removed
 
 
 def delegate_task_with_session(title, description, reminder_time, delegated_to_username, delegation_details="", user_id=None, session=None):
@@ -3316,7 +3268,7 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
             session.close()
 
 
-async def update_profile(user_id: int, city: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, session=None, close_session: bool = True) -> str:
+def update_profile(user_id: int, city: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, session=None, close_session: bool = True) -> str:
     """
     Обновляет профиль пользователя с новыми данными.
 
@@ -3393,96 +3345,7 @@ async def update_profile(user_id: int, city: str = None, interests: str = None, 
             session.close()
 
 
-async def suggest_alternatives_async(task_title: str, reason: str, user_id: int = None, session=None, close_session: bool = True) -> str:
-    """
-    Предложить альтернативы при проблемах с задачей.
-
-    Args:
-        task_title: Название проблемной задачи
-        reason: Причина проблемы
-        user_id: ID пользователя (опционально)
-        session: Сессия базы данных (опционально)
-        close_session: Закрывать ли сессию после выполнения
-
-    Returns:
-        Предложения альтернатив
-    """
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        # Получить профиль пользователя для персонализации
-        profile = None
-        if user_id:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if user:
-                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-
-        # Сгенерировать предложения на основе причины проблемы
-        alternatives = []
-
-        if "время" in reason.lower() or "задержка" in reason.lower():
-            alternatives.extend([
-                "Разбить задачу на меньшие подзадачи с отдельными дедлайнами",
-                "Делегировать часть работы коллегам или фрилансерам",
-                "Перенести дедлайн с уведомлением заинтересованных сторон",
-                "Найти более эффективный инструмент или метод выполнения"
-            ])
-
-        elif "ресурсы" in reason.lower() or "деньги" in reason.lower():
-            alternatives.extend([
-                "Найти бесплатные или более дешевые альтернативы",
-                "Обратиться за спонсорством или грантами",
-                "Использовать существующие ресурсы более эффективно",
-                "Отложить задачу до лучших времен"
-            ])
-
-        elif "навыки" in reason.lower() or "знания" in reason.lower():
-            alternatives.extend([
-                "Пройти онлайн-курс или обучение по теме",
-                "Найти ментора или консультанта",
-                "Начать с более простой версии задачи",
-                "Объединиться с кем-то, кто имеет нужные навыки"
-            ])
-
-        else:
-            alternatives.extend([
-                "Проанализировать причину более детально",
-                "Обратиться за советом к экспертам",
-                "Искать похожие кейсы и их решения",
-                "Рассмотреть полную отмену задачи, если она не критична"
-            ])
-
-        # Добавить персонализацию на основе профиля
-        personalized_suggestions = ""
-        if profile and profile.interests:
-            personalized_suggestions = f"\n\nУчитывая твои интересы ({profile.interests}), рекомендую также рассмотреть:"
-
-            if "технологии" in profile.interests.lower() or "программирование" in profile.interests.lower():
-                personalized_suggestions += "\n- Использовать автоматизацию или скрипты для упрощения процесса"
-            elif "бизнес" in profile.interests.lower():
-                personalized_suggestions += "\n- Провести анализ ROI перед продолжением"
-            elif "творчество" in profile.interests.lower():
-                personalized_suggestions += "\n- Взять творческий перерыв для свежих идей"
-
-        response = f"Проблема с задачей '{task_title}': {reason}\n\nПредлагаю следующие альтернативы:\n"
-        for i, alt in enumerate(alternatives[:5], 1):  # Ограничим до 5 предложений
-            response += f"{i}. {alt}\n"
-
-        response += personalized_suggestions
-
-        return response
-
-    except Exception as e:
-        logger.error(f"Ошибка при генерации альтернатив для задачи {task_title}: {e}")
-        return f"Не удалось сгенерировать альтернативы: {e}"
-
-    finally:
-        if close_session:
-            session.close()
+# Function removed
 
 
 async def update_user_memory_async(memory_type: str, content: str, user_id: int = None, session=None, close_session: bool = True) -> str:
@@ -3540,20 +3403,13 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
             session.close()
 
 
-async def suggest_trends_and_opportunities_async(focus_area: str, num_suggestions: int = 3, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
     """
-    Предложить тренды и возможности в определенной области.
+    Удалить задачу по ID или названию.
 
     Args:
-        focus_area: Область интереса (career, technology, business, etc.)
-        num_suggestions: Количество предложений
-        user_id: ID пользователя (опционально)
-        session: Сессия базы данных (опционально)
-        close_session: Закрывать ли сессию после выполнения
-
-    Returns:
-        Предложения трендов и возможностей
-    """
+        task_id: ID задачи для удаления (опционально)
+        task_title: Название задачи для удаления (опционально)
     if session is None:
         session = Session()
         close_session = True
@@ -3800,7 +3656,7 @@ async def get_task_details_async(task_title: str, user_id: int = None, session=N
             if completion_note:
                 completion_info += f"\nЗаметка: {completion_note}"
 
-        details = f"""📋 Детали задачи:
+        details = f"""Детали задачи:
 
 Название: {title}
 Описание: {description}
@@ -4056,69 +3912,5 @@ def accept_delegated_task(task_title, user_id=None):
         session.close()
 
 
-def reject_delegated_task(task_title, reason="", user_id=None):
-    """Отклонить делегированную задачу"""
-    logger.info(f"[REJECT_DELEGATED_TASK] Called with task_title='{task_title}', user_id={user_id}")
-
-    if not user_id:
-        return "❌ Ошибка: пользователь не найден"
-
-    if not task_title:
-        return "❌ Ошибка: укажите название задачи"
-
-    session = Session()
-    try:
-        # Найти пользователя
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "❌ Ошибка: пользователь не найден"
-
-        # Найти задачу, делегированную этому пользователю
-        task = session.query(Task).filter(
-            Task.delegated_to_username == user.username,
-            Task.delegation_status == 'pending'
-        ).filter(
-            func.lower(Task.title).like(f'%{task_title.lower()}%')
-        ).first()
-
-        if not task:
-            return f"❌ Задача '{task_title}' не найдена среди делегированных вам задач."
-
-        # Отклонить задачу
-        task.delegation_status = 'rejected'
-        if reason:
-            task.completion_notes = encrypt_data(f"Отклонено: {reason}")
-        session.commit()
-
-        # Удалить задачу, так как она отклонена
-        session.delete(task)
-        session.commit()
-
-        # Отправить уведомление отправителю
-        try:
-            delegator = session.query(User).filter_by(id=task.delegated_by).first()
-            if delegator:
-                from .handlers import generate_delegation_response_notification_async
-                import asyncio
-                rejection_reason = f" (причина: {reason})" if reason else ""
-                asyncio.create_task(generate_delegation_response_notification_async(
-                    task_title=task.title,
-                    response=f"rejected{rejection_reason}",
-                    delegator_telegram_id=delegator.telegram_id,
-                    delegatee_username=user.username or f"ID:{user.telegram_id}"
-                ))
-        except Exception as e:
-            logger.warning(f"[REJECT_DELEGATED_TASK] Could not send notification: {e}")
-
-        rejection_msg = f"✅ Задача '{task.title}' отклонена."
-        if reason:
-            rejection_msg += f" Причина: {reason}"
-
-        return rejection_msg
-
-    except Exception as e:
-        logger.error(f"[REJECT_DELEGATED_TASK] Error: {e}")
-        session.rollback()
-        return f"❌ Ошибка при отклонении задачи: {e}"
-    finally:
-        session.close()
+# Function removed
+# Function removed
