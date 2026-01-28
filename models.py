@@ -40,8 +40,6 @@ class User(Base):
     pending_task_data = Column(Text)  # JSON for pending task creation data
     last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     conversation_context = Column(Text)  # JSON array of recent messages for context
-    personal_data_consent = Column(Boolean, default=False)  # Consent for personal data processing
-    consent_given_at = Column(DateTime)  # When consent was given
 
 
 class Task(Base):

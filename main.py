@@ -1417,18 +1417,6 @@ def save_context_to_db(user_id, user_message, ai_message):
         session.close()
 
 
-from contextlib import asynccontextmanager
-
-@asynccontextmanager
-async def get_db_session():
-    """Асинхронный контекстный менеджер для работы с базой данных"""
-    session = Session()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
 async def get_timezone_from_ip(ip_address):
     """Определяет timezone по IP адресу через ipapi.co"""
     # Маппинг английских названий городов на русские
@@ -1659,16 +1647,8 @@ async def auth_handler(request):
             session['user_id'] = user_id
             logger.info(f"Session set with user_id: {user_id}, session keys: {list(session.keys())}")
 
-            # Проверяем согласие на обработку персональных данных
-            async with get_db_session() as db_session:
-                user = await db_session.get(User, user_id)
-                if not user or not user.personal_data_consent:
-                    logger.info(f"User {user_id} has not given consent, redirecting to consent page")
-                    response = web.HTTPFound('/consent')
-                else:
-                    response = web.HTTPFound('/dashboard')
-            
-            logger.info("Redirecting after auth")
+            response = web.HTTPFound('/dashboard')
+            logger.info("Redirecting to /dashboard after auth")
             return response
         else:
             logger.error(f"Authentication failed for data: {data}")
@@ -2775,51 +2755,11 @@ async def get_task_advice_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
-async def personal_data_consent_handler(request):
-    """Отображает страницу согласия на обработку персональных данных"""
-    session = await get_session(request)
-    user_id = session.get('user_id')
-    if not user_id:
-        return web.HTTPFound('/')
-
-    # Проверяем, дал ли пользователь согласие
-    async with get_db_session() as db_session:
-        user = await db_session.get(User, user_id)
-        if user and user.personal_data_consent:
-            # Если согласие уже дано, перенаправляем на dashboard
-            return web.HTTPFound('/dashboard')
-
-    # Отображаем страницу согласия
-    return web.Response(
-        text=render_template('personal_data_consent.html'),
-        content_type='text/html'
-    )
 
 
-async def accept_consent_handler(request):
-    """Принимает согласие на обработку персональных данных"""
-    session = await get_session(request)
-    user_id = session.get('user_id')
-    if not user_id:
-        return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    try:
-        async with get_db_session() as db_session:
-            user = await db_session.get(User, user_id)
-            if not user:
-                return web.json_response({'error': 'User not found'}, status=404)
 
-            # Обновляем согласие пользователя
-            user.personal_data_consent = True
-            user.consent_given_at = datetime.utcnow()
-            await db_session.commit()
 
-            logger.info(f"User {user_id} accepted personal data consent")
-            return web.json_response({'status': 'success'})
-
-    except Exception as e:
-        logger.error(f"Error accepting consent for user {user_id}: {e}")
-        return web.json_response({'error': 'Internal server error'}, status=500)
 
 
 async def direct_login_handler(request):
@@ -6537,8 +6477,6 @@ app.router.add_post('/skip_task', skip_task_handler)
 app.router.add_post('/delete_task', delete_task_handler)
 app.router.add_post('/reschedule_task', reschedule_task_handler)
 app.router.add_post('/get_task_advice', get_task_advice_handler)
-app.router.add_get('/consent', personal_data_consent_handler)
-app.router.add_post('/api/consent/accept', accept_consent_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
@@ -6651,7 +6589,7 @@ if __name__ == "__main__":
 
                     # Start polling for bot in local mode
                     polling_task = None
-                    if False and LOCAL and bot and dp:  # Temporarily disabled for testing
+                    if LOCAL and bot and dp:
                         logger.info("Starting Telegram bot polling for local mode")
                         await bot.delete_webhook()  # Delete webhook before polling
                         polling_task = asyncio.create_task(dp.start_polling(bot))
@@ -6661,19 +6599,8 @@ if __name__ == "__main__":
                         if polling_task:
                             await polling_task
                         else:
-                            # Keep server running indefinitely in local mode without polling
-                            import signal
-                            import asyncio
-                            stop_event = asyncio.Event()
-                            
-                            def signal_handler(signum, frame):
-                                logger.info("Received signal, shutting down...")
-                                stop_event.set()
-                            
-                            signal.signal(signal.SIGINT, signal_handler)
-                            signal.signal(signal.SIGTERM, signal_handler)
-                            
-                            await stop_event.wait()
+                            while True:
+                                await asyncio.sleep(3600)
                     except Exception as e:
                         logger.info(f"Server interrupted: {e}")
                     finally:
