@@ -41,19 +41,15 @@ async def send_delegation_notification_async(chat_id, message_text):
         logger.warning(f"Error sending delegation notification: {e}")
 
 PREMIUM_DESCRIPTION = """
-🤖 ASI Biont - ИИ-агент для управления задачами
+ASI Biont - лаборатория ИИ
 
-Я ваш персональный ИИ-ассистент для эффективного управления задачами и временем.
+Инновационная платформа от лаборатории искусственного интеллекта ASI Biont для поиска единомышленников через ваши дела. Система анализирует текущие задачи и цели, используя искусственный интеллект для глубокого понимания ваших интересов и приоритетов. Автоматически находит людей в вашем городе с похожими задачами и целями, сравнивая профили и обеспечивая релевантные связи для совместной работы и общения. Мгновенно реагирует на ситуацию и предлагает подходящих людей для бизнес-проектов, спортивных тренировок или просто прогулки в кино.
 
-✨ Возможности:
-• Создание и управление задачами через естественный язык
-• Умные напоминания и дедлайны
-• Делегирование задач партнерам
-• Анализ прогресса и рекомендации
-• Интеграция с календарем и уведомлениями
+Умный AI-агент запоминает контекст жизни, связывает задачи, понимает голосовые сообщения и предлагает оптимальные шаги с умными напоминаниями. Панель управления объединяет все: задачи, людей, историю взаимодействий и статистику. Следите за дедлайнами и делегируйте через чат с AI.
 
-Для доступа ко всем функциям нужна активная подписка.
-Выберите тариф в веб-приложении или используйте команду /subscription
+Начните использовать ASI Biont за несколько минут: просто опишите свои текущие задачи в чате с AI-агентом, и платформа автоматически создаст профиль, найдёт релевантных людей и предложит первые шаги. Интуитивный интерфейс в Telegram и веб-панель — всё необходимое под рукой для продуктивной работы и общения.
+
+Выберите тариф в веб панели пользователя https://asibiont.ru или используйте команду /subscription
 """
 
 try:
@@ -132,6 +128,20 @@ async def start_handler(message: Message):
         [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
     await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
+
+
+@router.message(Command("subscription"))
+async def subscription_handler(message: Message):
+    """Handle subscription command - redirect to web app"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Выбрать тариф", web_app=WebAppInfo(url=f"{WEB_APP_URL}/subscription_tiers"))],
+        [InlineKeyboardButton(text="Открыть панель управления", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
+    ])
+    await message.bot.send_message(
+        message.chat.id,
+        "Выберите подходящий тариф для доступа ко всем функциям ASI Biont:",
+        reply_markup=keyboard
+    )
 
 
 @router.message(Command("update_profile"))
