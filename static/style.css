@@ -2554,12 +2554,6 @@ details[open] .details-content {
         justify-content: flex-start !important;
     }
 
-    /* Добавляем отступ сверху для контента под header */
-    .main-layout {
-        margin-top: 20px !important;
-        padding-top: 0 !important;
-    }
-
     /* Login page и welcome section */
     .login-page-wrapper {
         padding: 20px 0 !important;
@@ -2641,7 +2635,8 @@ details[open] .details-content {
         height: auto;
         min-height: calc(100vh - var(--header-height));
         gap: 0;
-        margin-top: 20px !important;
+        margin-top: 0;
+        padding-top: 20px !important;
     }
 
     /* === СКРЫТЬ ЛЕВУЮ И ЦЕНТРАЛЬНУЮ КОЛОНКИ === */
