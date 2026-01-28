@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import logging
 import json
-from config import DATABASE_URL, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR
+from config import DATABASE_URL, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_MINUTES
 from ai_integration import check_delegation_deadlines, generate_proactive_message
 
 logger = logging.getLogger(__name__)
@@ -920,14 +920,14 @@ class ReminderService:
                 # Просроченные задачи - более частые проверки (каждые 30 минут)
                 interval_minutes = 30
             elif task_count == 0:
-                # Нет задач - чаще предлагать создать (каждые 60 минут)
-                interval_minutes = 60
+                # Нет задач - чаще предлагать создать (используем настройку из config: 24 часа)
+                interval_minutes = PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
             elif task_count <= 2:
-                # Мало задач - обычный интервал
-                interval_minutes = 60
+                # Мало задач - обычный интервал (2 часа)
+                interval_minutes = PROACTIVE_CHECK_INTERVAL_MINUTES
             else:
-                # Много задач - реже беспокоить (каждые 180 минут)
-                interval_minutes = 180
+                # Много задач - реже беспокоить (6 часов)
+                interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES
             
             # Вычисляем параметры cron триггера на основе интервала
             if interval_minutes >= 60:
