@@ -73,6 +73,11 @@ class IntentClassifier:
         if any(word in message_lower for word in ['перенеси', 'измени время', 'поставь на']):
             return "reschedule_task"
 
+        # Fast pre-check for profile updates
+        profile_keywords = ['интересует', 'увлекаюсь', 'люблю', 'хочу заняться', 'нравится']
+        if any(keyword in message_lower for keyword in profile_keywords):
+            return "conversation"  # Let AI handle profile extraction
+
         if any(word in message_lower for word in ['обнови', 'измени']):
             if 'профиль' in message_lower:
                 return "update_profile"
