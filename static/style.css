@@ -1861,6 +1861,8 @@ details[open] .details-content {
     font-size: 13px;
     font-weight: 400;
     transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .task-filter-btn:hover {
