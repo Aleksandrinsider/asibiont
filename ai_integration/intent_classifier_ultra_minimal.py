@@ -68,57 +68,10 @@ class IntentClassifierUltraMinimal:
                 # Remove any extra text, keep only the first word
                 intent = intent.split()[0] if intent else "conversation"
 
-                # Map common variations to standard intents
-                intent_mapping = {
-                    'create_task': 'add_task',
-                    'new_task': 'add_task',
-                    'add': 'add_task',
-                    'create': 'add_task',
-                    'show_tasks': 'list_tasks',
-                    'view_tasks': 'list_tasks',
-                    'my_tasks': 'list_tasks',
-                    'finish_task': 'complete_task',
-                    'done': 'complete_task',
-                    'finish': 'complete_task',
-                    'готово': 'complete_task',
-                    'сделал': 'complete_task',
-                    'выполнил': 'complete_task',
-                    'завершил': 'complete_task',
-                    'я сделал': 'complete_task',
-                    'я доработал': 'complete_task',
-                    'я завершил': 'complete_task',
-                    'я выполнил': 'complete_task',
-                    'уже сделал': 'complete_task',
-                    'уже выполнил': 'complete_task',
-                    'уже завершил': 'complete_task',
-                    'remove_task': 'delete_task',
-                    'remove': 'delete_task',
-                    'erase': 'delete_task',
-                    'удали': 'delete_task',
-                    'убери': 'delete_task',
-                    'move_task': 'reschedule_task',
-                    'change_time': 'reschedule_task',
-                    'reschedule': 'reschedule_task',
-                    'перенеси': 'reschedule_task',
-                    'измени время': 'reschedule_task',
-                    'update': 'update_profile',
-                    'profile': 'update_profile',
-                    'я из': 'update_profile',
-                    'работаю': 'update_profile',
-                    'интересует': 'update_profile',
-                    'find': 'find_partners',
-                    'partners': 'find_partners',
-                    'search': 'find_partners',
-                    'найди': 'find_partners',
-                    'партнеры': 'find_partners',
-                    'chat': 'conversation',
-                    'talk': 'conversation',
-                    'hello': 'conversation',
-                    'hi': 'conversation',
-                    'привет': 'conversation'
-                }
-
-                intent = intent_mapping.get(intent, intent)
+                # Clean response and return as intent (fully trust AI)
+                intent = response.strip().lower()
+                # Remove any extra text, keep only the first word if multiple
+                intent = intent.split()[0] if intent else "conversation"
 
                 if intent in cls.INTENTS:
                     return intent
