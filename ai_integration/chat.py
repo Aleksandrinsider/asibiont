@@ -3121,8 +3121,6 @@ async def generate_result_check(user_id, task_title):
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
     """Генерирует проактивное сообщение по основному промпту системы, как обычные ответы AI
     
-    ВРЕМЕННО ОТКЛЮЧЕНО
-    
     Args:
         user_id: ID пользователя
         context: Контекст сообщения
@@ -3130,7 +3128,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         overdue_count: Количество просроченных
         tasks_list: Список задач для анализа
     """
-    return None  # Временно отключено
+    try:
         # Используем тот же подход, что и в chat_with_ai
         import json
         from models import Interaction
