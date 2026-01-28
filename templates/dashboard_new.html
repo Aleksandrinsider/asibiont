@@ -451,6 +451,12 @@
             pointer-events: none;
         }
         
+        @media (max-width: 768px) {
+            body:not(.logged-in)::before {
+                display: none !important;
+            }
+        }
+        
         /* Стили для сообщений-болей на странице авторизации */
         .login-page-wrapper {
             width: 100%;
@@ -927,7 +933,7 @@
         <div class="login-page-wrapper">
             <!-- Логотип на мобильных -->
             <div class="mobile-logo" style="display: none;">
-                <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 180px; height: 180px; opacity: 1;">
+                <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 240px; height: 240px; opacity: 1;">
             </div>
             
             <!-- Левая колонка с сообщениями -->

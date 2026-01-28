@@ -2653,7 +2653,7 @@ details[open] .details-content {
     /* === ПРАВАЯ КОЛОНКА НА ВСЮ ШИРИНУ === */
     .right-column {
         width: 100% !important;
-        padding: 20px 0 0 0 !important;
+        padding: 0 !important;
         border-radius: 0;
         margin: 0;
     }
