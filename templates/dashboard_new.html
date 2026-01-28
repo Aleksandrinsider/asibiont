@@ -925,6 +925,11 @@
     <div class="container" {% if not logged_in %}style="margin-top: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh;"{% endif %}>
         {% if not logged_in %}
         <div class="login-page-wrapper">
+            <!-- Логотип на мобильных -->
+            <div class="mobile-logo" style="display: none;">
+                <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 120px; height: 120px; opacity: 0.15;">
+            </div>
+            
             <!-- Левая колонка с сообщениями -->
             <div class="login-messages-sidebar left">
                 <div class="login-message-card">

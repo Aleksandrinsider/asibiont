@@ -99,10 +99,17 @@
         @media (max-width: 768px) {
             body {
                 padding: 12px;
+                display: block !important;
+                align-items: unset !important;
+                justify-content: unset !important;
+                padding-top: 72px !important;
             }
             body::before {
                 background-size: 80%;
                 opacity: 0.03;
+            }
+            .pricing-container {
+                margin-top: 0;
             }
         }
         body::before {

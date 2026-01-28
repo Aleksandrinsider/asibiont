@@ -2529,6 +2529,13 @@ details[open] .details-content {
         padding-top: var(--header-height) !important;
     }
 
+    /* Отменяем flexbox для body на странице логина */
+    body .container {
+        display: block !important;
+        align-items: unset !important;
+        justify-content: unset !important;
+    }
+
     /* Универсальные боковые отступы для всех страниц */
     .container,
     .login-page-wrapper,
@@ -2562,10 +2569,18 @@ details[open] .details-content {
         gap: 24px;
     }
 
+    /* Показываем лого на мобильных */
+    .mobile-logo {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        order: 0;
+    }
+
     .welcome-section {
         margin-top: 0 !important;
         padding-top: 0 !important;
-        order: 1; /* Описание первым */
+        order: 1; /* Описание после лого */
     }
 
     /* Скрываем боковые колонки с сообщениями на мобильном */
