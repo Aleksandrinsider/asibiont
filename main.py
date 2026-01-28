@@ -5673,9 +5673,7 @@ async def api_reminders_handler(request):
 async def on_startup(app):
     from config import LOCAL
     # Always use SimpleCookieStorage (no Redis)
-    storage = SimpleCookieStorage()
-    logger.info("Using SimpleCookieStorage for sessions")
-
+    
     # Setup session middleware with proper cookie settings
     cookie_params = {'httponly': True}
     if not LOCAL:
@@ -5685,7 +5683,11 @@ async def on_startup(app):
         })
     else:
         cookie_params['samesite'] = 'Lax'
-    aiohttp_session.setup(app, storage, cookie_params=cookie_params)
+    
+    storage = SimpleCookieStorage(**cookie_params)
+    logger.info("Using SimpleCookieStorage for sessions")
+    
+    aiohttp_session.setup(app, storage)
     logger.info("Session middleware set up")
     
     # Синхронизируем users.subscription_tier с subscriptions.tier при старте
