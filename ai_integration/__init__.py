@@ -9,9 +9,9 @@ from .handlers import (
     add_task, list_tasks, complete_task, reschedule_task, get_task_advice,
     delegate_task_with_session, accept_delegated_task, reject_delegated_task, get_delegation_progress, get_delegation_progress_for_task, cancel_delegation,
     edit_task, delete_task, get_task_details,
-    find_partners, update_profile, suggest_alternatives,
+    find_partners, update_profile,
     create_subscription_payment, check_subscription_status,
-    cancel_subscription, get_partners_list, enrich_task_list_with_insights, check_delegation_deadlines, restore_task, update_user_memory_async
+    cancel_subscription, get_partners_list, check_delegation_deadlines, restore_task, update_user_memory_async
 )
 
 __all__ = [
@@ -43,13 +43,11 @@ __all__ = [
     'get_task_details',
     'find_partners',
     'update_profile',
-    'suggest_alternatives',
     'create_subscription_payment',
     'check_subscription_status',
     'brainstorm_ideas',
     'cancel_subscription',
     'get_partners_list',
-    'enrich_task_list_with_insights',
     'check_delegation_deadlines',
     'restore_task',
 ]

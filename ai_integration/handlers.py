@@ -1652,8 +1652,6 @@ def list_tasks(user_id=None, session=None, include_completed=False):
 
 
 # Function removed
-    finally:
-        session.close()
 
 
 def get_partners_list(user_id=None, session=None):
@@ -3394,12 +3392,6 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
 
 
 async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
-    """
-    Удалить задачу по ID или названию.
-
-    Args:
-        task_id: ID задачи для удаления (опционально)
-        task_title: Название задачи для удаления (опционально)
     if session is None:
         session = Session()
         close_session = True
@@ -3488,20 +3480,6 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
             session.close()
 
 async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
-    """
-    Удалить задачу по ID или названию.
-
-    Args:
-        task_id: ID задачи для удаления (опционально)
-        task_title: Название задачи для удаления (опционально)
-        reason: Причина удаления (опционально)
-        user_id: ID пользователя (опционально)
-        session: Сессия базы данных (опционально)
-        close_session: Закрывать ли сессию после выполнения
-
-    Returns:
-        Сообщение об успешном удалении
-    """
     if session is None:
         session = Session()
         close_session = True
@@ -3509,11 +3487,13 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         close_session = False
 
     try:
-        if not user_id:
-            return "Необходимо указать ID пользователя"
+        # Получить профиль пользователя для персонализации
+        profile = None
+        if user_id:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
-        # Получить пользователя
-        user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
 
@@ -3534,41 +3514,30 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
             logger.info(f"[DELETE_TASK] Searching for task with title '{task_title}', words: {words}, user_id: {user.id}")
             
             # Get all user tasks
-            user_tasks = session.query(Task).filter(
-                Task.user_id == user.id
-            ).all()
+            user_tasks = session.query(Task).filter_by(user_id=user.id).all()
             
-            # Find task by matching words (case-insensitive) - prefer pending tasks
+            # Find task by matching words (case-insensitive)
             for t in user_tasks:
                 task_title_lower = t.title.lower()
                 if any(word in task_title_lower for word in words):
-                    if t.status == 'pending':
-                        task = t
-                        break
-                    elif not task:
-                        task = t
-        else:
-            return "Необходимо указать ID или название задачи"
-
+                    task = t
+                    logger.info(f"[DELETE_TASK] Found matching task: {t.title}")
+                    break
+        
         if not task:
-            identifier = task_id or task_title
-            return f"Задача '{identifier}' не найдена"
+            return f"❌ Задача не найдена."
 
-        # Удалить задачу
+        # Delete the task
         session.delete(task)
         session.commit()
-
-        response = f"✅ Задача '{task.title}' удалена"
-        if reason:
-            response += f" (причина: {reason})"
-
-        return response
+        
+        logger.info(f"[DELETE_TASK] Deleted task '{task.title}' for user {user_id}")
+        return f"✅ Задача '{task.title}' удалена."
 
     except Exception as e:
+        logger.error(f"[DELETE_TASK] Error: {e}")
         session.rollback()
-        logger.error(f"Ошибка при удалении задачи {task_id or task_title}: {e}")
-        return f"❌ Ошибка при удалении задачи: {e}"
-
+        return f"❌ Ошибка удаления задачи: {e}"
     finally:
         if close_session:
             session.close()
@@ -3645,14 +3614,7 @@ async def get_task_details_async(task_title: str, user_id: int = None, session=N
             if completion_note:
                 completion_info += f"\nЗаметка: {completion_note}"
 
-        details = f"""Детали задачи:
-
-Название: {title}
-Описание: {description}
-Статус: {status}
-Создана: {created_at}
-Срок выполнения: {due_date}
-Напоминание: {reminder_time}{delegation_info}{completion_info}"""
+        details = f"Детали задачи:\n\nНазвание: {title}\nОписание: {description}\nСтатус: {status}\nСоздана: {created_at}\nСрок выполнения: {due_date}\nНапоминание: {reminder_time}{delegation_info}{completion_info}"
 
         return details
 
