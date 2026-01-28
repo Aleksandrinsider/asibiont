@@ -507,6 +507,16 @@ async def process_text_message(user_id, text, message, state):
             await message.bot.send_message(message.chat.id, "История очищена.")
             return
 
+        # СОХРАНЯЕМ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ СРАЗУ
+        session = Session()
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            from models import Interaction
+            interaction = Interaction(user_id=user.id, message_type='user', content=text)
+            session.add(interaction)
+            session.commit()
+        session.close()
+        
         context = []  # Simplified: no context in bot
         
         # Use new command-based architecture
@@ -526,13 +536,12 @@ async def process_text_message(user_id, text, message, state):
             response_text = ""
         finally:
             db_session.close()
-        # Записать взаимодействие для проактивных проверок
+        
+        # СОХРАНЯЕМ ОТВЕТ AI
         session = Session()
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if user:
             from models import Interaction
-            interaction = Interaction(user_id=user.id, message_type='user', content=text)
-            session.add(interaction)
             if response_text and response_text.strip():
                 interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
             else:
