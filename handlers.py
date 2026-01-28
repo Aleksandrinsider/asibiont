@@ -2,7 +2,8 @@ import logging
 import asyncio
 import os
 import tempfile
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, timezone
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -148,6 +149,75 @@ async def subscription_handler(message: Message):
     text_parts = message.text.split()
     if len(text_parts) > 1:
         promo_code = text_parts[1].upper()
+    
+    # Handle promo code activation if 100% discount
+    if promo_code:
+        from models import PromoCode, Subscription, SubscriptionTier, PaymentHistory
+        promo = session.query(PromoCode).filter_by(code=promo_code).first()
+        if promo and promo.discount_percent == 100:
+            # Check if user already used this promo code
+            used_by_users = json.loads(promo.used_by_users or '[]')
+            if user_id in used_by_users:
+                await message.bot.send_message(message.chat.id, "Вы уже использовали этот промокод!")
+                session.close()
+                return
+            
+            # Check max uses
+            if promo.max_uses and promo.used_count >= promo.max_uses:
+                await message.bot.send_message(message.chat.id, "Промокод уже исчерпан!")
+                session.close()
+                return
+            
+            # Check expiration
+            if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
+                await message.bot.send_message(message.chat.id, "Промокод истек!")
+                session.close()
+                return
+            
+            # Activate subscription directly
+            subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+            if not subscription:
+                subscription = Subscription(user_id=user.id, telegram_username=user.username)
+                session.add(subscription)
+            
+            subscription.status = 'active'
+            subscription.start_date = datetime.now(timezone.utc)
+            subscription.tier = promo.tier
+            user.subscription_tier = promo.tier
+            
+            # Set end date
+            now = datetime.now(timezone.utc)
+            if subscription.end_date and subscription.end_date > now:
+                subscription.end_date = subscription.end_date + timedelta(days=promo.duration_days)
+            else:
+                subscription.end_date = now + timedelta(days=promo.duration_days)
+            
+            # Mark promo code as used
+            used_by_users.append(user_id)
+            promo.used_by_users = json.dumps(used_by_users)
+            promo.used_count += 1
+            
+            # Log to payment history
+            payment_history = PaymentHistory(
+                user_id=user.id,
+                telegram_username=user.username,
+                action='promo_used',
+                tier=promo.tier,
+                amount='0',
+                duration_days=promo.duration_days,
+                start_date=subscription.start_date,
+                end_date=subscription.end_date,
+                details=json.dumps({'promo_code': promo_code, 'discount_percent': 100})
+            )
+            session.add(payment_history)
+            
+            session.commit()
+            
+            from payments import get_tier_name
+            tier_name = get_tier_name(promo.tier.value.lower())
+            await message.bot.send_message(message.chat.id, f"🎉 Промокод {promo_code} активирован! Подписка {tier_name} активирована бесплатно на {promo.duration_days} дней!")
+            session.close()
+            return
     
     # Описание тарифов
     tiers_description = """Доступные тарифы подписки:
