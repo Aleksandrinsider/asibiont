@@ -46,31 +46,80 @@ class IntentClassifier:
     async def classify_intent(cls, message: str, user_id: int) -> str:
         """Use AI to classify user intent from natural language"""
 
-        prompt = f"""
+        # Fast pre-check for recurring tasks (highest priority)
+        message_lower = message.lower()
+        recurring_keywords = ['каждый день', 'ежедневно', 'каждую неделю', 'еженедельно',
+                             'каждый месяц', 'ежемесячно', 'каждый год', 'ежегодно',
+                             'повторять', 'регулярно', 'каждые', 'еженедельно']
+        if any(keyword in message_lower for keyword in recurring_keywords):
+            return "set_recurring_task"
+
+        # Fast pre-check for common patterns
+        if any(word in message_lower for word in ['создай', 'создать', 'напомни', 'запланируй', 'добавь', 'нужно']):
+            if 'задачу' in message_lower or 'дело' in message_lower or 'напомни' in message_lower:
+                return "add_task"
+
+        if any(word in message_lower for word in ['покажи', 'список', 'мои', 'какие']):
+            if 'задач' in message_lower or 'дел' in message_lower:
+                return "list_tasks"
+
+        if any(word in message_lower for word in ['готово', 'сделал', 'выполнил', 'завершил', 'закончил']):
+            return "complete_task"
+
+        if any(word in message_lower for word in ['удали', 'убери', 'сотри']):
+            if 'задач' in message_lower:
+                return "delete_task"
+
+        if any(word in message_lower for word in ['перенеси', 'измени время', 'поставь на']):
+            return "reschedule_task"
+
+        if any(word in message_lower for word in ['обнови', 'измени']):
+            if 'профиль' in message_lower:
+                return "update_profile"
+
+        if any(word in message_lower for word in ['найди', 'поищи']):
+            if 'партнер' in message_lower:
+                return "find_partners"
+
+        prompt = """
 Ты - классификатор намерений для системы управления задачами.
 
-Проанализируй сообщение и верни ТОЛЬКО одно слово - название функции из списка:
+ПРОСТЫЕ ПРАВИЛА:
+- ЧИТАЙ СООБЩЕНИЕ ВНИМАТЕЛЬНО
+- ВЫБИРАЙ ТОЛЬКО ИЗ СПИСКА НИЖЕ
+- ЕСЛИ НЕТ ТОЧНОГО СОВПАДЕНИЯ - ВЕРНИ "conversation"
 
-ДОСТУПНЫЕ ФУНКЦИИ:
-{chr(10).join([f"- {name}: {desc.split('.')[0]}" for name, desc in cls.INTENTS.items()])}
+ТОЧНЫЕ СООТВЕТСТВИЯ:
 
-ВАЖНЫЕ ПРАВИЛА ПРИОРИТЕТА:
+add_task - Создание новой задачи с напоминанием
+complete_task - Завершение существующей задачи
+list_tasks - Просмотр списка задач
+delete_task - Удаление задачи
+reschedule_task - Изменение времени задачи
+edit_task - Изменение текста задачи
+set_recurring_task - Повторяющиеся задачи (уже проверено выше)
+update_profile - Обновление информации о пользователе
+find_partners - Поиск партнеров для сотрудничества
+get_task_details - Просмотр деталей одной задачи
+update_user_memory - Сохранение личных предпочтений
+delete_all_tasks - Удаление всех задач
+delegate_task - Делегирование задачи другому
+get_delegation_progress - Статус делегированных задач
+conversation - Все остальное
 
-1. ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ имеют ВЫСШИЙ ПРИОРИТЕТ:
-   - Если видишь слова "каждый день", "ежедневно", "каждую неделю", "еженедельно", "каждый месяц", "ежемесячно", "каждый год", "ежегодно", "повторять", "регулярно" - ОБЯЗАТЕЛЬНО используй "set_recurring_task"
-   - Даже если есть слово "напомни" или "создай" - если есть указание на повторение, используй "set_recurring_task"
-
-2. ОБЩИЕ ПРАВИЛА:
-   - Используй ТОЧНОЕ название функции
-   - Если не уверен - верни "conversation"
-   - Для создания обычных задач используй "add_task"
-   - Для завершения задач используй "complete_task"
-   - Для просмотра задач используй "list_tasks"
-   - Для удаления задач используй "delete_task"
+ПРИМЕРЫ:
+"Создай задачу на завтра" -> add_task
+"Какие у меня задачи" -> list_tasks
+"Я сделал работу" -> complete_task
+"Удалить задачу" -> delete_task
+"Перенеси на завтра" -> reschedule_task
+"Обнови профиль" -> update_profile
+"Найди партнеров" -> find_partners
+"Привет" -> conversation
 
 Сообщение: "{message}"
 
-Ответь ТОЛЬКО названием функции:
+Ответь ТОЛЬКО названием функции (одно слово):
 """
 
         try:
@@ -95,27 +144,29 @@ class IntentClassifier:
         """Map intent to command class"""
         from .commands import (
             CreateTaskCommand, ListTasksCommand, CompleteTaskCommand,
-            DeleteTaskCommand, ConversationCommand
+            DeleteTaskCommand, RescheduleTaskCommand, UpdateProfileCommand,
+            FindPartnersCommand, DelegateTaskCommand, ConversationCommand
         )
 
         # Map function names from TOOLS to command classes
         mapping = {
-            'add_task': CreateTaskCommand,  # add_task -> create_task
+            'add_task': CreateTaskCommand,
+            'create_task': CreateTaskCommand,  # Alias for router compatibility
             'list_tasks': ListTasksCommand,
             'complete_task': CompleteTaskCommand,
             'delete_task': DeleteTaskCommand,
-            'reschedule_task': ConversationCommand,  # Пока используем conversation
-            'edit_task': ConversationCommand,  # Пока используем conversation
-            'set_recurring_task': ConversationCommand,  # Пока используем conversation
-            'update_profile': ConversationCommand,  # Пока используем conversation
-            'find_partners': ConversationCommand,  # Пока используем conversation
-            'get_task_details': ConversationCommand,  # Пока используем conversation
-            'update_user_memory': ConversationCommand,  # Пока используем conversation
-            'delete_all_tasks': ConversationCommand,  # Пока используем conversation
-            'delegate_task': ConversationCommand,  # Пока используем conversation
-            'get_delegation_progress': ConversationCommand,  # Пока используем conversation
-            'accept_delegated_task': ConversationCommand,  # Пока используем conversation
-            'reject_delegated_task': ConversationCommand,  # Пока используем conversation
+            'reschedule_task': RescheduleTaskCommand,
+            'edit_task': ConversationCommand,
+            'set_recurring_task': ConversationCommand,
+            'update_profile': UpdateProfileCommand,
+            'find_partners': FindPartnersCommand,
+            'get_task_details': ConversationCommand,
+            'update_user_memory': ConversationCommand,
+            'delete_all_tasks': ConversationCommand,
+            'delegate_task': DelegateTaskCommand,
+            'get_delegation_progress': ConversationCommand,
+            'accept_delegated_task': ConversationCommand,
+            'reject_delegated_task': ConversationCommand,
             'conversation': ConversationCommand,
         }
 
@@ -151,7 +202,7 @@ class IntentClassifier:
         description = tool_def["function"]["description"]
         parameters = tool_def["function"]["parameters"]
 
-        prompt = f"""
+        prompt = """
 Извлеки параметры из сообщения пользователя на основе описания функции.
 
 Функция: {function_name}

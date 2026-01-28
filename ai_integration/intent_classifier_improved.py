@@ -28,7 +28,7 @@ class IntentClassifier:
     @classmethod
     async def _classify_with_ai(cls, message: str, user_id: int) -> Optional[dict]:
         """AI-based classification"""
-        prompt = f"""
+        prompt = """
 Ты - умный анализатор сообщений для системы управления задачами.
 
 Проанализируй сообщение пользователя и верни JSON с полями:

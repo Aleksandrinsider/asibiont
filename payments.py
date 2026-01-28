@@ -1,5 +1,5 @@
 from yookassa import Configuration, Payment
-from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, YOOKASSA_WEBHOOK_URL, WEB_APP_URL, LOCAL
+from config import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY, WEB_APP_URL, LOCAL
 import logging
 
 logger = logging.getLogger(__name__)

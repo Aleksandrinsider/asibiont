@@ -1,5 +1,4 @@
 import re
-from typing import Union
 from .commands import *
 from .intent_classifier import IntentClassifier
 

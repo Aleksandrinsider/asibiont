@@ -31,13 +31,13 @@ def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None
 
 Пользователь хочет перенести задачу на: "{time_str}"
 
-Верни JSON с целевым временем:
+Верни JSON с целевым временем в формате:
 {{
-  "year": 2026,
-  "month": 1,
-  "day": 28,
-  "hour": 10,
-  "minute": 0
+  "year": число,
+  "month": число,
+  "day": число,
+  "hour": число,
+  "minute": число
 }}
 
 Правила:
@@ -45,7 +45,14 @@ def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None
 - "завтра" = +1 день от текущей даты
 - "послезавтра" = +2 дня
 - "через N часов/минут" = прибавь к текущему времени
+- "сегодня" = текущая дата
+- "каждый день" = игнорируй, используй указанное время на сегодня
 - Если не можешь распарсить - верни {{"error": "описание проблемы"}}
+
+Примеры:
+- "завтра в 10:00" → {{"year": {current_time.year}, "month": {current_time.month}, "day": {current_time.day + 1}, "hour": 10, "minute": 0}}
+- "сегодня в 18:00" → {{"year": {current_time.year}, "month": {current_time.month}, "day": {current_time.day}, "hour": 18, "minute": 0}}
+- "через 2 часа" → рассчитай от текущего времени
 
 Верни ТОЛЬКО JSON, без текста."""
 
@@ -127,3 +134,30 @@ def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetim
         logger.error(f"❌ Simple fallback failed: {e}")
     
     return None
+
+
+def parse_time(time_str: str, timezone_str: str = 'UTC') -> datetime | None:
+    """
+    Универсальная функция парсинга времени.
+    Использует AI для сложных форматов, fallback для простых.
+    """
+    try:
+        # Get current time in specified timezone
+        if timezone_str == 'UTC':
+            tz = pytz.UTC
+        else:
+            tz = pytz.timezone(timezone_str)
+        
+        current_time = datetime.now(tz)
+        
+        # Try AI parsing first
+        result = parse_time_with_ai(time_str, current_time)
+        if result:
+            return result
+        
+        # Fallback to simple parsing
+        return parse_time_simple_fallback(time_str, current_time)
+        
+    except Exception as e:
+        logger.error(f"Error in parse_time: {e}")
+        return None

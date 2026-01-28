@@ -45,7 +45,7 @@ async def generate_progress_post(user_id, session):
         overdue_tasks = [t for t in tasks_today if t.overdue and t.status != 'completed']
         
         # Build context for AI
-        context = f"""Создай живой, естественный пост от лица пользователя {profile.first_name or user.username} о его дне.
+        context = """Создай живой, естественный пост от лица пользователя {profile.first_name or user.username} о его дне.
 
 Информация о пользователе:
 - Имя: {profile.first_name or user.username}
@@ -165,7 +165,7 @@ async def create_auto_post(user_id, content, session, notify=True):
             try:
                 from main import bot
                 if bot:
-                    notification_text = f"🤖 Автопост опубликован!\n\n💡 Пост о вашем прогрессе создан и опубликован в ленте. Вы можете просмотреть его в веб-панели."
+                    notification_text = "🤖 Автопост опубликован!\n\n💡 Пост о вашем прогрессе создан и опубликован в ленте. Вы можете просмотреть его в веб-панели."
                     
                     await bot.send_message(
                         chat_id=user_id,

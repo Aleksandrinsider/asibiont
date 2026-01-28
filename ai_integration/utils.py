@@ -164,7 +164,7 @@ def analyze_with_ai(profile, message):
     if not empty_fields:
         return None
     
-    prompt = f"""
+    prompt = """
     Проанализируй сообщение пользователя и предложи обновление профиля.
     Пустые поля профиля: {', '.join(empty_fields)}
     
@@ -1035,7 +1035,7 @@ def generate_task_recommendations(title, description, user_id):
         import requests
         from config import DEEPSEEK_API_KEY
         
-        prompt = f"""Проанализируй задачу и дай 2-3 КРАТКИХ рекомендации (максимум 3-4 слова).
+        prompt = """Проанализируй задачу и дай 2-3 КРАТКИХ рекомендации (максимум 3-4 слова).
 
 Задача: {title}
 
@@ -1267,7 +1267,7 @@ async def extract_short_title_from_message(message, current_title):
     import aiohttp
     
     try:
-        prompt = f"""Извлеки КОРОТКОЕ название задачи (2-5 слов) из сообщения пользователя.
+        prompt = """Извлеки КОРОТКОЕ название задачи (2-5 слов) из сообщения пользователя.
 
 ПРИМЕРЫ:
 "давай запланируем пробежку завтра утром в парке" → "Пробежка"

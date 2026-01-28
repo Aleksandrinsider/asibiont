@@ -2,6 +2,7 @@ import logging
 import asyncio
 import os
 import tempfile
+from datetime import datetime, timedelta
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -13,6 +14,8 @@ from models import Session, User, Subscription, Task
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
 from timezonefinder import TimezoneFinder
+
+logger = logging.getLogger(__name__)
 
 async def send_delegation_notification_async(chat_id, message_text):
     """Асинхронная отправка уведомления о делегировании"""
@@ -26,8 +29,7 @@ async def send_delegation_notification_async(chat_id, message_text):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         data = {
             "chat_id": chat_id,
-            "text": message_text,
-            "parse_mode": "HTML"
+            "text": message_text
         }
 
         async with aiohttp.ClientSession() as session:
@@ -225,7 +227,7 @@ PREMIUM — 27000₽/месяц
     standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id)
     premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id)
     
-    payment_message = f"""LIGHT (3000₽/мес):
+    payment_message = """LIGHT (3000₽/мес):
 {light_url}
 
 STANDARD (9000₽/мес):
@@ -387,10 +389,13 @@ async def process_text_message(user_id, text, message, state):
         db_session = Session()
         try:
             result = await command.execute(user_id, db_session)
-            await message.bot.send_message(message.chat.id, result)
+            # Extract response text from result dict
+            response_text = result.get('response', '') if isinstance(result, dict) else str(result)
+            await message.bot.send_message(message.chat.id, response_text)
         except Exception as e:
             logger.error(f"Error executing command for user {user_id}: {e}", exc_info=True)
             await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке команды.")
+            response_text = ""
         finally:
             db_session.close()
         # Записать взаимодействие для проактивных проверок
@@ -400,8 +405,8 @@ async def process_text_message(user_id, text, message, state):
             from models import Interaction
             interaction = Interaction(user_id=user.id, message_type='user', content=text)
             session.add(interaction)
-            if response and response.strip():
-                interaction = Interaction(user_id=user.id, message_type='ai', content=response.strip())
+            if response_text and response_text.strip():
+                interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
             else:
                 interaction = Interaction(
                     user_id=user.id,
@@ -688,6 +693,28 @@ def delegate_task(title, description, reminder_time, delegated_to_username, user
         )
 
         session.add(task)
+        
+        # Создать план контроля для агента
+        import json
+        from datetime import datetime, timezone, timedelta
+        
+        control_plan = {
+            'task_id': task.id,
+            'executor_username': delegated_to_username,
+            'user_id': user.id,
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'checkpoints': [
+                {'type': 'start_notification', 'completed': True, 'timestamp': datetime.now(timezone.utc).isoformat()},
+                {'type': 'progress_check', 'interval_hours': 4, 'next_check': (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat()},
+                {'type': 'deadline_warning', 'hours_before': 4, 'scheduled': None},
+                {'type': 'final_check', 'scheduled': task.reminder_time.isoformat() if task.reminder_time else None}
+            ],
+            'escalation_level': 0,
+            'last_contact': datetime.now(timezone.utc).isoformat(),
+            'agent_controlled': True
+        }
+        
+        task.delegation_details = json.dumps(control_plan)
         session.commit()
 
         # Отправить уведомление получателю (если бот может найти пользователя)
@@ -700,7 +727,7 @@ def delegate_task(title, description, reminder_time, delegated_to_username, user
                 # Импортировать здесь чтобы избежать циклических импортов
                 from main import bot
                 if bot:
-                    notification_text = f"📥 Вам делегирована задача!\n\n"
+                    notification_text = "📥 Вам делегирована задача!\n\n"
                     notification_text += f"📋 Задача: {title}\n"
                     notification_text += f"👤 От: @{user.username or user.first_name or 'пользователь'}\n"
                     if description:
@@ -708,7 +735,7 @@ def delegate_task(title, description, reminder_time, delegated_to_username, user
                     if reminder_time:
                         task_time = task.reminder_time.strftime('%d.%m.%Y %H:%M') if task.reminder_time else "не указан"
                         notification_text += f"⏰ Дедлайн: {task_time}\n"
-                    notification_text += f"\nИспользуйте команды:\n"
+                    notification_text += "\nИспользуйте команды:\n"
                     notification_text += f"/accept_{task.id} - принять\n"
                     notification_text += f"/reject_{task.id} - отклонить"
 
@@ -756,5 +783,630 @@ async def dashboard_handler(message: Message):
         f"🌐 Ваш личный дашборд:\n{dashboard_url}", 
         reply_markup=keyboard
     )
+
+
+# Business logic functions for command handlers
+
+def add_task(title, description, reminder_time, user_id, session):
+    """Add a new task for the user"""
+    try:
+        from models import Task, User
+        from ai_integration.time_parser import parse_time
+        
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Parse reminder time
+        parsed_time = parse_time(reminder_time, user.timezone if user.timezone else 'UTC')
+        if not parsed_time:
+            return f"Не удалось распознать время: {reminder_time}"
+        
+        # Create task
+        task = Task(
+            user_id=user_id,
+            title=title,
+            description=description,
+            reminder_time=parsed_time,
+            status='pending'
+        )
+        session.add(task)
+        session.commit()
+        
+        return f"Задача '{title}' создана на {parsed_time.strftime('%d.%m.%Y %H:%M')}"
+    
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error adding task: {e}")
+        return f"Ошибка при создании задачи: {str(e)}"
+
+
+def reschedule_task(task_title, new_time, user_id, session):
+    """Reschedule an existing task"""
+    try:
+        from models import Task, User
+        from ai_integration.time_parser import parse_time
+        
+        user = session.query(User).filter_by(id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+        
+        # Find task by title keywords
+        tasks = session.query(Task).filter(
+            Task.user_id == user_id,
+            Task.status == 'pending'
+        ).all()
+        
+        # Find best match
+        best_match = None
+        for task in tasks:
+            if task_title.lower() in task.title.lower():
+                best_match = task
+                break
+        
+        if not best_match:
+            return f"Задача с ключевыми словами '{task_title}' не найдена"
+        
+        # Parse new time
+        parsed_time = parse_time(new_time, user.timezone if user.timezone else 'UTC')
+        if not parsed_time:
+            return f"Не удалось распознать новое время: {new_time}"
+        
+        # Update task
+        best_match.reminder_time = parsed_time
+        session.commit()
+        
+        return f"Задача '{best_match.title}' перенесена на {parsed_time.strftime('%d.%m.%Y %H:%M')}"
+    
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error rescheduling task: {e}")
+        return f"Ошибка при переносе задачи: {str(e)}"
+
+
+def complete_task(task_title, completion_note, user_id, session):
+    """Mark a task as completed"""
+    try:
+        from models import Task
+        from datetime import datetime, timezone
+        
+        # Find task by title keywords
+        tasks = session.query(Task).filter(
+            Task.user_id == user_id,
+            Task.status == 'pending'
+        ).all()
+        
+        # Find best match
+        best_match = None
+        for task in tasks:
+            if task_title.lower() in task.title.lower():
+                best_match = task
+                break
+        
+        if not best_match:
+            return f"Задача с ключевыми словами '{task_title}' не найдена"
+        
+        # Complete task
+        best_match.status = 'completed'
+        best_match.actual_completion_time = datetime.now(timezone.utc)
+        if completion_note:
+            best_match.completion_notes = completion_note
+        session.commit()
+        
+        return f"Задача '{best_match.title}' отмечена как выполненная"
+    
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error completing task: {e}")
+        return f"Ошибка при завершении задачи: {str(e)}"
+
+
+def list_tasks(include_completed, user_id, session):
+    """List user's tasks"""
+    try:
+        from models import Task
+        
+        query = session.query(Task).filter(Task.user_id == user_id)
+        if not include_completed:
+            query = query.filter(Task.status == 'pending')
+        
+        tasks = query.order_by(Task.reminder_time).all()
+        
+        if not tasks:
+            return "У вас нет задач" + (" (включая выполненные)" if include_completed else "")
+        
+        result = "Ваши задачи:\n\n"
+        for i, task in enumerate(tasks, 1):
+            status_icon = "✅" if task.status == 'completed' else "⏰"
+            time_str = task.reminder_time.strftime('%d.%m.%Y %H:%M') if task.reminder_time else "без времени"
+            result += f"{i}. {status_icon} {task.title}\n   ⏰ {time_str}\n"
+            if task.description:
+                result += f"   📝 {task.description[:100]}{'...' if len(task.description) > 100 else ''}\n"
+            result += "\n"
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error listing tasks: {e}")
+        return f"Ошибка при получении списка задач: {str(e)}"
+
+
+def delete_task(task_title, user_id, session):
+    """Delete a task"""
+    try:
+        from models import Task
+        
+        # Find task by title keywords
+        tasks = session.query(Task).filter(
+            Task.user_id == user_id,
+            Task.status == 'pending'
+        ).all()
+        
+        # Find best match
+        best_match = None
+        for task in tasks:
+            if task_title.lower() in task.title.lower():
+                best_match = task
+                break
+        
+        if not best_match:
+            return f"Задача с ключевыми словами '{task_title}' не найдена"
+        
+        # Delete task
+        session.delete(best_match)
+        session.commit()
+        
+        return f"Задача '{best_match.title}' удалена"
+    
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error deleting task: {e}")
+        return f"Ошибка при удалении задачи: {str(e)}"
+
+
+def update_profile(user_id, city=None, interests=None, skills=None, goals=None, company=None, position=None, session=None):
+    """Update user profile"""
+    try:
+        from models import UserProfile
+        
+        user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+        if not user_profile:
+            user_profile = UserProfile(user_id=user_id)
+            session.add(user_profile)
+        
+        # Update fields
+        if city:
+            user_profile.city = city
+        if interests:
+            user_profile.interests = interests
+        if skills:
+            user_profile.skills = skills
+        if goals:
+            user_profile.goals = goals
+        if company:
+            user_profile.company = company
+        if position:
+            user_profile.position = position
+        
+        session.commit()
+        return "Профиль обновлен"
+    
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error updating profile: {e}")
+        return f"Ошибка при обновлении профиля: {str(e)}"
+
+
+def find_partners(user_id, session):
+    """Find potential partners for collaboration"""
+    try:
+        from models import UserProfile, User
+        
+        user_profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+        if not user_profile:
+            return "Сначала заполните профиль с навыками и интересами"
+        
+        # Find users with similar skills/interests
+        similar_users = session.query(UserProfile).filter(
+            UserProfile.user_id != user_id,
+            UserProfile.skills.isnot(None),
+            UserProfile.interests.isnot(None)
+        ).all()
+        
+        if not similar_users:
+            return "Пока нет пользователей с заполненными профилями для поиска партнеров"
+        
+        result = "Возможные партнеры для сотрудничества:\n\n"
+        for profile in similar_users[:5]:  # Limit to 5
+            user = session.query(User).filter_by(id=profile.user_id).first()
+            if user:
+                result += f"👤 @{user.username or user.first_name or 'пользователь'}\n"
+                if profile.skills:
+                    result += f"🛠 Навыки: {profile.skills[:100]}{'...' if len(profile.skills) > 100 else ''}\n"
+                if profile.interests:
+                    result += f"🎯 Интересы: {profile.interests[:100]}{'...' if len(profile.interests) > 100 else ''}\n"
+                result += "\n"
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"Error finding partners: {e}")
+        return f"Ошибка при поиске партнеров: {str(e)}"
+
+
+def delegate_task(task_title, executor_username, deadline=None, description=None, delegator_id=None, session=None):
+    """Delegate a task to another user with agent control"""
+    try:
+        from models import Task, User
+        import json
+        from datetime import datetime, timedelta
+        from ai_integration.time_parser import parse_time
+
+        if not session:
+            from models import Session
+            session = Session()
+
+        # Find executor by username
+        executor = session.query(User).filter(
+            (User.username == executor_username) | 
+            (User.username == f"@{executor_username}")
+        ).first()
+
+        if not executor:
+            return f"Пользователь @{executor_username} не найден в системе"
+
+        # Parse deadline if provided
+        deadline_dt = None
+        if deadline:
+            try:
+                deadline_dt = parse_time(deadline)
+            except Exception as e:
+                logger.warning(f"Could not parse deadline '{deadline}': {e}")
+
+        # Create the task
+        task = Task(
+            user_id=executor.id,  # Task belongs to executor
+            title=task_title,
+            description=description or f"Делегированная задача от пользователя {delegator_id}",
+            reminder_time=deadline_dt,
+            status='pending',
+            delegated_by=delegator_id,
+            delegated_to_username=executor_username,
+            delegation_status='pending',
+            created_at=datetime.now()
+        )
+
+        session.add(task)
+        session.commit()
+
+        # Create control plan for agent monitoring
+        control_plan = {
+            "delegator_id": delegator_id,
+            "executor_id": executor.id,
+            "task_id": task.id,
+            "created_at": datetime.now().isoformat(),
+            "deadline": deadline_dt.isoformat() if deadline_dt else None,
+            "checkpoints": [
+                {
+                    "type": "acceptance_check",
+                    "scheduled_time": (datetime.now() + timedelta(hours=1)).isoformat(),
+                    "completed": False,
+                    "escalation_level": 0
+                },
+                {
+                    "type": "progress_check",
+                    "scheduled_time": (datetime.now() + timedelta(hours=24)).isoformat(),
+                    "completed": False,
+                    "escalation_level": 0
+                }
+            ],
+            "escalation_levels": [
+                {"level": 1, "delay_hours": 24, "message": "Напоминание: задача ожидает принятия"},
+                {"level": 2, "delay_hours": 48, "message": "⚠️ Задача просрочена! Требуется срочное принятие"},
+                {"level": 3, "delay_hours": 72, "message": "🚨 КРИТИЧНО: Задача не принята в срок! Эскалация руководству"}
+            ],
+            "agent_monitoring": True,
+            "notifications_sent": []
+        }
+
+        # Store control plan in task delegation_details (JSON field)
+        task.delegation_details = json.dumps(control_plan)
+        session.commit()
+
+        # Send notification to executor (skip in test environments)
+        notification_text = f"""🤖 Новая делегированная задача
+
+📋 {task_title}
+👤 От: Пользователь {delegator_id}
+⏰ Дедлайн: {deadline_dt.strftime('%d.%m.%Y %H:%M') if deadline_dt else 'Не указан'}
+
+{description if description else ''}
+
+Используйте команды:
+✅ /accept_{task.id} - принять задачу
+❌ /reject_{task.id} - отклонить задачу"""
+
+        try:
+            # Schedule async notification
+            asyncio.create_task(send_delegation_notification_async(executor.telegram_id, notification_text))
+        except RuntimeError:
+            # No event loop running (test environment)
+            logger.info(f"Would send notification to executor {executor.username}: {notification_text[:100]}...")
+
+        return f"Задача '{task_title}' успешно делегирована пользователю @{executor_username}"
+
+    except Exception as e:
+        if session:
+            session.rollback()
+        logger.error(f"Error delegating task: {e}")
+        return f"Ошибка при делегировании задачи: {str(e)}"
+
+
+def accept_delegated_task(task_id, user_id, session=None):
+    """Accept a delegated task"""
+    try:
+        from models import Task
+        import json
+
+        if not session:
+            from models import Session
+            session = Session()
+
+        task = session.query(Task).filter(
+            Task.id == task_id,
+            Task.user_id == user_id,
+            Task.delegated_by.isnot(None)
+        ).first()
+
+        if not task:
+            return "Задача не найдена или не принадлежит вам"
+
+        if task.status != 'pending':
+            return "Задача уже обработана"
+
+        # Update task status
+        task.status = 'accepted'
+        task.delegation_status = 'accepted'
+        task.accepted_at = datetime.now()
+
+        # Update control plan
+        if task.delegation_details:
+            control_plan = json.loads(task.delegation_details)
+            for checkpoint in control_plan.get('checkpoints', []):
+                if checkpoint['type'] == 'acceptance_check':
+                    checkpoint['completed'] = True
+                    checkpoint['completed_at'] = datetime.now().isoformat()
+            task.delegation_details = json.dumps(control_plan)
+
+        session.commit()
+
+        # Notify delegator
+        delegator_notification = f"""✅ Задача принята исполнителем
+
+📋 {task.title}
+👤 Исполнитель: Пользователь {user_id}
+⏰ Принята: {datetime.now().strftime('%d.%m.%Y %H:%M')}"""
+
+        if task.delegated_by:
+            try:
+                asyncio.create_task(send_delegation_notification_async(task.delegated_by, delegator_notification))
+            except RuntimeError:
+                logger.info(f"Would notify delegator {task.delegated_by}: Task accepted")
+
+        return f"Задача '{task.title}' принята к исполнению"
+
+    except Exception as e:
+        if session:
+            session.rollback()
+        logger.error(f"Error accepting delegated task: {e}")
+        return f"Ошибка при принятии задачи: {str(e)}"
+
+
+def reject_delegated_task(task_id, user_id, reason=None, session=None):
+    """Reject a delegated task"""
+    try:
+        from models import Task
+        import json
+
+        if not session:
+            from models import Session
+            session = Session()
+
+        task = session.query(Task).filter(
+            Task.id == task_id,
+            Task.user_id == user_id,
+            Task.delegated_by.isnot(None)
+        ).first()
+
+        if not task:
+            return "Задача не найдена или не принадлежит вам"
+
+        if task.status != 'pending':
+            return "Задача уже обработана"
+
+        # Update task status
+        task.status = 'rejected'
+        task.delegation_status = 'rejected'
+        task.rejected_at = datetime.now()
+        task.rejection_reason = reason
+
+        # Update control plan
+        if task.delegation_details:
+            control_plan = json.loads(task.delegation_details)
+            control_plan['rejected'] = True
+            control_plan['rejection_reason'] = reason
+            task.delegation_details = json.dumps(control_plan)
+
+        session.commit()
+
+        # Notify delegator
+        delegator_notification = f"""❌ Задача отклонена исполнителем
+
+📋 {task.title}
+👤 Исполнитель: Пользователь {user_id}
+📝 Причина: {reason or 'Не указана'}
+⏰ Отклонена: {datetime.now().strftime('%d.%m.%Y %H:%M')}"""
+
+        if task.delegated_by:
+            try:
+                asyncio.create_task(send_delegation_notification_async(task.delegated_by, delegator_notification))
+            except RuntimeError:
+                logger.info(f"Would notify delegator {task.delegated_by}: Task rejected")
+
+        return f"Задача '{task.title}' отклонена"
+
+    except Exception as e:
+        if session:
+            session.rollback()
+        logger.error(f"Error rejecting delegated task: {e}")
+        return f"Ошибка при отклонении задачи: {str(e)}"
+
+
+def check_delegation_deadlines(session=None):
+    """Check for overdue delegated tasks and send escalation notifications"""
+    try:
+        from models import Task
+        import json
+        from datetime import datetime
+
+        if not session:
+            from models import Session
+            session = Session()
+
+        # Find tasks with control plans
+        tasks = session.query(Task).filter(
+            Task.delegation_details.isnot(None),
+            Task.status.in_(['pending', 'accepted'])
+        ).all()
+
+        notifications_sent = 0
+
+        for task in tasks:
+            try:
+                control_plan = json.loads(task.delegation_details)
+                if not control_plan.get('agent_monitoring', False):
+                    continue
+
+                now = datetime.now()
+                checkpoints = control_plan.get('checkpoints', [])
+                escalation_levels = control_plan.get('escalation_levels', [])
+
+                for checkpoint in checkpoints:
+                    if checkpoint.get('completed', False):
+                        continue
+
+                    scheduled_time = datetime.fromisoformat(checkpoint['scheduled_time'])
+                    if now >= scheduled_time:
+                        # Find appropriate escalation level
+                        escalation_level = checkpoint.get('escalation_level', 0)
+                        if escalation_level < len(escalation_levels):
+                            level_info = escalation_levels[escalation_level]
+
+                            # Send notification
+                            if task.status == 'pending':
+                                message = f"""🤖 Контроль делегированной задачи
+
+📋 {task.title}
+⚠️ {level_info['message']}
+
+👤 Исполнитель: Пользователь {task.user_id}
+⏰ Дедлайн: {control_plan.get('deadline', 'Не указан')}"""
+
+                                asyncio.create_task(send_delegation_notification_async(
+                                    task.user_id, message
+                                ))
+
+                                # Also notify delegator
+                                delegator_message = f"""🤖 Эскалация делегированной задачи
+
+📋 {task.title}
+👤 Исполнитель: Пользователь {task.user_id}
+⚠️ {level_info['message']}"""
+
+                                if control_plan.get('delegator_id'):
+                                    asyncio.create_task(send_delegation_notification_async(
+                                        control_plan['delegator_id'], delegator_message
+                                    ))
+
+                            # Update checkpoint
+                            checkpoint['escalation_level'] = escalation_level + 1
+                            if escalation_level + 1 >= len(escalation_levels):
+                                checkpoint['completed'] = True
+
+                            notifications_sent += 1
+
+                # Save updated control plan
+                task.delegation_details = json.dumps(control_plan)
+
+            except Exception as e:
+                logger.error(f"Error processing task {task.id}: {e}")
+                continue
+
+        session.commit()
+        logger.info(f"Sent {notifications_sent} delegation escalation notifications")
+
+    except Exception as e:
+        logger.error(f"Error checking delegation deadlines: {e}")
+
+
+def update_task_progress(task_id, progress_percentage, notes=None, user_id=None, session=None):
+    """Update progress on a delegated task"""
+    try:
+        from models import Task
+        import json
+
+        if not session:
+            from models import Session
+            session = Session()
+
+        task = session.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            return "Задача не найдена"
+
+        # Check permissions (executor or delegator)
+        if user_id and task.user_id != user_id and task.delegated_from != user_id:
+            return "У вас нет прав на обновление этой задачи"
+
+        # Update progress
+        if 'progress' not in task.__dict__:
+            # If no progress field, store in delegation_details
+            if not task.delegation_details:
+                task.delegation_details = '{}'
+            details = json.loads(task.delegation_details)
+            details['progress'] = progress_percentage
+            details['progress_updated_at'] = datetime.now().isoformat()
+            if notes:
+                details['progress_notes'] = notes
+            task.delegation_details = json.dumps(details)
+        else:
+            task.progress = progress_percentage
+            task.progress_updated_at = datetime.now()
+            if notes:
+                task.progress_notes = notes
+
+        session.commit()
+
+        # Notify delegator if this is a delegated task
+        if task.delegated_by and task.delegated_by != user_id:
+            notification = f"""📊 Обновление прогресса задачи
+
+📋 {task.title}
+👤 Исполнитель: Пользователь {task.user_id}
+📈 Прогресс: {progress_percentage}%
+
+{notes if notes else ''}"""
+
+            try:
+                asyncio.create_task(send_delegation_notification_async(task.delegated_by, notification))
+            except RuntimeError:
+                logger.info(f"Would notify delegator {task.delegated_by}: Progress update {progress_percentage}%")
+
+        return f"Прогресс задачи '{task.title}' обновлен: {progress_percentage}%"
+
+    except Exception as e:
+        if session:
+            session.rollback()
+        logger.error(f"Error updating task progress: {e}")
+        return f"Ошибка при обновлении прогресса: {str(e)}"
 
 

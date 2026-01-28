@@ -19,10 +19,10 @@ TOOLS = [
                     },
                     "reminder_time": {
                         "type": "string",
-                        "description": "Время напоминания в ЛЮБОМ формате: 'завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30', '15:00', 'YYYY-MM-DD HH:MM'",
+                        "description": "Время напоминания в ЛЮБОМ формате: 'завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30', '15:00', 'YYYY-MM-DD HH:MM'. ЕСЛИ НЕ УКАЗАНО - НЕ ПЕРЕДАВАЙ ПАРАМЕТР!",
                     },
                 },
-                "required": ["title", "reminder_time"],
+                "required": ["title"],
             },
         },
     },
@@ -449,5 +449,34 @@ TOOLS = [
                 "required": ["title", "recurrence_pattern", "first_reminder_time"],
             },
         },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_task",
+            "description": "ДЕЛЕГИРОВАТЬ ЗАДАЧУ ДРУГОМУ ПОЛЬЗОВАТЕЛЮ С КОНТРОЛЕМ АГЕНТА. Вызывай когда пользователь хочет поручить задачу кому-то другому. Агент будет автоматически контролировать выполнение, отправлять напоминания и эскалировать проблемы. Ключевые слова: 'делегируй', 'поручи', 'передай', 'отправь'. Примеры: 'делегируй задачу подготовки отчета @username', 'поручи дизайн логотипа @designer с дедлайном завтра'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название задачи для делегирования"
+                    },
+                    "executor_username": {
+                        "type": "string",
+                        "description": "Username исполнителя (без @)"
+                    },
+                    "deadline": {
+                        "type": "string",
+                        "description": "Дедлайн выполнения в любом формате: 'завтра в 15:00', 'через 3 дня', 'до конца недели'"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Подробное описание задачи (опционально)"
+                    }
+                },
+                "required": ["task_title", "executor_username"]
+            }
+        }
     },
 ]

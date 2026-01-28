@@ -14,12 +14,145 @@ from .utils import parse_relative_time, parse_natural_time, parse_time_to_dateti
 logger = logging.getLogger(__name__)
 
 
-def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None):
+def check_time_conflicts(user_db_id, parsed_time, session):
+    """
+    Проверяет конфликты по времени для новой задачи
+    
+    Args:
+        user_db_id: ID пользователя в БД (не telegram_id)
+        parsed_time: Уже распарсенное время (datetime)
+        session: Сессия БД
+    
+    Returns:
+        tuple: (conflict_message, suggested_time) или None если конфликтов нет
+    """
+    try:
+        if not parsed_time:
+            return None
+            
+        # Получаем пользователя для часового пояса
+        user = session.query(User).filter_by(id=user_db_id).first()
+        if not user:
+            return None
+            
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        
+        # Ищем задачи в интервале ±30 минут от новой задачи
+        time_window_start = parsed_time - timedelta(minutes=30)
+        time_window_end = parsed_time + timedelta(minutes=30)
+        
+        # Конвертируем в UTC для поиска в БД
+        utc_start = time_window_start.astimezone(pytz.UTC)
+        utc_end = time_window_end.astimezone(pytz.UTC)
+        
+        conflicting_tasks = session.query(Task).filter(
+            Task.user_id == user_db_id,
+            Task.status == 'pending',
+            Task.reminder_time.between(utc_start, utc_end)
+        ).all()
+        
+        if conflicting_tasks:
+            # Находим ближайшее свободное время
+            suggested_time = find_nearest_free_slot(user_db_id, parsed_time, session)
+            
+            task_list = "\n".join([f"• {task.title} ({task.reminder_time.astimezone(user_tz).strftime('%H:%M')})" for task in conflicting_tasks])
+            
+            conflict_message = f"В это время у тебя уже запланированы задачи:\n{task_list}"
+            
+            if suggested_time:
+                suggested_str = suggested_time.astimezone(user_tz).strftime('%H:%M')
+                return conflict_message, suggested_str
+            else:
+                return conflict_message, "укажи другое время"
+                
+    except Exception as e:
+        logger.warning(f"Error checking time conflicts: {e}")
+        return None
+    
+    return None
+
+
+def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=4):
+    """
+    Находит ближайшее свободное время в пределах search_range_hours часов
+    
+    Args:
+        user_db_id: ID пользователя в БД
+        target_time: Желаемое время (datetime)
+        session: Сессия БД
+        search_range_hours: Диапазон поиска в часах
+    
+    Returns:
+        datetime: Ближайшее свободное время или None
+    """
+    try:
+        # Получаем все задачи пользователя на ближайшие часы
+        user = session.query(User).filter_by(id=user_db_id).first()
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        
+        search_start = target_time - timedelta(hours=search_range_hours//2)
+        search_end = target_time + timedelta(hours=search_range_hours//2)
+        
+        utc_start = search_start.astimezone(pytz.UTC)
+        utc_end = search_end.astimezone(pytz.UTC)
+        
+        existing_tasks = session.query(Task).filter(
+            Task.user_id == user_db_id,
+            Task.status == 'pending',
+            Task.reminder_time.between(utc_start, utc_end)
+        ).order_by(Task.reminder_time).all()
+        
+        # Конвертируем все времена в локальный timezone
+        existing_times = [task.reminder_time.astimezone(user_tz) for task in existing_tasks]
+        target_local = target_time.astimezone(user_tz)
+        
+        # Ищем свободные слоты по 30 минут
+        current_time = datetime.now(user_tz)
+        
+        # Проверяем слоты после target_time
+        for minutes_offset in range(0, search_range_hours * 60, 30):
+            check_time = target_local + timedelta(minutes=minutes_offset)
+            if check_time < current_time:
+                continue  # Пропускаем прошедшее время
+                
+            # Проверяем, не конфликтует ли с существующими задачами
+            conflict = False
+            for existing_time in existing_times:
+                if abs((check_time - existing_time).total_seconds()) < 1800:  # 30 минут
+                    conflict = True
+                    break
+            
+            if not conflict:
+                return check_time.replace(tzinfo=user_tz)
+        
+        # Проверяем слоты до target_time
+        for minutes_offset in range(30, search_range_hours * 60, 30):
+            check_time = target_local - timedelta(minutes=minutes_offset)
+            if check_time < current_time:
+                continue  # Пропускаем прошедшее время
+                
+            # Проверяем, не конфликтует ли с существующими задачами
+            conflict = False
+            for existing_time in existing_times:
+                if abs((check_time - existing_time).total_seconds()) < 1800:  # 30 минут
+                    conflict = True
+                    break
+            
+            if not conflict:
+                return check_time.replace(tzinfo=user_tz)
+                
+    except Exception as e:
+        logger.warning(f"Error finding free slot: {e}")
+    
+    return None
+
+
+def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False):
     """Add a new task"""
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}")
     
     if user_id is None:
-        logger.error(f"[ADD_TASK] ERROR: user_id is None! Cannot create task without user_id")
+        logger.error("[ADD_TASK] ERROR: user_id is None! Cannot create task without user_id")
         return "ERROR: user_id is required but was None"
     
     # УМНОЕ СОКРАЩЕНИЕ НАЗВАНИЯ: если слишком длинное, пытаемся извлечь суть
@@ -69,6 +202,37 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
         return "NEED_TIME_FOR_TASK: Когда напомнить? Укажи время: завтра в 10:00, через час, сегодня в 15:00"
     
+    # ПРОВЕРКА ЗАНЯТОСТИ: проверяем конфликты по времени
+    # Сначала парсим время, потом проверяем конфликты
+    parsed_time_for_conflicts = None
+    try:
+        # Парсим время для проверки конфликтов
+        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
+        current_time = datetime.now(user_tz)
+
+        # Используем тот же парсер, что и ниже в функции
+        from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
+
+        parsed_time_for_conflicts = parse_time_with_ai(reminder_time, current_time)
+
+        # Fallback to simple parser if AI fails
+        if not parsed_time_for_conflicts:
+            logger.info("[ADD_TASK] AI parsing failed for conflicts check, trying simple fallback")
+            parsed_time_for_conflicts = parse_time_simple_fallback(reminder_time, current_time)
+
+        if parsed_time_for_conflicts and not ignore_conflicts:
+            # Проверяем конфликты
+            conflict_check_result = check_time_conflicts(user.id, parsed_time_for_conflicts, session)
+            if conflict_check_result:
+                conflict_message, suggested_time = conflict_check_result
+                logger.info(f"[ADD_TASK] Time conflict detected: {conflict_message}")
+                if close_session:
+                    session.close()
+                return f"TIME_CONFLICT: {conflict_message}\n\nПредлагаю альтернативное время: {suggested_time}\n\nПодтверди или укажи другое время."
+    except Exception as e:
+        logger.warning(f"[ADD_TASK] Error checking conflicts: {e}")
+        # Продолжаем без проверки конфликтов
+    
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
     if reminder_time:
         try:
@@ -91,7 +255,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
             
             # Fallback to simple parser if AI fails
             if not parsed_time:
-                logger.info(f"[ADD_TASK] AI parsing failed, trying simple fallback")
+                logger.info("[ADD_TASK] AI parsing failed, trying simple fallback")
                 parsed_time = parse_time_simple_fallback(reminder_time, current_time)
             
             if parsed_time:
@@ -743,7 +907,7 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             
             # Fallback to simple HH:MM parsing if AI fails
             if not local_dt:
-                logger.info(f"[RESCHEDULE_TASK] AI parsing failed, trying simple fallback...")
+                logger.info("[RESCHEDULE_TASK] AI parsing failed, trying simple fallback...")
                 local_dt = parse_time_simple_fallback(new_time, current_time)
             
             if not local_dt:
@@ -805,7 +969,7 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
         status = task.status
 
         # Generate advice using AI
-        prompt = f"""Дай полезный совет по выполнению этой задачи:
+        prompt = """Дай полезный совет по выполнению этой задачи:
 
 Задача: {title}
 Описание: {description}
@@ -975,8 +1139,6 @@ def delegate_task(
             logging.error(f"Failed to schedule delegation monitoring: {e}")
 
         return f"Задача '{title}' успешно делегирована пользователю @{recipient_username}. Ожидается подтверждение от получателя."
-
-        session.close()
     except Exception as e:
         logger.error(f"[DELEGATE] Unexpected error in delegate_task: {e}")
         if 'session' in locals():
@@ -1168,38 +1330,6 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
         session.close()
         return f"Ошибка: {str(e)}"
 
-
-def get_delegation_progress_for_task(task_id, user_id=None):
-    """Get progress report for a delegated task"""
-    session = Session()
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            return "Ошибка: Пользователь не найден."
-
-        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
-        if not task or not task.delegated_to_username:
-            return "Делегированная задача не найдена."
-
-        if task.delegation_status == "pending":
-            status_msg = f"@{task.delegated_to_username} еще не ответил на предложение."
-        elif task.delegation_status == "accepted":
-            if task.status == "completed":
-                status_msg = f"Задача выполнена @{task.delegated_to_username}!"
-            else:
-                status_msg = (
-                    f"@{task.delegated_to_username} принял задачу и работает над ней (статус: {task.status})."
-                )
-        elif task.delegation_status == "rejected":
-            status_msg = f"@{task.delegated_to_username} отклонил эту задачу."
-        else:
-            status_msg = "Статус неизвестен."
-
-        session.close()
-        return f"Задача: {task.title}\n{status_msg}"
-    except Exception as e:
-        session.close()
-        return f"Ошибка: {str(e)}"
 
 
 def get_delegation_progress(user_id, session=None):
@@ -1420,7 +1550,7 @@ def edit_task(
                 
                 # Fallback to simple parser if AI fails
                 if not parsed_time:
-                    logger.info(f"[EDIT_TASK] AI parsing failed, trying simple fallback")
+                    logger.info("[EDIT_TASK] AI parsing failed, trying simple fallback")
                     parsed_time = parse_time_simple_fallback(reminder_time, current_time)
                 
                 if parsed_time:
@@ -2085,6 +2215,9 @@ def find_partners(user_id=None, session=None):
             session.close()
         return "Пользователь не найден."
 
+    # Get user profile
+    user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
     # Get partners list
     partners = get_partners_list(user.id, session)
 
@@ -2200,7 +2333,7 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
                 message += f"Дедлайн: {deadline}\n"
             if delegation_details:
                 message += f"Детали: {delegation_details}\n"
-            message += f"\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
+            message += "\nНапишите боту 'принять задачу' для подтверждения или 'отклонить задачу' для отказа."
 
         await bot.send_message(recipient_telegram_id, message)
 
@@ -2220,7 +2353,7 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
 
         system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None)
 
-        prompt = f"""Создай персонализированное и мотивирующее уведомление о делегированной задаче.
+        prompt = """Создай персонализированное и мотивирующее уведомление о делегированной задаче.
 
 КОНТЕКСТ:
 - Отправитель: @{delegator_username}
@@ -2278,7 +2411,7 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
 
         system_prompt = get_extended_system_prompt(None, "", "", "system", "", "", None, None, None, None)
 
-        prompt = f"""Создай запрос о прогрессе выполнения делегированной задачи.
+        prompt = """Создай запрос о прогрессе выполнения делегированной задачи.
 
 КОНТЕКСТ:
 - Задача: {task_title}
@@ -2453,11 +2586,11 @@ def check_delegation_deadlines():
                 #     # try:
                 #     #     asyncio.run(bot.send_message(
                 #     #         delegator.telegram_id,
-                #     #             f"⚠️ Делегированная задача просрочена!\n\n"
+                #     #             "⚠️ Делегированная задача просрочена!\n\n"
                 #     #             f"Задача: {task.title}\n"
                 #     #             f"Исполнитель: @{recipient.username}\n"
                 #     #             f"Просрочена на: {days_overdue} дней\n\n"
-                #     #             f"Рекомендую связаться с исполнителем для уточнения статуса."
+                #     #             "Рекомендую связаться с исполнителем для уточнения статуса."
                 #     #         ))
                 #     #     logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
                 #     # except Exception as e:
@@ -2705,7 +2838,7 @@ def get_task_details(task_id=None, user_id=None, session=None):
             # Format detailed task information
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             
-            details = f"📋 Подробная информация о задаче:\n\n"
+            details = "📋 Подробная информация о задаче:\n\n"
             details += f"🆔 ID: {task.id}\n"
             details += f"📝 Название: {task.title}\n"
             
@@ -2742,7 +2875,7 @@ def get_task_details(task_id=None, user_id=None, session=None):
                     import json
                     recs = json.loads(task.recommendations)
                     if recs:
-                        details += f"💡 Рекомендации AI:\n"
+                        details += "💡 Рекомендации AI:\n"
                         for i, rec in enumerate(recs[:3], 1):
                             details += f"  {i}. {rec}\n"
                 except:
@@ -2763,68 +2896,6 @@ def get_task_details(task_id=None, user_id=None, session=None):
         if close_session and 'session' in locals():
             session.close()
         return f"Ошибка при получении деталей задачи: {str(e)}"
-
-def get_all_delegation_progress(user_id=None, session=None):
-    """Get progress status of all delegated tasks for the user"""
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if close_session:
-                session.close()
-            return "Пользователь не найден."
-
-        # Find all tasks delegated by this user
-        delegated_tasks = session.query(Task).filter(
-            Task.user_id == user.id,
-            Task.delegated_to_username.isnot(None)
-        ).all()
-
-        if not delegated_tasks:
-            if close_session:
-                session.close()
-            return "DELEGATION_REPORT: У вас нет делегированных задач."
-
-        status_info = "📋 Отчет по делегированным задачам:\n\n"
-
-        for task in delegated_tasks:
-            status_info += f"🆔 ID: {task.id}\n"
-            status_info += f"📝 Название: {task.title}\n"
-            status_info += f"👤 Делегирована: @{task.delegated_to_username}\n"
-            status_info += f"📋 Статус: {task.delegation_status or 'Ожидает принятия'}\n"
-
-            if task.delegation_status == "accepted":
-                status_info += f"✅ Задача принята исполнителем\n"
-            elif task.delegation_status == "rejected":
-                status_info += f"❌ Задача отклонена исполнителем\n"
-            elif task.delegation_status == "completed":
-                status_info += f"✅ Задача выполнена!\n"
-                if task.actual_completion_time:
-                    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-                    local_completion = task.actual_completion_time.astimezone(user_tz)
-                    status_info += f"🕒 Время выполнения: {local_completion.strftime('%d.%m.%Y %H:%M')}\n"
-            else:
-                status_info += f"⏳ Ожидает решения исполнителя\n"
-
-            if task.completion_notes and task.delegation_status == "completed":
-                completion_notes = decrypt_data(task.completion_notes) if task.completion_notes.startswith('gAAAAA') else task.completion_notes
-                status_info += f"📝 Результат выполнения: {completion_notes}\n"
-
-            status_info += "---\n"
-
-        if close_session:
-            session.close()
-        return f"DELEGATION_REPORT: {status_info}"
-
-    except Exception as e:
-        if close_session:
-            session.close()
-        return f"Ошибка при получении статуса делегирования: {str(e)}"
 
 
 
@@ -2938,144 +3009,6 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
     return f"Задача '{title}' делегирована пользователю @{delegated_username}"
 
 
-def edit_task_with_session(task_id=None, task_title=None, title=None, description=None, reminder_time=None, user_id=None, session=None):
-    """Edit an existing task"""
-    logger.info(f"[EDIT_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")
-    
-    if user_id is None:
-        logger.error("[EDIT_TASK] ERROR: user_id is None!")
-        return "ERROR: user_id is required"
-    
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-    
-    # Find task
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        if close_session:
-            session.close()
-        return "Пользователь не найден"
-    
-    task = None
-    if task_id:
-        task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
-    elif task_title:
-        # Find by title (case insensitive partial match)
-        from sqlalchemy import func
-        task = session.query(Task).filter(
-            Task.user_id == user.id,
-            func.lower(Task.title).contains(func.lower(task_title))
-        ).first()
-    
-    if not task:
-        if close_session:
-            session.close()
-        return f"Задача не найдена: {task_title or f'ID {task_id}'}"
-    
-    # Update fields
-    updated_fields = []
-    if title:
-        task.title = title
-        updated_fields.append("название")
-    
-    if description:
-        task.description = encrypt_data(description)
-        updated_fields.append("описание")
-    
-    if reminder_time:
-        try:
-            user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-            # Try to parse reminder_time - add ISO format support
-            for fmt in ["%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d %H:%M", "%d.%m.%Y %H:%M", "%H:%M"]:
-                try:
-                    if isinstance(reminder_time, str) and "завтра" in reminder_time.lower():
-                        local_dt = datetime.now(user_tz) + timedelta(days=1)
-                        time_part = reminder_time.lower().replace("завтра", "").strip()
-                        if time_part:
-                            time_dt = datetime.strptime(time_part, "%H:%M")
-                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
-                    elif isinstance(reminder_time, str) and "сегодня" in reminder_time.lower():
-                        local_dt = datetime.now(user_tz)
-                        time_part = reminder_time.lower().replace("сегодня", "").strip()
-                        if time_part:
-                            time_dt = datetime.strptime(time_part, "%H:%M")
-                            local_dt = local_dt.replace(hour=time_dt.hour, minute=time_dt.minute)
-                    else:
-                        local_dt = datetime.strptime(reminder_time, fmt)
-                        if user.timezone and fmt != "%Y-%m-%dT%H:%M:%S%z":  # ISO already has timezone
-                            local_dt = user_tz.localize(local_dt)
-                    
-                    task.reminder_time = local_dt.astimezone(pytz.UTC)
-                    updated_fields.append("время")
-                    break
-                except ValueError:
-                    continue
-        except Exception as e:
-            logger.warning(f"[EDIT_TASK] Could not parse reminder_time '{reminder_time}': {e}")
-    
-    session.commit()
-    
-    if close_session:
-        session.close()
-    
-    if updated_fields:
-        return f"Задача '{task.title}' обновлена: {', '.join(updated_fields)}"
-    else:
-        return f"Задача '{task.title}' не была изменена"
-
-
-def delete_task_legacy(task_id=None, task_title=None, reason=None, user_id=None, session=None):
-    """Delete a task (legacy version)"""
-    logger.info(f"[DELETE_TASK] Called with task_id={task_id}, task_title='{task_title}', user_id={user_id}")
-    
-    if user_id is None:
-        logger.error("[DELETE_TASK] ERROR: user_id is None!")
-        return "ERROR: user_id is required"
-    
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-    
-    # Find task
-    user = session.query(User).filter_by(telegram_id=user_id).first()
-    if not user:
-        if close_session:
-            session.close()
-        return "Пользователь не найден"
-    
-    task = None
-    if task_id:
-        task = session.query(Task).filter_by(id=task_id, user_id=user.id).first()
-    elif task_title:
-        # Find by title (case insensitive partial match)
-        from sqlalchemy import func
-        task = session.query(Task).filter(
-            Task.user_id == user.id,
-            func.lower(Task.title).contains(func.lower(task_title))
-        ).first()
-    
-    if not task:
-        if close_session:
-            session.close()
-        return f"Задача не найдена: {task_title or f'ID {task_id}'}"
-    
-    task_title_saved = task.title
-    session.delete(task)
-    session.commit()
-    
-    if close_session:
-        session.close()
-    
-    response = f"Задача '{task_title_saved}' удалена"
-    if reason:
-        response += f" ({reason})"
-    
-    return response
 
 
 def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggestions=3, session=None):
@@ -3526,7 +3459,7 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
                     break
         
         if not task:
-            return f"❌ Задача не найдена."
+            return "❌ Задача не найдена."
 
         # Delete the task
         session.delete(task)
@@ -3862,3 +3795,185 @@ def accept_delegated_task(task_title, user_id=None):
 
 # Function removed
 # Function removed
+
+
+def check_delegation_deadlines(session=None):
+    """Проверить дедлайны делегированных задач и выполнить необходимые действия"""
+    should_close = False
+    if session is None:
+        session = Session()
+        should_close = True
+
+    try:
+        now = datetime.now(timezone.utc)
+
+        # Найти все активные делегированные задачи
+        delegated_tasks = session.query(Task).filter(
+            Task.delegation_status == 'accepted',
+            Task.status.in_(['pending', 'in_progress'])
+        ).all()
+
+        actions_taken = []
+
+        for task in delegated_tasks:
+            try:
+                import json
+                if task.delegation_details:
+                    control_plan = json.loads(task.delegation_details)
+                else:
+                    # Создать план контроля для старых задач
+                    control_plan = {
+                        'task_id': task.id,
+                        'executor_username': task.delegated_to_username,
+                        'user_id': task.user_id,
+                        'checkpoints': [
+                            {'type': 'progress_check', 'interval_hours': 4, 'next_check': now + timedelta(hours=4)},
+                            {'type': 'deadline_warning', 'hours_before': 4, 'scheduled': None},
+                        ],
+                        'escalation_level': 0,
+                        'last_contact': now
+                    }
+
+                # Проверить дедлайн
+                if task.reminder_time and task.reminder_time <= now:
+                    # Задача просрочена
+                    escalation_level = control_plan.get('escalation_level', 0) + 1
+                    control_plan['escalation_level'] = escalation_level
+
+                    # Уведомить делегировавшего пользователя
+                    delegator = session.query(User).filter_by(id=task.user_id).first()
+                    if delegator:
+                        message = f"🚨 ПРОСРОЧЕНА: Задача '{task.title}'\n"
+                        message += f"👤 Исполнитель: @{task.delegated_to_username}\n"
+                        message += f"⏰ Дедлайн был: {task.reminder_time.strftime('%d.%m.%Y %H:%M')}\n"
+
+                        if escalation_level == 1:
+                            message += f"🔄 Агент начинает поиск нового исполнителя..."
+                        elif escalation_level == 2:
+                            message += f"⚠️  Требуется ваше вмешательство!"
+
+                        actions_taken.append(f"escalation_{task.id}")
+                        import asyncio
+                        asyncio.create_task(send_notification_async(delegator.telegram_id, message))
+
+                # Проверить необходимость прогресс-чеков
+                for checkpoint in control_plan.get('checkpoints', []):
+                    if checkpoint.get('type') == 'progress_check':
+                        next_check = checkpoint.get('next_check')
+                        if next_check and isinstance(next_check, str):
+                            next_check = datetime.fromisoformat(next_check.replace('Z', '+00:00'))
+
+                        if not next_check or next_check <= now:
+                            # Время для проверки прогресса
+                            executor = session.query(User).filter(
+                                User.username.ilike(task.delegated_to_username)
+                            ).first()
+
+                            if executor:
+                                message = f"📊 Статус задачи '{task.title}'\n"
+                                message += f"👤 От: @{session.query(User).filter_by(id=task.user_id).first().username}\n"
+                                message += f"⏰ Дедлайн: {task.reminder_time.strftime('%d.%m.%Y %H:%M') if task.reminder_time else 'не установлен'}\n\n"
+                                message += f"Пожалуйста, сообщите о прогрессе выполнения."
+
+                                import asyncio
+                                asyncio.create_task(send_notification_async(executor.telegram_id, message))
+
+                                # Запланировать следующую проверку
+                                checkpoint['next_check'] = (now + timedelta(hours=checkpoint.get('interval_hours', 4))).isoformat()
+                                actions_taken.append(f"progress_check_{task.id}")
+
+                # Сохранить обновленный план контроля
+                task.delegation_details = json.dumps(control_plan, default=str)
+                session.commit()
+
+            except Exception as e:
+                logger.error(f"Error processing delegation deadline for task {task.id}: {e}")
+                continue
+
+        if should_close:
+            session.close()
+
+        return f"Delegation check completed. Actions taken: {len(actions_taken)}"
+
+    except Exception as e:
+        logger.error(f"Error in check_delegation_deadlines: {e}")
+        if should_close:
+            session.close()
+        return f"Error checking delegation deadlines: {str(e)}"
+
+
+async def send_notification_async(chat_id, message):
+    """Асинхронная отправка уведомления"""
+    try:
+        from main import bot
+        if bot:
+            await bot.send_message(chat_id, message)
+    except Exception as e:
+        logger.warning(f"Error sending notification to {chat_id}: {e}")
+
+
+def update_task_progress(task_id, progress_update, user_id=None, session=None):
+    """Обновить прогресс выполнения делегированной задачи"""
+    should_close = False
+    if session is None:
+        session = Session()
+        should_close = True
+
+    try:
+        task = session.query(Task).filter_by(id=task_id).first()
+        if not task:
+            if should_close:
+                session.close()
+            return "Задача не найдена"
+
+        # Проверить права доступа
+        user = session.query(User).filter_by(telegram_id=user_id).first() if user_id else None
+        if user and task.delegated_to_username != user.username.replace('@', '') and task.user_id != user.id:
+            if should_close:
+                session.close()
+            return "У вас нет прав обновлять эту задачу"
+
+        # Обновить статус задачи
+        if "заверш" in progress_update.lower() or "готов" in progress_update.lower():
+            task.status = 'completed'
+            task.actual_completion_time = datetime.now(timezone.utc)
+        elif "работа" in progress_update.lower() or "прогресс" in progress_update.lower():
+            task.status = 'in_progress'
+
+        # Добавить заметку о прогрессе
+        current_notes = task.completion_notes or ""
+        timestamp = datetime.now(timezone.utc).strftime('%d.%m.%Y %H:%M')
+        new_note = f"[{timestamp}] {progress_update}"
+        task.completion_notes = current_notes + "\n" + new_note if current_notes else new_note
+
+        # Обновить план контроля
+        import json
+        if task.delegation_details:
+            control_plan = json.loads(task.delegation_details)
+            control_plan['last_contact'] = datetime.now(timezone.utc).isoformat()
+            control_plan['escalation_level'] = 0  # Сбросить уровень эскалации
+            task.delegation_details = json.dumps(control_plan, default=str)
+
+        session.commit()
+
+        # Уведомить делегировавшего пользователя
+        if task.user_id != user.id if user else True:
+            delegator = session.query(User).filter_by(id=task.user_id).first()
+            if delegator:
+                message = f"📈 Прогресс по задаче '{task.title}'\n"
+                message += f"👤 От @{task.delegated_to_username}: {progress_update}\n"
+                message += f"📊 Статус: {'Завершена' if task.status == 'completed' else 'В работе'}"
+
+                import asyncio
+                asyncio.create_task(send_notification_async(delegator.telegram_id, message))
+
+        if should_close:
+            session.close()
+
+        return f"✅ Прогресс обновлен: {progress_update}"
+
+    except Exception as e:
+        logger.error(f"Error updating task progress for {task_id}: {e}")
+        if should_close:
+            session.close()
+        return f"Ошибка при обновлении прогресса: {str(e)}"

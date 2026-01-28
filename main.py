@@ -1620,7 +1620,7 @@ async def auth_handler(request):
                 logger.error(f"Database error in auth_handler: {e}", exc_info=True)
                 if session_db:
                     session_db.rollback()
-                return web.Response(text=f'Ошибка подключения к базе данных. Попробуйте позже.', status=500)
+                return web.Response(text='Ошибка подключения к базе данных. Попробуйте позже.', status=500)
             finally:
                 if session_db:
                     session_db.close()
@@ -1644,7 +1644,6 @@ async def auth_handler(request):
     except Exception as e:
         logger.error(f"CRITICAL ERROR in auth_handler: {e}", exc_info=True)
         return web.Response(text=f'Internal server error: {str(e)}', status=500)
-        return web.Response(text='Authentication failed', status=401)
 
 
 async def logout_handler(request):
@@ -1870,7 +1869,7 @@ async def dashboard_handler(request):
                                     'id': favorite_user.id,
                                     'username': favorite_user.username,
                                     'first_name': favorite_user.first_name,
-                                    'reason': f'в избранном',
+                                    'reason': 'в избранном',
                                     'tasks': [],
                                     'task_count': 0
                                 })
@@ -2351,7 +2350,7 @@ async def api_send_message_handler(request):
                 
                 logger.info(f"[API_SEND_MESSAGE] AI response preview: '{response[:100]}...'")
                 if response is None or response == '':
-                    logger.error(f"[API_SEND_MESSAGE] AI response is empty!")
+                    logger.error("[API_SEND_MESSAGE] AI response is empty!")
                     response = "Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз."
             except Exception as e:
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
