@@ -1436,6 +1436,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     user_memory += f"\n\n🎯 ИСПОЛЬЗУЙ ЭТУ ИНФОРМАЦИЮ ДЛЯ ПЕРСОНАЛИЗАЦИИ: адаптируй советы под навыки, интересы и профессиональную сферу пользователя. Каждый ответ должен учитывать профиль!"
                     logger.info(f"[PROFILE DEBUG] Profile info added to prompt: {profile_info}")
 
+                    # Предложение поиска партнеров по интересам
+                    if any('Интересы:' in info for info in profile_info):
+                        user_memory += f"\n\n👥 ПРЕДЛАГАЙ ПОИСК ПАРТНЕРОВ: Если пользователь упоминает интересы, предложи найти единомышленников через find_partners() для совместной деятельности!"
+
                 # Проактивное заполнение при незаполненных полях
                 if empty_fields and len(empty_fields) > 0:
                     logger.info(f"[PROFILE DEBUG] Empty fields detected: {empty_fields}")
