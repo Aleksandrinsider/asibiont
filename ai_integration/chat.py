@@ -202,9 +202,47 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if not tool_calls:
         return None
     
+    # КРИТИЧЕСКАЯ ВАЛИДАЦИЯ НЕПОЛНЫХ КОМАНД: Запрещаем tool calls для неполных команд
+    incomplete_commands = [
+        # Удаление без указания чего
+        'удали', 'убери', 'удалить', 'удали все',
+        # Перенос без указания задачи
+        'перенеси', 'перенести', 'переместить', 'перенеси на завтра',
+        # Делегирование без указания кому и чего
+        'делегируй', 'поручи', 'передай',
+        # Поиск без указания чего
+        'найди', 'ищи', 'поиск',
+        # Профиль без указания данных
+        'я из', 'я работаю', 'мне нравится', 'мои навыки',
+        # Создание без указания задачи
+        'создай задачу', 'добавь задачу', 'новая задача',
+        # Завершение без указания задачи
+        'готово', 'сделал', 'выполнил', 'завершил',
+        # Показ без указания чего
+        'покажи', 'открой', 'просмотреть',
+        # Повторение без указания периода
+        'каждый день', 'каждую неделю', 'каждый месяц', 'повторять'
+    ]
+    
+    message_lower = message.lower().strip()
+    is_incomplete = False
+    
+    for incomplete in incomplete_commands:
+        if message_lower == incomplete or message_lower.startswith(incomplete + ' '):
+            # Проверяем, есть ли дополнительные детали после команды
+            remaining_text = message_lower.replace(incomplete, '').strip()
+            if not remaining_text or len(remaining_text.split()) < 2:
+                is_incomplete = True
+                logger.warning(f"[INCOMPLETE COMMAND] Detected incomplete command: '{message}' (matches '{incomplete}')")
+                break
+    
+    if is_incomplete:
+        logger.error(f"[INCOMPLETE COMMAND] BLOCKING tool calls for incomplete command: '{message}'")
+        logger.error(f"[INCOMPLETE COMMAND] Tool calls that would be blocked: {[tc.get('function', {}).get('name') for tc in tool_calls]}")
+        # Возвращаем None, что приведет к повторному запросу AI без tool calls
+        return None
+    
     # КРИТИЧЕСКАЯ ВАЛИДАЦИЯ: Проверяем соответствие tool calls команде пользователя
-    message_lower = message.lower()
-    tool_names = [tc.get('function', {}).get('name') for tc in tool_calls]
     
     # УНИФИЦИРОВАННЫЙ ПОДХОД: минимальная валидация
     # Проверяем только явные конфликты между критичными операциями
@@ -230,6 +268,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     
     # Проверяем только явные конфликты
     if disallowed_tools:
+        tool_names = [tc.get('function', {}).get('name') for tc in tool_calls]
         for tool_name in tool_names:
             if tool_name in disallowed_tools:
                 logger.warning(f"[CONFLICT DETECTED] Tool {tool_name} conflicts with intent in: {message[:100]}")
