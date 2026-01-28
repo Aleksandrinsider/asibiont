@@ -2433,7 +2433,10 @@ details[open] .details-content {
     animation: fadeOut 0.3s ease-out forwards;
 }
 
-/* Tablet adaptation (landscape and portrait) */
+/* ============================================================================
+   АДАПТАЦИЯ ДЛЯ ПЛАНШЕТОВ (769px - 1024px)
+   Показываются все 3 колонки с оптимизированными размерами
+   ============================================================================ */
 @media (min-width: 769px) and (max-width: 1024px) {
     :root {
         --header-height: 65px;
@@ -2447,6 +2450,7 @@ details[open] .details-content {
         gap: 12px;
     }
 
+    /* Все колонки видимы, но уже */
     .left-column {
         width: 260px;
     }
@@ -2487,8 +2491,21 @@ details[open] .details-content {
     }
 }
 
-/* Mobile adaptation */
+/* ============================================================================
+   АДАПТАЦИЯ ДЛЯ МОБИЛЬНЫХ (до 768px)
+   
+   ЧТО ПОКАЗЫВАЕТСЯ:
+   - Шапка (header) с аватаром, кнопкой тарифа и выходом
+   - ТОЛЬКО блок статистики задач (task-stats-block)
+   
+   ЧТО СКРЫТО:
+   - Левая и центральная колонки (профиль, контакты, сообщения)
+   - Список задач (tasks-section-wrapper)
+   - Админ панель (admin-section)
+   - Боковые панели логина (login-messages-sidebar)
+   ============================================================================ */
 @media (max-width: 768px) {
+    /* === БАЗОВЫЕ НАСТРОЙКИ === */
     :root {
         --header-height: 60px;
     }
@@ -2496,7 +2513,7 @@ details[open] .details-content {
     body {
         overflow: auto;
         font-size: 14px;
-        padding-top: var(--header-height);
+        padding-top: var(--header-height); /* Отступ сверху под фиксированный header */
     }
 
     .container {
@@ -2506,6 +2523,7 @@ details[open] .details-content {
         margin-top: 0;
     }
 
+    /* === ШАПКА (HEADER) === */
     .app-header {
         height: var(--header-height);
         padding: 0 12px;
@@ -2526,7 +2544,7 @@ details[open] .details-content {
     }
 
     .header-center {
-        display: none;
+        display: none; /* Центральная часть header скрыта */
     }
 
     .header-info {
@@ -2534,6 +2552,7 @@ details[open] .details-content {
         gap: 6px;
     }
 
+    /* === ОСНОВНАЯ РАСКЛАДКА === */
     .main-layout {
         flex-direction: column;
         height: auto;
@@ -2542,18 +2561,20 @@ details[open] .details-content {
         margin-top: 0;
     }
 
+    /* === СКРЫТЬ ЛЕВУЮ И ЦЕНТРАЛЬНУЮ КОЛОНКИ === */
     .left-column,
     .center-column {
-        display: none;
+        display: none !important;
     }
 
+    /* === ПРАВАЯ КОЛОНКА НА ВСЮ ШИРИНУ === */
     .right-column {
         width: 100%;
         padding: 12px;
         border-radius: 0;
     }
 
-    /* Показывать только статистику на мобильном */
+    /* === ЧТО ПОКАЗЫВАЕМ: ТОЛЬКО СТАТИСТИКА === */
     .task-stats-block {
         padding: 16px;
         margin: 12px 0;
@@ -2561,21 +2582,22 @@ details[open] .details-content {
         display: block !important;
     }
 
-    /* Скрыть остальные блоки */
-    .profile-block,
-    .contacts-block,
-    .message-card,
-    .stats-block:not(.task-stats-block),
-    .quick-actions,
-    .search-bar,
-    .contacts-list,
-    .messages-list,
-    .tasks-section-wrapper,
-    .admin-section,
-    .login-messages-sidebar {
+    /* === ЧТО СКРЫВАЕМ: ВСЁ КРОМЕ СТАТИСТИКИ === */
+    .profile-block,              /* Профиль пользователя */
+    .contacts-block,             /* Блок контактов */
+    .message-card,               /* Карточки сообщений */
+    .stats-block:not(.task-stats-block), /* Другие статистики */
+    .quick-actions,              /* Быстрые действия */
+    .search-bar,                 /* Поиск */
+    .contacts-list,              /* Список контактов */
+    .messages-list,              /* Список сообщений */
+    .tasks-section-wrapper,      /* СПИСОК ЗАДАЧ - скрыт на мобильном */
+    .admin-section,              /* Админ панель */
+    .login-messages-sidebar {    /* Боковые панели на логине */
         display: none !important;
     }
 
+    /* === КНОПКИ И ЭЛЕМЕНТЫ === */
     .cta-button,
     .button,
     button {
@@ -2598,6 +2620,7 @@ details[open] .details-content {
         border-radius: 8px;
     }
 
+    /* === УВЕДОМЛЕНИЯ === */
     .error-notification {
         max-width: 95%;
         left: 2.5%;
@@ -2605,6 +2628,7 @@ details[open] .details-content {
         font-size: 14px;
     }
 
+    /* === ЗАГОЛОВКИ === */
     h1 {
         font-size: 24px;
     }
@@ -2618,6 +2642,10 @@ details[open] .details-content {
     }
 }
 
+/* ============================================================================
+   АДАПТАЦИЯ ДЛЯ МАЛЕНЬКИХ МОБИЛЬНЫХ (до 480px)
+   Ещё более компактный вид для очень маленьких экранов
+   ============================================================================ */
 @media (max-width: 480px) {
     .app-header {
         padding: 0 8px;
