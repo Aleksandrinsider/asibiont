@@ -2433,3 +2433,145 @@ details[open] .details-content {
     animation: fadeOut 0.3s ease-out forwards;
 }
 
+/* Mobile adaptation */
+@media (max-width: 768px) {
+    :root {
+        --header-height: 60px;
+    }
+
+    body {
+        overflow: auto;
+        font-size: 14px;
+    }
+
+    .container {
+        width: 100%;
+        padding: 0;
+        border-radius: 0;
+        margin-top: var(--header-height);
+    }
+
+    .app-header {
+        height: var(--header-height);
+        padding: 0 12px;
+        border-radius: 0;
+    }
+
+    .header-content {
+        padding: 0 8px;
+    }
+
+    .header-left {
+        gap: 8px;
+        padding-left: 0;
+    }
+
+    .header-center {
+        display: none;
+    }
+
+    .header-info {
+        font-size: 12px;
+        gap: 6px;
+    }
+
+    .main-layout {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        gap: 0;
+    }
+
+    .left-column,
+    .center-column {
+        display: none;
+    }
+
+    .right-column {
+        width: 100%;
+        padding: 12px;
+        border-radius: 0;
+    }
+
+    .stats-block,
+    .profile-block,
+    .contacts-block,
+    .message-card,
+    .task-stats-block {
+        padding: 16px;
+        margin: 12px 0;
+        border-radius: 12px;
+    }
+
+    .cta-button,
+    .button,
+    button {
+        font-size: 16px;
+        padding: 14px 24px;
+        border-radius: 8px;
+    }
+
+    .contact-search-desktop {
+        display: none;
+    }
+
+    .profile-avatar {
+        width: 60px;
+        height: 60px;
+    }
+
+    .task-item {
+        padding: 12px;
+        border-radius: 8px;
+    }
+
+    .error-notification {
+        max-width: 95%;
+        left: 2.5%;
+        right: 2.5%;
+        font-size: 14px;
+    }
+
+    h1 {
+        font-size: 24px;
+    }
+
+    h2 {
+        font-size: 20px;
+    }
+
+    h3 {
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-header {
+        padding: 0 8px;
+    }
+
+    .header-info {
+        font-size: 11px;
+    }
+
+    .right-column {
+        padding: 8px;
+    }
+
+    .stats-block,
+    .profile-block,
+    .contacts-block,
+    .message-card {
+        padding: 12px;
+        margin: 8px 0;
+    }
+
+    h1 {
+        font-size: 20px;
+    }
+
+    h2 {
+        font-size: 18px;
+    }
+}
+
