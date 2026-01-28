@@ -502,14 +502,22 @@ class ReminderService:
         finally:
             db.close()
     def schedule_proactive_checks(self):
-        """Планирование чекпоинтов для задач по принципу 1/3-2/3 времени вместо периодических проверок"""
+        """Планирование начальных проактивных проверок для всех пользователей"""
         
         db = Session()
         try:
             users = db.query(User).all()
-            logger.info(f"Scheduling task checkpoints for {len(users)} users")
+            logger.info(f"Scheduling initial proactive checks for {len(users)} users")
             for user in users:
-                self.schedule_task_checkpoints(user.telegram_id)
+                # Получить количество активных задач для пользователя
+                task_count = db.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['pending', 'in_progress'])
+                ).count()
+                
+                # Запланировать начальную проактивную проверку
+                import asyncio
+                asyncio.create_task(self._reschedule_proactive_check(user.telegram_id, task_count > 0, task_count))
         finally:
             db.close()
 
@@ -898,7 +906,7 @@ class ReminderService:
             db.close()
 
     async def _reschedule_proactive_check(self, user_id: int, has_tasks: bool, task_count: int = 0, urgent: bool = False):
-        """Перепланирование следующей проактивной проверки с адаптивным интервалом
+        """Перепланирование следующей проактивной проверки с привязкой к последнему сообщению пользователя
         
         Args:
             user_id: ID пользователя
@@ -915,42 +923,37 @@ class ReminderService:
             user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
             job_id = f"proactive_{user.telegram_id}"
             
-            # Адаптивные интервалы на основе количества задач
-            if urgent:
-                # Просроченные задачи - более частые проверки (каждые 30 минут)
-                interval_minutes = 30
-            elif task_count == 0:
-                # Нет задач - каждые 6 часов только днем
-                interval_minutes = PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
-            elif task_count <= 2:
-                # Мало задач - обычный интервал (2 часа)
-                interval_minutes = PROACTIVE_CHECK_INTERVAL_MINUTES
-            else:
-                # Много задач - реже беспокоить (6 часов)
-                interval_minutes = PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES
+            # Получить время последнего сообщения пользователя
+            last_user_message = db.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == "user"
+            ).order_by(Interaction.created_at.desc()).first()
             
-            # Вычисляем параметры cron триггера на основе интервала
-            if interval_minutes >= 60:
-                hour_step = interval_minutes // 60
-                minute = '0'
-                hour = f'8-22/{hour_step}' if hour_step > 1 else '8-22'  # Увеличены часы с 10-21 на 8-22
+            if last_user_message:
+                # Привязываемся к последнему сообщению пользователя + 6 часов
+                next_check_time = last_user_message.created_at.replace(tzinfo=pytz.UTC) + timedelta(hours=6)
             else:
-                minute = f'*/{interval_minutes}'
-                hour = '8-22'  # Только в рабочие часы
+                # Если нет сообщений, используем текущее время + 6 часов
+                next_check_time = datetime.now(pytz.UTC) + timedelta(hours=6)
             
-            # Перепланировать джоб с новым интервалом
+            # Убедимся, что время в будущем
+            now_utc = datetime.now(pytz.UTC)
+            if next_check_time <= now_utc:
+                next_check_time = now_utc + timedelta(hours=6)
+            
+            # Конвертируем в локальное время пользователя для планирования
+            next_check_local = next_check_time.astimezone(user_tz)
+            
+            # Перепланировать джоб на конкретное время
             self.scheduler.add_job(
                 _check_and_send_proactive_job,
-                trigger="cron",
-                minute=minute,
-                hour=hour,
-                timezone=user_tz,
+                trigger=DateTrigger(run_date=next_check_local, timezone=user_tz),
                 args=[user.telegram_id],
                 id=job_id,
                 replace_existing=True,
                 max_instances=1
             )
-            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} with {interval_minutes}min interval (has_tasks={has_tasks}, urgent={urgent})")
+            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} at {next_check_local} (6 hours after last user message)")
         finally:
             db.close()
 
