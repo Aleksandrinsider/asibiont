@@ -2542,11 +2542,25 @@ details[open] .details-content {
         border-radius: 0;
         margin: 0 !important;
         padding-top: 0 !important;
-        min-height: calc(100vh - var(--header-height));
+        min-height: calc(100vh - var(--header-height)) !important;
+        align-items: flex-start !important; /* Отменяем вертикальное центрирование */
+        justify-content: flex-start !important;
     }
 
     /* Убираем все верхние отступы, которые могут вызвать заход под header */
     .main-layout {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Login page и welcome section */
+    .login-page-wrapper {
+        padding-top: 20px !important;
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .welcome-section {
         margin-top: 0 !important;
         padding-top: 0 !important;
     }
