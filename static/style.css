@@ -2526,7 +2526,7 @@ details[open] .details-content {
         font-size: 14px;
         min-height: 100vh;
         position: relative;
-        padding-top: var(--header-height) !important;
+        padding-top: calc(var(--header-height) + 20px) !important;
     }
 
     /* Отменяем flexbox для body на странице логина */
