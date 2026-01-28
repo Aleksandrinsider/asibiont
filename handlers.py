@@ -132,16 +132,51 @@ async def start_handler(message: Message):
 
 @router.message(Command("subscription"))
 async def subscription_handler(message: Message):
-    """Handle subscription command - redirect to web app"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Выбрать тариф", web_app=WebAppInfo(url=f"{WEB_APP_URL}/subscription_tiers"))],
-        [InlineKeyboardButton(text="Открыть панель управления", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
-    ])
-    await message.bot.send_message(
-        message.chat.id,
-        "Выберите подходящий тариф для доступа ко всем функциям ASI Biont:",
-        reply_markup=keyboard
-    )
+    """Handle subscription command - show tariffs and payment links"""
+    user_id = message.from_user.id
+    session = Session()
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        user = User(telegram_id=user_id, username=message.from_user.username)
+        session.add(user)
+        session.commit()
+    
+    # Описание тарифов
+    tiers_description = """Доступные тарифы подписки:
+
+LIGHT — 3000₽/месяц
+Для всех. AI-агент управляет вашими задачами, напоминает о важном, помогает находить единомышленников.
+
+STANDARD — 9000₽/месяц (ПОПУЛЯРНЫЙ)
+Для тех, кто ставит задачи другим. Делегируйте с автоматическим ИИ-контролем выполнения, управляйте проектами, получайте приоритет в сообществе.
+
+PREMIUM — 27000₽/месяц
+Для тех, кто стремится к элитным связям и взаимной видимости на высшем уровне. Полный доступ ко всем контактам, премиум-статус, VIP-поддержка.
+
+Подробнее о тарифах: https://asibiont.ru/subscription-tiers
+Есть промокод? Введите его на сайте
+
+Выберите тариф для оплаты через ЮКАССА:"""
+    
+    await message.bot.send_message(message.chat.id, tiers_description)
+    
+    # Создать платежи для всех тарифов
+    from payments import create_payment
+    light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id)
+    standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id)
+    premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id)
+    
+    payment_message = f"""LIGHT (3000₽/мес):
+{light_url}
+
+STANDARD (9000₽/мес):
+{standard_url}
+
+PREMIUM (27000₽/мес):
+{premium_url}"""
+    
+    await message.bot.send_message(message.chat.id, payment_message)
+    session.close()
 
 
 @router.message(Command("update_profile"))
