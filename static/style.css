@@ -2568,21 +2568,10 @@ details[open] .details-content {
         order: 1; /* Описание первым */
     }
 
-    /* Боковые колонки на мобильном - показываем после описания */
+    /* Скрываем боковые колонки с сообщениями на мобильном */
     .login-messages-sidebar.left,
     .login-messages-sidebar.right {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 12px;
-        order: 2; /* После описания */
-        width: 100% !important;
-        padding: 0 !important;
-        align-items: center !important;
-    }
-
-    .login-message-card {
-        max-width: 100% !important;
-        text-align: center !important;
+        display: none !important;
     }
 
     /* === ШАПКА (HEADER) === */
