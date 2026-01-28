@@ -2612,7 +2612,8 @@ details[open] .details-content {
         padding-left: 0;
     }
 
-    /* Скрыть поиск контактов и кнопку "Сообщить об ошибке" */
+    /* Скрыть лого, поиск контактов и кнопку "Сообщить об ошибке" */
+    .logo,
     .contact-search-desktop,
     .header-left a[href*="aleksandrinsider"] {
         display: none !important;
