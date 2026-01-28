@@ -504,7 +504,6 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
 
 
 async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
-    """Mark task as skipped"""
     if session is None:
         session = Session()
         close_session = True
@@ -604,7 +603,6 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
 
 
 async def restore_task(task_id=None, task_title=None, user_id=None, session=None):
-    """Restore task to pending status"""
     logger.info(f"[RESTORE_TASK] Called with task_id={task_id}, task_title={task_title}, user_id={user_id}")
     if session is None:
         session = Session()
@@ -676,7 +674,6 @@ async def restore_task(task_id=None, task_title=None, user_id=None, session=None
 
 
 async def reschedule_task(task_title=None, new_time=None, user_id=None, session=None):
-    """Reschedule task to a new time"""
     logger.info(f"[RESCHEDULE_TASK] Called with task_title='{task_title}', new_time='{new_time}', user_id={user_id}")
     logger.info(f"[RESCHEDULE_TASK] task_title type: {type(task_title)}, repr: {repr(task_title)}, bytes: {task_title.encode('utf-8') if task_title else None}")
     
@@ -772,7 +769,6 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
 
 
 async def get_task_advice(task_id=None, user_id=None, session=None):
-    """Get AI advice for a task"""
     import asyncio
 
     if session is None:
@@ -843,7 +839,6 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
 def delegate_task(
     title, reminder_time=None, delegated_to_username=None, user_id=None, description="", delegation_details=""
 ):
-    """Create a delegated task that requires acceptance by the recipient"""
     from config import FREE_ACCESS_MODE
     
     # Validate input parameters
@@ -1356,7 +1351,6 @@ def edit_task(
         reminder_time=None,
         user_id=None,
         session=None):
-    """Edit task properties"""
     if session is None:
         session = Session()
         close_session = True
@@ -2179,7 +2173,6 @@ def find_partners(user_id=None, session=None):
 
 
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
-    """Async wrapper for delegation notification generation and sending"""
     try:
         from main import bot
         if not bot:
@@ -2217,7 +2210,6 @@ async def generate_delegation_notification_async(delegator_username, recipient_u
 
 
 async def generate_delegation_notification(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, user_id):
-    """Generate personalized delegation notification using AI"""
     import aiohttp
     from config import DEEPSEEK_API_KEY
     from .prompts import get_extended_system_prompt
@@ -2276,7 +2268,6 @@ async def generate_delegation_notification(delegator_username, recipient_usernam
 
 
 async def generate_progress_request(task_title, delegator_username, time_remaining, user_id):
-    """Generate AI-powered progress request for delegated task"""
     import aiohttp
     from config import DEEPSEEK_API_KEY
     from .prompts import get_extended_system_prompt
@@ -2331,7 +2322,6 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
 
 
 async def generate_delegation_response_notification_async(task_title, response, delegator_telegram_id, delegatee_username):
-    """Send notification to delegator about task acceptance/rejection"""
     try:
         from main import bot
         if not bot:
@@ -3585,7 +3575,6 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
 
 
 async def get_task_details_async(task_title: str, user_id: int = None, session=None, close_session: bool = True) -> str:
-    """Показать детали конкретной задачи"""
     logger.info(f"[GET_TASK_DETAILS] Called with task_title='{task_title}', user_id={user_id}")
     
     if user_id is None:
@@ -3677,7 +3666,6 @@ async def get_task_details_async(task_title: str, user_id: int = None, session=N
 
 
 def delegate_task(title, description="", reminder_time=None, delegated_to_username=None, delegation_details="", user_id=None):
-    """Делегировать задачу другому пользователю"""
     logger.info(f"[DELEGATE_TASK] Called with title='{title}', delegated_to='{delegated_to_username}', user_id={user_id}")
 
     if not user_id:
@@ -3781,7 +3769,6 @@ def delegate_task(title, description="", reminder_time=None, delegated_to_userna
 
 
 def get_delegation_progress(user_id=None, session=None):
-    """Показать статус делегированных задач"""
     logger.info(f"[GET_DELEGATION_PROGRESS] Called for user_id={user_id}")
 
     if session is None:
@@ -3851,9 +3838,7 @@ def get_delegation_progress(user_id=None, session=None):
         if close_session:
             session.close()
 
-
 def accept_delegated_task(task_title, user_id=None):
-    """Принять делегированную задачу"""
     logger.info(f"[ACCEPT_DELEGATED_TASK] Called with task_title='{task_title}', user_id={user_id}")
 
     if not user_id:
