@@ -51,11 +51,6 @@
             backdrop-filter: blur(3px);
             border-radius: 6px;
         }
-        @media (min-width: 768px) {
-            .pricing-card {
-                padding: 40px;
-            }
-        }
         .pricing-grid {
             display: flex;
             flex-wrap: wrap;
@@ -69,21 +64,6 @@
         }
 
         /* Адаптация для планшетов */
-        @media (max-width: 992px) {
-            .pricing-container {
-                max-width: 100%;
-            }
-
-            body::before {
-                background-size: 60%;
-                background-position: calc(100% - 30px) center;
-            }
-
-            .pricing-item {
-                flex: 1 1 280px;
-                min-width: 200px;
-            }
-        }
     </style>
 </head>
 <body>

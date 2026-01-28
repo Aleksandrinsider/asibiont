@@ -96,6 +96,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }  
 
+<<<<<<< HEAD
 /* Мобильная адаптация */
 @media (max-width: 768px) {
     body {
@@ -237,6 +238,8 @@ body {
     }
 }
 
+=======
+>>>>>>> e94625a (Remove mobile adaptations from CSS and HTML templates)
 .app-header {
     width: 100%;
     height: var(--header-height);
