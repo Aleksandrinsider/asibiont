@@ -872,7 +872,7 @@ def analyze_user_context_for_advice(user_id, message, context=None):
 
         # На основе эмоционального состояния
         if analysis["context_insights"]["emotional_state"] == "stressed":
-            recommendations.append("При стрессе: разбить задачи на микрошаги по 15-20 минут")
+            recommendations.append("Сфокусируйся на одной критичной задаче прямо сейчас")
         if analysis["context_insights"]["wants_optimization"]:
             recommendations.append("Проанализировать повторяющиеся задачи для автоматизации")
 
