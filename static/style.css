@@ -2558,7 +2558,7 @@ details[open] .details-content {
         padding: 16px;
         margin: 12px 0;
         border-radius: 12px;
-        display: block;
+        display: block !important;
     }
 
     /* Скрыть остальные блоки */
@@ -2569,7 +2569,10 @@ details[open] .details-content {
     .quick-actions,
     .search-bar,
     .contacts-list,
-    .messages-list {
+    .messages-list,
+    .tasks-section-wrapper,
+    .admin-section,
+    .login-messages-sidebar {
         display: none !important;
     }
 
