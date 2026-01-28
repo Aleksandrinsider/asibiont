@@ -821,7 +821,8 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
         try:
             import asyncio
             from .chat import chat_with_ai
-            advice = asyncio.run(chat_with_ai(user_id, prompt))
+            ai_result = asyncio.run(chat_with_ai(user_id, prompt))
+            advice = ai_result['response']
             result = f"Совет по задаче '{title}':\n\n{advice}"
 
             # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом

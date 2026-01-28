@@ -2272,7 +2272,8 @@ async def chat_handler(request):
             # Get AI response (will take time, so agent timestamp will be later)
             try:
                 logger.info(f"Calling chat_with_ai with user_id: {user_id}")
-                response = await chat_with_ai(message, context, user_id, file_content, db_session=session_db)
+                ai_result = await chat_with_ai(message, context, user_id, file_content, db_session=session_db)
+                response = ai_result['response']
                 logger.info("AI response: %s...", response[:100])
             except Exception as e:
                 logger.error(f"Error getting AI response: {e}", exc_info=True)
@@ -2529,7 +2530,8 @@ async def complete_task_handler(request):
                             # Отправляем сообщение через AI, как будто пользователь написал о выполнении
                             ai_message = f"я выполнил задачу '{task.title}'"
                             try:
-                                ai_response = await chat_with_ai(ai_message, user_id=user_id)
+                                ai_result = await chat_with_ai(ai_message, user_id=user_id)
+                                ai_response = ai_result['response']
                                 await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
                                 
                                 # Сохраняем взаимодействие в базу данных для отображения в веб-панели
@@ -2641,7 +2643,8 @@ async def delete_task_handler(request):
                 db_session = DBSession()
                 try:
                     # Обработка через AI для генерации естественного ответа
-                    ai_response = await chat_with_ai(result, user_id=user_id, db_session=db_session)
+                    ai_result = await chat_with_ai(result, user_id=user_id, db_session=db_session)
+                    ai_response = ai_result['response']
                     
                     # Отправляем AI ответ в Telegram если бот доступен
                     if 'bot' in request.app and ai_response:

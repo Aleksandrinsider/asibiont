@@ -94,11 +94,12 @@ async def generate_progress_post(user_id, session):
         
         # Use AI to generate natural post
         try:
-            response = await chat_with_ai(
+            ai_result = await chat_with_ai(
                 user_id=user_id,
                 message=context,
                 db_session=session
             )
+            response = ai_result['response']
             
             if response and len(response) > 20:
                 # Clean up response - remove quotes if present

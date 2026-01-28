@@ -1233,10 +1233,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     user.conversation_state = 'normal'
                     user.pending_task_data = None
                     db_session.commit()
-                    return "Извините, не удалось создать задачу. Попробуйте еще раз."
+                    return {'response': "Извините, не удалось создать задачу. Попробуйте еще раз.", 'tool_calls': []}
             else:
                 # Время не распознано, просим уточнить
-                return "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'."
+                return {'response': "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'.", 'tool_calls': []}
 
     context_len = (
         len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
@@ -1247,7 +1247,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
     if not DEEPSEEK_API_KEY:
         logger.warning("DEEPSEEK_API_KEY not set")
-        return "API ключ DeepSeek не настроен. Обратитесь к администратору для настройки."
+        return {'response': "API ключ DeepSeek не настроен. Обратитесь к администратору для настройки.", 'tool_calls': []}
 
     try:
         logger.info("Starting chat_with_ai processing")
@@ -1349,10 +1349,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             async with sess.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                                 if resp.status == 200:
                                     result = await resp.json()
-                                    return result["choices"][0]["message"]["content"].strip()
+                                    return {'response': result["choices"][0]["message"]["content"].strip(), 'tool_calls': []}
                     except Exception:
                         pass
-                    return "Для использования требуется активная подписка 💳 Активируйте её в @asibiont_bot"
+                    return {'response': "Для использования требуется активная подписка 💳 Активируйте её в @asibiont_bot", 'tool_calls': []}
 
             if user and user.memory:
                 try:
@@ -1654,7 +1654,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         user.pending_action = None
                         db_session.commit()
                         # Вернуть специальный ответ для обработки результата
-                        return f"Спасибо за информацию о задаче '{task_title}'! Результат сохранён для анализа."
+                        return {'response': f"Спасибо за информацию о задаче '{task_title}'! Результат сохранён для анализа.", 'tool_calls': []}
 
                     elif action_type == "task_skip_confirmation":
                         task_id = pending_data.get("task_id")
@@ -1664,10 +1664,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         if task:
                             if "да" in original_message.lower() or "пропустить" in original_message.lower():
                                 skip_response = f"Задача '{task_title}' отмечена как пропущенная. Могу предложить альтернативы или создать новую задачу."
-                                return skip_response
+                                return {'response': skip_response, 'tool_calls': []}
                             else:
                                 keep_response = f"Хорошо, оставляем задачу '{task_title}' активной. Чем могу помочь?"
-                                return keep_response
+                                return {'response': keep_response, 'tool_calls': []}
                         user.pending_action = None
                         db_session.commit()
                 except (json.JSONDecodeError, KeyError) as e:
@@ -1677,33 +1677,95 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # БАЗОВАЯ INTENT CLASSIFICATION для антигаллюцинационной системы
-        # Нужна для корректной работы валидации tool calls
+        # УЛУЧШЕННАЯ INTENT CLASSIFICATION для предотвращения галлюцинаций
+        # Учитывает контекст и имеет приоритеты для точного определения намерения
         message_lower = original_message.lower()
         intent = {"type": "conversation", "confidence": 0.5, "params": {}}
-        
-        # Определяем intent для основных команд
-        # Сначала проверяем массовые операции
-        if any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']):
-            if any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'закрой', 'удалить']):
-                intent = {"type": "delete_all_tasks", "confidence": 0.95, "params": {}}
-            elif any(kw in message_lower for kw in ['готово', 'завершил', 'выполнил', 'сделал']):
-                intent = {"type": "complete_all_tasks", "confidence": 0.95, "params": {}}
-            else:
-                intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
-        elif any(kw in message_lower for kw in ['делегируй', 'поручи', 'передай']):
+
+        # ПРОВЕРКА СПЕЦИФИЧЕСКИХ СЛУЧАЕВ С ВЫСОКИМ ПРИОРИТЕТОМ
+
+        # 1. Повторяющиеся задачи (высокий приоритет)
+        if any(phrase in message_lower for phrase in [
+            'каждый день', 'ежедневно', 'каждую неделю', 'еженедельно',
+            'каждый месяц', 'ежемесячно', 'повторять', 'регулярно'
+        ]):
+            intent = {"type": "set_recurring_task", "confidence": 0.95, "params": {}}
+
+        # 2. Удаление всех задач (высокий приоритет)
+        elif any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']) and \
+             any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'удалить']):
+            intent = {"type": "delete_all_tasks", "confidence": 0.95, "params": {}}
+
+        # 3. Детали конкретной задачи
+        elif any(phrase in message_lower for phrase in [
+            'детали задачи', 'покажи детали', 'что в задаче', 'информация о задаче'
+        ]):
+            intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
+
+        # 4. Обновление профиля
+        elif any(phrase in message_lower for phrase in [
+            'обнови профиль', 'измени профиль', 'добавь в профиль', 'мой профиль'
+        ]):
+            intent = {"type": "update_profile", "confidence": 0.9, "params": {}}
+
+        # 5. Поиск партнеров
+        elif any(phrase in message_lower for phrase in [
+            'найди партнеров', 'поищи контакты', 'партнеры по', 'контакты для'
+        ]):
+            intent = {"type": "find_partners", "confidence": 0.9, "params": {}}
+
+        # 6. Сохранение в память
+        elif any(phrase in message_lower for phrase in [
+            'запомни', 'помни что', 'я предпочитаю', 'у меня аллергия'
+        ]):
+            intent = {"type": "update_user_memory", "confidence": 0.9, "params": {}}
+
+        # 7. Делегирование задач
+        elif any(kw in message_lower for kw in ['делегируй', 'поручи', 'передай']) and \
+             'задачу' in message_lower:
             intent = {"type": "delegate_task", "confidence": 0.9, "params": {}}
-        elif any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что у меня']):
-            intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
-        elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'закончил']):
-            intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
-        elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить задачу']):
+
+        # 8. Изменение существующей задачи (текст или время)
+        elif any(phrase in message_lower for phrase in [
+            'измени название', 'исправь задачу', 'обнови задачу', 'добавь описание',
+            'измени время', 'перенеси на', 'поставь на другое время'
+        ]):
+            # Определяем тип изменения
+            if any(time_kw in message_lower for time_kw in ['время', 'на ', 'перенеси']):
+                intent = {"type": "reschedule_task", "confidence": 0.9, "params": {}}
+            else:
+                intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
+
+        # 9. Удаление задачи
+        elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить задачу']) and \
+             not any(kw in message_lower for kw in ['все', 'всё']):
             intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
-        elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови', 'перенести на']):
-            intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
-        elif any(kw in message_lower for kw in ['напомни', 'создай задачу', 'добавь задачу', 'нужно', 'надо']):
-            intent = {"type": "add_task", "confidence": 0.9, "params": {}}
-        
+
+        # 10. Завершение задачи
+        elif any(phrase in message_lower for phrase in [
+            'сделал задачу', 'выполнил задачу', 'завершил задачу', 'задача выполнена',
+            'закончил задачу', 'готово с задачей'
+        ]):
+            intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
+
+        # 11. Просмотр списка задач
+        elif any(phrase in message_lower for phrase in [
+            'покажи задачи', 'список задач', 'мои задачи', 'какие задачи',
+            'что запланировано', 'что у меня'
+        ]):
+            # Проверяем, не хочет ли пользователь детали конкретной задачи
+            if not any(det_kw in message_lower for det_kw in ['детали', 'подробно', 'информацию']):
+                intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+
+        # 12. Создание новой задачи (низкий приоритет, проверяем в конце)
+        elif any(phrase in message_lower for phrase in [
+            'напомни', 'создай задачу', 'добавь задачу', 'нужно сделать', 'надо сделать'
+        ]) or \
+             (any(time_ind in message_lower for time_ind in [
+                 'завтра', 'послезавтра', 'через', 'в ', 'на '
+             ]) and len(message_lower.split()) > 3):
+            intent = {"type": "add_task", "confidence": 0.8, "params": {}}
+
         logger.info(f"[INTENT] Detected: {intent['type']} (confidence: {intent['confidence']})")
 
         # AI-FIRST APPROACH: Полный контроль за AI с базовым intent для валидации
@@ -1815,18 +1877,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Это предотвращает путаницу когда AI пытается выполнить все команды из истории
         is_task_command = intent.get('type') in ['add_task', 'complete_task', 'delete_task', 'edit_task', 'delete_all_tasks', 'complete_all_tasks', 'delegate_task']
         
-        # Используем conversation_context для истории разговора, но ТОЛЬКО для разговорных команд
-        if conversation_context and isinstance(conversation_context, list) and not is_task_command:
-            # Берем последние 4 сообщения для контекста (2 пары вопрос-ответ) - УМЕНЬШЕНО для предотвращения галлюцинаций
-            recent_context = conversation_context[-4:] if len(conversation_context) > 4 else conversation_context
-            for item in recent_context:
-                if item.get("role") == "user":
-                    messages.append({"role": "user", "content": item["content"]})
-                elif item.get("role") == "assistant":
-                    messages.append({"role": "assistant", "content": item["content"]})
-            logger.info(f"[CONTEXT] Added {len(recent_context)} context messages for conversation")
-        elif is_task_command:
-            logger.info(f"[CONTEXT] SKIPPED context for task command: {intent.get('type')}")
+        # КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: НЕ ДОБАВЛЯЕМ КОНТЕКСТ ДЛЯ ЛЮБЫХ КОМАНД!
+        # Каждый запрос обрабатывается независимо, без учета предыдущих сообщений
+        # Это предотвращает галлюцинации и путаницу инструментов
+        logger.info(f"[CONTEXT] SKIPPED context for all commands to prevent hallucinations")
         
         # Добавляем текущее сообщение
         messages.append({"role": "user", "content": message})
@@ -1999,7 +2053,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     if profile:
                         profile.interaction_count = (profile.interaction_count or 0) + 1
                         db_session.commit()
-                return cached_response
+                return {'response': cached_response, 'tool_calls': []}
         else:
             logger.info(f"Skipping cache for intent_type '{intent.get('type')}' (requires freshness)")
             cache_key = None  # Для сохранения в кэш позже
@@ -2291,7 +2345,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             if tool_calls:
                                 result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
                                 if result:
-                                    return result
+                                    return {'response': result, 'tool_calls': [{'function': tc.get('function', {}).get('name'), 'arguments': tc.get('function', {}).get('arguments')} for tc in tool_calls]}
                                 elif result is None and tool_calls:
                                     # Если process_tool_calls вернул None при наличии tool_calls - значит валидация не прошла
                                     # Заменяем tool_calls на пустой список, чтобы сработала антигаллюцинация
@@ -2399,7 +2453,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                         logger.info(f"[HALLUCINATION FIX] Retry successful, got {len(retry_tool_calls)} tool calls")
                                                         result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
                                                         if result:
-                                                            return result
+                                                            return {'response': result, 'tool_calls': [{'function': tc.get('function', {}).get('name'), 'arguments': tc.get('function', {}).get('arguments')} for tc in retry_tool_calls]}
                                                     else:
                                                         logger.warning(f"[HALLUCINATION FIX] Retry failed - still no tool calls")
                                     except Exception as retry_e:
@@ -2562,7 +2616,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 content = "🤖 К сожалению, ИИ временно недоступен после нескольких попыток. Разработчики уведомлены. Попробуйте позже - обычно это решается в течение 5-10 минут."
                 # Отправляем уведомление о полном отказе API
                 asyncio.create_task(send_error_notification_to_bot(f"All API retry attempts failed for user {user_id}", user_id, "Multiple retry attempts exhausted", target_user_id=146333757))
-            return content
+            return {'response': content, 'tool_calls': []}
             
         # Обработка успешного ответа
         # Обработка успешного ответа
@@ -2607,10 +2661,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         except Exception as e:
             logger.warning(f"Failed to save interaction to database: {e}")
 
-        return final_content
+        # Собираем информацию о tool calls для отладки
+        tool_calls_info = []
+        if 'tool_calls' in locals() and tool_calls:
+            for tc in tool_calls:
+                tool_calls_info.append({
+                    'function': tc.get('function', {}).get('name'),
+                    'arguments': tc.get('function', {}).get('arguments')
+                })
+
+        return {
+            'response': final_content,
+            'tool_calls': tool_calls_info
+        }
 
     except Exception as e:
-        logger.error(f"Error in chat_with_ai: {e}")
         logger.error(f"Error type: {type(e).__name__}")
         logger.error(f"Traceback:\n{traceback.format_exc()}")
 
@@ -2683,11 +2748,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 except Exception as mem_e:
                     logger.warning(f"Could not save error context: {mem_e}")
 
-            return recovery_message
+            return {'response': recovery_message, 'tool_calls': []}
 
         except Exception as recovery_e:
             logger.error(f"Error in recovery mechanism: {recovery_e}")
-            return "Извини, произошла ошибка. Попробуй еще раз или свяжись с поддержкой."
+            return {'response': "Извини, произошла ошибка. Попробуй еще раз или свяжись с поддержкой.", 'tool_calls': []}
 
 
 async def generate_reminder(user_id, task_title, task_id=None):
