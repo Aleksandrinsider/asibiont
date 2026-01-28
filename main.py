@@ -67,6 +67,15 @@ try:
         conn.execute(text("SELECT 1"))
     logger.info("✅ Database connection successful")
 
+    # Clear database if requested
+    if os.getenv('CLEAR_DB') == '1':
+        logger.warning("CLEAR_DB=1 detected, clearing all database data...")
+        try:
+            Base.metadata.drop_all(engine)
+            logger.warning("All tables dropped successfully")
+        except Exception as e:
+            logger.error(f"Error dropping tables: {e}")
+
     # Initialize database tables
     init_db()
 except Exception as e:
@@ -1105,51 +1114,52 @@ except Exception as e:
 # Test data creation removed for production
 
 # Create test promo codes (3 for each tier, valid until Feb 1, 2026, unlimited uses)
-try:
-    session_db = Session()
+# COMMENTED OUT FOR PRODUCTION - Remove this block before deploying
+# try:
+#     session_db = Session()
 
-    # Check if promo codes already exist
-    existing_promos = session_db.query(PromoCode).filter(PromoCode.code.like('SPORT%')).all()
-    if existing_promos:
-        logger.info(f"Test promo codes already exist: {[p.code for p in existing_promos]}")
-    else:
-        # Create promo codes valid until February 1, 2026
-        expires_at = datetime(2026, 2, 1, tzinfo=dt_timezone.utc)
+#     # Check if promo codes already exist
+#     existing_promos = session_db.query(PromoCode).filter(PromoCode.code.like('SPORT%')).all()
+#     if existing_promos:
+#         logger.info(f"Test promo codes already exist: {[p.code for p in existing_promos]}")
+#     else:
+#         # Create promo codes valid until February 1, 2026
+#         expires_at = datetime(2026, 2, 1, tzinfo=dt_timezone.utc)
 
-        # LIGHT tier promo codes
-        light_promos = [
-            PromoCode(code='SPORTLIGHT1', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-            PromoCode(code='SPORTLIGHT2', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-            PromoCode(code='SPORTLIGHT3', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
-        ]
+#         # LIGHT tier promo codes
+#         light_promos = [
+#             PromoCode(code='SPORTLIGHT1', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+#             PromoCode(code='SPORTLIGHT2', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+#             PromoCode(code='SPORTLIGHT3', tier=SubscriptionTier.LIGHT, duration_days=30, max_uses=None, expires_at=expires_at),
+#         ]
 
-        # STANDARD tier promo codes
-        standard_promos = [
-            PromoCode(code='SPORTSTAND1', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-            PromoCode(code='SPORTSTAND2', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-            PromoCode(code='SPORTSTAND3', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
-        ]
+#         # STANDARD tier promo codes
+#         standard_promos = [
+#             PromoCode(code='SPORTSTAND1', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+#             PromoCode(code='SPORTSTAND2', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+#             PromoCode(code='SPORTSTAND3', tier=SubscriptionTier.STANDARD, duration_days=30, max_uses=None, expires_at=expires_at),
+#         ]
 
-        # PREMIUM tier promo codes
-        premium_promos = [
-            PromoCode(code='SPORTPREM1', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-            PromoCode(code='SPORTPREM2', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-            PromoCode(code='SPORTPREM3', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
-        ]
+#         # PREMIUM tier promo codes
+#         premium_promos = [
+#             PromoCode(code='SPORTPREM1', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+#             PromoCode(code='SPORTPREM2', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+#             PromoCode(code='SPORTPREM3', tier=SubscriptionTier.PREMIUM, duration_days=30, max_uses=None, expires_at=expires_at),
+#         ]
 
-        # Add all promo codes
-        all_promos = light_promos + standard_promos + premium_promos
-        for promo in all_promos:
-            session_db.add(promo)
+#         # Add all promo codes
+#         all_promos = light_promos + standard_promos + premium_promos
+#         for promo in all_promos:
+#             session_db.add(promo)
 
-        session_db.commit()
-        logger.info(f"Created {len(all_promos)} test promo codes valid until {expires_at.date()}")
-        for promo in all_promos:
-            logger.info(f"  - {promo.code}: {promo.tier.value} tier for {promo.duration_days} days")
+#         session_db.commit()
+#         logger.info(f"Created {len(all_promos)} test promo codes valid until {expires_at.date()}")
+#         for promo in all_promos:
+#             logger.info(f"  - {promo.code}: {promo.tier.value} tier for {promo.duration_days} days")
 
-    session_db.close()
-except Exception as e:
-    logger.error(f"Failed to create test promo codes: {e}")
+#     session_db.close()
+# except Exception as e:
+#     logger.error(f"Failed to create test promo codes: {e}")
 
 # Test database connection before starting
 try:
@@ -6382,6 +6392,30 @@ async def create_payment_handler(request):
         return web.Response(text=f'Ошибка создания платежа: {str(e)}', status=500)
 
 
+async def clear_database_handler(request):
+    """Clear all data from database (admin only)"""
+    try:
+        # Security check - require admin secret
+        admin_secret = request.headers.get('X-Admin-Secret') or request.query.get('admin_secret')
+        expected_secret = os.getenv('ADMIN_SECRET')
+        
+        if not admin_secret or admin_secret != expected_secret:
+            return web.json_response({'error': 'Unauthorized'}, status=403)
+        
+        logger.warning("Database clear requested by admin")
+        
+        # Clear all data by dropping and recreating tables
+        from models import Base
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+        
+        logger.warning("Database cleared successfully")
+        return web.json_response({'message': 'Database cleared successfully'})
+        
+    except Exception as e:
+        logger.error(f"Error clearing database: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
 
 # Routes
 app.router.add_get('/health', health_handler)
@@ -6417,6 +6451,7 @@ app.router.add_post('/webhook/yookassa', yookassa_webhook)
 # API routes for dynamic updates
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
+app.router.add_post('/admin/clear_database', clear_database_handler)
 app.router.add_get('/api/elite_partners', api_elite_partners_handler)
 app.router.add_get('/api/contact_profile', api_contact_profile_handler)
 app.router.add_get('/api/favorite_contacts', api_favorite_contacts_handler)
