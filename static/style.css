@@ -2433,6 +2433,60 @@ details[open] .details-content {
     animation: fadeOut 0.3s ease-out forwards;
 }
 
+/* Tablet adaptation (landscape and portrait) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    :root {
+        --header-height: 65px;
+    }
+
+    .container {
+        padding: 12px;
+    }
+
+    .main-layout {
+        gap: 12px;
+    }
+
+    .left-column {
+        width: 260px;
+    }
+
+    .center-column {
+        flex: 1;
+        min-width: 350px;
+    }
+
+    .right-column {
+        width: 280px;
+    }
+
+    .stats-block,
+    .profile-block,
+    .contacts-block {
+        padding: 18px;
+        margin-bottom: 12px;
+    }
+
+    .message-card {
+        padding: 14px;
+    }
+
+    h1 {
+        font-size: 26px;
+    }
+
+    h2 {
+        font-size: 22px;
+    }
+
+    .cta-button,
+    .button,
+    button {
+        font-size: 14px;
+        padding: 12px 20px;
+    }
+}
+
 /* Mobile adaptation */
 @media (max-width: 768px) {
     :root {
