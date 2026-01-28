@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import logging
 import json
-from config import DATABASE_URL, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_MINUTES
+from config import DATABASE_URL, OVERDUE_CHECK_INTERVAL_MINUTES, PROACTIVE_CHECK_AHEAD_MINUTES, LAST_INTERACTION_THRESHOLD_MINUTES, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, PROACTIVE_CHECK_INTERVAL_WITH_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES, PROACTIVE_CHECK_INTERVAL_MINUTES
 from ai_integration import check_delegation_deadlines, generate_proactive_message
 
 logger = logging.getLogger(__name__)
@@ -646,8 +646,8 @@ class ReminderService:
             now_user_time = datetime.now(user_tz)
             current_hour = now_user_time.hour
             
-            # Проверить, находится ли текущее время в периоде запрета (22:00 - 8:00)
-            if PROACTIVE_NO_SEND_START_HOUR <= current_hour or current_hour < 8:
+            # Проверить, находится ли текущее время в периоде запрета (22:00 - 10:00)
+            if PROACTIVE_NO_SEND_START_HOUR <= current_hour or current_hour < PROACTIVE_SEND_START_HOUR:
                 # Время запрета, перепланировать следующий чек с правильным интервалом
                 await self._reschedule_proactive_check(user_id, has_tasks=False, task_count=0)
                 return
@@ -944,6 +944,18 @@ class ReminderService:
             # Конвертируем в локальное время пользователя для планирования
             next_check_local = next_check_time.astimezone(user_tz)
             
+            # Проверить, попадает ли время в разрешенный диапазон (10:00-22:00)
+            if next_check_local.hour < PROACTIVE_SEND_START_HOUR:
+                # Если раньше 10:00, перенести на 10:00 того же дня
+                next_check_local = next_check_local.replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
+            elif next_check_local.hour >= PROACTIVE_NO_SEND_START_HOUR:
+                # Если 22:00 или позже, перенести на 10:00 следующего дня
+                next_check_local = (next_check_local + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
+            
+            # Если после корректировки время оказалось в прошлом, перенести на следующий день
+            if next_check_local <= datetime.now(user_tz):
+                next_check_local = (datetime.now(user_tz) + timedelta(days=1)).replace(hour=PROACTIVE_SEND_START_HOUR, minute=0, second=0, microsecond=0)
+            
             # Перепланировать джоб на конкретное время
             self.scheduler.add_job(
                 _check_and_send_proactive_job,
@@ -953,7 +965,7 @@ class ReminderService:
                 replace_existing=True,
                 max_instances=1
             )
-            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} at {next_check_local} (6 hours after last user message)")
+            logger.debug(f"Rescheduled proactive check for user {user.telegram_id} at {next_check_local} (6 hours after last user message, adjusted for daytime 10-22)")
         finally:
             db.close()
 
