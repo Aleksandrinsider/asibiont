@@ -1931,6 +1931,30 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             message_type=message_type_for_prompt)
         logger.info("[PROMPTS] Using extended prompt system")
 
+        # ДОБАВЛЯЕМ ИНСТРУКЦИЮ ПО УНИКАЛЬНОСТИ ОТВЕТОВ
+        # Проверяем последние 3 ответа AI для предотвращения повторений
+        if user:
+            recent_responses = []
+            try:
+                from models import Interaction
+                recent_interactions = db_session.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'ai'
+                ).order_by(Interaction.created_at.desc()).limit(3).all()
+
+                for interaction in recent_interactions:
+                    if interaction.content:
+                        # Берем первые 50 символов для сравнения
+                        preview = interaction.content.strip()[:50].lower()
+                        if preview and preview not in recent_responses:
+                            recent_responses.append(preview)
+            except Exception as e:
+                logger.warning(f"Could not get recent responses: {e}")
+
+            if recent_responses:
+                uniqueness_instruction = f"\n\nКРИТИЧНО: НЕ ПОВТОРЯЙ эти недавние ответы:\n" + "\n".join(f"❌ '{resp}...'" for resp in recent_responses[:2])
+                system_prompt += uniqueness_instruction
+
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
         is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and 'ASK_' not in original_message and 'ASK_' not in original_message
 
