@@ -1,6 +1,6 @@
 import re
 from .commands import *
-from .intent_classifier import IntentClassifier
+from .intent_classifier_ultra_minimal import IntentClassifierUltraMinimal
 
 class CommandRouter:
     """AI-powered command routing for unlimited variations"""
@@ -21,10 +21,10 @@ class CommandRouter:
         # Fast check for simple patterns first
         for intent, pattern in self.simple_patterns.items():
             if re.search(pattern, message_lower):
-                return IntentClassifier.get_command_class(intent)(message)
+                return IntentClassifierUltraMinimal.get_command_class(intent)(message)
 
         # Use AI for complex classification
-        intent = await IntentClassifier.classify_intent(message, user_id)
+        intent = await IntentClassifierUltraMinimal.classify_intent(message, user_id)
         command_class = IntentClassifier.get_command_class(intent)
 
         # Create command with basic parameters

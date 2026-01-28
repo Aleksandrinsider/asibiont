@@ -1788,7 +1788,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # УЛУЧШЕННАЯ INTENT CLASSIFICATION с AI-powered анализом
         # Сначала пробуем AI классификацию для точного извлечения параметров
         try:
-            from .intent_classifier import IntentClassifier
+            from .intent_classifier_ultra_minimal import IntentClassifierUltraMinimal
             ai_result = await IntentClassifier.classify_intent(original_message, user_id)
             
             # Парсим результат: КОМАНДА|УВЕРЕННОСТЬ
