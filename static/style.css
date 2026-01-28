@@ -2540,8 +2540,15 @@ details[open] .details-content {
     .container {
         width: 100%;
         border-radius: 0;
-        margin: 0;
+        margin: 0 !important;
+        padding-top: 0 !important;
         min-height: calc(100vh - var(--header-height));
+    }
+
+    /* Убираем все верхние отступы, которые могут вызвать заход под header */
+    .main-layout {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
 
     /* === ШАПКА (HEADER) === */
