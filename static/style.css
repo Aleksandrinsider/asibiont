@@ -2661,7 +2661,7 @@ details[open] .details-content {
     /* === ЧТО ПОКАЗЫВАЕМ: ТОЛЬКО СТАТИСТИКА === */
     .task-stats-block {
         padding: 16px;
-        margin: 12px;
+        margin: 20px 12px 12px 12px;
         border-radius: 12px;
         display: block !important;
     }
