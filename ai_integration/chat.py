@@ -1766,6 +1766,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
              ]) and len(message_lower.split()) > 3):
             intent = {"type": "add_task", "confidence": 0.8, "params": {}}
 
+        # 13. Просмотр деталей задачи
+        elif any(phrase in message_lower for phrase in [
+            'детали', 'подробно', 'подробнее', 'информацию о задаче', 'покажи задачу', 'расскажи о задаче'
+        ]):
+            intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
+
         logger.info(f"[INTENT] Detected: {intent['type']} (confidence: {intent['confidence']})")
 
         # AI-FIRST APPROACH: Полный контроль за AI с базовым intent для валидации
@@ -1924,7 +1930,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Определяем, является ли сообщение запросом на управление задачами на основе intent
         is_task_request = intent.get('type') in [
             'add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task',
-            'delegate_task', 'find_partners', 'update_profile', 'profile_info'
+            'delegate_task', 'find_partners', 'update_profile', 'profile_info', 'get_task_details'
         ]
 
         # МИНИМАЛЬНАЯ ЛОГИКА: Полный AI-first подход с умными подсказками
@@ -1937,6 +1943,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # AI сам решает, но мы логируем намерение для отладки
             tool_choice = "auto"
             parallel_tool_calls = True
+            
+            # Принудительный вызов инструментов для определенных intent
+            action_intents = [
+                'add_task', 'get_task_details', 'set_recurring_task', 'complete_task', 
+                'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
+                'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
+            ]
+            if intent.get('type') in action_intents:
+                tool_choice = 'required'
+                logger.info(f"[TOOL CHOICE] REQUIRED for {intent.get('type')} intent")
             
             # Детектируем тип команды для логирования
             logger.info(f"[TOOL DETECTOR] Testing message: '{clean_message.lower()[:100]}'")
