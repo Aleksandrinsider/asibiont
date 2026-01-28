@@ -2524,9 +2524,13 @@ details[open] .details-content {
     body {
         overflow-y: auto;
         font-size: 14px;
-        padding-top: var(--header-height) !important; /* Отступ для контента под header */
         min-height: 100vh;
         position: relative;
+    }
+
+    /* Отступ для контента под header на всех страницах кроме страницы тарифов */
+    body:not(.subscription-page) {
+        padding-top: var(--header-height) !important;
     }
 
     /* Универсальные боковые отступы для всех страниц */
@@ -2555,14 +2559,28 @@ details[open] .details-content {
 
     /* Login page и welcome section */
     .login-page-wrapper {
-        padding-top: 20px !important;
-        display: block !important;
+        padding: 20px 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
         width: 100% !important;
+        gap: 24px;
     }
 
     .welcome-section {
         margin-top: 0 !important;
         padding-top: 0 !important;
+        order: 1; /* Описание первым */
+    }
+
+    /* Боковые колонки на мобильном - показываем после описания */
+    .login-messages-sidebar.left,
+    .login-messages-sidebar.right {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px;
+        order: 2; /* После описания */
+        width: 100% !important;
+        padding: 0 !important;
     }
 
     /* === ШАПКА (HEADER) === */
@@ -2629,7 +2647,7 @@ details[open] .details-content {
     /* === ПРАВАЯ КОЛОНКА НА ВСЮ ШИРИНУ === */
     .right-column {
         width: 100% !important;
-        padding: 0 !important; /* Убираем внутренний padding */
+        padding: 20px 0 0 0 !important; /* Добавляем верхний отступ */
         border-radius: 0;
         margin: 0;
     }
