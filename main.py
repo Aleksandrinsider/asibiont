@@ -1504,10 +1504,6 @@ async def get_user_avatar_url(bot, user_id):
     except Exception as e:
         logger.error(f"Error getting cached avatar for user {user_id}: {e}")
         return None
-            logger.debug(f"User {user_id} not found or has no avatar (expected for test users)")
-        else:
-            logger.error(f"Error getting user avatar for {user_id}: {e}")
-    return None
 
 
 def check_telegram_authentication(data):
