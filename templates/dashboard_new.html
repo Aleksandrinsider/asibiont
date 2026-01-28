@@ -1978,11 +1978,8 @@
             const indicator = document.getElementById('new-posts-indicator');
             if (indicator) indicator.style.display = 'none';
             
-            // Загружаем ленту только если она пустая (не загружена ранее)
-            const feedContainer = document.getElementById('feed-container');
-            if (!feedContainer || feedContainer.innerHTML.trim() === '') {
-                loadFeed();
-            }
+            // Всегда перезагружаем ленту при переключении для получения актуального состояния лайков
+            loadFeed();
         }
 
         function handlePostKeyPress(event) {
