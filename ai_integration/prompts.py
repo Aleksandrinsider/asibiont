@@ -30,6 +30,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 1. ЗАВЕРШЕНИЕ (если видишь эти слова - ОБЯЗАТЕЛЬНО ВЫЗОВИ complete_task):
    ✓ "Готово X" → ВЫЗОВИ complete_task(task_title="X")
+   ✓ "Готово" (без указания задачи) → ВЫЗОВИ complete_task() - завершит последнюю активную задачу
    ✓ "Сделал X" → ВЫЗОВИ complete_task(task_title="X")
    ✓ "Выполнил X" → ВЫЗОВИ complete_task(task_title="X")
    ✓ "Завершил X" → ВЫЗОВИ complete_task(task_title="X")

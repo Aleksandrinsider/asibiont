@@ -545,14 +545,32 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                 session.close()
             return f"Некорректный ID задачи: {task_id}"
     
-    task = find_task_flexible(
-        session=session,
-        user=user,
-        task_id=task_id_int,
-        task_title=task_title,
-        include_completed=True,  # Include to check status
-        include_delegated=True
-    )
+    # Если task_title не указан, завершаем последнюю активную задачу
+    if not task_title or not task_title.strip():
+        logger.info("[COMPLETE_TASK] No task_title provided, completing the most recent active task")
+        
+        # Найти последнюю активную задачу пользователя
+        recent_task = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status != "completed"
+        ).order_by(Task.created_at.desc()).first()
+        
+        if recent_task:
+            task = recent_task
+            logger.info(f"[COMPLETE_TASK] Completing most recent task: '{task.title}' (ID: {task.id})")
+        else:
+            if close_session:
+                session.close()
+            return "Нет активных задач для завершения"
+    else:
+        task = find_task_flexible(
+            session=session,
+            user=user,
+            task_id=task_id_int,
+            task_title=task_title,
+            include_completed=True,  # Include to check status
+            include_delegated=True
+        )
     
     if not task:
         if close_session:
