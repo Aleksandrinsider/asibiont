@@ -72,6 +72,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        @media (max-width: 768px) {
+            .tiers-grid {
+                grid-template-columns: 1fr !important;
+                gap: 16px !important;
+            }
+        }
+    </style>
+    <style>
         * {
             margin: 0;
             padding: 0;
@@ -87,6 +95,15 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            body::before {
+                background-size: 80%;
+                opacity: 0.03;
+            }
         }
         body::before {
             content: '';
@@ -127,7 +144,7 @@
                     <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Получите доступ к закрытому сообществу ASI Biont</p>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                <div class="tiers-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
                     <!-- Лайт -->
                     <div style="border: 1px solid #D1D9E0; border-radius: 6px; padding: 24px; background: white;">
                         <h2 style="margin: 0 0 4px 0; font-size: 18px; font-weight: 600; color: #374151;">Лайт</h2>

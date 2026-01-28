@@ -2553,14 +2553,24 @@ details[open] .details-content {
         border-radius: 0;
     }
 
-    .stats-block,
-    .profile-block,
-    .contacts-block,
-    .message-card,
+    /* Показывать только статистику на мобильном */
     .task-stats-block {
         padding: 16px;
         margin: 12px 0;
         border-radius: 12px;
+        display: block;
+    }
+
+    /* Скрыть остальные блоки */
+    .profile-block,
+    .contacts-block,
+    .message-card,
+    .stats-block:not(.task-stats-block),
+    .quick-actions,
+    .search-bar,
+    .contacts-list,
+    .messages-list {
+        display: none !important;
     }
 
     .cta-button,
