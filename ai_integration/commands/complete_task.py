@@ -3,8 +3,8 @@ from .. import handlers
 
 class CompleteTaskCommand(BaseCommand):
     async def execute(self, user_id, db_session):
-        # For PoC, use message as task_title
-        task_title = self.message
+        # Use AI-extracted task_title if available, otherwise fallback to message
+        task_title = self.params.get('task_title', self.message)
 
         # Call handler
         result = await handlers.complete_task(

@@ -177,16 +177,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "ТОЛЬКО ДЛЯ ОБНОВЛЕНИЯ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ! СТРОГО ЗАПРЕЩЕНО использовать для задач, памяти или поиска. Вызывай ТОЛЬКО когда пользователь хочет изменить личную информацию. Ключевые слова: 'обнови профиль', 'измени город', 'добавь навыки'. СТРОГО ЗАПРЕЩЕНО: для создания задач, для сохранения предпочтений, для поиска партнеров. Примеры: 'обнови мой профиль: город Москва' → update_profile, 'добавь в профиль навыки Python' → update_profile. ЗАПРЕЩЕНО: 'запомни что я люблю чай' (используй update_user_memory), 'найди партнеров' (используй find_partners)",
+        "description": "ОБЯЗАТЕЛЬНОЕ ОБНОВЛЕНИЕ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ! Вызывай АВТОМАТИЧЕСКИ при ЛЮБОМ упоминании личной информации в разговоре. КЛЮЧЕВЫЕ СЛОВА: город, компания, должность, навыки, интересы, цели, работаю, занимаюсь, люблю, хочу. ПРИМЕРЫ ОБЯЗАТЕЛЬНОГО ВЫЗОВА: 'я из Лондона' → update_profile(city='Лондон'), 'работаю в Google' → update_profile(company='Google'), 'дизайнер' → update_profile(skills='дизайнер'), 'люблю музыку' → update_profile(interests='музыка'), 'хочу открыть бизнес' → update_profile(goals='открыть бизнес'). НИКОГДА не используй update_user_memory для этой информации!",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "city": {"type": "string", "description": "Город"},
-                    "interests": {"type": "string", "description": "Интересы"},
-                    "skills": {"type": "string", "description": "Навыки"},
-                    "goals": {"type": "string", "description": "Цели"},
-                    "company": {"type": "string", "description": "Компания"},
-                    "position": {"type": "string", "description": "Должность"},
+                    "city": {"type": "string", "description": "Город проживания или работы"},
+                    "interests": {"type": "string", "description": "Хобби, увлечения, интересы"},
+                    "skills": {"type": "string", "description": "Профессиональные навыки, специальность"},
+                    "goals": {"type": "string", "description": "Цели, планы, желания"},
+                    "company": {"type": "string", "description": "Название компании"},
+                    "position": {"type": "string", "description": "Должность, роль в компании"},
                 },
             },
         },

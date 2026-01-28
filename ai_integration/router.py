@@ -28,4 +28,6 @@ class CommandRouter:
         intent = await IntentClassifier.classify_intent(message, user_id)
         command_class = IntentClassifier.get_command_class(intent)
 
-        return command_class(message)
+        # Create command with basic parameters
+        command = command_class(message)
+        return command

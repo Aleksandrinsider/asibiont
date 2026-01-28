@@ -927,6 +927,11 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                     logger.warning(f"Failed to get profile context: {e}")
 
             # ФОРМИРУЕМ КОНТЕКСТ ДЛЯ AI: результаты + профиль + инструкции
+            # Ограничиваем длину ai_context для предотвращения превышения лимита токенов
+            max_ai_context_len = 2000  # Максимум 2000 символов
+            if len(ai_context) > max_ai_context_len:
+                ai_context = ai_context[:max_ai_context_len] + "... (сокращено для экономии токенов)"
+            
             tool_context_msg = f"""РЕЗУЛЬТАТЫ ВЫПОЛНЕННЫХ ДЕЙСТВИЙ:
 {ai_context}{profile_context}
 
@@ -967,6 +972,11 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
    ✅ ХОРОШО: "Напомню проверить почту в 17:57 — через 5 минут. Учитывая поздний час, стоит быстро пробежаться по важным письмам, отложив детальные ответы на утро. Если ожидаешь что-то срочное, можно сразу настроить фильтры для приоритетных отправителей."
 
 ВАЖНО: Создавай УНИКАЛЬНЫЙ ответ для каждой ситуации, НЕ используй одинаковые фразы!"""
+
+            # Ограничиваем общую длину tool_context_msg
+            max_tool_context_len = 4000  # Максимум 4000 символов
+            if len(tool_context_msg) > max_tool_context_len:
+                tool_context_msg = tool_context_msg[:max_tool_context_len] + "... (инструкции сокращены)"
 
             logger.info(f"[AI CONTEXT] ai_context={ai_context[:200]}")
             logger.info(f"[AI CONTEXT] fallback_message={fallback_message[:200]}")
@@ -1032,6 +1042,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
     if context is not None and not isinstance(context, list):
         logger.warning(f"context is not a list: {type(context)}, setting to None")
         context = None
+
+    # Ограничиваем контекст для предотвращения превышения лимита токенов
+    if context and len(context) > 20:  # Максимум 20 сообщений в истории
+        context = context[-20:]
+        logger.info(f"Context truncated to last 20 messages")
 
     # Use provided db_session or create new one if not provided
     if db_session is None:
@@ -1677,12 +1692,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # УЛУЧШЕННАЯ INTENT CLASSIFICATION для предотвращения галлюцинаций
-        # Учитывает контекст и имеет приоритеты для точного определения намерения
-        message_lower = original_message.lower()
-        intent = {"type": "conversation", "confidence": 0.5, "params": {}}
+        # УЛУЧШЕННАЯ INTENT CLASSIFICATION с AI-powered анализом
+        # Сначала пробуем AI классификацию для точного извлечения параметров
+        try:
+            from .intent_classifier import IntentClassifier
+            ai_intent_str = await IntentClassifier.classify_intent(original_message, user_id)
+            intent = {'type': ai_intent_str, 'confidence': 0.9, 'params': {}}
+            logger.info(f"[AI INTENT] Classified as {intent['type']} with confidence {intent['confidence']}")
+        except Exception as e:
+            logger.warning(f"[AI INTENT] Failed to use AI classification: {e}, falling back to static")
+            intent = {'type': 'conversation', 'confidence': 0.5, 'params': {}}
+
+        # Если AI не сработал или уверенность низкая - используем статическую классификацию
+        if intent['type'] == 'conversation' and intent['confidence'] <= 0.5:
+            # ПРОВЕРКА СПЕЦИФИЧЕСКИХ СЛУЧАЕВ С ВЫСОКИМ ПРИОРИТЕТОМ
+            message_lower = original_message.lower()
 
         # ПРОВЕРКА СПЕЦИФИЧЕСКИХ СЛУЧАЕВ С ВЫСОКИМ ПРИОРИТЕТОМ
+        message_lower = original_message.lower()
 
         # 1. Повторяющиеся задачи (высокий приоритет)
         if any(phrase in message_lower for phrase in [
@@ -1744,9 +1771,39 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # 10. Завершение задачи
         elif any(phrase in message_lower for phrase in [
             'сделал задачу', 'выполнил задачу', 'завершил задачу', 'задача выполнена',
-            'закончил задачу', 'готово с задачей'
+            'закончил задачу', 'готово с задачей', 'всё готово', 'всё сделано',
+            'можно закрывать', 'закрывать сдачу', 'закрыть задачу', 'задача закрыта',
+            'приемку закрыть', 'сдачу закрыть', 'готово', 'закрыто'
         ]):
-            intent = {"type": "complete_task", "confidence": 0.9, "params": {}}
+            # Извлекаем название задачи из сообщения
+            task_title = None
+            # Для сообщений типа "всё продукты заказал" - извлекаем "продукты"
+            if 'всё' in message_lower and len(message_lower.split()) > 2:
+                words = message_lower.split()
+                # Находим слово "всё" и берём следующее слово как ключ
+                try:
+                    vse_index = words.index('всё')
+                    if vse_index + 1 < len(words):
+                        task_title = words[vse_index + 1]
+                except ValueError:
+                    pass
+            # Для других случаев - ищем после ключевых слов
+            if not task_title:
+                complete_keywords = ['сделал', 'выполнил', 'завершил', 'закончил', 'готово', 'закрыл']
+                for keyword in complete_keywords:
+                    if keyword in message_lower:
+                        idx = message_lower.find(keyword)
+                        remaining_text = message_lower[idx + len(keyword):].strip()
+                        # Ищем существительные (слова, описывающие задачу)
+                        words = remaining_text.split()[:3]  # Не больше 3 слов
+                        if words:
+                            # Фильтруем служебные слова
+                            filtered_words = [w for w in words if w not in ['задачу', 'работу', 'дело', 'с', 'по', 'в', 'на', 'и', 'а', 'но', 'или']]
+                            if filtered_words:
+                                task_title = ' '.join(filtered_words[:2])  # Максимум 2 слова
+                                break
+            
+            intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
 
         # 11. Просмотр списка задач
         elif any(phrase in message_lower for phrase in [
@@ -2017,7 +2074,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 logger.info(f"[TOOL CHOICE] REQUIRED for add_task trigger: {message[:50]}")
         
         # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ для других критичных команд
-        complete_triggers = ['сделал', 'выполнил', 'завершил', 'готово', 'закончил']
+        complete_triggers = ['сделал', 'выполнил', 'завершил', 'готово', 'закончил', 'всё', 'закрывать', 'закрыть', 'можно', 'сдачу', 'приемку']
         if any(trigger in message_lower for trigger in complete_triggers) and tool_choice == 'auto':
             tool_choice = 'required'
             logger.info(f"[TOOL CHOICE] REQUIRED for complete_task trigger: {message[:50]}")
@@ -2392,7 +2449,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                         'delete_task': ['удалил задачу', 'задача удалена', 'убрал задачу',
                                                         'задача убрана', 'удалил напоминание', 'убрал напоминание'],
                                         'complete_task': ['задача выполнена', 'отметил выполненной', 'завершил задачу',
-                                                          'задача завершена', 'отметил как выполненную'],
+                                                          'задача завершена', 'отметил как выполненную', 'готово с задачей',
+                                                          'задача готова', 'закрыл задачу', 'задача закрыта', 'сделано',
+                                                          'выполнено', 'завершено', 'закончено', 'готово', 'закрыто',
+                                                          'сдачу закрываю', 'закрываю сдачу', 'приемку закрываю', 'закрываю приемку'],
                                         'list_tasks': ['вот твои задачи', 'список задач', 'твои задачи',
                                                        'показываю задачи', 'у тебя задачи'],
                                         'edit_task': ['изменил задачу', 'обновил задачу', 'перенес на',
