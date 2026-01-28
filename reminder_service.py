@@ -695,6 +695,28 @@ class ReminderService:
                 logger.debug(f"Proactive message was already sent in the last hour for user {user_id}, skipping")
                 return
             
+            # ДОБАВИТЬ: Проверить недавние напоминания о задачах (последние 2 часа)
+            recent_reminders = db.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == 'reminder',
+                Interaction.created_at >= now_utc - timedelta(hours=2)
+            ).all()
+            
+            if recent_reminders:
+                logger.debug(f"Recent task reminders found ({len(recent_reminders)}) in last 2 hours for user {user_id}, skipping proactive message")
+                return
+            
+            # ДОБАВИТЬ: Проверить недавнюю активность с задачами (последние 30 минут)
+            recent_task_activity = db.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type.in_(['task_created', 'task_completed', 'task_updated']),
+                Interaction.created_at >= now_utc - timedelta(minutes=30)
+            ).first()
+            
+            if recent_task_activity:
+                logger.debug(f"Recent task activity found in last 30 minutes for user {user_id}, skipping proactive message")
+                return
+            
             # Новая адаптивная логика: частота зависит от количества задач
             total_pending_tasks = len(pending_tasks)
             total_active_tasks = total_pending_tasks
@@ -722,23 +744,34 @@ class ReminderService:
             
             # 3. Адаптивная логика на основе количества задач
             if total_active_tasks == 0:
-                # Нет задач - отправлять чаще (предложения создать задачи)
+                # Нет задач - отправлять реже (было чаще, теперь реже чтобы не надоедать)
                 await self.send_proactive_message(user_id, context="no_tasks")
                 await self._reschedule_proactive_check(user_id, has_tasks=False, task_count=0)
             elif total_active_tasks <= 2:
                 # Мало задач - обычная частота
                 await self.send_proactive_message(user_id, context="few_tasks", task_count=total_active_tasks)
                 await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
-            else:
-                # Много задач - реже отправлять, чтобы не мешать
-                # Отправляем только если последнее проактивное сообщение было >2 часов назад
-                recent_proactive_2h = db.query(Interaction).filter(
+            elif total_active_tasks <= 5:
+                # Среднее количество задач - реже отправлять
+                recent_proactive_3h = db.query(Interaction).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'ai',
-                    Interaction.created_at >= now_utc - timedelta(hours=2)
+                    Interaction.created_at >= now_utc - timedelta(hours=3)
                 ).first()
                 
-                if not recent_proactive_2h:
+                if not recent_proactive_3h:
+                    await self.send_proactive_message(user_id, context="many_tasks", task_count=total_active_tasks)
+                
+                await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
+            else:
+                # Очень много задач - очень редко отправлять, только если прошло >4 часов
+                recent_proactive_4h = db.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'ai',
+                    Interaction.created_at >= now_utc - timedelta(hours=4)
+                ).first()
+                
+                if not recent_proactive_4h:
                     await self.send_proactive_message(user_id, context="many_tasks", task_count=total_active_tasks)
                 
                 await self._reschedule_proactive_check(user_id, has_tasks=True, task_count=total_active_tasks)
