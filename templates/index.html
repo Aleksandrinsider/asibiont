@@ -236,68 +236,6 @@
         </div>
     </div>
     <script>
-        // Проверка на мобильное устройство
-        (function() {
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isSmallScreen = window.innerWidth <= 768;
-            
-            if (isMobile || isSmallScreen) {
-                // Создаем заглушку для мобильных устройств
-                document.body.innerHTML = `
-                    <div style="
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        min-height: 100vh;
-                        padding: 20px;
-                        text-align: center;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    ">
-                        <div style="
-                            background: white;
-                            border-radius: 20px;
-                            padding: 40px 30px;
-                            max-width: 400px;
-                            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-                        ">
-                            <div style="font-size: 64px; margin-bottom: 20px;">📱</div>
-                            <h1 style="
-                                font-size: 24px;
-                                margin-bottom: 15px;
-                                background: linear-gradient(45deg, #667eea, #764ba2);
-                                -webkit-background-clip: text;
-                                -webkit-text-fill-color: transparent;
-                                background-clip: text;
-                            ">Мобильная версия в разработке</h1>
-                            <p style="
-                                color: #666;
-                                line-height: 1.6;
-                                margin-bottom: 25px;
-                                font-size: 16px;
-                            ">
-                                Веб-панель пока доступна только на компьютере.<br>
-                                Для работы с ASI Biont на мобильном используйте Telegram-бот.
-                            </p>
-                            <a href="https://t.me/Asibiont_bot" style="
-                                display: inline-block;
-                                background: linear-gradient(45deg, #667eea, #764ba2);
-                                color: white;
-                                padding: 15px 30px;
-                                border-radius: 50px;
-                                text-decoration: none;
-                                font-weight: bold;
-                                margin-top: 10px;
-                                transition: transform 0.2s;
-                            " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                                Открыть в Telegram
-                            </a>
-                        </div>
-                    </div>
-                `;
-            }
-        })();
     </script>
 </body>
 </html>
