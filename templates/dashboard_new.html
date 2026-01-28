@@ -963,21 +963,10 @@
                             <script async src="https://telegram.org/js/telegram-widget.js?22" 
                                     data-telegram-login="{{ bot_username }}" 
                                     data-size="large" 
-                                    data-onauth="onTelegramAuth(user)" 
+                                    data-auth-url="/tg_auth" 
                                     data-request-access="write"></script>
                         </div>
                     </div>
-                    <script type="text/javascript">
-                        function onTelegramAuth(user) {
-                            // Build query string from user data
-                            const params = new URLSearchParams();
-                            for (const key in user) {
-                                params.append(key, user[key]);
-                            }
-                            // Redirect to auth handler with user data
-                            window.location.href = '/tg_auth?' + params.toString();
-                        }
-                    </script>
                 </div>
             </div>
             

@@ -1643,7 +1643,7 @@ async def auth_handler(request):
                 session = await new_session(request)
             
             session['user_id'] = user_id
-            logger.info(f"Session set with user_id: {user_id}")
+            logger.info(f"Session set with user_id: {user_id}, session keys: {list(session.keys())}")
 
             response = web.HTTPFound('/dashboard')
             logger.info("Redirecting to /dashboard after auth")
@@ -2063,6 +2063,20 @@ async def dashboard_handler(request):
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
                     reasons.append('из вашего города')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'подходящий контакт'
+
+        # Add photo_url to partners
+        if partners:
+            session_db = Session()
+            try:
+                for p in partners:
+                    partner_user = session_db.query(User).filter_by(id=p.user_id).first()
+                    if partner_user:
+                        p.photo_url = partner_user.photo_url
+                    else:
+                        p.photo_url = None
+            finally:
+                session_db.close()
+
         user_tz = pytz.UTC
         if user and user.timezone:
             try:
@@ -2946,6 +2960,7 @@ async def get_user_id_from_request(request):
     """Helper function to get user_id from session or query parameters"""
     session_req = await get_session(request)
     user_id = session_req.get('user_id')
+    logger.info(f"Session keys: {list(session_req.keys())}, user_id: {user_id}")
     
     # Check for telegram_id in query parameters (for local testing)
     if not user_id:
@@ -5661,8 +5676,16 @@ async def on_startup(app):
     storage = SimpleCookieStorage()
     logger.info("Using SimpleCookieStorage for sessions")
 
-    # Setup session middleware
-    aiohttp_session.setup(app, storage)
+    # Setup session middleware with proper cookie settings
+    cookie_params = {'httponly': True}
+    if not LOCAL:
+        cookie_params.update({
+            'secure': True,  # HTTPS only in production
+            'samesite': 'None'  # Allow cross-site for Telegram auth
+        })
+    else:
+        cookie_params['samesite'] = 'Lax'
+    aiohttp_session.setup(app, storage, cookie_params=cookie_params)
     logger.info("Session middleware set up")
     
     # Синхронизируем users.subscription_tier с subscriptions.tier при старте
