@@ -2599,6 +2599,11 @@ details[open] .details-content {
         display: block !important;
     }
 
+    /* Показать информационное сообщение на мобильном */
+    .mobile-info-message {
+        display: block !important;
+    }
+
     /* === ЧТО СКРЫВАЕМ: ВСЁ КРОМЕ СТАТИСТИКИ === */
     .profile-block,              /* Профиль пользователя */
     .contacts-block,             /* Блок контактов */
