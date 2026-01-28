@@ -2526,10 +2526,6 @@ details[open] .details-content {
         font-size: 14px;
         min-height: 100vh;
         position: relative;
-    }
-
-    /* Отступ для контента под header на всех страницах кроме страницы тарифов */
-    body:not(.subscription-page) {
         padding-top: var(--header-height) !important;
     }
 
@@ -2581,6 +2577,12 @@ details[open] .details-content {
         order: 2; /* После описания */
         width: 100% !important;
         padding: 0 !important;
+        align-items: center !important;
+    }
+
+    .login-message-card {
+        max-width: 100% !important;
+        text-align: center !important;
     }
 
     /* === ШАПКА (HEADER) === */
@@ -2647,7 +2649,7 @@ details[open] .details-content {
     /* === ПРАВАЯ КОЛОНКА НА ВСЮ ШИРИНУ === */
     .right-column {
         width: 100% !important;
-        padding: 20px 0 0 0 !important; /* Добавляем верхний отступ */
+        padding: 0 !important;
         border-radius: 0;
         margin: 0;
     }
