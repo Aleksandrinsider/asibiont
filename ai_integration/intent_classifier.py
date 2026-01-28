@@ -57,12 +57,18 @@ class IntentClassifier:
 
         try:
             # Use AI for classification
-            response = await chat_with_ai(
+            result = await chat_with_ai(
                 prompt,
                 context=[],
                 user_id=user_id,
                 message_type="intent_classification"
             )
+
+            # Extract response from result
+            if isinstance(result, dict):
+                response = result.get('response', '')
+            else:
+                response = result
 
             # Extract JSON from response
             if response:

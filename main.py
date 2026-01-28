@@ -2336,11 +2336,22 @@ async def api_send_message_handler(request):
             logger.info(f"[API_SEND_MESSAGE] Calling AI for user {user_id}...")
             # Call AI chat
             try:
-                response = await chat(message, context=context, user_id=user_id, file_content=None, db_session=session_db)
-                logger.info(f"[API_SEND_MESSAGE] AI response received, length: {len(response) if response else 0}")
+                result = await chat(message, context=context, user_id=user_id, file_content=None, db_session=session_db)
+                logger.info(f"[API_SEND_MESSAGE] AI result received, type: {type(result)}")
+                
+                # Handle both string and dict responses
+                if isinstance(result, dict):
+                    response = result.get('response', '')
+                    tool_calls = result.get('tool_calls', [])
+                    logger.info(f"[API_SEND_MESSAGE] Dict response: response length {len(response)}, tool_calls: {len(tool_calls)}")
+                else:
+                    response = result
+                    tool_calls = []
+                    logger.info(f"[API_SEND_MESSAGE] String response, length: {len(response) if response else 0}")
+                
                 logger.info(f"[API_SEND_MESSAGE] AI response preview: '{response[:100]}...'")
-                if response is None:
-                    logger.error(f"[API_SEND_MESSAGE] AI response is None!")
+                if response is None or response == '':
+                    logger.error(f"[API_SEND_MESSAGE] AI response is empty!")
                     response = "Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз."
             except Exception as e:
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
