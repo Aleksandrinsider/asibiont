@@ -1482,22 +1482,28 @@ async def get_timezone_from_ip(ip_address):
 
 
 async def get_user_avatar_url(bot, user_id):
-    """Получает URL аватара пользователя из Telegram"""
+    """Получает URL аватара пользователя из БД (кэшированный)
+    
+    Живые запросы к Telegram API отключены для снижения rate limiting.
+    Аватары обновляются по расписанию (раз в день) через reminder_service.
+    """
     try:
-        photos = await bot.get_user_profile_photos(user_id, limit=1)
-        logger.info(f"User {user_id} has {photos.total_count} profile photos")
-        if photos.total_count > 0:
-            photo = photos.photos[0][-1]  # Берем самое большое фото
-            file = await bot.get_file(photo.file_id)
-            avatar_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file.file_path}"
-            logger.info(f"Avatar URL for user {user_id}: {avatar_url}")
-            return avatar_url
-        else:
-            logger.info(f"User {user_id} has no profile photos")
+        # Возвращаем кэшированный аватар из БД вместо запроса к Telegram API
+        from models import User
+        db = Session()
+        try:
+            user = db.query(User).filter(User.telegram_id == user_id).first()
+            if user and user.photo_url:
+                logger.debug(f"Returning cached avatar for user {user_id}")
+                return user.photo_url
+            else:
+                logger.debug(f"No cached avatar for user {user_id}")
+                return None
+        finally:
+            db.close()
     except Exception as e:
-        error_str = str(e).lower()
-        if "user not found" in error_str or "bad request" in error_str:
-            # Для тестовых пользователей или несуществующих пользователей не логируем ошибку
+        logger.error(f"Error getting cached avatar for user {user_id}: {e}")
+        return None
             logger.debug(f"User {user_id} not found or has no avatar (expected for test users)")
         else:
             logger.error(f"Error getting user avatar for {user_id}: {e}")
@@ -3265,17 +3271,8 @@ async def api_partners_handler(request):
                     logger.warning(f"Partner user not found for profile user_id: {p.user_id}")
                     continue
 
-                # Update avatar from Telegram if available
+                # Use cached avatar from DB (updated daily by scheduler)
                 photo_url = partner_user.photo_url if partner_user and partner_user.photo_url else None
-                if partner_user and partner_user.telegram_id and 'bot' in request.app:
-                    try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], partner_user.telegram_id)
-                        if updated_avatar and updated_avatar != partner_user.photo_url:
-                            partner_user.photo_url = updated_avatar
-                            session_db.commit()
-                            photo_url = updated_avatar
-                    except Exception as e:
-                        logger.error(f"Error updating partner avatar for {partner_user.telegram_id}: {e}")
 
                 # Check tier access - use user.subscription_tier for now since update script uses it
                 user_tier = user.subscription_tier if user and hasattr(user, 'subscription_tier') and user.subscription_tier else SubscriptionTier.LIGHT

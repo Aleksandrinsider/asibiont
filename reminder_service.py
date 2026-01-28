@@ -1366,7 +1366,7 @@ class ReminderService:
 
     def schedule_avatar_updates(self):
         """Schedule periodic avatar updates from Telegram"""
-        from apscheduler.triggers.interval import IntervalTrigger
+        from apscheduler.triggers.cron import CronTrigger
         logger = logging.getLogger(__name__)
 
         job_id = "avatar_update"
@@ -1376,15 +1376,15 @@ class ReminderService:
             logger.debug(f"Avatar update job {job_id} already exists, skipping")
             return
 
-        # Schedule avatar updates every hour
+        # Schedule avatar updates once a day at 3 AM
         self.scheduler.add_job(
             _update_user_avatars_job,
-            trigger=IntervalTrigger(hours=1),
+            trigger=CronTrigger(hour=3, minute=0),
             id=job_id,
-            name="Update user avatars from Telegram",
+            name="Update user avatars from Telegram (daily)",
             replace_existing=True
         )
-        logger.info("Scheduled avatar updates every hour")
+        logger.info("Scheduled avatar updates once a day at 3:00 AM")
 
     def schedule_delegation_checks(self):
         """Schedule periodic delegation deadline checks"""
