@@ -196,11 +196,39 @@ async def test_all_commands():
     results[mark] += 1
     print(f"{mark} Идеи сгенерированы")
     
-    # 12. DELEGATION (требует второго пользователя - пропускаем)
+    # 12. DELEGATION - создаём второго пользователя и тестируем
     print("\n1️⃣2️⃣ DELEGATE_TASK - делегирование")
     print("-" * 80)
-    results["❓"] += 1
-    print("❓ Пропущено (требует второго пользователя)")
+    
+    # Создаём второго пользователя для делегирования
+    second_user = session.query(User).filter_by(telegram_id=777889).first()
+    if not second_user:
+        from models import UserProfile, SubscriptionTier
+        second_user = User(telegram_id=777889, username="test_delegate_user")
+        session.add(second_user)
+        session.commit()
+        
+        profile = UserProfile(user_id=second_user.id)
+        profile.skills = "Python, AI"
+        profile.interests = "Программирование, тестирование"
+        profile.subscription_tier = SubscriptionTier.STANDARD
+        session.add(profile)
+        session.commit()
+        print("   Создан второй пользователь: @test_delegate_user (ID: 777889)")
+    
+    # Делегируем задачу
+    response = await chat_with_ai("Делегируй задачу 'Код-ревью' пользователю @test_delegate_user на завтра в 10:00", user_id=telegram_id)
+    
+    # Проверяем делегированную задачу
+    session.expire_all()
+    delegated_tasks = session.query(Task).filter_by(
+        delegated_by=user.id
+    ).filter(Task.delegated_to_username == "test_delegate_user").all()
+    
+    success = len(delegated_tasks) > 0 or "делегирован" in response.lower() or "поручена" in response.lower()
+    mark = "✅" if success else "❌"
+    results[mark] += 1
+    print(f"{mark} Делегирование: найдено {len(delegated_tasks)} делегированных задач")
     
     # ИТОГИ
     print("\n" + "=" * 80)

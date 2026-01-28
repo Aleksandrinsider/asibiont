@@ -213,40 +213,37 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     expected_tools = None
     disallowed_tools = []  # Инструменты, которые точно НЕ должны вызываться
     
-    # ПРИОРИТЕТНАЯ детекция: проверяем сначала самые специфичные паттерны
-    # 0. МАССОВЫЕ ОПЕРАЦИИ (наивысший приоритет)
-    if any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']):
-        if any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'закрой', 'удалить']):
-            expected_tools = ['delete_all_tasks']
-            disallowed_tools = ['add_task', 'delete_task', 'complete_task', 'edit_task']
-        elif any(kw in message_lower for kw in ['готово', 'завершил', 'выполнил', 'сделал', 'завершить', 'закончил']):
-            expected_tools = ['complete_all_tasks', 'delete_all_tasks']  # Может быть любой массовой операцией
-            disallowed_tools = ['add_task', 'delete_task', 'complete_task', 'edit_task']
-        else:
-            expected_tools = ['list_tasks']
-            disallowed_tools = ['add_task', 'delete_task', 'complete_task', 'edit_task']
-    # 1. ЗАВЕРШЕНИЕ (высокий приоритет)
-    elif any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'выполнена']):
-        expected_tools = ['complete_task']
-        disallowed_tools = ['add_task', 'delete_task', 'edit_task']  # Не создавать/удалять при завершении
-    # 2. УДАЛЕНИЕ (высокий приоритет)
-    elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']):
-        expected_tools = ['delete_task']
-        disallowed_tools = ['add_task', 'complete_task', 'edit_task']  # Не создавать при удалении
-    # 3. ПРОСМОТР (высокий приоритет)
-    elif any(kw in message_lower for kw in ['покажи', 'список', 'какие задачи', 'мои задачи', 'что запланировано']):
-        expected_tools = ['list_tasks']
-        disallowed_tools = ['add_task', 'complete_task', 'delete_task', 'edit_task']  # Не изменять при просмотре
-    # 4. ПЕРЕНОС/ИЗМЕНЕНИЕ (средний приоритет)
-    elif any(kw in message_lower for kw in ['перенеси', 'измени', 'обнови', 'перенести']):
-        expected_tools = ['edit_task', 'reschedule_task']
-        disallowed_tools = ['add_task']  # Не создавать новую при переносе
-    # 5. СОЗДАНИЕ (низкий приоритет - только если есть явное указание времени)
-    elif any(kw in message_lower for kw in ['напомни', 'создай', 'добавь']) and any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня', 'час', 'минут']):
-        expected_tools = ['add_task']
-        disallowed_tools = ['edit_task', 'reschedule_task', 'complete_task', 'delete_task']  # Не переносить/завершать при создании
+    # ГИБКИЙ ПОДХОД: валидация только для критичных операций
+    # Для креативных и информационных команд - полная свобода AI
     
-    # Проверяем недопустимые tools
+    # 1. ЗАВЕРШЕНИЕ (строгая валидация)
+    if any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'выполнена', 'закончил', 'готов', 'закрыл']) and \
+       not any(kw in message_lower for kw in ['все задачи', 'всех задач', 'покажи', 'список']):
+        expected_tools = ['complete_task']
+        disallowed_tools = ['add_task', 'delete_task']  # Не создавать/удалять при завершении
+    # 2. УДАЛЕНИЕ (строгая валидация)
+    elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']) and \
+         not any(kw in message_lower for kw in ['все задачи', 'всех задач']):
+        expected_tools = ['delete_task']
+        disallowed_tools = ['add_task', 'complete_task']  # Не создавать при удалении
+    # 3. МАССОВОЕ УДАЛЕНИЕ (строгая валидация)
+    elif any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']) and \
+         any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'закрой', 'удалить']):
+        expected_tools = ['delete_all_tasks']
+        disallowed_tools = ['add_task', 'delete_task', 'complete_task']
+    # 4. СОЗДАНИЕ (мягкая валидация - только если есть явное указание времени)
+    elif any(kw in message_lower for kw in ['напомни', 'создай задачу', 'добавь задачу']) and \
+         any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня', 'час', 'минут', 'послезавтра']):
+        expected_tools = ['add_task']
+        disallowed_tools = ['complete_task', 'delete_task']  # Не завершать/удалять при создании
+    
+    # ГИБКИЕ КОМАНДЫ без строгой валидации:
+    # - list_tasks, suggest_alternatives, brainstorm_ideas, find_partners
+    # - reschedule_task, edit_task (AI сам решает какой инструмент использовать)
+    # - update_profile, get_task_details
+    # Для них AI имеет полную свободу выбора инструментов
+    
+    # Проверяем недопустимые tools (только для критичных операций)
     if disallowed_tools:
         has_disallowed = False
         for tool_name in tool_names:
@@ -257,16 +254,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         
         if has_disallowed:
             logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
-            # Возвращаем пустой список вместо None для правильной обработки
             return None
     
-    # Если есть ожидаемые tools, проверяем соответствие
+    # Проверяем ожидаемые tools (только если определены)
     if expected_tools:
         if not any(tool in expected_tools for tool in tool_names):
             logger.error(f"[TOOL VALIDATION FAILED] Expected {expected_tools}, got {tool_names}")
             logger.error(f"[TOOL VALIDATION] Message: {message[:100]}")
             logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
-            # Возвращаем None, чтобы сработала антигаллюцинация
             return None
         
     # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
