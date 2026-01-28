@@ -137,6 +137,22 @@ body {
         height: 28px !important;
         font-size: 14px !important;
     }
+    
+    /* Скрываем левую и центральную колонки на мобильных, оставляем только правую */
+    .left-column,
+    .center-column {
+        display: none !important;
+    }
+    
+    .right-column {
+        flex: 1 !important;
+        width: 100% !important;
+    }
+    
+    .main-layout {
+        height: calc(100vh - var(--header-height) - 40px) !important;
+        margin-top: 10px !important;
+    }
 }
 
 .app-header {
