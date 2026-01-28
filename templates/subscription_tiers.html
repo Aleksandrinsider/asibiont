@@ -77,6 +77,16 @@
                 grid-template-columns: 1fr !important;
                 gap: 16px !important;
             }
+            .apply-promo-btn {
+                font-size: 0 !important;
+                padding: 10px 12px !important;
+                min-width: 40px;
+            }
+            .apply-promo-btn::after {
+                content: '✓';
+                font-size: 18px;
+                font-weight: 600;
+            }
         }
     </style>
     <style>
@@ -192,7 +202,7 @@
                     <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600; color: #374151;">Есть промокод?</h3>
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <input type="text" id="promo_code" placeholder="Введите промокод" style="flex: 1; padding: 10px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 14px; font-family: inherit; outline: none;" maxlength="50">
-                        <button onclick="applyPromoCode()" id="apply_promo_btn" style="padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Применить</button>
+                        <button onclick="applyPromoCode()" id="apply_promo_btn" class="apply-promo-btn" style="padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Применить</button>
                     </div>
                     <div id="promo_message" style="margin-top: 8px; font-size: 13px; display: none;"></div>
                 </div>
