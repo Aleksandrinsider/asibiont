@@ -2510,10 +2510,13 @@ details[open] .details-content {
         --header-height: 60px;
     }
 
+    html {
+        padding-top: var(--header-height); /* Отступ для ВСЕХ страниц */
+    }
+
     body {
         overflow: auto;
         font-size: 14px;
-        padding-top: var(--header-height); /* Отступ сверху под фиксированный header */
     }
 
     .container {
@@ -2543,8 +2546,22 @@ details[open] .details-content {
         padding-left: 0;
     }
 
+    /* Скрыть поиск контактов и кнопку "Сообщить об ошибке" */
+    .contact-search-desktop,
+    .header-left a[href*="aleksandrinsider"] {
+        display: none !important;
+    }
+
     .header-center {
         display: none; /* Центральная часть header скрыта */
+    }
+
+    /* Скрыть время и дату */
+    #header-time,
+    #header-date,
+    #header-info span:has(#header-time),
+    .header-info > span:first-child {
+        display: none !important;
     }
 
     .header-info {
