@@ -2859,10 +2859,25 @@ async def yookassa_webhook(request):
         payment = data['object']
         user_id = payment['metadata']['user_id']
         tier = payment['metadata'].get('tier', 'light')  # Get tier from payment metadata
+        promo_code = payment['metadata'].get('promo_code')  # Get promo code if used
 
         session = Session()
         user = session.query(User).filter_by(telegram_id=int(user_id)).first()
         if user:
+            # Handle promo code if provided
+            if promo_code:
+                promo = session.query(PromoCode).filter_by(code=promo_code.upper()).first()
+                if promo:
+                    # Mark promo code as used by this user
+                    used_by_users = json.loads(promo.used_by_users or '[]')
+                    if user_id not in used_by_users:
+                        used_by_users.append(user_id)
+                        promo.used_by_users = json.dumps(used_by_users)
+                        promo.used_count += 1
+                        logger.info(f"Promo code {promo_code} used by user {user.username} (user_id: {user_id})")
+                    else:
+                        logger.warning(f"User {user.username} already used promo code {promo_code}")
+
             subscription = session.query(Subscription).filter_by(user_id=user.id).first()
             if not subscription:
                 subscription = Subscription(user_id=user.id, telegram_username=user.username)
@@ -2906,18 +2921,23 @@ async def yookassa_webhook(request):
                     duration_days=30,
                     start_date=subscription.start_date,
                     end_date=subscription.end_date,
-                    details=json.dumps({'payment_method': payment.get('payment_method', {}).get('type'), 'status': payment.get('status')})
+                    details=json.dumps({
+                        'payment_method': payment.get('payment_method', {}).get('type'), 
+                        'status': payment.get('status'),
+                        'promo_code': promo_code
+                    })
                 )
                 session.add(payment_history)
                 session.commit()
-                logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}")
+                logger.info(f"💾 Payment logged to history: user={user.username}, tier={tier}, payment_id={payment['id']}, promo_code={promo_code}")
             except Exception as e:
                 logger.error(f"❌ Failed to log payment to history: {e}")
                 # Не падаем, платеж уже обработан
 
             from payments import get_tier_name
             tier_name = get_tier_name(tier)
-            await bot.send_message(int(user_id), f"Подписка {tier_name} активирована! Теперь у вас доступ ко всем премиум-функциям.")
+            promo_msg = f" с промокодом {promo_code}" if promo_code else ""
+            await bot.send_message(int(user_id), f"Подписка {tier_name} активирована{promo_msg}! Теперь у вас доступ ко всем премиум-функциям.")
         session.close()
     return web.Response(text="OK")
 

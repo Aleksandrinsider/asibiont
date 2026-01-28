@@ -143,6 +143,12 @@ async def subscription_handler(message: Message):
         session.add(user)
         session.commit()
     
+    # Check for promo code in message
+    promo_code = None
+    text_parts = message.text.split()
+    if len(text_parts) > 1:
+        promo_code = text_parts[1].upper()
+    
     # Описание тарифов
     tiers_description = """Доступные тарифы подписки:
 
@@ -162,12 +168,12 @@ PREMIUM — 27000₽/месяц
     await message.bot.send_message(message.chat.id, tiers_description)
     
     # Создать платежи для всех тарифов
-    from payments import create_payment
-    light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id)
-    standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id)
-    premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id)
-    
-    payment_message = f"""LIGHT (3000₽/мес):
+    try:
+        light_url = create_payment(3000, "Подписка LIGHT (месяц)", user_id, 'light', promo_code)
+        standard_url = create_payment(9000, "Подписка STANDARD (месяц)", user_id, 'standard', promo_code)
+        premium_url = create_payment(27000, "Подписка PREMIUM (месяц)", user_id, 'premium', promo_code)
+        
+        payment_message = f"""LIGHT (3000₽/мес):
 {light_url}
 
 STANDARD (9000₽/мес):
@@ -175,8 +181,14 @@ STANDARD (9000₽/мес):
 
 PREMIUM (27000₽/мес):
 {premium_url}"""
+        
+        await message.bot.send_message(message.chat.id, payment_message)
+    except ValueError as e:
+        await message.bot.send_message(message.chat.id, f"Ошибка с промокодом: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error creating payments: {e}")
+        await message.bot.send_message(message.chat.id, "Ошибка при создании платежей. Попробуйте позже.")
     
-    await message.bot.send_message(message.chat.id, payment_message)
     session.close()
 
 
