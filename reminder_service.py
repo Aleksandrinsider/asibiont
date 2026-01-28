@@ -129,6 +129,14 @@ async def _send_task_checkpoint_job(user_id: int, checkpoint_type: str = "genera
         logger.error("REMINDER_SERVICE not initialized; cannot send task checkpoint message")
 
 
+async def _schedule_recurring_tasks_job():
+    """Jobstore-safe wrapper for scheduling recurring tasks"""
+    if REMINDER_SERVICE:
+        REMINDER_SERVICE.schedule_recurring_tasks()
+    else:
+        logger.error("REMINDER_SERVICE not initialized; cannot schedule recurring tasks")
+
+
 async def _send_delegation_check_job(task_id: int, delegator_id: int, recipient_id: int, check_type: str = "progress_request"):
     """Jobstore-safe wrapper for delegation check"""
     if REMINDER_SERVICE:
@@ -1484,7 +1492,7 @@ class ReminderService:
         """Schedule periodic checks for creating new recurring task instances"""
         job_id = "recurring_tasks_check"
         self.scheduler.add_job(
-            self.schedule_recurring_tasks,
+            _schedule_recurring_tasks_job,
             trigger="interval",
             hours=1,  # Check every hour
             id=job_id,
