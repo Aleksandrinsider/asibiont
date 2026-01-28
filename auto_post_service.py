@@ -165,7 +165,7 @@ async def create_auto_post(user_id, content, session, notify=True):
             try:
                 from main import bot
                 if bot:
-                    notification_text = "🤖 Автопост опубликован!\n\n💡 Пост о вашем прогрессе создан и опубликован в ленте. Вы можете просмотреть его в веб-панели."
+                    notification_text = f"Ежедневный автопост опубликован!\n{content}\n\nВы можете удалить пост в панели управления https://asibiont.ru/"
                     
                     await bot.send_message(
                         chat_id=user_id,
