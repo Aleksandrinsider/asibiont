@@ -4,7 +4,7 @@ import aiohttp
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from .tools import TOOLS
 
-class IntentClassifier:
+class IntentClassifierMinimal:
     """AI-powered intent classification with minimal keywords - relies on AI understanding"""
 
     # Extract all available intents from TOOLS
@@ -46,7 +46,7 @@ class IntentClassifier:
     async def classify_intent(cls, message: str, user_id: int) -> str:
         """Use AI to classify user intent with minimal guidance"""
 
-        # Very minimal prompt - let AI figure it out with command list
+        # Very minimal prompt - let AI figure it out
         prompt = f"""
 Ты - эксперт по анализу намерений в системе управления задачами.
 
@@ -83,87 +83,28 @@ class IntentClassifier:
     def get_command_class(cls, intent: str):
         """Map intent to command class"""
         from .commands import (
-            CreateTaskCommand, ListTasksCommand, CompleteTaskCommand,
-            DeleteTaskCommand, RescheduleTaskCommand, UpdateProfileCommand,
-            FindPartnersCommand, DelegateTaskCommand, ConversationCommand
+            AddTaskCommand, CompleteTaskCommand, ListTasksCommand,
+            DeleteTaskCommand, RescheduleTaskCommand, EditTaskCommand,
+            SetRecurringTaskCommand, UpdateProfileCommand, FindPartnersCommand,
+            GetTaskDetailsCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
+            DelegateTaskCommand, GetDelegationProgressCommand
         )
 
-        # Map function names from TOOLS to command classes
         mapping = {
-            'add_task': CreateTaskCommand,
-            'create_task': CreateTaskCommand,  # Alias for router compatibility
-            'list_tasks': ListTasksCommand,
+            'add_task': AddTaskCommand,
             'complete_task': CompleteTaskCommand,
+            'list_tasks': ListTasksCommand,
             'delete_task': DeleteTaskCommand,
             'reschedule_task': RescheduleTaskCommand,
-            'edit_task': ConversationCommand,
-            'set_recurring_task': ConversationCommand,
+            'edit_task': EditTaskCommand,
+            'set_recurring_task': SetRecurringTaskCommand,
             'update_profile': UpdateProfileCommand,
             'find_partners': FindPartnersCommand,
-            'get_task_details': ConversationCommand,
-            'update_user_memory': ConversationCommand,
-            'delete_all_tasks': ConversationCommand,
+            'get_task_details': GetTaskDetailsCommand,
+            'update_user_memory': UpdateUserMemoryCommand,
+            'delete_all_tasks': DeleteAllTasksCommand,
             'delegate_task': DelegateTaskCommand,
-            'get_delegation_progress': ConversationCommand,
-            'accept_delegated_task': ConversationCommand,
-            'reject_delegated_task': ConversationCommand,
-            'conversation': ConversationCommand,
+            'get_delegation_progress': GetDelegationProgressCommand,
         }
 
-        return mapping.get(intent, ConversationCommand)
-
-    @classmethod
-    async def classify_intent_with_params(cls, message: str, user_id: int) -> dict:
-        """Classify intent and extract parameters using AI"""
-        intent = await cls.classify_intent(message, user_id)
-
-        # If conversation, no parameters needed
-        if intent == 'conversation':
-            return {'type': intent, 'confidence': 0.9, 'params': {}}
-
-        # Find the tool definition for this intent
-        tool_def = None
-        for tool in TOOLS:
-            if tool["function"]["name"] == intent:
-                tool_def = tool
-                break
-
-        if not tool_def:
-            return {'type': intent, 'confidence': 0.9, 'params': {}}
-
-        # Use AI to extract parameters based on the tool schema
-        params = await cls._extract_parameters_with_ai(message, tool_def)
-        return {'type': intent, 'confidence': 0.9, 'params': params}
-
-    @classmethod
-    async def _extract_parameters_with_ai(cls, message: str, tool_def: dict) -> dict:
-        """Extract parameters using AI based on tool schema"""
-        function_name = tool_def["function"]["name"]
-        description = tool_def["function"]["description"]
-        parameters = tool_def["function"]["parameters"]
-
-        prompt = """
-Извлеки параметры из сообщения пользователя на основе описания функции.
-
-Функция: {function_name}
-Описание: {description}
-Параметры: {json.dumps(parameters, ensure_ascii=False, indent=2)}
-
-Сообщение: "{message}"
-
-Верни ТОЛЬКО JSON с извлеченными параметрами. Если параметр не найден в сообщении, не включай его в результат.
-"""
-
-        try:
-            response = await cls._call_ai(prompt)
-            if response:
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                if start >= 0 and end > start:
-                    json_str = response[start:end]
-                    params = json.loads(json_str)
-                    return params
-        except Exception as e:
-            print(f"Parameter extraction error: {e}")
-
-        return {}
+        return mapping.get(intent)
