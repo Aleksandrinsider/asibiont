@@ -6573,29 +6573,6 @@ logger.info("App created successfully")
 if __name__ == "__main__":
     from config import LOCAL
 
-    # TEMPORARY: Create post for user 146333757 in production
-    if not LOCAL:
-        logger.info("Creating test post for user 146333757...")
-        import asyncio
-        from auto_post_service import create_auto_post
-        from models import Session
-
-        async def create_test_post():
-            session = Session()
-            try:
-                result = await create_auto_post(
-                    146333757,
-                    'Тестовый автопост для проверки ленты новостей в продакшене',
-                    session,
-                    notify=False
-                )
-                logger.info(f'Post creation result: {result}')
-            finally:
-                session.close()
-
-        asyncio.run(create_test_post())
-        logger.info("Test post creation completed")
-
     if LOCAL:  # Enabled web server for local testing
         logger.info("Running in local mode with web server only")
         # Production mode or local web mode: run web server
