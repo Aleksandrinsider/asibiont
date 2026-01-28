@@ -7,14 +7,10 @@ async def extract_task_details(message: str, user_id: int = None):
     For PoC, simple regex parsing.
     TODO: Integrate with AI for better parsing.
     """
-    # Simple title extraction - remove time-related words
-    title = re.sub(r'\b(сегодня|завтра|вечером|утром|в|через|на)\b', '', message, flags=re.IGNORECASE).strip()
-    title = re.sub(r'\d{1,2}:\d{2}', '', title).strip()  # Remove time like 7:00
-    title = re.sub(r'\d{1,2}\s*час', '', title).strip()  # Remove "7 час"
-
-    # Time parsing
-    reminder_time = None
     message_lower = message.lower()
+
+    # Time parsing first
+    reminder_time = None
 
     # "в 7:00", "в 19:00"
     time_match = re.search(r'в\s+(\d{1,2}):(\d{2})', message_lower)
@@ -52,6 +48,26 @@ async def extract_task_details(message: str, user_id: int = None):
             reminder_time = now + timedelta(hours=amount)
         elif 'день' in unit or 'дня' in unit:
             reminder_time = now + timedelta(days=amount)
+
+    # Title extraction - remove command words and time expressions
+    title = message
+
+    # Remove common command prefixes
+    title = re.sub(r'^(напомни|создай|запланируй|добавь)\s+', '', title, flags=re.IGNORECASE)
+
+    # Remove time expressions
+    title = re.sub(r'\b(сегодня|завтра|вечером|утром|в|через|на|спустя)\b', '', title, flags=re.IGNORECASE)
+
+    # Remove time patterns
+    title = re.sub(r'\d{1,2}:\d{2}', '', title)
+    title = re.sub(r'\d+\s*(минут|час|день|дня)', '', title)
+
+    # Clean up extra spaces
+    title = re.sub(r'\s+', ' ', title).strip()
+
+    # If title is empty or too short, use original message
+    if len(title) < 3:
+        title = message
 
     return {
         'title': title,
