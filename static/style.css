@@ -2526,7 +2526,6 @@ details[open] .details-content {
         font-size: 14px;
         min-height: 100vh;
         position: relative;
-        padding-top: calc(var(--header-height) + 20px) !important;
     }
 
     /* Отменяем flexbox для body на странице логина */
@@ -2635,8 +2634,8 @@ details[open] .details-content {
         height: auto;
         min-height: calc(100vh - var(--header-height));
         gap: 0;
-        margin-top: 0;
-        padding-top: 20px !important;
+        margin-top: 80px !important;
+        padding-top: 0;
     }
 
     /* === СКРЫТЬ ЛЕВУЮ И ЦЕНТРАЛЬНУЮ КОЛОНКИ === */
