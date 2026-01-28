@@ -920,7 +920,7 @@ class ReminderService:
                 # Просроченные задачи - более частые проверки (каждые 30 минут)
                 interval_minutes = 30
             elif task_count == 0:
-                # Нет задач - чаще предлагать создать (используем настройку из config: 24 часа)
+                # Нет задач - чаще предлагать создать (каждый час для восстановления общения)
                 interval_minutes = PROACTIVE_CHECK_INTERVAL_NO_TASKS_MINUTES
             elif task_count <= 2:
                 # Мало задач - обычный интервал (2 часа)
