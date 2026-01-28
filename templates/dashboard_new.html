@@ -338,7 +338,7 @@
                             
                             // Кнопка отправки сообщения вместо делегирования
                             const messageTitleElite = 'Отправить сообщение';
-                            html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="' + messageTitleElite + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .743.357l2.068-1.707a.5.5 0 0 1 .465-.126l3.065.876a.5.5 0 0 1 .235.624l-.783 3.128a.5.5 0 0 0 .734.519l4.928-2.464a.5.5 0 0 1 .49 0l4.928 2.464a.5.5 0 0 0 .734-.519l-.783-3.128a.5.5 0 0 1 .235-.624l3.065-.876a.5.5 0 0 1 .465.126l2.068 1.707a.5.5 0 0 0 .743-.357L13.5 1.5a.5.5 0 0 0-.5-.5h-11a.5.5 0 0 0-.5.5l-1.5 12.64ZM6.5 3.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5Zm.5 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1h-6Zm0 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1h-6Z"/></svg></button>';
+                            html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="' + messageTitleElite + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg></button>';
                             
                             html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                             
@@ -2863,50 +2863,13 @@
 
         async function sendMessageToContact(username) {
             try {
-                // Отправляем сообщение агенту о желании связаться с контактом
-                const response = await fetch('/api/send_message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        message: `Хочу связаться с пользователем @${username}. Помоги мне отправить сообщение этому контакту.`
-                    })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    // Обновляем чат для отображения ответа
-                    await updateChat();
-                    // Прокручиваем чат вниз к новым сообщениям
-                    const chatMessages = document.getElementById('chat-messages');
-                    if (chatMessages) {
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                    }
-                    showNotification('Сообщение отправлено в чат', 'success');
-                } else if (response.status === 403) {
-                    // Ошибка из-за ограничений тарифа
-                    const errorData = await response.json();
-                    if (errorData.error === 'tier_restriction') {
-                        showNotificationWithLink(
-                            errorData.message,
-                            'warning',
-                            'Повысить тариф',
-                            errorData.upgrade_url
-                        );
-                    } else {
-                        showNotification(errorData.message || 'Недостаточно прав для отправки сообщения', 'error');
-                    }
-                } else {
-                    // Log detailed error
-                    const errorText = await response.text();
-                    console.error('Send message error:', response.status, errorText);
-                    showNotification(`Ошибка ${response.status}: ${errorText.substring(0, 100)}`, 'error');
-                }
+                // Убираем @ если есть
+                const cleanUsername = username.replace('@', '');
+                // Открываем Telegram чат
+                window.open(`https://t.me/${cleanUsername}`, '_blank');
             } catch (error) {
-                console.error('Error sending message to contact:', error);
-                showNotification(`Ошибка при отправке: ${error.message}`, 'error');
+                console.error('Error opening Telegram:', error);
+                showNotification('Ошибка при открытии Telegram', 'error');
             }
         }
 
@@ -5368,7 +5331,7 @@
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
-                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .577.093l2.914-1.457A13.06 13.06 0 0 0 8 13.5c3.314 0 6-2.239 6-5s-2.686-5-6-5-6 2.239-6 5c0 1.345.668 2.573 1.775 3.503L.593 13.646a.5.5 0 0 0 .083.577zM8 14.5c-3.59 0-6.5-2.406-6.5-5.5S4.41 3.5 8 3.5s6.5 2.406 6.5 5.5-2.91 5.5-6.5 5.5z"></path></svg></button>';
+                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg></button>';
                                     
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
@@ -5457,7 +5420,7 @@
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
-                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .743.357l2.068-1.707a.5.5 0 0 1 .465-.126l3.065.876a.5.5 0 0 1 .235.624l-.783 3.128a.5.5 0 0 0 .734.519l4.928-2.464a.5.5 0 0 1 .49 0l4.928 2.464a.5.5 0 0 0 .734-.519l-.783-3.128a.5.5 0 0 1 .235-.624l3.065-.876a.5.5 0 0 1 .465.126l2.068 1.707a.5.5 0 0 0 .743-.357L13.5 1.5a.5.5 0 0 0-.5-.5h-11a.5.5 0 0 0-.5.5l-1.5 12.64ZM6.5 3.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5Zm.5 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1h-6Zm0 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1h-6Z"/></svg></button>';
+                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576 6.636 10.07Zm6.787-8.201L1.591 6.602l4.339 2.76 7.494-7.493Z"/></svg></button>';
                                     
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
@@ -5646,7 +5609,7 @@
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
-                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .577.093l2.914-1.457A13.06 13.06 0 0 0 8 13.5c3.314 0 6-2.239 6-5s-2.686-5-6-5-6 2.239-6 5c0 1.345.668 2.573 1.775 3.503L.593 13.646a.5.5 0 0 0 .083.577zM8 14.5c-3.59 0-6.5-2.406-6.5-5.5S4.41 3.5 8 3.5s6.5 2.406 6.5 5.5-2.91 5.5-6.5 5.5z"></path></svg></button>';
+                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg></button>';
                                     
                                     // Rating button
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
@@ -5741,7 +5704,7 @@
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
                                     // Send Message button
-                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .577.093l2.914-1.457A13.06 13.06 0 0 0 8 13.5c3.314 0 6-2.239 6-5s-2.686-5-6-5-6 2.239-6 5c0 1.345.668 2.573 1.775 3.503L.593 13.646a.5.5 0 0 0 .083.577zM8 14.5c-3.59 0-6.5-2.406-6.5-5.5S4.41 3.5 8 3.5s6.5 2.406 6.5 5.5-2.91 5.5-6.5 5.5z"></path></svg></button>';
+                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/></svg></button>';
                                     
                                     // Rating button
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
