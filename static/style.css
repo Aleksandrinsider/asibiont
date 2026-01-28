@@ -101,13 +101,13 @@ body {
     body {
         overflow: auto;
         overflow-x: hidden;
-        padding-top: calc(var(--header-height) + 20px); /* Дополнительный отступ для мобильных браузеров */
+        padding-top: calc(var(--header-height) + 40px); /* Увеличиваем отступ для мобильных браузеров */
     }
     
     .container {
         margin: 10px 10px 0 10px; /* Уменьшаем margin-top, так как body имеет больший padding-top */
         width: calc(100% - 20px);
-        height: calc(100dvh - var(--header-height) - 40px); /* Используем 100dvh для лучшей мобильной совместимости */
+        height: calc(100dvh - var(--header-height) - 60px); /* Корректируем высоту под новый отступ */
     }
     
     .app-header {
@@ -150,7 +150,7 @@ body {
     }
     
     .main-layout {
-        height: calc(100vh - var(--header-height) - 40px) !important;
+        height: calc(100vh - var(--header-height) - 60px) !important;
         margin-top: 10px !important;
     }
 }
