@@ -5,7 +5,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "add_task",
-            "description": "📝 Создать новую задачу с напоминанием. Вызывай когда пользователь просит что-то запланировать: 'напомни X', 'создай задачу Y', 'добавь Z'. Примеры: 'напомни купить хлеб завтра в 9' → add_task(title='Купить хлеб', reminder_time='завтра в 9:00'), 'встреча послезавтра в 14:30' → add_task(title='Встреча', reminder_time='послезавтра в 14:30')",
+            "description": "📝 Создать новую задачу с напоминанием. ВСЕГДА вызывай когда: 'напомни', 'создай', 'добавь' + время. Примеры: 'напомни купить хлеб завтра в 9' → add_task(title='Купить хлеб', reminder_time='завтра в 9:00'), 'встреча послезавтра в 14:30' → add_task(title='Встреча', reminder_time='послезавтра в 14:30'), 'проверить код завтра в 11:00' → add_task(title='Проверить код', reminder_time='завтра в 11:00')",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -88,13 +88,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "delete_task",
-            "description": "Удалить задачу",
+            "description": "🗑️ Удалить задачу из списка. ВСЕГДА используй когда: 'удали', 'убери', 'сотри', 'больше не нужна'. Примеры: 'удали купить хлеб', 'убери задачу про встречу', 'больше не нужна задача X'",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_title": {
                         "type": "string",
-                        "description": "Название задачи для удаления",
+                        "description": "Название или часть названия задачи для удаления. Примеры: 'купить', 'встреча', 'хлеб'",
                     },
                     "reason": {
                         "type": "string",
@@ -293,27 +293,6 @@ TOOLS = [
                     },
                 },
                 "required": ["focus_area"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "brainstorm_ideas",
-            "description": "Мозговой штурм идей по теме",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "topic": {
-                        "type": "string",
-                        "description": "Тема для мозгового штурма",
-                    },
-                    "context": {
-                        "type": "string",
-                        "description": "Дополнительный контекст",
-                    },
-                },
-                "required": ["topic"],
             },
         },
     },

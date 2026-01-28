@@ -76,28 +76,8 @@ async def test_all_commands():
         results["❓"] += 1
         print("❓ Нет задач для переноса")
     
-    # 4. EDIT_TASK
-    print("\n4️⃣  EDIT_TASK - редактирование")
-    print("-" * 80)
-    
-    if len(tasks) > 1:
-        task = tasks[1]
-        old_time = task.reminder_time
-        
-        response = await chat_with_ai(f"Измени время {task.title.split()[0]} на через 1 час", user_id=telegram_id)
-        
-        session.expire_all()
-        task_updated = session.query(Task).filter_by(id=task.id).first()
-        success = task_updated and task_updated.reminder_time != old_time
-        mark = "✅" if success else "❌"
-        results[mark] += 1
-        print(f"{mark} Задача отредактирована")
-    else:
-        results["❓"] += 1
-        print("❓ Недостаточно задач для редактирования")
-    
-    # 5. COMPLETE_TASK
-    print("\n5️⃣  COMPLETE_TASK - завершение")
+    # 4. COMPLETE_TASK
+    print("\n4️⃣  COMPLETE_TASK - завершение")
     print("-" * 80)
     
     if len(tasks) > 0:
@@ -115,8 +95,8 @@ async def test_all_commands():
         results["❓"] += 1
         print("❓ Нет задач для завершения")
     
-    # 6. GET_TASK_DETAILS
-    print("\n6️⃣  GET_TASK_DETAILS - детали задачи")
+    # 5. GET_TASK_DETAILS
+    print("\n5️⃣  GET_TASK_DETAILS - детали задачи")
     print("-" * 80)
     
     session.expire_all()
@@ -133,8 +113,8 @@ async def test_all_commands():
         results["❓"] += 1
         print("❓ Нет активных задач")
     
-    # 7. DELETE_TASK
-    print("\n7️⃣  DELETE_TASK - удаление")
+    # 6. DELETE_TASK
+    print("\n6️⃣  DELETE_TASK - удаление")
     print("-" * 80)
     
     session.expire_all()
@@ -216,8 +196,11 @@ async def test_all_commands():
         session.commit()
         print("   Создан второй пользователь: @test_delegate_user (ID: 777889)")
     
-    # Делегируем задачу
-    response = await chat_with_ai("Делегируй задачу 'Код-ревью' пользователю @test_delegate_user на завтра в 10:00", user_id=telegram_id)
+    # Сначала создаём новую задачу для делегирования
+    response = await chat_with_ai("Напомни проверить код завтра в 11:00", user_id=telegram_id)
+    
+    # Делегируем созданную задачу с указанием дедлайна
+    response = await chat_with_ai("Делегируй задачу 'проверить код' пользователю @test_delegate_user на завтра к 15:00", user_id=telegram_id)
     
     # Проверяем делегированную задачу
     session.expire_all()

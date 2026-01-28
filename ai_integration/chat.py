@@ -29,7 +29,7 @@ from .handlers import (
     list_tasks, enrich_task_list_with_insights, get_partners_list, find_partners,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
-    cancel_subscription, brainstorm_ideas_async, get_task_details_async, suggest_alternatives_async,
+    cancel_subscription, get_task_details_async, suggest_alternatives_async,
     suggest_trends_and_opportunities_async as suggest_trends_and_opportunities, update_profile, delete_task
 )
 
@@ -170,7 +170,6 @@ async def send_error_notification_to_bot(error_message, user_id=None, error_deta
 check_subscription_status = handlers.check_subscription_status
 create_subscription_payment = handlers.create_subscription_payment
 cancel_subscription = handlers.cancel_subscription
-brainstorm_ideas = handlers.brainstorm_ideas_async
 enrich_task_list_with_insights = handlers.enrich_task_list_with_insights
 get_partners_list = handlers.get_partners_list
 get_task_details = handlers.get_task_details_async
@@ -209,60 +208,36 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     message_lower = message.lower()
     tool_names = [tc.get('function', {}).get('name') for tc in tool_calls]
     
-    # Определяем ожидаемые tools на основе команды
-    expected_tools = None
-    disallowed_tools = []  # Инструменты, которые точно НЕ должны вызываться
+    # УНИФИЦИРОВАННЫЙ ПОДХОД: минимальная валидация
+    # Проверяем только явные конфликты между критичными операциями
+    disallowed_tools = []
     
-    # ГИБКИЙ ПОДХОД: валидация только для критичных операций
-    # Для креативных и информационных команд - полная свобода AI
-    
-    # 1. ЗАВЕРШЕНИЕ (строгая валидация)
-    if any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'задача выполнена', 'выполнена', 'закончил', 'готов', 'закрыл']) and \
-       not any(kw in message_lower for kw in ['все задачи', 'всех задач', 'покажи', 'список']):
-        expected_tools = ['complete_task']
-        disallowed_tools = ['add_task', 'delete_task']  # Не создавать/удалять при завершении
-    # 2. УДАЛЕНИЕ (строгая валидация)
-    elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']) and \
-         not any(kw in message_lower for kw in ['все задачи', 'всех задач']):
-        expected_tools = ['delete_task']
-        disallowed_tools = ['add_task', 'complete_task']  # Не создавать при удалении
-    # 3. МАССОВОЕ УДАЛЕНИЕ (строгая валидация)
-    elif any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']) and \
-         any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'закрой', 'удалить']):
-        expected_tools = ['delete_all_tasks']
-        disallowed_tools = ['add_task', 'delete_task', 'complete_task']
-    # 4. СОЗДАНИЕ (мягкая валидация - только если есть явное указание времени)
-    elif any(kw in message_lower for kw in ['напомни', 'создай задачу', 'добавь задачу']) and \
+    # Защита от случайных операций при явных намерениях:
+    # 1. При завершении - не создавать/удалять
+    if any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'закончил', 'готов', 'закрыл']):
+        disallowed_tools = ['add_task', 'delete_task', 'delete_all_tasks']
+    # 2. При удалении - не создавать/завершать  
+    elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']):
+        disallowed_tools = ['add_task', 'complete_task']
+    # 3. При создании - не удалять/завершать
+    elif any(kw in message_lower for kw in ['напомни', 'создай', 'добавь']) and \
          any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня', 'час', 'минут', 'послезавтра']):
-        expected_tools = ['add_task']
-        disallowed_tools = ['complete_task', 'delete_task']  # Не завершать/удалять при создании
+        disallowed_tools = ['delete_task', 'complete_task', 'delete_all_tasks']
+    # 4. update_profile: разрешаем любые изменения профиля (валидация в handlers.py)
+    # AI может обновлять профиль несколько раз - это нормальное поведение
     
-    # ГИБКИЕ КОМАНДЫ без строгой валидации:
-    # - list_tasks, suggest_alternatives, brainstorm_ideas, find_partners
-    # - reschedule_task, edit_task (AI сам решает какой инструмент использовать)
-    # - update_profile, get_task_details
-    # Для них AI имеет полную свободу выбора инструментов
+    # Всё остальное - полная свобода AI
+    # AI сам выбирает нужные инструменты для: list_tasks, update_profile,
+    # find_partners, suggest_alternatives, reschedule_task, edit_task и т.д.
     
-    # Проверяем недопустимые tools (только для критичных операций)
+    # Проверяем только явные конфликты
     if disallowed_tools:
-        has_disallowed = False
         for tool_name in tool_names:
             if tool_name in disallowed_tools:
-                logger.error(f"[TOOL VALIDATION FAILED] Disallowed tool {tool_name} for message: {message[:100]}")
-                logger.error(f"[TOOL VALIDATION] Expected one of {expected_tools}, got disallowed {tool_name}")
-                has_disallowed = True
-        
-        if has_disallowed:
-            logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
-            return None
-    
-    # Проверяем ожидаемые tools (только если определены)
-    if expected_tools:
-        if not any(tool in expected_tools for tool in tool_names):
-            logger.error(f"[TOOL VALIDATION FAILED] Expected {expected_tools}, got {tool_names}")
-            logger.error(f"[TOOL VALIDATION] Message: {message[:100]}")
-            logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
-            return None
+                logger.warning(f"[CONFLICT DETECTED] Tool {tool_name} conflicts with intent in: {message[:100]}")
+                logger.warning(f"[CONFLICT] Disallowed tools: {disallowed_tools}, AI chose: {tool_names}")
+                logger.warning("[VALIDATION] Triggering anti-hallucination retry")
+                return None
         
     # ПОСТ-ПРОЦЕССИНГ: Корректируем tool calls на основе intent
     corrected_tool_calls = post_process_tool_calls(intent, tool_calls, message)
@@ -533,15 +508,6 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             elif func_name == "create_subscription_payment":
                 result = create_subscription_payment(
                     tier=args.get("tier"),
-                    user_id=user_id,
-                    session=db_session,
-                )
-                tool_results.append({"function": func_name, "result": result})
-
-            elif func_name == "brainstorm_ideas":
-                result = await brainstorm_ideas(
-                    topic=args.get("topic"),
-                    context=args.get("context"),
                     user_id=user_id,
                     session=db_session,
                 )
@@ -1964,6 +1930,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             top_p = 1.0
 
         logger.info(f"Using temperature {temperature}, top_p {top_p} for message analysis: questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
+
+        # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ delete_task при явных триггерах удаления
+        delete_triggers = ['удали', 'убери', 'сотри', 'удалить', 'delete', 'больше не нужн']
+        if any(trigger in message_lower for trigger in delete_triggers) and tool_choice == 'auto':
+            # Исключаем случаи удаления ВСЕХ задач - для них есть delete_all_tasks
+            if not any(word in message_lower for word in ['все', 'всё', 'all']):
+                tool_choice = 'required'
+                logger.info(f"[TOOL CHOICE] REQUIRED for delete_task trigger: {message[:50]}")
+        
+        # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ add_task при явных триггерах создания
+        create_triggers = ['напомни', 'создай', 'добавь', 'запланируй', 'поставь задачу']
+        time_indicators = ['через', 'в ', 'завтра', 'сегодня', ' час', 'минут', 'послезавтра', ':00', ':30', ':15', ':45']
+        has_create_trigger = any(trigger in message_lower for trigger in create_triggers)
+        has_time_indicator = any(indicator in message_lower for indicator in time_indicators)
+        
+        if has_create_trigger and has_time_indicator and tool_choice == 'auto':
+            # Исключаем случаи делегирования - для них есть delegate_task
+            if not any(word in message_lower for word in ['делегируй', 'поручи', '@']):
+                tool_choice = 'required'
+                logger.info(f"[TOOL CHOICE] REQUIRED for add_task trigger: {message[:50]}")
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
         # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности

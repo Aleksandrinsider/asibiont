@@ -2633,69 +2633,6 @@ def cancel_subscription(user_id=None):
         return f"Ошибка отмены подписки: {str(e)}"
 
 
-def brainstorm_ideas(topic=None, num_ideas=5, user_id=None, session=None):
-    """Generate creative ideas for a topic using AI"""
-    import asyncio
-    
-    if not topic:
-        return "Не указана тема для генерации идей."
-    
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if not user:
-            if close_session:
-                session.close()
-            return "Пользователь не найден."
-
-        # Get user profile for context
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        user_context = ""
-        if profile:
-            skills = profile.skills or ""
-            interests = profile.interests or ""
-            goals = profile.goals or ""
-            user_context = f"Учитывай навыки пользователя: {skills}. Интересы: {interests}. Цели: {goals}."
-
-        # Generate ideas using AI
-        prompt = f"""Сгенерируй {num_ideas} креативных идей для темы: "{topic}"
-
-{user_context}
-
-Требования к идеям:
-1. Будь конкретным и практичным
-2. Учитывай навыки и интересы пользователя
-3. Каждая идея должна быть реализуемой
-4. Формат: номер + краткое название + описание
-
-Примеры хороших идей:
-1. Онлайн-курс по Python - Создать серию видеоуроков на YouTube с практическими заданиями
-2. Фитнес-трекер - Разработать мобильное приложение для отслеживания прогресса тренировок"""
-
-        try:
-            import asyncio
-            from .chat import chat_with_ai
-            ideas = asyncio.run(chat_with_ai(user_id, prompt))
-            result = f"💡 Идеи для темы '{topic}':\n\n{ideas}"
-            
-            if close_session:
-                session.close()
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error generating brainstorm ideas: {e}")
-            if close_session:
-                session.close()
-            return f"Не удалось сгенерировать идеи для темы '{topic}'. Попробуйте позже."
-
-    except Exception:
-        if close_session:
-            session.close()
 def get_task_details(task_id=None, user_id=None, session=None):
     """Get detailed information about a task"""
     if session is None:
@@ -3013,6 +2950,7 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
         user_id=user.id,
         title=title,
         description=encrypt_data(description),
+        delegated_by=user.id,  # ВАЖНО: кто делегировал задачу
         delegated_to_username=delegated_to_username,
         delegation_details=encrypt_data(delegation_details) if delegation_details else None,
         status="pending",
@@ -3702,111 +3640,6 @@ async def suggest_trends_and_opportunities_async(focus_area: str, num_suggestion
     finally:
         if close_session:
             session.close()
-
-
-async def brainstorm_ideas_async(topic: str, context: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
-    """
-    Мозговой штурм идей по теме.
-
-    Args:
-        topic: Тема для мозгового штурма
-        context: Дополнительный контекст
-        user_id: ID пользователя (опционально)
-        session: Сессия базы данных (опционально)
-        close_session: Закрывать ли сессию после выполнения
-
-    Returns:
-        Список идей по теме
-    """
-    if session is None:
-        session = Session()
-        close_session = True
-    else:
-        close_session = False
-
-    try:
-        # Получить профиль пользователя для персонализации
-        profile = None
-        if user_id:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if user:
-                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-
-        # Генерировать идеи на основе темы и контекста
-        ideas = []
-
-        # Общие идеи для мозгового штурма
-        base_ideas = [
-            "Комбинировать существующие подходы новыми способами",
-            "Посмотреть на проблему с другой стороны или перспективы",
-            "Упростить сложное до основных элементов",
-            "Добавить элемент неожиданности или креативности",
-            "Использовать аналогии из других областей",
-            "Обратиться к первоисточникам и фундаментальным принципам",
-            "Рассмотреть крайние случаи и сценарии",
-            "Привлечь разные точки зрения и мнения"
-        ]
-
-        # Специфические идеи в зависимости от темы
-        if "бизнес" in topic.lower() or "стартап" in topic.lower():
-            ideas.extend([
-                "Создать MVP и протестировать на небольшой аудитории",
-                "Найти нишевый рынок с меньшей конкуренцией",
-                "Партнерство с существующими игроками рынка",
-                "Фокус на проблеме, а не на решении",
-                "Бутстрэппинг вместо привлечения инвестиций"
-            ])
-
-        elif "технологии" in topic.lower() or "продукт" in topic.lower():
-            ideas.extend([
-                "Открытый исходный код для привлечения контрибьюторов",
-                "API-first подход для интеграций",
-                "Модульная архитектура для гибкости",
-                "Фокус на UX/UI для лучшего пользовательского опыта",
-                "Автоматизация рутинных процессов"
-            ])
-
-        elif "маркетинг" in topic.lower() or "продвижение" in topic.lower():
-            ideas.extend([
-                "Контент-маркетинг с ценным и полезным контентом",
-                "Сторителлинг и эмоциональная связь с аудиторией",
-                "Вовлечение сообщества и пользовательского контента",
-                "Персонализация коммуникаций",
-                "Омниканальность - интеграция всех каналов"
-            ])
-
-        else:
-            ideas.extend(base_ideas)
-
-        # Добавить контекст, если он есть
-        if context:
-            ideas.append(f"Учитывая контекст '{context}': адаптировать идеи под конкретные условия")
-
-        # Ограничить до 8 идей
-        selected_ideas = ideas[:8]
-
-        response = f"🧠 Мозговой штурм по теме '{topic}'"
-        if context:
-            response += f" (контекст: {context})"
-        response += ":\n\n"
-
-        for i, idea in enumerate(selected_ideas, 1):
-            response += f"{i}. {idea}\n"
-
-        # Добавить персонализацию
-        if profile and profile.interests:
-            response += f"\n💡 Учитывая твои интересы ({profile.interests}), некоторые идеи могут быть особенно актуальными."
-
-        return response
-
-    except Exception as e:
-        logger.error(f"Ошибка при мозговом штурме по теме {topic}: {e}")
-        return f"Не удалось сгенерировать идеи: {e}"
-
-    finally:
-        if close_session:
-            session.close()
-
 
 async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, session=None, close_session=True) -> str:
     """
