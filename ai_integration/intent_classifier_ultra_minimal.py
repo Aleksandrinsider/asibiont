@@ -54,6 +54,16 @@ class IntentClassifierUltraMinimal:
 
 Верни ТОЛЬКО одно слово на английском: add_task, list_tasks, complete_task, delete_task, reschedule_task, update_profile, find_partners, или conversation.
 
+Примеры:
+"Создай задачу на завтра" → add_task
+"Покажи мои задачи" → list_tasks
+"Я закончил задачу" → complete_task
+"Удали задачу" → delete_task
+"Перенеси задачу на завтра" → reschedule_task
+"Я из Москвы" → update_profile
+"Найди партнеров" → find_partners
+"Привет" → conversation
+
 Сообщение: "{message}"
 
 Операция:
@@ -86,28 +96,21 @@ class IntentClassifierUltraMinimal:
     def get_command_class(cls, intent: str):
         """Map intent to command class"""
         from .commands import (
-            AddTaskCommand, CompleteTaskCommand, ListTasksCommand,
-            DeleteTaskCommand, RescheduleTaskCommand, EditTaskCommand,
-            SetRecurringTaskCommand, UpdateProfileCommand, FindPartnersCommand,
-            GetTaskDetailsCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
-            DelegateTaskCommand, GetDelegationProgressCommand
+            CreateTaskCommand, CompleteTaskCommand, ListTasksCommand,
+            DeleteTaskCommand, RescheduleTaskCommand, UpdateProfileCommand, 
+            FindPartnersCommand, DelegateTaskCommand, ConversationCommand
         )
 
         mapping = {
-            'add_task': AddTaskCommand,
+            'add_task': CreateTaskCommand,
             'complete_task': CompleteTaskCommand,
             'list_tasks': ListTasksCommand,
             'delete_task': DeleteTaskCommand,
             'reschedule_task': RescheduleTaskCommand,
-            'edit_task': EditTaskCommand,
-            'set_recurring_task': SetRecurringTaskCommand,
             'update_profile': UpdateProfileCommand,
             'find_partners': FindPartnersCommand,
-            'get_task_details': GetTaskDetailsCommand,
-            'update_user_memory': UpdateUserMemoryCommand,
-            'delete_all_tasks': DeleteAllTasksCommand,
             'delegate_task': DelegateTaskCommand,
-            'get_delegation_progress': GetDelegationProgressCommand,
+            'conversation': ConversationCommand,
         }
 
-        return mapping.get(intent)
+        return mapping.get(intent, ConversationCommand)
