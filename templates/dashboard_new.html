@@ -336,12 +336,9 @@
                             const favoriteTitleElite = isFavoriteElite ? 'Удалить из избранного' : 'Добавить в избранное';
                             html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColorElite + '" title="' + favoriteTitleElite + '">' + starSvgElite + '</button>';
                             
-                            // Delegate button with Light tier check
-                            const isLightElite = userSubscriptionTier === 'LIGHT';
-                            const delegateClassElite = isLightElite ? 'quick-action disabled' : 'quick-action';
-                            const delegateTitleElite = isLightElite ? 'Функция доступна на других тарифах' : 'Делегировать';
-                            const delegateOnclickElite = isLightElite ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';const delegateDisabledElite = isLightElite ? ' disabled' : '';
-                            html += '<button onclick="' + delegateOnclickElite + '" class="' + delegateClassElite + '"' + delegateDisabledElite + ' title="' + delegateTitleElite + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
+                            // Кнопка отправки сообщения вместо делегирования
+                            const messageTitleElite = 'Отправить сообщение';
+                            html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="' + messageTitleElite + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .743.357l2.068-1.707a.5.5 0 0 1 .465-.126l3.065.876a.5.5 0 0 1 .235.624l-.783 3.128a.5.5 0 0 0 .734.519l4.928-2.464a.5.5 0 0 1 .49 0l4.928 2.464a.5.5 0 0 0 .734-.519l-.783-3.128a.5.5 0 0 1 .235-.624l3.065-.876a.5.5 0 0 1 .465.126l2.068 1.707a.5.5 0 0 0 .743-.357L13.5 1.5a.5.5 0 0 0-.5-.5h-11a.5.5 0 0 0-.5.5l-1.5 12.64ZM6.5 3.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5Zm.5 2.5a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1h-6Zm0 3a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1h-6Z"/></svg></button>';
                             
                             html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                             
@@ -2864,9 +2861,9 @@
             }
         }
 
-        async function delegateToContact(username) {
+        async function sendMessageToContact(username) {
             try {
-                // Отправляем сообщение агенту о желании делегировать задачу этому контакту
+                // Отправляем сообщение агенту о желании связаться с контактом
                 const response = await fetch('/api/send_message', {
                     method: 'POST',
                     headers: {
@@ -2874,10 +2871,10 @@
                     },
                     credentials: 'include',
                     body: JSON.stringify({
-                        message: `Хочу делегировать задачу пользователю @${username}. Покажи список моих активных задач.`
+                        message: `Хочу связаться с пользователем @${username}. Помоги мне отправить сообщение этому контакту.`
                     })
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
                     // Обновляем чат для отображения ответа
@@ -2887,11 +2884,11 @@
                     if (chatMessages) {
                         chatMessages.scrollTop = chatMessages.scrollHeight;
                     }
+                    showNotification('Сообщение отправлено в чат', 'success');
                 } else if (response.status === 403) {
                     // Ошибка из-за ограничений тарифа
                     const errorData = await response.json();
                     if (errorData.error === 'tier_restriction') {
-                        // Показываем уведомление с возможностью перейти на страницу тарифов
                         showNotificationWithLink(
                             errorData.message,
                             'warning',
@@ -2899,16 +2896,16 @@
                             errorData.upgrade_url
                         );
                     } else {
-                        showNotification(errorData.message || 'Недостаточно прав для делегирования', 'error');
+                        showNotification(errorData.message || 'Недостаточно прав для отправки сообщения', 'error');
                     }
                 } else {
                     // Log detailed error
                     const errorText = await response.text();
-                    console.error('Delegation error:', response.status, errorText);
+                    console.error('Send message error:', response.status, errorText);
                     showNotification(`Ошибка ${response.status}: ${errorText.substring(0, 100)}`, 'error');
                 }
             } catch (error) {
-                console.error('Error delegating to contact:', error);
+                console.error('Error sending message to contact:', error);
                 showNotification(`Ошибка при отправке: ${error.message}`, 'error');
             }
         }
@@ -5370,14 +5367,8 @@
                                     const favoriteTitle = isFavorite ? 'Удалить из избранного' : 'Добавить в избранное';
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
-                                    // Delegate button with Light tier check
-                                    const isLight = userSubscriptionTier === 'LIGHT';
-                                    
-                                    const delegateClass = isLight ? 'quick-action disabled' : 'quick-action';
-                                    const delegateTitle = isLight ? 'Функция доступна на других тарифах' : 'Делегировать';
-                                    const delegateOnclick = isLight ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
-                                    const delegateDisabled = isLight ? ' disabled' : '';
-                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
+                                    // Send Message button
+                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .577.093l2.914-1.457A13.06 13.06 0 0 0 8 13.5c3.314 0 6-2.239 6-5s-2.686-5-6-5-6 2.239-6 5c0 1.345.668 2.573 1.775 3.503L.593 13.646a.5.5 0 0 0 .083.577zM8 14.5c-3.59 0-6.5-2.406-6.5-5.5S4.41 3.5 8 3.5s6.5 2.406 6.5 5.5-2.91 5.5-6.5 5.5z"></path></svg></button>';
                                     
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
@@ -5465,14 +5456,8 @@
                                     const favoriteTitle = isFavorite ? 'Удалить из избранного' : 'Добавить в избранное';
                                     html += '<button onclick="toggleFavoriteContact(\'' + contactInfoEscaped + '\')" class="quick-action" style="' + heartColor + '" title="' + favoriteTitle + '">' + starSvg + '</button>';
                                     
-                                    // Delegate button with Light tier check
-                                    const isLight = userSubscriptionTier === 'LIGHT';
-                                    
-                                    const delegateClass = isLight ? 'quick-action disabled' : 'quick-action';
-                                    const delegateTitle = isLight ? 'Функция доступна на других тарифах' : 'Делегировать';
-                                    const delegateOnclick = isLight ? '' : 'delegateToContact(\'' + contactInfoEscaped + '\')';
-                                    const delegateDisabled = isLight ? ' disabled' : '';
-                                    html += '<button onclick="' + delegateOnclick + '" class="' + delegateClass + '"' + delegateDisabled + ' title="' + delegateTitle + '"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8.75 3.75a.75.75 0 0 0-1.5 0v3.5h-3.5a.75.75 0 0 0 0 1.5h3.5v3.5a.75.75 0 0 0 1.5 0v-3.5h3.5a.75.75 0 0 0 0-1.5h-3.5v-3.5Z"></path></svg></button>';
+                                    // Send Message button
+                                    html += '<button onclick="sendMessageToContact(\'' + contactInfoEscaped + '\')" class="quick-action" title="Отправить сообщение"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1.676 14.14a.5.5 0 0 0 .577.093l2.914-1.457A13.06 13.06 0 0 0 8 13.5c3.314 0 6-2.239 6-5s-2.686-5-6-5-6 2.239-6 5c0 1.345.668 2.573 1.775 3.503L.593 13.646a.5.5 0 0 0 .083.577zM8 14.5c-3.59 0-6.5-2.406-6.5-5.5S4.41 3.5 8 3.5s6.5 2.406 6.5 5.5-2.91 5.5-6.5 5.5z"></path></svg></button>';
                                     
                                     html += '<button onclick="openRatingModal(\'' + contactInfoEscaped + '\')" class="quick-action" title="Рекомендовать контакт"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z"></path></svg></button>';
                                     
