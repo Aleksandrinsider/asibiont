@@ -2514,7 +2514,7 @@ details[open] .details-content {
 @media (max-width: 768px) {
     /* === БАЗОВЫЕ НАСТРОЙКИ === */
     :root {
-        --header-height: 60px;
+        --header-height: 80px;
     }
 
     * {
