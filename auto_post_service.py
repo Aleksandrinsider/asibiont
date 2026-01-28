@@ -150,7 +150,7 @@ async def create_auto_post(user_id, content, session, notify=True):
         
         post = Post(
             user_id=user.id,
-            username=user.username,
+            username=user.username or user.first_name or f"user_{user.telegram_id}",
             content=content,
             created_at=datetime.now(pytz.UTC)
         )

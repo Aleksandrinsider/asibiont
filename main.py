@@ -5060,18 +5060,23 @@ async def get_feed_handler(request):
             
             logger.info(f"Feed: all_user_ids for feed (favorites + self - blocked): {all_user_ids}")
 
-            # Get posts from favorites and self
+            # Get posts from favorites and self, or from all users if no favorites
             if all_user_ids:
                 posts = session_db.query(Post).filter(
                     Post.user_id.in_(all_user_ids)
                 ).order_by(Post.created_at.desc()).limit(20).all()
                 logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
-                for post in posts:
-                    post_author = session_db.query(User).filter_by(id=post.user_id).first()
-                    logger.info(f"Feed post: ID={post.id}, author={post_author.username if post_author else 'unknown'} (user_id={post.user_id}), content={post.content[:30]}...")
             else:
-                posts = []
-                logger.info("No favorite contacts found, returning empty feed")
+                # If no favorites, show recent posts from all active users (excluding blocked)
+                logger.info("No favorites found, showing recent posts from all users")
+                active_user_ids = [u.id for u in session_db.query(User).join(UserProfile).filter(
+                    UserProfile.city.isnot(None)
+                ).all() if u.id not in blocked_by_users]
+                
+                posts = session_db.query(Post).filter(
+                    Post.user_id.in_(active_user_ids)
+                ).order_by(Post.created_at.desc()).limit(20).all()
+                logger.info(f"Found {len(posts)} posts from all active users")
 
             # Get user profiles for author info
             user_ids = list(set([p.user_id for p in posts]))
