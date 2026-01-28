@@ -57,6 +57,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    ✓ "Уже завершил X" → ВЫЗОВИ complete_task(task_title="X")
    ✓ "Заказал" (без указания задачи) → ВЫЗОВИ complete_task() - завершит последнюю активную задачу
    ✓ "Сделал" (без указания задачи) → ВЫЗОВИ complete_task() - завершит последнюю активную задачу
+   ✓ "Я сделал X" → ВЫЗОВИ complete_task(task_title="X")
+   ✓ "Я доработал X" → ВЫЗОВИ complete_task(task_title="X")
+   ✓ "Я завершил X" → ВЫЗОВИ complete_task(task_title="X")
+   ✓ "Я выполнил X" → ВЫЗОВИ complete_task(task_title="X")
    ⚠️ НЕ ПРОСТО ПИШИ "задача завершена" - ВЫЗЫВАЙ complete_task!
    ⚠️ НЕ СОЗДАВАЙ add_task если видишь "готово"!
 

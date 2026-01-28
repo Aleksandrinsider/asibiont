@@ -71,6 +71,11 @@ class IntentClassifier:
 "Добавь напоминание о встрече" → add_task|0.9
 "Я закончил с отчетом" → complete_task|0.9
 "Уже выполнил задачу по уборке" → complete_task|0.85
+"Готово с презентацией" → complete_task|0.9
+"Сделал задачу" → complete_task|0.8
+"Я доработал агента" → complete_task|0.9
+"Завершил проект" → complete_task|0.9
+"Выполнил задачу" → complete_task|0.85
 "Покажи мои задачи" → list_tasks|0.95
 "Какие у меня задачи" → list_tasks|0.9
 "Удали задачу о покупке молока" → delete_task|0.9
