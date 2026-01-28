@@ -44,30 +44,44 @@ class IntentClassifierUltraMinimal:
 
     @classmethod
     async def classify_intent(cls, message: str, user_id: int) -> str:
-        """Ultra minimal AI classification - let AI figure out everything"""
+        """AI classification with context understanding"""
 
-        # Ultra minimal prompt - no command list at all
-        prompt = f"""
-Ты - ИИ-ассистент для управления задачами. Проанализируй сообщение пользователя и определи, какую операцию он хочет выполнить.
+        prompt = f"""Ты - анализатор намерений пользователя в боте управления задачами.
 
-Возможные операции: создание задачи, просмотр задач, завершение задачи, удаление задачи, перенос задачи, обновление профиля, поиск партнеров, общий разговор.
+Определи ОДНУ операцию из сообщения. Верни ТОЛЬКО английское слово:
 
-Верни ТОЛЬКО одно слово на английском: add_task, list_tasks, complete_task, delete_task, reschedule_task, update_profile, find_partners, или conversation.
+ОПЕРАЦИИ:
+• add_task - создать новую задачу (напомни, создай, добавь)
+• complete_task - завершить задачу (готово, сделал, выполнил, закончил)
+• list_tasks - показать задачи (покажи, список, что у меня)
+• delete_task - удалить задачу (удали, убери)
+• reschedule_task - перенести задачу (перенеси, измени время)
+• update_profile - обновить профиль (я из [город], работаю [кем], люблю [что])
+• find_partners - найти партнеров (найди, ищу партнеров/коллег)
+• delegate_task - делегировать (делегируй, поручи [кому])
+• set_recurring_task - повторяющаяся задача (каждый день/неделю/месяц)
+• delete_all_tasks - удалить все задачи (удали все, очисти все)
+• conversation - обычный разговор, вопросы, уточнения
 
-Примеры:
-"Создай задачу на завтра" → add_task
-"Покажи мои задачи" → list_tasks
-"Я закончил задачу" → complete_task
-"Удали задачу" → delete_task
-"Перенеси задачу на завтра" → reschedule_task
+ПРИМЕРЫ:
+"Готово отчет" → complete_task
+"Сделал" → complete_task
+"Выполнил задачу" → complete_task
+"Напомни позвонить" → add_task
+"Покажи задачи" → list_tasks
+"Удали встречу" → delete_task
+"Перенеси на завтра" → reschedule_task
 "Я из Москвы" → update_profile
 "Найди партнеров" → find_partners
+"Делегируй Ивану" → delegate_task
+"Каждый день зарядка" → set_recurring_task
+"Удали все" → delete_all_tasks
 "Привет" → conversation
+"Как дела?" → conversation
 
 Сообщение: "{message}"
 
-Операция:
-"""
+Операция:"""
 
         try:
             response = await cls._call_ai(prompt)

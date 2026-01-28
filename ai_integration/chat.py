@@ -204,50 +204,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if not tool_calls:
         return None
     
-    # КРИТИЧЕСКАЯ ВАЛИДАЦИЯ НЕПОЛНЫХ КОМАНД: Запрещаем tool calls для неполных команд
-    incomplete_commands = [
-        # Удаление без указания чего
-        'удали', 'убери', 'удалить', 'удали все',
-        # Перенос без указания задачи
-        'перенеси', 'перенести', 'переместить', 'перенеси на завтра',
-        # Делегирование без указания кому и чего
-        'делегируй', 'поручи', 'передай',
-        # Поиск без указания чего
-        'найди', 'ищи', 'поиск',
-        # Профиль без указания данных
-        'я из', 'я работаю', 'мне нравится', 'мои навыки',
-        # Создание без указания задачи
-        'создай задачу', 'добавь задачу', 'новая задача',
-        # Завершение без указания задачи
-        'готово', 'сделал', 'выполнил', 'завершил',
-        # Показ без указания чего
-        'покажи', 'открой', 'просмотреть',
-        # Повторение без указания периода
-        'каждый день', 'каждую неделю', 'каждый месяц', 'повторять'
-    ]
+    # УБРАЛИ ВАЛИДАЦИЮ НЕПОЛНЫХ КОМАНД - AI понимает контекст!
+    # Теперь AI сам решает, достаточно ли информации из контекста
     
     message_lower = message.lower().strip()
-    is_incomplete = False
     
-    for incomplete in incomplete_commands:
-        if message_lower == incomplete or message_lower.startswith(incomplete + ' '):
-            # Проверяем, есть ли дополнительные детали после команды
-            remaining_text = message_lower.replace(incomplete, '').strip()
-            if not remaining_text or len(remaining_text.split()) < 2:
-                is_incomplete = True
-                logger.warning(f"[INCOMPLETE COMMAND] Detected incomplete command: '{message}' (matches '{incomplete}')")
-                break
-    
-    if is_incomplete:
-        logger.error(f"[INCOMPLETE COMMAND] BLOCKING tool calls for incomplete command: '{message}'")
-        logger.error(f"[INCOMPLETE COMMAND] Tool calls that would be blocked: {[tc.get('function', {}).get('name') for tc in tool_calls]}")
-        # Возвращаем None, что приведет к повторному запросу AI без tool calls
-        return None
-    
-    # КРИТИЧЕСКАЯ ВАЛИДАЦИЯ: Проверяем соответствие tool calls команде пользователя
-    
-    # УНИФИЦИРОВАННЫЙ ПОДХОД: минимальная валидация
-    # Проверяем только явные конфликты между критичными операциями
+    # Минимальная защита от конфликтов
     disallowed_tools = []
     
     # Защита от случайных операций при явных намерениях:
@@ -1937,12 +1899,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         logger.info(f"[INTENT] Detected: {intent['type']} (confidence: {intent['confidence']})")
 
-        # ЕСЛИ УВЕРЕННОСТЬ НИЗКАЯ - ПЕРЕКЛЮЧАЕМСЯ НА КОНВЕРСАЦИЮ ДЛЯ УТОЧНЕНИЯ
-        # Делаем это ПОСЛЕ всей классификации, чтобы переопределить даже статическую
-        if intent['confidence'] < 0.85:
-            logger.info(f"[INTENT] Low confidence ({intent['confidence']}) - switching to conversation for clarification")
-            intent['type'] = 'conversation'
-            intent['confidence'] = 0.5
+        # УБР АЛИ БЛОКИРОВКУ ПО LOW CONFIDENCE - AI сам решает!
+        # Теперь даже при низкой уверенности AI может вызывать инструменты
+        # Доверяем DeepSeek понимать контекст
 
         # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА ДЛЯ ПЕРСОНАЛИЗИРОВАННЫХ СОВЕТОВ
         # context_analysis = analyze_user_context_for_advice(user_id, db_session)
@@ -2041,32 +2000,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             message_type=message_type_for_prompt)
         logger.info("[PROMPTS] Using extended prompt system")
 
-        # ДОБАВЛЯЕМ ИНСТРУКЦИЮ ДЛЯ УТОЧНЯЮЩИХ ВОПРОСОВ ПРИ НИЗКОЙ УВЕРЕННОСТИ
-        if intent.get('confidence', 1.0) < 0.85:
-            clarification_instruction = f"""
-
-🚨 КРИТИЧНО: НИЗКАЯ УВЕРЕННОСТЬ В НАМЕРЕНИИ ({intent.get('confidence', 0):.2f})
-Намерение было классифицировано как '{intent.get('type')}', но уверенность низкая.
-
-❌ ЗАПРЕЩЕНО: Выполнять любые команды или инструменты
-❌ ЗАПРЕЩЕНО: Предлагать помощь без уточнения
-✅ ОБЯЗАТЕЛЬНО: Задать 1-2 конкретных уточняющих вопроса пользователю
-
-ПРАВИЛА УТОЧНЕНИЯ:
-1. Задай конкретный вопрос о том, что пользователь имеет в виду
-2. Не выполняй никаких действий
-3. Не предлагай помощь - только вопросы
-4. Будь краток и дружелюбен
-
-ПРИМЕРЫ ВОПРОСОВ:
-- "Ты хочешь найти партнеров для работы или просто познакомиться?"
-- "Что именно ты хочешь обновить в профиле?"
-- "Ты имеешь в виду создать новую задачу или посмотреть существующие?"
-
-ТВОЙ ОТВЕТ ДОЛЖЕН СОДЕРЖАТЬ ТОЛЬКО УТОЧНЯЮЩИЙ ВОПРОС!
-"""
-            system_prompt += clarification_instruction
-            logger.info(f"[CLARIFICATION] Added STRICT clarification instruction for low confidence {intent.get('confidence')}")
+        # УБРАЛИ CLARIFICATION INSTRUCTION - AI сам понимает когда нужно уточнение!
 
         # ДОБАВЛЯЕМ ИНСТРУКЦИЮ ПО УНИКАЛЬНОСТИ ОТВЕТОВ
         # Проверяем последние 3 ответа AI для предотвращения повторений
@@ -2169,19 +2103,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             tool_choice = "auto"
             parallel_tool_calls = True
             
-            # Принудительный вызов инструментов для определенных intent ТОЛЬКО при высокой уверенности
+            # Принудительный вызов инструментов для определенных intent
             action_intents = [
                 'add_task', 'get_task_details', 'set_recurring_task', 'complete_task', 
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
                 'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
             ]
-            if intent.get('type') in action_intents and intent.get('confidence', 0) >= 0.85:
+            if intent.get('type') in action_intents:
+                # УПРОЩЕНО: вызываем инструмент независимо от confidence
+                # AI лучше понимает контекст, чем наша статическая логика
                 tool_choice = {"type": "function", "function": {"name": intent['type']}}
                 logger.info(f"[TOOL CHOICE] REQUIRED for {intent.get('type')} intent (confidence: {intent.get('confidence')})")
-            elif intent.get('confidence', 1.0) < 0.85:
-                # При низкой уверенности - только разговор, без инструментов
-                tool_choice = "none"
-                logger.info(f"[TOOL CHOICE] NONE for clarification (low confidence: {intent.get('confidence')})")
             
             # Детектируем тип команды для логирования
             logger.info(f"[TOOL DETECTOR] Testing message: '{clean_message.lower()[:100]}'")

@@ -496,9 +496,41 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         logger.error("[COMPLETE_TASK] user_id is None")
         return "ERROR: user_id не может быть None"
     
+    # НОВАЯ ЛОГИКА: Если не указаны параметры - берем последнюю активную задачу
     if task_id is None and (task_title is None or task_title.strip() == ""):
-        logger.error("[COMPLETE_TASK] Both task_id and task_title are None/empty") 
-        return "ERROR: Не указан идентификатор или название задачи"
+        logger.info("[COMPLETE_TASK] No params - looking for last active task")
+        if session is None:
+            session = Session()
+            close_session = True
+        else:
+            close_session = False
+        
+        from models import User
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            last_task = session.query(Task).filter_by(
+                user_id=user.id,
+                status='pending'
+            ).order_by(Task.created_at.desc()).first()
+            
+            if last_task:
+                task_id_int = last_task.id
+                logger.info(f"[COMPLETE_TASK] Found last task: #{task_id_int} '{last_task.title}'")
+            else:
+                if close_session:
+                    session.close()
+                return "ERROR: Нет активных задач для завершения"
+        else:
+            if close_session:
+                session.close()
+            return "ERROR: Пользователь не найден"
+    else:
+        task_id_int = None
+        if task_id is not None:
+            try:
+                task_id_int = int(task_id)
+            except (ValueError, TypeError):
+                logger.warning(f"[COMPLETE_TASK] Invalid task_id format: {task_id}, ignoring")
     
     if session is None:
         session = Session()
