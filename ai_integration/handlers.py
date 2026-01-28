@@ -202,37 +202,6 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         logger.info(f"[ADD_TASK] Task '{title}' NOT created - no reminder_time provided")
         return "NEED_TIME_FOR_TASK: Когда напомнить? Укажи время: завтра в 10:00, через час, сегодня в 15:00"
     
-    # ПРОВЕРКА ЗАНЯТОСТИ: проверяем конфликты по времени
-    # Сначала парсим время, потом проверяем конфликты
-    parsed_time_for_conflicts = None
-    try:
-        # Парсим время для проверки конфликтов
-        user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
-        current_time = datetime.now(user_tz)
-
-        # Используем тот же парсер, что и ниже в функции
-        from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
-
-        parsed_time_for_conflicts = parse_time_with_ai(reminder_time, current_time)
-
-        # Fallback to simple parser if AI fails
-        if not parsed_time_for_conflicts:
-            logger.info("[ADD_TASK] AI parsing failed for conflicts check, trying simple fallback")
-            parsed_time_for_conflicts = parse_time_simple_fallback(reminder_time, current_time)
-
-        if parsed_time_for_conflicts and not ignore_conflicts:
-            # Проверяем конфликты
-            conflict_check_result = check_time_conflicts(user.id, parsed_time_for_conflicts, session)
-            if conflict_check_result:
-                conflict_message, suggested_time = conflict_check_result
-                logger.info(f"[ADD_TASK] Time conflict detected: {conflict_message}")
-                if close_session:
-                    session.close()
-                return f"TIME_CONFLICT: {conflict_message}\n\nПредлагаю альтернативное время: {suggested_time}\n\nПодтверди или укажи другое время."
-    except Exception as e:
-        logger.warning(f"[ADD_TASK] Error checking conflicts: {e}")
-        # Продолжаем без проверки конфликтов
-    
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
     if reminder_time:
         try:
