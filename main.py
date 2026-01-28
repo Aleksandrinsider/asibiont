@@ -6591,6 +6591,7 @@ if __name__ == "__main__":
                     polling_task = None
                     if LOCAL and bot and dp:
                         logger.info("Starting Telegram bot polling for local mode")
+                        await bot.delete_webhook()  # Delete webhook before polling
                         polling_task = asyncio.create_task(dp.start_polling(bot))
                     
                     # Keep the server running
