@@ -5803,7 +5803,7 @@ async def api_tasks_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # Get tasks created by me OR delegated to me
+        # Get tasks created by me OR delegated to me OR delegated by me
         query_conditions = [Task.user_id == user.id]
         if user.username:
             # Compare without @ symbol to handle both @username and username formats
@@ -5812,6 +5812,8 @@ async def api_tasks_handler(request):
                 Task.delegated_to_username.ilike(username_clean),
                 Task.delegated_to_username.ilike(f'@{username_clean}')
             ))
+        # Add tasks delegated BY me
+        query_conditions.append(Task.delegated_by == user.id)
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
         
