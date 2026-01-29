@@ -3463,7 +3463,7 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
     Сохранить информацию в память пользователя.
 
     Args:
-        memory_type: Тип информации (preference, project, contact, etc.)
+        memory_type: Тип информации (preference, project, contact, interest, etc.)
         content: Что запомнить
         user_id: ID пользователя (опционально)
         session: Сессия базы данных (опционально)
@@ -3487,7 +3487,35 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
         if not user:
             return "Пользователь не найден"
 
-        # Обновить память пользователя
+        # Получить или создать профиль
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ ИНТЕРЕСОВ
+        if memory_type.lower() in ['interest', 'interests', 'интерес', 'интересы', 'хобби', 'увлечение']:
+            # Добавляем в profile.interests
+            current_interests = profile.interests or ""
+            
+            # Нормализуем content - убираем лишние слова
+            content_lower = content.lower()
+            for phrase in ['хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь']:
+                content_lower = content_lower.replace(phrase, '').strip()
+            
+            # Добавляем к существующим интересам
+            if current_interests:
+                interests_list = [i.strip() for i in current_interests.split(',')]
+                if content_lower not in [i.lower() for i in interests_list]:
+                    interests_list.append(content_lower)
+                    profile.interests = ', '.join(interests_list)
+            else:
+                profile.interests = content_lower
+            
+            session.commit()
+            return f"✅ Добавил в интересы: {content_lower}"
+
+        # Обычное сохранение в память
         current_memory = user.memory or ""
 
         # Добавить новую информацию с типом

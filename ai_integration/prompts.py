@@ -88,6 +88,10 @@ update_user_memory(memory_type, content) - сохранить в память
 ДЕЛЕГИРОВАНИЕ: "делегируй", "поручи", "передай задачу"
 → ВЫЗОВИ delegate_task()
 
+ИНТЕРЕСЫ/УВЛЕЧЕНИЯ: "хочу заняться", "интересуюсь", "люблю", "увлекаюсь"
+→ ВЫЗОВИ update_user_memory(memory_type="interest", content="<что именно>")
+Пример: "хочу заняться спортом" → update_user_memory(memory_type="interest", content="спорт")
+
 ПОВТОРЯЮЩИЕСЯ: "каждый день", "ежедневно", "еженедельно"
 → ВЫЗОВИ set_recurring_task()
 

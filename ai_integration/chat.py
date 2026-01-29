@@ -1844,9 +1844,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         ]):
             intent = {"type": "find_partners", "confidence": 0.9, "params": {}}
 
-        # 6. Сохранение в память
+        # 6. Сохранение в память / обновление интересов
         elif any(phrase in message_lower for phrase in [
-            'запомни', 'помни что', 'я предпочитаю', 'у меня аллергия'
+            'запомни', 'помни что', 'я предпочитаю', 'у меня аллергия',
+            'хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь'
         ]):
             intent = {"type": "update_user_memory", "confidence": 0.9, "params": {}}
 
