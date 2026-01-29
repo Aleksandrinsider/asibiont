@@ -4161,6 +4161,9 @@
                 const tomorrowEl = document.querySelector('.date-stat:nth-child(2) .stat-number');
                 if (todayEl) todayEl.textContent = '0';
                 if (tomorrowEl) tomorrowEl.textContent = '0';
+                
+                // Обновляем недельный таймлайн даже для пустого массива
+                updateWeekTimeline([]);
                 return;
             }
             
