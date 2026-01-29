@@ -5869,16 +5869,19 @@ async def api_tasks_handler(request):
                 'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
                 'delegated_to': task.delegated_to_username,
-                'delegated_by': None,  # Будет установлено ниже если задача делегирована мне
+                'delegated_to_username': task.delegated_to_username,  # Дублируем для удобства
+                'delegated_by': None,  # Будет установлено ниже
+                'delegated_by_username': None,  # Username того кто поручил
                 'delegated_by_me': task.delegated_by == user.id  # True если я делегировал эту задачу
             }
             
-            # Определяем delegated_by если задача делегирована мне
-            if task.delegated_to_username and user.username:
-                if task.delegated_to_username.lower().strip('@') == user.username.lower():
-                    creator = session_db.query(User).filter_by(id=task.user_id).first()
-                    if creator and creator.username:
-                        task_data['delegated_by'] = creator.username
+            # Определяем delegated_by и delegated_by_username
+            if task.delegated_by and task.delegated_by != user.id:
+                # Задача была делегирована мне кем-то
+                delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                if delegator and delegator.username:
+                    task_data['delegated_by'] = delegator.username
+                    task_data['delegated_by_username'] = delegator.username
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
                     task.reminder_time = pytz.UTC.localize(task.reminder_time)

@@ -3952,17 +3952,29 @@
             let cleanTitle = task.title;
             let delegationInfo = '';
             
-            // Проверяем делегирование "от"
-            const fromMatch = task.title.match(/^(.+?) - Делегирована от (@\w+)$/);
-            if (fromMatch) {
-                cleanTitle = fromMatch[1];
-                delegationInfo = 'Делегирована от ' + fromMatch[2];
-            } else {
-                // Проверяем делегирование "на"
-                const toMatch = task.title.match(/^(.+?) - Делегирована на (@\w+)$/);
-                if (toMatch) {
-                    cleanTitle = toMatch[1];
-                    delegationInfo = 'Делегирована на ' + toMatch[2];
+            // Используем поля из БД для определения делегирования
+            if (task.delegated_by_me) {
+                // Задача поручена мной кому-то
+                if (task.delegated_to_username) {
+                    delegationInfo = 'Поручена @' + task.delegated_to_username;
+                }
+            } else if (task.delegated_by_username) {
+                // Задача поручена мне кем-то
+                delegationInfo = 'Поручена от @' + task.delegated_by_username;
+            }
+            
+            // Если не нашли через БД поля, пробуем старый способ через заголовок
+            if (!delegationInfo) {
+                const fromMatch = task.title.match(/^(.+?) - Делегирована от (@\w+)$/);
+                if (fromMatch) {
+                    cleanTitle = fromMatch[1];
+                    delegationInfo = 'Поручена от ' + fromMatch[2];
+                } else {
+                    const toMatch = task.title.match(/^(.+?) - Делегирована на (@\w+)$/);
+                    if (toMatch) {
+                        cleanTitle = toMatch[1];
+                        delegationInfo = 'Поручена @' + toMatch[2];
+                    }
                 }
             }
             
