@@ -6678,6 +6678,39 @@ logger.info("ReminderService initialized")
 # Start ReminderService on app startup
 
 
+async def ensure_database_schema(app):
+    """Ensure database schema is up to date with migrations"""
+    logger.info("Checking database schema...")
+    try:
+        from sqlalchemy import inspect as sql_inspect, text as sql_text, create_engine as sql_engine
+        
+        engine = sql_engine(DATABASE_URL)
+        inspector = sql_inspect(engine)
+        
+        # Check if tasks table exists
+        if 'tasks' not in inspector.get_table_names():
+            logger.info("Tasks table doesn't exist yet, skipping migration")
+            return
+        
+        # Check if pending_delegator_report column exists
+        columns = [col['name'] for col in inspector.get_columns('tasks')]
+        
+        if 'pending_delegator_report' not in columns:
+            logger.info("Adding pending_delegator_report column to tasks table...")
+            with engine.connect() as conn:
+                conn.execute(sql_text("""
+                    ALTER TABLE tasks 
+                    ADD COLUMN pending_delegator_report BIGINT
+                """))
+                conn.commit()
+            logger.info("✅ Successfully added pending_delegator_report column")
+        else:
+            logger.info("✅ pending_delegator_report column already exists")
+            
+    except Exception as e:
+        logger.error(f"Error during database schema check: {e}")
+
+
 async def start_reminder_service(app):
     logger.info("Starting ReminderService...")
     await reminder_service.start()
@@ -6689,6 +6722,7 @@ async def start_reminder_service(app):
     for job in jobs[:5]:  # Log first 5 jobs
         logger.info(f"Job: {job.id} at {job.next_run_time}")
 
+app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
 # app.on_shutdown.append(on_shutdown)
