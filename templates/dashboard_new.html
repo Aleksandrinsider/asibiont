@@ -1113,13 +1113,15 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
                     </div>
-                    <div style="margin-bottom: 15px; display: flex; align-items: stretch; gap: 6px; flex-direction: column; font-size: 12px;">
-                        <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Избранное</button>
-                        <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" style="padding: 8px 12px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Рекомендуемые</button>
-                        <button class="contact-filter-btn{% if subscription_tier not in ['PREMIUM'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['PREMIUM'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %} style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Премиум</button>
-                        <button class="contact-filter-btn" data-filter="delegating_to_me" onclick="filterContacts('delegating_to_me')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Поручают мне</button>
-                        <button class="contact-filter-btn{% if subscription_tier == 'LIGHT' %} disabled-btn{% endif %}" data-filter="delegating_by_me" onclick="{% if subscription_tier == 'LIGHT' %}{% else %}filterContacts('delegating_by_me'){% endif %}"{% if subscription_tier == 'LIGHT' %} disabled{% endif %} style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Поручаю я</button>
-                        <button class="contact-filter-btn" data-filter="blocked" onclick="filterContacts('blocked')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Заблокировано</button>
+                    <div style="margin-bottom: 15px;">
+                        <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit;">
+                            <option value="favorite">Избранное</option>
+                            <option value="recommended" selected>Рекомендуемые</option>
+                            <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
+                            <option value="delegating_to_me">Поручают мне</option>
+                            <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                            <option value="blocked">Заблокировано</option>
+                        </select>
                     </div>
                     <div class="people-list" id="people-list" style="padding: 0 4px;">
                         <!-- Контакты будут загружены динамически -->
@@ -1268,13 +1270,15 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
                     </div>
-                    <div style="margin-bottom: 15px; display: flex; align-items: stretch; gap: 6px; flex-direction: column; font-size: 12px;">
-                        <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 8px 12px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Все</button>
-                        <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Личные</button>
-                        <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Поручили мне</button>
-                        <button class="task-filter-btn{% if subscription_tier == 'LIGHT' %} disabled-btn{% endif %}" data-filter="assigned-by-me" onclick="{% if subscription_tier == 'LIGHT' %}{% else %}filterTasks('assigned-by-me'){% endif %}"{% if subscription_tier == 'LIGHT' %} disabled{% endif %} style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Поручил я</button>
-                        <button class="task-filter-btn" data-filter="overdue" onclick="filterTasks('overdue')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Просрочено</button>
-                        <button class="task-filter-btn" data-filter="completed" onclick="filterTasks('completed')" style="padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit; text-align: left;">Выполнено</button>
+                    <div style="margin-bottom: 15px;">
+                        <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit;">
+                            <option value="all" selected>Все</option>
+                            <option value="my">Личные</option>
+                            <option value="assigned-to-me">Поручили мне</option>
+                            <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                            <option value="overdue">Просрочено</option>
+                            <option value="completed">Выполнено</option>
+                        </select>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container" style="padding: 0 4px;">
                         <div class="task-groups" id="task-groups">
