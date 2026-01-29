@@ -4158,130 +4158,146 @@
         
         async function completeTask(taskId) {
             try {
-                const response = await fetch('/complete_task', {
+                const task = allTasksFromServer.find(t => t.id === taskId);
+                if (!task) {
+                    showNotification('Task not found', 'error');
+                    return;
+                }
+                
+                const message = `complete task "${task.title}"`;
+                showTypingIndicator();
+                
+                const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId }),
+                    body: JSON.stringify({ message: message }),
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return;
+                
+                if (!await checkAuth(response)) {
+                    hideTypingIndicator();
+                    return;
+                }
+                
                 if (response.ok) {
-                    const data = await response.json();
-                    
-                    // ���������� ������� ������ �� DOM
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
                         taskElement.remove();
                     }
                     
-                    // ��������� ������ ����� � ������
                     allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
-                    showNotification('������ ���������!', 'success');
-                    // ���������� �������� �������� ���� ���� ����� �� ������
-                    showTypingIndicator();
-                    // �������� ��� ��� ��������� ������ ������
                     await updateChat();
                     hideTypingIndicator();
-                    
-                    // ���������������� ������ ����� � ��������
                     await updateTasks();
                 } else {
+                    hideTypingIndicator();
                     const error = await response.json();
-                    showNotification(`������ ��� ���������� ������: ${error.error}`, 'error');
+                    showNotification(`Error: ${error.error}`, 'error');
                 }
             } catch (error) {
+                hideTypingIndicator();
                 console.error('Error completing task:', error);
-                showNotification('������ ��� ���������� ������', 'error');
+                showNotification('Error completing task', 'error');
             }
         }
         
         async function acceptDelegatedTask(taskId) {
             try {
-                const response = await fetch('/api/accept_delegated_task', {
+                const task = allTasksFromServer.find(t => t.id === taskId);
+                if (!task) {
+                    showNotification('Task not found', 'error');
+                    return;
+                }
+                
+                const message = `accept task "${task.title}"`;
+                showTypingIndicator();
+                
+                const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        task_id: taskId
-                    }),
+                    body: JSON.stringify({ message: message }),
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return;
+                
+                if (!await checkAuth(response)) {
+                    hideTypingIndicator();
+                    return;
+                }
+                
                 if (response.ok) {
-                    const result = await response.json();
-                    showNotification(result.message || '������ �������', 'success');
-                    
-                    // ������������� ��������� ���������
-                    lastTasksUpdate = 0; // ���������� throttle
-                    lastPeopleUpdate = 0; // ���������� throttle ��� ���������
+                    lastTasksUpdate = 0;
+                    lastPeopleUpdate = 0;
                     await updateTasks();
-                    // ���������� �������� �������� ���� ���� ����� �� ������
-                    showTypingIndicator();
                     await updateChat();
                     hideTypingIndicator();
                     await updatePeople(true);
-                    // �������� ������� �������� ���� ������� ������
                     if (currentContactFilter === 'elite') {
                         await loadEliteContacts();
                     }
                 } else {
+                    hideTypingIndicator();
                     const error = await response.json();
-                    showNotification(error.error || '������ ��� �������� ������', 'error');
+                    showNotification(error.error || 'Error accepting task', 'error');
                 }
             } catch (error) {
+                hideTypingIndicator();
                 console.error('Error accepting task:', error);
-                showNotification('������ ��� �������� ������', 'error');
+                showNotification('Error accepting task', 'error');
             }
         }
         
         async function rejectDelegatedTask(taskId) {
             try {
-                // ���������� ������ ������ �� ���������� ������
-                const response = await fetch('/api/reject_delegated_task', {
+                const task = allTasksFromServer.find(t => t.id === taskId);
+                if (!task) {
+                    showNotification('Task not found', 'error');
+                    return;
+                }
+                
+                const message = `reject task "${task.title}"`;
+                showTypingIndicator();
+                
+                const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        task_id: taskId
-                    }),
+                    body: JSON.stringify({ message: message }),
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return;
+                
+                if (!await checkAuth(response)) {
+                    hideTypingIndicator();
+                    return;
+                }
+                
                 if (response.ok) {
-                    const result = await response.json();
-                    
-                    // ���������� ������� ������ �� DOM
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
                         taskElement.remove();
                     }
                     
-                    // ��������� ������ ����� � ������
                     allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
-                    showNotification(result.message || '������ ���������', 'success');
-                    
-                    // ������������� ��������� ���������
-                    lastTasksUpdate = 0; // ���������� throttle
-                    lastPeopleUpdate = 0; // ���������� throttle ��� ���������
+                    lastTasksUpdate = 0;
+                    lastPeopleUpdate = 0;
                     await updateTasks();
-                    // ���������� �������� �������� ���� ���� ����� �� ������
-                    showTypingIndicator();
                     await updateChat();
                     hideTypingIndicator();
                     await updatePeople(true);
-                    // �������� ������� �������� ���� ������� ������
                     if (currentContactFilter === 'elite') {
                         await loadEliteContacts();
                     }
                 } else {
+                    hideTypingIndicator();
                     const error = await response.json();
-                    showNotification(error.error || '������ ��� ���������� ������', 'error');
+                    showNotification(error.error || 'Error rejecting task', 'error');
                 }
             } catch (error) {
+                hideTypingIndicator();
                 console.error('Error rejecting task:', error);
-                showNotification('������ ��� ���������� ������', 'error');
+                showNotification('Error rejecting task', 'error');
             }
         }
         
@@ -4324,57 +4340,56 @@
         }
         
         async function deleteTask(taskId) {
-            // �������� �������� ������ �� ����� ������ �����
-            let taskTitle = `������ ${taskId}`;
+            let taskTitle = `Task ${taskId}`;
             const task = allTasksData.find(t => t.id === taskId);
-            let isDelegatedToMe = false;
             if (task) {
                 taskTitle = task.title;
-                // ���������, �������� �� ������ �������������� �� ���
-                isDelegatedToMe = task.delegated_to_username !== null && task.delegated_to_username !== undefined;
             }
             
-            // ������������� ��������
-            if (!confirm(`�� �������, ��� ������ ������� ������ "${taskTitle}"?`)) {
+            if (!confirm(`Are you sure you want to delete "${taskTitle}"?`)) {
                 return;
             }
             
             try {
-                const response = await fetch('/delete_task', {
+                const message = `delete task "${taskTitle}"`;
+                showTypingIndicator();
+                
+                const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ task_id: taskId }),
+                    body: JSON.stringify({ message: message }),
                     credentials: 'include'
                 });
-                if (!await checkAuth(response)) return;
+                
+                if (!await checkAuth(response)) {
+                    hideTypingIndicator();
+                    return;
+                }
+                
                 if (response.ok) {
-                    const data = await response.json();
-                    
-                    // ���������� ������� ������ �� DOM
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
                         taskElement.remove();
                     }
                     
-                    // ��������� ������ ����� � ������
                     allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
-                    showNotification('������ �������', 'success');
+                    await updateChat();
+                    hideTypingIndicator();
                     
-                    // ������� ������� ����� � ����������
                     updateTasksCounter();
                     updateStats(allTasksFromServer);
-                    
-                    // ��������������� ������ � ����������� ������� (��� �������� � �������)
                     renderTaskGroups(allTasksFromServer);
                 } else {
+                    hideTypingIndicator();
                     const error = await response.json();
-                    showNotification(`������ ��� �������� ������: ${error.error}`, 'error');
+                    showNotification(`Error: ${error.error}`, 'error');
                 }
             } catch (error) {
+                hideTypingIndicator();
                 console.error('Error deleting task:', error);
-                showNotification('������ ��� �������� ������', 'error');
+                showNotification('Error deleting task', 'error');
             }
         }
         
