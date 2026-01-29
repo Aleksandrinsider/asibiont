@@ -29,7 +29,7 @@ from .handlers import (
     list_tasks, get_partners_list, find_partners,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
-    cancel_subscription, get_task_details_async,
+    cancel_subscription, get_task_details,
     update_profile, delete_task, set_recurring_task
 )
 
@@ -171,7 +171,7 @@ check_subscription_status = handlers.check_subscription_status
 create_subscription_payment = handlers.create_subscription_payment
 cancel_subscription = handlers.cancel_subscription
 get_partners_list = handlers.get_partners_list
-get_task_details = handlers.get_task_details_async
+# Убираем лишние строки (уже импортировано напрямую)
 get_delegation_progress = handlers.get_delegation_progress
 cancel_delegation = handlers.cancel_delegation
 
