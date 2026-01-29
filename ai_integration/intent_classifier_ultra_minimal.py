@@ -69,6 +69,11 @@ class IntentClassifierUltraMinimal:
 "Готово отчет" → complete_task
 "Сделал" → complete_task
 "Выполнил задачу" → complete_task
+"Уже проверил" → complete_task
+"Уже сделал" → complete_task
+"Проверил почту" → complete_task
+"Закончил" → complete_task
+"Завершил" → complete_task
 "Напомни позвонить" → add_task
 "Покажи задачи" → list_tasks
 "Удали встречу" → delete_task
