@@ -227,8 +227,10 @@
             document.querySelectorAll('.contact-filter-btn').forEach(btn => {
                 if (btn.getAttribute('data-filter') === filterType) {
                     btn.classList.add('active');
+                    btn.style.setProperty('background', '#F6F8FA', 'important');
                 } else {
                     btn.classList.remove('active');
+                    btn.style.setProperty('background', '#FFFFFF', 'important');
                 }
             });
             
@@ -3794,8 +3796,10 @@
             document.querySelectorAll('.task-filter-btn').forEach(btn => {
                 if (btn.getAttribute('data-filter') === filterType) {
                     btn.classList.add('active');
+                    btn.style.setProperty('background', '#F6F8FA', 'important');
                 } else {
                     btn.classList.remove('active');
+                    btn.style.setProperty('background', '#FFFFFF', 'important');
                 }
             });
             
@@ -4016,8 +4020,7 @@
             
             // Кнопки действий
             const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
-            const gridColumns = '1fr';
-            html += '<div class="task-actions" style="display: grid; grid-template-columns: ' + gridColumns + '; gap: 4px;">';
+            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: row;">';
             
             if (isDelegatedToMe) {
                 // Задача делегирована МНЕ и ожидает моего принятия - только кнопки Принять и Отклонить (БЕЗ удаления)
@@ -4349,12 +4352,14 @@
                     
                     showNotification('Задача удалена', 'success');
                     
-                    // НЕ вызываем updateChat() - это может вернуть удаленные задачи
-                    // Обновим только счетчик задач
+                    // Обновим счетчик задач и статистику
                     updateTasksCounter();
+                    updateStats(allTasksFromServer);
                     
-                    // Синхронизировать список задач с сервером
-                    await updateTasks();
+                    // Обновляем задачи с задержкой, чтобы дать серверу время удалить
+                    setTimeout(() => {
+                        updateTasks();
+                    }, 500);
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
