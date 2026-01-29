@@ -5,7 +5,7 @@ import json
 import re
 from datetime import datetime, timezone, timedelta
 import pytz
-from models import Session, Task, User, UserProfile, SubscriptionTier
+from models import Session, Task, User, UserProfile, SubscriptionTier, Subscription
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data
@@ -2103,13 +2103,24 @@ def get_partners_list(user_id=None, session=None):
 
         # ВАЖНО: Всегда показывать избранные и заблокированные контакты
         
-        # Получаем тарифы пользователей
-        profile_user_tier = profile_user.subscription_tier.value if profile_user.subscription_tier else 'LIGHT'
-        user_tier = user.subscription_tier.value if user.subscription_tier else 'LIGHT'
+        # Получаем АКТУАЛЬНЫЕ тарифы из таблицы Subscription (не из User.subscription_tier!)
+        profile_user_subscription = session.query(Subscription).filter_by(user_id=profile_user.id, status='active').first()
+        user_subscription = session.query(User).filter_by(id=user.id).first()
+        user_subscription_obj = session.query(Subscription).filter_by(user_id=user.id, status='active').first()
         
-        # КРИТИЧНАЯ ФИЛЬТРАЦИЯ: LIGHT/STANDARD НЕ ВИДЯТ PREMIUM (даже при совпадениях)
+        profile_user_tier = profile_user_subscription.tier.value if profile_user_subscription and profile_user_subscription.tier else 'LIGHT'
+        user_tier = user_subscription_obj.tier.value if user_subscription_obj and user_subscription_obj.tier else 'LIGHT'
+        
+        logger.info(f"[PARTNERS] Checking {profile_user.username}: profile_tier={profile_user_tier}, user_tier={user_tier}")
+        
+        # КРИТИЧНАЯ ФИЛЬТРАЦИЯ ПО ТАРИФАМ:
+        # LIGHT: видят LIGHT + STANDARD (не видят PREMIUM)
+        # STANDARD: видят LIGHT + STANDARD (не видят PREMIUM)
+        # PREMIUM: видят всех
+        
         if user_tier in ['LIGHT', 'STANDARD'] and profile_user_tier == 'PREMIUM':
-            continue  # Пропускаем PREMIUM профили для LIGHT/STANDARD пользователей
+            logger.info(f"[PARTNERS] Skipping PREMIUM user {profile_user.username} for {user_tier} user")
+            continue
         
         # Специальное правило для PREMIUM: они видят ВСЕХ (даже без совпадений)
         if user_tier == 'PREMIUM':

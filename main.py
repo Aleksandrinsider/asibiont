@@ -6473,6 +6473,102 @@ async def clear_database_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def add_test_users_handler(request):
+    """Add test users with different tiers and interests (admin only)"""
+    try:
+        # Security check
+        admin_secret = request.query.get('secret', '')
+        expected_secret = os.getenv('ADMIN_SECRET')
+        
+        if not admin_secret or admin_secret != expected_secret:
+            return web.json_response({'error': 'Unauthorized'}, status=403)
+        
+        session = Session()
+        
+        # Данные пользователей
+        sport_users = [
+            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'футбол, баскетбол, волейбол', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'sport_maria', 'telegram_id': 1000002, 'interests': 'бег, йога, пилатес', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'теннис, плавание, велоспорт', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'фитнес, кроссфит, бодибилдинг', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'sport_dmitry', 'telegram_id': 1000005, 'interests': 'хоккей, биатлон, лыжи', 'tier': SubscriptionTier.STANDARD},
+        ]
+        
+        business_users = [
+            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'стартапы, маркетинг, продажи', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'инвестиции, финансы, криптовалюта', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'управление проектами, agile, scrum', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, онлайн-торговля, логистика', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, рекрутинг, обучение персонала', 'tier': SubscriptionTier.LIGHT},
+        ]
+        
+        all_users = sport_users + business_users
+        added = []
+        skipped = []
+        
+        for user_data in all_users:
+            existing = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
+            if existing:
+                skipped.append(user_data['username'])
+                continue
+            
+            user = User(
+                telegram_id=user_data['telegram_id'],
+                username=user_data['username'],
+                subscription_tier=user_data['tier'],
+                created_at=datetime.datetime.now(datetime.timezone.utc)
+            )
+            session.add(user)
+            session.flush()
+            
+            profile = UserProfile(
+                user_id=user.id,
+                interests=user_data['interests'],
+                skills='',
+                goals='',
+                created_at=datetime.datetime.now(datetime.timezone.utc)
+            )
+            session.add(profile)
+            
+            end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+            subscription = Subscription(
+                user_id=user.id,
+                telegram_id=user_data['telegram_id'],
+                telegram_username=user_data['username'],
+                username=user_data['username'],
+                status='active',
+                plan='yearly',
+                tier=user_data['tier'],
+                start_date=datetime.datetime.now(datetime.timezone.utc),
+                end_date=end_date,
+                login_count=1,
+                created_at=datetime.datetime.now(datetime.timezone.utc)
+            )
+            session.add(subscription)
+            
+            added.append(f"@{user_data['username']} ({user_data['tier'].value})")
+        
+        session.commit()
+        total = session.query(User).count()
+        session.close()
+        
+        logger.info(f"Test users added: {len(added)}, skipped: {len(skipped)}")
+        
+        return web.json_response({
+            'success': True,
+            'added': added,
+            'skipped': skipped,
+            'total_users': total
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding test users: {e}")
+        if 'session' in locals():
+            session.rollback()
+            session.close()
+        return web.json_response({'error': str(e)}, status=500)
+
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/', login_handler)
@@ -6508,6 +6604,7 @@ app.router.add_post('/webhook/yookassa', yookassa_webhook)
 app.router.add_get('/api/tasks', api_tasks_handler)
 app.router.add_get('/api/partners', api_partners_handler)
 app.router.add_post('/admin/clear_database', clear_database_handler)
+app.router.add_get('/admin/add_test_users', add_test_users_handler)
 app.router.add_get('/api/elite_partners', api_elite_partners_handler)
 app.router.add_get('/api/contact_profile', api_contact_profile_handler)
 app.router.add_get('/api/favorite_contacts', api_favorite_contacts_handler)
