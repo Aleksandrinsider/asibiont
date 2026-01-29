@@ -1855,11 +1855,11 @@ async def dashboard_handler(request):
 
                 delegator_ids = set()
                 for task in delegated_tasks:
-                    if task.user_id and task.user_id not in delegator_ids:
-                        delegator_ids.add(task.user_id)
-                        delegator = session_db.query(User).filter_by(id=task.user_id).first()
+                    if task.delegated_by and task.delegated_by not in delegator_ids:
+                        delegator_ids.add(task.delegated_by)
+                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
                         if delegator and delegator.id != user.id:
-                            delegator_tasks = [t for t in delegated_tasks if t.user_id == delegator.id]
+                            delegator_tasks = [t for t in delegated_tasks if t.delegated_by == delegator.id]
                             task_count = len(delegator_tasks)
                             task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegator_tasks[:3]]
                             delegating_to_me.append({
@@ -3091,12 +3091,12 @@ async def api_partners_handler(request):
 
                 delegator_ids = set()
                 for task in delegated_tasks:
-                    if task.user_id and task.user_id not in delegator_ids:
-                        delegator_ids.add(task.user_id)
-                        delegator = session_db.query(User).filter_by(id=task.user_id).first()
+                    if task.delegated_by and task.delegated_by not in delegator_ids:
+                        delegator_ids.add(task.delegated_by)
+                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
                         if delegator and delegator.id != user.id:
                             delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first()
-                            task_titles = [t.title for t in delegated_tasks if t.user_id == delegator.id]
+                            task_titles = [t.title for t in delegated_tasks if t.delegated_by == delegator.id]
                             delegating_to_me.append({
                                 'id': delegator.id,
                                 'username': delegator.username,
