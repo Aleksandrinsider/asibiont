@@ -175,11 +175,12 @@ get_partners_list = handlers.get_partners_list
 get_delegation_progress = handlers.get_delegation_progress
 cancel_delegation = handlers.cancel_delegation
 
-async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None):
+async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None, ai_content=None):
     """Обрабатывает tool calls и возвращает естественный ответ
     
     Args:
         current_time: Текущее время пользователя (datetime object с timezone)
+        ai_content: Оригинальный текстовый ответ AI (если был возвращён вместе с tool_calls)
     """
     from models import User  # Явный импорт для избежания конфликтов области видимости
     logger = logging.getLogger(__name__)
@@ -248,6 +249,24 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     logger.info(f"[PROCESS_TOOL_CALLS] After duplicate check: {len(tool_calls)} tool calls")
     if not tool_calls:
         logger.warning("[PROCESS_TOOL_CALLS] No tool calls to process after duplicate check!")
+
+    # ДЕ-ДУПЛИКАЦИЯ TOOL CALLS: Удаляем идентичные вызовы
+    # AI иногда может вызвать один и тот же tool несколько раз
+    unique_tool_calls = []
+    seen_calls = set()
+    for tc in tool_calls:
+        func_name = tc.get('function', {}).get('name')
+        args = tc.get('function', {}).get('arguments', '')
+        # Создаём уникальный ключ на основе имени функции и аргументов
+        call_key = f"{func_name}:{args}"
+        if call_key not in seen_calls:
+            seen_calls.add(call_key)
+            unique_tool_calls.append(tc)
+        else:
+            logger.warning(f"[DEDUP] Duplicate tool call detected and removed: {func_name}")
+    
+    tool_calls = unique_tool_calls
+    logger.info(f"[PROCESS_TOOL_CALLS] After deduplication: {len(tool_calls)} unique tool calls")
 
     # Если это вопрос о совете, игнорируем tool_calls и обрабатываем как обычный текст
     if is_advice_question:
@@ -830,6 +849,12 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
         # УПРОЩЕННАЯ ОБРАБОТКА: Формируем финальный контент на основе результатов
         if natural_responses:
+            # КРИТИЧЕСКАЯ ПРОВЕРКА: Если AI уже дал ответ, используем его без генерации
+            if ai_content and ai_content.strip():
+                logger.info(f"[AI CONTENT REUSE] Using AI's original response instead of generating new one")
+                logger.info(f"[AI CONTENT] Original response: {ai_content[:200]}")
+                return ai_content.strip()
+            
             # Формируем ДВА контента:
             # 1. ai_context - для передачи AI (с маркерами и структурой)
             # 2. fallback_message - для пользователя если AI не ответит (читаемый текст)
@@ -2569,7 +2594,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # ПЕРВИЧНАЯ ОБРАБОТКА TOOL CALLS
                             validation_failed = False
                             if tool_calls:
-                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
+                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=content)
                                 if result:
                                     return {'response': result, 'tool_calls': [{'function': tc.get('function', {}).get('name'), 'arguments': tc.get('function', {}).get('arguments')} for tc in tool_calls]}
                                 elif result is None and tool_calls:
@@ -2677,10 +2702,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                     retry_result = await retry_response.json()
                                                     retry_message = retry_result["choices"][0]["message"]
                                                     retry_tool_calls = retry_message.get("tool_calls")
+                                                    retry_content = retry_message.get("content", "")
                                                     
                                                     if retry_tool_calls:
                                                         logger.info(f"[HALLUCINATION FIX] Retry successful, got {len(retry_tool_calls)} tool calls")
-                                                        result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now)
+                                                        result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=retry_content)
                                                         if result:
                                                             return {'response': result, 'tool_calls': [{'function': tc.get('function', {}).get('name'), 'arguments': tc.get('function', {}).get('arguments')} for tc in retry_tool_calls]}
                                                     else:
