@@ -3591,25 +3591,40 @@ def _add_to_list_field(current_value: str, new_value: str) -> tuple[str, bool]:
     """
     Добавляет новое значение в поле-список (через запятую).
     Возвращает (обновленное_значение, было_ли_добавлено).
+    Разбивает new_value по запятым и проверяет каждый элемент на дубликаты.
     """
     if not new_value or not new_value.strip():
         return current_value, False
     
-    new_value = new_value.strip()
-    
-    if not current_value:
-        return new_value, True
-    
     # Разбираем текущие значения
-    items = [item.strip().lower() for item in current_value.split(',')]
-    new_item_lower = new_value.lower()
+    if current_value:
+        current_items = [item.strip() for item in current_value.split(',')]
+        current_items_lower = [item.lower() for item in current_items]
+    else:
+        current_items = []
+        current_items_lower = []
     
-    # Проверяем дубликаты
-    if new_item_lower in items:
+    # Разбираем новые значения по запятым
+    new_items = [item.strip() for item in new_value.split(',') if item.strip()]
+    
+    # Фильтруем дубликаты
+    added_items = []
+    for new_item in new_items:
+        new_item_lower = new_item.lower()
+        if new_item_lower not in current_items_lower:
+            added_items.append(new_item)
+            current_items_lower.append(new_item_lower)
+    
+    if not added_items:
         return current_value, False
     
-    # Добавляем новое значение
-    return f"{current_value}, {new_value}", True
+    # Объединяем со старыми
+    if current_items:
+        result = ', '.join(current_items + added_items)
+    else:
+        result = ', '.join(added_items)
+    
+    return result, True
 
 
 def update_profile(user_id: int, city: str = None, birth_date: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, replace_mode: bool = False, session=None, close_session: bool = True) -> str:

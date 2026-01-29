@@ -3576,7 +3576,8 @@
         // Initialize task groups on load
         {% if tasks %}
         const initialTasks = {{ tasks|tojson }};
-        renderTaskGroups(initialTasks);
+        // Не рендерим initialTasks сразу, чтобы избежать показа старых данных
+        // renderTaskGroups будет вызван из updateTasks() со свежими данными с сервера
         {% endif %}
         
         // Задачи обновляются в главном цикле (см. ниже)
