@@ -175,8 +175,7 @@ async def run_dialogue_test():
             # Отправка сообщения агенту
             response = await chat_with_ai(
                 message=scenario['message'],
-                user_id=TEST_USER_ID,
-                conversation_history=conversation_history
+                user_id=TEST_USER_ID
             )
             
             # Обновление истории
