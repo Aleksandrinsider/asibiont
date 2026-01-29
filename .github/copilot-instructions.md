@@ -1,7 +1,7 @@
 # Copilot Instructions
 
 ## Project Requirements
-AI-powered Telegram bot for task management using natural dialogue, DeepSeek AI, PostgreSQL, Redis, Yookassa payments.
+AI-powered Telegram bot for task management using natural dialogue, DeepSeek AI, PostgreSQL, Yookassa payments.
 
 ## Project Status
 - [x] Project scaffolded with Python, aiogram, SQLAlchemy, etc.
