@@ -192,6 +192,40 @@
             }
         }
 
+        function toggleContactFilters() {
+            const content = document.getElementById('contact-filter-content');
+            const button = document.getElementById('contact-filter-toggle-btn');
+            const svg = button ? button.querySelector('svg') : null;
+            if (!content) return;
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                if (svg) svg.style.transform = 'rotate(0deg)';
+                localStorage.setItem('contactFiltersCollapsed', 'false');
+            } else {
+                content.style.display = 'none';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
+                localStorage.setItem('contactFiltersCollapsed', 'true');
+            }
+        }
+
+        function toggleTaskFilters() {
+            const content = document.getElementById('task-filter-content');
+            const button = document.getElementById('task-filter-toggle-btn');
+            const svg = button ? button.querySelector('svg') : null;
+            if (!content) return;
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                if (svg) svg.style.transform = 'rotate(0deg)';
+                localStorage.setItem('taskFiltersCollapsed', 'false');
+            } else {
+                content.style.display = 'none';
+                if (svg) svg.style.transform = 'rotate(-90deg)';
+                localStorage.setItem('taskFiltersCollapsed', 'true');
+            }
+        }
+
         async function filterContacts(filterType) {
             // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
             const profileContent = document.getElementById('profile-content');
@@ -1112,9 +1146,31 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
+                        <button onclick="toggleContactFilters()" class="section-toggle-btn" id="contact-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
-                    <div style="margin-bottom: 15px;">
-                        <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit;">
+                    <div id="contact-filter-content" style="margin-bottom: 15px;">
+                    <script>
+                        // Инициализация состояния фильтров контактов
+                        (function() {
+                            var isCollapsed = localStorage.getItem('contactFiltersCollapsed');
+                            var contentEl = document.getElementById('contact-filter-content');
+                            var btn = document.getElementById('contact-filter-toggle-btn');
+                            var svg = btn ? btn.querySelector('svg') : null;
+                            
+                            if (isCollapsed === 'true') {
+                                if (contentEl) contentEl.style.display = 'none';
+                                if (svg) svg.style.transform = 'rotate(-90deg)';
+                            } else {
+                                if (contentEl) contentEl.style.display = 'block';
+                                if (svg) svg.style.transform = 'rotate(0deg)';
+                            }
+                        })();
+                    </script>
+                        <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
                             <option value="favorite">Избранное</option>
                             <option value="recommended" selected>Рекомендуемые</option>
                             <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
@@ -1198,7 +1254,7 @@
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
                             </button>
                             <button onclick="createPost()" class="chat-action-btn" title="Опубликовать пост">
-                                <svg width="18" height="18" viewBox="0 0 16 16" fill="#374151"><path d="M.5 1.163A1 1 0 0 1 1.97.28l12.868 6.837a1 1 0 0 1 0 1.766L1.969 15.72A1 1 0 0 1 .5 14.836V10.33a1 1 0 0 1 .816-.983L8.5 8 1.316 6.653A1 1 0 0 1 .5 5.67V1.163z"/></svg>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                             </button>
                             </div>
                             {% endif %}
@@ -1269,9 +1325,31 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
+                        <button onclick="toggleTaskFilters()" class="section-toggle-btn" id="task-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
-                    <div style="margin-bottom: 15px;">
-                        <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit;">
+                    <div id="task-filter-content" style="margin-bottom: 15px;">
+                    <script>
+                        // Инициализация состояния фильтров задач
+                        (function() {
+                            var isCollapsed = localStorage.getItem('taskFiltersCollapsed');
+                            var contentEl = document.getElementById('task-filter-content');
+                            var btn = document.getElementById('task-filter-toggle-btn');
+                            var svg = btn ? btn.querySelector('svg') : null;
+                            
+                            if (isCollapsed === 'true') {
+                                if (contentEl) contentEl.style.display = 'none';
+                                if (svg) svg.style.transform = 'rotate(-90deg)';
+                            } else {
+                                if (contentEl) contentEl.style.display = 'block';
+                                if (svg) svg.style.transform = 'rotate(0deg)';
+                            }
+                        })();
+                    </script>
+                        <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
                             <option value="all" selected>Все</option>
                             <option value="my">Личные</option>
                             <option value="assigned-to-me">Поручили мне</option>
