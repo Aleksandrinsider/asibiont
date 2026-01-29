@@ -156,6 +156,13 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         logger.error("[ADD_TASK] ERROR: user_id is None! Cannot create task without user_id")
         return "ERROR: user_id is required but was None"
     
+    # Валидация: название не может быть пустым
+    if not title or not title.strip():
+        logger.error("[ADD_TASK] ERROR: title is empty or whitespace only")
+        return "ERROR: Название задачи не может быть пустым"
+    
+    title = title.strip()
+    
     # УМНОЕ СОКРАЩЕНИЕ НАЗВАНИЯ: если слишком длинное, пытаемся извлечь суть
     original_title = title
     word_count = len(title.split())
