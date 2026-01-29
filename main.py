@@ -5869,7 +5869,8 @@ async def api_tasks_handler(request):
                 'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
                 'delegated_to': task.delegated_to_username,
-                'delegated_by': None  # Будет установлено ниже если задача делегирована мне
+                'delegated_by': None,  # Будет установлено ниже если задача делегирована мне
+                'delegated_by_me': task.delegated_by == user.id  # True если я делегировал эту задачу
             }
             
             # Определяем delegated_by если задача делегирована мне

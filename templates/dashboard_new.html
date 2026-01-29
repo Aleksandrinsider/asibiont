@@ -3564,10 +3564,10 @@
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && !t.is_delegated);
             } else if (currentTaskFilter === 'assigned-to-me') {
                 // ����������� ��� - ������ �������������� ���, �������������, �������������
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.is_delegated && t.title.includes(' - ������������ �� @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.delegated_by && !t.delegated_by_me);
             } else if (currentTaskFilter === 'assigned-by-me') {
                 // ����������� ���� - ������ �������������� ������, �������������, �������������
-                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.is_delegated && t.title.includes(' - ������������ �� @'));
+                filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected' && t.delegated_by_me === true);
             } else if (currentTaskFilter === 'overdue') {
                 // � ����������� - ������������ ������ (�������������)
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true && t.status !== 'rejected');
