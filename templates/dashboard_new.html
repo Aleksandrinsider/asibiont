@@ -4991,7 +4991,7 @@
             
             // Задержка перед загрузкой контактов, чтобы сессия успела установиться
             setTimeout(() => {
-                updatePeople();
+                updatePeople(true); // force=true для первой загрузки
             }, 500);
             
             document.querySelectorAll('.filter-btn').forEach(btn => {
