@@ -55,12 +55,14 @@ class IntentClassifierUltraMinimal:
 • complete_task - завершить задачу (готово, сделал, выполнил, закончил)
 • list_tasks - показать задачи (покажи, список, что у меня)
 • delete_task - удалить задачу (удали, убери)
+• delete_all_tasks - удалить все задачи (удали все, очисти все)
 • reschedule_task - перенести задачу (перенеси, измени время)
-• update_profile - обновить профиль (я из [город], работаю [кем], люблю [что])
-• find_partners - найти партнеров (найди, ищу партнеров/коллег)
 • delegate_task - делегировать (делегируй, поручи [кому])
 • set_recurring_task - повторяющаяся задача (каждый день/неделю/месяц)
-• delete_all_tasks - удалить все задачи (удали все, очисти все)
+• get_task_details - детали задачи (расскажи подробнее, детали задачи, что в задаче)
+• find_partners - найти партнеров (найди, ищу партнеров/коллег)
+• update_profile - обновить профиль (я из [город], работаю [кем], люблю [что])
+• update_user_memory - сохранить в память (запомни что, сохрани предпочтение)
 • conversation - обычный разговор, вопросы, уточнения
 
 ПРИМЕРЫ:
@@ -70,12 +72,16 @@ class IntentClassifierUltraMinimal:
 "Напомни позвонить" → add_task
 "Покажи задачи" → list_tasks
 "Удали встречу" → delete_task
+"Удали все" → delete_all_tasks
 "Перенеси на завтра" → reschedule_task
-"Я из Москвы" → update_profile
-"Найди партнеров" → find_partners
 "Делегируй Ивану" → delegate_task
 "Каждый день зарядка" → set_recurring_task
-"Удали все" → delete_all_tasks
+"Расскажи о задаче презентация" → get_task_details
+"Детали задачи встреча" → get_task_details
+"Найди партнеров" → find_partners
+"Я из Москвы" → update_profile
+"Работаю программистом" → update_profile
+"Запомни что я предпочитаю чай" → update_user_memory
 "Привет" → conversation
 "Как дела?" → conversation
 
