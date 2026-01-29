@@ -375,9 +375,15 @@ class ReminderService:
             db = Session()
             try:
                 # Найти user.id по telegram_id
-                from models import User
+                from models import User, Task
                 user = db.query(User).filter_by(telegram_id=user_id).first()
                 if user:
+                    # УСТАНАВЛИВАЕМ КОНТЕКСТ ТЕКУЩЕЙ ЗАДАЧИ при отправке напоминания
+                    task = db.query(Task).filter_by(id=task_id).first()
+                    if task:
+                        user.current_task_id = task_id
+                        logger.info(f"[CONTEXT] Set current_task_id={task_id} ({task.title}) for user {user_id} during reminder")
+                    
                     interaction = Interaction(
                         user_id=user.id,
                         message_type="ai",

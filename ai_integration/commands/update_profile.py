@@ -87,21 +87,20 @@ class UpdateProfileCommand(BaseCommand):
                         profile_data['goals'] = ' '.join(words)
                     break
 
-        if not profile_data:
-            # Fallback to AI extraction
-            try:
-                if self.params:
-                    profile_data = {k: v for k, v in self.params.items() if v}
-            except:
-                pass
+        # Priority: AI-extracted params from tool call
+        if self.params:
+            ai_data = {k: v for k, v in self.params.items() if v}
+            # Merge AI data with local parsing (AI has priority)
+            profile_data = {**profile_data, **ai_data}
 
         if not profile_data:
-            return "Не удалось распознать информацию для обновления профиля. Попробуйте: 'я из Москвы, работаю в IT, люблю программирование'"
+            return "Не удалось распознать информацию для обновления профиля. Попробуйте: 'я из Москвы, работаю в ASI Biont директором, люблю ИИ и книги'"
 
         # Call the handler
         result = handlers.update_profile(
             user_id=user_id,
             city=profile_data.get('city'),
+            birth_date=profile_data.get('birth_date'),
             interests=profile_data.get('interests'),
             skills=profile_data.get('skills'),
             goals=profile_data.get('goals'),
@@ -110,5 +109,5 @@ class UpdateProfileCommand(BaseCommand):
             session=db_session
         )
 
-        # Generate response
-        return await generate_response('profile_updated', message=result)
+        # Generate natural response without mentioning the action
+        return result if result else "Профиль обновлен"

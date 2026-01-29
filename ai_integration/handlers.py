@@ -3260,13 +3260,14 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
             session.close()
 
 
-def update_profile(user_id: int, city: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, session=None, close_session: bool = True) -> str:
+def update_profile(user_id: int, city: str = None, birth_date: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, session=None, close_session: bool = True) -> str:
     """
     Обновляет профиль пользователя с новыми данными.
 
     Args:
         user_id: ID пользователя (telegram_id)
         city: Город пользователя (опционально)
+        birth_date: Дата рождения в формате DD.MM.YYYY (опционально)
         interests: Интересы пользователя (опционально)
         skills: Навыки пользователя (опционально)
         goals: Цели пользователя (опционально)
@@ -3301,6 +3302,9 @@ def update_profile(user_id: int, city: str = None, interests: str = None, skills
         if city is not None:
             profile.city = city
             updates.append(f"город: {city}")
+        if birth_date is not None:
+            profile.birthdate = birth_date
+            updates.append(f"день рождения: {birth_date}")
         if interests is not None:
             profile.interests = interests
             updates.append(f"интересы: {interests}")

@@ -1376,13 +1376,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # ОБНОВЛЯЕМ КОНТЕКСТ ТЕКУЩЕЙ ЗАДАЧИ при упоминании задач в сообщении
             if user:
                 try:
-                    from .task_context import extract_task_reference_from_message, update_user_current_task
+                    from .task_context import extract_task_reference_from_message, update_user_current_task, replace_pronouns_in_message
                     task_reference = extract_task_reference_from_message(original_message)
                     if task_reference:
                         logger.info(f"[CONTEXT] Detected task reference in message: '{task_reference}'")
                         updated_task = update_user_current_task(user, task_reference, db_session)
                         if updated_task:
                             logger.info(f"[CONTEXT] Updated current task context to: {updated_task.title}")
+                            # ЗАМЕНЯЕМ МЕСТОИМЕНИЯ на название задачи для AI
+                            message = replace_pronouns_in_message(message, user_id, db_session)
+                            original_message = replace_pronouns_in_message(original_message, user_id, db_session)
+                            logger.info(f"[CONTEXT] Message after pronoun replacement: '{message}'")
                         else:
                             logger.info(f"[CONTEXT] Could not find task for reference: '{task_reference}'")
                 except Exception as e:
