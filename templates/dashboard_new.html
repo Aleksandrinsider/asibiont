@@ -3955,17 +3955,8 @@
             // Используем поля из БД для определения делегирования
             if (task.delegated_by_me) {
                 // Задача поручена мной кому-то
-                console.log('Task delegated BY me:', {
-                    id: task.id,
-                    title: task.title,
-                    delegated_to_username: task.delegated_to_username,
-                    delegated_by_me: task.delegated_by_me
-                });
                 if (task.delegated_to_username) {
                     delegationInfo = 'Поручена @' + task.delegated_to_username;
-                } else {
-                    // Fallback: если username не указан, показываем хотя бы что задача делегирована
-                    delegationInfo = 'Поручена другому пользователю';
                 }
             } else if (task.delegated_by_username) {
                 // Задача поручена мне кем-то
@@ -4059,8 +4050,7 @@
                 html += '<button onclick="event.stopPropagation(); rejectDelegatedTask(' + task.id + ')" class="quick-action" style="background: #d73a49;" title="Отклонить задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.delegated_by_me) {
                 // Задача поручена МНОЙ другому пользователю - делегатор НЕ может завершить, только отменить делегирование
-                html += '<button onclick="event.stopPropagation(); cancelDelegation(' + task.id + ', \'' + (task.delegated_to_username || '') + '\')" class="quick-action" style="background: #6c757d;" title="Отменить делегирование"><svg width="16" height="16" viewBox="0 0 16 16" fill="#fff"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
-                html += '<span style="font-size: 12px; color: #6c757d; padding: 0 8px;">Выполняет @' + (task.delegated_to_username || 'исполнитель') + '</span>';
+                html += '<button onclick="event.stopPropagation(); cancelDelegation(' + task.id + ', \'' + (task.delegated_to_username || '') + '\')" class="quick-action" title="Отменить делегирование"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 0 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 0 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"></path></svg></button>';
             } else if (task.status !== 'completed') {
                 // Обычная задача - можно завершить
                 html += '<button onclick="completeTask(' + task.id + ')" class="quick-action" title="Завершить задачу"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"></path></svg></button>';
