@@ -2024,13 +2024,13 @@ def get_partners_list(user_id=None, session=None):
             else:
                 # Проверка вхождения одного интереса в другой (например "спорт" в "пляжный спорт")
                 for user_interest in user_interests:
-                    user_clean = user_interest.strip()
-                    # Пропускаем слишком короткие слова
-                    if len(user_clean) < 4:
+                    user_clean = user_interest.strip().lower()
+                    # Пропускаем слишком короткие слова (менее 3 символов)
+                    if len(user_clean) < 3:
                         continue
                     for profile_interest in profile_interests:
-                        profile_clean = profile_interest.strip()
-                        # Проверяем вхождение как целого слова
+                        profile_clean = profile_interest.strip().lower()
+                        # Проверяем вхождение как подстроки (спорт <-> пляжный спорт)
                         if user_clean in profile_clean or profile_clean in user_clean:
                             has_match = True
                             match_reasons.append(f"interests substring: '{user_clean}' <-> '{profile_clean}'")

@@ -1928,41 +1928,40 @@ async def dashboard_handler(request):
                                 'task_count': task_count
                             })
 
-                # Для премиум пользователей (Premium) добавляем все рекомендованные контакты
-                if user_subscription_tier and user_subscription_tier.value == 'PREMIUM':
-                    # Получаем все рекомендованные контакты
-                    all_partners = get_partners_list(user.id, session_db)
-                    
-                    # Добавляем контакты, которые еще не в списках делегирования
-                    existing_contact_ids = set()
-                    for contact in delegating_to_me + delegating_by_me:
-                        existing_contact_ids.add(contact['id'])
-                    
-                    for partner in all_partners:
-                        partner_user = session_db.query(User).filter_by(id=partner.user_id).first()
-                        if partner_user and partner_user.id not in existing_contact_ids and partner_user.id != user.id:
-                            # Определяем причину рекомендации
-                            reason_parts = []
-                            if hasattr(partner, 'common_interests') and partner.common_interests:
-                                reason_parts.append(f"общие интересы: {partner.common_interests}")
-                            if hasattr(partner, 'common_skills') and partner.common_skills:
-                                reason_parts.append(f"общие навыки: {partner.common_skills}")
-                            if hasattr(partner, 'common_goals') and partner.common_goals:
-                                reason_parts.append(f"общие цели: {partner.common_goals}")
-                            if hasattr(partner, 'task_relevance') and partner.task_relevance:
-                                reason_parts.append(partner.task_relevance)
-                            
-                            reason = ', '.join(reason_parts) if reason_parts else 'рекомендован системой'
-                            
-                            # Добавляем в delegating_to_me как рекомендованный контакт
-                            delegating_to_me.append({
-                                'id': partner_user.id,
-                                'username': partner_user.username,
-                                'first_name': partner_user.first_name,
-                                'reason': reason,
-                                'tasks': [],
-                                'task_count': 0
-                            })
+                # Добавляем рекомендованные контакты для всех пользователей
+                # Получаем все рекомендованные контакты
+                all_partners = get_partners_list(user.id, session_db)
+                
+                # Добавляем контакты, которые еще не в списках делегирования
+                existing_contact_ids = set()
+                for contact in delegating_to_me + delegating_by_me:
+                    existing_contact_ids.add(contact['id'])
+                
+                for partner in all_partners:
+                    partner_user = session_db.query(User).filter_by(id=partner.user_id).first()
+                    if partner_user and partner_user.id not in existing_contact_ids and partner_user.id != user.id:
+                        # Определяем причину рекомендации
+                        reason_parts = []
+                        if hasattr(partner, 'common_interests') and partner.common_interests:
+                            reason_parts.append(f"общие интересы: {partner.common_interests}")
+                        if hasattr(partner, 'common_skills') and partner.common_skills:
+                            reason_parts.append(f"общие навыки: {partner.common_skills}")
+                        if hasattr(partner, 'common_goals') and partner.common_goals:
+                            reason_parts.append(f"общие цели: {partner.common_goals}")
+                        if hasattr(partner, 'task_relevance') and partner.task_relevance:
+                            reason_parts.append(partner.task_relevance)
+                        
+                        reason = ', '.join(reason_parts) if reason_parts else 'рекомендован системой'
+                        
+                        # Добавляем в delegating_to_me как рекомендованный контакт
+                        delegating_to_me.append({
+                            'id': partner_user.id,
+                            'username': partner_user.username,
+                            'first_name': partner_user.first_name,
+                            'reason': reason,
+                            'tasks': [],
+                            'task_count': 0
+                        })
 
             except Exception as e:
                 logger.error(f"Error getting delegation contacts: {e}")
