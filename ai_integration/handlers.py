@@ -974,6 +974,24 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             session.commit()
             logger.info(f"[RESCHEDULE_TASK] ✅ Task {task.id} updated, new time (UTC): {task.reminder_time}")
 
+            # Перепланируем напоминание (создается новое или обновляется существующее)
+            try:
+                from reminder_service import REMINDER_SERVICE
+                if REMINDER_SERVICE:
+                    REMINDER_SERVICE.schedule_reminder(
+                        task_id=task.id,
+                        reminder_time=task.reminder_time,
+                        user_id=user.telegram_id,
+                        task_title=task.title
+                    )
+                    logger.info(f"[RESCHEDULE_TASK] ✅ Reminder rescheduled for task {task.id} at {task.reminder_time}")
+                else:
+                    logger.warning(f"[RESCHEDULE_TASK] REMINDER_SERVICE not initialized, cannot reschedule reminder")
+            except Exception as e:
+                logger.error(f"[RESCHEDULE_TASK] Error rescheduling reminder: {e}")
+                import traceback
+                traceback.print_exc()
+
             result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
 
         except ValueError as e:
