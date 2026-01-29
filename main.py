@@ -6507,10 +6507,33 @@ async def add_test_users_handler(request):
         skipped = []
         
         for user_data in all_users:
-            existing = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
-            if existing:
-                skipped.append(user_data['username'])
-                continue
+            existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
+            
+            if existing_user:
+                # Проверяем есть ли subscription
+                existing_sub = session.query(Subscription).filter_by(user_id=existing_user.id).first()
+                if existing_sub:
+                    skipped.append(user_data['username'])
+                    continue
+                else:
+                    # User есть, но subscription нет - добавляем только subscription
+                    end_date = datetime.now(dt_timezone.utc) + timedelta(days=365)
+                    subscription = Subscription(
+                        user_id=existing_user.id,
+                        telegram_id=user_data['telegram_id'],
+                        telegram_username=user_data['username'],
+                        username=user_data['username'],
+                        status='active',
+                        plan='yearly',
+                        tier=user_data['tier'],
+                        start_date=datetime.now(dt_timezone.utc),
+                        end_date=end_date,
+                        login_count=1,
+                        created_at=datetime.now(dt_timezone.utc)
+                    )
+                    session.add(subscription)
+                    added.append(f"@{user_data['username']} (subscription only - {user_data['tier'].value})")
+                    continue
             
             user = User(
                 telegram_id=user_data['telegram_id'],

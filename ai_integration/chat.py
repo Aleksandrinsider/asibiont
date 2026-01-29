@@ -1753,22 +1753,34 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # ============================================================================
         # ПЕРЕХВАТЧИК ДЛЯ ПЕРЕНОСА ЗАДАЧ - КРИТИЧЕСКИ ВАЖНО!
-        # Если пользователь явно говорит "перенеси" - ФОРСИРУЕМ reschedule_task
+        # Если пользователь явно говорит "перенеси" или хочет изменить время - ФОРСИРУЕМ reschedule_task
         # ============================================================================
         message_lower = original_message.lower()
+        
+        # Проверка на явный перенос
         if any(word in message_lower for word in ['перенес', 'перенеси', 'переноси', 'переносим']):
-            # Проверяем есть ли текущая задача или упоминание задачи
             from .task_context import get_user_current_task
             current_task = get_user_current_task(user)
             
-            # Извлекаем временные выражения
             time_keywords = ['через', 'на час', 'минут', 'часа', 'завтра', 'послезавтра', 'в ', ':']
             has_time = any(kw in message_lower for kw in time_keywords)
             
             if current_task and has_time:
                 logger.warning(f"[RESCHEDULE INTERCEPTOR] Detected reschedule request for '{current_task.title}' - FORCING reschedule_task")
-                # Добавляем инструкцию в промпт чтобы AI точно использовал reschedule_task
                 original_message = f"ПЕРЕНЕСИ ВРЕМЯ задачи '{current_task.title}' {original_message}"
+        
+        # Проверка на изменение времени недавно созданной задачи ("давай лучше на X", "лучше на X")
+        elif any(phrase in message_lower for phrase in ['давай лучше', 'лучше на', 'давай на', 'поставь на', 'а давай']):
+            time_keywords = ['через', 'минут', 'часа', 'час', 'в ', ':']
+            has_time = any(kw in message_lower for kw in time_keywords)
+            
+            if has_time:
+                from .task_context import get_user_current_task
+                current_task = get_user_current_task(user)
+                
+                if current_task and current_task.status != 'completed':
+                    logger.warning(f"[TIME CHANGE INTERCEPTOR] Detected time change request for '{current_task.title}' - FORCING reschedule_task")
+                    original_message = f"ПЕРЕНЕСИ ВРЕМЯ задачи '{current_task.title}' {original_message}"
 
         # УЛУЧШЕННАЯ INTENT CLASSIFICATION с AI-powered анализом
         # Сначала пробуем AI классификацию для точного извлечения параметров
