@@ -4170,27 +4170,13 @@
         
         async function completeTask(taskId) {
             try {
-                const task = allTasksFromServer.find(t => t.id === taskId);
-                if (!task) {
-                    showNotification('Task not found', 'error');
-                    return;
-                }
-                
-                const message = `complete task "${task.title}"`;
-                showTypingIndicator();
-                
-                const response = await fetch('/chat', {
+                const response = await fetch('/complete_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
-                
-                if (!await checkAuth(response)) {
-                    hideTypingIndicator();
-                    return;
-                }
-                
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
@@ -4200,16 +4186,12 @@
                     allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
-                    await updateChat();
-                    hideTypingIndicator();
                     await updateTasks();
                 } else {
-                    hideTypingIndicator();
                     const error = await response.json();
                     showNotification(`Error: ${error.error}`, 'error');
                 }
             } catch (error) {
-                hideTypingIndicator();
                 console.error('Error completing task:', error);
                 showNotification('Error completing task', 'error');
             }
@@ -4217,44 +4199,26 @@
         
         async function acceptDelegatedTask(taskId) {
             try {
-                const task = allTasksFromServer.find(t => t.id === taskId);
-                if (!task) {
-                    showNotification('Task not found', 'error');
-                    return;
-                }
-                
-                const message = `accept task "${task.title}"`;
-                showTypingIndicator();
-                
-                const response = await fetch('/chat', {
+                const response = await fetch('/api/accept_delegated_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
-                
-                if (!await checkAuth(response)) {
-                    hideTypingIndicator();
-                    return;
-                }
-                
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     lastTasksUpdate = 0;
                     lastPeopleUpdate = 0;
                     await updateTasks();
-                    await updateChat();
-                    hideTypingIndicator();
                     await updatePeople(true);
                     if (currentContactFilter === 'elite') {
                         await loadEliteContacts();
                     }
                 } else {
-                    hideTypingIndicator();
                     const error = await response.json();
                     showNotification(error.error || 'Error accepting task', 'error');
                 }
             } catch (error) {
-                hideTypingIndicator();
                 console.error('Error accepting task:', error);
                 showNotification('Error accepting task', 'error');
             }
@@ -4262,27 +4226,13 @@
         
         async function rejectDelegatedTask(taskId) {
             try {
-                const task = allTasksFromServer.find(t => t.id === taskId);
-                if (!task) {
-                    showNotification('Task not found', 'error');
-                    return;
-                }
-                
-                const message = `reject task "${task.title}"`;
-                showTypingIndicator();
-                
-                const response = await fetch('/chat', {
+                const response = await fetch('/api/reject_delegated_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
-                
-                if (!await checkAuth(response)) {
-                    hideTypingIndicator();
-                    return;
-                }
-                
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
@@ -4295,19 +4245,15 @@
                     lastTasksUpdate = 0;
                     lastPeopleUpdate = 0;
                     await updateTasks();
-                    await updateChat();
-                    hideTypingIndicator();
                     await updatePeople(true);
                     if (currentContactFilter === 'elite') {
                         await loadEliteContacts();
                     }
                 } else {
-                    hideTypingIndicator();
                     const error = await response.json();
                     showNotification(error.error || 'Error rejecting task', 'error');
                 }
             } catch (error) {
-                hideTypingIndicator();
                 console.error('Error rejecting task:', error);
                 showNotification('Error rejecting task', 'error');
             }
@@ -4363,21 +4309,13 @@
             }
             
             try {
-                const message = `delete task "${taskTitle}"`;
-                showTypingIndicator();
-                
-                const response = await fetch('/chat', {
+                const response = await fetch('/delete_task', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message }),
+                    body: JSON.stringify({ task_id: taskId }),
                     credentials: 'include'
                 });
-                
-                if (!await checkAuth(response)) {
-                    hideTypingIndicator();
-                    return;
-                }
-                
+                if (!await checkAuth(response)) return;
                 if (response.ok) {
                     const taskElement = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
                     if (taskElement) {
@@ -4387,19 +4325,14 @@
                     allTasksFromServer = allTasksFromServer.filter(t => t.id !== taskId);
                     allTasksData = allTasksData.filter(t => t.id !== taskId);
                     
-                    await updateChat();
-                    hideTypingIndicator();
-                    
                     updateTasksCounter();
                     updateStats(allTasksFromServer);
                     renderTaskGroups(allTasksFromServer);
                 } else {
-                    hideTypingIndicator();
                     const error = await response.json();
                     showNotification(`Error: ${error.error}`, 'error');
                 }
             } catch (error) {
-                hideTypingIndicator();
                 console.error('Error deleting task:', error);
                 showNotification('Error deleting task', 'error');
             }
