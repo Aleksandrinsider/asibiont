@@ -20,9 +20,13 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
-    if not DATABASE_URL:
-        raise ValueError("DATABASE_URL or DATABASE_PUBLIC_URL is required in .env file")
+    # Try individual PG* variables first, then DATABASE_URL/DATABASE_PUBLIC_URL
+    if os.getenv("PGUSER") and os.getenv("PGPASSWORD") and os.getenv("PGHOST") and os.getenv("PGDATABASE"):
+        DATABASE_URL = f"postgresql://{os.getenv('PGUSER')}:{os.getenv('PGPASSWORD')}@{os.getenv('PGHOST')}:{os.getenv('PGPORT', '5432')}/{os.getenv('PGDATABASE')}"
+    else:
+        DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
+        if not DATABASE_URL:
+            raise ValueError("Database configuration required: either set PGUSER/PGPASSWORD/PGHOST/PGDATABASE or DATABASE_URL/DATABASE_PUBLIC_URL")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
