@@ -1960,7 +1960,15 @@ async def dashboard_handler(request):
                             'first_name': partner_user.first_name,
                             'reason': reason,
                             'tasks': [],
-                            'task_count': 0
+                            'task_count': 0,
+                            'common_interests': partner.common_interests if hasattr(partner, 'common_interests') else None,
+                            'common_skills': partner.common_skills if hasattr(partner, 'common_skills') else None,
+                            'common_goals': partner.common_goals if hasattr(partner, 'common_goals') else None,
+                            'common_tasks': partner.common_tasks if hasattr(partner, 'common_tasks') else None,
+                            'contact_info': partner_user.username if partner_user.username else None,
+                            'photo_url': partner_user.photo_url if hasattr(partner_user, 'photo_url') else None,
+                            'city': partner.city if hasattr(partner, 'city') else None,
+                            'average_rating': partner.average_rating if hasattr(partner, 'average_rating') else 0
                         })
 
             except Exception as e:
