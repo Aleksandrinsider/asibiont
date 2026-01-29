@@ -130,7 +130,9 @@ async def start_handler(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Открыть веб-версию", web_app=WebAppInfo(url=f"{WEB_APP_URL}/dashboard"))]
     ])
-    await message.bot.send_message(message.chat.id, PREMIUM_DESCRIPTION, reply_markup=keyboard)
+    
+    welcome_text = PREMIUM_DESCRIPTION + "\n\n💡 Есть промокод? Используйте команду /promo <КОД>"
+    await message.bot.send_message(message.chat.id, welcome_text, reply_markup=keyboard)
 
 
 @router.message(Command("subscription"))
@@ -315,6 +317,135 @@ async def find_partners_handler(message: Message):
         await message.bot.send_message(message.chat.id, "Произошла ошибка при поиске партнеров.")
 
 
+@router.message(Command("promo"))
+async def promo_handler(message: Message):
+    """Активация промокода"""
+    user_id = message.from_user.id
+    
+    # Извлекаем промокод из команды
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer(
+            "📝 Использование: /promo <КОД>\n\n"
+            "Например: /promo LIGHT1\n\n"
+            "Доступные промокоды:\n"
+            "• LIGHT1 - месяц подписки LIGHT\n"
+            "• STD2026XPRO - месяц подписки STANDARD\n"
+            "• PREM2026ELITE - месяц подписки PREMIUM\n"
+            "• VIPACCESS2026 - год подписки PREMIUM (одноразовый)"
+        )
+        return
+    
+    promo_code = args[1].upper()
+    
+    session = Session()
+    try:
+        # Найти или создать пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(
+                telegram_id=user_id,
+                username=message.from_user.username,
+                first_name=message.from_user.first_name
+            )
+            session.add(user)
+            session.commit()
+        
+        # Проверить промокод
+        from models import PromoCode, SubscriptionTier, PaymentHistory
+        promo = session.query(PromoCode).filter_by(code=promo_code).first()
+        
+        if not promo:
+            await message.answer("❌ Промокод не найден. Проверьте правильность ввода.")
+            return
+        
+        # Проверка на использование
+        used_by_users = json.loads(promo.used_by_users or '[]')
+        if user.id in used_by_users:
+            await message.answer("❌ Вы уже использовали этот промокод.")
+            return
+        
+        # Проверка лимита использований
+        if promo.max_uses and promo.used_count >= promo.max_uses:
+            await message.answer("❌ Промокод уже исчерпан.")
+            return
+        
+        # Проверка срока действия
+        if promo.expires_at and promo.expires_at < datetime.now(timezone.utc):
+            await message.answer("❌ Срок действия промокода истек.")
+            return
+        
+        # Активировать подписку
+        subscription = session.query(Subscription).filter_by(user_id=user.id).first()
+        
+        start_date = datetime.now(timezone.utc)
+        end_date = start_date + timedelta(days=promo.duration_days)
+        
+        if not subscription:
+            # Создать новую подписку
+            subscription = Subscription(
+                user_id=user.id,
+                telegram_id=user_id,
+                telegram_username=user.username,
+                username=user.username,
+                status='active',
+                tier=promo.tier,
+                start_date=start_date,
+                end_date=end_date
+            )
+            session.add(subscription)
+        else:
+            # Обновить существующую подписку
+            subscription.status = 'active'
+            subscription.tier = promo.tier
+            subscription.start_date = start_date
+            subscription.end_date = end_date
+        
+        # Обновить тариф в User
+        user.subscription_tier = promo.tier
+        
+        # Отметить использование промокода
+        used_by_users.append(user.id)
+        promo.used_by_users = json.dumps(used_by_users)
+        promo.used_count += 1
+        
+        # Записать в историю платежей
+        payment_history = PaymentHistory(
+            user_id=user.id,
+            telegram_username=user.username,
+            action='promo_activated',
+            tier=promo.tier,
+            amount='0',
+            duration_days=promo.duration_days,
+            start_date=start_date,
+            end_date=end_date,
+            details=json.dumps({'promo_code': promo_code})
+        )
+        session.add(payment_history)
+        
+        session.commit()
+        
+        tier_names = {
+            SubscriptionTier.LIGHT: '🥉 Бронза',
+            SubscriptionTier.STANDARD: '🥈 Серебро',
+            SubscriptionTier.PREMIUM: '🥇 Золото'
+        }
+        
+        await message.answer(
+            f"✅ Промокод активирован!\n\n"
+            f"🎁 Тариф: {tier_names.get(promo.tier, promo.tier.value)}\n"
+            f"📅 Действует до: {end_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"Используйте /dashboard для просмотра подписки"
+        )
+        
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error activating promo code: {e}")
+        await message.answer("❌ Ошибка при активации промокода. Попробуйте позже.")
+    finally:
+        session.close()
+
+
 @router.message(Command("subscribe"))
 async def subscribe_handler(message: Message):
     user_id = message.from_user.id
@@ -343,7 +474,7 @@ PREMIUM — 27000₽/месяц
 Для тех, кто стремится к элитным связям и взаимной видимости на высшем уровне. Полный доступ ко всем контактам, премиум-статус, VIP-поддержка.
 
 Подробнее о тарифах: https://asibiont.ru/subscription-tiers
-Есть промокод? Введите его на сайте
+Есть промокод? Используйте команду /promo <КОД>
 
 Выберите тариф для оплаты через ЮКАССА:"""
     

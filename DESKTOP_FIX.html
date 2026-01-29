@@ -1,0 +1,36 @@
+/* Desktop Force Styles - добавить в <head> дашборда */
+<style>
+    /* Принудительное задание правильных размеров для десктопа */
+    @media (min-width: 1024px) {
+        html, body {
+            width: 100vw !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+        }
+        
+        body {
+            font-size: 14px !important;
+            line-height: 1.5 !important;
+        }
+        
+        .container, .dashboard-container {
+            width: 100% !important;
+            max-width: 1400px !important;
+            margin: 0 auto !important;
+            padding: 20px !important;
+        }
+        
+        /* Убираем мобильные стили на десктопе */
+        .mobile-only {
+            display: none !important;
+        }
+    }
+    
+    /* Для планшетов */
+    @media (min-width: 769px) and (max-width: 1023px) {
+        .container {
+            max-width: 90% !important;
+            margin: 0 auto !important;
+        }
+    }
+</style>
