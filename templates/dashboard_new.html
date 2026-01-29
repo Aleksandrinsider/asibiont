@@ -4159,8 +4159,10 @@
             // Не обновляем статистику до загрузки данных с сервера
             if (!allTasks || allTasks.length === 0) {
                 // Показываем нулевую статистику
-                document.querySelector('.stat-value').textContent = '0';
-                document.querySelector('.stat-percent').textContent = '0%';
+                const statValueEl = document.querySelector('.stat-value');
+                const statPercentEl = document.querySelector('.stat-percent');
+                if (statValueEl) statValueEl.textContent = '0';
+                if (statPercentEl) statPercentEl.textContent = '0%';
                 const todayEl = document.querySelector('.date-stat:nth-child(1) .stat-number');
                 const tomorrowEl = document.querySelector('.date-stat:nth-child(2) .stat-number');
                 if (todayEl) todayEl.textContent = '0';
