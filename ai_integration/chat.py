@@ -1847,9 +1847,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # 6. Сохранение в память / обновление интересов
         elif any(phrase in message_lower for phrase in [
             'запомни', 'помни что', 'я предпочитаю', 'у меня аллергия',
-            'хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь'
+            'хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь',
+            'хочу научиться', 'хочу освоить', 'планирую изучить'
         ]):
-            intent = {"type": "update_user_memory", "confidence": 0.9, "params": {}}
+            intent = {"type": "update_user_memory", "confidence": 0.95, "params": {}}
+            
+            # ENHANCED: Автоматическое распознавание целей и интересов
+            # "хочу научиться X" = ЦЕЛЬ + ИНТЕРЕС одновременно
+            if any(goal_trigger in message_lower for goal_trigger in ['хочу научиться', 'хочу освоить', 'планирую', 'моя цель']):
+                # Добавляем подсказку что это ЦЕЛЬ И ИНТЕРЕС
+                context_hint = "\n🎯 КРИТИЧНО: Фраза содержит ЦЕЛЬ и ИНТЕРЕС одновременно. Вызови update_user_memory ДВАЖДЫ:\n1) memory_type='goal' - для сохранения цели\n2) memory_type='interest' - для сохранения интереса\nПосле этого вызови find_relevant_contacts_for_task чтобы найти людей с таким же интересом."
+                if context:
+                    context += context_hint
+                else:
+                    context = context_hint
 
         # 7. Делегирование задач
         elif any(kw in message_lower for kw in ['делегируй', 'поручи', 'передай']) and \
