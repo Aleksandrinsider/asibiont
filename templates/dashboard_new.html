@@ -3955,8 +3955,17 @@
             // Используем поля из БД для определения делегирования
             if (task.delegated_by_me) {
                 // Задача поручена мной кому-то
+                console.log('Task delegated BY me:', {
+                    id: task.id,
+                    title: task.title,
+                    delegated_to_username: task.delegated_to_username,
+                    delegated_by_me: task.delegated_by_me
+                });
                 if (task.delegated_to_username) {
                     delegationInfo = 'Поручена @' + task.delegated_to_username;
+                } else {
+                    // Fallback: если username не указан, показываем хотя бы что задача делегирована
+                    delegationInfo = 'Поручена другому пользователю';
                 }
             } else if (task.delegated_by_username) {
                 // Задача поручена мне кем-то

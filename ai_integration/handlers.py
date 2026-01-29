@@ -3346,7 +3346,7 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
         title=title,
         description=encrypt_data(description),
         delegated_by=user.id,  # ВАЖНО: кто делегировал задачу
-        delegated_to_username=delegated_to_username,
+        delegated_to_username=delegated_username,  # Сохраняем БЕЗ @
         delegation_details=encrypt_data(delegation_details) if delegation_details else None,
         status="pending",
         delegation_status="pending"
