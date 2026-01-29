@@ -4356,10 +4356,8 @@
                     updateTasksCounter();
                     updateStats(allTasksFromServer);
                     
-                    // Обновляем задачи с задержкой, чтобы дать серверу время удалить
-                    setTimeout(() => {
-                        updateTasks();
-                    }, 500);
+                    // Перерендериваем задачи с обновленным списком (БЕЗ загрузки с сервера)
+                    renderTaskGroups(allTasksFromServer);
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка при удалении задачи: ${error.error}`, 'error');
