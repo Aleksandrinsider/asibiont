@@ -2129,36 +2129,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         logger.info(f"Temp {temperature}, top_p {top_p} (creative={is_creative}, command={is_command})")
 
-        # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ delete_task при явных триггерах удаления
-        delete_triggers = ['удали', 'убери', 'сотри', 'удалить', 'delete', 'больше не нужн']
-        if any(trigger in message_lower for trigger in delete_triggers) and tool_choice == 'auto':
-            # Исключаем случаи удаления ВСЕХ задач - для них есть delete_all_tasks
-            if not any(word in message_lower for word in ['все', 'всё', 'all']):
-                tool_choice = {"type": "function", "function": {"name": "delete_task"}}
-                logger.info(f"[TOOL CHOICE] REQUIRED for delete_task trigger: {message[:50]}")
-        
-        # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ add_task при явных триггерах создания
-        create_triggers = ['напомни', 'создай', 'добавь', 'запланируй', 'поставь задачу', 'встреча', 'задача']
-        time_indicators = ['через', 'в ', 'завтра', 'сегодня', ' час', 'минут', 'послезавтра', ':00', ':30', ':15', ':45', 'утром', 'вечером', 'днём']
-        has_create_trigger = any(trigger in message_lower for trigger in create_triggers)
-        has_time_indicator = any(indicator in message_lower for indicator in time_indicators)
-        
-        if has_create_trigger and has_time_indicator and tool_choice == 'auto':
-            # Исключаем случаи делегирования - для них есть delegate_task
-            if not any(word in message_lower for word in ['делегируй', 'поручи', '@']):
-                tool_choice = {"type": "function", "function": {"name": "add_task"}}
-                logger.info(f"[TOOL CHOICE] REQUIRED for add_task trigger: {message[:50]}")
-        
-        # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ для других критичных команд
-        complete_triggers = ['сделал', 'выполнил', 'завершил', 'готово', 'закончил', 'всё', 'закрывать', 'закрыть', 'можно', 'сдачу', 'приемку']
-        if any(trigger in message_lower for trigger in complete_triggers) and tool_choice == 'auto':
-            tool_choice = {"type": "function", "function": {"name": "complete_task"}}
-            logger.info(f"[TOOL CHOICE] REQUIRED for complete_task trigger: {message[:50]}")
-        
-        reschedule_triggers = ['перенеси', 'измени время', 'поменяй время', 'сдвинь']
-        if any(trigger in message_lower for trigger in reschedule_triggers) and tool_choice == 'auto':
-            tool_choice = {"type": "function", "function": {"name": "reschedule_task"}}
-            logger.info(f"[TOOL CHOICE] REQUIRED for reschedule_task trigger: {message[:50]}")
+        # AI-FIRST подход: доверяем intent classification и промпты, не форсим инструменты
+        # Все команды распознаются через prompts.py и примеры в tools.py
+        # Принудительные вызовы удалены - AI сам правильно определяет команды через промпт и примеры
 
         # ИНТЕЛЛЕКТУАЛЬНОЕ КЭШИРОВАНИЕ: только для определенных типов запросов
         # Не кэшируем conversational запросы, поиск партнеров и запросы требующие актуальности
