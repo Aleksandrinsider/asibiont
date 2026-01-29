@@ -1113,7 +1113,7 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
                     </div>
-                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px;">
+                    <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px;">
                         <button class="contact-filter-btn" data-filter="favorite" onclick="filterContacts('favorite')" style="padding: 6px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit;">Избранное</button>
                         <button class="contact-filter-btn active" data-filter="recommended" onclick="filterContacts('recommended')" style="padding: 6px 12px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit;">Рекомендуемые</button>
                         <button class="contact-filter-btn{% if subscription_tier not in ['PREMIUM'] %} disabled-btn{% endif %}" data-filter="elite" onclick="{% if subscription_tier in ['PREMIUM'] %}filterContacts('elite'){% endif %}"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %} style="padding: 6px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit;">Премиум</button>
@@ -1268,7 +1268,7 @@
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
                     </div>
-                    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px;">
+                    <div style="margin-bottom: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px;">
                         <button class="task-filter-btn active" data-filter="all" onclick="filterTasks('all')" style="padding: 6px 12px; background: #F6F8FA; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit;">Все</button>
                         <button class="task-filter-btn" data-filter="my" onclick="filterTasks('my')" style="padding: 6px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit;">Личные</button>
                         <button class="task-filter-btn" data-filter="assigned-to-me" onclick="filterTasks('assigned-to-me')" style="padding: 6px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; color: #374151; font-weight: 400; white-space: nowrap; font-family: inherit;">Поручили мне</button>
