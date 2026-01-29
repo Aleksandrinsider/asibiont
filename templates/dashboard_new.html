@@ -3633,8 +3633,8 @@
         }
         
         function renderTaskGroups(tasks) {
-            // Сохраняем все задачи с сервера
-            allTasksFromServer = tasks;
+            // Сохраняем все задачи с сервера (очищаем перед обновлением)
+            allTasksFromServer = tasks || [];
             
             // Применяем фильтр
             let filteredTasks = allTasksFromServer;
@@ -4150,7 +4150,7 @@
         
         function updateStats(tasks) {
             // Используем все задачи для статистики, независимо от фильтра
-            const allTasks = allTasksFromServer.length > 0 ? allTasksFromServer : tasks;
+            const allTasks = (allTasksFromServer && allTasksFromServer.length > 0) ? allTasksFromServer : (tasks || []);
             
             // Не обновляем статистику до загрузки данных с сервера
             if (!allTasks || allTasks.length === 0) {
