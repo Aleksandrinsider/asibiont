@@ -239,6 +239,9 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 return f"❌ Не удалось распознать время '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         except Exception as e:
             logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
         if due_date:
             try:
                 user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.UTC
@@ -259,6 +262,9 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 logger.info(f"[ADD_TASK] Saved recommendations to task: {task.recommendations}")
         except Exception as e:
             logging.warning(f"Could not generate recommendations for task {title}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         session.commit()
         task_id = task.id
@@ -401,6 +407,9 @@ def set_recurring_task(title, description="", recurrence_pattern=None, recurrenc
                 logger.info(f"[SET_RECURRING_TASK] Scheduled first reminder for recurring task {first_instance.id}")
         except Exception as e:
             logger.warning(f"Could not schedule reminder for recurring task instance {first_instance.id}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         # Format result message
         pattern_text = {
@@ -466,6 +475,9 @@ def delete_all_tasks(user_id=None, session=None):
         return f"🗑️ Удалено {task_count} задач"
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         if close_session:
             session.close()
         return f"❌ Ошибка удаления задач: {str(e)}"
@@ -793,6 +805,9 @@ async def skip_task(task_id=None, task_title=None, user_id=None, session=None):
                     logger.info(f"[SKIP_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
         except Exception as e:
             logger.warning(f"[SKIP_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -1031,6 +1046,9 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
             # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
         except Exception as e:
             logger.error(f"Error getting AI advice: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
             result = f"Не удалось получить совет по задаче '{title}'. Попробуйте позже."
     else:
         result = "Задача не найдена."
@@ -1113,10 +1131,16 @@ def delegate_task(
                             asyncio.create_task(bot.send_message(delegator.telegram_id, message))
                     except Exception as e:
                         logging.error(f"Failed to notify about blocked delegation: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        session.rollback()
                     
                     return f"@{recipient_username} не готов принимать задачи от вас. Попробуйте делегировать задачу другому пользователю."
             except (json.JSONDecodeError, Exception) as e:
                 logging.error(f"Error checking blocked contacts: {e}")
+                import traceback
+                traceback.print_exc()
+                session.rollback()
 
         # If delegating to self, return error marker
         if recipient.id == delegator.id:
@@ -1255,6 +1279,9 @@ def accept_delegated_task(task_id, user_id=None):
                     )
             except Exception as e:
                 logging.error(f"Failed to schedule reminder: {e}")
+                import traceback
+                traceback.print_exc()
+                session.rollback()
 
         # Notify delegator
         try:
@@ -1267,10 +1294,16 @@ def accept_delegated_task(task_id, user_id=None):
                     asyncio.create_task(bot.send_message(delegator.telegram_id, message))
         except Exception as e:
             logging.error(f"Failed to notify delegator: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         session.close()
         return f"Вы приняли задачу '{task.title}'. Она добавлена в ваш список задач."
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         session.close()
         return f"Ошибка: {str(e)}"
 
@@ -1350,6 +1383,9 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
                     logger.info(f"[REJECT_DELEGATED_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
         except Exception as e:
             logger.warning(f"[REJECT_DELEGATED_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         # Notify delegator
         try:
@@ -1362,10 +1398,16 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
                     asyncio.create_task(bot.send_message(delegator.telegram_id, message))
         except Exception as e:
             logging.error(f"Failed to notify delegator: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         session.close()
         return f"Вы отклонили задачу '{task.title}'."
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         session.close()
         return f"Ошибка: {str(e)}"
 
@@ -1469,6 +1511,9 @@ def get_delegation_progress(user_id, session=None):
 
     except Exception as e:
         logger.error(f"Error getting delegation progress for user {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         if should_close:
             session.close()
         return f"Ошибка при получении отчета о делегировании: {str(e)}"
@@ -1509,6 +1554,9 @@ def cancel_delegation(task_id, user_id=None):
 
         return f"Делегирование задачи '{task_title}' отменено. Задача возвращена вам."
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         session.close()
         return f"Ошибка при отмене делегирования: {str(e)}"
 
@@ -1615,9 +1663,15 @@ def edit_task(
                         logger.warning(f"[EDIT_TASK] Cannot reschedule reminder: REMINDER_SERVICE={REMINDER_SERVICE}, reminder_time={task.reminder_time}")
                 except Exception as e:
                     logger.error(f"[EDIT_TASK] Error rescheduling reminder for task {task.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    session.rollback()
                     
             except Exception as e:
                 logger.error(f"[EDIT_TASK] Error parsing time: {e}")
+                import traceback
+                traceback.print_exc()
+                session.rollback()
                 if close_session:
                     session.close()
                 return f"Ошибка при обработке времени: {e}"
@@ -1714,6 +1768,9 @@ def list_tasks(user_id=None, session=None, include_completed=False):
                         overdue_count += 1
                 except Exception as e:
                     logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    session.rollback()
                     pass
 
         # Format brief response
@@ -2640,10 +2697,16 @@ def check_delegation_deadlines():
 
             except Exception as e:
                 logger.error(f"Error processing overdue task {task.id}: {e}")
+                import traceback
+                traceback.print_exc()
+                session.rollback()
 
         session.close()
     except Exception as e:
         logger.error(f"Error in check_delegation_deadlines: {e}")
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         session.close()
 
 
@@ -2674,6 +2737,9 @@ def update_user_memory(info=None, user_id=None, session=None):
 
     except Exception as e:
         logger.error(f"Error updating user memory for user {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         if should_close and 'session' in locals():
             session.close()
 def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, session=None, confirmed=False):
@@ -2784,6 +2850,9 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
                     logger.info(f"[DELETE_TASK] Cancelled 1/3 checkpoint job for task {task.id}")
         except Exception as e:
             logger.warning(f"[DELETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
 
         # Delete the task from database
         task_title = task.title
@@ -2956,6 +3025,9 @@ def get_task_details(task_id=None, user_id=None, session=None):
 
     except Exception as e:
         logger.error(f"Error in get_task_details: {e}")
+        import traceback
+        traceback.print_exc()
+        session.rollback()
         if close_session and 'session' in locals():
             session.close()
         return f"Ошибка при получении деталей задачи: {str(e)}"
@@ -3062,6 +3134,9 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
                     continue
         except Exception as e:
             logger.warning(f"[DELEGATE_TASK] Could not parse reminder_time '{reminder_time}': {e}")
+            import traceback
+            traceback.print_exc()
+            session.rollback()
     
     session.add(task)
     session.commit()
