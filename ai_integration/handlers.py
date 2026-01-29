@@ -2894,6 +2894,12 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
             traceback.print_exc()
             session.rollback()
 
+        # ВАЖНО: Обнулить current_task_id если удаляемая задача является текущей
+        if user.current_task_id == task.id:
+            user.current_task_id = None
+            session.commit()
+            logger.info(f"[DELETE_TASK] Cleared current_task_id for user {user.id}")
+
         # Delete the task from database
         task_title = task.title
         print(f"[DEBUG] delete_task_sync: deleting task {task.id} '{task.title}'")
