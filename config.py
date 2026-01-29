@@ -20,13 +20,10 @@ if LOCAL:
     db_path = os.path.join(os.path.dirname(__file__), "local.db")
     DATABASE_URL = f"sqlite:///{db_path}"  # Use SQLite for local development with absolute path
 else:
-    # Priority: DATABASE_PUBLIC_URL > DATABASE_URL (public is more reliable)
-    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
+    # Priority: DATABASE_URL > DATABASE_PUBLIC_URL (use private network URL)
+    DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DATABASE_PUBLIC_URL")
     if not DATABASE_URL:
-        print(f"DEBUG: DATABASE_PUBLIC_URL = {os.getenv('DATABASE_PUBLIC_URL')}")
-        print(f"DEBUG: DATABASE_URL = {os.getenv('DATABASE_URL')}")
-        print(f"DEBUG: All env vars with DATABASE: {[k for k in os.environ.keys() if 'DATABASE' in k]}")
-        raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in production mode")
+        raise ValueError("DATABASE_URL or DATABASE_PUBLIC_URL is required in production mode")
 
 # AI Model Configuration
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")  # Fast chat model for production
