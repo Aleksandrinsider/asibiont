@@ -1562,7 +1562,7 @@ async def login_handler(request):
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
-        'timestamp': 1768857743,
+        'timestamp': 1738138953,
         'user_timezone': 'UTC',
         'user': None,
         'profile': None,
@@ -1696,7 +1696,7 @@ async def dashboard_handler(request):
                 'current_date': '',
                 'current_time': '',
                 'formatted_end_date': None,
-                'timestamp': 1768857743,
+                'timestamp': 1738138953,
                 'user_timezone': 'UTC',
                 'user': None,
                 'profile': None,
@@ -1719,7 +1719,7 @@ async def dashboard_handler(request):
                     'current_date': '',
                     'current_time': '',
                     'formatted_end_date': None,
-                    'timestamp': 1768857743,
+                    'timestamp': 1738138953,
                     'user_timezone': 'UTC',
                     'user': None,
                     'profile': None,
@@ -2247,7 +2247,7 @@ async def dashboard_handler(request):
             'user_timezone': user.timezone if user and user.timezone else 'UTC',
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': 1768857743,
+            'timestamp': 1738138953,
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
             'user_avatar_url': user_avatar_url
         })
@@ -2261,7 +2261,7 @@ async def dashboard_handler(request):
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
-            'timestamp': 1768857743
+            'timestamp': 1738138953
         })
 
 
