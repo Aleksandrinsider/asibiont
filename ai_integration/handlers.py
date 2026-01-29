@@ -918,34 +918,15 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
                 logger.warning(f"[RESCHEDULE_TASK] No current task set for pronoun '{task_title}'")
                 task = None
         else:
-            # Обычный поиск по названию
-            # Получаем все задачи пользователя и ищем на уровне Python (для надёжности с кириллицей)
-            all_user_tasks = session.query(Task).filter(Task.user_id == user.id).all()
-            
-            task = None
-            search_lower = task_title.lower().strip()
-            
-            # Убираем окончания для лучшего поиска (простой стемминг)
-            # "почта" -> "почт", "почту" -> "почт"
-            if len(search_lower) > 3:
-                search_stem = search_lower[:-1] if search_lower[-1] in 'аяуюыи' else search_lower
-            else:
-                search_stem = search_lower
-                
-            logger.info(f"[RESCHEDULE_TASK] Searching with stem: '{search_stem}'")
-            
-            for t in all_user_tasks:
-                title_lower = t.title.lower()
-                # Проверяем и полное совпадение, и стемминг
-                if search_lower in title_lower or search_stem in title_lower:
-                    task = t
-                    logger.info(f"[RESCHEDULE_TASK] Found task: id={t.id}, title='{t.title}'")
-                    break
-            
-            if not task:
-                logger.warning(f"[RESCHEDULE_TASK] Task not found with search '{task_title}'! User has {len(all_user_tasks)} tasks:")
-                for t in all_user_tasks:
-                    logger.warning(f"[RESCHEDULE_TASK]   - Task #{t.id}: '{t.title}'")
+            # Используем общую функцию поиска
+            from .task_search import find_task_flexible
+            task = find_task_flexible(
+                session=session,
+                user=user,
+                task_title=task_title,
+                include_completed=False,
+                include_delegated=True
+            )
     else:
         if close_session:
             session.close()

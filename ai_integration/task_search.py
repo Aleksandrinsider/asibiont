@@ -101,44 +101,59 @@ def find_task_flexible(
     
     logger.info(f"[FIND_TASK] Total tasks to search: {len(tasks)}")
     
-    # Python-level поиск с stemming
+    # Убираем стоп-слова из поиска
+    stop_words = {'и', 'в', 'на', 'с', 'для', 'от', 'по', 'к', 'о', 'об', 'из', 'над', 'про', 'через', 'без', 'до', 'после', 'перед'}
+    search_keywords = [kw for kw in search_keywords if kw not in stop_words and len(kw) > 2]
+    
+    logger.info(f"[FIND_TASK] Search keywords (without stop words): {search_keywords}")
+    
+    if not search_keywords:
+        logger.warning("[FIND_TASK] No meaningful keywords to search")
+        return None
+    
+    # Python-level поиск с улучшенным алгоритмом
     best_match = None
     best_score = 0
     
     for task in tasks:
         title_lower = task.title.lower()
-        score = 0
+        title_words = [w for w in title_lower.split() if w not in stop_words and len(w) > 2]
+        
+        matched_keywords = 0
         
         # Проверка каждого ключевого слова
         for keyword in search_keywords:
-            # Прямое совпадение
-            if keyword in title_lower:
-                score += 2
-                continue
-            
-            # Поиск с stemming
             keyword_stem = apply_stemming(keyword)
-            if keyword_stem != keyword and keyword_stem in title_lower:
-                score += 1.5
+            
+            # Прямое совпадение в названии
+            if keyword in title_lower:
+                matched_keywords += 1
                 continue
             
-            # Проверка stemming для слов в названии
-            title_words = title_lower.split()
+            # Stemming совпадение
+            if keyword_stem != keyword and keyword_stem in title_lower:
+                matched_keywords += 1
+                continue
+            
+            # Проверка по словам
             for word in title_words:
                 word_stem = apply_stemming(word)
-                if keyword == word_stem or keyword_stem == word_stem:
-                    score += 1
+                if keyword == word_stem or keyword_stem == word_stem or keyword in word or word in keyword:
+                    matched_keywords += 1
                     break
         
-        # Если найдено хотя бы одно совпадение
-        if score > 0:
-            logger.info(f"[FIND_TASK] Task '{task.title}' score: {score}")
-            if score > best_score:
+        # Рассчитываем процент совпадения
+        score = matched_keywords / len(search_keywords) if search_keywords else 0
+        
+        # Если совпадает хотя бы 50% ключевых слов (или минимум 2 слова)
+        if score >= 0.5 or matched_keywords >= 2:
+            logger.info(f"[FIND_TASK] Task '{task.title}' score: {score:.2f} ({matched_keywords}/{len(search_keywords)})")
+            if score > best_score or (score == best_score and matched_keywords > 0):
                 best_score = score
                 best_match = task
     
     if best_match:
-        logger.info(f"[FIND_TASK] Best match: '{best_match.title}' (score: {best_score})")
+        logger.info(f"[FIND_TASK] Best match: '{best_match.title}' (score: {best_score:.2f})")
     else:
         logger.warning(f"[FIND_TASK] No task found matching '{task_title}'")
         # Вывести все доступные задачи для отладки
