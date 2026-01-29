@@ -3171,7 +3171,7 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
     )
 
 
-def get_task_details(task_id=None, user_id=None, session=None):
+def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
     """Get detailed information about a task"""
     if session is None:
         session = Session()
@@ -3185,6 +3185,16 @@ def get_task_details(task_id=None, user_id=None, session=None):
             if close_session:
                 session.close()
             return "Пользователь не найден."
+
+        # Поиск по названию если task_title указан
+        if task_title and not task_id:
+            task = find_task_flexible(session, user, task_id=None, task_title=task_title)
+            if task:
+                task_id = task.id
+            else:
+                if close_session:
+                    session.close()
+                return f"Задача с названием '{task_title}' не найдена"
 
         # Find task by ID
         if task_id:
