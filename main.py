@@ -2698,31 +2698,6 @@ async def delete_task_handler(request):
                 try:
                     # Обработка через AI для генерации естественного ответа
                     ai_result = await chat_with_ai(result, user_id=user_id, db_session=db_session)
-
-
-async def cancel_delegation_handler(request):
-    """Отменяет делегирование задачи"""
-    session = await get_session(request)
-    user_id = session.get('user_id')
-    if not user_id:
-        return web.json_response({'error': 'Not authenticated'}, status=401)
-
-    data = await request.json()
-    task_id = data.get('task_id')
-    if not task_id:
-        return web.json_response({'error': 'Task ID required'}, status=400)
-
-    from ai_integration.handlers import cancel_delegation
-    try:
-        result = cancel_delegation(task_id=task_id, user_id=user_id)
-        logger.info(f"Delegation cancelled for task {task_id} by user {user_id}: {result}")
-        return web.json_response({'message': result})
-    except Exception as e:
-        logger.error(f"Error cancelling delegation for task {task_id}: {e}")
-        return web.json_response({'error': str(e)}, status=500)
-
-
-async def delete_task_handler(request):
                     ai_response = ai_result['response']
                     
                     # Отправляем AI ответ в Telegram если бот доступен
@@ -2750,6 +2725,28 @@ async def delete_task_handler(request):
         return web.json_response({'message': result})
     except Exception as e:
         logger.error(f"Error deleting task {task_id}: {e}")
+        return web.json_response({'error': str(e)}, status=500)
+
+
+async def cancel_delegation_handler(request):
+    """Отменяет делегирование задачи"""
+    session = await get_session(request)
+    user_id = session.get('user_id')
+    if not user_id:
+        return web.json_response({'error': 'Not authenticated'}, status=401)
+
+    data = await request.json()
+    task_id = data.get('task_id')
+    if not task_id:
+        return web.json_response({'error': 'Task ID required'}, status=400)
+
+    from ai_integration.handlers import cancel_delegation
+    try:
+        result = cancel_delegation(task_id=task_id, user_id=user_id)
+        logger.info(f"Delegation cancelled for task {task_id} by user {user_id}: {result}")
+        return web.json_response({'message': result})
+    except Exception as e:
+        logger.error(f"Error cancelling delegation for task {task_id}: {e}")
         return web.json_response({'error': str(e)}, status=500)
 
 
