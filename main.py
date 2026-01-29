@@ -191,6 +191,16 @@ try:
                 if LOCAL:
                     session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier TEXT DEFAULT \'LIGHT\''))
                 else:
+                    # First, create the enum type if it doesn't exist
+                    try:
+                        session.execute(text('CREATE TYPE subscription_tier_enum AS ENUM (\'LIGHT\', \'STANDARD\', \'PREMIUM\')'))
+                        session.commit()
+                        logger.info("Migration: subscription_tier_enum type created")
+                    except Exception as e:
+                        logger.info(f"Migration: subscription_tier_enum type already exists or error: {e}")
+                        session.rollback()
+                    
+                    # Now add the column
                     session.execute(text('ALTER TABLE user_profiles ADD COLUMN subscription_tier subscription_tier_enum DEFAULT \'LIGHT\''))
                 session.commit()
                 logger.info("Migration: subscription_tier column added successfully")
