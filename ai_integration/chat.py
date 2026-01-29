@@ -2099,63 +2099,35 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             parallel_tool_calls = False
             logger.info(f"[TOOL CHOICE] NONE for system message")
         else:
-            # AI сам решает, но мы логируем намерение для отладки
+            # AI сам решает - доверяем его интеллекту
             tool_choice = "auto"
             parallel_tool_calls = True
             
-            # Принудительный вызов инструментов для определенных intent
+            # Принудительный вызов ТОЛЬКО для явных команд
             action_intents = [
                 'add_task', 'get_task_details', 'set_recurring_task', 'complete_task', 
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
                 'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
             ]
             if intent.get('type') in action_intents:
-                # УПРОЩЕНО: вызываем инструмент независимо от confidence
-                # AI лучше понимает контекст, чем наша статическая логика
                 tool_choice = {"type": "function", "function": {"name": intent['type']}}
-                logger.info(f"[TOOL CHOICE] REQUIRED for {intent.get('type')} intent (confidence: {intent.get('confidence')})")
-            
-            # Детектируем тип команды для логирования
-            logger.info(f"[TOOL DETECTOR] Testing message: '{clean_message.lower()[:100]}'")
-            if "удали" in clean_message.lower() or "убери" in clean_message.lower():
-                logger.info(f"[TOOL HINT] DELETE detected: {clean_message[:50]}")
-            elif any(kw in clean_message.lower() for kw in ["сделал", "выполнил", "завершил", "закончил", "готов", "закрыл"]):
-                logger.info(f"[TOOL HINT] COMPLETE detected: {clean_message[:50]} - FORCING tool call")
-                tool_choice = "required"  # ФОРСИРУЕМ вызов complete_task
-            elif any(kw in clean_message.lower() for kw in ["напомни", "через", "нужно", "надо", "создай", "добавь"]):
-                logger.info(f"[TOOL HINT] CREATE detected: {clean_message[:50]}")
-            elif any(kw in clean_message.lower() for kw in ["перенеси", "измени время", "обнови", "сдвинь"]):
-                logger.info(f"[TOOL HINT] RESCHEDULE detected: {clean_message[:50]} - FORCING tool call")
-                tool_choice = "required"  # ФОРСИРУЕМ вызов reschedule_task для переноса
-            
-            logger.info(f"[TOOL CHOICE] {str(tool_choice).upper()} for: {clean_message[:50]}")
+                logger.info(f"[TOOL CHOICE] {intent['type']} (confidence: {intent.get('confidence')})")
+            else:
+                logger.info(f"[TOOL CHOICE] auto for: {clean_message[:50]}")
 
-        # УПРОЩЕННЫЙ АНАЛИЗ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ AI
+        # Динамическая температура для естественности
         message_lower = clean_message.lower()
-        has_questions = '?' in clean_message
-        has_technical_terms = any(term in message_lower for term in [
-            'api', 'база данных', 'алгоритм', 'код', 'программирование', 'sql', 'python',
-            'анализ', 'отчет', 'презентация', 'проект', 'задача', 'план'
-        ])
-        is_creative_request = any(term in message_lower for term in [
-            'идеи', 'креатив', 'варианты', 'предложения', 'мозговой штурм'
-        ])
-
-        # Упрощенная логика температуры на основе типа сообщения
-        if is_creative_request:
-            # Для креативных запросов нужна высокая вариативность
-            temperature = 0.9
-            top_p = 0.95
-        elif has_technical_terms:
-            # Технические темы требуют точности
-            temperature = 0.4
-            top_p = 0.9
+        is_creative = any(w in message_lower for w in ['идеи', 'креатив', 'варианты', 'предложи', 'совет'])
+        is_command = any(w in message_lower for w in ['создай', 'удали', 'перенеси', 'готово', 'сделал'])
+        
+        if is_creative:
+            temperature, top_p = 0.9, 0.95  # Высокая вариативность для советов
+        elif is_command:
+            temperature, top_p = 0.4, 0.9   # Точность для команд
         else:
-            # По умолчанию средняя вариативность
-            temperature = 0.7
-            top_p = 1.0
+            temperature, top_p = 0.7, 1.0   # Баланс для разговоров
 
-        logger.info(f"Using temperature {temperature}, top_p {top_p} for message analysis: questions={has_questions}, technical={has_technical_terms}, creative={is_creative_request}")
+        logger.info(f"Temp {temperature}, top_p {top_p} (creative={is_creative}, command={is_command})")
 
         # ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ delete_task при явных триггерах удаления
         delete_triggers = ['удали', 'убери', 'сотри', 'удалить', 'delete', 'больше не нужн']
