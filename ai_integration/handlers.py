@@ -3572,19 +3572,48 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
             session.close()
 
 
-def update_profile(user_id: int, city: str = None, birth_date: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, session=None, close_session: bool = True) -> str:
+def _add_to_list_field(current_value: str, new_value: str) -> tuple[str, bool]:
+    """
+    Добавляет новое значение в поле-список (через запятую).
+    Возвращает (обновленное_значение, было_ли_добавлено).
+    """
+    if not new_value or not new_value.strip():
+        return current_value, False
+    
+    new_value = new_value.strip()
+    
+    if not current_value:
+        return new_value, True
+    
+    # Разбираем текущие значения
+    items = [item.strip().lower() for item in current_value.split(',')]
+    new_item_lower = new_value.lower()
+    
+    # Проверяем дубликаты
+    if new_item_lower in items:
+        return current_value, False
+    
+    # Добавляем новое значение
+    return f"{current_value}, {new_value}", True
+
+
+def update_profile(user_id: int, city: str = None, birth_date: str = None, interests: str = None, skills: str = None, goals: str = None, company: str = None, position: str = None, replace_mode: bool = False, session=None, close_session: bool = True) -> str:
     """
     Обновляет профиль пользователя с новыми данными.
+    
+    ПО УМОЛЧАНИЮ ДОБАВЛЯЕТ данные в списочные поля (interests, skills, goals).
+    Для замены используйте replace_mode=True.
 
     Args:
         user_id: ID пользователя (telegram_id)
         city: Город пользователя (опционально)
         birth_date: Дата рождения в формате DD.MM.YYYY (опционально)
-        interests: Интересы пользователя (опционально)
-        skills: Навыки пользователя (опционально)
-        goals: Цели пользователя (опционально)
+        interests: Интересы пользователя (опционально) - ДОБАВЛЯЮТСЯ к существующим
+        skills: Навыки пользователя (опционально) - ДОБАВЛЯЮТСЯ к существующим
+        goals: Цели пользователя (опционально) - ДОБАВЛЯЮТСЯ к существующим
         company: Компания пользователя (опционально)
         position: Должность пользователя (опционально)
+        replace_mode: Если True - заменяет данные, если False - добавляет (по умолчанию False)
         session: Сессия базы данных (опционально)
         close_session: Закрывать ли сессию после выполнения
 
@@ -3611,35 +3640,72 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
 
         # Обновляем поля если они переданы
         updates = []
+        added = []
+        
+        # Простые поля (заменяются всегда)
         if city is not None:
             profile.city = city
             updates.append(f"город: {city}")
         if birth_date is not None:
             profile.birthdate = birth_date
             updates.append(f"день рождения: {birth_date}")
-        if interests is not None:
-            profile.interests = interests
-            updates.append(f"интересы: {interests}")
-        if skills is not None:
-            profile.skills = skills
-            updates.append(f"навыки: {skills}")
-        if goals is not None:
-            profile.goals = goals
-            updates.append(f"цели: {goals}")
         if company is not None:
             profile.company = company
             updates.append(f"компания: {company}")
         if position is not None:
             profile.position = position
             updates.append(f"должность: {position}")
+        
+        # Списочные поля (добавляются или заменяются в зависимости от replace_mode)
+        if interests is not None:
+            if replace_mode:
+                profile.interests = interests
+                updates.append(f"интересы заменены: {interests}")
+            else:
+                new_value, was_added = _add_to_list_field(profile.interests, interests)
+                if was_added:
+                    profile.interests = new_value
+                    added.append(f"интерес: {interests}")
+                else:
+                    updates.append(f"интерес '{interests}' уже есть")
+        
+        if skills is not None:
+            if replace_mode:
+                profile.skills = skills
+                updates.append(f"навыки заменены: {skills}")
+            else:
+                new_value, was_added = _add_to_list_field(profile.skills, skills)
+                if was_added:
+                    profile.skills = new_value
+                    added.append(f"навык: {skills}")
+                else:
+                    updates.append(f"навык '{skills}' уже есть")
+        
+        if goals is not None:
+            if replace_mode:
+                profile.goals = goals
+                updates.append(f"цели заменены: {goals}")
+            else:
+                new_value, was_added = _add_to_list_field(profile.goals, goals)
+                if was_added:
+                    profile.goals = new_value
+                    added.append(f"цель: {goals}")
+                else:
+                    updates.append(f"цель '{goals}' уже есть")
 
         # Обновляем время последнего обновления
         profile.updated_at = datetime.utcnow()
 
         session.commit()
 
+        result_parts = []
+        if added:
+            result_parts.append(f"✅ Добавлено: {', '.join(added)}")
         if updates:
-            return f"Профиль успешно обновлен: {', '.join(updates)}"
+            result_parts.append(f"Обновлено: {', '.join(updates)}")
+        
+        if result_parts:
+            return ' | '.join(result_parts)
         else:
             return "Профиль проверен, изменений не требуется"
 
@@ -3691,27 +3757,40 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
             profile = UserProfile(user_id=user.id)
             session.add(profile)
 
+        # Нормализуем content - убираем лишние слова
+        content_clean = content.lower()
+        for phrase in ['хочу заняться', 'хочу научиться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь', 'умею', 'владею', 'моя цель', 'хочу достичь']:
+            content_clean = content_clean.replace(phrase, '').strip()
+        
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА ДЛЯ ИНТЕРЕСОВ
         if memory_type.lower() in ['interest', 'interests', 'интерес', 'интересы', 'хобби', 'увлечение']:
-            # Добавляем в profile.interests
-            current_interests = profile.interests or ""
-            
-            # Нормализуем content - убираем лишние слова
-            content_lower = content.lower()
-            for phrase in ['хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь']:
-                content_lower = content_lower.replace(phrase, '').strip()
-            
-            # Добавляем к существующим интересам
-            if current_interests:
-                interests_list = [i.strip() for i in current_interests.split(',')]
-                if content_lower not in [i.lower() for i in interests_list]:
-                    interests_list.append(content_lower)
-                    profile.interests = ', '.join(interests_list)
+            new_value, was_added = _add_to_list_field(profile.interests, content_clean)
+            if was_added:
+                profile.interests = new_value
+                session.commit()
+                return f"✅ Добавил в интересы: {content_clean}"
             else:
-                profile.interests = content_lower
-            
-            session.commit()
-            return f"✅ Добавил в интересы: {content_lower}"
+                return f"Интерес '{content_clean}' уже есть в профиле"
+        
+        # ОБРАБОТКА ДЛЯ НАВЫКОВ
+        elif memory_type.lower() in ['skill', 'skills', 'навык', 'навыки']:
+            new_value, was_added = _add_to_list_field(profile.skills, content_clean)
+            if was_added:
+                profile.skills = new_value
+                session.commit()
+                return f"✅ Добавил в навыки: {content_clean}"
+            else:
+                return f"Навык '{content_clean}' уже есть в профиле"
+        
+        # ОБРАБОТКА ДЛЯ ЦЕЛЕЙ
+        elif memory_type.lower() in ['goal', 'goals', 'цель', 'цели']:
+            new_value, was_added = _add_to_list_field(profile.goals, content_clean)
+            if was_added:
+                profile.goals = new_value
+                session.commit()
+                return f"✅ Добавил в цели: {content_clean}"
+            else:
+                return f"Цель '{content_clean}' уже есть в профиле"
 
         # Обычное сохранение в память
         current_memory = user.memory or ""
