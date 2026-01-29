@@ -1540,22 +1540,26 @@ def cancel_delegation(task_id, user_id=None):
             session.close()
             return "Ошибка: Пользователь не найден."
 
-        task = session.query(Task).filter_by(id=int(task_id), user_id=user.id).first()
+        # Ищем задачу где текущий пользователь является делегатором
+        task = session.query(Task).filter_by(id=int(task_id), delegated_by=user.id).first()
         if not task:
             session.close()
-            return "Задача не найдена."
+            return "Задача не найдена или вы не являетесь делегатором этой задачи."
 
         if not task.delegated_to_username:
             session.close()
             return "Эта задача не делегирована."
 
-        # Check if task is already completed or in progress
-        if task.delegation_status == "accepted" and task.status == "completed":
+        # Check if task is already completed
+        if task.status == "completed":
             session.close()
             return "Нельзя отменить делегирование выполненной задачи."
 
-        # Cancel delegation
+        # Cancel delegation - возвращаем задачу делегатору
         task_title = task.title
+        delegated_to = task.delegated_to_username
+        
+        task.user_id = user.id  # Возвращаем владение делегатору
         task.delegated_to_username = None
         task.delegation_status = None
         task.delegated_by = None
@@ -1564,7 +1568,7 @@ def cancel_delegation(task_id, user_id=None):
         session.commit()
         session.close()
 
-        return f"Делегирование задачи '{task_title}' отменено. Задача возвращена вам."
+        return f"Делегирование задачи '{task_title}' для @{delegated_to} отменено. Задача возвращена в ваш список."
     except Exception as e:
         import traceback
         traceback.print_exc()
