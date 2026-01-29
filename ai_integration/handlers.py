@@ -2033,20 +2033,41 @@ def get_partners_list(user_id=None, session=None):
             # Стоп-слова которые игнорируем при частичном совпадении
             stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with'}
             
+            # Семантические группы для расширения совпадений
+            sport_keywords = {'спорт', 'бег', 'пробежка', 'йога', 'фитнес', 'тренировка', 'велоспорт', 'плавание', 
+                            'футбол', 'баскетбол', 'теннис', 'волейбол', 'хоккей', 'кроссфит', 'гимнастика',
+                            'марафон', 'триатлон', 'бадминтон', 'сквош', 'гольф', 'бильярд', 'пилатес'}
+            business_keywords = {'бизнес', 'стартап', 'предпринимательство', 'инвестиции', 'маркетинг', 
+                               'продажи', 'финансы', 'управление', 'менеджмент', 'e-commerce'}
+            
             # Точное совпадение интересов
             if user_interests & profile_interests:
                 has_match = True
                 match_reasons.append(f"interests exact: {user_interests & profile_interests}")
             else:
+                # Проверка семантических групп
+                user_has_sport = any(k in interest for interest in user_interests for k in sport_keywords)
+                profile_has_sport = any(k in interest for interest in profile_interests for k in sport_keywords)
+                user_has_business = any(k in interest for interest in user_interests for k in business_keywords)
+                profile_has_business = any(k in interest for interest in profile_interests for k in business_keywords)
+                
+                if (user_has_sport and profile_has_sport):
+                    has_match = True
+                    match_reasons.append("interests semantic: sport")
+                elif (user_has_business and profile_has_business):
+                    has_match = True
+                    match_reasons.append("interests semantic: business")
+                
                 # Проверка вхождения одного интереса в другой (например "спорт" в "пляжный спорт")
-                for user_interest in user_interests:
-                    user_clean = user_interest.strip().lower()
-                    # Пропускаем слишком короткие слова (менее 3 символов)
-                    if len(user_clean) < 3:
-                        continue
-                    for profile_interest in profile_interests:
-                        profile_clean = profile_interest.strip().lower()
-                        # Проверяем вхождение как подстроки (спорт <-> пляжный спорт)
+                if not has_match:
+                    for user_interest in user_interests:
+                        user_clean = user_interest.strip().lower()
+                        # Пропускаем слишком короткие слова (менее 3 символов)
+                        if len(user_clean) < 3:
+                            continue
+                        for profile_interest in profile_interests:
+                            profile_clean = profile_interest.strip().lower()
+                            # Проверяем вхождение как подстроки (спорт <-> пляжный спорт)
                         if user_clean in profile_clean or profile_clean in user_clean:
                             has_match = True
                             match_reasons.append(f"interests substring: '{user_clean}' <-> '{profile_clean}'")
@@ -2176,11 +2197,33 @@ def get_partners_list(user_id=None, session=None):
     
     # Извлечь ключевые слова из задач пользователя
     user_task_keywords = set()
+    
+    # Словарь синонимов для лучшего сопоставления
+    synonyms = {
+        'пробежка': ['бег', 'бегать', 'пробежки', 'бега', 'running', 'jogging'],
+        'йога': ['yoga', 'йоги', 'йогой'],
+        'плавание': ['плавать', 'бассейн', 'плаванье', 'swimming'],
+        'футбол': ['football', 'футболом', 'футбола'],
+        'баскетбол': ['basketball', 'баскетболом'],
+        'теннис': ['tennis', 'теннисом'],
+        'велоспорт': ['велосипед', 'cycling', 'bike', 'велик'],
+        'фитнес': ['fitness', 'тренажерный зал', 'тренажерка', 'gym'],
+        'стартап': ['startup', 'бизнес', 'предпринимательство'],
+        'инвестиции': ['invest', 'инвестировать', 'вложения'],
+    }
+    
     for task in user_tasks:
         if task.title:
             # Простая токенизация: разбиваем на слова, убираем короткие
             words = [w.lower().strip() for w in task.title.split() if len(w) > 3]
             user_task_keywords.update(words)
+            
+            # Добавляем синонимы
+            for word in words:
+                for key, syns in synonyms.items():
+                    if key in word or any(syn in word for syn in syns):
+                        user_task_keywords.update([key] + syns)
+                        
         if task.description:
             words = [w.lower().strip() for w in task.description.split() if len(w) > 3]
             user_task_keywords.update(words)
@@ -2237,18 +2280,33 @@ def get_partners_list(user_id=None, session=None):
                     logger.info(f"[PARTNERS] @{session.query(User).filter_by(id=partner.user_id).first().username if session.query(User).filter_by(id=partner.user_id).first() else 'unknown'} relevant for tasks: {task_skill_match}")
             
             # Проверяем совпадение интересов партнера с задачами
-            if partner.interests and not partner.task_relevance:
+            if partner.interests:
                 partner_interest_words = set()
                 for interest in partner.interests.split(','):
                     interest_words = [w.lower().strip() for w in interest.split() if len(w) > 3]
                     partner_interest_words.update(interest_words)
                 
+                # Точное совпадение
                 task_interest_match = user_task_keywords & partner_interest_words
-                if task_interest_match:
-                    partner.task_relevance = f"интересы для задач: {', '.join(list(task_interest_match)[:3])}"
+                
+                # Частичное совпадение (stemming-like)
+                if not task_interest_match:
+                    partial_matches = set()
+                    for task_word in user_task_keywords:
+                        for interest_word in partner_interest_words:
+                            # Проверяем подстроку (минимум 4 символа)
+                            if len(task_word) >= 4 and len(interest_word) >= 4:
+                                if task_word[:4] in interest_word or interest_word[:4] in task_word:
+                                    partial_matches.add(f"{task_word}~{interest_word}")
+                    task_interest_match = partial_matches
+                
+                if task_interest_match and not partner.task_relevance:
+                    matched_words = [m.split('~')[0] if '~' in m else m for m in list(task_interest_match)[:3]]
+                    partner.task_relevance = f"интересы для задач: {', '.join(matched_words)}"
                     partner.task_relevance_score += len(task_interest_match) * 2
+                    logger.info(f"[PARTNERS] @{session.query(User).filter_by(id=partner.user_id).first().username if session.query(User).filter_by(id=partner.user_id).first() else 'unknown'} task relevance: {task_interest_match}")
             
-            # Проверяем совпадение задач партнера с задачами пользователя
+            # Проверяем совпадение задач партнера с задачами пользователя (схожие активности)
             partner_user = session.query(User).filter_by(id=partner.user_id).first()
             if partner_user:
                 partner_tasks = session.query(Task).filter(
@@ -2438,6 +2496,146 @@ def find_partners(user_id=None, session=None):
         session.close()
 
     return response
+
+
+def find_relevant_contacts_for_task(task_description: str, user_id: int = None, limit: int = 5, session=None) -> str:
+    """
+    Найти контакты релевантные для конкретной задачи.
+    Используется AI агентом для рекомендации людей при создании/обсуждении задач.
+    
+    Args:
+        task_description: Описание задачи или активности
+        user_id: ID пользователя (telegram_id)
+        limit: Максимальное количество контактов
+        session: SQLAlchemy сессия
+        
+    Returns:
+        Строка с рекомендациями контактов
+    """
+    logger.info(f"[FIND_RELEVANT] Searching contacts for task: '{task_description}', user_id={user_id}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    # Получить пользователя
+    user = session.query(User).filter_by(telegram_id=user_id).first()
+    if not user:
+        if close_session:
+            session.close()
+        return "❌ Пользователь не найден"
+    
+    # Извлечь ключевые слова из описания задачи
+    task_keywords = set()
+    stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'пойду', 'сделать', 'в', 'на', 'с', 'для', 'от', 'к', 'по'}
+    
+    # Синонимы для расширения поиска
+    synonyms = {
+        'пробежка': ['бег', 'бегать', 'running', 'jogging'],
+        'тренировка': ['фитнес', 'спорт', 'gym', 'workout'],
+        'йога': ['yoga', 'медитация', 'растяжка'],
+        'плавание': ['бассейн', 'swimming', 'плавать'],
+        'футбол': ['football', 'soccer'],
+        'стартап': ['startup', 'бизнес', 'предпринимательство'],
+        'инвестиции': ['invest', 'финансы', 'вложения'],
+        'программирование': ['coding', 'разработка', 'development', 'python', 'javascript'],
+    }
+    
+    words = [w.lower().strip() for w in task_description.split() if len(w) > 3 and w.lower() not in stop_words]
+    task_keywords.update(words)
+    
+    # Добавить синонимы
+    for word in words:
+        for key, syns in synonyms.items():
+            if key in word or any(syn in word for syn in syns):
+                task_keywords.update([key] + syns)
+    
+    logger.info(f"[FIND_RELEVANT] Task keywords: {task_keywords}")
+    
+    # Получить всех потенциальных партнеров
+    all_partners = get_partners_list(user_id=user.id, session=session)
+    
+    if not all_partners:
+        if close_session:
+            session.close()
+        return "В вашей сети пока нет контактов. Заполните профиль (интересы, навыки) чтобы найти людей со схожими интересами."
+    
+    # Найти релевантные контакты
+    relevant_contacts = []
+    
+    for partner in all_partners:
+        relevance_score = 0
+        match_reasons = []
+        
+        # Проверка интересов
+        if hasattr(partner, 'interests') and partner.interests:
+            partner_interests = set(i.lower().strip() for i in partner.interests.split(','))
+            interest_match = task_keywords & partner_interests
+            if interest_match:
+                relevance_score += len(interest_match) * 3
+                match_reasons.append(f"интересы: {', '.join(list(interest_match)[:2])}")
+        
+        # Проверка навыков
+        if hasattr(partner, 'skills') and partner.skills:
+            partner_skills = set(s.lower().strip() for s in partner.skills.split(','))
+            skill_match = task_keywords & partner_skills
+            if skill_match:
+                relevance_score += len(skill_match) * 5  # Навыки важнее
+                match_reasons.append(f"навыки: {', '.join(list(skill_match)[:2])}")
+        
+        # Используем уже вычисленную релевантность из get_partners_list
+        if hasattr(partner, 'task_relevance_score') and partner.task_relevance_score > 0:
+            relevance_score += partner.task_relevance_score
+            if hasattr(partner, 'task_relevance') and partner.task_relevance:
+                match_reasons.append(partner.task_relevance)
+        
+        if relevance_score > 0:
+            # Получить username пользователя
+            partner_user = session.query(User).filter_by(id=partner.user_id).first()
+            if partner_user and partner_user.username:
+                relevant_contacts.append({
+                    'username': partner_user.username,
+                    'name': partner_user.username,
+                    'interests': partner.interests or '',
+                    'skills': partner.skills or '',
+                    'city': partner.city or '',
+                    'score': relevance_score,
+                    'reasons': match_reasons
+                })
+    
+    # Сортировка по релевантности
+    relevant_contacts.sort(key=lambda x: x['score'], reverse=True)
+    
+    if close_session:
+        session.close()
+    
+    # Формирование ответа
+    if not relevant_contacts:
+        return "Не нашел подходящих контактов для этой задачи. Попробуйте заполнить больше информации в профиле или создайте задачу с более конкретным описанием."
+    
+    # Ограничить до limit контактов
+    top_contacts = relevant_contacts[:limit]
+    
+    result_lines = [f"🎯 Нашел {len(top_contacts)} подходящих контактов для этой задачи:\n"]
+    
+    for i, contact in enumerate(top_contacts, 1):
+        line = f"{i}. @{contact['username']}"
+        if contact['name'] != contact['username']:
+            line += f" ({contact['name']})"
+        
+        if contact['reasons']:
+            line += f" - {', '.join(contact['reasons'][:2])}"
+        
+        if contact['city']:
+            line += f" | {contact['city']}"
+        
+        result_lines.append(line)
+    
+    result_lines.append("\n💡 Совет: вы можете делегировать задачу или пригласить их к совместной активности через раздел 'Контакты' в дашборде.")
+    
+    return '\n'.join(result_lines)
 
 
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
