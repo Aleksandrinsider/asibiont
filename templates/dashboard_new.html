@@ -1121,7 +1121,7 @@
                             <p>Должность: {{ profile.position or 'Не указана' }}</p>
                             <p>Цели: {{ profile.goals or 'Не указаны' }}</p>
                             <p>Навыки: {{ profile.skills or 'Не указаны' }}</p>
-                            <p>Интересы: {{ profile.interests or 'Не указаны' }}</p>
+                            <p>Интересы: {{ profile.interests|unique_interests or 'Не указаны' }}</p>
                             {% if profile.average_rating is defined and profile.average_rating > 0 %}
                             <p {% if profile.average_rating < 5 %}style="color: #d73a49;"{% elif profile.average_rating >= 8 %}style="color: #068487;"{% endif %}>Рекомендация: {{ profile.average_rating }}/10</p>
                             {% else %}

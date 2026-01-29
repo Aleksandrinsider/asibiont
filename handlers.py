@@ -641,26 +641,44 @@ def update_profile(skills=None, interests=None, goals=None, city=None, current_p
         if interests:
             if interests.startswith('-'):
                 # Удаление интереса
-                interest_to_remove = interests[1:]
+                interest_to_remove = interests[1:].strip().lower()
                 if profile.interests:
                     current_interests = [i.strip() for i in profile.interests.split(',')]
-                    if interest_to_remove in current_interests:
-                        current_interests.remove(interest_to_remove)
-                        profile.interests = ', '.join(current_interests)
+                    # Удаляем с учётом регистра
+                    current_interests = [i for i in current_interests if i.lower() != interest_to_remove]
+                    profile.interests = ', '.join(current_interests)
             elif interests == '':
                 # Полная очистка
                 profile.interests = None
             else:
                 # Добавление интереса
                 if profile.interests:
-                    current_interests = [i.strip() for i in profile.interests.split(',')]
-                    new_interests = [i.strip() for i in interests.split(',')]
+                    current_interests = [i.strip() for i in profile.interests.split(',') if i.strip()]
+                    new_interests = [i.strip() for i in interests.split(',') if i.strip()]
+                    # Создаём set из нижнего регистра для проверки дубликатов
+                    interests_lower = {i.lower() for i in current_interests}
                     for interest in new_interests:
-                        if interest and interest not in current_interests:
+                        if interest and interest.lower() not in interests_lower:
                             current_interests.append(interest)
-                    profile.interests = ', '.join(current_interests)
+                            interests_lower.add(interest.lower())
+                    # Удаляем дубликаты (если они уже есть в БД)
+                    seen = set()
+                    unique_interests = []
+                    for i in current_interests:
+                        if i.lower() not in seen:
+                            unique_interests.append(i)
+                            seen.add(i.lower())
+                    profile.interests = ', '.join(unique_interests)
                 else:
-                    profile.interests = interests
+                    # Удаляем дубликаты из новых интересов
+                    new_interests = [i.strip() for i in interests.split(',') if i.strip()]
+                    seen = set()
+                    unique_interests = []
+                    for i in new_interests:
+                        if i.lower() not in seen:
+                            unique_interests.append(i)
+                            seen.add(i.lower())
+                    profile.interests = ', '.join(unique_interests)
 
         if goals:
             if goals == '':

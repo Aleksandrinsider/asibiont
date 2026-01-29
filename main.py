@@ -2906,7 +2906,22 @@ app.middlewares.append(session_error_middleware)
 app.middlewares.append(logging_middleware)
 app.middlewares.append(csp_middleware)
 
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+# Setup Jinja2 with custom filters
+def unique_interests(value):
+    """Remove duplicate interests (case-insensitive)"""
+    if not value:
+        return value
+    interests = [i.strip() for i in value.split(',') if i.strip()]
+    seen = set()
+    unique = []
+    for i in interests:
+        if i.lower() not in seen:
+            unique.append(i)
+            seen.add(i.lower())
+    return ', '.join(unique)
+
+jinja_env = aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
+jinja_env.filters['unique_interests'] = unique_interests
 
 
 async def yookassa_webhook(request):
