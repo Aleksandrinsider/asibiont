@@ -1751,6 +1751,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
+        # ============================================================================
+        # ПЕРЕХВАТЧИК ДЛЯ ПЕРЕНОСА ЗАДАЧ - КРИТИЧЕСКИ ВАЖНО!
+        # Если пользователь явно говорит "перенеси" - ФОРСИРУЕМ reschedule_task
+        # ============================================================================
+        message_lower = original_message.lower()
+        if any(word in message_lower for word in ['перенес', 'перенеси', 'переноси', 'переносим']):
+            # Проверяем есть ли текущая задача или упоминание задачи
+            from .task_context import get_user_current_task
+            current_task = get_user_current_task(user)
+            
+            # Извлекаем временные выражения
+            time_keywords = ['через', 'на час', 'минут', 'часа', 'завтра', 'послезавтра', 'в ', ':']
+            has_time = any(kw in message_lower for kw in time_keywords)
+            
+            if current_task and has_time:
+                logger.warning(f"[RESCHEDULE INTERCEPTOR] Detected reschedule request for '{current_task.title}' - FORCING reschedule_task")
+                # Добавляем инструкцию в промпт чтобы AI точно использовал reschedule_task
+                original_message = f"ПЕРЕНЕСИ ВРЕМЯ задачи '{current_task.title}' {original_message}"
+
         # УЛУЧШЕННАЯ INTENT CLASSIFICATION с AI-powered анализом
         # Сначала пробуем AI классификацию для точного извлечения параметров
         try:
