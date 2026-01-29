@@ -2085,10 +2085,15 @@ def get_partners_list(user_id=None, session=None):
 
         # ВАЖНО: Всегда показывать избранные и заблокированные контакты
         
-        # Специальное правило для PREMIUM: они видят ВСЕХ (даже без совпадений)
+        # Получаем тарифы пользователей
         profile_user_tier = profile_user.subscription_tier.value if profile_user.subscription_tier else 'LIGHT'
         user_tier = user.subscription_tier.value if user.subscription_tier else 'LIGHT'
         
+        # КРИТИЧНАЯ ФИЛЬТРАЦИЯ: LIGHT/STANDARD НЕ ВИДЯТ PREMIUM (даже при совпадениях)
+        if user_tier in ['LIGHT', 'STANDARD'] and profile_user_tier == 'PREMIUM':
+            continue  # Пропускаем PREMIUM профили для LIGHT/STANDARD пользователей
+        
+        # Специальное правило для PREMIUM: они видят ВСЕХ (даже без совпадений)
         if user_tier == 'PREMIUM':
             has_match = True  # PREMIUM видит всех
             match_reasons.append("premium-sees-all")
