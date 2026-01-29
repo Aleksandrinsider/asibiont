@@ -6516,7 +6516,7 @@ async def add_test_users_handler(request):
                 telegram_id=user_data['telegram_id'],
                 username=user_data['username'],
                 subscription_tier=user_data['tier'],
-                created_at=datetime.datetime.now(datetime.timezone.utc)
+                created_at=datetime.now(datetime.timezone.utc)
             )
             session.add(user)
             session.flush()
@@ -6525,12 +6525,11 @@ async def add_test_users_handler(request):
                 user_id=user.id,
                 interests=user_data['interests'],
                 skills='',
-                goals='',
-                created_at=datetime.datetime.now(datetime.timezone.utc)
+                goals=''
             )
             session.add(profile)
             
-            end_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+            end_date = datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
             subscription = Subscription(
                 user_id=user.id,
                 telegram_id=user_data['telegram_id'],
@@ -6539,10 +6538,10 @@ async def add_test_users_handler(request):
                 status='active',
                 plan='yearly',
                 tier=user_data['tier'],
-                start_date=datetime.datetime.now(datetime.timezone.utc),
+                start_date=datetime.now(datetime.timezone.utc),
                 end_date=end_date,
                 login_count=1,
-                created_at=datetime.datetime.now(datetime.timezone.utc)
+                created_at=datetime.now(datetime.timezone.utc)
             )
             session.add(subscription)
             
