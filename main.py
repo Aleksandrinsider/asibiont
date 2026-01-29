@@ -4905,7 +4905,8 @@ async def api_accept_delegated_task_handler(request):
             if task.delegation_status != 'pending':
                 return web.json_response({'error': 'Task is not in pending delegation status'}, status=400)
 
-            # Update delegation status to accepted (task status remains pending)
+            # Accept task: status -> in_progress, delegation_status -> accepted
+            task.status = 'in_progress'
             task.delegation_status = 'accepted'
             task.updated_at = datetime.now(pytz.UTC)
 
@@ -4913,7 +4914,7 @@ async def api_accept_delegated_task_handler(request):
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Задача "{task.title}" принята'
+                content=f'Задача "{task.title}" принята и взята в работу'
             )
             session_db.add(interaction)
 
