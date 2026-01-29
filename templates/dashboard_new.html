@@ -366,7 +366,7 @@
                             html += '</div>'; // flex: 1
                             
                             // Кнопки действий для элитных контактов (как в рекомендуемых)
-                            html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
+                            html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                             const isFavoriteElite = favoriteContacts.includes(partner.contact_info);
                             const starSvgElite = isFavoriteElite 
                                 ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -1146,6 +1146,11 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
+                        <button onclick="toggleContactFilters()" class="section-toggle-btn" id="contact-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
                     <div id="contact-filter-content" style="margin-bottom: 15px;">
                     <script>
@@ -1165,21 +1170,14 @@
                             }
                         })();
                     </script>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <select id="contact-filter-select" onchange="filterContacts(this.value)" style="flex: 1; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
-                                <option value="favorite">Избранное</option>
-                                <option value="recommended" selected>Рекомендуемые</option>
-                                <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
-                                <option value="delegating_to_me">Поручают мне</option>
-                                <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
-                                <option value="blocked">Заблокировано</option>
-                            </select>
-                            <button onclick="toggleContactFilters()" class="section-toggle-btn" id="contact-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center; flex-shrink: 0;">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
-                                    <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-                                </svg>
-                            </button>
-                        </div>
+                        <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
+                            <option value="favorite">Избранное</option>
+                            <option value="recommended" selected>Рекомендуемые</option>
+                            <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
+                            <option value="delegating_to_me">Поручают мне</option>
+                            <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                            <option value="blocked">Заблокировано</option>
+                        </select>
                     </div>
                     <div class="people-list" id="people-list" style="padding: 0 4px;">
                         <!-- Контакты будут загружены динамически -->
@@ -1327,6 +1325,11 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
+                        <button onclick="toggleTaskFilters()" class="section-toggle-btn" id="task-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                            </svg>
+                        </button>
                     </div>
                     <div id="task-filter-content" style="margin-bottom: 15px;">
                     <script>
@@ -1346,21 +1349,14 @@
                             }
                         })();
                     </script>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <select id="task-filter-select" onchange="filterTasks(this.value)" style="flex: 1; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
-                                <option value="all" selected>Все</option>
-                                <option value="my">Личные</option>
-                                <option value="assigned-to-me">Поручили мне</option>
-                                <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
-                                <option value="overdue">Просрочено</option>
-                                <option value="completed">Выполнено</option>
-                            </select>
-                            <button onclick="toggleTaskFilters()" class="section-toggle-btn" id="task-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center; flex-shrink: 0;">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
-                                    <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-                                </svg>
-                            </button>
-                        </div>
+                        <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
+                            <option value="all" selected>Все</option>
+                            <option value="my">Личные</option>
+                            <option value="assigned-to-me">Поручили мне</option>
+                            <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                            <option value="overdue">Просрочено</option>
+                            <option value="completed">Выполнено</option>
+                        </select>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container" style="padding: 0 4px;">
                         <div class="task-groups" id="task-groups">
@@ -4128,7 +4124,7 @@
             
             // Кнопки действий
             const isDelegatedToMe = task.delegated_by && task.delegation_status === 'pending';
-            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: column;">';
+            html += '<div class="task-actions" style="display: flex; gap: 4px; flex-direction: row;">';
             
             if (isDelegatedToMe) {
                 // Задача делегирована МНЕ и ожидает моего принятия - только кнопки Принять и Отклонить (БЕЗ удаления)
@@ -5440,7 +5436,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -5529,7 +5525,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -5718,7 +5714,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -5813,7 +5809,7 @@
                                         html += '<div style="margin-top: 4px;"><span style="font-size: 13px; color: #374151;">Нет рекомендаций</span></div>';
                                     }
                                     html += '</div>';
-                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: 1fr; gap: 4px;">';
+                                    html += '<div class="task-actions" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;">';
                                     const isFavorite = favoriteContacts.includes(partner.contact_info);
                                     const starSvg = isFavorite 
                                         ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="#068487"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"></path></svg>'
@@ -6837,5 +6833,3 @@
     </script>
 </body>
 </html>
-
-
