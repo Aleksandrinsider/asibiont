@@ -23,6 +23,9 @@ else:
     # Priority: DATABASE_PUBLIC_URL > DATABASE_URL (public is more reliable)
     DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL") or os.getenv("DATABASE_URL")
     if not DATABASE_URL:
+        print(f"DEBUG: DATABASE_PUBLIC_URL = {os.getenv('DATABASE_PUBLIC_URL')}")
+        print(f"DEBUG: DATABASE_URL = {os.getenv('DATABASE_URL')}")
+        print(f"DEBUG: All env vars with DATABASE: {[k for k in os.environ.keys() if 'DATABASE' in k]}")
         raise ValueError("DATABASE_PUBLIC_URL or DATABASE_URL is required in production mode")
 
 # AI Model Configuration
