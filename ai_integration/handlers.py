@@ -661,27 +661,51 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         # Возвращаем сообщение с флагом для AI чтобы спросил о результате
         result = f"TASK_COMPLETED_ASK_RESULT: Задача '{task.title}' завершена."
 
-        # Если задача была делегирована этому пользователю, отправляем отчет делегировавшему
-        if task.delegated_to_username and task.delegation_status == "accepted":
-            # Проверяем, является ли текущий пользователь получателем делегированной задачи
-            if task.delegated_to_username.replace('@', '').lower() == (user.username or '').replace('@', '').lower():
-                # Находим пользователя, который делегировал задачу
-                delegator = session.query(User).filter_by(id=task.user_id).first()
-                if delegator:
-                    # Отправляем сообщение делегировавшему пользователю
-                    try:
-                        from main import bot
-                        from ai_integration.chat import generate_result_check
-                        if bot:
-                            result_check_text = await generate_result_check(delegator.telegram_id, task.title)
-                            report_message = f"👤 @{user.username} выполнил(а) делегированную задачу:\n📋 '{task.title}'\n\n{result_check_text}"
-                            await bot.send_message(chat_id=delegator.telegram_id, text=report_message)
-                            logging.info(f"Sent completion report to delegator {delegator.username} for task {task.id}")
-                    except Exception as e:
-                        logging.error(f"Failed to send completion report to delegator: {e}")
-
-                    # Для делегированных задач добавляем дополнительный запрос
-                    result += f" Это также поможет @{delegator.username} оценить качество выполненной работы."
+        # ЛОГИКА ДЕЛЕГИРОВАНИЯ: определяем кто выполнил задачу и кому отправлять отчет
+        is_delegated_task = False
+        delegator = None
+        
+        # Случай 1: Задача была делегирована МНЕ (я получил задачу от другого пользователя)
+        # В этом случае task.delegated_by содержит ID делегатора
+        if task.delegated_by and task.delegated_by != user.id and task.delegation_status == "accepted":
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
+            is_delegated_task = True
+            logger.info(f"[COMPLETE_TASK] Task {task.id} was delegated TO user {user.username} BY {delegator.username if delegator else 'unknown'}")
+        
+        # Случай 2: Задача была делегирована МНОЙ (я поручил задачу другому пользователю)
+        # В этом случае task.user_id == мой ID, task.delegated_to_username содержит исполнителя
+        elif task.user_id == user.id and task.delegated_to_username and task.delegation_status == "accepted":
+            # Это я делегатор, а выполняет кто-то другой
+            # Этот случай обрабатывается отдельно - это не должно происходить здесь
+            # т.к. complete_task вызывается от имени исполнителя, а не делегатора
+            logger.warning(f"[COMPLETE_TASK] Task {task.id} delegated BY user {user.username}, but completed by same user - unusual case")
+        
+        # Отправляем отчет делегатору если задача была делегирована
+        if is_delegated_task and delegator:
+            try:
+                from main import bot
+                if bot:
+                    # Запрашиваем у исполнителя результаты работы
+                    result_request = (
+                        f"📝 Расскажи о результатах выполнения задачи:\n"
+                        f"'{task.title}'\n\n"
+                        f"Опиши что было сделано, какие результаты достигнуты, "
+                        f"были ли сложности. Это важно для @{delegator.username}, "
+                        f"который поручил тебе эту задачу."
+                    )
+                    await bot.send_message(chat_id=user.telegram_id, text=result_request)
+                    logger.info(f"[COMPLETE_TASK] Requested completion results from user {user.username} for task {task.id}")
+                    
+                    # Сохраняем флаг что нужно отправить отчет делегатору после получения результатов
+                    # Используем поле completion_notes для временного хранения ID делегатора
+                    task.pending_delegator_report = delegator.telegram_id
+                    session.commit()
+                    
+                    # Обновляем сообщение для пользователя
+                    result = f"✅ Задача '{task.title}' завершена! Теперь опиши результаты выполнения для @{delegator.username}"
+                    
+            except Exception as e:
+                logger.error(f"[COMPLETE_TASK] Failed to request completion results from executor: {e}")
 
         # НЕ сохраняем в БД здесь - это сделает chat_with_ai с финальным AI-ответом
     else:

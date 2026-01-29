@@ -72,6 +72,7 @@ class Task(Base):
     recurrence_interval = Column(Integer, default=1)  # Every N days/weeks/months
     recurrence_end_date = Column(DateTime)  # When to stop recurring
     parent_task_id = Column(Integer, ForeignKey('tasks.id'))  # For recurring task instances
+    pending_delegator_report = Column(BigInteger)  # Telegram ID of delegator waiting for completion report
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])

@@ -1280,6 +1280,63 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 # Время не распознано, просим уточнить
                 return {'response': "Не удалось распознать время. Попробуйте сказать 'завтра в 10 утра' или 'через 2 часа'.", 'tool_calls': []}
 
+    # ПРОВЕРКА НА ОЖИДАНИЕ ОТЧЕТА О ВЫПОЛНЕНИИ ДЕЛЕГИРОВАННОЙ ЗАДАЧИ
+    if user:
+        from models import Task
+        # Ищем задачи, ожидающие отчета от текущего пользователя
+        pending_report_tasks = db_session.query(Task).filter(
+            Task.pending_delegator_report.isnot(None),
+            Task.user_id == user.id,
+            Task.status == 'completed'
+        ).all()
+        
+        if pending_report_tasks:
+            # Пользователь только что выполнил делегированную задачу и должен предоставить отчет
+            logger.info(f"[DELEGATION_REPORT] User {user.username} has {len(pending_report_tasks)} task(s) waiting for report")
+            
+            # Берем первую задачу из списка
+            task = pending_report_tasks[0]
+            delegator_telegram_id = task.pending_delegator_report
+            
+            # Сохраняем результаты в поле completion_notes
+            task.completion_notes = encrypt_data(clean_message)
+            task.pending_delegator_report = None  # Убираем флаг
+            db_session.commit()
+            
+            # Отправляем отчет делегатору
+            try:
+                from main import bot
+                delegator = db_session.query(User).filter_by(telegram_id=delegator_telegram_id).first()
+                
+                if bot and delegator:
+                    report_message = (
+                        f"📋 Отчет о выполнении задачи\n\n"
+                        f"👤 Исполнитель: @{user.username}\n"
+                        f"📝 Задача: {task.title}\n"
+                        f"✅ Статус: Выполнена\n"
+                        f"📄 Результаты:\n{clean_message}\n\n"
+                        f"Оцени качество выполнения или задай вопросы исполнителю."
+                    )
+                    await bot.send_message(chat_id=delegator_telegram_id, text=report_message)
+                    logger.info(f"[DELEGATION_REPORT] Sent completion report to delegator @{delegator.username} for task {task.id}")
+                    
+                    # Отправляем подтверждение исполнителю
+                    response_to_executor = (
+                        f"✅ Отлично! Я отправил отчет о выполнении задачи '{task.title}' "
+                        f"пользователю @{delegator.username}. Спасибо за работу!"
+                    )
+                    
+                    if close_session:
+                        db_session.close()
+                    
+                    return {'response': response_to_executor, 'tool_calls': []}
+                    
+            except Exception as e:
+                logger.error(f"[DELEGATION_REPORT] Failed to send report to delegator: {e}")
+                if close_session:
+                    db_session.close()
+                return {'response': f"Отчет сохранен, но не удалось отправить его делегатору. Попробую позже.", 'tool_calls': []}
+
     context_len = (
         len(context) if context and not isinstance(context, int) else (context if isinstance(context, int) else 0)
     )
