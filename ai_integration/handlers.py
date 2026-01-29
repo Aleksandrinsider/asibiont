@@ -1166,10 +1166,10 @@ def delegate_task(
 
         # Create task with pending delegation status
         task = Task(
-            user_id=delegator.id,
+            user_id=recipient.id,  # Получатель задачи
             title=title,
             description=encrypt_data(description),
-            delegated_by=None,
+            delegated_by=delegator.id,  # Кто делегировал
             delegated_to_username=recipient_username,
             delegation_status="pending",
             delegation_details=delegation_details,
@@ -1280,8 +1280,9 @@ def accept_delegated_task(task_id, user_id=None):
         if not task:
             return "Задача не найдена или уже обработана."
 
-        # Update delegation status
+        # Update delegation status and task status
         task.delegation_status = "accepted"
+        task.status = "in_progress"  # Задача теперь в работе
         session.commit()
 
         # Schedule reminder
@@ -1303,7 +1304,7 @@ def accept_delegated_task(task_id, user_id=None):
 
         # Notify delegator
         try:
-            delegator = session.query(User).filter_by(id=task.user_id).first()
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
             if delegator and delegator.telegram_id != user_id:
                 from main import bot
                 if bot:
@@ -1407,7 +1408,7 @@ def reject_delegated_task(task_id=None, task_title=None, user_id=None):
 
         # Notify delegator
         try:
-            delegator = session.query(User).filter_by(id=task.user_id).first()
+            delegator = session.query(User).filter_by(id=task.delegated_by).first()
             if delegator and delegator.telegram_id != user_id:
                 from main import bot
                 if bot:
@@ -3348,7 +3349,7 @@ def delegate_task_with_session(title, description, reminder_time, delegated_to_u
     
     # Create delegated task
     task = Task(
-        user_id=user.id,
+        user_id=delegated_user.id,  # Получатель задачи
         title=title,
         description=encrypt_data(description),
         delegated_by=user.id,  # ВАЖНО: кто делегировал задачу
