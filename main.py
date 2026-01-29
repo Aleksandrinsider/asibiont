@@ -1899,7 +1899,7 @@ async def dashboard_handler(request):
 
                 # Люди, которым я делегировал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
-                    Task.user_id == user.id,
+                    Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
@@ -3111,7 +3111,7 @@ async def api_partners_handler(request):
 
                 # Люди, которым я делегировал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
-                    Task.user_id == user.id,
+                    Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
                     Task.delegation_status.in_(['pending', 'accepted']),
                     Task.status != 'deleted'
@@ -4091,7 +4091,7 @@ async def api_elite_partners_handler(request):
 
                 # Люди, которым я делегировал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
-                    Task.user_id == user.id,
+                    Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
                     Task.delegation_status.in_(['pending', 'accepted']),
                     Task.status != 'deleted'
