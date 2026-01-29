@@ -1949,10 +1949,8 @@ def get_partners_list(user_id=None, session=None):
         )
     )
     
-    # Light and Standard tier users cannot see Premium tier users
-    if user.subscription_tier and user.subscription_tier.value in ['LIGHT', 'STANDARD']:
-        from models import SubscriptionTier
-        profile_query = profile_query.filter(User.subscription_tier != SubscriptionTier.PREMIUM)
+    # Примечание: PREMIUM пользователи видят всех
+    # LIGHT/STANDARD могут видеть PREMIUM только при наличии совпадений (проверяется ниже)
     
     all_profiles = profile_query.all()
 
@@ -2086,6 +2084,14 @@ def get_partners_list(user_id=None, session=None):
                     match_reasons.append(f"company: {profile.company}")
 
         # ВАЖНО: Всегда показывать избранные и заблокированные контакты
+        
+        # Специальное правило для PREMIUM: они видят ВСЕХ (даже без совпадений)
+        profile_user_tier = profile_user.subscription_tier.value if profile_user.subscription_tier else 'LIGHT'
+        user_tier = user.subscription_tier.value if user.subscription_tier else 'LIGHT'
+        
+        if user_tier == 'PREMIUM':
+            has_match = True  # PREMIUM видит всех
+            match_reasons.append("premium-sees-all")
         
         if user_profile.favorite_contacts:
             favorite_usernames = [u.strip().lower().replace('@', '') for u in user_profile.favorite_contacts.split(',')]
