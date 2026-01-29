@@ -4905,8 +4905,7 @@ async def api_accept_delegated_task_handler(request):
             if task.delegation_status != 'pending':
                 return web.json_response({'error': 'Task is not in pending delegation status'}, status=400)
 
-            # Update task status to accepted
-            task.status = 'accepted'
+            # Update delegation status to accepted (task status remains pending)
             task.delegation_status = 'accepted'
             task.updated_at = datetime.now(pytz.UTC)
 
@@ -5848,7 +5847,7 @@ async def api_tasks_handler(request):
                 if user.username and (task.delegated_to_username.lower() == user.username.lower(
                 ) or task.delegated_to_username.lower() == f"@{user.username.lower()}"):
                     # Task delegated TO me
-                    creator = session_db.query(User).filter_by(id=task.user_id).first()
+                    creator = session_db.query(User).filter_by(id=task.delegated_by).first()
                     if creator:
                         title = f"{title} - Делегирована от @{creator.username}"
                 elif task.user_id == user.id:
