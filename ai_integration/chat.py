@@ -1602,7 +1602,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 # ДЕМОНСТРАЦИЯ ВОЗМОЖНОСТЕЙ: каждые 5-7 взаимодействий
                 interaction_count = getattr(profile, 'interaction_count', 0) or 0
                 if interaction_count > 0 and interaction_count % 6 == 0:  # Каждые 6 взаимодействий
-                    user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Расскажи о полезных функциях - поиске контактов, делегировании задач, анализе прогресса. Сделай это естественно в контексте ответа!"
+                    # Ротация возможностей для разнообразия
+                    capability_rotation = interaction_count // 6 % 4
+                    if capability_rotation == 0:
+                        user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни поиск контактов для задач (find_relevant_contacts_for_task). Пример: 'Кстати, могу найти подходящих людей для этой задачи'"
+                    elif capability_rotation == 1:
+                        user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни делегирование задач (delegate_task). Пример: 'Можно делегировать это кому-то из контактов'"
+                    elif capability_rotation == 2:
+                        user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни повторяющиеся задачи (set_recurring_task). Пример: 'Если это регулярная задача, могу настроить автоповтор'"
+                    else:
+                        user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни анализ прогресса и предложи альтернативные подходы к сложным задачам"
 
                 # Если профиль не полностью заполнен - информируем AI о незаполненных полях
                 if not profile_filled and (len(context) if context else 0 < 2):
@@ -2160,12 +2169,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Проверяем последние 3 ответа AI для предотвращения повторений
         if user:
             recent_responses = []
+            recent_questions = []  # Добавлено: отслеживание заданных вопросов
             try:
                 from models import Interaction
                 recent_interactions = db_session.query(Interaction).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'ai'
-                ).order_by(Interaction.created_at.desc()).limit(3).all()
+                ).order_by(Interaction.created_at.desc()).limit(5).all()  # Увеличено до 5 для лучшей памяти
 
                 for interaction in recent_interactions:
                     if interaction.content:
@@ -2173,12 +2183,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         preview = interaction.content.strip()[:50].lower()
                         if preview and preview not in recent_responses:
                             recent_responses.append(preview)
+                        
+                        # Извлекаем вопросы из ответов агента
+                        if '?' in interaction.content:
+                            questions = [q.strip() for q in interaction.content.split('?') if q.strip()]
+                            for q in questions[:2]:  # Первые 2 вопроса из сообщения
+                                q_normalized = q.lower()[:60]
+                                if q_normalized and q_normalized not in recent_questions:
+                                    recent_questions.append(q_normalized)
             except Exception as e:
                 logger.warning(f"Could not get recent responses: {e}")
 
             if recent_responses:
                 uniqueness_instruction = f"\n\nКРИТИЧНО: НЕ ПОВТОРЯЙ эти недавние ответы:\n" + "\n".join(f"❌ '{resp}...'" for resp in recent_responses[:2])
                 system_prompt += uniqueness_instruction
+            
+            # Добавлено: инструкция не повторять вопросы
+            if recent_questions:
+                questions_instruction = f"\n\nКРИТИЧНО: НЕ ПОВТОРЯЙ эти вопросы (даже в других формулировках):\n" + "\n".join(f"❌ \"{q}?\"" for q in recent_questions[:3])
+                questions_instruction += "\n💡 Если уже спрашивал - переключись на другую тему или предложи альтернативный подход!"
+                system_prompt += questions_instruction
 
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
         is_system_message = original_message.startswith(('TASK_', 'DUPLICATE_TASK:', 'NEED_TIME_FOR_TASK:')) and 'ASK_' not in original_message and 'ASK_' not in original_message
@@ -2271,11 +2295,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         # Динамическая температура для естественности
         message_lower = clean_message.lower()
-        is_creative = any(w in message_lower for w in ['идеи', 'креатив', 'варианты', 'предложи', 'совет'])
+        is_creative = any(w in message_lower for w in ['идеи', 'креатив', 'варианты', 'предложи', 'совет', 'альтернатив', 'как лучше', 'посоветуй'])
         is_command = any(w in message_lower for w in ['создай', 'удали', 'перенеси', 'готово', 'сделал'])
         
-        if is_creative:
-            temperature, top_p = 0.9, 0.95  # Высокая вариативность для советов
+        # Добавлено: детектируем запросы о сложных задачах для альтернативных подходов
+        is_complex_task = any(w in message_lower for w in ['сложн', 'не знаю как', 'не получается', 'трудн', 'проблем'])
+        
+        if is_creative or is_complex_task:
+            temperature, top_p = 0.9, 0.95  # Высокая вариативность для советов и альтернатив
+            if is_complex_task:
+                system_prompt += "\n\n🔄 АЛЬТЕРНАТИВНЫЕ ПОДХОДЫ: Пользователь столкнулся со сложностью. Предложи 2-3 разных способа решения: разбить задачу, делегировать, изменить подход, найти помощь через контакты."
         elif is_command:
             temperature, top_p = 0.4, 0.9   # Точность для команд
         else:
