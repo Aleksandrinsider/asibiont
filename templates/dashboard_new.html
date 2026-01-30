@@ -81,9 +81,9 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '';
                 }
-                // Показываем фильтры и контакты при сворачивании профиля
-                if (contactFilterContent) contactFilterContent.style.display = '';
-                if (peopleList) peopleList.style.display = '';
+                // Скрываем фильтры и контакты при разворачивании профиля
+                if (contactFilterContent) contactFilterContent.style.display = 'none';
+                if (peopleList) peopleList.style.display = 'none';
                 // Скрываем индикатор при разворачивании
                 if (indicator) indicator.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'false');
@@ -96,9 +96,9 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Скрываем фильтры и контакты при разворачивании профиля
-                if (contactFilterContent) contactFilterContent.style.display = 'none';
-                if (peopleList) peopleList.style.display = 'none';
+                // Показываем фильтры и контакты при сворачивании профиля
+                if (contactFilterContent) contactFilterContent.style.display = '';
+                if (peopleList) peopleList.style.display = '';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
