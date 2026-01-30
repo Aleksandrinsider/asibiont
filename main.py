@@ -6472,26 +6472,18 @@ async def create_payment_handler(request):
         logger.warning("No user_id in session, redirecting to login")
         return web.HTTPFound('/')
 
-    tier = request.query.get('tier', 'bronze')
+    tier = request.query.get('tier', 'light')
     logger.info(f"Creating payment for tier: {tier}")
 
-    # Map display tiers to internal tiers
-    tier_mapping = {
-        'bronze': 'light',
-        'silver': 'standard', 
-        'gold': 'premium'
-    }
-    internal_tier = tier_mapping.get(tier, 'light')
-
-    if tier not in ['bronze', 'silver', 'gold']:
-        tier = 'bronze'
-        internal_tier = 'light'
+    # Validate tier
+    if tier not in ['light', 'standard', 'premium']:
+        tier = 'light'
 
     try:
         from payments import create_payment, get_tier_price, get_tier_name
 
-        amount = get_tier_price(internal_tier)
-        tier_name = get_tier_name(internal_tier)
+        amount = get_tier_price(tier)
+        tier_name = get_tier_name(tier)
 
         logger.info(f"Creating payment: amount={amount}, tier={tier}, user_id={user_id}")
 
@@ -6499,7 +6491,7 @@ async def create_payment_handler(request):
             amount=str(amount),
             description=f"Подписка ASI Biont - {tier_name} на 30 дней",
             user_id=user_id,
-            tier=internal_tier
+            tier=tier
         )
 
         logger.info(f"Payment URL created: {payment_url}")
