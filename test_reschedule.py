@@ -155,7 +155,10 @@ async def test_reschedule_variations():
                 ai_logger.removeHandler(handler)
             
             # Проверяем количество задач
-            tasks_count = db_session.query(Task).filter_by(user_id=test_user_id, completed=False).count()
+            tasks_count = db_session.query(Task).filter(
+                Task.user_id == test_user_id,
+                Task.status != 'completed'
+            ).count()
             if tasks_count > 1:
                 print(f"⚠️  ВНИМАНИЕ: В базе {tasks_count} активных задач (должна быть 1)")
         

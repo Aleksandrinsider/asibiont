@@ -56,7 +56,7 @@ class IntentClassifierUltraMinimal:
 • list_tasks - показать задачи (покажи, список, что у меня)
 • delete_task - удалить задачу (удали, убери)
 • delete_all_tasks - удалить все задачи (удали все, очисти все)
-• reschedule_task - перенести задачу (перенеси, измени время)
+• reschedule_task - перенести задачу (перенеси, измени время, отложи, подвинь, перенос просроченной)
 • delegate_task - делегировать (делегируй, поручи [кому])
 • set_recurring_task - повторяющаяся задача (каждый день/неделю/месяц)
 • get_task_details - детали задачи (расскажи подробнее, детали задачи, что в задаче)
@@ -79,6 +79,9 @@ class IntentClassifierUltraMinimal:
 "Удали встречу" → delete_task
 "Удали все" → delete_all_tasks
 "Перенеси на завтра" → reschedule_task
+"Перенеси просроченную задачу" → reschedule_task
+"Отложи на час" → reschedule_task
+"Подвинь на завтра" → reschedule_task
 "Делегируй Ивану" → delegate_task
 "Каждый день зарядка" → set_recurring_task
 "Расскажи о задаче презентация" → get_task_details
