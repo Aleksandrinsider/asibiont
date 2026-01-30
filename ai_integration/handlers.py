@@ -1835,43 +1835,114 @@ def list_tasks(user_id=None, session=None, include_completed=False):
         if not active_tasks:
             return "Нет активных задач. Что планируете?"
 
+        # УМНАЯ ПАГИНАЦИЯ: при большом количестве задач показываем топ-20
+        MAX_TASKS_IN_RESPONSE = 20
+        
+        # Приоритизируем: 1) просроченные, 2) сегодня, 3) завтра, 4) будущие
+        priority_tasks = []
+        today_tasks = []
+        upcoming_tasks = []
+        later_tasks = []
+        
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+        tomorrow_end = tomorrow_start + timedelta(days=1)
+        
+        for task in my_tasks:
+            if task.reminder_time:
+                try:
+                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    if reminder_dt < now:
+                        priority_tasks.append(task)  # Просроченные
+                    elif today_start <= reminder_dt < tomorrow_start:
+                        today_tasks.append(task)  # Сегодня
+                    elif tomorrow_start <= reminder_dt < tomorrow_end:
+                        upcoming_tasks.append(task)  # Завтра
+                    else:
+                        later_tasks.append(task)  # Позже
+                except:
+                    later_tasks.append(task)
+            else:
+                later_tasks.append(task)  # Без времени - в конец
+        
+        # Сортируем по времени внутри каждой группы
+        priority_tasks.sort(key=lambda t: t.reminder_time or datetime.min.replace(tzinfo=pytz.UTC))
+        today_tasks.sort(key=lambda t: t.reminder_time or datetime.min.replace(tzinfo=pytz.UTC))
+        upcoming_tasks.sort(key=lambda t: t.reminder_time or datetime.min.replace(tzinfo=pytz.UTC))
+        
+        # Объединяем: сначала важные
+        sorted_tasks = priority_tasks + today_tasks + upcoming_tasks + later_tasks
+        
+        # Ограничиваем до MAX_TASKS_IN_RESPONSE
+        tasks_to_show = sorted_tasks[:MAX_TASKS_IN_RESPONSE]
+        hidden_count = len(sorted_tasks) - len(tasks_to_show)
+
         # Правильный подсчёт: только личные незавершённые задачи
         result = f"У вас {len(my_tasks)} {'задача' if len(my_tasks) == 1 else ('задачи' if 2 <= len(my_tasks) <= 4 else 'задач')}"
         if delegated_to_me:
             result += f" + {len(delegated_to_me)} делегированных"
         result += "\n\n"
 
-        # Show first 10 tasks instead of 3
-        tasks_to_show = my_tasks[:10]
-        if tasks_to_show:
-            result += "Ваши задачи:\n"
-            for task in tasks_to_show:
-                reminder_info = ""
-                status_marker = ""
-                if task.reminder_time:
-                    try:
+        # ФОРМАТИРОВАНИЕ ПО КАТЕГОРИЯМ с эмодзи для ясности
+        if priority_tasks:
+            # Просроченные показываем всегда (КРИТИЧНО!)
+            result += f"⚠️ ПРОСРОЧЕННЫЕ ({len(priority_tasks)}):\n"
+            for task in [t for t in tasks_to_show if t in priority_tasks]:
+                try:
+                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    delta = now - reminder_dt
+                    days = delta.days
+                    hours = delta.seconds // 3600
+                    if days > 0:
+                        delay_str = f"{days}д {hours}ч" if hours else f"{days}д"
+                    else:
+                        delay_str = f"{hours}ч"
+                    result += f"  {task.id}. {task.title} (просрочено на {delay_str})\n"
+                except:
+                    result += f"  {task.id}. {task.title}\n"
+            result += "\n"
+        
+        if today_tasks:
+            result += f"📅 СЕГОДНЯ ({len(today_tasks)}):\n"
+            for task in [t for t in tasks_to_show if t in today_tasks]:
+                try:
+                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    time_str = reminder_dt.strftime("%H:%M")
+                    result += f"  {task.id}. {task.title} ({time_str})\n"
+                except:
+                    result += f"  {task.id}. {task.title}\n"
+            result += "\n"
+        
+        if upcoming_tasks and len(tasks_to_show) > len(priority_tasks) + len(today_tasks):
+            result += f"🔜 ЗАВТРА ({len(upcoming_tasks)}):\n"
+            for task in [t for t in tasks_to_show if t in upcoming_tasks]:
+                try:
+                    reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    time_str = reminder_dt.strftime("%H:%M")
+                    result += f"  {task.id}. {task.title} ({time_str})\n"
+                except:
+                    result += f"  {task.id}. {task.title}\n"
+            result += "\n"
+        
+        # Остальные задачи (если есть место в топ-20)
+        remaining_later = [t for t in tasks_to_show if t in later_tasks]
+        if remaining_later:
+            result += f"📋 ПОЗЖЕ ({len(later_tasks)}):\n"
+            for task in remaining_later[:5]:  # Максимум 5 из будущих
+                try:
+                    if task.reminder_time:
                         reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
-                        if reminder_dt < now:
-                            delta = now - reminder_dt
-                            days = delta.days
-                            hours = (delta.seconds // 3600)
-                            status_marker = " [ПРОСРОЧЕНО]"
-                            if days > 0:
-                                reminder_info = f" - просрочено на {days} д {hours} ч" if hours else f" - просрочено на {days} д"
-                            else:
-                                reminder_info = f" - просрочено на {hours} ч"
-                        else:
-                            status_marker = " [АКТУАЛЬНО]"
-                            # Добавляем часовой пояс к времени для ясности
-                            tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
-                            reminder_info = f" - {reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
-                    except Exception as e:
-                        logger.warning(f"Failed to process reminder time for task {task.id}: {e}")
-                        pass
-                result += f"- {task.title}{status_marker}{reminder_info}\n"
-
-            if len(my_tasks) > 10:
-                result += f"...и ещё {len(my_tasks) - 10}\n"
+                        time_str = reminder_dt.strftime("%d.%m %H:%M")
+                        result += f"  {task.id}. {task.title} ({time_str})\n"
+                    else:
+                        result += f"  {task.id}. {task.title}\n"
+                except:
+                    result += f"  {task.id}. {task.title}\n"
+            result += "\n"
+        
+        # Показываем сколько задач скрыто
+        if hidden_count > 0:
+            result += f"💡 Ещё {hidden_count} {'задача' if hidden_count == 1 else ('задачи' if 2 <= hidden_count <= 4 else 'задач')} не {'показана' if hidden_count == 1 else 'показаны'}. Сфокусируйтесь на приоритетных!\n\n"
         
         # Show delegated tasks
         if delegated_to_me:
