@@ -215,8 +215,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     disallowed_tools = []
     
     # Защита от случайных операций при явных намерениях:
-    # 1. При завершении - не создавать/удалять
-    if any(kw in message_lower for kw in ['готово', 'сделал', 'выполнил', 'завершил', 'закончил', 'готов', 'закрыл']):
+    # 1. При завершении - не создавать/удалять (используем \b для границ слов)
+    completion_pattern = r'\b(готово|сделал|сделана|выполнил|выполнена|завершил|завершена|закончил|закончена|готов|готова|закрыл|закрыта)\b'
+    if re.search(completion_pattern, message_lower):
         disallowed_tools = ['add_task', 'delete_task', 'delete_all_tasks']
     # 2. При удалении - не создавать/завершать  
     elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']):
