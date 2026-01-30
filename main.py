@@ -1199,8 +1199,8 @@ try:
     # Production mode: Test users and promo codes disabled
     logger.info("Production mode: Test data creation disabled")
 
-    # Create test users with different tiers and sport interests (only in local mode or when explicitly enabled)
-    if os.getenv('LOCAL') == '1' or os.getenv('CREATE_TEST_USERS') == '1':
+    # Create test users ONLY when explicitly enabled with CREATE_TEST_USERS=1
+    if os.getenv('CREATE_TEST_USERS') == '1':
         try:
             session_db = Session()
             logger.info("Creating test users with different subscription tiers")
@@ -1236,11 +1236,18 @@ try:
             now = datetime.now()
 
             added_count = 0
+            updated_count = 0
             for user_data in test_users_data:
                 # Check if user already exists
                 existing_user = session_db.query(User).filter(User.telegram_id == user_data['telegram_id']).first()
                 if existing_user:
-                    logger.info(f"Test user {user_data['telegram_id']} already exists")
+                    logger.info(f"Test user {user_data['telegram_id']} already exists, updating profile interests")
+                    # Update existing profile interests to 'спорт'
+                    existing_profile = session_db.query(UserProfile).filter_by(user_id=existing_user.id).first()
+                    if existing_profile:
+                        existing_profile.interests = 'спорт'
+                        updated_count += 1
+                        logger.info(f"Updated interests for test user {user_data['telegram_id']}")
                     continue
 
                 # Create user
@@ -1328,11 +1335,14 @@ try:
                     session_db.add(task3)
                     logger.info("Created delegated task from user 1001 to user 1002")
 
-            if added_count > 0:
+            if added_count > 0 or updated_count > 0:
                 session_db.commit()
-                logger.info(f"Successfully added {added_count} test users")
+                if added_count > 0:
+                    logger.info(f"Successfully added {added_count} test users")
+                if updated_count > 0:
+                    logger.info(f"Successfully updated {updated_count} test user profiles")
             else:
-                logger.info("All test users already exist")
+                logger.info("All test users already exist and up to date")
         except Exception as e:
             logger.error(f"Error creating test users: {e}")
             session_db.rollback()
@@ -6786,91 +6796,55 @@ logger.info("App created successfully")
 if __name__ == "__main__":
     from config import LOCAL
 
-    if LOCAL:  # Enabled web server for local testing
-        logger.info("Running in local mode with web server only")
-        # Production mode or local web mode: run web server
+    # Production mode or local web mode: run web server
+    try:
+        port = PORT
+        host = '0.0.0.0'
+        mode = "LOCAL" if LOCAL else "PRODUCTION"
+        logger.info(f"Starting web server in {mode} mode on {host}:{port}")
+
+        # Use asyncio AppRunner
+        logger.info("Using asyncio AppRunner")
         try:
-            port = PORT
-            host = '0.0.0.0'
-            logger.info(f"Starting web server on {host}:{port}")
+            async def run_server():
+                runner = web.AppRunner(app)
+                await runner.setup()
+                site = web.TCPSite(runner, host, port)
+                await site.start()
+                logger.info(f"Server started on {host}:{port}")
+                logger.info(f"Health check endpoint: http://{host}:{port}/health")
+                logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
+                logger.info("Server is ready to accept connections")
 
-            # Use asyncio AppRunner
-            logger.info("Using asyncio AppRunner")
-            try:
-                async def run_server():
-                    runner = web.AppRunner(app)
-                    await runner.setup()
-                    site = web.TCPSite(runner, host, port)
-                    await site.start()
-                    logger.info(f"Server started on {host}:{port}")
-                    logger.info(f"Health check endpoint: http://{host}:{port}/health")
-                    logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
-                    logger.info("Server is ready to accept connections")
-
-                    # Start polling for bot in local mode
-                    polling_task = None
-                    if LOCAL and bot and dp:
-                        logger.info("Starting Telegram bot polling for local mode")
-                        await bot.delete_webhook()  # Delete webhook before polling
-                        polling_task = asyncio.create_task(dp.start_polling(bot))
-                    
-                    # Keep the server running
-                    try:
-                        if polling_task:
-                            await polling_task
-                        else:
-                            while True:
-                                await asyncio.sleep(3600)
-                    except Exception as e:
-                        logger.info(f"Server interrupted: {e}")
-                    finally:
-                        await runner.cleanup()
-                        logger.info("Server shut down")
-
-                asyncio.run(run_server())
-                import sys
-                sys.exit(0)
-            except Exception as serve_error:
-                logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
-                raise
-        except Exception as e:
-            logger.error(f"Failed to start application: {e}", exc_info=True)
-            raise
-    else:
-        # Production mode or local web mode: run web server
-        try:
-            port = PORT
-            host = '0.0.0.0'
-            logger.info(f"Starting web server on {host}:{port}")
-
-            # Use asyncio AppRunner
-            logger.info("Using asyncio AppRunner")
-            try:
-                async def run_server():
-                    runner = web.AppRunner(app)
-                    await runner.setup()
-                    site = web.TCPSite(runner, host, port)
-                    await site.start()
-                    logger.info(f"Server started on {host}:{port}")
-                    logger.info(f"Health check endpoint: http://{host}:{port}/health")
-                    logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
-                    logger.info("Server is ready to accept connections")
-
-                    # Keep the server running
-                    try:
-                        # Keep server running indefinitely
+                # Start polling for bot ONLY in local mode
+                polling_task = None
+                if LOCAL and bot and dp:
+                    logger.info("Starting Telegram bot polling for local mode")
+                    await bot.delete_webhook()  # Delete webhook before polling
+                    polling_task = asyncio.create_task(dp.start_polling(bot))
+                else:
+                    logger.info("Production mode: Using webhooks instead of polling")
+                
+                # Keep the server running
+                try:
+                    if polling_task:
+                        await polling_task
+                    else:
+                        # Keep server running indefinitely in production
                         while True:
                             await asyncio.sleep(3600)
-                    except KeyboardInterrupt:
-                        logger.info("Shutting down server...")
-                    finally:
-                        await runner.cleanup()
-                        logger.info("Server shut down")
+                except KeyboardInterrupt:
+                    logger.info("Shutting down server...")
+                except Exception as e:
+                    logger.error(f"Server interrupted: {e}")
+                finally:
+                    await runner.cleanup()
+                    logger.info("Server shut down")
 
-                asyncio.run(run_server())
-            except Exception as serve_error:
-                logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
-                raise
-        except Exception as e:
-            logger.error(f"Failed to start application: {e}", exc_info=True)
+            asyncio.run(run_server())
+        except Exception as serve_error:
+            logger.error(f"Error in asyncio run: {serve_error}", exc_info=True)
             raise
+    except Exception as e:
+        logger.error(f"Failed to start application: {e}", exc_info=True)
+        raise

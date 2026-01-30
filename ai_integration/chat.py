@@ -282,10 +282,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             logger.info(f"[TOOL CALL] Executing {func_name} with args: {args}")
 
             if "task_title" in args and args["task_title"]:
-                print(f"[DEBUG] Before pronoun replacement: task_title = '{args['task_title']}'")
                 from .task_context import extract_task_reference_from_message, get_user_current_task
                 task_ref = extract_task_reference_from_message(args["task_title"])
-                print(f"[DEBUG] task_ref = '{task_ref}'")
                 if task_ref == "__CURRENT_TASK__":
                     # Получаем пользователя для получения текущей задачи
                     temp_session = Session()
@@ -295,14 +293,11 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                             current_task = get_user_current_task(user_obj)
                             if current_task:
                                 logger.info(f"[CONTEXT] Replacing pronoun '{args['task_title']}' with current task: '{current_task.title}'")
-                                print(f"[DEBUG] Replacing '{args['task_title']}' with '{current_task.title}'")
                                 args["task_title"] = current_task.title
                             else:
                                 logger.warning(f"[CONTEXT] No current task set for pronoun '{args['task_title']}'")
-                                print(f"[DEBUG] No current task set")
                     finally:
                         temp_session.close()
-                print(f"[DEBUG] After pronoun replacement: task_title = '{args['task_title']}'")
 
             if func_name == "add_task":
                 # logger.info(

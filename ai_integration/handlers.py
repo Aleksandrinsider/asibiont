@@ -3140,10 +3140,10 @@ def delete_task_sync(task_id=None, task_title=None, reason=None, user_id=None, s
 
         # Delete the task from database
         task_title = task.title
-        print(f"[DEBUG] delete_task_sync: deleting task {task.id} '{task.title}'")
+        # Deleting task
         session.delete(task)
         session.commit()
-        print(f"[DEBUG] delete_task_sync: committed deletion")
+        # Task deleted successfully
 
         # Update profile analytics
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()

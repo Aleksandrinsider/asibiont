@@ -201,11 +201,11 @@
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
-                localStorage.setItem('contactFiltersCollapsed', 'false');
+                // localStorage.setItem('contactFiltersCollapsed', 'false'); // временно отключено
             } else {
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
-                localStorage.setItem('contactFiltersCollapsed', 'true');
+                // localStorage.setItem('contactFiltersCollapsed', 'true'); // временно отключено
             }
         }
 
@@ -227,32 +227,7 @@
         }
 
         async function filterContacts(filterType) {
-            // Сворачиваем профиль при клике на фильтр (даже если фильтр уже активен)
-            const profileContent = document.getElementById('profile-content');
-            const profileBtn = document.getElementById('profile-toggle-btn');
-            const profileSvg = profileBtn ? profileBtn.querySelector('svg') : null;
-            const peopleSection = document.querySelector('.people-section');
-            const peopleList = document.querySelector('.people-list');
-            
-            if (profileContent && profileContent.style.display !== 'none') {
-                profileContent.style.display = 'none';
-                if (profileSvg) profileSvg.style.transform = 'rotate(-90deg)';
-                localStorage.setItem('profileCollapsed', 'true');
-                
-                // Разворачиваем список контактов
-                if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto';
-                    peopleSection.style.minHeight = '0';
-                }
-                if (peopleList) {
-                    peopleList.style.maxHeight = '';
-                }
-            }
-            
-            // Если фильтр уже активен, только сворачиваем профиль
-            if (currentContactFilter === filterType) {
-                return;
-            }
+            // НЕ сворачиваем фильтр автоматически - убрали эту логику
             
             currentContactFilter = filterType;
             currentContactPage = 1; // Сброс страницы при смене фильтра
@@ -394,6 +369,9 @@
                     
                     html += '</ul>';
                     peopleList.innerHTML = html;
+                    
+                    // Применяем пагинацию к элитным контактам
+                    renderContacts();
                 } else {
                     console.error('Failed to load elite contacts:', response.status);
                 }
@@ -403,59 +381,8 @@
         }
 
         async function applyContactFilter() {
-            const peopleList = document.getElementById('people-list');
-            if (!peopleList) return;
-            
-            const allCards = peopleList.querySelectorAll('.task-item');
-            
-            allCards.forEach(card => {
-                let type = null;
-                if (card.classList.contains('contact-recommended')) {
-                    type = 'recommended';
-                } else if (card.classList.contains('contact-elite')) {
-                    type = 'elite';
-                } else if (card.classList.contains('contact-delegating-to-me')) {
-                    type = 'delegating_to_me';
-                } else if (card.classList.contains('contact-delegating-by-me')) {
-                    type = 'delegating_by_me';
-                } else if (card.classList.contains('contact-favorite')) {
-                    type = 'favorite';
-                } else if (card.classList.contains('contact-blocked')) {
-                    type = 'blocked';
-                }
-                
-                if (currentContactFilter === 'all') {
-                    card.style.display = 'flex';
-                } else if (currentContactFilter === 'favorite') {
-                    // Для favorite дедуплицируем контакты по username
-                    const seenUsernames = new Set();
-                    allCards.forEach(card => {
-                        const username = card.getAttribute('data-username');
-                        const isFavorite = card.classList.contains('contact-favorite');
-                        
-                        if (isFavorite && username && !seenUsernames.has(username)) {
-                            seenUsernames.add(username);
-                            card.style.display = 'flex';
-                        } else {
-                            card.style.display = 'none';
-                        }
-                    });
-                } else if (currentContactFilter === 'elite') {
-                    // Для elite показываем контакты с type='elite'
-                    card.style.display = type === 'elite' ? 'flex' : 'none';
-                } else if (currentContactFilter === 'blocked') {
-                    // Для blocked показываем только заблокированные контакты
-                    card.style.display = type === 'blocked' ? 'flex' : 'none';
-                } else if (currentContactFilter === 'delegating_to_me' || currentContactFilter === 'delegating_by_me') {
-                    // Для делегирования показываем контакты соответствующего типа
-                    card.style.display = type === currentContactFilter ? 'flex' : 'none';
-                } else if (currentContactFilter === 'recommended') {
-                    // Для recommended показываем только recommended контакты
-                    card.style.display = type === 'recommended' ? 'flex' : 'none';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
+            // Используем функцию с пагинацией вместо прямого управления display
+            renderContacts();
         }
 
         // Global variables
@@ -1154,38 +1081,38 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Контакты</h3>
                         </div>
-                        <button onclick="toggleContactFilters()" class="section-toggle-btn" id="contact-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
-                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-                            </svg>
-                        </button>
                     </div>
                     <div id="contact-filter-content" style="margin-bottom: 15px;">
+                        <div style="position: relative; width: 100%;">
+                            <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                                <option value="favorite">Избранное</option>
+                                <option value="recommended" selected>Рекомендуемые</option>
+                                <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
+                                <option value="delegating_to_me">Поручают мне</option>
+                                <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                                <option value="blocked">Заблокировано</option>
+                            </select>
+                            <button onclick="event.stopPropagation(); toggleContactFilters()" class="section-toggle-btn" id="contact-filter-toggle-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center; pointer-events: all; z-index: 10;">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                    <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                                </svg>
+                            </button>
+                        </div>
                     <script>
-                        // Инициализация состояния фильтров контактов
+                        // Инициализация состояния фильтров контактов - ВСЕГДА ПОКАЗЫВАЕМ
                         (function() {
-                            var isCollapsed = localStorage.getItem('contactFiltersCollapsed');
                             var contentEl = document.getElementById('contact-filter-content');
                             var btn = document.getElementById('contact-filter-toggle-btn');
                             var svg = btn ? btn.querySelector('svg') : null;
                             
-                            if (isCollapsed === 'true') {
-                                if (contentEl) contentEl.style.display = 'none';
-                                if (svg) svg.style.transform = 'rotate(-90deg)';
-                            } else {
-                                if (contentEl) contentEl.style.display = 'block';
-                                if (svg) svg.style.transform = 'rotate(0deg)';
+                            // Всегда показываем фильтр и не используем localStorage
+                            if (contentEl) {
+                                contentEl.style.display = 'block';
+                                contentEl.style.visibility = 'visible';
                             }
+                            if (svg) svg.style.transform = 'rotate(0deg)';
                         })();
                     </script>
-                        <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
-                            <option value="favorite">Избранное</option>
-                            <option value="recommended" selected>Рекомендуемые</option>
-                            <option value="elite"{% if subscription_tier not in ['PREMIUM'] %} disabled{% endif %}>Премиум{% if subscription_tier not in ['PREMIUM'] %} (недоступно){% endif %}</option>
-                            <option value="delegating_to_me">Поручают мне</option>
-                            <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
-                            <option value="blocked">Заблокировано</option>
-                        </select>
                     </div>
                     <div class="people-list" id="people-list" style="padding: 0 4px;">
                         <!-- Контакты будут загружены динамически -->
@@ -1333,38 +1260,39 @@
                             </svg>
                             <h3 style="margin: 0; font-size: 13px; font-weight: 400; color: #374151; line-height: normal;">Задачи</h3>
                         </div>
-                        <button onclick="toggleTaskFilters()" class="section-toggle-btn" id="task-filter-toggle-btn" style="background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center;">
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
-                                <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-                            </svg>
-                        </button>
                     </div>
                     <div id="task-filter-content" style="margin-bottom: 15px;">
+                        <div style="position: relative; width: 100%;">
+                            <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                                <option value="all" selected>Все</option>
+                                <option value="my">Личные</option>
+                                <option value="assigned-to-me">Поручили мне</option>
+                                <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
+                                <option value="overdue">Просрочено</option>
+                                <option value="completed">Выполнено</option>
+                            </select>
+                            <button onclick="event.stopPropagation(); toggleTaskFilters()" class="section-toggle-btn" id="task-filter-toggle-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center; pointer-events: all; z-index: 10;">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
+                                    <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                                </svg>
+                            </button>
+                        </div>
                     <script>
                         // Инициализация состояния фильтров задач
                         (function() {
-                            var isCollapsed = localStorage.getItem('taskFiltersCollapsed');
+                            // Временно принудительно показываем фильтр
                             var contentEl = document.getElementById('task-filter-content');
                             var btn = document.getElementById('task-filter-toggle-btn');
                             var svg = btn ? btn.querySelector('svg') : null;
                             
-                            if (isCollapsed === 'true') {
-                                if (contentEl) contentEl.style.display = 'none';
-                                if (svg) svg.style.transform = 'rotate(-90deg)';
-                            } else {
-                                if (contentEl) contentEl.style.display = 'block';
-                                if (svg) svg.style.transform = 'rotate(0deg)';
-                            }
+                            // Всегда показываем фильтр
+                            if (contentEl) contentEl.style.display = 'block';
+                            if (svg) svg.style.transform = 'rotate(0deg)';
+                            
+                            // Сбрасываем localStorage
+                            localStorage.removeItem('taskFiltersCollapsed');
                         })();
                     </script>
-                        <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 4px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none;">
-                            <option value="all" selected>Все</option>
-                            <option value="my">Личные</option>
-                            <option value="assigned-to-me">Поручили мне</option>
-                            <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
-                            <option value="overdue">Просрочено</option>
-                            <option value="completed">Выполнено</option>
-                        </select>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container" style="padding: 0 4px;">
                         <div class="task-groups" id="task-groups">
@@ -2929,6 +2857,12 @@
                 // Force reload contacts to update heart icons
                 cachedPartnersData = null;
                 await updatePeople();
+                
+                // Если активен фильтр избранное, обновляем его через пагинацию
+                if (currentContactFilter === 'favorite') {
+                    await applyContactFilter();
+                }
+                
                 // Обновляем ленту новостей, так как состав избранного изменился
                 await loadFeed();
                 // Обновить элитные контакты если активен фильтр
@@ -3341,7 +3275,7 @@
         let currentPage = 1;
         const TASKS_PER_PAGE = 10;
         let currentContactPage = 1;
-        const CONTACTS_PER_PAGE = 12;
+        const CONTACTS_PER_PAGE = 10;
         let allTasksData = [];
         let allTasksFromServer = []; // Все задачи с сервера (включая завершенные)
         let lastMessageCount = 0;
@@ -3917,60 +3851,70 @@
             // Собираем все контакты из всех категорий
             const recommendedCards = peopleList.querySelectorAll('.contact-recommended');
             recommendedCards.forEach(card => {
+                const isFavorite = card.classList.contains('contact-favorite');
                 const contactData = {
                     type: 'recommended',
                     html: card.innerHTML,
                     username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
                     tier: card.dataset.tier || null,
-                    element: card
+                    element: card,
+                    isFavorite: isFavorite
                 };
                 allContacts.push(contactData);
             });
 
             const delegatingToMeCards = peopleList.querySelectorAll('.contact-delegating-to-me');
             delegatingToMeCards.forEach(card => {
+                const isFavorite = card.classList.contains('contact-favorite');
                 const contactData = {
                     type: 'delegating_to_me',
                     html: card.innerHTML,
                     username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
                     tier: card.dataset.tier || null,
-                    element: card
+                    element: card,
+                    isFavorite: isFavorite
                 };
                 allContacts.push(contactData);
             });
 
             const delegatingByMeCards = peopleList.querySelectorAll('.contact-delegating-by-me');
             delegatingByMeCards.forEach(card => {
+                const isFavorite = card.classList.contains('contact-favorite');
                 const contactData = {
                     type: 'delegating_by_me',
                     html: card.innerHTML,
                     username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
                     tier: card.dataset.tier || null,
-                    element: card
-                };
-                allContacts.push(contactData);
-            });
-
-            const favoriteCards = peopleList.querySelectorAll('.contact-favorite');
-            favoriteCards.forEach(card => {
-                const contactData = {
-                    type: 'favorite',
-                    html: card.innerHTML,
-                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
-                    tier: card.dataset.tier || null,
-                    element: card
+                    element: card,
+                    isFavorite: isFavorite
                 };
                 allContacts.push(contactData);
             });
 
             const blockedCards = peopleList.querySelectorAll('.contact-blocked');
             blockedCards.forEach(card => {
+                const isFavorite = card.classList.contains('contact-favorite');
                 const contactData = {
                     type: 'blocked',
                     html: card.innerHTML,
                     username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
                     tier: card.dataset.tier || null,
-                    element: card
+                    element: card,
+                    isFavorite: isFavorite
+                };
+                allContacts.push(contactData);
+            });
+
+            const eliteCards = peopleList.querySelectorAll('.contact-elite');
+            eliteCards.forEach(card => {
+                const isFavorite = card.classList.contains('contact-favorite');
+                const contactData = {
+                    type: 'elite',
+                    html: card.innerHTML,
+                    username: card.querySelector('.task-title')?.textContent?.replace('@', '') || card.dataset.username || '',
+                    tier: card.dataset.tier || null,
+                    element: card,
+                    isFavorite: isFavorite
                 };
                 allContacts.push(contactData);
             });
@@ -3986,11 +3930,8 @@
             // Фильтруем контакты по текущему фильтру
             let filteredContacts = Object.values(uniqueContacts);
             if (currentContactFilter === 'favorite') {
-                // Показываем только избранные контакты
-                filteredContacts = filteredContacts.filter(contact => {
-                    const isFavorite = cachedFavorites && cachedFavorites.includes(contact.username);
-                    return isFavorite;
-                });
+                // Показываем только избранные контакты (те у кого есть класс contact-favorite)
+                filteredContacts = filteredContacts.filter(contact => contact.isFavorite === true);
             } else if (currentContactFilter !== 'all') {
                 // Показываем контакты определенного типа
                 filteredContacts = filteredContacts.filter(contact => contact.type === currentContactFilter);
@@ -5889,7 +5830,7 @@
                         // Обновляем визуализацию окружения
                         await updateCircleContacts(data.partners);
                         
-                        // Применяем текущий фильтр после обновления контактов
+                        // Применяем текущий фильтр после обновления контактов с пагинацией
                         applyContactFilter();
                     } else {
                         peopleList.innerHTML = '';

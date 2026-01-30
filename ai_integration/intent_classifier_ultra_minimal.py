@@ -39,7 +39,7 @@ class IntentClassifierUltraMinimal:
                     else:
                         return "conversation"  # fallback
         except Exception as e:
-            print(f"AI call failed: {e}")
+            logger.error(f"AI call failed: {e}")
             return "conversation"  # fallback
 
     @classmethod
@@ -114,7 +114,7 @@ class IntentClassifierUltraMinimal:
             return 'conversation'
 
         except Exception as e:
-            print(f"Intent classification error: {e}")
+            logger.error(f"Intent classification error: {e}")
             return 'conversation'
 
     @classmethod

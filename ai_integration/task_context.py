@@ -41,10 +41,10 @@ def update_user_current_task(user: User, task_title: str, session) -> Optional[T
 
         if task:
             # Обновляем current_task_id пользователя
-            print(f"[DEBUG] update_user_current_task: setting user.current_task_id = {task.id} for user {user.telegram_id}")
+            # Setting current task for user
             user.current_task_id = task.id
             session.commit()
-            print(f"[DEBUG] update_user_current_task: committed, user.current_task_id = {user.current_task_id}")
+            # Current task set successfully
             logger.info(f"[CONTEXT] Updated current_task for user {user.telegram_id} to: {task.title} (ID: {task.id})")
             return task
         else:
