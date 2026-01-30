@@ -490,12 +490,13 @@
                 display: block !important;
             }
             
-            /* Увеличиваем аватар */
+            /* Увеличиваем аватар и делаем квадратным с закругленными углами */
             .header-avatar-small img,
             .header-avatar-small div {
                 width: 36px !important;
                 height: 36px !important;
                 font-size: 16px !important;
+                border-radius: 6px !important;
             }
             
             /* Показываем кнопку Telegram на мобильных */
@@ -503,11 +504,14 @@
                 display: none !important;
             } */
             
-            /* Компактные кнопки в хедере */
-            .header-info button {
-                padding: 6px 10px !important;
-                height: 32px !important;
-                font-size: 12px !important;
+            /* Квадратные кнопки в хедере */
+            .header-info button,
+            .header-info .quick-action {
+                width: 36px !important;
+                height: 36px !important;
+                padding: 6px !important;
+                min-width: 36px !important;
+            }
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
