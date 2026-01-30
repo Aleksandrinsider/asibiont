@@ -943,9 +943,32 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
                 include_delegated=True
             )
     else:
-        if close_session:
-            session.close()
-        return "Не указано название задачи."
+        # Если название не указано, пробуем взять текущую задачу или последнюю активную
+        logger.info("[RESCHEDULE_TASK] No task_title provided, looking for current/last active task")
+        from .task_context import get_user_current_task
+        from models import Task
+        
+        # Сначала пробуем текущую задачу
+        task = get_user_current_task(user)
+        
+        # Если текущей нет, берем последнюю активную (по reminder_time)
+        if not task:
+            logger.info("[RESCHEDULE_TASK] No current task, searching for last active task")
+            task = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status != 'completed',
+                Task.status != 'deleted'
+            ).order_by(Task.reminder_time.asc()).first()
+            
+            if task:
+                logger.info(f"[RESCHEDULE_TASK] Found last active task: '{task.title}'")
+            else:
+                logger.info("[RESCHEDULE_TASK] No active tasks found")
+        
+        if not task:
+            if close_session:
+                session.close()
+            return "Не найдено активных задач для переноса."
 
     if task:
         try:
