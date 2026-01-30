@@ -2560,6 +2560,8 @@ def find_partners(user_id=None, session=None):
             partner_user = session.query(User).filter_by(id=p.user_id).first()
             if partner_user and partner_user.username:
                 info_parts = []
+                if hasattr(p, "current_plans") and p.current_plans:
+                    info_parts.append(f"сейчас: {p.current_plans}")
                 if p.interests:
                     info_parts.append(f"интересы: {p.interests}")
                 if hasattr(p, "bio") and p.bio:
@@ -2585,6 +2587,8 @@ def find_partners(user_id=None, session=None):
             partner_user = session.query(User).filter_by(id=p.user_id).first()
             if partner_user and partner_user.username:
                 info_parts = []
+                if hasattr(p, "current_plans") and p.current_plans:
+                    info_parts.append(f"сейчас: {p.current_plans}")
                 if p.interests:
                     info_parts.append(f"интересы: {p.interests}")
                 if hasattr(p, "bio") and p.bio:
