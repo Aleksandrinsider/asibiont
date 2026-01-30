@@ -6816,6 +6816,17 @@ if __name__ == "__main__":
                 logger.info(f"Dashboard endpoint: http://{host}:{port}/dashboard")
                 logger.info("Server is ready to accept connections")
 
+                # Start auto-post service as background task
+                auto_post_task = None
+                if not LOCAL:  # Only in production
+                    try:
+                        from auto_post_service import run_service as run_auto_post_service
+                        logger.info("Starting auto-post service in background...")
+                        auto_post_task = asyncio.create_task(run_auto_post_service())
+                        logger.info("Auto-post service task created")
+                    except Exception as e:
+                        logger.error(f"Failed to start auto-post service: {e}")
+
                 # Start polling for bot ONLY in local mode
                 polling_task = None
                 if LOCAL and bot and dp:
@@ -6838,6 +6849,10 @@ if __name__ == "__main__":
                 except Exception as e:
                     logger.error(f"Server interrupted: {e}")
                 finally:
+                    # Cancel background tasks
+                    if auto_post_task and not auto_post_task.done():
+                        logger.info("Cancelling auto-post service...")
+                        auto_post_task.cancel()
                     await runner.cleanup()
                     logger.info("Server shut down")
 
