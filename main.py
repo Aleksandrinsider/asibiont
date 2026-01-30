@@ -5640,6 +5640,15 @@ async def on_startup(app):
     except Exception as e:
         logger.error(f"❌ Error syncing subscription tiers on startup: {e}")
 
+    # Set webhook for production mode
+    if bot and not LOCAL:
+        webhook_url = os.getenv('WEBHOOK_URL', 'https://task-production-1d10.up.railway.app/webhook')
+        try:
+            await bot.set_webhook(webhook_url)
+            logger.info(f"✅ Webhook set to: {webhook_url}")
+        except Exception as e:
+            logger.error(f"❌ Failed to set webhook: {e}")
+
 
 async def on_shutdown(app):
     """Cleanup on application shutdown"""
@@ -6602,16 +6611,16 @@ async def start_reminder_service(app):
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
 app.on_startup.append(on_startup)
-# app.on_shutdown.append(on_shutdown)
+app.on_shutdown.append(on_shutdown)
 
 if bot:
-    # webhook_requests_handler = SimpleRequestHandler(
-    #     dispatcher=dp,
-    #     bot=bot,
-    # )
-    # webhook_requests_handler.register(app, path="/webhook")
-    # setup_application(app, dp, bot=bot)
-    logger.info("Bot created, but webhook setup disabled for local mode")
+    webhook_requests_handler = SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    )
+    webhook_requests_handler.register(app, path="/webhook")
+    setup_application(app, dp, bot=bot)
+    logger.info("Bot created with webhook setup for production mode")
 else:
     logger.warning("Bot not created or local mode, skipping webhook setup")
 
