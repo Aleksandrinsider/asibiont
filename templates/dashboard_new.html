@@ -438,6 +438,21 @@
                 order: 1;
             }
             
+            /* Разворачиваем профиль по умолчанию на мобильных */
+            #profile-content {
+                display: block !important;
+            }
+            
+            #profile-toggle-btn svg {
+                transform: rotate(0deg) !important;
+            }
+            
+            /* Показываем фильтр и список контактов */
+            #contact-filter-content,
+            .people-list {
+                display: block !important;
+            }
+            
             /* Центральная колонка (чат) вторая */
             .center-column {
                 order: 2;
