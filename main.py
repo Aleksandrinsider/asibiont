@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Aiogram imports
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher
 
 # Скрываем некритичные предупреждения
