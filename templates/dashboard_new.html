@@ -4787,6 +4787,9 @@
                     // Очищаем флаг пропуска, т.к. профиль заполнен
                     localStorage.removeItem('skipQuickSetup');
                     
+                    // Восстанавливаем текст кнопки
+                    submitBtn.textContent = originalText;
+                    
                     // Закрываем модальное окно
                     const modal = document.getElementById('quick-profile-modal');
                     if (modal) {
@@ -5144,27 +5147,35 @@
         // Функция обновления времени в шапке
         function updateHeaderTime() {
             // Use server-provided time with user timezone
-            const now = new Date();
-            const userTime = new Date(now.toLocaleString('en-US', { timeZone: USER_TIMEZONE }));
-            const hours = String(userTime.getHours()).padStart(2, '0');
-            const minutes = String(userTime.getMinutes()).padStart(2, '0');
-            
-            const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
-                          'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
-            const day = userTime.getDate();
-            const month = months[userTime.getMonth()];
-            const year = userTime.getFullYear();
-            
-            const timeString = `${hours}:${minutes}`;
-            const dateString = `${day} ${month} ${year} г.`;
-            
-            const headerTime = document.getElementById('header-time');
-            const headerDate = document.getElementById('header-date');
-            if (headerTime) {
-                headerTime.textContent = timeString;
-            }
-            if (headerDate) {
-                headerDate.textContent = dateString;
+            try {
+                const now = new Date();
+                // Используем правильную конвертацию в user timezone
+                const formatter = new Intl.DateTimeFormat('ru-RU', {
+                    timeZone: USER_TIMEZONE,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                });
+                const timeString = formatter.format(now);
+                
+                const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
+                    timeZone: USER_TIMEZONE,
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                });
+                const dateString = dateFormatter.format(now) + ' г.';
+                
+                const headerTime = document.getElementById('header-time');
+                const headerDate = document.getElementById('header-date');
+                if (headerTime) {
+                    headerTime.textContent = timeString;
+                }
+                if (headerDate) {
+                    headerDate.textContent = dateString;
+                }
+            } catch (error) {
+                console.error('Error updating header time:', error);
             }
         }
         

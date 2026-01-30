@@ -90,17 +90,20 @@ def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None
             logger.warning(f"AI couldn't parse time '{time_str}': {parsed['error']}")
             return None
         
-        # Create datetime in user's timezone
-        user_tz = current_time.tzinfo
-        result_dt = current_time.replace(
-            year=parsed["year"],
-            month=parsed["month"],
-            day=parsed["day"],
-            hour=parsed["hour"],
-            minute=parsed["minute"],
-            second=0,
-            microsecond=0
-        )
+        # Create datetime in user's timezone with proper error handling
+        try:
+            result_dt = current_time.replace(
+                year=int(parsed["year"]),
+                month=int(parsed["month"]),
+                day=int(parsed["day"]),
+                hour=int(parsed["hour"]),
+                minute=int(parsed["minute"]),
+                second=0,
+                microsecond=0
+            )
+        except (ValueError, KeyError) as e:
+            logger.error(f"❌ Invalid date/time from AI: {parsed}, error: {e}")
+            return None
         
         logger.info(f"✅ AI parsed '{time_str}' → {result_dt}")
         return result_dt

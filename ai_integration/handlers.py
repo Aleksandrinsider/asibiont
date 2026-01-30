@@ -957,12 +957,19 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             # Use AI for flexible time parsing
             from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
             
-            local_dt = parse_time_with_ai(new_time, current_time)
+            local_dt = None
+            try:
+                local_dt = parse_time_with_ai(new_time, current_time)
+            except Exception as e:
+                logger.error(f"[RESCHEDULE_TASK] AI parsing error: {e}")
             
             # Fallback to simple HH:MM parsing if AI fails
             if not local_dt:
                 logger.info("[RESCHEDULE_TASK] AI parsing failed, trying simple fallback...")
-                local_dt = parse_time_simple_fallback(new_time, current_time)
+                try:
+                    local_dt = parse_time_simple_fallback(new_time, current_time)
+                except Exception as e:
+                    logger.error(f"[RESCHEDULE_TASK] Simple fallback error: {e}")
             
             if not local_dt:
                 logger.error(f"[RESCHEDULE_TASK] ❌ Cannot parse time format: '{new_time}'")
@@ -970,9 +977,10 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
                     session.close()
                 return "Не могу понять формат времени. Попробуй указать точнее, например: 'завтра в 10:00', 'через 2 часа', '15:30'."
 
+            # Convert to UTC for storage (local_dt already has timezone from parser)
             task.reminder_time = local_dt.astimezone(pytz.UTC)
             session.commit()
-            logger.info(f"[RESCHEDULE_TASK] ✅ Task {task.id} updated, new time (UTC): {task.reminder_time}")
+            logger.info(f"[RESCHEDULE_TASK] ✅ Task {task.id} updated, new time (UTC): {task.reminder_time}, local: {local_dt}")
 
             # Перепланируем напоминание (создается новое или обновляется существующее)
             try:
@@ -995,7 +1003,11 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             result = f"Задача '{task.title}' перенесена на {local_dt.strftime('%d.%m.%Y %H:%M')}."
 
         except ValueError as e:
+            logger.error(f"[RESCHEDULE_TASK] ValueError: {e}")
             result = f"Ошибка формата времени: {e}. Используйте формат HH:MM или YYYY-MM-DD HH:MM."
+        except Exception as e:
+            logger.error(f"[RESCHEDULE_TASK] Unexpected error: {e}", exc_info=True)
+            result = f"Ошибка при переносе задачи: {str(e)}"
     else:
         result = f"Задача '{task_title}' не найдена."
 
