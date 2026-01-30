@@ -475,6 +475,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             elif func_name == "find_partners":
                 result = find_partners(user_id=user_id, session=db_session)
+                tool_results.append({"function": func_name, "result": result})
+                
             elif func_name == "find_relevant_contacts_for_task":
                 task_desc = func_args.get('task_description', '')
                 result = find_relevant_contacts_for_task(task_description=task_desc, user_id=user_id, session=db_session)
