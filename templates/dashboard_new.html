@@ -393,13 +393,13 @@
         }
         
         @media (max-width: 768px) {
-            body:not(.logged-in)::before {
+            /* body:not(.logged-in)::before {
                 display: none !important;
-            }
+            } */
             
-            /* Показываем мобильное информационное сообщение */
+            /* Скрываем мобильное информационное сообщение */
             .mobile-info-message {
-                display: block !important;
+                display: none !important;
             }
             
             /* Показываем мобильный логотип на странице входа */
@@ -409,7 +409,7 @@
                 margin-bottom: 24px;
             }
             
-            /* Скрываем сайдбары с сообщениями на странице входа */
+            /* Скрываем сайдбары с сообщениями на странице входа - оставляем для чистоты */
             .login-messages-sidebar {
                 display: none !important;
             }
