@@ -6158,7 +6158,8 @@ async def api_profile_handler(request):
             'current_date': current_date,
             'formatted_end_date': formatted_end_date,
             'user_avatar_url': user_avatar_url,
-            'first_name': user.first_name
+            'first_name': user.first_name,
+            'telegram_id': user.telegram_id
         }
 
         return web.json_response(response_data)
