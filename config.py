@@ -53,7 +53,7 @@ if not TELEGRAM_BOT_USERNAME:
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID", "123456789")  # Replace with actual developer telegram_id
 
 # WEBHOOK_URL теперь хардкодится в main.py для Railway subdomain
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://task-production-1d10.up.railway.app/webhook")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://asibiont.ru/webhook")
 
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://asibiont.ru")
 

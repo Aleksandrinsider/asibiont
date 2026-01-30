@@ -5642,7 +5642,7 @@ async def on_startup(app):
 
     # Set webhook for production mode
     if bot and not LOCAL:
-        webhook_url = os.getenv('WEBHOOK_URL', 'https://task-production-1d10.up.railway.app/webhook')
+        webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.ru/webhook')
         try:
             await bot.set_webhook(webhook_url)
             logger.info(f"✅ Webhook set to: {webhook_url}")
@@ -5663,7 +5663,7 @@ async def on_shutdown(app):
                 webhook_url = f"https://{railway_project_id}.up.railway.app/webhook"
             else:
                 # Fallback to hardcoded but log warning
-                webhook_url = "https://task-production-1d10.up.railway.app/webhook"
+                webhook_url = "https://asibiont.ru/webhook"
                 logger.warning("WEBHOOK_URL not set and RAILWAY_PROJECT_ID not found, using hardcoded URL")
 
         try:
