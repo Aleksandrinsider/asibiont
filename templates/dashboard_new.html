@@ -503,14 +503,18 @@
             
             /* Компактные кнопки в хедере */
             .header-info button {
-                padding: 4px 8px !important;
+                padding: 4px 6px !important;
                 height: 26px !important;
-                font-size: 11px !important;
+                font-size: 10px !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                max-width: 70px !important;
             }
             
             /* Уменьшаем отступы между кнопками */
             .header-info > div {
-                gap: 4px !important;
+                gap: 3px !important;
             }
             
             /* Уменьшаем аватары контактов */
