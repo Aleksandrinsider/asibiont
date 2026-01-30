@@ -1,8 +1,11 @@
 import json
 from typing import Optional
 import aiohttp
+import logging
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from .tools import TOOLS
+
+logger = logging.getLogger(__name__)
 
 class IntentClassifierUltraMinimal:
     """Ultra minimal intent classification - AI figures everything out"""
@@ -107,11 +110,6 @@ conversation - остальное (привет, спасибо, как дела
             if response:
                 intent = response.strip().lower()
                 # Remove any extra text, keep only the first word
-                intent = intent.split()[0] if intent else "conversation"
-
-                # Clean response and return as intent (fully trust AI)
-                intent = response.strip().lower()
-                # Remove any extra text, keep only the first word if multiple
                 intent = intent.split()[0] if intent else "conversation"
 
                 if intent in cls.INTENTS:

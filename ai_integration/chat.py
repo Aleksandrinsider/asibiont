@@ -1918,149 +1918,146 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.warning(f"[AI INTENT] Failed to use AI classification: {e}, falling back to static")
             intent = {'type': 'conversation', 'confidence': 0.5, 'params': {}}
 
-        # Если AI не сработал или уверенность низкая - используем статическую классификацию
-        if intent['type'] == 'conversation' and intent['confidence'] <= 0.5:
-            # ПРОВЕРКА СПЕЦИФИЧЕСКИХ СЛУЧАЕВ С ВЫСОКИМ ПРИОРИТЕТОМ
-            message_lower = original_message.lower()
-
-        # ПРОВЕРКА СПЕЦИФИЧЕСКИХ СЛУЧАЕВ С ВЫСОКИМ ПРИОРИТЕТОМ
+        # ПРОВЕРКА СПЕЦИФИЧЕСКИХ СЛУЧАЕВ (всегда выполняется, даже после AI)
         message_lower = original_message.lower()
 
-        # 1. Повторяющиеся задачи (высокий приоритет)
-        if any(phrase in message_lower for phrase in [
+        # Если AI не дал результат или вернул conversation - используем статическую классификацию
+        if intent['type'] == 'conversation':
+            # 1. Повторяющиеся задачи (высокий приоритет)
+            if any(phrase in message_lower for phrase in [
             'каждый день', 'ежедневно', 'каждую неделю', 'еженедельно',
             'каждый месяц', 'ежемесячно', 'повторять', 'регулярно'
         ]):
-            intent = {"type": "set_recurring_task", "confidence": 0.95, "params": {}}
+                intent = {"type": "set_recurring_task", "confidence": 0.95, "params": {}}
 
-        # 2. Удаление всех задач (высокий приоритет)
-        elif any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']) and \
-             any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'удалить']):
-            intent = {"type": "delete_all_tasks", "confidence": 0.95, "params": {}}
+            # 2. Удаление всех задач (высокий приоритет)
+            elif any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']) and \
+                 any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'удалить']):
+                intent = {"type": "delete_all_tasks", "confidence": 0.95, "params": {}}
 
-        # 3. Детали конкретной задачи
-        elif any(phrase in message_lower for phrase in [
-            'детали задачи', 'покажи детали', 'что в задаче', 'информация о задаче'
-        ]):
-            intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
+            # 3. Детали конкретной задачи
+            elif any(phrase in message_lower for phrase in [
+                'детали задачи', 'покажи детали', 'что в задаче', 'информация о задаче'
+            ]):
+                intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
 
-        # 4. Обновление профиля
-        elif any(phrase in message_lower for phrase in [
-            'обнови профиль', 'измени профиль', 'добавь в профиль', 'мой профиль'
-        ]):
-            intent = {"type": "update_profile", "confidence": 0.9, "params": {}}
+            # 4. Обновление профиля
+            elif any(phrase in message_lower for phrase in [
+                'обнови профиль', 'измени профиль', 'добавь в профиль', 'мой профиль'
+            ]):
+                intent = {"type": "update_profile", "confidence": 0.9, "params": {}}
 
-        # 5. Поиск партнеров
-        elif any(phrase in message_lower for phrase in [
-            'найди партнеров', 'поищи контакты', 'партнеры по', 'контакты для'
-        ]):
-            intent = {"type": "find_partners", "confidence": 0.9, "params": {}}
+            # 5. Поиск партнеров
+            elif any(phrase in message_lower for phrase in [
+                'найди партнеров', 'поищи контакты', 'партнеры по', 'контакты для'
+            ]):
+                intent = {"type": "find_partners", "confidence": 0.9, "params": {}}
 
-        # 6. Сохранение в память / обновление интересов
-        elif any(phrase in message_lower for phrase in [
-            'запомни', 'помни что', 'я предпочитаю', 'у меня аллергия',
-            'хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь',
-            'хочу научиться', 'хочу освоить', 'планирую изучить'
-        ]):
-            intent = {"type": "update_user_memory", "confidence": 0.95, "params": {}}
-            
-            # ENHANCED: Автоматическое распознавание целей и интересов
-            # "хочу научиться X" = ЦЕЛЬ + ИНТЕРЕС одновременно
-            if any(goal_trigger in message_lower for goal_trigger in ['хочу научиться', 'хочу освоить', 'планирую', 'моя цель']):
-                # Добавляем подсказку что это ЦЕЛЬ И ИНТЕРЕС
-                context_hint = "\n🎯 КРИТИЧНО: Фраза содержит ЦЕЛЬ и ИНТЕРЕС одновременно. Вызови update_user_memory ДВАЖДЫ:\n1) memory_type='goal' - для сохранения цели\n2) memory_type='interest' - для сохранения интереса\nПосле этого вызови find_relevant_contacts_for_task чтобы найти людей с таким же интересом."
-                if context:
-                    context += context_hint
+            # 6. Сохранение в память / обновление интересов
+            elif any(phrase in message_lower for phrase in [
+                'запомни', 'помни что', 'я предпочитаю', 'у меня аллергия',
+                'хочу заняться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь',
+                'хочу научиться', 'хочу освоить', 'планирую изучить'
+            ]):
+                intent = {"type": "update_user_memory", "confidence": 0.95, "params": {}}
+                
+                # ENHANCED: Автоматическое распознавание целей и интересов
+                # "хочу научиться X" = ЦЕЛЬ + ИНТЕРЕС одновременно
+                if any(goal_trigger in message_lower for goal_trigger in ['хочу научиться', 'хочу освоить', 'планирую', 'моя цель']):
+                    # Добавляем подсказку что это ЦЕЛЬ И ИНТЕРЕС
+                    context_hint = "\n🎯 КРИТИЧНО: Фраза содержит ЦЕЛЬ и ИНТЕРЕС одновременно. Вызови update_user_memory ДВАЖДЫ:\n1) memory_type='goal' - для сохранения цели\n2) memory_type='interest' - для сохранения интереса\nПосле этого вызови find_relevant_contacts_for_task чтобы найти людей с таким же интересом."
+                    if context:
+                        context += context_hint
+                    else:
+                        context = context_hint
+
+            # 7. Делегирование задач
+            elif any(kw in message_lower for kw in ['делегируй', 'поручи', 'передай']) and \
+                 'задачу' in message_lower:
+                intent = {"type": "delegate_task", "confidence": 0.9, "params": {}}
+
+            # 8. Изменение существующей задачи (текст или время)
+            elif any(phrase in message_lower for phrase in [
+                'измени название', 'исправь задачу', 'обнови задачу', 'добавь описание',
+                'измени время', 'перенеси на', 'перенеси задачу', 'поставь на другое время', 'давай перенесем'
+            ]):
+                # Определяем тип изменения
+                if any(time_kw in message_lower for time_kw in ['время', 'на ', 'перенеси', 'перенесем']):
+                    intent = {"type": "reschedule_task", "confidence": 0.95, "params": {}}
                 else:
-                    context = context_hint
+                    intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
 
-        # 7. Делегирование задач
-        elif any(kw in message_lower for kw in ['делегируй', 'поручи', 'передай']) and \
-             'задачу' in message_lower:
-            intent = {"type": "delegate_task", "confidence": 0.9, "params": {}}
+            # 9. Удаление задачи
+            elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить задачу']) and \
+                 not any(kw in message_lower for kw in ['все', 'всё']):
+                intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
 
-        # 8. Изменение существующей задачи (текст или время)
-        elif any(phrase in message_lower for phrase in [
-            'измени название', 'исправь задачу', 'обнови задачу', 'добавь описание',
-            'измени время', 'перенеси на', 'перенеси задачу', 'поставь на другое время', 'давай перенесем'
-        ]):
-            # Определяем тип изменения
-            if any(time_kw in message_lower for time_kw in ['время', 'на ', 'перенеси', 'перенесем']):
-                intent = {"type": "reschedule_task", "confidence": 0.95, "params": {}}
-            else:
-                intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
+            # 10б. Извлечение названия задачи для завершения (если нужно уточнение)
+            # Эта секция срабатывает если AI не смог определить intent выше
+            # Для сообщений типа "всё продукты заказал" - извлекаем "продукты"
+            elif 'всё' in message_lower and len(message_lower.split()) > 2:
+                words = message_lower.split()
+                # Находим слово "всё" и берём следующее слово как ключ
+                task_title = None
+                try:
+                    vse_index = words.index('всё')
+                    if vse_index + 1 < len(words):
+                        task_title = words[vse_index + 1]
+                except ValueError:
+                        pass
+                # Для других случаев - ищем после ключевых слов
+                if not task_title:
+                    complete_keywords = ['сделал', 'выполнил', 'завершил', 'закончил', 'готово', 'закрыл']
+                    for keyword in complete_keywords:
+                        if keyword in message_lower:
+                            idx = message_lower.find(keyword)
+                            remaining_text = message_lower[idx + len(keyword):].strip()
+                            # Ищем существительные (слова, описывающие задачу)
+                            words = remaining_text.split()[:3]  # Не больше 3 слов
+                            if words:
+                                # Фильтруем служебные слова
+                                filtered_words = [w for w in words if w not in ['задачу', 'работу', 'дело', 'с', 'по', 'в', 'на', 'и', 'а', 'но', 'или']]
+                                if filtered_words:
+                                    task_title = ' '.join(filtered_words[:2])  # Максимум 2 слова
+                                    break
+                
+                intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
 
-        # 9. Удаление задачи
-        elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить задачу']) and \
-             not any(kw in message_lower for kw in ['все', 'всё']):
-            intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
+            # 10. Завершение задачи (ВЫСОКИЙ ПРИОРИТЕТ - проверяем РАНЬШЕ add_task)
+            elif any(phrase in message_lower for phrase in [
+                'выполнена', 'выполнил', 'выполнена!', 'задача выполнена',
+                'сделал задачу', 'завершил задачу', 'закончил задачу',
+                'готово с задачей', 'всё готово', 'всё сделано', 'готово', 'сделал',
+                'можно закрывать', 'закрывать сдачу', 'закрыть задачу', 'задача закрыта',
+                'приемку закрыть', 'сдачу закрыть', 'закрыто'
+            ]):
+                intent = {"type": "complete_task", "confidence": 0.95, "params": {}}
 
-        # 10б. Извлечение названия задачи для завершения (если нужно уточнение)
-        # Эта секция срабатывает если AI не смог определить intent выше
-        # Для сообщений типа "всё продукты заказал" - извлекаем "продукты"
-        elif 'всё' in message_lower and len(message_lower.split()) > 2:
-            words = message_lower.split()
-            # Находим слово "всё" и берём следующее слово как ключ
-            task_title = None
-            try:
-                vse_index = words.index('всё')
-                if vse_index + 1 < len(words):
-                    task_title = words[vse_index + 1]
-            except ValueError:
-                    pass
-            # Для других случаев - ищем после ключевых слов
-            if not task_title:
-                complete_keywords = ['сделал', 'выполнил', 'завершил', 'закончил', 'готово', 'закрыл']
-                for keyword in complete_keywords:
-                    if keyword in message_lower:
-                        idx = message_lower.find(keyword)
-                        remaining_text = message_lower[idx + len(keyword):].strip()
-                        # Ищем существительные (слова, описывающие задачу)
-                        words = remaining_text.split()[:3]  # Не больше 3 слов
-                        if words:
-                            # Фильтруем служебные слова
-                            filtered_words = [w for w in words if w not in ['задачу', 'работу', 'дело', 'с', 'по', 'в', 'на', 'и', 'а', 'но', 'или']]
-                            if filtered_words:
-                                task_title = ' '.join(filtered_words[:2])  # Максимум 2 слова
-                                break
-            
-            intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
+            # 11. Просмотр списка задач
+            elif any(phrase in message_lower for phrase in [
+                'покажи задачи', 'список задач', 'мои задачи', 'какие задачи',
+                'что запланировано', 'что у меня'
+            ]):
+                # Проверяем, не хочет ли пользователь детали конкретной задачи
+                if not any(det_kw in message_lower for det_kw in ['детали', 'подробно', 'информацию']):
+                    intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
 
-        # 10. Завершение задачи (ВЫСОКИЙ ПРИОРИТЕТ - проверяем РАНЬШЕ add_task)
-        elif any(phrase in message_lower for phrase in [
-            'выполнена', 'выполнил', 'выполнена!', 'задача выполнена',
-            'сделал задачу', 'завершил задачу', 'закончил задачу',
-            'готово с задачей', 'всё готово', 'всё сделано', 'готово', 'сделал',
-            'можно закрывать', 'закрывать сдачу', 'закрыть задачу', 'задача закрыта',
-            'приемку закрыть', 'сдачу закрыть', 'закрыто'
-        ]):
-            intent = {"type": "complete_task", "confidence": 0.95, "params": {}}
-
-        # 11. Просмотр списка задач
-        elif any(phrase in message_lower for phrase in [
-            'покажи задачи', 'список задач', 'мои задачи', 'какие задачи',
-            'что запланировано', 'что у меня'
-        ]):
-            # Проверяем, не хочет ли пользователь детали конкретной задачи
-            if not any(det_kw in message_lower for det_kw in ['детали', 'подробно', 'информацию']):
-                intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
-
-        # 12. Создание новой задачи (низкий приоритет, проверяем в конце)
-        # ВАЖНО: confidence снижен до 0.7 чтобы не переопределять AI intent
-        elif any(phrase in message_lower for phrase in [
-            'напомни', 'создай задачу', 'добавь задачу', 'нужно сделать', 'надо сделать'
-        ]) or \
-             (any(time_ind in message_lower for time_ind in [
-                 'завтра', 'послезавтра', 'через', 'в ', 'на '
-             ]) and len(message_lower.split()) > 3 and 
-              not any(complete_kw in message_lower for complete_kw in ['выполнена', 'сделал', 'готово'])):
-            intent = {"type": "add_task", "confidence": 0.7, "params": {}}
+            # 12. Создание новой задачи (низкий приоритет, проверяем в конце)
+            # ВАЖНО: confidence снижен до 0.7 чтобы не переопределять AI intent
+            elif any(phrase in message_lower for phrase in [
+                'напомни', 'создай задачу', 'добавь задачу', 'нужно сделать', 'надо сделать'
+            ]) or \
+                 (any(time_ind in message_lower for time_ind in [
+                     'завтра', 'послезавтра', 'через', 'в ', 'на '
+                 ]) and len(message_lower.split()) > 3 and 
+                  not any(complete_kw in message_lower for complete_kw in ['выполнена', 'сделал', 'готово'])):
+                intent = {"type": "add_task", "confidence": 0.7, "params": {}}
 
         # 13. Просмотр деталей задачи
-        elif any(phrase in message_lower for phrase in [
-            'детали', 'подробно', 'подробнее', 'информацию о задаче', 'покажи задачу', 'расскажи о задаче'
-        ]):
-            intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
+            elif any(phrase in message_lower for phrase in [
+                'детали', 'подробно', 'подробнее', 'информацию о задаче', 'покажи задачу', 'расскажи о задаче'
+            ]):
+                intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
 
         logger.info(f"[INTENT] Detected: {intent['type']} (confidence: {intent['confidence']})")
 
