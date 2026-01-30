@@ -473,14 +473,16 @@
             /* Адаптация хедера */
             .header-info {
                 font-size: 12px !important;
+                flex-wrap: nowrap !important;
             }
             
-            .header-info span {
+            /* Скрываем внутренние span'ы (точку и дату), кроме времени */
+            #header-info span:not(#header-time) {
                 display: none !important;
             }
             
-            .header-info #header-time {
-                display: inline !important;
+            #header-info {
+                display: flex !important;
             }
             
             /* Показываем сообщение для мобильных */
