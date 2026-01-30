@@ -791,13 +791,13 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 natural_responses.append("Все задачи удалены")
 
             elif "TASK_DELETED_ASK_REASON:" in result_text:
-                # AI должен спросить о причине удаления - НЕ добавляем в natural_responses,
-                # это инструкция для AI, а не сообщение пользователю
-                pass
+                # AI должен спросить о причине удаления
+                natural_responses.append("TASK_DELETED_ASK_REASON: Задача удалена, спроси о причине")
             
             elif "TASK_COMPLETED_ASK_RESULT:" in result_text:
-                # AI должен спросить о результате выполнения - НЕ добавляем в natural_responses
-                pass
+                # AI должен спросить о результате выполнения
+                task_title = result_text.replace("TASK_COMPLETED_ASK_RESULT:", "").strip()
+                natural_responses.append(f"TASK_COMPLETED_ASK_RESULT: {task_title}. Спроси о результате выполнения")
             
             elif "TASK_UPDATED:" in result_text:
                 # AI должен прокомментировать изменение задачи
