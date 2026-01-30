@@ -3907,7 +3907,7 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
 # Function removed
 
 
-async def update_user_memory_async(memory_type: str, content: str, user_id: int = None, session=None, close_session: bool = True) -> str:
+async def update_user_memory_async(memory_type: str = 'general', content: str = None, info: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
     """
     Сохранить информацию в память пользователя.
 
@@ -3930,6 +3930,12 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
     try:
         if not user_id:
             return "Необходимо указать ID пользователя"
+        
+        # Поддерживаем оба формата: info (старый) и content (новый)
+        actual_content = content if content else info
+        
+        if not actual_content:
+            return "❌ Требуется указать содержимое для сохранения"
 
         # Получить пользователя
         user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -3943,7 +3949,7 @@ async def update_user_memory_async(memory_type: str, content: str, user_id: int 
             session.add(profile)
 
         # Нормализуем content - убираем лишние слова
-        content_clean = content.lower()
+        content_clean = actual_content.lower()
         for phrase in ['хочу заняться', 'хочу научиться', 'интересуюсь', 'люблю', 'увлекаюсь', 'занимаюсь', 'умею', 'владею', 'моя цель', 'хочу достичь']:
             content_clean = content_clean.replace(phrase, '').strip()
         

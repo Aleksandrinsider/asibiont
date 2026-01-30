@@ -616,6 +616,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     # Генерируем естественный ответ на основе результатов tool calls
     if tool_results:
         natural_responses = []
+        final_content = "Действие выполнено"  # Default значение на случай ошибки
         has_list_tasks = False
         list_tasks_result = None
 
