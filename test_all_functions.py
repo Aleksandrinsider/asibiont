@@ -162,29 +162,29 @@ async def test_all_functions():
                     # Анализируем логи
                     logs = log_capture.getvalue()
                     
-                    # Определяем вызванную функцию
+                    # Определяем вызванную функцию из tool_calls в ответе
                     called_function = None
-                    if "Executing add_task" in logs:
-                        called_function = "add_task"
-                    elif "Executing complete_task" in logs:
-                        called_function = "complete_task"
-                    elif "Executing list_tasks" in logs:
-                        called_function = "list_tasks"
-                    elif "Executing delete_task" in logs:
-                        called_function = "delete_task"
-                    elif "Executing reschedule_task" in logs:
-                        called_function = "reschedule_task"
-                    elif "Executing update_profile" in logs:
-                        called_function = "update_profile"
-                    elif "Executing find_partners" in logs:
-                        called_function = "find_partners"
-                    elif "Executing set_recurring_task" in logs:
-                        called_function = "set_recurring_task"
-                    elif "Executing delete_all_tasks" in logs:
-                        called_function = "delete_all_tasks"
-                    elif "Executing delegate_task" in logs:
-                        called_function = "delegate_task"
-                    else:
+                    if response and isinstance(response, dict):
+                        tool_calls = response.get('tool_calls', [])
+                        if tool_calls and len(tool_calls) > 0:
+                            # Берем первый вызов функции
+                            first_call = tool_calls[0]
+                            if isinstance(first_call, dict):
+                                called_function = first_call.get('function')
+                            elif hasattr(first_call, 'function'):
+                                called_function = first_call.function.name if hasattr(first_call.function, 'name') else first_call.function
+                        
+                        # Если tool_calls пустой, проверяем логи на наличие [TOOL CHOICE]
+                        if not called_function:
+                            for line in logs.split('\n'):
+                                if '[TOOL CHOICE]' in line:
+                                    # Формат: [TOOL CHOICE] add_task (confidence: 0.9)
+                                    parts = line.split('[TOOL CHOICE]')[1].split('(')[0].strip()
+                                    called_function = parts
+                                    break
+                    
+                    # Если ничего не найдено - значит conversation
+                    if not called_function:
                         called_function = "conversation"
                     
                     # Проверяем на ошибки
