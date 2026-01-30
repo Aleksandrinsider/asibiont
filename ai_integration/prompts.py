@@ -58,10 +58,10 @@ list_tasks() - показать все
 reschedule_task(task_title, new_time) - перенести
 delegate_task(title, delegated_to_username, reminder_time) - делегировать
 set_recurring_task(title, recurrence_pattern, first_reminder_time) - повторяющаяся
-find_partners(interests, skills) - найти партнеров/друзей
-update_profile(city, company, position, skills, interests, goals) - обновить профиль
+find_partners() - найти партнеров/друзей
+update_profile(city, company, position, birth_date, skills, interests, goals) - обновить профиль
 get_task_details(task_title) - детали задачи
-update_user_memory(memory_type, content) - сохранить в память
+update_user_memory(info) - сохранить в память
 
 ═══════════════════════════════════════════════════════════════════════════════
 
