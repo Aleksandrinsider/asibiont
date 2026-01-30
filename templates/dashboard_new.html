@@ -4728,17 +4728,16 @@
                     // Очищаем флаг пропуска, т.к. профиль заполнен
                     localStorage.removeItem('skipQuickSetup');
                     
-                    // Восстанавливаем текст кнопки
-                    submitBtn.textContent = originalText;
-                    
                     // Закрываем модальное окно
                     const modal = document.getElementById('quick-profile-modal');
                     if (modal) {
                         modal.style.display = 'none';
                     }
-
-                    // Обновляем отображение профиля на странице без перезагрузки
-                    await updateProfileDisplay();
+                    
+                    // Перезагружаем страницу чтобы обновить все данные профиля
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 500); // Небольшая задержка чтобы пользователь увидел уведомление
                 } else {
                     const error = await response.json();
                     showNotification(`Ошибка: ${error.error || 'Не удалось сохранить профиль'}`, 'error');

@@ -2569,30 +2569,48 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     
     # Извлечь ключевые слова из описания задачи
     task_keywords = set()
-    stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'пойду', 'сделать', 'в', 'на', 'с', 'для', 'от', 'к', 'по'}
+    stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'пойду', 'сделать', 'в', 'на', 'с', 'для', 'от', 'к', 'по', 'из'}
     
     # Синонимы для расширения поиска
     synonyms = {
         'пробежка': ['бег', 'бегать', 'running', 'jogging'],
+        'бег': ['пробежка', 'бегать', 'running', 'jogging'],
         'тренировка': ['фитнес', 'спорт', 'gym', 'workout'],
+        'спорт': ['фитнес', 'тренировка', 'gym', 'workout'],
         'йога': ['yoga', 'медитация', 'растяжка'],
         'плавание': ['бассейн', 'swimming', 'плавать'],
         'футбол': ['football', 'soccer'],
         'стартап': ['startup', 'бизнес', 'предпринимательство'],
+        'startup': ['стартап', 'бизнес', 'предпринимательство'],
         'инвестиции': ['invest', 'финансы', 'вложения'],
         'программирование': ['coding', 'разработка', 'development', 'python', 'javascript'],
+        'python': ['программирование', 'coding', 'разработка'],
+        'ai': ['искусственный интеллект', 'машинное обучение', 'ml'],
     }
     
-    words = [w.lower().strip() for w in task_description.split() if len(w) > 3 and w.lower() not in stop_words]
+    # Снижаем минимальную длину до 2 символов чтобы захватить "AI", "ML", "бег"
+    words = [w.lower().strip() for w in task_description.split() if len(w) >= 2 and w.lower() not in stop_words]
     task_keywords.update(words)
     
     # Добавить синонимы
     for word in words:
+        if word in synonyms:
+            task_keywords.update(synonyms[word])
+        # Частичное совпадение для длинных слов
         for key, syns in synonyms.items():
-            if key in word or any(syn in word for syn in syns):
+            if len(word) > 4 and (key in word or any(syn in word for syn in syns if len(syn) > 3)):
                 task_keywords.update([key] + syns)
     
     logger.info(f"[FIND_RELEVANT] Task keywords: {task_keywords}")
+    
+    # Получить город пользователя для приоритизации
+    user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    user_city = user_profile.city.lower().strip() if user_profile and user_profile.city else None
+    
+    # Определить тип активности (оффлайн = город критичен)
+    offline_keywords = {'пробежка', 'бег', 'бегать', 'тренировка', 'зал', 'спорт', 'йога', 'плавание', 
+                        'встреча', 'кофе', 'прогулка', 'футбол', 'баскетбол', 'волейбол', 'теннис'}
+    is_offline_activity = bool(task_keywords & offline_keywords)
     
     # Получить всех потенциальных партнеров
     all_partners = get_partners_list(user_id=user.id, session=session)
@@ -2609,21 +2627,35 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         relevance_score = 0
         match_reasons = []
         
-        # Проверка интересов
-        if hasattr(partner, 'interests') and partner.interests:
-            partner_interests = set(i.lower().strip() for i in partner.interests.split(','))
-            interest_match = task_keywords & partner_interests
-            if interest_match:
-                relevance_score += len(interest_match) * 3
-                match_reasons.append(f"интересы: {', '.join(list(interest_match)[:2])}")
+        # ПРИОРИТЕТ 1: Город (особенно для оффлайн активностей)
+        partner_city = partner.city.lower().strip() if partner.city else None
+        same_city = user_city and partner_city and user_city == partner_city
         
-        # Проверка навыков
+        if same_city:
+            if is_offline_activity:
+                relevance_score += 15  # Критично для спорта/встреч
+                match_reasons.append(f"тот же город ({partner.city})")
+            else:
+                relevance_score += 5  # Полезно для онлайн активностей
+        elif is_offline_activity and user_city and partner_city:
+            # Для оффлайн активностей разные города - сильный минус
+            relevance_score -= 10
+        
+        # ПРИОРИТЕТ 2: Навыки (для профессиональных задач)
         if hasattr(partner, 'skills') and partner.skills:
             partner_skills = set(s.lower().strip() for s in partner.skills.split(','))
             skill_match = task_keywords & partner_skills
             if skill_match:
-                relevance_score += len(skill_match) * 5  # Навыки важнее
+                relevance_score += len(skill_match) * 8  # Навыки очень важны
                 match_reasons.append(f"навыки: {', '.join(list(skill_match)[:2])}")
+        
+        # ПРИОРИТЕТ 3: Интересы
+        if hasattr(partner, 'interests') and partner.interests:
+            partner_interests = set(i.lower().strip() for i in partner.interests.split(','))
+            interest_match = task_keywords & partner_interests
+            if interest_match:
+                relevance_score += len(interest_match) * 4
+                match_reasons.append(f"интересы: {', '.join(list(interest_match)[:2])}")
         
         # Используем уже вычисленную релевантность из get_partners_list
         if hasattr(partner, 'task_relevance_score') and partner.task_relevance_score > 0:
@@ -2645,18 +2677,35 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     'reasons': match_reasons
                 })
     
-    # Сортировка по релевантности
-    relevant_contacts.sort(key=lambda x: x['score'], reverse=True)
+    # ПРИОРИТЕТНАЯ СОРТИРОВКА: сначала свой город, потом другие (как в get_partners_list)
+    contacts_same_city = []
+    contacts_other_city = []
+    
+    for contact in relevant_contacts:
+        contact_city = contact['city'].lower().strip() if contact['city'] else None
+        if user_city and contact_city and user_city == contact_city:
+            contacts_same_city.append(contact)
+        else:
+            contacts_other_city.append(contact)
+    
+    # Сортируем каждую группу по баллам
+    contacts_same_city.sort(key=lambda x: x['score'], reverse=True)
+    contacts_other_city.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Объединяем: СНАЧАЛА свой город, ПОТОМ остальные
+    sorted_contacts = contacts_same_city + contacts_other_city
+    
+    logger.info(f"[FIND_RELEVANT] Sorted: {len(contacts_same_city)} from same city, {len(contacts_other_city)} from other cities")
     
     if close_session:
         session.close()
     
     # Формирование ответа
-    if not relevant_contacts:
+    if not sorted_contacts:
         return "Не нашел подходящих контактов для этой задачи. Попробуйте заполнить больше информации в профиле или создайте задачу с более конкретным описанием."
     
     # Ограничить до limit контактов
-    top_contacts = relevant_contacts[:limit]
+    top_contacts = sorted_contacts[:limit]
     
     result_lines = [f"🎯 Нашел {len(top_contacts)} подходящих контактов для этой задачи:\n"]
     

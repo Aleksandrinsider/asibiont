@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 import pytz
 import random
+import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
 from ai_integration.chat import chat_with_ai
@@ -45,14 +46,20 @@ async def generate_progress_post(user_id, session):
         overdue_tasks = [t for t in tasks_today if t.overdue and t.status != 'completed']
         
         # Build context for AI
-        context = """Создай живой, естественный пост от лица пользователя {profile.first_name or user.username} о его дне.
+        user_name = profile.first_name if profile.first_name else (user.username or 'Пользователь')
+        user_city = profile.city or 'не указан'
+        user_interests = profile.interests or 'не указаны'
+        user_skills = profile.skills or 'не указаны'
+        user_goals = profile.goals or 'не указаны'
+        
+        context = f"""Создай живой, естественный пост от лица пользователя {user_name} о его дне.
 
 Информация о пользователе:
-- Имя: {profile.first_name or user.username}
-- Город: {profile.city}
-- Интересы: {profile.interests}
-- Навыки: {profile.skills}
-- Цели: {profile.goals}
+- Имя: {user_name}
+- Город: {user_city}
+- Интересы: {user_interests}
+- Навыки: {user_skills}
+- Цели: {user_goals}
 
 Задачи сегодня:
 """
@@ -163,15 +170,25 @@ async def create_auto_post(user_id, content, session, notify=True):
         # Notify user about created post
         if notify:
             try:
-                from main import bot
-                if bot:
-                    notification_text = f"Ежедневный автопост опубликован!\n{content}\n\nВы можете удалить пост в панели управления https://asibiont.ru/"
+                # Worker не может импортировать bot из main, используем прямой API
+                from config import TELEGRAM_TOKEN
+                import aiohttp
+                
+                if TELEGRAM_TOKEN:
+                    notification_text = f"📝 Ежедневный автопост опубликован!\n\n{content}\n\n💡 Вы можете удалить пост в панели управления"
                     
-                    await bot.send_message(
-                        chat_id=user_id,
-                        text=notification_text
-                    )
-                    logger.info(f"Notification sent to user {user_id} about auto-post")
+                    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+                    data = {
+                        "chat_id": user_id,
+                        "text": notification_text
+                    }
+                    
+                    async with aiohttp.ClientSession() as aio_session:
+                        async with aio_session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                            if response.status == 200:
+                                logger.info(f"Notification sent to user {user_id} about auto-post")
+                            else:
+                                logger.warning(f"Failed to send notification to {user_id}: {response.status}")
             except Exception as notify_error:
                 logger.warning(f"Could not send notification to user {user_id}: {notify_error}")
         

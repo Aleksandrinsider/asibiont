@@ -116,6 +116,7 @@ accept_delegated_task = handlers.accept_delegated_task
 reject_delegated_task = handlers.reject_delegated_task
 list_tasks = handlers.list_tasks
 find_partners = handlers.find_partners
+find_relevant_contacts_for_task = handlers.find_relevant_contacts_for_task
 update_profile = handlers.update_profile
 update_user_memory = handlers.update_user_memory_async
 delegate_task = handlers.delegate_task_with_session
@@ -220,9 +221,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     # 2. При удалении - не создавать/завершать  
     elif any(kw in message_lower for kw in ['удали', 'убери', 'удалить']):
         disallowed_tools = ['add_task', 'complete_task']
-    # 3. При создании - не удалять/завершать
+    # 3. При создании - не удалять/завершать (НО разрешаем add_task для recurring!)
     elif any(kw in message_lower for kw in ['напомни', 'создай', 'добавь']) and \
-         any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня', 'час', 'минут', 'послезавтра']):
+         any(kw in message_lower for kw in ['через', 'в', 'завтра', 'сегодня', 'час', 'минут', 'послезавтра']) and \
+         not any(rec_kw in message_lower for rec_kw in ['каждый', 'ежедневно', 'еженедельно', 'повторяющ']):
         disallowed_tools = ['delete_task', 'complete_task', 'delete_all_tasks']
     # 4. update_profile: разрешаем любые изменения профиля (валидация в handlers.py)
     # AI может обновлять профиль несколько раз - это нормальное поведение
@@ -472,6 +474,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             elif func_name == "find_partners":
                 result = find_partners(user_id=user_id, session=db_session)
+            elif func_name == "find_relevant_contacts_for_task":
+                task_desc = func_args.get('task_description', '')
+                result = find_relevant_contacts_for_task(task_description=task_desc, user_id=user_id, session=db_session)
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "update_profile":
@@ -591,7 +596,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "get_task_details":
-                result = await get_task_details(
+                result = get_task_details(
                     task_title=args.get("task_title"),
                     user_id=user_id,
                     session=db_session,
@@ -1947,11 +1952,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # 8. Изменение существующей задачи (текст или время)
         elif any(phrase in message_lower for phrase in [
             'измени название', 'исправь задачу', 'обнови задачу', 'добавь описание',
-            'измени время', 'перенеси на', 'поставь на другое время'
+            'измени время', 'перенеси на', 'перенеси задачу', 'поставь на другое время', 'давай перенесем'
         ]):
             # Определяем тип изменения
-            if any(time_kw in message_lower for time_kw in ['время', 'на ', 'перенеси']):
-                intent = {"type": "reschedule_task", "confidence": 0.9, "params": {}}
+            if any(time_kw in message_lower for time_kw in ['время', 'на ', 'перенеси', 'перенесем']):
+                intent = {"type": "reschedule_task", "confidence": 0.95, "params": {}}
             else:
                 intent = {"type": "edit_task", "confidence": 0.9, "params": {}}
 
@@ -1960,24 +1965,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
              not any(kw in message_lower for kw in ['все', 'всё']):
             intent = {"type": "delete_task", "confidence": 0.9, "params": {}}
 
-        # 10. Завершение задачи
-        elif any(phrase in message_lower for phrase in [
-            'сделал задачу', 'выполнил задачу', 'завершил задачу', 'задача выполнена',
-            'закончил задачу', 'готово с задачей', 'всё готово', 'всё сделано',
-            'можно закрывать', 'закрывать сдачу', 'закрыть задачу', 'задача закрыта',
-            'приемку закрыть', 'сдачу закрыть', 'готово', 'закрыто'
-        ]):
-            # Извлекаем название задачи из сообщения
+        # 10б. Извлечение названия задачи для завершения (если нужно уточнение)
+        # Эта секция срабатывает если AI не смог определить intent выше
+        # Для сообщений типа "всё продукты заказал" - извлекаем "продукты"
+        elif 'всё' in message_lower and len(message_lower.split()) > 2:
+            words = message_lower.split()
+            # Находим слово "всё" и берём следующее слово как ключ
             task_title = None
-            # Для сообщений типа "всё продукты заказал" - извлекаем "продукты"
-            if 'всё' in message_lower and len(message_lower.split()) > 2:
-                words = message_lower.split()
-                # Находим слово "всё" и берём следующее слово как ключ
-                try:
-                    vse_index = words.index('всё')
-                    if vse_index + 1 < len(words):
-                        task_title = words[vse_index + 1]
-                except ValueError:
+            try:
+                vse_index = words.index('всё')
+                if vse_index + 1 < len(words):
+                    task_title = words[vse_index + 1]
+            except ValueError:
                     pass
             # Для других случаев - ищем после ключевых слов
             if not task_title:
@@ -1997,6 +1996,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             intent = {"type": "complete_task", "confidence": 0.9, "params": {"task_title": task_title}}
 
+        # 10. Завершение задачи (ВЫСОКИЙ ПРИОРИТЕТ - проверяем РАНЬШЕ add_task)
+        elif any(phrase in message_lower for phrase in [
+            'выполнена', 'выполнил', 'выполнена!', 'задача выполнена',
+            'сделал задачу', 'завершил задачу', 'закончил задачу',
+            'готово с задачей', 'всё готово', 'всё сделано', 'готово', 'сделал',
+            'можно закрывать', 'закрывать сдачу', 'закрыть задачу', 'задача закрыта',
+            'приемку закрыть', 'сдачу закрыть', 'закрыто'
+        ]):
+            intent = {"type": "complete_task", "confidence": 0.95, "params": {}}
+
         # 11. Просмотр списка задач
         elif any(phrase in message_lower for phrase in [
             'покажи задачи', 'список задач', 'мои задачи', 'какие задачи',
@@ -2007,13 +2016,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
 
         # 12. Создание новой задачи (низкий приоритет, проверяем в конце)
+        # ВАЖНО: confidence снижен до 0.7 чтобы не переопределять AI intent
         elif any(phrase in message_lower for phrase in [
             'напомни', 'создай задачу', 'добавь задачу', 'нужно сделать', 'надо сделать'
         ]) or \
              (any(time_ind in message_lower for time_ind in [
                  'завтра', 'послезавтра', 'через', 'в ', 'на '
-             ]) and len(message_lower.split()) > 3):
-            intent = {"type": "add_task", "confidence": 0.8, "params": {}}
+             ]) and len(message_lower.split()) > 3 and 
+              not any(complete_kw in message_lower for complete_kw in ['выполнена', 'сделал', 'готово'])):
+            intent = {"type": "add_task", "confidence": 0.7, "params": {}}
 
         # 13. Просмотр деталей задачи
         elif any(phrase in message_lower for phrase in [
@@ -2037,18 +2048,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Расширяем system prompt для работы с относительным временем
         user_username = f"@{user.username}" if user and user.username else "@unknown"
 
-        # Извлекаем последние 2 ответа агента для предотвращения повторов
+        # Извлекаем последние 5 ответов агента для предотвращения повторов
         last_responses = []
         if context and isinstance(context, list):
-            for item in context[-3:]:  # Последние 3 сообщения
+            for item in context[-7:]:  # Последние 7 сообщений
                 if "agent" in item and item["agent"] and isinstance(item["agent"], str):
-                    # Берём первые 40 символов
-                    response_text = item["agent"][:40].strip()
+                    # Берём первые 50 символов для лучшего распознавания повторов
+                    response_text = item["agent"][:50].strip()
                     if response_text and response_text not in last_responses:
                         last_responses.append(response_text)
 
-        # Ограничиваем до 2 последних
-        last_responses = last_responses[-2:]
+        # Ограничиваем до 5 последних
+        last_responses = last_responses[-5:]
 
         # СПЕЦИАЛЬНАЯ ОБРАБОТКА СИСТЕМНЫХ СООБЩЕНИЙ (результаты действий)
         is_system_message = (
