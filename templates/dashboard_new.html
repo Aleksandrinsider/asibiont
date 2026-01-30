@@ -509,18 +509,25 @@
                 white-space: nowrap !important;
                 overflow: hidden !important;
                 text-overflow: ellipsis !important;
-                max-width: 85px !important;
+                max-width: none !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 4px !important;
             }
             
             /* Увеличиваем SVG иконки в кнопках */
             .header-info button svg {
                 width: 16px !important;
                 height: 16px !important;
+                flex-shrink: 0 !important;
             }
             
-            /* Уменьшаем отступы между кнопками */
+            /* Равномерное распределение кнопок в хедере */
             .header-info > div {
                 gap: 4px !important;
+                justify-content: center !important;
+                flex-wrap: wrap !important;
             }
             
             /* Адаптация модальных окон под мобильные */
