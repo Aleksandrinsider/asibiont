@@ -192,7 +192,12 @@
             }
         }
 
-        function toggleContactFilters() {
+        function toggleContactFilters(event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            
             const content = document.getElementById('contact-filter-content');
             const button = document.getElementById('contact-filter-toggle-btn');
             const svg = button ? button.querySelector('svg') : null;
@@ -201,11 +206,9 @@
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
-                // localStorage.setItem('contactFiltersCollapsed', 'false'); // временно отключено
             } else {
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
-                // localStorage.setItem('contactFiltersCollapsed', 'true'); // временно отключено
             }
         }
 
@@ -1092,25 +1095,25 @@
                                 <option value="delegating_by_me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручаю я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
                                 <option value="blocked">Заблокировано</option>
                             </select>
-                            <button onclick="event.stopPropagation(); toggleContactFilters()" class="section-toggle-btn" id="contact-filter-toggle-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center; pointer-events: all; z-index: 10;">
+                            <button onclick="toggleContactFilters(event)" class="section-toggle-btn" id="contact-filter-toggle-btn" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; padding: 4px; color: #374151; font-size: 13px; font-weight: 400; display: flex; align-items: center; pointer-events: all; z-index: 10;">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="transition: transform 0.2s;">
                                     <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
                                 </svg>
                             </button>
                         </div>
                     <script>
-                        // Инициализация состояния фильтров контактов - ВСЕГДА ПОКАЗЫВАЕМ
+                        // Инициализация состояния фильтров контактов - только при первой загрузке
                         (function() {
                             var contentEl = document.getElementById('contact-filter-content');
                             var btn = document.getElementById('contact-filter-toggle-btn');
                             var svg = btn ? btn.querySelector('svg') : null;
                             
-                            // Всегда показываем фильтр и не используем localStorage
-                            if (contentEl) {
+                            // Показываем фильтр только если он еще не инициализирован
+                            if (contentEl && !contentEl.style.display) {
                                 contentEl.style.display = 'block';
                                 contentEl.style.visibility = 'visible';
+                                if (svg) svg.style.transform = 'rotate(0deg)';
                             }
-                            if (svg) svg.style.transform = 'rotate(0deg)';
                         })();
                     </script>
                     </div>
