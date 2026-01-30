@@ -1005,19 +1005,32 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             session.commit()
             logger.info(f"[RESCHEDULE_TASK] ✅ Task {task.id} updated, new time (UTC): {task.reminder_time}, local: {local_dt}")
 
-            # Перепланируем напоминание (создается новое или обновляется существующее)
+            # Отменяем старое напоминание и создаем новое
             try:
                 from reminder_service import REMINDER_SERVICE
-                if REMINDER_SERVICE:
+                if REMINDER_SERVICE and REMINDER_SERVICE.scheduler and REMINDER_SERVICE.scheduler.running:
+                    # Сначала отменяем все связанные джобы
+                    reminder_job_id = f"reminder_{task.id}"
+                    if REMINDER_SERVICE.scheduler.get_job(reminder_job_id):
+                        REMINDER_SERVICE.scheduler.remove_job(reminder_job_id)
+                        logger.info(f"[RESCHEDULE_TASK] Cancelled old reminder job for task {task.id}")
+                    
+                    # Отменяем проверку результата
+                    result_check_job_id = f"result_check_{task.id}"
+                    if REMINDER_SERVICE.scheduler.get_job(result_check_job_id):
+                        REMINDER_SERVICE.scheduler.remove_job(result_check_job_id)
+                        logger.info(f"[RESCHEDULE_TASK] Cancelled old result check job for task {task.id}")
+                    
+                    # Создаем новое напоминание
                     REMINDER_SERVICE.schedule_reminder(
                         task_id=task.id,
                         reminder_time=task.reminder_time,
                         user_id=user.telegram_id,
                         task_title=task.title
                     )
-                    logger.info(f"[RESCHEDULE_TASK] ✅ Reminder rescheduled for task {task.id} at {task.reminder_time}")
+                    logger.info(f"[RESCHEDULE_TASK] ✅ New reminder scheduled for task {task.id} at {task.reminder_time}")
                 else:
-                    logger.warning(f"[RESCHEDULE_TASK] REMINDER_SERVICE not initialized, cannot reschedule reminder")
+                    logger.warning(f"[RESCHEDULE_TASK] REMINDER_SERVICE not running, skipping reminder rescheduling (task time updated in DB)")
             except Exception as e:
                 logger.error(f"[RESCHEDULE_TASK] Error rescheduling reminder: {e}")
                 import traceback

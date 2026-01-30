@@ -6547,8 +6547,10 @@ app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 # Session storage will be initialized in on_startup handler
 
 # Initialize ReminderService
+import reminder_service as reminder_service_module
 reminder_service = ReminderService(bot=bot if not LOCAL else None)
-logger.info("ReminderService initialized")
+reminder_service_module.REMINDER_SERVICE = reminder_service  # Set global variable for use in handlers
+logger.info("ReminderService initialized and set as global REMINDER_SERVICE")
 
 # Start ReminderService on app startup
 
