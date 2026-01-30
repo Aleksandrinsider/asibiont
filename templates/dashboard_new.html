@@ -206,9 +206,11 @@
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
+                localStorage.setItem('contactFiltersCollapsed', 'false');
             } else {
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
+                localStorage.setItem('contactFiltersCollapsed', 'true');
             }
         }
 
@@ -1106,17 +1108,24 @@
                             </button>
                         </div>
                     <script>
-                        // Инициализация состояния фильтров контактов - только при первой загрузке
+                        // Инициализация состояния фильтров контактов с сохранением в localStorage
                         (function() {
                             var contentEl = document.getElementById('contact-filter-content');
                             var btn = document.getElementById('contact-filter-toggle-btn');
                             var svg = btn ? btn.querySelector('svg') : null;
                             
-                            // Показываем фильтр только если он еще не инициализирован
-                            if (contentEl && !contentEl.style.display) {
-                                contentEl.style.display = 'block';
-                                contentEl.style.visibility = 'visible';
-                                if (svg) svg.style.transform = 'rotate(0deg)';
+                            if (contentEl) {
+                                // Восстанавливаем состояние из localStorage
+                                var isCollapsed = localStorage.getItem('contactFiltersCollapsed') === 'true';
+                                
+                                if (isCollapsed) {
+                                    contentEl.style.display = 'none';
+                                    if (svg) svg.style.transform = 'rotate(-90deg)';
+                                } else {
+                                    contentEl.style.display = 'block';
+                                    contentEl.style.visibility = 'visible';
+                                    if (svg) svg.style.transform = 'rotate(0deg)';
+                                }
                             }
                         })();
                     </script>
