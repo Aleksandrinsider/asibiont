@@ -117,14 +117,50 @@ logger = logging.getLogger(__name__)
 async def start_handler(message: Message):
     user_id = message.from_user.id
 
+    # Extract referral code if present
+    referrer_id = None
+    if message.text and len(message.text.split()) > 1:
+        start_param = message.text.split()[1]
+        if start_param.startswith('ref'):
+            try:
+                referrer_id = int(start_param[3:])  # Extract telegram_id from ref{telegram_id}
+            except ValueError:
+                pass
+
     # Create user if doesn't exist
     session = Session()
     user = session.query(User).filter_by(telegram_id=user_id).first()
+    is_new_user = False
     if not user:
         user = User(telegram_id=user_id, username=message.from_user.username)
         session.add(user)
         session.commit()
         logger.info(f"Created new user {user_id}")
+        is_new_user = True
+    
+    # If new user and came from referral link, add bonus to referrer
+    if is_new_user and referrer_id and referrer_id != user_id:
+        referrer = session.query(User).filter_by(telegram_id=referrer_id).first()
+        if referrer:
+            referrer_subscription = session.query(Subscription).filter_by(user_id=referrer.id).first()
+            if referrer_subscription:
+                # Add 5 days to referrer's subscription
+                if referrer_subscription.end_date:
+                    referrer_subscription.end_date += timedelta(days=5)
+                else:
+                    referrer_subscription.end_date = datetime.now(timezone.utc) + timedelta(days=5)
+                session.commit()
+                logger.info(f"Added 5 days to referrer {referrer_id} for new user {user_id}")
+                
+                # Notify referrer
+                try:
+                    await message.bot.send_message(
+                        referrer_id,
+                        f"🎁 По вашей реферальной ссылке зарегистрировался новый пользователь! +5 дней к подписке."
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to notify referrer {referrer_id}: {e}")
+    
     session.close()
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
