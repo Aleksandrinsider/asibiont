@@ -392,6 +392,18 @@
             pointer-events: none;
         } */
         
+        /* Медиа-запросы для средних экранов (планшеты и небольшие ноутбуки) */
+        @media (max-width: 1200px) {
+            /* Скрываем боковые панели на средних экранах */
+            .login-messages-sidebar {
+                display: none !important;
+            }
+            
+            .login-page-wrapper {
+                justify-content: center !important;
+            }
+        }
+        
         @media (max-width: 768px) {
             /* body:not(.logged-in)::before {
                 display: none !important;
