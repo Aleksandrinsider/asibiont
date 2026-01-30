@@ -2687,8 +2687,6 @@ if bot:
     app['bot'] = bot
     dp = Dispatcher()
     dp.include_router(handlers_router)
-    if not LOCAL:
-        app.router.add_post('/webhook', SimpleRequestHandler(dp, bot))
 
 # Middleware to add CSP headers and disable cache for static files
 
@@ -5652,31 +5650,13 @@ async def on_startup(app):
 
 async def on_shutdown(app):
     """Cleanup on application shutdown"""
-    # Set webhook - используем Railway subdomain т.к. Telegram требует HTTPS
+    logger.info("Application shutting down...")
     if bot and not LOCAL:
-        # Get webhook URL from environment variable or construct from Railway variables
-        webhook_url = os.getenv('WEBHOOK_URL')
-        if not webhook_url:
-            # Try to construct from Railway environment variables
-            railway_project_id = os.getenv('RAILWAY_PROJECT_ID')
-            if railway_project_id:
-                webhook_url = f"https://{railway_project_id}.up.railway.app/webhook"
-            else:
-                # Fallback to hardcoded but log warning
-                webhook_url = "https://asibiont.ru/webhook"
-                logger.warning("WEBHOOK_URL not set and RAILWAY_PROJECT_ID not found, using hardcoded URL")
-
         try:
-            await bot.set_webhook(webhook_url)
-            logger.info(f"Webhook set to: {webhook_url}")
+            await bot.delete_webhook()
+            logger.info("✅ Webhook deleted on shutdown")
         except Exception as e:
-            logger.error(f"Failed to set webhook to {webhook_url}: {e}")
-            logger.warning("Continuing without webhook setup - bot may not receive updates")
-    else:
-        logger.warning("Bot not created or local mode, skipping webhook setup")
-
-    # Redis was removed from the project - using in-memory cache only
-    # ReminderService will be started later in start_reminder_service
+            logger.error(f"❌ Failed to delete webhook: {e}")
 
 
 async def api_tasks_handler(request):
