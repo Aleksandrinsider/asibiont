@@ -1489,10 +1489,13 @@ async def get_timezone_from_ip(ip_address):
     return 'UTC', None
 
 
-async def get_user_avatar_url(bot, user_id):
+async def get_user_avatar_url(bot, user_id, force_refresh=False):
     """Получает URL аватара пользователя из Telegram или БД
     
-    Сначала проверяем кэш в БД, если нет - загружаем из Telegram API.
+    Args:
+        bot: Telegram bot instance
+        user_id: Telegram user ID
+        force_refresh: If True, always fetch fresh avatar from Telegram API, bypassing cache
     """
     try:
         from models import User
@@ -1500,12 +1503,12 @@ async def get_user_avatar_url(bot, user_id):
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             
-            # Если есть кэшированный аватар, возвращаем его
-            if user and user.photo_url:
+            # Если не требуется принудительное обновление и есть кэшированный аватар, возвращаем его
+            if not force_refresh and user and user.photo_url:
                 logger.debug(f"Returning cached avatar for user {user_id}")
                 return user.photo_url
             
-            # Если нет кэша, пытаемся загрузить из Telegram
+            # Загружаем свежий аватар из Telegram
             if bot:
                 try:
                     photos = await bot.get_user_profile_photos(user_id, limit=1)
@@ -1517,7 +1520,7 @@ async def get_user_avatar_url(bot, user_id):
                         if user:
                             user.photo_url = avatar_url
                             db.commit()
-                            logger.info(f"Updated avatar for user {user_id}")
+                            logger.info(f"Updated avatar for user {user_id} (force_refresh={force_refresh})")
                         
                         return avatar_url
                 except Exception as e:
@@ -1613,7 +1616,7 @@ async def auth_handler(request):
                     avatar_url = None
                     if 'bot' in request.app:
                         try:
-                            avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
+                            avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
                             logger.info(f"Got avatar URL for new user {user_id}: {avatar_url}")
                         except Exception as e:
                             logger.error(f"Error getting avatar for new user {user_id}: {e}")
@@ -1638,11 +1641,11 @@ async def auth_handler(request):
                         session_db.commit()
                 else:
                     logger.info(f"Found existing user: {user.id}")
-                    # Update avatar from Telegram API
+                    # Update avatar from Telegram API on every login to ensure it's always fresh
                     if 'bot' in request.app:
                         try:
-                            avatar_url = await get_user_avatar_url(request.app['bot'], user_id)
-                            if avatar_url and avatar_url != user.photo_url:
+                            avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
+                            if avatar_url:
                                 user.photo_url = avatar_url
                                 session_db.commit()
                                 logger.info(f"Updated avatar for user {user_id}: {avatar_url}")
