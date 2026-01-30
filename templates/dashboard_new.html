@@ -315,8 +315,10 @@
                             // Аватар
                             if (partner.photo_url) {
                                 const imgId = 'img-elite-' + (partner.telegram_id || partner.contact_info);
+                                const fallbackHtml = '<div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div>';
                                 html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
+                                html += '<img id="' + imgId + '" src="' + partner.photo_url + '" onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" />';
+                                html += fallbackHtml.replace('display: flex', 'display: none');
                                 html += '</div>';
                             } else {
                                 html += '<div style="margin-right: 12px; flex-shrink: 0;"><div onclick="openContactProfileModal(\'' + contactInfoEscaped + '\')" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; cursor: pointer;">@</div></div>';
@@ -942,9 +944,10 @@
                 </span>
                 
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 12px; margin-right: 30px;">
-                    <div class="header-avatar-small" style="margin-top: 4px;">
+                    <div class="header-avatar-small" style="margin-top: 2px;">
                         {% if user_avatar_url %}
-                        <img src="{{ user_avatar_url }}" alt="Аватар" onclick="openContactProfileModal('{{ user.username or '' }}')" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;">
+                        <img id="header-user-avatar" src="{{ user_avatar_url }}" alt="Аватар" onclick="openContactProfileModal('{{ user.username or '' }}')" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" onerror="this.onerror=null; setTimeout(() => { if(this.src.includes('?')) { this.style.display='none'; this.nextElementSibling.style.display='flex'; } else { this.src=this.src+'?retry=1'; } }, 1000);">
+                        <div onclick="openContactProfileModal('{{ user.username or '' }}')" style="display: none; width: 32px; height: 32px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% else %}
                         <div onclick="openContactProfileModal('{{ user.username or '' }}')" style="width: 32px; height: 32px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px; border: 1px solid #D1D9E0; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                         {% endif %}
@@ -1103,7 +1106,8 @@
                                             {% set tier_glow = '#FFD700' %}
                                         {% endif %}
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA;">
+                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% else %}
                                         <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
@@ -4896,10 +4900,11 @@
                     // Avatar and basic info - центрированно как в панели профиля
                     html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">';
                     
+                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                     if (partner.photo_url) {
-                        html += `<img src="${partner.photo_url}" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; margin-bottom: 8px;">`;
+                        html += `<img src="${partner.photo_url}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; margin-bottom: 8px;">`;
+                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: none; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
                     } else {
-                        const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                         html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
                     }
                     
@@ -5385,8 +5390,10 @@
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info);
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
@@ -5489,8 +5496,10 @@
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-fav-' + (partner.telegram_id || partner.contact_info);
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
@@ -5673,8 +5682,10 @@
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
@@ -5768,8 +5779,10 @@
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
-                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; ' + cursorStyle + '" />';
+                                        html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; ' + cursorStyle + ';">@</div></div>';
@@ -6171,7 +6184,7 @@
                             // Обновляем только если URL изменился или элемент пустой
                             const currentImg = headerAvatarSmall.querySelector('img');
                             if (!currentImg || !currentImg.src.includes(data.user_avatar_url.split('?')[0])) {
-                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: #F6F8FA;">`;
+                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" onerror="this.onerror=null; setTimeout(() => { if(this.src.includes('?')) { this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex'; } else { this.src=this.src+'?retry=1'; } }, 1000);" onclick="openContactProfileModal('${data.profile?.username || ''}')">`;
                             }
                         } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.first_name)) {
                             // Показываем инициал только если элемент пустой и нет аватара
