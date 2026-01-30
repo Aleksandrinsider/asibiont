@@ -38,6 +38,31 @@ logger = logging.getLogger(__name__)
 # Базовый системный промпт для простых сообщений
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
 
+def safe_extract_tool_info(tc):
+    """Безопасно извлекает информацию о tool call из различных форматов"""
+    if isinstance(tc, dict):
+        func = tc.get('function', {})
+        if isinstance(func, dict):
+            return {
+                'function': func.get('name'),
+                'arguments': func.get('arguments')
+            }
+        else:
+            return {
+                'function': func,
+                'arguments': tc.get('arguments')
+            }
+    elif isinstance(tc, str):
+        try:
+            tc_dict = json.loads(tc)
+            return {
+                'function': tc_dict.get('function'),
+                'arguments': tc_dict.get('arguments')
+            }
+        except:
+            return {'function': 'unknown', 'arguments': str(tc)}
+    return {'function': None, 'arguments': None}
+
 # ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
 class SimpleCache:
     """Простой in-memory кеш с TTL и ограничением размера"""
@@ -195,7 +220,8 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     # Print tool_calls for debugging
     if tool_calls:
         for i, tc in enumerate(tool_calls):
-            logger.info(f"[PROCESS_TOOL_CALLS] Tool call {i}: function={tc.get('function', {}).get('name')}, args={tc.get('function', {}).get('arguments', '')[:100]}")
+            tool_info = safe_extract_tool_info(tc)
+            logger.info(f"[PROCESS_TOOL_CALLS] Tool call {i}: function={tool_info['function']}, args={str(tool_info['arguments'])[:100]}")
     else:
         logger.warning("[PROCESS_TOOL_CALLS] tool_calls is empty or None!")
     
@@ -236,7 +262,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     
     # Проверяем только явные конфликты
     if disallowed_tools:
-        tool_names = [tc.get('function', {}).get('name') for tc in tool_calls]
+        tool_names = [safe_extract_tool_info(tc)['function'] for tc in tool_calls]
         for tool_name in tool_names:
             if tool_name in disallowed_tools:
                 logger.warning(f"[CONFLICT DETECTED] Tool {tool_name} conflicts with intent in: {message[:100]}")
@@ -258,8 +284,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     unique_tool_calls = []
     seen_calls = set()
     for tc in tool_calls:
-        func_name = tc.get('function', {}).get('name')
-        args = tc.get('function', {}).get('arguments', '')
+        tool_info = safe_extract_tool_info(tc)
+        func_name = tool_info['function']
+        args = tool_info['arguments'] or ''
         # Создаём уникальный ключ на основе имени функции и аргументов
         call_key = f"{func_name}:{args}"
         if call_key not in seen_calls:
@@ -2602,7 +2629,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     logger.info(f"[AI RESPONSE] Full message_response keys: {message_response.keys()}")
                                     if tool_calls:
                                         for tc in tool_calls:
-                                            func_name = tc.get('function', {}).get('name')
+                                            func_name = safe_extract_tool_info(tc)['function']
                                             logger.info(f"[AI RESPONSE] Calling tool: {func_name}")
                                     else:
                                         logger.warning(f"[AI RESPONSE] No tool_calls in response! Expected tool for message: {original_message[:100]}")
@@ -2649,7 +2676,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             if tool_calls:
                                 result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=content)
                                 if result:
-                                    return {'response': result, 'tool_calls': [{'function': tc.get('function', {}).get('name'), 'arguments': tc.get('function', {}).get('arguments')} for tc in tool_calls]}
+                                    return {'response': result, 'tool_calls': [safe_extract_tool_info(tc) for tc in tool_calls]}
                                 elif result is None and tool_calls:
                                     # Если process_tool_calls вернул None при наличии tool_calls - значит валидация не прошла
                                     # Заменяем tool_calls на пустой список, чтобы сработала антигаллюцинация
@@ -2761,7 +2788,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                         logger.info(f"[HALLUCINATION FIX] Retry successful, got {len(retry_tool_calls)} tool calls")
                                                         result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=retry_content)
                                                         if result:
-                                                            return {'response': result, 'tool_calls': [{'function': tc.get('function', {}).get('name'), 'arguments': tc.get('function', {}).get('arguments')} for tc in retry_tool_calls]}
+                                                            return {'response': result, 'tool_calls': [safe_extract_tool_info(tc) for tc in retry_tool_calls]}
                                                     else:
                                                         logger.warning(f"[HALLUCINATION FIX] Retry failed - still no tool calls")
                                     except Exception as retry_e:
@@ -2805,7 +2832,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 
                                 intent_type = intent.get('type')
                                 if intent_type in expected_tools:
-                                    actual_tools = [tc.get('function', {}).get('name') for tc in tool_calls]
+                                    actual_tools = [safe_extract_tool_info(tc)['function'] for tc in tool_calls]
                                     expected = expected_tools[intent_type]
                                     
                                     # Проверяем, что хотя бы один ожидаемый tool вызван
@@ -2972,11 +2999,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Собираем информацию о tool calls для отладки
         tool_calls_info = []
         if 'tool_calls' in locals() and tool_calls:
-            for tc in tool_calls:
-                tool_calls_info.append({
-                    'function': tc.get('function', {}).get('name'),
-                    'arguments': tc.get('function', {}).get('arguments')
-                })
+            tool_calls_info = [safe_extract_tool_info(tc) for tc in tool_calls]
 
         return {
             'response': final_content,
