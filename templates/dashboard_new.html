@@ -396,6 +396,134 @@
             body:not(.logged-in)::before {
                 display: none !important;
             }
+            
+            /* Показываем мобильное информационное сообщение */
+            .mobile-info-message {
+                display: block !important;
+            }
+            
+            /* Показываем мобильный логотип на странице входа */
+            .mobile-logo {
+                display: block !important;
+                text-align: center;
+                margin-bottom: 24px;
+            }
+            
+            /* Скрываем сайдбары с сообщениями на странице входа */
+            .login-messages-sidebar {
+                display: none !important;
+            }
+            
+            /* Адаптация layout для вертикального расположения */
+            .main-layout {
+                flex-direction: column !important;
+                height: auto !important;
+                gap: 12px !important;
+                overflow-y: auto !important;
+            }
+            
+            /* Колонки на полную ширину с ограниченной высотой */
+            .left-column,
+            .center-column,
+            .right-column {
+                flex: none !important;
+                width: 100% !important;
+                max-height: none !important;
+            }
+            
+            /* Левая колонка свернута по умолчанию на мобильных */
+            .context-section {
+                order: 1;
+            }
+            
+            /* Центральная колонка (чат) вторая */
+            .center-column {
+                order: 2;
+                min-height: 400px;
+            }
+            
+            /* Правая колонка (задачи) третья */
+            .right-column {
+                order: 3;
+                min-height: 300px;
+            }
+            
+            /* Адаптация хедера */
+            .header-info {
+                font-size: 12px !important;
+            }
+            
+            .header-info span {
+                display: none !important;
+            }
+            
+            .header-info #header-time {
+                display: inline !important;
+            }
+            
+            /* Уменьшаем аватар */
+            .header-avatar-small img,
+            .header-avatar-small div {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 14px !important;
+            }
+            
+            /* Скрываем кнопку Telegram */
+            .header-info > div > a:last-child {
+                display: none !important;
+            }
+            
+            /* Компактные кнопки в хедере */
+            .header-info button {
+                padding: 6px 10px !important;
+                height: 28px !important;
+                font-size: 12px !important;
+            }
+            
+            /* Уменьшаем аватары контактов */
+            .people-list img,
+            .people-list > ul > li > div:first-child img {
+                width: 48px !important;
+                height: 48px !important;
+            }
+            
+            .people-list > ul > li > div:first-child > div {
+                width: 48px !important;
+                height: 48px !important;
+                font-size: 20px !important;
+            }
+            
+            /* Компактные карточки контактов */
+            .task-item {
+                padding: 10px !important;
+                font-size: 12px !important;
+            }
+            
+            /* Увеличиваем шрифт фильтра */
+            #contact-filter-select {
+                font-size: 14px !important;
+                padding: 10px 36px 10px 14px !important;
+            }
+            
+            /* Адаптация контейнера */
+            .container {
+                margin: calc(var(--header-height) + 8px) 12px 0 12px !important;
+                width: calc(100% - 24px) !important;
+            }
+            
+            /* Адаптация welcome-content */
+            .welcome-content {
+                padding: 24px !important;
+            }
+            
+            .welcome-content h1 {
+                font-size: 20px !important;
+            }
+            
+            .welcome-content p {
+                font-size: 13px !important;
+            }
         }
         
         /* Стили для сообщений-болей на странице авторизации */
