@@ -453,16 +453,20 @@
                 display: block !important;
             }
             
-            /* Центральная колонка (чат) вторая */
+            /* Скрываем чат на мобильных */
             .center-column {
-                order: 2;
-                min-height: 400px;
+                display: none !important;
             }
             
-            /* Правая колонка (задачи) третья */
+            /* Правая колонка (задачи/статистика) на первое место */
             .right-column {
-                order: 3;
+                order: 1;
                 min-height: 300px;
+            }
+            
+            /* Левая колонка (профиль/контакты) вторая */
+            .context-section {
+                order: 2;
             }
             
             /* Адаптация хедера */
