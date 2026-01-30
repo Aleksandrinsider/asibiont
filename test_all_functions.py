@@ -162,6 +162,12 @@ async def test_all_functions():
                     # Анализируем логи
                     logs = log_capture.getvalue()
                     
+                    # DEBUG: выводим response для отладки
+                    print(f"   [DEBUG] Response type: {type(response)}")
+                    print(f"   [DEBUG] Response keys: {response.keys() if isinstance(response, dict) else 'not dict'}")
+                    if isinstance(response, dict) and 'tool_calls' in response:
+                        print(f"   [DEBUG] Tool calls: {response['tool_calls']}")
+                    
                     # Определяем вызванную функцию из tool_calls в ответе
                     called_function = None
                     if response and isinstance(response, dict):
