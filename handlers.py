@@ -151,15 +151,6 @@ async def start_handler(message: Message):
                     referrer_subscription.end_date = datetime.now(timezone.utc) + timedelta(days=5)
                 session.commit()
                 logger.info(f"Added 5 days to referrer {referrer_id} for new user {user_id}")
-                
-                # Notify referrer
-                try:
-                    await message.bot.send_message(
-                        referrer_id,
-                        f"🎁 По вашей реферальной ссылке зарегистрировался новый пользователь! +5 дней к подписке."
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to notify referrer {referrer_id}: {e}")
     
     session.close()
 
