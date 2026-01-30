@@ -1503,27 +1503,45 @@ async def get_timezone_from_ip(ip_address):
 
 
 async def get_user_avatar_url(bot, user_id):
-    """Получает URL аватара пользователя из БД (кэшированный)
+    """Получает URL аватара пользователя из Telegram или БД
     
-    Живые запросы к Telegram API отключены для снижения rate limiting.
-    Аватары обновляются по расписанию (раз в день) через reminder_service.
+    Сначала проверяем кэш в БД, если нет - загружаем из Telegram API.
     """
     try:
-        # Возвращаем кэшированный аватар из БД вместо запроса к Telegram API
         from models import User
         db = Session()
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
+            
+            # Если есть кэшированный аватар, возвращаем его
             if user and user.photo_url:
                 logger.debug(f"Returning cached avatar for user {user_id}")
                 return user.photo_url
-            else:
-                logger.debug(f"No cached avatar for user {user_id}")
-                return None
+            
+            # Если нет кэша, пытаемся загрузить из Telegram
+            if bot:
+                try:
+                    photos = await bot.get_user_profile_photos(user_id, limit=1)
+                    if photos.total_count > 0:
+                        file = await bot.get_file(photos.photos[0][-1].file_id)
+                        avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                        
+                        # Сохраняем в БД для кэширования
+                        if user:
+                            user.photo_url = avatar_url
+                            db.commit()
+                            logger.info(f"Updated avatar for user {user_id}")
+                        
+                        return avatar_url
+                except Exception as e:
+                    logger.debug(f"Could not fetch avatar from Telegram for user {user_id}: {e}")
+            
+            logger.debug(f"No avatar available for user {user_id}")
+            return None
         finally:
             db.close()
     except Exception as e:
-        logger.error(f"Error getting cached avatar for user {user_id}: {e}")
+        logger.error(f"Error getting avatar for user {user_id}: {e}")
         return None
 
 
