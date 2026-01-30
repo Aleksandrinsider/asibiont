@@ -517,6 +517,42 @@
                 gap: 3px !important;
             }
             
+            /* Адаптация модальных окон под мобильные */
+            .rating-modal-content,
+            .search-modal-content {
+                max-width: 95% !important;
+                width: 95% !important;
+                margin: 10px !important;
+                padding: 16px !important;
+                max-height: 90vh !important;
+                overflow-y: auto !important;
+            }
+            
+            .rating-modal-header h3,
+            .search-modal-header h3 {
+                font-size: 16px !important;
+            }
+            
+            .rating-modal-body,
+            .search-modal-search {
+                font-size: 12px !important;
+            }
+            
+            .rating-modal-body input,
+            .search-modal-search input {
+                font-size: 13px !important;
+                padding: 8px 10px !important;
+            }
+            
+            .rating-modal-actions {
+                flex-direction: column !important;
+                gap: 8px !important;
+            }
+            
+            .rating-modal-actions button {
+                width: 100% !important;
+            }
+            
             /* Уменьшаем аватары контактов */
             .people-list img,
             .people-list > ul > li > div:first-child img {
