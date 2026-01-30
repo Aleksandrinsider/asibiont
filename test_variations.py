@@ -2,6 +2,7 @@
 import asyncio
 import os
 import logging
+import pytest
 from datetime import datetime
 
 os.environ['FREE_ACCESS_MODE'] = '1'
@@ -171,6 +172,7 @@ TEST_CASES = {
     ],
 }
 
+@pytest.mark.skip(reason="This is a helper function, not a test")
 async def test_function(func_name, test_cases, user_id, session):
     """Тестирование функции с различными формулировками"""
     print(f"\n{'='*80}")
