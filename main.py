@@ -2275,7 +2275,7 @@ async def dashboard_handler(request):
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'bot_username': bot_user,
-            'subscription_tier': 'BRONZE',
+            'subscription_tier': 'LIGHT',
             'current_date': '',
             'current_time': '',
             'formatted_end_date': None,
