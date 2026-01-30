@@ -1008,6 +1008,21 @@
             align-items: center;
             justify-content: center;
         }
+        
+        /* Modal content default styles for desktop */
+        .rating-modal-content,
+        .search-modal-content {
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 24px rgba(31, 35, 40, 0.12);
+        }
+
     </style>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
