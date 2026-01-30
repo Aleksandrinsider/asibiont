@@ -2564,9 +2564,6 @@ def find_partners(user_id=None, session=None):
                     info_parts.append(f"сейчас: {p.current_plans}")
                 if p.interests:
                     info_parts.append(f"интересы: {p.interests}")
-                if hasattr(p, "bio") and p.bio:
-                    bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
-                    info_parts.append(f"сфера деятельности: {bio_short}")
                 if hasattr(p, "position") and p.position:
                     info_parts.append(f"{p.position}")
                 if hasattr(p, "company") and p.company:
@@ -2591,9 +2588,6 @@ def find_partners(user_id=None, session=None):
                     info_parts.append(f"сейчас: {p.current_plans}")
                 if p.interests:
                     info_parts.append(f"интересы: {p.interests}")
-                if hasattr(p, "bio") and p.bio:
-                    bio_short = p.bio[:80] + "..." if len(p.bio) > 80 else p.bio
-                    info_parts.append(f"сфера деятельности: {bio_short}")
                 if hasattr(p, "position") and p.position:
                     info_parts.append(f"{p.position}")
                 if hasattr(p, "company") and p.company:
