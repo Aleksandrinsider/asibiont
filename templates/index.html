@@ -32,7 +32,7 @@
         }
         body {
             display: block;
-            padding: 20px 15px;
+            padding: 40px 15px;
             overflow-y: auto;
         }
         @media (max-width: 768px) {
@@ -40,7 +40,7 @@
                 display: block;
                 align-items: unset;
                 justify-content: unset;
-                padding: 20px 12px;
+                padding: 40px 12px;
             }
         }
         .auth-container {
@@ -159,18 +159,17 @@
                 }
             }
         </style>
+        <div id="telegram-login-container">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                data-telegram-login="{{ bot_username }}" 
+                data-size="large" 
+                data-auth-url="https://asibiont.ru/tg_auth" 
+                data-request-access="write">
+            </script>
+        </div>
         <div class="auth-card">
             <h1>ASI Biont</h1>
             <p class="subtitle">Начните использовать ASI Biont за несколько минут: просто опишите свои текущие задачи в чате с AI-агентом, и платформа автоматически создаст профиль, найдёт релевантных людей и предложит первые шаги. Интуитивный интерфейс в Telegram и веб-панель — всё необходимое под рукой для продуктивной работы и общения.</p>
-
-            <div id="telegram-login-container">
-                <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                    data-telegram-login="{{ bot_username }}" 
-                    data-size="large" 
-                    data-auth-url="https://asibiont.ru/tg_auth" 
-                    data-request-access="write">
-                </script>
-            </div>
 
             <div class="features-grid">
                 <!-- Ряд 1 -->
