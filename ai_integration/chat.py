@@ -642,6 +642,14 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 )
                 tool_results.append({"function": func_name, "result": result})
 
+            elif func_name == "get_task_advice":
+                result = await get_task_advice(
+                    task_id=args.get("task_id"),
+                    user_id=user_id,
+                    session=db_session,
+                )
+                tool_results.append({"function": func_name, "result": result})
+
             else:
                 logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
                 tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})

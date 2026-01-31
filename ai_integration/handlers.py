@@ -963,25 +963,96 @@ async def get_task_advice(task_id=None, user_id=None, session=None):
         title = task.title
         description = decrypt_data(task.description) if task.description else ""
         status = task.status
+        created_at = task.created_at
+        reminder_time = task.reminder_time
+        
+        # ГЛУБОКИЙ АНАЛИЗ КОНТЕКСТА
+        # 1. Все задачи пользователя
+        all_tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['active', 'overdue'])
+        ).all()
+        tasks_context = f"Всего активных задач: {len(all_tasks)}\n"
+        
+        # Анализ перегрузки
+        if len(all_tasks) > 10:
+            tasks_context += "⚠️ ПЕРЕГРУЗКА: у пользователя много активных задач!\n"
+        
+        # Похожие задачи
+        similar = [t for t in all_tasks if t.id != task.id and any(word in t.title.lower() for word in title.lower().split() if len(word) > 3)]
+        if similar:
+            tasks_context += f"Связанные задачи: {', '.join([t.title for t in similar[:3]])}\n"
+        
+        # 2. Профиль пользователя
+        profile_info = ""
+        if user.first_name:
+            profile_info += f"Имя: {user.first_name}\n"
+        if user.username:
+            profile_info += f"Username: @{user.username}\n"
+        
+        # Получаем профиль пользователя
+        user_profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if user_profile:
+            if user_profile.city:
+                profile_info += f"Город: {user_profile.city}\n"
+            if user_profile.skills:
+                profile_info += f"Навыки: {decrypt_data(user_profile.skills)}\n"
+            if user_profile.interests:
+                profile_info += f"Интересы: {decrypt_data(user_profile.interests)}\n"
+        
+        # 3. Анализ паттернов застревания
+        from datetime import datetime, timedelta
+        task_age = (datetime.now() - created_at).days if created_at else 0
+        stuck_warning = ""
+        if task_age > 7:
+            stuck_warning = f"⚠️ Задача висит {task_age} дней - возможно застряли!\n"
+        elif reminder_time and reminder_time < datetime.now():
+            stuck_warning = "⚠️ Дедлайн пропущен!\n"
+        
+        # 4. Проверка возможности делегирования
+        delegation_hint = ""
+        # TODO: Реализовать модель Contact или использовать UserProfile
+        # contacts = session.query(Contact).filter_by(user_id=user.id, can_share_contacts=True).all()
+        # if contacts:
+        #     delegation_hint = f"\n💡 ДЕЛЕГИРОВАНИЕ: У пользователя {len(contacts)} контактов, можно предложить делегировать или попросить помощь\n"
+        
+        # Generate advice using AI with full context
+        prompt = f"""ГЛУБОКИЙ АНАЛИЗ ЗАДАЧИ С УЧЁТОМ КОНТЕКСТА:
 
-        # Generate advice using AI
-        prompt = """Дай полезный совет по выполнению этой задачи:
-
+📋 ТЕКУЩАЯ ЗАДАЧА:
 Задача: {title}
 Описание: {description}
 Статус: {status}
+{stuck_warning}
 
-Дай конкретные, практические рекомендации по:
-1. Как лучше подойти к выполнению
-2. Возможные сложности и как их избежать
-3. Советы по эффективности
+👤 ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
+{profile_info if profile_info else "Профиль не заполнен"}
 
-Ответ должен быть кратким и полезным."""
+📊 КОНТЕКСТ ДРУГИХ ЗАДАЧ:
+{tasks_context}
+{delegation_hint}
+
+🎯 ТВОЯ ЗАДАЧА:
+Ты - эксперт-консультант. Дай ПЕРСОНАЛИЗИРОВАННЫЙ совет с учётом:
+1. Профиля и навыков пользователя
+2. Его текущей загруженности
+3. Возможности делегировать или попросить помощь
+4. Связей с другими задачами
+5. Конкретных шагов действий
+
+Формат ответа:
+✅ ПЛАН ДЕЙСТВИЙ: конкретные шаги
+💡 ОПТИМИЗАЦИЯ: как сделать лучше/быстрее
+⚠️ РИСКИ: на что обратить внимание
+🤝 ДЕЛЕГИРОВАНИЕ: кого привлечь (если релевантно)
+
+Ответ должен быть практичным и учитывать реальный контекст пользователя."""
 
         try:
             import asyncio
             from .chat import chat_with_ai
-            ai_result = asyncio.run(chat_with_ai(user_id, prompt))
+            # Используем asyncio.create_task вместо asyncio.run в уже запущенном event loop
+            ai_result = await chat_with_ai(user_id, prompt)
             advice = ai_result['response']
             result = f"Совет по задаче '{title}':\n\n{advice}"
 
