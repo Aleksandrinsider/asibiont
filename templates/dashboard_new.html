@@ -34,24 +34,30 @@
             max-width: 1400px;
             margin: 0 auto;
             padding: 0 20px;
+            flex-wrap: wrap; /* Позволяет колонкам переноситься на новую строку */
         }
         
         .left-column {
-            flex: 0 0 320px;
+            flex: 1 1 300px;
+            min-width: 300px;
+            max-width: 400px;
             display: flex;
             flex-direction: column;
             gap: 24px;
         }
         
         .center-column {
-            flex: 1 1 auto;
+            flex: 2 1 500px;
+            min-width: 400px;
             display: flex;
             flex-direction: column;
             gap: 24px;
         }
         
         .right-column {
-            flex: 0 0 400px;
+            flex: 1 1 350px;
+            min-width: 300px;
+            max-width: 450px;
             display: flex;
             flex-direction: column;
             gap: 24px;
