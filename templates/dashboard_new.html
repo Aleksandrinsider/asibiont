@@ -43,8 +43,15 @@
             gap: 24px;
         }
         
-        .right-column {
+        .center-column {
             flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        
+        .right-column {
+            flex: 0 0 400px;
             display: flex;
             flex-direction: column;
             gap: 24px;
@@ -57,6 +64,7 @@
             border: 1px solid #D1D9E0;
             border-radius: 12px;
             padding: 20px;
+            min-height: 200px; /* Минимальная высота для видимости */
         }
         
         .stats-content, .profile-content {
@@ -123,9 +131,9 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Скрываем фильтры и контакты при разворачивании профиля
-                if (contactFilterContent) contactFilterContent.style.display = 'none';
-                if (peopleList) peopleList.style.display = 'none';
+                // Показываем фильтры и контакты при разворачивании профиля
+                if (contactFilterContent) contactFilterContent.style.display = '';
+                if (peopleList) peopleList.style.display = '';
                 // Скрываем индикатор при разворачивании
                 if (indicator) indicator.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'false');
@@ -138,9 +146,9 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Показываем фильтры и контакты при сворачивании профиля
-                if (contactFilterContent) contactFilterContent.style.display = '';
-                if (peopleList) peopleList.style.display = '';
+                // Скрываем фильтры и контакты при сворачивании профиля
+                if (contactFilterContent) contactFilterContent.style.display = 'none';
+                if (peopleList) peopleList.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
@@ -722,6 +730,7 @@
                     </div>
                     <div class="people-list" id="people-list" style="padding: 0 4px;">
                         <!-- Контакты будут загружены динамически -->
+                        <div style="padding: 20px; text-align: center; color: #6C727F;">Загрузка контактов...</div>
                     </div>
                 </div>
             </div>
@@ -867,6 +876,7 @@
                     <div class="tasks-section" id="tasks-scroll-container" style="padding: 0 4px;">
                         <div class="task-groups" id="task-groups">
                             <!-- Задачи будут сгруппированы по срокам -->
+                            <div style="padding: 20px; text-align: center; color: #6C727F;">Загрузка задач...</div>
                         </div>
                     </div>
                 </div>
