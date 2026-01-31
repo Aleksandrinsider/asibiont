@@ -479,6 +479,23 @@ try:
             else:
                 logger.info("Migration: current_task_id column already exists")
 
+            # Migration for users table - referral_balance and referrer_id columns
+            if 'referral_balance' not in user_columns:
+                logger.info("Adding referral_balance column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN referral_balance INTEGER DEFAULT 0'))
+                session.commit()
+                logger.info("Migration: referral_balance column added successfully")
+            else:
+                logger.info("Migration: referral_balance column already exists")
+
+            if 'referrer_id' not in user_columns:
+                logger.info("Adding referrer_id column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN referrer_id INTEGER REFERENCES users(id)'))
+                session.commit()
+                logger.info("Migration: referrer_id column added successfully")
+            else:
+                logger.info("Migration: referrer_id column already exists")
+
         session.close()
         logger.info("Migration session closed successfully")
     except Exception as e:
