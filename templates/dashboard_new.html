@@ -27,7 +27,17 @@
     <!-- Canonical URL -->
     <link rel="canonical" href="https://asibiont.ru/dashboard">
     <style>
+        /* Мобильные блоки по умолчанию скрыты */
+        .mobile-logo, .mobile-info-message {
+            display: none !important;
+        }
+
         @media (max-width: 768px) {
+            /* Показываем мобильные блоки только на мобильных устройствах */
+            .mobile-logo, .mobile-info-message {
+                display: block !important;
+            }
+
             .contact-search-desktop {
                 padding: 8px !important;
                 width: 32px !important;
@@ -527,7 +537,7 @@
         {% if not logged_in %}
         <div class="login-page-wrapper">
             <!-- Логотип на мобильных -->
-            <div class="mobile-logo" style="display: none;">
+            <div class="mobile-logo">
                 <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 240px; height: 240px; opacity: 1;">
             </div>
             
@@ -846,7 +856,7 @@
                 </div>
                 
                 <!-- Мобильное информационное сообщение -->
-                <div class="mobile-info-message" style="display: none; margin: 16px 0; padding: 16px; background: #F8FAFC; border: 1px solid #D1D9E0; border-radius: 12px;">
+                <div class="mobile-info-message" style="margin: 16px 0; padding: 16px; background: #F8FAFC; border: 1px solid #D1D9E0; border-radius: 12px;">
                     <div style="display: flex; align-items: flex-start; gap: 12px;">
                         <svg width="20" height="20" viewBox="0 0 16 16" fill="#374151" style="flex-shrink: 0; margin-top: 2px; opacity: 0.8;">
                             <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/>
@@ -860,7 +870,7 @@
                     </div>
                     
                     <!-- Сообщение для мобильных устройств -->
-                    <div class="mobile-info-message" style="display: none; margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 100%); border: 1px solid #D1D9E0; border-radius: 12px; text-align: center;">
+                    <div class="mobile-info-message" style="margin-top: 20px; padding: 20px; background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 100%); border: 1px solid #D1D9E0; border-radius: 12px; text-align: center;">
                         <svg width="48" height="48" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.8; margin-bottom: 16px;">
                             <path d="M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z"/>
                         </svg>
