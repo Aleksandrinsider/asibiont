@@ -7,7 +7,7 @@ load_dotenv()
 # App settings first
 PORT = int(os.getenv("PORT", 8080))
 LOCAL = os.getenv("LOCAL", "0").lower() in ("true", "1", "yes")  # Production by default
-FREE_ACCESS_MODE = os.getenv("FREE_ACCESS_MODE", "False").lower() in ("true", "1", "yes")  # Paid mode by default
+FREE_ACCESS_MODE = False  # Production: paid mode only
 USE_OPTIMIZED_PROMPT = os.getenv("USE_OPTIMIZED_PROMPT", "True").lower() in ("true", "1", "yes")
 CURRENT_DATE_STR = os.getenv("CURRENT_DATE")
 if CURRENT_DATE_STR:

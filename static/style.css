@@ -428,7 +428,19 @@ body {
     flex: 1 !important;
     min-height: 0 !important;
     overflow: hidden !important;
-} 
+}
+
+/* View panels for switching between chat and feed */
+.view-panel {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+.view-panel.active {
+    display: flex;
+}
 
 
 /* Responsive adjustments */
@@ -2335,16 +2347,17 @@ details[open] .details-content {
 }
 
 .delete-btn {
-    background: #FEF2F2 !important;
-    color: #DC2626 !important;
+    background: #F6F8FA !important;
+    color: #374151 !important;
+    border: none !important;
 }
 
 .delete-btn:hover {
-    background: #FEE2E2 !important;
+    background: #E8ECEF !important;
 }
 
 .delete-btn:active {
-    background: #FECACA !important;
+    background: #D1D9E0 !important;
 }
 
 /* Error notification styles */
