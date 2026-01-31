@@ -505,7 +505,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
                 
             elif func_name == "find_relevant_contacts_for_task":
-                task_desc = func_args.get('task_description', '')
+                task_desc = args.get('task_description', '')
                 result = find_relevant_contacts_for_task(task_description=task_desc, user_id=user_id, session=db_session)
                 tool_results.append({"function": func_name, "result": result})
 
@@ -1180,7 +1180,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
     # ВСЕГДА получаем актуальный список задач перед обработкой
     # Это гарантирует, что AI видит свежие данные после операций через веб-интерфейс
-    current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
+    try:
+        current_tasks = list_tasks(user_id=user_id, session=db_session, include_completed=False)
+    except Exception as e:
+        logger.warning(f"Failed to get tasks list: {e}")
+        current_tasks = "Задачи не загружены"
     
     # Для proactive режима фильтруем только предстоящие задачи
     if message_type == 'proactive':
@@ -2583,7 +2587,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
-                        url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
+                        url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)
                     ) as response:
                         logger.info(f"DeepSeek API response status: {response.status} (attempt {attempt + 1}/{max_retries + 1})")
                         
@@ -3667,7 +3671,7 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)) as response:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)) as response:
                 if response.status == 200:
                     result = await response.json()
                     content = result["choices"][0]["message"]["content"]
