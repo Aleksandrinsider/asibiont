@@ -30,24 +30,24 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
         }
         body {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 15px;
             overflow-y: auto;
         }
         @media (max-width: 768px) {
             body {
+                display: block;
+                align-items: unset;
+                justify-content: unset;
                 padding: 15px 12px;
             }
         }
         .auth-container {
             width: 100%;
             max-width: 900px;
-            margin: 40px auto;
-        }
-        @media (max-width: 768px) {
-            .auth-container {
-                margin: 0 auto;
-            }
+            margin: 0 auto;
         }
         .auth-card {
             padding: 24px;
@@ -180,6 +180,12 @@
                     <div class="feature-description">Полный функционал в Telegram - работайте где угодно, получайте уведомления мгновенно</div>
                 </div>
             </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #D1D9E0;">
+            <a href="/subscription-tiers" style="display: inline-block; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Тарифы</a>
+            <a href="https://t.me/aleksandrinsider" target="_blank" style="display: inline-block; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Поддержка</a>
         </div>
     </div>
 </body>
