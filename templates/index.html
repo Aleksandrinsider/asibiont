@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASI Biont - Авторизация</title>
+    <title>ASI Biont - AI-Партнёр для Задач и Связи | Интеллектуальный Ассистент</title>
+    <meta name="description" content="ASI Biont - AI-агент для управления задачами, поиска единомышленников и достижения целей. Интеллектуальный анализ, умные советы, делегирование с ИИ-контролем. Попробуйте бесплатно!">
+    <meta name="keywords" content="AI ассистент, управление задачами, поиск единомышленников, делегирование, productivity, нетворкинг, ASI Biont">
     <style>
         * {
             margin: 0;
@@ -93,8 +95,47 @@
             margin: 32px 0;
             padding: 24px;
         }
-        .mobile-logo {
-            display: none;
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 32px 0;
+        }
+        .feature-card {
+            border: 1px solid #D1D9E0;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .feature-card:hover {
+            border-color: #374151;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .feature-icon {
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+        .feature-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+        .feature-description {
+            font-size: 13px;
+            color: #6C727F;
+            line-height: 1.5;
+        }
+        @media (max-width: 768px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .feature-card {
+                padding: 16px;
+            }
         }
     </style>
 </head>
@@ -102,14 +143,63 @@
     <img src="/static/asibiont.svg" alt="ASI Biont" class="mobile-logo">
     <div class="auth-container">
         <div class="auth-card">
-            <h1>ASI Biont - лаборатория ИИ</h1>
-            
+            <h1>ASI Biont - Ваш AI-Партнёр</h1>
+
+            <div class="features-grid">
+                <!-- Ряд 1 -->
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <div class="feature-title">Интеллектуальный Анализ</div>
+                    <div class="feature-description">AI глубоко анализирует ваши задачи, учитывает навыки, опыт и текущую загруженность для персонализированных советов</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <div class="feature-title">Поиск Единомышленников</div>
+                    <div class="feature-description">Автоматически находит людей в вашем городе с похожими задачами и целями для совместной работы</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💡</div>
+                    <div class="feature-title">Умные Советы</div>
+                    <div class="feature-description">Получайте конкретные рекомендации по решению задач с учётом рисков и оптимизации</div>
+                </div>
+
+                <!-- Ряд 2 -->
+                <div class="feature-card">
+                    <div class="feature-icon">⏰</div>
+                    <div class="feature-title">Управление Временем</div>
+                    <div class="feature-description">Умные напоминания, контроль дедлайнов и автоматическое планирование вашего дня</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <div class="feature-title">Делегирование с ИИ</div>
+                    <div class="feature-description">Поручайте задачи с автоматическим контролем выполнения и прогресса</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎤</div>
+                    <div class="feature-title">Голосовые Сообщения</div>
+                    <div class="feature-description">Работайте с AI через голос - диктуйте задачи и получайте ответы в аудиоформате</div>
+                </div>
+
+                <!-- Ряд 3 -->
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <div class="feature-title">Память Контекста</div>
+                    <div class="feature-description">AI запоминает вашу историю, предпочтения и связи между задачами для лучшего понимания</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">Панель Управления</div>
+                    <div class="feature-description">Веб-интерфейс для просмотра всех задач, контактов, истории и статистики в одном месте</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <div class="feature-title">Telegram Интеграция</div>
+                    <div class="feature-description">Полный функционал в Telegram - работайте где угодно, получайте уведомления мгновенно</div>
+                </div>
+            </div>
+
             <div class="description">
-                <p>Инновационная платформа от лаборатории искусственного интеллекта ASI Biont для поиска единомышленников через ваши дела. Система анализирует текущие задачи и цели, используя искусственный интеллект для глубокого понимания ваших интересов и приоритетов. Автоматически находит людей в вашем городе с похожими задачами и целями, сравнивая профили и обеспечивая релевантные связи для совместной работы и общения. Мгновенно реагирует на ситуацию и предлагает подходящих людей для бизнес-проектов, спортивных тренировок или просто прогулки в кино.</p>
-                
-                <p>Умный AI-агент запоминает контекст жизни, связывает задачи, понимает голосовые сообщения и предлагает оптимальные шаги с умными напоминаниями. Панель управления объединяет все: задачи, людей, историю взаимодействий и статистику. Следите за дедлайнами и делегируйте через чат с AI.</p>
-                
-                <p>Начните использовать ASI Biont за несколько минут: просто опишите свои текущие задачи в чате с AI-агентом, и платформа автоматически создаст профиль, найдёт релевантных людей и предложит первые шаги. Интуитивный интерфейс в Telegram и веб-панель — всё необходимое под рукой для продуктивной работы и общения.</p>
+                <p><strong>ASI Biont</strong> - это не просто todo-лист, а полноценный AI-партнёр, который понимает ваши цели, находит нужных людей и помогает достигать результатов быстрее.</p>
             </div>
 
             <div id="telegram-login-container">
