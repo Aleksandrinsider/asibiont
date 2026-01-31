@@ -422,15 +422,6 @@ body {
     flex: 1.46;
 }
 
-/* Chat section should fill available space */
-.chat-section {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-}
-
 /* View container holds both chat and feed panels */
 .view-container {
     position: relative;
