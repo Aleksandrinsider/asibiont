@@ -387,7 +387,8 @@ def set_recurring_task(title, description="", recurrence_pattern=None, recurrenc
         )
 
         session.add(recurring_task)
-        session.commit()
+        session.flush()  # Получаем ID для recurring_task
+        print(f"[DEBUG HANDLER] Created recurring task: id={recurring_task.id}, title={recurring_task.title}")
 
         # Create first instance immediately
         first_instance = Task(
@@ -395,11 +396,17 @@ def set_recurring_task(title, description="", recurrence_pattern=None, recurrenc
             title=title,
             description=encrypt_data(description),
             reminder_time=parsed_time.astimezone(pytz.UTC),
-            parent_task_id=recurring_task.id
+            parent_task_id=recurring_task.id,
+            is_recurring=False  # Явно указываем что это экземпляр, НЕ шаблон
         )
 
         session.add(first_instance)
+        session.flush()  # Получаем ID для first_instance
+        print(f"[DEBUG HANDLER] Created first instance: id={first_instance.id}, title={first_instance.title}")
+        
+        # Commit both tasks together
         session.commit()
+        print(f"[DEBUG HANDLER] Both tasks committed to DB")
 
         # Schedule reminder for first instance
         try:
@@ -414,9 +421,8 @@ def set_recurring_task(title, description="", recurrence_pattern=None, recurrenc
                 logger.info(f"[SET_RECURRING_TASK] Scheduled first reminder for recurring task {first_instance.id}")
         except Exception as e:
             logger.warning(f"Could not schedule reminder for recurring task instance {first_instance.id}: {e}")
-            import traceback
-            traceback.print_exc()
-            session.rollback()
+            # НЕ делаем rollback - задача уже создана в БД
+            # Напоминание можно добавить позже вручную
 
         # Format result message
         pattern_text = {
@@ -515,10 +521,11 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         logger.error("[COMPLETE_TASK] user_id is None")
         return "ERROR: user_id не может быть None"
     
-    # ТРЕБУЕМ task_id или task_title - не используем "последнюю задачу" автоматически
+    # МЯГКАЯ ПРОВЕРКА: Если нет task_id/task_title, попробуем найти последнюю активную задачу
+    # Это позволит завершать задачи даже если AI не передал параметры
     if task_id_int is None and (task_title is None or task_title.strip() == ""):
-        logger.warning("[COMPLETE_TASK] No task_id or task_title provided")
-        return "ERROR: Укажите какую задачу нужно завершить (ID или название)"
+        logger.warning("[COMPLETE_TASK] No task_id or task_title provided, will use fallback")
+        # Не возвращаем ошибку - дадим шанс найти задачу автоматически ниже
     
     if session is None:
         session = Session()
@@ -639,6 +646,11 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         except Exception as e:
             logger.warning(f"[COMPLETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
 
+        # КРИТИЧНО: всегда возвращаем маркер для запроса результата
+        # AI должен ОБЯЗАТЕЛЬНО спросить о результате выполнения
+        result = f"TASK_COMPLETED_ASK_RESULT:{task.title}"
+        logger.info(f"[COMPLETE_TASK] Returning marker to request result: {result}")
+        
         # Schedule result check - уточнение результата выполнения через 1 час
         result_check_time = datetime.now(timezone.utc) + timedelta(hours=1)
         try:
@@ -2782,31 +2794,72 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     if close_session:
         session.close()
     
+    # ДВУСТОРОННИЙ АНАЛИЗ: кому пользователь может помочь
+    reverse_matches = []
+    if user_profile and user_profile.skills:
+        user_skills_set = set(s.strip().lower() for s in user_profile.skills.split(','))
+        for partner in all_partners:
+            partner_user = session.query(User).filter_by(id=partner.user_id).first()
+            if not partner_user or not partner_user.username:
+                continue
+            
+            score = 0
+            reasons = []
+            # Навыки пользователя совпадают с целями контакта
+            if hasattr(partner, 'goals') and partner.goals:
+                partner_goals_set = set(g.strip().lower() for g in partner.goals.split(','))
+                overlap = user_skills_set & partner_goals_set
+                if overlap:
+                    score += len(overlap) * 3
+                    reasons.append(f"нуждается в твоих навыках: {', '.join(list(overlap)[:2])}")
+            # Навыки пользователя совпадают с интересами контакта
+            if hasattr(partner, 'interests') and partner.interests:
+                partner_interests_set = set(i.strip().lower() for i in partner.interests.split(','))
+                overlap = user_skills_set & partner_interests_set
+                if overlap:
+                    score += len(overlap) * 2
+                    reasons.append(f"интересуется тем, в чем ты эксперт")
+            
+            if score > 0:
+                reverse_matches.append({
+                    'username': partner_user.username,
+                    'city': partner.city or '',
+                    'score': score,
+                    'reasons': reasons
+                })
+    
+    reverse_matches.sort(key=lambda x: x['score'], reverse=True)
+    
     # Формирование ответа
-    if not sorted_contacts:
-        return "Не нашел подходящих контактов для этой задачи. Попробуйте заполнить больше информации в профиле или создайте задачу с более конкретным описанием."
+    result_lines = []
     
-    # Ограничить до limit контактов
-    top_contacts = sorted_contacts[:limit]
+    if sorted_contacts:
+        result_lines.append("💡 Кто может помочь тебе:")
+        top_contacts = sorted_contacts[:min(3, limit)]
+        for i, contact in enumerate(top_contacts, 1):
+            line = f"• @{contact['username']}"
+            if contact['reasons']:
+                line += f" — {', '.join(contact['reasons'][:2])}"
+            if contact['city']:
+                line += f" | {contact['city']}"
+            result_lines.append(line)
     
-    result_lines = [f"🎯 Нашел {len(top_contacts)} подходящих контактов для этой задачи:\n"]
+    if reverse_matches:
+        if result_lines:
+            result_lines.append("")
+        result_lines.append("🤝 Кому ты можешь помочь:")
+        for i, contact in enumerate(reverse_matches[:min(3, limit)], 1):
+            line = f"• @{contact['username']}"
+            if contact['reasons']:
+                line += f" — {', '.join(contact['reasons'][:2])}"
+            if contact['city']:
+                line += f" | {contact['city']}"
+            result_lines.append(line)
     
-    for i, contact in enumerate(top_contacts, 1):
-        line = f"{i}. @{contact['username']}"
-        if contact['name'] != contact['username']:
-            line += f" ({contact['name']})"
-        
-        if contact['reasons']:
-            line += f" - {', '.join(contact['reasons'][:2])}"
-        
-        if contact['city']:
-            line += f" | {contact['city']}"
-        
-        result_lines.append(line)
-    
-    result_lines.append("\n💡 Совет: вы можете делегировать задачу или пригласить их к совместной активности через раздел 'Контакты' в дашборде.")
-    
-    return '\n'.join(result_lines)
+    if result_lines:
+        return '\n'.join(result_lines)
+    else:
+        return "Не нашел подходящих контактов для этой задачи. Попробуй заполнить больше информации в профиле."
 
 
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):

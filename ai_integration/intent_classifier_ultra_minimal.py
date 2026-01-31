@@ -57,16 +57,19 @@ class IntentClassifierUltraMinimal:
 add_task - создание задачи с напоминанием (напомни, создай, добавь, нужно, поставь напоминание)
 complete_task - завершение задачи (готово, сделал, выполнил, закончил, завершил, проверил)
 list_tasks - показ задач (покажи, список, что у меня, мои дела, запланировано)
+get_task_details - получить детали задачи (расскажи подробнее о, детали задачи, покажи детали)
 delete_task - удаление одной задачи (удали задачу, убери встречу, отмени)
 delete_all_tasks - удаление всех задач (удали все, очисти все, убери все дела)
 reschedule_task - перенос времени задачи (перенеси, измени время, отложи, подвинь)
+edit_task - изменение задачи (измени задачу, отредактируй, добавь описание, поменяй название)
 delegate_task - делегирование задачи другому (делегируй, поручи @username)
-set_recurring_task - повторяющаяся задача (каждый день/неделю, напоминай регулярно, ежедневно)
-get_task_details - получить детали задачи (расскажи подробнее о, детали задачи)
+accept_delegated_task - принять делегированную задачу (приму, соглашусь, выполню)
+reject_delegated_task - отклонить делегированную задачу (отклоню, не могу, откажусь)
+get_delegation_progress - статус делегированных задач (где моя задача, как дела с поручением)
 find_partners - поиск партнеров (найди партнеров, ищу единомышленников, подбери коллег)
 find_relevant_contacts_for_task - поиск помощи для конкретной задачи (кто может помочь с, нужен дизайнер)
 update_profile - обновление профиля (я из Москвы, работаю программистом, люблю спорт)
-update_user_memory - сохранение в память (запомни что я, сохрани предпочтение)
+update_user_memory - сохранение в память (запомни что я, сохрани предпочтение, не забудь что)
 conversation - остальное (привет, спасибо, как дела, что умеешь)
 
 ПРИМЕРЫ КЛАССИФИКАЦИИ:
@@ -84,29 +87,64 @@ conversation - остальное (привет, спасибо, как дела
 "Что у меня запланировано" → list_tasks
 "Список задач" → list_tasks
 "Мои дела" → list_tasks
+"Расскажи про задачу звонок" → get_task_details
+"Покажи детали задачи про презентацию" → get_task_details
+"Что с задачей купить молоко" → get_task_details
 "Удали задачу про молоко" → delete_task
 "Убери встречу" → delete_task
+"Отмени напоминание про звонок" → delete_task
 "Удали все задачи" → delete_all_tasks
 "Очисти все напоминания" → delete_all_tasks
+"Убери все дела" → delete_all_tasks
 "Перенеси на завтра" → reschedule_task
 "Отложи задачу на час" → reschedule_task
-"Напоминай зарядку каждый день в 7 утра" → set_recurring_task
-"Каждую среду в 19:00 напоминай про встречу" → set_recurring_task
-"Каждый понедельник отчет" → set_recurring_task
-"Ежедневно в 8 утра" → set_recurring_task
-"Регулярно напоминай" → set_recurring_task
+"Измени время встречи на 15:00" → reschedule_task
+"Измени задачу про продукты: добавь описание" → edit_task
+"Отредактируй задачу встреча: поменяй название" → edit_task
+"Добавь описание к задаче" → edit_task
+"Поручи задачу @ivanov" → delegate_task
+"Делегируй встречу Петру" → delegate_task
+"Соглашусь выполнить задачу от коллеги" → accept_delegated_task
+"Приму поручение" → accept_delegated_task
+"Отклоняю делегированную задачу" → reject_delegated_task
+"Не смогу выполнить поручение" → reject_delegated_task
+"Где моя делегированная задача" → get_delegation_progress
+"Как дела с поручением от Петра" → get_delegation_progress
 "Я из Москвы" → update_profile
 "Работаю программистом" → update_profile
+"Интересуюсь Python" → update_profile
+"Запомни что я предпочитаю работать утром" → update_user_memory
+"Сохрани: я не люблю телефонные звонки" → update_user_memory
+"Не забудь что у меня аллергия" → update_user_memory
 "Найди партнеров" → find_partners
 "Ищу единомышленников" → find_partners
+"Подбери коллег с похожими интересами" → find_partners
 "Кто может помочь с дизайном" → find_relevant_contacts_for_task
-"Нужен программист" → find_relevant_contacts_for_task
+"Нужен программист для проекта" → find_relevant_contacts_for_task
 "Кто разбирается в маркетинге" → find_relevant_contacts_for_task
 "Привет" → conversation
 "Спасибо" → conversation
+"Что ты умеешь" → conversation
+
+КРИТИЧНО:
+• Если "измени/отредактируй задачу" или "добавь описание/название" → edit_task, НЕ update_profile!
+• Если "перенеси/отложи" ИЛИ меняется только ВРЕМЯ → reschedule_task, НЕ edit_task!
+• Если "покажи детали/расскажи про задачу" → get_task_details, НЕ list_tasks!
+• Если "запомни что я/сохрани" про предпочтения/факты → update_user_memory, НЕ update_profile!
+• Если "я из/работаю/интересуюсь" → update_profile, НЕ update_user_memory!
+• Если "кто может помочь с X" или "нужен X для задачи" → find_relevant_contacts_for_task, НЕ find_partners!
+• Если "удали все/очисти все" → delete_all_tasks, НЕ delete_task!
+• Если "поручи/делегируй @username" → delegate_task, НЕ add_task!
+• Если "соглашусь/приму поручение" → accept_delegated_task!
+• Если "откажусь/отклоню поручение" → reject_delegated_task!
+• Если "где моя задача/как дела с поручением" → get_delegation_progress!
+• Иначе для создания новой задачи → add_task
+"Что ты умеешь" → conversation
 
 КРИТИЧНО:
 • Если видишь "каждый день/неделю/час" или "ежедневно/еженедельно" → set_recurring_task, НЕ add_task!
+• Если "измени/отредактируй задачу" или "добавь описание к задаче" → edit_task, НЕ update_profile!
+• Если "перенеси/отложи" ИЛИ меняется ВРЕМЯ → reschedule_task, НЕ edit_task!
 • Если "кто может помочь с X" или "нужен X" → find_relevant_contacts_for_task, НЕ find_partners!
 • Иначе для создания задачи → add_task
 
@@ -122,9 +160,13 @@ conversation - остальное (привет, спасибо, как дела
                 intent = response.strip().lower()
                 # Remove any extra text, keep only the first word
                 intent = intent.split()[0] if intent else "conversation"
+                
+                logger.info(f"[CLASSIFIER] Raw response: '{response}' -> parsed intent: '{intent}'")
 
                 if intent in cls.INTENTS:
                     return intent
+                else:
+                    logger.warning(f"[CLASSIFIER] Intent '{intent}' not in INTENTS list, defaulting to conversation")
 
             return 'conversation'
 

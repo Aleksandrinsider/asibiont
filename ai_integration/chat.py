@@ -462,6 +462,28 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             elif func_name == "complete_task":
                 task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
+                
+                # КРИТИЧЕСКАЯ ФИКСАЦИЯ: Если AI не передал task_title, извлекаем из сообщения
+                if not task_title or task_title.strip() == "":
+                    logger.warning(f"[COMPLETE_TASK FALLBACK] AI didn't provide task_title, extracting from message: {original_message[:100]}")
+                    # Простой поиск ключевых слов из сообщения в названиях задач
+                    from .task_search import find_task_flexible
+                    temp_user = db_session.query(User).filter_by(telegram_id=user_id).first()
+                    if temp_user:
+                        potential_task = find_task_flexible(
+                            session=db_session,
+                            user=temp_user,
+                            task_id=None,
+                            task_title=original_message,  # Используем всё сообщение для поиска
+                            include_completed=False,
+                            include_delegated=False
+                        )
+                        if potential_task:
+                            task_title = potential_task.title
+                            logger.info(f"[COMPLETE_TASK FALLBACK] Found task from message: '{task_title}'")
+                        else:
+                            logger.warning("[COMPLETE_TASK FALLBACK] No matching task found in message")
+                
                 result = await complete_task(
                     task_id=args.get("task_id"),
                     task_title=task_title,
@@ -795,9 +817,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 natural_responses.append("TASK_DELETED_ASK_REASON: Задача удалена, спроси о причине")
             
             elif "TASK_COMPLETED_ASK_RESULT:" in result_text:
-                # AI должен спросить о результате выполнения
+                # КРИТИЧНО: AI ОБЯЗАН спросить о результате выполнения
                 task_title = result_text.replace("TASK_COMPLETED_ASK_RESULT:", "").strip()
-                natural_responses.append(f"TASK_COMPLETED_ASK_RESULT: {task_title}. Спроси о результате выполнения")
+                natural_responses.append(f"TASK_COMPLETED_MUST_ASK:{task_title}")
             
             elif "TASK_UPDATED:" in result_text:
                 # AI должен прокомментировать изменение задачи
@@ -1056,6 +1078,13 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
    - Адаптируйся под ТЕКУЩУЮ СИТУАЦИЮ (время суток, контекст)
    - Создавай УНИКАЛЬНЫЙ ответ для каждой ситуации
    - НЕ используй шаблоны и заготовки
+
+⚠️ КРИТИЧНО - ЗАВЕРШЕНИЕ ЗАДАЧ:
+Если в контексте есть маркер TASK_COMPLETED_MUST_ASK - ты ОБЯЗАН:
+1. КРАТКО подтвердить завершение (1 фраза)
+2. ОБЯЗАТЕЛЬНО спросить о результате: "Как прошло?", "Что получилось?", "Какой результат?"
+3. НЕ давай советы до ответа пользователя
+4. НЕ переходи к другим темам
 
 ВАЖНО: Все ответы генерируй на основе контекста, НЕ копируй фразы!"""
 
@@ -1947,6 +1976,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             intent = {'type': intent_type, 'confidence': confidence, 'params': {}}
             logger.info(f"[AI INTENT] Classified as {intent['type']} with confidence {intent['confidence']} - RAW: {ai_result}")
+            print(f"[DEBUG] AI INTENT: {intent}")  # DEBUG OUTPUT
         except Exception as e:
             logger.warning(f"[AI INTENT] Failed to use AI classification: {e}, falling back to static")
             intent = {'type': 'conversation', 'confidence': 0.5, 'params': {}}
@@ -1962,6 +1992,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'каждый месяц', 'ежемесячно', 'повторять', 'регулярно'
         ]):
                 intent = {"type": "set_recurring_task", "confidence": 0.95, "params": {}}
+                logger.info(f"[STATIC CLASSIFIER] Detected recurring task pattern in message")
 
             # 2. Удаление всех задач (высокий приоритет)
             elif any(kw in message_lower for kw in ['все задачи', 'всех задач', 'все мои задачи']) and \
@@ -2319,11 +2350,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
                 'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
             ]
+            logger.info(f"[TOOL CHOICE CHECK] intent type: '{intent.get('type')}', in action_intents: {intent.get('type') in action_intents}")
+            print(f"[DEBUG] TOOL CHOICE CHECK: intent={intent}, type={intent.get('type')}")  # DEBUG OUTPUT
             if intent.get('type') in action_intents:
-                tool_choice = {"type": "function", "function": {"name": intent['type']}}
-                logger.info(f"[TOOL CHOICE] {intent['type']} (confidence: {intent.get('confidence')})")
+                # Используем "required" вместо конкретной функции - пусть AI сам выбирает нужный tool
+                tool_choice = "required"  # Принудительный вызов ЛЮБОГО tool
+                logger.info(f"[TOOL CHOICE] REQUIRED for {intent['type']} (confidence: {intent.get('confidence')})")
+                print(f"[DEBUG] FORCED tool_choice: required")  # DEBUG OUTPUT
             else:
                 logger.info(f"[TOOL CHOICE] auto for: {clean_message[:50]}")
+                print(f"[DEBUG] AUTO tool_choice")  # DEBUG OUTPUT
 
         # Динамическая температура для естественности
         message_lower = clean_message.lower()
@@ -2642,12 +2678,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                     logger.info(f"[AI RESPONSE] Content: {content[:200]}")
                                     logger.info(f"[AI RESPONSE] Tool calls: {tool_calls}")
                                     logger.info(f"[AI RESPONSE] Full message_response keys: {message_response.keys()}")
+                                    print(f"[DEBUG] API RESPONSE - tool_calls: {tool_calls}, message keys: {list(message_response.keys())}")  # DEBUG
                                     if tool_calls:
                                         for tc in tool_calls:
                                             func_name = safe_extract_tool_info(tc)['function']
                                             logger.info(f"[AI RESPONSE] Calling tool: {func_name}")
                                     else:
                                         logger.warning(f"[AI RESPONSE] No tool_calls in response! Expected tool for message: {original_message[:100]}")
+                                        print(f"[DEBUG] NO TOOL_CALLS! Message response: {message_response}")  # DEBUG
                                 else:
                                     logger.error(f"No choices in API response: {result}")
                                     content = "Извините, произошла ошибка при обработке запроса."
@@ -2690,14 +2728,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             validation_failed = False
                             if tool_calls:
                                 result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=content)
+                                # Всегда возвращаем информацию о tool_calls, даже если result пустой
+                                tool_calls_info = [safe_extract_tool_info(tc) for tc in tool_calls]
+                                print(f"[DEBUG] Returning with tool_calls: {tool_calls_info}")  # DEBUG
                                 if result:
-                                    return {'response': result, 'tool_calls': [safe_extract_tool_info(tc) for tc in tool_calls]}
+                                    return {'response': result, 'tools_called': tool_calls_info}
                                 elif result is None and tool_calls:
                                     # Если process_tool_calls вернул None при наличии tool_calls - значит валидация не прошла
                                     # Заменяем tool_calls на пустой список, чтобы сработала антигаллюцинация
                                     logger.error("[VALIDATION FAILED] Setting tool_calls to empty to trigger anti-hallucination")
                                     tool_calls = []
                                     validation_failed = True
+                                else:
+                                    # result пустой, но tools были вызваны - возвращаем дефолтный ответ
+                                    return {'response': "Выполнено", 'tools_called': tool_calls_info}
                                 # tool_calls были проигнорированы для вопроса совета, переходим к обычной обработке
                             
                             # КРИТИЧЕСКАЯ ПРОВЕРКА: AI НЕ ДОЛЖЕН ГАЛЛЮЦИНИРОВАТЬ ДЕЙСТВИЯ
@@ -3495,15 +3539,19 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         user_username = f"@{user.username}" if user and user.username else "@unknown"
         mentions_str = ""
 
-        # Извлекаем последние ответы агента для предотвращения повторов
+        # Извлекаем последние ответы агента для предотвращения повторов (УСИЛЕННАЯ ВЕРСИЯ)
         last_responses = []
         if context and isinstance(context, list):
-            for item in context[-3:]:
-                if "agent" in item:
-                    response_text = item["agent"][:40].strip()
-                    if response_text and response_text not in last_responses:
-                        last_responses.append(response_text)
-        last_responses = last_responses[-2:]
+            for item in context[-5:]:
+                if isinstance(item, dict) and 'agent' in item:
+                    response_text = item['agent'].strip()
+                    if response_text and len(response_text) > 10:
+                        # Берем первые 80 символов для более точной проверки
+                        last_responses.append(response_text[:80])
+        # Убираем дубликаты, сохраняя порядок
+        seen = set()
+        last_responses = [x for x in last_responses if not (x in seen or seen.add(x))]
+        last_responses = last_responses[-5:]  # Последние 5 уникальных ответов
 
         system_prompt = get_extended_system_prompt(
             user_now,
@@ -3514,6 +3562,12 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             user_memory,
             subscription_tier=subscription_tier,
             message_type='proactive')
+        
+        # Добавляем последние ответы для избегания повторов
+        if last_responses:
+            responses_text = "\n".join([f"- {resp}" for resp in last_responses])
+            system_prompt += f"\n\n⚠️ ЗАПРЕЩЕНО ПОВТОРЯТЬ ЭТИ ФРАЗЫ (твои последние ответы):\n{responses_text}\n\nГенерируй НОВЫЙ уникальный ответ!"
+        
         logger.info("[PROACTIVE] Using extended prompt system")
 
         # Создаем messages как в обычном чате, но с проактивным контекстом
