@@ -1399,7 +1399,7 @@ async def login_handler(request):
     # Показываем страницу авторизации
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
-    return aiohttp_jinja2.render_template('dashboard_new.html', request, {
+    return aiohttp_jinja2.render_template('index.html', request, {
         'logged_in': False,
         'bot_username': bot_user,
         'subscription_tier': 'BRONZE',
@@ -2868,6 +2868,9 @@ async def get_user_id_from_request(request):
             try:
                 user_id = int(telegram_id_param)
                 logger.info(f"Set user_id from query parameter: {user_id}")
+                # Save to session for subsequent API calls
+                session_req['user_id'] = user_id
+                logger.info(f"Saved user_id {user_id} to session")
             except ValueError:
                 logger.error(f"Invalid telegram_id in query: {telegram_id_param}")
     
@@ -6485,6 +6488,7 @@ app.router.add_post('/get_task_advice', get_task_advice_handler)
 app.router.add_post('/update_timezone', update_timezone_handler)
 app.router.add_get('/extend_subscription', extend_subscription_handler)
 app.router.add_get('/subscription_tiers', subscription_tiers_handler)
+app.router.add_get('/subscription-tiers', subscription_tiers_handler)  # Alias with dash
 app.router.add_post('/apply_promo_code', apply_promo_code_handler)
 app.router.add_get('/create_payment', create_payment_handler)
 # app.router.add_get('/check_sportfan3', check_sportfan3_handler)  # Disabled - user deleted from production
