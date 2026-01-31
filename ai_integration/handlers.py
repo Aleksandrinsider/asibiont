@@ -315,9 +315,6 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
 
 
 # set_recurring_task removed - feature not critical, required subscription
-        if close_session:
-            session.close()
-        return f"ERROR: Не удалось создать повторяющуюся задачу: {str(e)}"
 
 
 def delete_all_tasks(user_id=None, session=None):
@@ -2982,45 +2979,7 @@ def check_delegation_deadlines():
 
         for task in overdue_tasks:
             try:
-                # Get delegator and recipient info
-                # Reminder functionality disabled - function doesn't exist
-                # if delegator and recipient:
-                #     # Generate AI-powered reminder - DISABLED: function doesn't exist
-                #     # import asyncio
-                #     # reminder_text = asyncio.run(generate_progress_reminder(
-                #     #     task.title,
-                #     #     delegator.username,
-                #     #     days_overdue,
-                #     #     recipient.telegram_id
-                #     # ))
-
-                #     # if reminder_text:
-                #     #     # Send reminder to recipient
-                #     #     from main import bot
-                #     #     if bot:
-                #     #         try:
-                #     #             asyncio.run(bot.send_message(
-                #     #         recipient.telegram_id,
-                #     #         f"🔔 Напоминание о делегированной задаче:\n\n{reminder_text}\n\nЗадача: {task.title}"
-                #     #     ))
-                #     #         logger.info(f"Sent overdue reminder for task {task.id} to @{recipient.username}")
-                #     #         except Exception as e:
-                #     #             logger.error(f"Failed to send reminder to recipient: {e}")
-
-                #     # # Notify delegator about overdue task
-                #     # try:
-                #     #     asyncio.run(bot.send_message(
-                #     #         delegator.telegram_id,
-                #     #             "⚠️ Делегированная задача просрочена!\n\n"
-                #     #             f"Задача: {task.title}\n"
-                #     #             f"Исполнитель: @{recipient.username}\n"
-                #     #             f"Просрочена на: {days_overdue} дней\n\n"
-                #     #             "Рекомендую связаться с исполнителем для уточнения статуса."
-                #     #         ))
-                #     #     logger.info(f"Notified delegator {delegator.username} about overdue task {task.id}")
-                #     # except Exception as e:
-                #     #     logger.error(f"Failed to notify delegator: {e}")
-
+                # Reminder functionality for delegated tasks is handled by the reminder service
                 # End of task processing
                 pass
 
