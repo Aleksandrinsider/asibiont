@@ -38,6 +38,26 @@
                 display: block !important;
             }
 
+            /* Обеспечиваем видимость всех основных блоков дашборда на мобильных */
+            .main-layout {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 16px !important;
+            }
+            
+            .left-column, .right-column {
+                display: block !important;
+                width: 100% !important;
+                margin-bottom: 16px !important;
+            }
+            
+            .context-section, .people-section, .chat-section, 
+            .task-stats-block, .tasks-section-wrapper {
+                display: block !important;
+                width: 100% !important;
+                margin-bottom: 16px !important;
+            }
+
             .contact-search-desktop {
                 padding: 8px !important;
                 width: 32px !important;
