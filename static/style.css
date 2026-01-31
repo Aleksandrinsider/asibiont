@@ -2888,6 +2888,18 @@ details[open] .details-content {
     box-shadow: 0 8px 24px rgba(31, 35, 40, 0.12);
 }
 
+/* Медиа-запросы для средних экранов (планшеты и небольшие ноутбуки) */
+@media (max-width: 1200px) {
+    /* Скрываем боковые панели на средних экранах */
+    .login-messages-sidebar {
+        display: none !important;
+    }
+
+    .login-page-wrapper {
+        justify-content: center !important;
+    }
+}
+
 @media (max-width: 768px) {
     .login-messages-sidebar {
         display: none;

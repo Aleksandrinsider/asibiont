@@ -373,10 +373,9 @@
         let currentView = 'chat'; // Начальный вид - всегда чат
     </script>
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/style.css?v={{ timestamp }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-    </style>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
     {% if logged_in %}
