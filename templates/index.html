@@ -33,7 +33,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 15px;
+            padding: 15px 15px 30px 15px;
             overflow-y: auto;
         }
         @media (max-width: 768px) {
@@ -123,7 +123,15 @@
 </head>
 <body>
     <div style="max-width: 900px; margin: 0 auto;">
-        <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 200px; height: 200px; display: block; margin: 0 auto 20px;">
+        <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 250px; height: 250px; display: block; margin: 0 auto 20px;">
+        <style>
+            @media (max-width: 768px) {
+                img[alt="ASI Biont"] {
+                    width: 180px !important;
+                    height: 180px !important;
+                }
+            }
+        </style>
         <div class="auth-container">
         <div class="auth-card">
             <h1>ASI Biont</h1>
