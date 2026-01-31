@@ -225,6 +225,28 @@ try:
             else:
                 logger.info("Migration: subscription_renewal_date column already exists")
 
+        # Migration for users table columns
+        if inspector.has_table('users'):
+            user_columns = [col['name'] for col in inspector.get_columns('users')]
+
+            # Migration for referral_balance column
+            if 'referral_balance' not in user_columns:
+                logger.info("Adding referral_balance column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN referral_balance INTEGER DEFAULT 0'))
+                session.commit()
+                logger.info("Migration: referral_balance column added successfully")
+            else:
+                logger.info("Migration: referral_balance column already exists")
+
+            # Migration for referrer_id column
+            if 'referrer_id' not in user_columns:
+                logger.info("Adding referrer_id column to users table")
+                session.execute(text('ALTER TABLE users ADD COLUMN referrer_id INTEGER REFERENCES users(id)'))
+                session.commit()
+                logger.info("Migration: referrer_id column added successfully")
+            else:
+                logger.info("Migration: referrer_id column already exists")
+
         # Migration for tasks table
         if not inspector.has_table('tasks'):
             logger.info("Creating tasks table")
