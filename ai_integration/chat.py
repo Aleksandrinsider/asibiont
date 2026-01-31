@@ -30,7 +30,7 @@ from .handlers import (
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, delete_task, set_recurring_task
+    update_profile, delete_task
 )
 
 logger = logging.getLogger(__name__)
@@ -446,19 +446,6 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         session=db_session,
                     )
                     tool_results.append({"function": func_name, "result": result})
-
-            elif func_name == "set_recurring_task":
-                result = set_recurring_task(
-                    title=args.get("title"),
-                    description=args.get("description", ""),
-                    recurrence_pattern=args.get("recurrence_pattern"),
-                    recurrence_interval=args.get("recurrence_interval", 1),
-                    first_reminder_time=args.get("first_reminder_time"),
-                    recurrence_end_date=args.get("recurrence_end_date"),
-                    user_id=user_id,
-                    session=db_session,
-                )
-                tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "complete_task":
                 task_title = args.get("task_title") or intent.get("params", {}).get("task_title")
@@ -1673,7 +1660,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     elif capability_rotation == 1:
                         user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни делегирование задач (delegate_task). Пример: 'Можно делегировать это кому-то из контактов'"
                     elif capability_rotation == 2:
-                        user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни повторяющиеся задачи (set_recurring_task). Пример: 'Если это регулярная задача, могу настроить автоповтор'"
+                        user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни возможности бота. Пример: 'Могу помочь с организацией задач, делегированием, поиском партнеров'"
                     else:
                         user_memory += "\n🚀 ДЕМОНСТРИРУЙ ВОЗМОЖНОСТИ: Естественно упомяни анализ прогресса и предложи альтернативные подходы к сложным задачам"
 
@@ -1991,7 +1978,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             'каждый день', 'ежедневно', 'каждую неделю', 'еженедельно',
             'каждый месяц', 'ежемесячно', 'повторять', 'регулярно'
         ]):
-                intent = {"type": "set_recurring_task", "confidence": 0.95, "params": {}}
+                intent = {"type": "add_task", "confidence": 0.95, "params": {}}
                 logger.info(f"[STATIC CLASSIFIER] Detected recurring task pattern in message")
 
             # 2. Удаление всех задач (высокий приоритет)
@@ -2346,7 +2333,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             # Принудительный вызов ТОЛЬКО для явных команд
             action_intents = [
-                'add_task', 'get_task_details', 'set_recurring_task', 'complete_task', 
+                'add_task', 'get_task_details', 'complete_task', 
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
                 'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
             ]

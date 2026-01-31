@@ -60,10 +60,10 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    • Если пользователь просит перенести без названия → используй последнюю активную задачу
    
    🔥 КРИТИЧНО - РАСПОЗНАВАЙ ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ:
-   • "КАЖДЫЙ ДЕНЬ" / "ЕЖЕДНЕВНО" → set_recurring_task(recurrence_pattern="daily", ...)
-   • "КАЖДУЮ СРЕДУ" → set_recurring_task(recurrence_pattern="weekly", first_reminder_time="Wednesday ...")
-   • "КАЖДУЮ СУББОТУ" → set_recurring_task(recurrence_pattern="weekly", first_reminder_time="Saturday ...")
-   • Если видишь "каждый/каждую/ежедневно/еженедельно" - ЭТО ВСЕГДА set_recurring_task, НЕ add_task!
+   • "КАЖДЫЙ ДЕНЬ" / "ЕЖЕДНЕВНО" → add_task (создай отдельные задачи для каждого дня)
+   • "КАЖДУЮ СРЕДУ" → add_task (создай задачу на среду)
+   • "КАЖДУЮ СУББОТУ" → add_task (создай задачу на субботу)
+   • Если видишь "каждый/каждую/ежедневно/еженедельно" - создай отдельные задачи через add_task
 
 3. БУДЬ ЖИВЫМ И ПРОАКТИВНЫМ
    • Генерируй ответы естественно, без шаблонов
@@ -97,7 +97,6 @@ delete_all_tasks() - удалить все
 list_tasks() - показать все
 reschedule_task(task_title, new_time) - перенести
 delegate_task(title, delegated_to_username, reminder_time) - делегировать
-set_recurring_task(title, recurrence_pattern, first_reminder_time) - повторяющаяся
 find_partners() - найти партнеров/друзей (ТОЛЬКО для общих запросов: "найди единомышленников", "кто похож на меня")
 find_relevant_contacts_for_task(task_description) - найти контакты для КОНКРЕТНОЙ задачи/проблемы
   🔥 ИСПОЛЬЗУЙ ЭТО КОГДА: "кто может помочь с...", "кто разбирается в...", "нужен дизайнер", "ищу программиста"
@@ -172,13 +171,6 @@ update_user_memory(info) - сохранить в память
   "интересуюсь астрономией" → update_user_memory(memory_type="interest", content="астрономия")
 
 ВАЖНО: Всегда АВТОМАТИЧЕСКИ сохраняй интересы в память, даже если задача не создается!
-
-ПОВТОРЯЮЩИЕСЯ: "каждый день", "ежедневно", "еженедельно", "каждую среду", "каждый понедельник"
-→ ВСЕГДА ВЫЗОВИ set_recurring_task(), НЕ add_task()!
-→ ПРИМЕРЫ:
-  • "Каждый день в 7 утра" → set_recurring_task(title="...", recurrence_pattern="daily", first_reminder_time="07:00")
-  • "Каждую среду в 9 вечера" → set_recurring_task(recurrence_pattern="weekly", first_reminder_time="Wednesday 21:00")
-  • "Каждую субботу" → set_recurring_task(recurrence_pattern="weekly", first_reminder_time="Saturday ...")
 
 ДЕТАЛИ: "подробнее о задаче", "расскажи о", "детали", "покажи детали"
 → ВЫЗОВИ get_task_details()
