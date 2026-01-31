@@ -692,7 +692,7 @@
                             </p>
                             <p style="margin: 0; margin-bottom: 4px;">Баланс: {{ referral_balance or 0 }} рублей</p>
                             <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: https://t.me/ASIBiontBot?start=ref{{ user.telegram_id }}</p>
-                            <p style="margin: 0; color: #6C727F; font-size: 12px;">25% от стоимости подписки за каждого реферала</p>
+                            <p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>
                             {% else %}
                             <p style="margin: 0;">Подписка: информация загружается...</p>
                             {% endif %}
@@ -5820,7 +5820,7 @@
                             html += '<p style="margin: 0; margin-bottom: 4px;">Баланс: ' + (data.referral_balance || 0) + ' рублей</p>';
                             const refLink = 'https://t.me/ASIBiontBot?start=ref' + data.telegram_id;
                             html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: ' + refLink + '</p>';
-                            html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">25% от стоимости подписки за каждого реферала</p>';
+                            html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>';
                         } else {
                             html += '<p style="margin-bottom: 20px;">Подписка: информация загружается...</p>';
                         }
