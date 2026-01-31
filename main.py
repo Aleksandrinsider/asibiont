@@ -2407,20 +2407,22 @@ async def yookassa_webhook(request):
                 logger.error(f"вќЊ Failed to log payment to history: {e}")
                 # РќРµ РїР°РґР°РµРј, РїР»Р°С‚РµР¶ СѓР¶Рµ РѕР±СЂР°Р±РѕС‚Р°РЅ
 
-            from payments import get_tier_name
+            from payments import get_tier_name, TIER_PRICES
             tier_name = get_tier_name(tier)
             promo_msg = f" СЃ РїСЂРѕРјРѕРєРѕРґРѕРј {promo_code}" if promo_code else ""
             await bot.send_message(int(user_id), f"РџРѕРґРїРёСЃРєР° {tier_name} Р°РєС‚РёРІРёСЂРѕРІР°РЅР°{promo_msg}! РўРµРїРµСЂСЊ Сѓ РІР°СЃ РґРѕСЃС‚СѓРї РєРѕ РІСЃРµРј РїСЂРµРјРёСѓРј-С„СѓРЅРєС†РёСЏРј.")
 
-            # Handle referral commission (20% of payment amount)
+            # Handle referral commission (20% of full tier price, not discounted amount)
             if user.referrer_id:
                 try:
                     referrer = session.query(User).filter_by(id=user.referrer_id).first()
                     if referrer:
-                        commission_amount = int(float(payment['amount']['value']) * 0.20)
+                        # Calculate commission from full tier price, not the discounted payment amount
+                        full_tier_price = TIER_PRICES.get(tier, 3000)  # Default to light tier price
+                        commission_amount = int(float(full_tier_price) * 0.20)
                         referrer.referral_balance += commission_amount
                         session.commit()
-                        logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance})")
+                        logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance}) from full tier price {full_tier_price} RUB")
                         
                         # Notify referrer about commission
                         try:
