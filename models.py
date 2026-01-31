@@ -170,11 +170,9 @@ class PromoCode(Base):
     is_used = Column(Boolean, default=False)  # Whether the code has been used (for single-use codes)
     used_count = Column(Integer, default=0)  # Number of times used
     used_by_users = Column(Text, default='[]')  # JSON list of user IDs who used this code
-    used_by_user_id = Column(Integer, ForeignKey('users.id'))  # User who used it (for single-use) - deprecated
-    used_at = Column(DateTime)  # When it was used (for single-use) - deprecated
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
-    used_by_user = relationship("User", backref="used_promo_codes")
+    # Removed deprecated fields: used_by_user_id, used_at (use used_by_users instead)
 
 
 class PaymentHistory(Base):
