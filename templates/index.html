@@ -47,12 +47,13 @@
         }
         .auth-container {
             width: 100%;
-            max-width: 900px;
+            max-width: min(900px, calc(100vw - 30px));
             margin: 0 auto;
         }
         @media (max-width: 768px) {
             .auth-container {
                 margin-top: 0;
+                max-width: calc(100vw - 24px);
             }
         }
         .auth-card {
