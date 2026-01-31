@@ -52,10 +52,11 @@
                 margin-top: 0;
             }
             .mobile-logo {
-                display: block;
-                width: 120px;
-                height: 120px;
-                margin: 0 auto 24px;
+                display: block !important;
+            }
+            .feature-card {
+                background: white !important;
+                backdrop-filter: none !important;
             }
         }
         .auth-container {
@@ -105,17 +106,28 @@
             border: 1px solid #D1D9E0;
             border-radius: 8px;
             padding: 20px;
-            background: white;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
             text-align: center;
             transition: all 0.2s;
         }
         .feature-card:hover {
             border-color: #374151;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.95);
         }
         .feature-icon {
-            font-size: 24px;
-            margin-bottom: 12px;
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: white;
+            font-weight: 600;
         }
         .feature-title {
             font-size: 16px;
@@ -148,58 +160,54 @@
             <div class="features-grid">
                 <!-- Ряд 1 -->
                 <div class="feature-card">
-                    <div class="feature-icon">🧠</div>
+                    <div class="feature-icon">1</div>
                     <div class="feature-title">Интеллектуальный Анализ</div>
                     <div class="feature-description">AI глубоко анализирует ваши задачи, учитывает навыки, опыт и текущую загруженность для персонализированных советов</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">👥</div>
+                    <div class="feature-icon">2</div>
                     <div class="feature-title">Поиск Единомышленников</div>
                     <div class="feature-description">Автоматически находит людей в вашем городе с похожими задачами и целями для совместной работы</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">💡</div>
+                    <div class="feature-icon">3</div>
                     <div class="feature-title">Умные Советы</div>
                     <div class="feature-description">Получайте конкретные рекомендации по решению задач с учётом рисков и оптимизации</div>
                 </div>
 
                 <!-- Ряд 2 -->
                 <div class="feature-card">
-                    <div class="feature-icon">⏰</div>
+                    <div class="feature-icon">4</div>
                     <div class="feature-title">Управление Временем</div>
                     <div class="feature-description">Умные напоминания, контроль дедлайнов и автоматическое планирование вашего дня</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">🎯</div>
+                    <div class="feature-icon">5</div>
                     <div class="feature-title">Делегирование с ИИ</div>
                     <div class="feature-description">Поручайте задачи с автоматическим контролем выполнения и прогресса</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">🎤</div>
+                    <div class="feature-icon">6</div>
                     <div class="feature-title">Голосовые Сообщения</div>
-                    <div class="feature-description">Работайте с AI через голос - диктуйте задачи и получайте ответы в аудиоформате</div>
+                    <div class="feature-description">Записывайте голосовые сообщения для создания задач и общения с AI - диктуйте свои мысли естественно</div>
                 </div>
 
                 <!-- Ряд 3 -->
                 <div class="feature-card">
-                    <div class="feature-icon">🧠</div>
+                    <div class="feature-icon">7</div>
                     <div class="feature-title">Память Контекста</div>
                     <div class="feature-description">AI запоминает вашу историю, предпочтения и связи между задачами для лучшего понимания</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">📊</div>
+                    <div class="feature-icon">8</div>
                     <div class="feature-title">Панель Управления</div>
                     <div class="feature-description">Веб-интерфейс для просмотра всех задач, контактов, истории и статистики в одном месте</div>
                 </div>
                 <div class="feature-card">
-                    <div class="feature-icon">🚀</div>
+                    <div class="feature-icon">9</div>
                     <div class="feature-title">Telegram Интеграция</div>
                     <div class="feature-description">Полный функционал в Telegram - работайте где угодно, получайте уведомления мгновенно</div>
                 </div>
-            </div>
-
-            <div class="description">
-                <p><strong>ASI Biont</strong> - это не просто todo-лист, а полноценный AI-партнёр, который понимает ваши цели, находит нужных людей и помогает достигать результатов быстрее.</p>
             </div>
 
             <div id="telegram-login-container">
