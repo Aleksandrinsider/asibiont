@@ -26,6 +26,47 @@
 
     <!-- Canonical URL -->
     <link rel="canonical" href="https://asibiont.ru/dashboard">
+    <style>
+        @media (max-width: 768px) {
+            .contact-search-desktop {
+                padding: 8px !important;
+                width: 32px !important;
+                height: 32px !important;
+            }
+            .contact-search-desktop svg {
+                margin-right: 0 !important;
+            }
+            .contact-search-desktop::after {
+                content: "Поиск контактов";
+                position: absolute;
+                background: #374151;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s;
+                top: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-top: 4px;
+            }
+            .contact-search-desktop:hover::after {
+                opacity: 1;
+            }
+            .header-left a button, .header-info button {
+                padding: 8px !important;
+                width: 32px !important;
+                height: 32px !important;
+                font-size: 0 !important;
+            }
+            .header-info button svg {
+                margin: 0 !important;
+            }
+        }
+    </style>
 
     <!-- Structured Data -->
     <script type="application/ld+json">
