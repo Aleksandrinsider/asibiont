@@ -76,10 +76,10 @@
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) {
-                    profileSection.style.flex = '';
+                    profileSection.style.flex = '1 1 auto';
                 }
                 if (peopleSection) {
-                    peopleSection.style.flex = '';
+                    peopleSection.style.flex = '1 1 auto';
                 }
                 // Скрываем фильтры и контакты при разворачивании профиля
                 if (contactFilterContent) contactFilterContent.style.display = 'none';
@@ -165,8 +165,10 @@
             if ((content.style.display || '') === 'none') {
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
+                const statsBlock = content.parentElement;
+                if (statsBlock) statsBlock.style.flex = '1 1 auto';
                 if (tasksWrapper) {
-                    tasksWrapper.style.flex = '';
+                    tasksWrapper.style.flex = '1 1 auto';
                     tasksWrapper.style.minHeight = '';
                 }
                 if (tasksSection) {
@@ -175,6 +177,8 @@
             } else {
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
+                const statsBlock = content.parentElement;
+                if (statsBlock) statsBlock.style.flex = '0 0 auto';
                 if (tasksWrapper) {
                     tasksWrapper.style.flex = '1 1 auto';
                     tasksWrapper.style.minHeight = '0';
@@ -641,6 +645,7 @@
             width: 100%;
             max-width: 1600px;
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: center;
             gap: 40px;
@@ -656,6 +661,7 @@
             width: 300px;
             flex-shrink: 0;
             justify-content: center;
+            align-items: center;
         }
         
         .login-message-card {
@@ -1260,6 +1266,15 @@
                             } else {
                                 if (profileEl) profileEl.style.display = 'block';
                                 if (svg) svg.style.transform = 'rotate(0deg)';
+                            }
+                            var profileSection = document.querySelector('.context-section');
+                            var peopleSection = document.querySelector('.people-section');
+                            if (isCollapsed === 'true') {
+                                if (profileSection) profileSection.style.flex = '0 0 auto';
+                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
+                            } else {
+                                if (profileSection) profileSection.style.flex = '1 1 auto';
+                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
                             }
                         })();
                     </script>
