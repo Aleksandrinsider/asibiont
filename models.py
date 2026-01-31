@@ -41,6 +41,8 @@ class User(Base):
     last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
     conversation_context = Column(Text)  # JSON array of recent messages for context
     current_task_id = Column(Integer, ForeignKey('tasks.id'))  # Currently discussed task
+    referral_balance = Column(Integer, default=0)  # Referral earnings in kopecks
+    referrer_id = Column(Integer, ForeignKey('users.id'))  # User who referred this user
 
     current_task = relationship("Task", foreign_keys=[current_task_id])
 

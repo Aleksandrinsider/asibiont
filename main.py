@@ -968,6 +968,15 @@ async def auth_handler(request):
             user_id = int(data['id'])
             logger.info(f"Authentication successful for user_id: {user_id}")
 
+            # Check for referral
+            referrer_telegram_id = None
+            if 'start' in data and data['start'].startswith('ref'):
+                try:
+                    referrer_telegram_id = int(data['start'][3:])
+                    logger.info(f"Referral detected: referrer_telegram_id={referrer_telegram_id}")
+                except ValueError:
+                    logger.error(f"Invalid referrer ID in start parameter: {data['start']}")
+
             session_db = None
             try:
                 session_db = Session()
@@ -989,12 +998,22 @@ async def auth_handler(request):
                         except Exception as e:
                             logger.error(f"Error getting avatar for new user {user_id}: {e}")
 
+                    # Find referrer
+                    referrer = None
+                    if referrer_telegram_id:
+                        referrer = session_db.query(User).filter_by(telegram_id=referrer_telegram_id).first()
+                        if referrer:
+                            logger.info(f"Referrer found: {referrer.id}")
+                        else:
+                            logger.warning(f"Referrer not found for telegram_id: {referrer_telegram_id}")
+
                     user = User(
                         telegram_id=user_id,
                         username=data.get('username'),
                         first_name=data.get('first_name'),
                         photo_url=avatar_url,
-                        timezone=timezone)
+                        timezone=timezone,
+                        referrer_id=referrer.id if referrer else None)
                     session_db.add(user)
                     session_db.commit()
 
@@ -1635,7 +1654,8 @@ async def dashboard_handler(request):
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
             'timestamp': 1738138953,
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
-            'user_avatar_url': user_avatar_url
+            'user_avatar_url': user_avatar_url,
+            'referral_balance': user.referral_balance
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
@@ -2374,6 +2394,28 @@ async def yookassa_webhook(request):
             tier_name = get_tier_name(tier)
             promo_msg = f" СЃ РїСЂРѕРјРѕРєРѕРґРѕРј {promo_code}" if promo_code else ""
             await bot.send_message(int(user_id), f"РџРѕРґРїРёСЃРєР° {tier_name} Р°РєС‚РёРІРёСЂРѕРІР°РЅР°{promo_msg}! РўРµРїРµСЂСЊ Сѓ РІР°СЃ РґРѕСЃС‚СѓРї РєРѕ РІСЃРµРј РїСЂРµРјРёСѓРј-С„СѓРЅРєС†РёСЏРј.")
+
+            # Handle referral commission (20% of payment amount)
+            if user.referrer_id:
+                try:
+                    referrer = session.query(User).filter_by(id=user.referrer_id).first()
+                    if referrer:
+                        commission_amount = int(float(payment['amount']['value']) * 0.20)
+                        referrer.referral_balance += commission_amount
+                        session.commit()
+                        logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance})")
+                        
+                        # Notify referrer about commission
+                        try:
+                            await bot.send_message(
+                                int(referrer.telegram_id), 
+                                f"рџ’° Р’Р°С€ СЂРµС„РµСЂР°Р» РѕРїР»Р°С‚РёР» РїРѕРґРїРёСЃРєСѓ! Р’С‹ РїРѕР»СѓС‡РёР»Рё {commission_amount} СЂСѓР±Р»РµР№ РєРѕРјРёСЃСЃРёРё. РўРµРєСѓС‰РёР№ Р±Р°Р»Р°РЅСЃ: {referrer.referral_balance} СЂСѓР±Р»РµР№."
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing referral commission: {e}")
+                    session.rollback()
         session.close()
     return web.Response(text="OK")
 
@@ -5674,7 +5716,8 @@ async def api_profile_handler(request):
             'formatted_end_date': formatted_end_date,
             'user_avatar_url': user_avatar_url,
             'first_name': user.first_name,
-            'telegram_id': user.telegram_id
+            'telegram_id': user.telegram_id,
+            'referral_balance': user.referral_balance
         }
 
         return web.json_response(response_data)
