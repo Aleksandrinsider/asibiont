@@ -277,7 +277,7 @@ async def run_live_test():
                         context=history[-10:],
                         db_session=session
                     ),
-                    timeout=30.0  # 30 секунд максимум
+                    timeout=90.0  # 90 секунд максимум для медленных API
                 )
             finally:
                 session.close()

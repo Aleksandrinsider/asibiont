@@ -1116,13 +1116,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     logger = logging.getLogger(__name__)
-    logger.info(f"[CHAT_WITH_AI] Called with user_id={user_id}")
-
-    if user_id is None:
-        logger.error(f"[CHAT_WITH_AI] ERROR: user_id is None! This will cause issues with tool calls")
+    logger.info(f"[CHAT_WITH_AI] START - user_id={user_id}, message='{message[:50]}...'")
     
     if user_id is None:
         logger.error(f"[CHAT_WITH_AI] ERROR: user_id is None! This will cause issues with tool calls")
+        return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
+    
+    if user_id is None:
+        logger.error(f"[CHAT_WITH_AI] ERROR: user_id is None! This will cause issues with tool calls")
+        return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
 
     # Ensure context is a list or None
     if context is not None and not isinstance(context, list):
@@ -2585,18 +2587,27 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     logger.info(f"Waiting {backoff_time}s before retry {attempt}/{max_retries}")
                     await asyncio.sleep(backoff_time)
                 
+                logger.info(f"[API CALL START] Attempt {attempt + 1}/{max_retries + 1} - Sending request to DeepSeek API")
+                logger.info(f"[API CALL DETAILS] URL: {url}, Timeout: 60s, Message count: {len(messages)}")
+                start_time = time.time()
+                
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
-                        url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=20)
+                        url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60)
                     ) as response:
-                        logger.info(f"DeepSeek API response status: {response.status} (attempt {attempt + 1}/{max_retries + 1})")
+                        end_time = time.time()
+                        duration = end_time - start_time
+                        logger.info(f"[API CALL END] Response received in {duration:.2f}s, Status: {response.status} (attempt {attempt + 1}/{max_retries + 1})")
                         
                         # Обработка различных HTTP статусов согласно документации
                         if response.status == 200:
+                            logger.info("[API RESPONSE] Processing successful response (200)")
                             # Успешный ответ - обрабатываем
                             tool_calls = []
                             try:
+                                logger.info("[API RESPONSE] Parsing JSON response")
                                 result = await response.json()
+                                logger.info(f"[API RESPONSE] JSON parsed successfully, keys: {list(result.keys())}")
                                 if "choices" in result and result["choices"]:
                                     message_response = result["choices"][0]["message"]
                                     content = message_response.get("content", "")
@@ -2931,7 +2942,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 break
                                 
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                logger.error(f"Network error on attempt {attempt + 1}: {e}")
+                logger.error(f"[API CALL ERROR] Network/Timeout error on attempt {attempt + 1}: {e}")
                 if attempt < max_retries:
                     continue
                 else:
@@ -2940,7 +2951,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     asyncio.create_task(send_error_notification_to_bot(f"Network error for user {user_id}", user_id, f"Error: {str(e)}", target_user_id=146333757))
                     break
             except Exception as e:
-                logger.error(f"Unexpected error on attempt {attempt + 1}: {e}")
+                logger.error(f"[API CALL ERROR] Unexpected error on attempt {attempt + 1}: {e}")
+                logger.error(f"[API CALL ERROR] Exception type: {type(e).__name__}")
+                import traceback
+                logger.error(f"[API CALL ERROR] Traceback: {traceback.format_exc()}")
                 if attempt < max_retries:
                     continue
                 else:
