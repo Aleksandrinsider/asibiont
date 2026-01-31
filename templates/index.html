@@ -33,7 +33,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 15px 15px 30px 15px;
+            padding: 15px;
             overflow-y: auto;
         }
         @media (max-width: 768px) {
@@ -48,6 +48,11 @@
             width: 100%;
             max-width: 900px;
             margin: 0 auto;
+        }
+        @media (max-width: 768px) {
+            .auth-container {
+                margin-top: 0;
+            }
         }
         .auth-card {
             padding: 24px;
@@ -122,7 +127,7 @@
     </style>
 </head>
 <body>
-    <div style="max-width: 900px; margin: 0 auto;">
+    <div class="auth-container">
         <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 250px; height: 250px; display: block; margin: 0 auto 20px;">
         <style>
             @media (max-width: 768px) {
@@ -132,7 +137,6 @@
                 }
             }
         </style>
-        <div class="auth-container">
         <div class="auth-card">
             <h1>ASI Biont</h1>
             <p class="subtitle">Сеть нового поколения для поиска партнёров и друзей через AI</p>
