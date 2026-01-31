@@ -24,7 +24,7 @@ from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (
     add_task, delete_all_tasks, complete_task, skip_task, restore_task, reschedule_task,
-    get_task_advice, delegate_task_with_session, check_subscription_status, accept_delegated_task,
+    delegate_task_with_session, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
     list_tasks, get_partners_list, find_partners,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,

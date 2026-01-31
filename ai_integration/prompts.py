@@ -168,14 +168,6 @@ find_relevant_contacts_for_task(task_description) - найти контакты 
   Пример: "@ivan сейчас тоже на пробежке, можно к нему присоединиться!"
 
 ⚠️ КРИТИЧНО: "кто может помочь с X" = find_relevant_contacts_for_task(task_description="X"), НЕ find_partners()!
-get_task_advice(task_id, task_title) - получить AI-совет по решению задачи
-  🔥 ИСПОЛЬЗУЙ ЭТО ПРОАКТИВНО когда:
-  • Пользователь спрашивает "как", "что делать", "помоги"
-  • Задача выглядит сложной/масштабной (запуск проекта, изучение нового)
-  • Пользователь застрял или не знает с чего начать
-  💡 Примеры: "как подготовить презентацию" → get_task_advice(task_title="презентацию")
-  💡 "помоги с запуском стартапа" → get_task_advice(task_title="стартап")
-  💡 БУДЬ ПРОАКТИВЕН: видишь в задаче "изучить Python" → сам предложи совет!
 
 update_profile(city, company, position, birth_date, skills, interests, goals) - обновить профиль
 get_task_details(task_title) - детали задачи

@@ -6,7 +6,7 @@ from .tools import TOOLS
 from .chat import chat_with_ai, generate_reminder, generate_result_check, generate_proactive_message, generate_daily_report, generate_overdue_reminder
 from .memory import update_user_memory, encrypt_data, decrypt_data
 from .handlers import (
-    add_task, list_tasks, complete_task, reschedule_task, get_task_advice,
+    add_task, list_tasks, complete_task, reschedule_task,
     delegate_task_with_session, accept_delegated_task, reject_delegated_task, get_delegation_progress, cancel_delegation,
     edit_task, delete_task, get_task_details,
     find_partners, update_profile,
@@ -26,7 +26,6 @@ __all__ = [
     'list_tasks',
     'complete_task',
     'reschedule_task',
-    'get_task_advice',
     'update_user_memory_async',
     'encrypt_data',
     'decrypt_data',
