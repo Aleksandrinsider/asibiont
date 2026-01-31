@@ -1399,9 +1399,15 @@ async def login_handler(request):
     # Показываем страницу авторизации
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
+    
+    # Формируем auth_url для виджета Telegram
+    base_url = str(request.url.origin())
+    auth_url = f"{base_url}/tg_auth"
+    
     return aiohttp_jinja2.render_template('index.html', request, {
         'logged_in': False,
         'bot_username': bot_user,
+        'auth_url': auth_url,
         'subscription_tier': 'BRONZE',
         'current_date': '',
         'current_time': '',
