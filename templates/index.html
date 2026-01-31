@@ -43,8 +43,17 @@
                 align-items: unset !important;
                 justify-content: unset !important;
             }
+            body::before {
+                display: none;
+            }
             .auth-container {
                 margin-top: 0;
+            }
+            .mobile-logo {
+                display: block;
+                width: 120px;
+                height: 120px;
+                margin: 0 auto 24px;
             }
         }
         .auth-container {
@@ -84,9 +93,13 @@
             margin: 32px 0;
             padding: 24px;
         }
+        .mobile-logo {
+            display: none;
+        }
     </style>
 </head>
-<body>
+<body>img src="/static/asibiont.svg" alt="ASI Biont" class="mobile-logo">
+            <
     <div class="auth-container">
         <div class="auth-card">
             <h1>ASI Biont - лаборатория ИИ</h1>
