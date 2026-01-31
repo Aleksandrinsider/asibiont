@@ -2876,15 +2876,26 @@ details[open] .details-content {
     justify-content: center;
 }
 
-.rating-modal-content, .search-modal-content {
+.rating-modal-content {
     background: #FFFFFF;
-    border: 1px solid #D1D9E0;
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 600px;
-    width: min(600px, 90%);
+    border: none;
+    border-radius: 6px;
+    width: 90%;
+    max-width: 420px;
+    padding: 0;
+    box-shadow: 0 8px 24px rgba(31, 35, 40, 0.12);
+}
+
+.search-modal-content {
+    background: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    width: 90%;
+    max-width: 800px;
     max-height: 80vh;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     box-shadow: 0 8px 24px rgba(31, 35, 40, 0.12);
 }
 
