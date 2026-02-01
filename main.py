@@ -1565,7 +1565,7 @@ async def dashboard_handler(request):
             'РѕРєС‚СЏР±СЂСЏ',
             'РЅРѕСЏР±СЂСЏ',
             'РґРµРєР°Р±СЂСЏ']
-        current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+        current_date = user_now.strftime('%d.%m.%Y')
 
         for task in tasks:
             if task.reminder_time:
