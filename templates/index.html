@@ -42,24 +42,10 @@
             padding: 40px 15px;
             overflow-y: auto;
         }
-        @media (max-width: 768px) {
-            body {
-                display: block;
-                align-items: unset;
-                justify-content: unset;
-                padding: 40px 12px;
-            }
-        }
         .auth-container {
             width: 100%;
             max-width: min(900px, calc(100vw - 30px));
             margin: 40px auto 0 auto;
-        }
-        @media (max-width: 768px) {
-            .auth-container {
-                margin-top: 40px;
-                max-width: calc(100vw - 24px);
-            }
         }
         .auth-card {
             padding: 24px;
@@ -70,12 +56,6 @@
             width: 160px;
             height: 160px;
             margin: 0 auto 24px;
-        }
-        @media (max-width: 768px) {
-            .mobile-logo {
-                width: 120px;
-                height: 120px;
-            }
         }
         h1 {
             margin: 0 0 16px 0;
@@ -103,12 +83,6 @@
             gap: 16px;
             margin: 24px 0 0 0;
         }
-        @media (max-width: 768px) {
-            .features-grid {
-                grid-template-columns: 1fr;
-                gap: 8px;
-            }
-        }
         .feature-card {
             border: 1px solid #D1D9E0;
             border-radius: 6px;
@@ -120,11 +94,6 @@
             flex-direction: column;
             align-items: center;
             gap: 12px;
-        }
-        @media (max-width: 768px) {
-            .feature-card {
-                padding: 16px;
-            }
         }
         .feature-card:hover {
             border-color: #1F2328;
@@ -153,6 +122,44 @@
             color: #374151;
             line-height: 1.5;
             text-align: center;
+        }
+        /* Mobile styles for index page */
+        @media (max-width: 768px) {
+            body {
+                display: block;
+                align-items: unset;
+                justify-content: unset;
+                padding: 40px 12px;
+            }
+        }
+        @media (max-width: 768px) {
+            .auth-container {
+                margin-top: 40px;
+                max-width: calc(100vw - 24px);
+            }
+        }
+        @media (max-width: 768px) {
+            .mobile-logo {
+                width: 120px;
+                height: 120px;
+            }
+        }
+        @media (max-width: 768px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+        @media (max-width: 768px) {
+            .feature-card {
+                padding: 16px;
+            }
+        }
+        @media (max-width: 400px) {
+            img[alt="ASI Biont"] {
+                width: 150px !important;
+                height: 150px !important;
+            }
         }
     </style>
 </head>
@@ -185,28 +192,14 @@
 
         // Apply mobile fixes
         if (isMobileDevice()) {
-            console.log('Mobile device detected on index page - applying fixes for CSSPeeper and ad units');
-            disableProblematicScripts();
+            console.log('Mobile device detected on index page - applying mobile styles');
+            // Mobile styles are now in the CSS
         } else {
-            console.log('Desktop device detected on index page - no mobile fixes applied');
+            console.log('Desktop device detected on index page');
         }
     </script>
     <div class="auth-container">
         <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 300px; height: 300px; display: block; margin: 0 auto 20px; max-width: 100%;">
-        <style>
-            @media (max-width: 768px) {
-                img[alt="ASI Biont"] {
-                    width: 200px !important;
-                    height: 200px !important;
-                }
-            }
-            @media (max-width: 400px) {
-                img[alt="ASI Biont"] {
-                    width: 150px !important;
-                    height: 150px !important;
-                }
-            }
-        </style>
         <div id="telegram-login-container">
             <script async src="https://telegram.org/js/telegram-widget.js?22" 
                 data-telegram-login="{{ bot_username }}" 

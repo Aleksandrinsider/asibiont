@@ -91,28 +91,7 @@
         }
 
         /* Mobile adjustments */
-        @media (max-width: 768px) {
-            .error-notification {
-                left: 10px;
-                right: 10px;
-                max-width: none;
-            }
-            
-            .main-layout {
-                flex-direction: column !important;
-                gap: 4px !important;
-            }
-            
-            .left-column, .right-column {
-                min-width: 0 !important;
-                flex: 1 1 auto !important;
-            }
-            
-            .tasks-section {
-                max-height: none !important;
-                overflow-y: visible !important;
-            }
-        }
+        
     </style>
 
     <!-- Structured Data -->
@@ -167,32 +146,11 @@
 
         // Apply mobile fixes
         if (isMobileDevice()) {
-            console.log('Mobile device detected - applying fixes for CSSPeeper and ad units');
-            disableProblematicScripts();
-
-            // Add mobile-specific styles
-            const mobileStyle = document.createElement('style');
-            mobileStyle.textContent = `
-                /* Mobile-specific fixes */
-                * {
-                    -webkit-touch-callout: none;
-                    -webkit-user-select: none;
-                    -khtml-user-select: none;
-                    -moz-user-select: none;
-                    -ms-user-select: none;
-                    user-select: none;
-                }
-
-                /* Allow text selection in inputs */
-                input, textarea, [contenteditable] {
-                    -webkit-user-select: text;
-                    -khtml-user-select: text;
-                    -moz-user-select: text;
-                    -ms-user-select: text;
-                    user-select: text;
-                }
-            `;
-            document.head.appendChild(mobileStyle);
+            console.log('Mobile device detected - showing mobile modal');
+            const modal = document.getElementById('mobile-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+            }
         } else {
             console.log('Desktop device detected - no mobile fixes applied');
         }
@@ -510,6 +468,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body{% if logged_in %} class="logged-in"{% endif %}>
+    <!-- Mobile Modal -->
+    <div id="mobile-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 10000; display: none; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.15);">
+            <h3 style="margin: 0 0 16px 0; color: #374151; font-size: 18px;">Мобильная версия недоступна</h3>
+            <p style="margin: 0 0 8px 0; color: #374151; line-height: 1.5;">На данный момент панель доступна только для десктопов.</p>
+            <p style="margin: 0 0 16px 0; color: #374151; line-height: 1.5;">С мобильного устройства пользуйтесь нашим Telegram ботом:</p>
+            <a href="https://t.me/aleksandrinsider" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500;">https://t.me/aleksandrinsider</a>
+        </div>
+    </div>
     {% if logged_in %}
     <div class="app-header" style="margin-bottom: 0; padding-bottom: 0;">
         <div class="header-content" style="padding-bottom: 0;">
