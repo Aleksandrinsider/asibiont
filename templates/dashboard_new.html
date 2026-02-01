@@ -162,10 +162,10 @@
                 content.style.display = 'block';
                 if (svg) svg.style.transform = 'rotate(0deg)';
                 if (profileSection) {
-                    profileSection.style.flex = '1 1 auto'; // Развернутый профиль занимает больше места
+                    profileSection.style.flex = '0 0 auto';
                 }
                 if (peopleSection) {
-                    peopleSection.style.flex = '0 0 auto'; // Контакты занимают меньше места
+                    peopleSection.style.flex = '1 1 auto';
                 }
                 // Показываем фильтры и контакты при разворачивании профиля
                 if (contactFilterContent) contactFilterContent.style.display = '';
@@ -177,10 +177,10 @@
                 content.style.display = 'none';
                 if (svg) svg.style.transform = 'rotate(-90deg)';
                 if (profileSection) {
-                    profileSection.style.flex = '0 0 auto'; // Свернутый профиль занимает меньше места
+                    profileSection.style.flex = '0 0 auto';
                 }
                 if (peopleSection) {
-                    peopleSection.style.flex = '1 1 auto'; // Контакты занимают больше места
+                    peopleSection.style.flex = '1 1 auto';
                 }
                 // Скрываем фильтры и контакты при сворачивании профиля
                 if (contactFilterContent) contactFilterContent.style.display = 'none';
@@ -610,11 +610,11 @@
                             var profileSection = document.querySelector('.context-section');
                             var peopleSection = document.querySelector('.people-section');
                             if (isCollapsed === 'true') {
-                                if (profileSection) profileSection.style.flex = '0 0 auto'; // Свернутый профиль
-                                if (peopleSection) peopleSection.style.flex = '1 1 auto'; // Контакты занимают больше места
+                                if (profileSection) profileSection.style.flex = '0 0 auto';
+                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
                             } else {
-                                if (profileSection) profileSection.style.flex = '1 1 auto'; // Развернутый профиль
-                                if (peopleSection) peopleSection.style.flex = '0 0 auto'; // Контакты занимают меньше места
+                                if (profileSection) profileSection.style.flex = '0 0 auto';
+                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
                             }
                         })();
                     </script>
