@@ -561,74 +561,8 @@
             </div>
         </div>
     </div>
-    {% endif %}
 
-    <div class="container" {% if not logged_in %}style="margin-top: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh;"{% endif %}>
-        {% if not logged_in %}
-        <div class="login-page-wrapper">
-            
-            <!-- Левая колонка с сообщениями -->
-            <div class="login-messages-sidebar left">
-                <div class="login-message-card">
-                    Каждый понедельник обещаю себе похудеть, но к пятнице срываюсь ??
-                </div>
-                <div class="login-message-card">
-                    Стартап на грани, нужны разработчики срочно!
-                </div>
-                <div class="login-message-card">
-                    Опять забыл дедлайн, карьера летит к черту...
-                </div>
-                <div class="login-message-card">
-                    Новый город, пустота в контактах, одиноко ??
-                </div>
-                <div class="login-message-card">
-                    Проект гениальный, но без инвесторов - пустышка
-                </div>
-            </div>
-            
-            <!-- Центральный контент -->
-            <div class="welcome-section" style="width: 100%; max-width: 700px; display: flex; justify-content: center;">
-                <div class="welcome-content" style="background: transparent; max-width: 700px; padding: 40px;">
-                    <div style="text-align: left; margin-bottom: 24px;">
-                        <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 600; color: #374151;">ASI Biont</h1>
-                        <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; line-height: 1.5;">Инновационная платформа от лаборатории искусственного интеллекта ASI Biont для поиска единомышленников через ваши дела. Система анализирует текущие задачи и цели, используя искусственный интеллект для глубокого понимания ваших интересов и приоритетов. Автоматически находит людей в вашем городе с похожими задачами и целями, сравнивая профили и обеспечивая релевантные связи для совместной работы и общения. Мгновенно реагирует на ситуацию и предлагает подходящих людей для бизнес-проектов, спортивных тренировок или просто прогулки в кино.</p>
-                        <p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; line-height: 1.5;">Умный AI-агент запоминает контекст жизни, связывает задачи, понимает голосовые сообщения и предлагает оптимальные шаги с умными напоминаниями. Панель управления объединяет все: задачи, людей, историю взаимодействий и статистику. Следите за дедлайнами и делегируйте через чат с AI.</p>
-                        <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.5;">Начните использовать ASI Biont за несколько минут: просто опишите свои текущие задачи в чате с AI-агентом, и платформа автоматически создаст профиль, найдёт релевантных людей и предложит первые шаги. Интуитивный интерфейс в Telegram и веб-панель — всё необходимое под рукой для продуктивной работы и общения.</p>
-                    </div>
-                    
-                    <div style="text-align: center;">
-                        <p style="margin: 0 0 16px 0; color: #374151; font-size: 14px;">Войдите через Telegram</p>
-                        <div style="display: flex; justify-content: center;">
-                            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                                    data-telegram-login="{{ bot_username }}" 
-                                    data-size="large" 
-                                    data-auth-url="/tg_auth" 
-                                    data-request-access="write"></script>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Правая колонка с сообщениями -->
-            <div class="login-messages-sidebar right">
-                <div class="login-message-card right">
-                    Хочу найти компанию для вечерней прогулки ??
-                </div>
-                <div class="login-message-card right">
-                    Нужен напарник для утренних пробежек в парке ??
-                </div>
-                <div class="login-message-card right">
-                    Хочу расти в карьере, нужен опытный наставник
-                </div>
-                <div class="login-message-card right">
-                    Как собрать команду мечты, где каждый на своем месте?
-                </div>
-                <div class="login-message-card right">
-                    Ищу не просто девушку, а родственную душу с общими интересами
-                </div>
-            </div>
-        </div>
-        {% else %}
+    <div class="container">
         <div class="main-layout">
             <!-- Error notification container -->
             <div id="error-notification" class="error-notification">
@@ -790,18 +724,6 @@
                         <!-- Чат с ИИ -->
                         <div id="chat-view" class="view-panel active">
                             <div id="chat-messages" class="chat-messages">
-                        {% if not logged_in %}
-                        <div class="message ai">
-                            <p>Добро пожаловать! Войдите для общения с AI.</p>
-                            <button onclick="login()">Войти</button>
-                            <div style="margin-top: 10px; font-size: 12px; color: #6B7280;">
-                                Локальное тестирование:
-                                <button onclick="testLogin(1001)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1001 (Light)</button>
-                                <button onclick="testLogin(1002)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1002 (Standard)</button>
-                                <button onclick="testLogin(1003)" style="margin-left: 5px; padding: 2px 8px; font-size: 11px;">User 1003 (Premium)</button>
-                            </div>
-                        </div>
-                        {% endif %}
                         </div>
                         {% if logged_in %}
                         <div class="chat-input">
