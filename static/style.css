@@ -26,6 +26,14 @@
 
 /* Mobile-specific fixes for CSSPeeper and ad unit errors */
 @media (max-width: 768px) {
+    /* Safe area insets для современных мобильных устройств */
+    body {
+        padding-top: env(safe-area-inset-top) !important;
+        padding-bottom: env(safe-area-inset-bottom) !important;
+        padding-left: env(safe-area-inset-left) !important;
+        padding-right: env(safe-area-inset-right) !important;
+    }
+
     /* Prevent CSSPeeper inspector tool errors */
     * {
         -webkit-touch-callout: none;
@@ -2701,6 +2709,8 @@ details[open] .details-content {
         margin: 0 !important;
         width: 100% !important;
         min-height: calc(100vh - var(--header-height)) !important;
+        /* Компенсация фиксированной шапки */
+        margin-top: calc(var(--header-height) + env(safe-area-inset-top)) !important;
     }
 
     /* === ШАПКА (HEADER) === */
@@ -2714,24 +2724,36 @@ details[open] .details-content {
         z-index: 1000;
         background: #FFFFFF;
         border-bottom: 1px solid #D1D9E0;
+        /* Safe area для современных мобильных устройств */
+        padding-top: env(safe-area-inset-top);
+        height: calc(var(--header-height) + env(safe-area-inset-top));
     }
 
     .header-content {
         padding: 0 4px;
         height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
 
     .header-left {
         gap: 6px;
+        display: flex;
+        align-items: center;
     }
 
     .header-center {
         flex: 1;
         justify-content: center;
+        display: flex;
+        align-items: center;
     }
 
     .header-right {
         gap: 6px;
+        display: flex;
+        align-items: center;
     }
 
     /* Скрываем некоторые элементы header для компактности */
@@ -2741,10 +2763,20 @@ details[open] .details-content {
         display: none !important;
     }
 
-    /* Аватар профиля */
-    .profile-avatar {
-        width: 50px;
-        height: 50px;
+    /* Кнопки в шапке */
+    .header-left .button,
+    .header-right .button,
+    .header-center .button {
+        font-size: 12px !important;
+        padding: 6px 8px !important;
+        min-width: auto !important;
+        margin: 0 !important;
+    }
+
+    /* Аватар профиля в шапке */
+    .header-right .profile-avatar {
+        width: 40px !important;
+        height: 40px !important;
     }
 
     /* Информация в header */
@@ -2762,7 +2794,7 @@ details[open] .details-content {
     .main-layout {
         flex-direction: column !important;
         gap: var(--mobile-gap) !important;
-        margin-top: calc(var(--header-height) + 10px) !important;
+        margin-top: 0 !important; /* Убираем margin-top, так как container уже имеет компенсацию */
         padding: 0 !important;
         width: 100% !important;
     }
@@ -2958,6 +2990,9 @@ details[open] .details-content {
 
     .app-header {
         padding: 0 var(--mobile-padding);
+        /* Safe area для очень маленьких экранов */
+        padding-top: calc(var(--mobile-padding) + env(safe-area-inset-top));
+        height: calc(var(--header-height) + env(safe-area-inset-top));
     }
 
     .header-info {
