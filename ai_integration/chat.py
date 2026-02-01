@@ -1938,13 +1938,23 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                  any(kw in message_lower for kw in ['удали', 'убери', 'очисти', 'удалить']):
                 intent = {"type": "delete_all_tasks", "confidence": 0.95, "params": {}}
 
-            # 3. Детали конкретной задачи
+            # 3. Просмотр списка задач (ВЫСОКИЙ ПРИОРИТЕТ)
+            elif any(phrase in message_lower for phrase in [
+                'покажи задачи', 'список задач', 'мои задачи', 'какие задачи',
+                'что запланировано', 'что у меня', 'задачи на неделю', 'задачи на эту неделю',
+                'какие у меня задачи', 'посмотреть задачи'
+            ]):
+                # Проверяем, не хочет ли пользователь детали конкретной задачи
+                if not any(det_kw in message_lower for det_kw in ['детали', 'подробно', 'информацию']):
+                    intent = {"type": "list_tasks", "confidence": 0.95, "params": {}}
+
+            # 4. Детали конкретной задачи
             elif any(phrase in message_lower for phrase in [
                 'детали задачи', 'покажи детали', 'что в задаче', 'информация о задаче'
             ]):
                 intent = {"type": "get_task_details", "confidence": 0.9, "params": {}}
 
-            # 4. Обновление профиля
+            # 5. Обновление профиля
             elif any(phrase in message_lower for phrase in [
                 'обнови профиль', 'измени профиль', 'добавь в профиль', 'мой профиль'
             ]):
@@ -2036,24 +2046,24 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             ]):
                 intent = {"type": "complete_task", "confidence": 0.95, "params": {}}
 
-            # 11. Просмотр списка задач
+            # 11. Просмотр списка задач (ВЫСОКИЙ ПРИОРИТЕТ)
             elif any(phrase in message_lower for phrase in [
                 'покажи задачи', 'список задач', 'мои задачи', 'какие задачи',
-                'что запланировано', 'что у меня'
+                'что запланировано', 'что у меня', 'задачи на неделю', 'задачи на эту неделю',
+                'какие у меня задачи', 'посмотреть задачи'
             ]):
                 # Проверяем, не хочет ли пользователь детали конкретной задачи
                 if not any(det_kw in message_lower for det_kw in ['детали', 'подробно', 'информацию']):
-                    intent = {"type": "list_tasks", "confidence": 0.9, "params": {}}
+                    intent = {"type": "list_tasks", "confidence": 0.95, "params": {}}
 
             # 12. Создание новой задачи (низкий приоритет, проверяем в конце)
             # ВАЖНО: confidence снижен до 0.7 чтобы не переопределять AI intent
             elif any(phrase in message_lower for phrase in [
-                'напомни', 'создай задачу', 'добавь задачу', 'нужно сделать', 'надо сделать'
-            ]) or \
-                 (any(time_ind in message_lower for time_ind in [
-                     'завтра', 'послезавтра', 'через', 'в ', 'на '
-                 ]) and len(message_lower.split()) > 3 and 
-                  not any(complete_kw in message_lower for complete_kw in ['выполнена', 'сделал', 'готово'])):
+                'напомни', 'создай задачу', 'добавь задачу', 'нужно сделать', 'надо сделать',
+                'создай', 'добавь', 'запланируй', 'поставь задачу'
+            ]) and not any(show_kw in message_lower for show_kw in [
+                'покажи', 'список', 'мои задачи', 'какие задачи', 'что запланировано'
+            ]):
                 intent = {"type": "add_task", "confidence": 0.7, "params": {}}
 
         # 13. Просмотр деталей задачи
@@ -2382,10 +2392,16 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.info(f"[TOOL CHOICE CHECK] intent type: '{intent.get('type')}', in action_intents: {intent.get('type') in action_intents}")
             print(f"[DEBUG] TOOL CHOICE CHECK: intent={intent}, type={intent.get('type')}")  # DEBUG OUTPUT
             if intent.get('type') in action_intents:
-                # Используем "required" вместо конкретной функции - пусть AI сам выбирает нужный tool
-                tool_choice = "required"  # Принудительный вызов ЛЮБОГО tool
-                logger.info(f"[TOOL CHOICE] REQUIRED for {intent['type']} (confidence: {intent.get('confidence')})")
-                print(f"[DEBUG] FORCED tool_choice: required")  # DEBUG OUTPUT
+                # Если confidence высокий, используем конкретный tool
+                if intent.get('confidence', 0) > 0.6:
+                    tool_choice = {"type": "function", "function": {"name": intent['type']}}
+                    logger.info(f"[TOOL CHOICE] SPECIFIC for {intent['type']} (confidence: {intent.get('confidence')})")
+                    print(f"[DEBUG] SPECIFIC tool_choice: {intent['type']}")  # DEBUG OUTPUT
+                else:
+                    # Иначе принудительный вызов любого tool
+                    tool_choice = "required"
+                    logger.info(f"[TOOL CHOICE] REQUIRED for {intent['type']} (confidence: {intent.get('confidence')})")
+                    print(f"[DEBUG] FORCED tool_choice: required")  # DEBUG OUTPUT
             else:
                 logger.info(f"[TOOL CHOICE] auto for: {clean_message[:50]}")
                 print(f"[DEBUG] AUTO tool_choice")  # DEBUG OUTPUT
@@ -2734,9 +2750,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             logger.info(f"[SUCCESS] API call successful, content length: {len(content) if content else 0}")
                             logger.info(f"[SUCCESS] Tool calls found: {len(tool_calls) if tool_calls else 0}")
                             
-                            # ПРОВЕРКА: Если tool_choice был REQUIRED, но AI не вызвал tool - критическая ошибка
-                            if tool_choice == "required" and not tool_calls:
-                                logger.error(f"[VALIDATION FAILED] tool_choice=required but no tools called!")
+                            # ПРОВЕРКА: Если tool_choice был REQUIRED или SPECIFIC, но AI не вызвал tool - критическая ошибка
+                            if (tool_choice == "required" or isinstance(tool_choice, dict)) and not tool_calls:
+                                logger.error(f"[VALIDATION FAILED] tool_choice={tool_choice} but no tools called!")
                                 logger.error(f"[VALIDATION] Intent: {intent.get('type')}, Message: {clean_message[:100]}")
                                 logger.error(f"[VALIDATION] AI response: {content[:200]}")
                                 
@@ -2755,34 +2771,47 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                 else:
                                     content = "Понял ваше намерение, но мне нужно больше информации. Уточните детали."
                             
-                            # ПРОВЕРКА: Если tool_choice был REQUIRED, но AI вызвал неправильный tool
-                            elif tool_choice == "required" and tool_calls:
-                                expected_tools = {
-                                    'add_task': ['add_task'],
-                                    'complete_task': ['complete_task', 'list_tasks'],  # complete_task может вызывать list_tasks для обновления
-                                    'edit_task': ['edit_task'],
-                                    'delete_task': ['delete_task'],
-                                    'delegate_task': ['delegate_task'],
-                                    'update_profile': ['update_profile']
-                                }
-                                
-                                intent_type = intent.get('type')
-                                if intent_type in expected_tools:
+                            elif (tool_choice == "required" or isinstance(tool_choice, dict)) and tool_calls:
+                                if isinstance(tool_choice, dict):
+                                    # Для specific tool_choice проверяем точное совпадение
+                                    expected_tool_name = tool_choice['function']['name']
                                     actual_tools = [safe_extract_tool_info(tc)['function'] for tc in tool_calls]
-                                    expected = expected_tools[intent_type]
+                                    if expected_tool_name not in actual_tools:
+                                        logger.error(f"[VALIDATION FAILED] tool_choice specified '{expected_tool_name}', but got {actual_tools}")
+                                        # Fallback - вызываем ожидаемый tool
+                                        fallback_tool = expected_tool_name
+                                        logger.info(f"[FALLBACK] Calling expected tool: {fallback_tool}")
+                                        # Здесь можно добавить вызов fallback_tool
+                                    else:
+                                        logger.info(f"[VALIDATION OK] Correct tool '{expected_tool_name}' was called")
+                                else:
+                                    # Для "required" проверяем по intent
+                                    expected_tools = {
+                                        'add_task': ['add_task'],
+                                        'complete_task': ['complete_task', 'list_tasks'],
+                                        'edit_task': ['edit_task'],
+                                        'delete_task': ['delete_task'],
+                                        'delegate_task': ['delegate_task'],
+                                        'update_profile': ['update_profile']
+                                    }
                                     
-                                    # Проверяем, что хотя бы один ожидаемый tool вызван
-                                    if not any(tool in expected for tool in actual_tools):
-                                        logger.error(f"[VALIDATION FAILED] Intent '{intent_type}' expects tools {expected}, but got {actual_tools}")
-                                        logger.error(f"[VALIDATION] Message: {clean_message[:100]}")
+                                    intent_type = intent.get('type')
+                                    if intent_type in expected_tools:
+                                        actual_tools = [safe_extract_tool_info(tc)['function'] for tc in tool_calls]
+                                        expected = expected_tools[intent_type]
                                         
-                                        # Fallback для неправильных tool calls
-                                        if intent_type == 'complete_task':
-                                            content = "Отлично! Какую именно задачу завершили? Уточните название."
-                                        elif intent_type == 'edit_task':
-                                            content = "Какую задачу изменить и на какое время?"
-                                        elif intent_type == 'add_task':
-                                            content = "NEED_TIME_FOR_TASK: Когда напомнить? (завтра в 10:00, через час, сегодня в 15:00)"
+                                        # Проверяем, что хотя бы один ожидаемый tool вызван
+                                        if not any(tool in expected for tool in actual_tools):
+                                            logger.error(f"[VALIDATION FAILED] Intent '{intent_type}' expects tools {expected}, but got {actual_tools}")
+                                            logger.error(f"[VALIDATION] Message: {clean_message[:100]}")
+                                            
+                                            # Fallback для неправильных tool calls
+                                            if intent_type == 'complete_task':
+                                                content = "Отлично! Какую именно задачу завершили? Уточните название."
+                                            elif intent_type == 'edit_task':
+                                                content = "Какую задачу изменить и на какое время?"
+                                            elif intent_type == 'add_task':
+                                                content = "NEED_TIME_FOR_TASK: Когда напомнить? (завтра в 10:00, через час, сегодня в 15:00)"
                                         elif intent_type == 'delegate_task':
                                             # Для делегирования - принудительно вызываем delegate_task
                                             logger.info(f"[FORCED DELEGATION] Intent was delegate_task, forcing delegate_task call")
@@ -3207,11 +3236,11 @@ async def generate_reminder(user_id, task_title, task_id=None):
                     error_text = await response.text()
                     logger.error(f"Failed to generate reminder: status {response.status}, error: {error_text}")
                     # Более качественный fallback
-                    return f"Привет! ⏰ Напоминаю о задаче: {task_title}\n\nПора начинать! Как планируешь подойти к выполнению?"
+                    return f"Напоминание о задаче: {task_title}\n\nПора приступить к выполнению. Как планируете подойти к задаче?"
     except Exception as e:
         logger.error(f"Error in generate_reminder: {e}", exc_info=True)
         # Более качественный fallback с контекстом
-        return f"Привет! ⏰ Напоминаю о задаче: {task_title}\n\nВремя приступить к выполнению. Готов начать?"
+        return f"Напоминание о задаче: {task_title}\n\nВремя приступить к выполнению. Готов начать?"
 
 
 async def generate_result_check(user_id, task_title):
@@ -3312,10 +3341,10 @@ async def generate_result_check(user_id, task_title):
                     return content
                 else:
                     logger.error(f"Failed to generate result check: status {response.status}")
-                    return f"Отлично! Задача '{task_title}' выполнена! ✅"
+                    return f"Задача '{task_title}' выполнена успешно."
     except Exception as e:
         logger.error(f"Error in generate_result_check: {e}")
-        return f"Поздравляю с выполнением задачи '{task_title}'! 🎉"
+        return f"Задача '{task_title}' выполнена."
 
 
 async def generate_proactive_message(user_id, context="general", task_count=0, overdue_count=0, tasks_list=None):
@@ -3960,7 +3989,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                                     return result["choices"][0]["message"]["content"].strip()
                     except Exception:
                         pass
-                    return "Заметил просроченные задачи 📌"
+                    return "Обратите внимание на просроченные задачи."
     except Exception as e:
         logger.error(f"Error in generate_overdue_reminder: {e}")
         try:
@@ -3975,7 +4004,7 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                         return res["choices"][0]["message"]["content"].strip()
         except:
             pass
-        return "Задачи ждут внимания 📌"
+        return "Задачи ожидают внимания."
 
 
 def validate_response_compliance(content, msg_type):

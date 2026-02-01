@@ -40,7 +40,6 @@ class InteractiveDialogueTester:
                 telegram_id=TEST_USER_ID,
                 username="test_user_dialogue",
                 first_name="Test",
-                last_name="Dialogue",
                 referral_balance=0
             )
             self.session.add(self.user)
@@ -86,6 +85,11 @@ class InteractiveDialogueTester:
 1. Естественным и conversational
 2. Включать запрос на выполнение какой-то задачи (создание, редактирование, просмотр и т.д.)
 3. Быть связанным с предыдущим контекстом, но не повторять одно и то же
+4. ПРОДОЛЖАТЬ РАЗГОВОР - не завершать его фразами типа "спасибо, пока" или "хватит"
+5. Задавать вопросы или просить дополнительные действия
+6. Добавлять новые идеи или развивать текущую тему
+7. Создавать новые задачи или модифицировать существующие
+8. Спрашивать о деталях, партнерах, сроках или других аспектах
 
 Примеры возможных сообщений:
 - "Создай задачу на завтра в 10 утра"
@@ -93,8 +97,13 @@ class InteractiveDialogueTester:
 - "Измени задачу про молоко на послезавтра"
 - "Кто может помочь с дизайном?"
 - "Напомни мне о встрече через час"
+- "А что ещё можно добавить?"
+- "Расскажи подробнее про эту задачу"
+- "Создай ещё одну задачу в этом проекте"
+- "Найди партнёров для этой задачи"
+- "Обнови мой профиль с новыми навыками"
 
-Сгенерируй одно сообщение пользователя:
+Сгенерируй одно сообщение пользователя, которое продолжит разговор:
 """
 
         try:
@@ -149,7 +158,7 @@ class InteractiveDialogueTester:
         ]
         return messages[min(turn_number - 1, len(messages) - 1)]
 
-    async def run_interactive_dialogue(self, max_turns=10):
+    async def run_interactive_dialogue(self, max_turns=40):
         """Запуск интерактивного диалога"""
         await self.setup()
 
@@ -164,7 +173,7 @@ class InteractiveDialogueTester:
                     user_message = "Привет! Расскажи о себе и что ты умеешь."
                 else:
                     # Используем предыдущий ответ системы для генерации
-                    last_system_response = self.conversation_history[-1] if self.conversation_history else ""
+                    last_system_response = self.conversation_history[-1]['response'] if self.conversation_history else ""
                     user_message = await self.generate_user_message(last_system_response, turn)
 
                 print(f"👤 ПОЛЬЗОВАТЕЛЬ: {user_message}")
@@ -174,19 +183,30 @@ class InteractiveDialogueTester:
                     system_response = await chat_with_ai(
                         message=user_message,
                         user_id=self.user.telegram_id,
-                        username=self.user.username,
                         context=""
                     )
 
-                    print(f"🤖 СИСТЕМА: {system_response}")
+                    # Извлекаем текст ответа
+                    if isinstance(system_response, dict):
+                        response_text = system_response.get('response', str(system_response))
+                        tools_called = system_response.get('tools_called', [])
+                    else:
+                        response_text = str(system_response)
+                        tools_called = []
+
+                    print(f"🤖 СИСТЕМА: {response_text}")
 
                     # Сохраняем в истории
-                    self.conversation_history.append(system_response)
+                    self.conversation_history.append({
+                        'response': response_text,
+                        'tools_called': tools_called
+                    })
 
-                    # Проверяем, не закончен ли диалог
-                    if any(phrase in system_response.lower() for phrase in ["до свидания", "пока", "всего хорошего"]):
-                        print("🏁 Диалог завершен системой")
-                        break
+                    # Проверяем, не закончен ли диалог (только если пользователь явно хочет остановиться)
+                    # Убираем автоматическое завершение, чтобы диалог шел до max_turns
+                    # if any(phrase in response_text.lower() for phrase in ["до свидания", "пока", "всего хорошего", "до встречи", "увидимся", "пока-пока", "до новых встреч", "было приятно пообщаться"]):
+                    #     print("🏁 Диалог завершен системой")
+                    #     break
 
                 except Exception as e:
                     print(f"❌ Ошибка в ответе системы: {e}")
@@ -213,25 +233,24 @@ class InteractiveDialogueTester:
 
         # Проверяем использование инструментов
         tool_usage = []
-        for response in self.conversation_history:
-            if "✅" in response or "⚠️" in response or "❌" in response:
+        commands_used = []
+        for entry in self.conversation_history:
+            tools_called = entry.get('tools_called', [])
+            if tools_called:
                 tool_usage.append("Инструмент использован")
-            elif "💬" in response:
+                # Собираем использованные команды
+                for tool in tools_called:
+                    if isinstance(tool, dict) and 'function' in tool:
+                        commands_used.append(tool['function'])
+                    elif isinstance(tool, str):
+                        commands_used.append(tool)
+            else:
                 tool_usage.append("Простой ответ")
 
         print(f"- Ходов с использованием инструментов: {tool_usage.count('Инструмент использован')}")
         print(f"- Ходов с простыми ответами: {tool_usage.count('Простой ответ')}")
 
         # Проверяем разнообразие команд
-        commands_used = []
-        for response in self.conversation_history:
-            if "Добавлена задача" in response or "Записал" in response:
-                commands_used.append("add_task")
-            elif "список задач" in response.lower() or "задачи" in response.lower():
-                commands_used.append("list_tasks")
-            elif "обновлено" in response.lower() or "изменено" in response.lower():
-                commands_used.append("update_profile")
-
         unique_commands = set(commands_used)
         print(f"- Уникальных команд использовано: {len(unique_commands)}")
         if unique_commands:
@@ -248,7 +267,7 @@ class InteractiveDialogueTester:
         print("- Добавить обработку ошибок и edge cases")
         print("- Улучшить контекстную память между ходами")
 
-async def run_interactive_dialogue_test(max_turns=8):
+async def run_interactive_dialogue_test(max_turns=40):
     """Запуск интерактивного диалогового теста"""
     tester = InteractiveDialogueTester()
     await tester.run_interactive_dialogue(max_turns)
