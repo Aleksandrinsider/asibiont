@@ -48,103 +48,11 @@ class IntentClassifierUltraMinimal:
 
     @classmethod
     async def classify_intent(cls, message: str, user_id: int) -> str:
-        """Ultra minimal AI classification - let AI figure out everything"""
-
-        # For testing and reliability, prefer local classification
-        # Only use AI if explicitly configured and working
-        if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY in ['test_key', 'dummy_key'] or DEEPSEEK_API_KEY.startswith('test'):
-            print(f"[INTENT] Using local classification for: {message[:50]}...")
-            return cls._local_classify(message)
-
-        print(f"[INTENT] Using AI classification for: {message[:50]}...")
-        # Ultra minimal prompt - no command list at all
-        prompt = f"""
-Ты - ИИ-ассистент для управления задачами. Проанализируй сообщение пользователя и определи, какую операцию он хочет выполнить.
-
-Возможные операции: создание задачи, просмотр задач, завершение задачи, удаление задачи, перенос задачи, обновление профиля, поиск партнеров, общий разговор.
-
-Верни ТОЛЬКО одно слово на английском: add_task, list_tasks, complete_task, delete_task, reschedule_task, update_profile, find_partners, или conversation.
-
-Сообщение: "{message}"
-
-Операция:
-"""
-
-        try:
-            response = await cls._call_ai(prompt)
-
-            # If API call failed (returned None), use local classification
-            if response is None:
-                print(f"[INTENT] API call failed, using local classification for: {message[:50]}...")
-                return cls._local_classify(message)
-
-            print(f"[INTENT] AI response: '{response}'")
-            # Clean response and check if it's a valid intent
-            if response:
-                intent = response.strip().lower()
-                # Remove any extra text, keep only the first word
-                intent = intent.split()[0] if intent else "conversation"
-
-                # Map common variations to standard intents
-                intent_mapping = {
-                    'create_task': 'add_task',
-                    'new_task': 'add_task',
-                    'add': 'add_task',
-                    'create': 'add_task',
-                    'show_tasks': 'list_tasks',
-                    'view_tasks': 'list_tasks',
-                    'my_tasks': 'list_tasks',
-                    'finish_task': 'complete_task',
-                    'done': 'complete_task',
-                    'finish': 'complete_task',
-                    'готово': 'complete_task',
-                    'сделал': 'complete_task',
-                    'выполнил': 'complete_task',
-                    'завершил': 'complete_task',
-                    'я сделал': 'complete_task',
-                    'я доработал': 'complete_task',
-                    'я завершил': 'complete_task',
-                    'я выполнил': 'complete_task',
-                    'уже сделал': 'complete_task',
-                    'уже выполнил': 'complete_task',
-                    'уже завершил': 'complete_task',
-                    'remove_task': 'delete_task',
-                    'remove': 'delete_task',
-                    'erase': 'delete_task',
-                    'удали': 'delete_task',
-                    'убери': 'delete_task',
-                    'move_task': 'reschedule_task',
-                    'change_time': 'reschedule_task',
-                    'reschedule': 'reschedule_task',
-                    'перенеси': 'reschedule_task',
-                    'измени время': 'reschedule_task',
-                    'update': 'update_profile',
-                    'profile': 'update_profile',
-                    'я из': 'update_profile',
-                    'работаю': 'update_profile',
-                    'интересует': 'update_profile',
-                    'find': 'find_partners',
-                    'partners': 'find_partners',
-                    'search': 'find_partners',
-                    'найди': 'find_partners',
-                    'партнеры': 'find_partners',
-                    'chat': 'conversation',
-                    'talk': 'conversation',
-                    'hello': 'conversation',
-                    'hi': 'conversation',
-                    'привет': 'conversation'
-                }
-
-                intent = intent_mapping.get(intent, intent)
-
-                if intent in cls.INTENTS:
-                    return intent
-
-            return 'conversation'
-
-        except Exception as e:
-            print(f"Intent classification error: {e}")
-            return cls._local_classify(message)  # Fallback to local on error
+        """Use local classification for reliability"""
+        
+        # Use local classification for better accuracy and reliability
+        print(f"[INTENT] Using local classification for: {message[:50]}...")
+        return cls._local_classify(message)
 
     @classmethod
     def _local_classify(cls, message: str) -> str:
@@ -268,15 +176,41 @@ class IntentClassifierUltraMinimal:
                 r'\b(делегируй|поручи)\b.*@\w+.*\b(сделать|выполнить|подготовить)\b'
             ],
             
+            # Update user memory patterns
+            'update_user_memory': [
+                r'\b(запомни|помни|сохрани)\b.*\b(что|мне)\b',
+                r'\b(я люблю|я предпочитаю|у меня аллергия)\b',
+                r'\b(запомни|помни)\b.*\b(мой|мою|мои)\b'
+            ],
+            
+            # Accept delegated task patterns
+            'accept_delegated_task': [
+                r'\b(соглашусь|приму|возьму|выполню)\b.*\b(задач|дело|поручени)\b',
+                r'\b(да|согласен|принимаю)\b.*\b(задач|дело)\b'
+            ],
+            
+            # Reject delegated task patterns
+            'reject_delegated_task': [
+                r'\b(откажусь|не могу|не возьму|не выполню)\b.*\b(задач|дело|поручени)\b',
+                r'\b(нет|отказываюсь)\b.*\b(от|задач|дела)\b'
+            ],
+            
+            # Get delegation progress patterns
+            'get_delegation_progress': [
+                r'\b(где|как|что|статус)\b.*\b(делегирован|поручен|мои|задач)\b',
+                r'\b(мои поручения|делегированные задачи)\b'
+            ],
+            
             # Get task details patterns
             'get_task_details': [
                 r'\b(расскажи|подробно|детали|информация)\b.*\b(о|про|задач|дело)\b',
-                r'\b(что|какие)\b.*\b(детали|информация|подробности)\b.*\b(задач|дело)\b'
+                r'\b(что|какие)\b.*\b(детали|информация|подробности)\b.*\b(задач|дело)\b',
+                r'\b(расскажи|подробно)\b.*\b(про|о)\b.*\b(задач|дело)\b'
             ]
         }
         
         # Check patterns in order of priority (more specific first)
-        priority_order = ['complete_task', 'delete_task', 'delete_all_tasks', 'delegate_task', 'reschedule_task', 'add_task', 'list_tasks', 'edit_task', 'find_relevant_contacts_for_task', 'get_task_details', 'update_profile', 'find_partners']
+        priority_order = ['complete_task', 'delete_all_tasks', 'delete_task', 'delegate_task', 'reschedule_task', 'add_task', 'list_tasks', 'edit_task', 'find_relevant_contacts_for_task', 'get_task_details', 'update_profile', 'update_user_memory', 'accept_delegated_task', 'reject_delegated_task', 'get_delegation_progress', 'find_partners']
         
         for intent in priority_order:
             if intent in intent_patterns:
@@ -318,7 +252,8 @@ class IntentClassifierUltraMinimal:
             CreateTaskCommand, CompleteTaskCommand, ListTasksCommand,
             DeleteTaskCommand, RescheduleTaskCommand, UpdateProfileCommand, FindPartnersCommand,
             DelegateTaskCommand, ConversationCommand, GetTaskDetailsCommand,
-            EditTaskCommand, FindRelevantContactsForTaskCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand
+            EditTaskCommand, FindRelevantContactsForTaskCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
+            AcceptDelegatedTaskCommand, RejectDelegatedTaskCommand, GetDelegationProgressCommand
         )
 
         mapping = {
@@ -336,6 +271,9 @@ class IntentClassifierUltraMinimal:
             'find_relevant_contacts_for_task': FindRelevantContactsForTaskCommand,
             'update_user_memory': UpdateUserMemoryCommand,
             'delete_all_tasks': DeleteAllTasksCommand,
+            'accept_delegated_task': AcceptDelegatedTaskCommand,
+            'reject_delegated_task': RejectDelegatedTaskCommand,
+            'get_delegation_progress': GetDelegationProgressCommand,
         }
 
         return mapping.get(intent)

@@ -49,6 +49,30 @@ async def extract_task_details(message: str, user_id: int = None):
         elif 'день' in unit or 'дня' in unit:
             reminder_time = now + timedelta(days=amount)
 
+    # Parse specific date and time: "01.02.2026 17:46"
+    date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})\s+(\d{1,2}):(\d{2})', message)
+    if date_match and not reminder_time:
+        day = int(date_match.group(1))
+        month = int(date_match.group(2))
+        year = int(date_match.group(3))
+        hour = int(date_match.group(4))
+        minute = int(date_match.group(5))
+        reminder_time = datetime(year, month, day, hour, minute)
+
+    # Parse delay: "с отставанием на 10 мин"
+    delay = timedelta()
+    delay_match = re.search(r'с отставанием на (\d+) (минут|час|мин)', message_lower)
+    if delay_match:
+        delay_amount = int(delay_match.group(1))
+        delay_unit = delay_match.group(2)
+        if 'минут' in delay_unit or 'мин' in delay_unit:
+            delay = timedelta(minutes=delay_amount)
+        elif 'час' in delay_unit:
+            delay = timedelta(hours=delay_amount)
+
+    if reminder_time and delay:
+        reminder_time += delay
+
     # Title extraction - remove command words and time expressions
     title = message
 
@@ -56,11 +80,12 @@ async def extract_task_details(message: str, user_id: int = None):
     title = re.sub(r'^(напомни|создай|запланируй|добавь)\s+', '', title, flags=re.IGNORECASE)
 
     # Remove time expressions
-    title = re.sub(r'\b(сегодня|завтра|вечером|утром|в|через|на|спустя)\b', '', title, flags=re.IGNORECASE)
+    title = re.sub(r'\b(сегодня|завтра|вечером|утром|в|через|на|спустя|с|отставанием)\b', '', title, flags=re.IGNORECASE)
 
     # Remove time patterns
     title = re.sub(r'\d{1,2}:\d{2}', '', title)
-    title = re.sub(r'\d+\s*(минут|час|день|дня)', '', title)
+    title = re.sub(r'\d+\s*(минут|час|день|дня|мин)', '', title)
+    title = re.sub(r'\d{2}\.\d{2}\.\d{4}', '', title)
 
     # Clean up extra spaces
     title = re.sub(r'\s+', ' ', title).strip()
