@@ -145,15 +145,17 @@
         }
 
         // Apply mobile fixes
-        if (isMobileDevice()) {
-            console.log('Mobile device detected - showing mobile modal');
-            const modal = document.getElementById('mobile-modal');
-            if (modal) {
-                modal.style.display = 'flex';
+        document.addEventListener('DOMContentLoaded', function() {
+            if (isMobileDevice()) {
+                console.log('Mobile device detected - showing mobile modal');
+                const modal = document.getElementById('mobile-modal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                }
+            } else {
+                console.log('Desktop device detected - no mobile fixes applied');
             }
-        } else {
-            console.log('Desktop device detected - no mobile fixes applied');
-        }
+        });
         
         // Helper function to convert UTC date to user timezone
         function toUserTimezone(date) {
