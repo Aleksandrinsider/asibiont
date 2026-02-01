@@ -44,14 +44,16 @@
             display: flex;
             flex-direction: column;
             gap: 24px;
+            height: fit-content; /* Адаптивная высота колонки */
         }
         
-        .center-column {
-            flex: 2 1 500px;
-            min-width: 400px;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
+        .left-column .context-section,
+        .left-column .people-section {
+            flex: 1 1 auto; /* Секции растягиваются внутри колонки */
+        }
+        
+        .center-column .chat-section {
+            flex: 1 1 auto; /* Чат растягивается */
         }
         
         .right-column {
