@@ -4407,17 +4407,17 @@
                     
                     const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
                     if (partner.photo_url) {
-                        html += `<img src="${partner.photo_url}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; margin-bottom: 8px;">`;
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: none; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
+                        html += '<img src="' + partner.photo_url + '" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; margin-bottom: 8px;">';
+                        html += '<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: none; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">' + initial + '</div>';
                     } else {
-                        html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">${initial}</div>`;
+                        html += '<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; margin-bottom: 8px;">' + initial + '</div>';
                     }
                     
                     // Имя и ник под аватаром
                     const fullName = partner.first_name || 'Пользователь';
                     const contactInfoEscaped = (partner.contact_info || 'неизвестен').replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                    html += `<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">${fullName}</p>`;
-                    html += `<p style="margin: 0; color: #374151; font-size: 13px;">@${contactInfoEscaped}</p>`;
+                    html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">' + fullName + '</p>';
+                    html += '<p style="margin: 0; color: #374151; font-size: 13px;">@' + contactInfoEscaped + '</p>';
                     
                     // Тариф контакта
                     if (partner.subscription_tier) {
@@ -4430,9 +4430,9 @@
                             'gold': 'Золотой'
                         };
                         const tierName = tierNames[partner.subscription_tier.toLowerCase()] || partner.subscription_tier;
-                        html += `<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">${tierName}</p>`;
+                        html += '<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">' + tierName + '</p>';
                     } else {
-                        html += `<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">Лайт</p>`;
+                        html += '<p style="margin: 0; color: #6C727F; font-size: 13px; margin-bottom: 8px;">Лайт</p>';
                     }
                     
                     html += '</div>';
@@ -4440,46 +4440,46 @@
                     // Profile details - текст слева, отступы как в блоке профиля
                     html += '<div class="context-item">';
                     
-                    html += `<p style="text-align: left;">Город: ${partner.city || 'Не указан'}</p>`;
+                    html += '<p style="text-align: left;">Город: ' + (partner.city || 'Не указан') + '</p>';
                     if (partner.birthdate) {
-                        const age = calculateAge(partner.birthdate);
-                        const ageText = age !== null ? ` (${age} лет)` : '';
-                        html += `<p style="text-align: left;">День рождения: ${partner.birthdate}${ageText}</p>`;
+                        var contactAge = calculateAge(partner.birthdate);
+                        var ageDisplay = contactAge !== null ? ' (' + contactAge + ' лет)' : '';
+                        html += '<p style="text-align: left;">День рождения: ' + partner.birthdate + ageDisplay + '</p>';
                     } else {
-                        html += `<p style="text-align: left;">День рождения: Не указана</p>`;
+                        html += '<p style="text-align: left;">День рождения: Не указана</p>';
                     }
-                    html += `<p style="text-align: left;">Компания: ${partner.company || 'Не указана'}</p>`;
-                    html += `<p style="text-align: left;">Должность: ${partner.position || 'Не указана'}</p>`;
-                    html += `<p style="text-align: left;">Цели: ${partner.goals || 'Не указаны'}</p>`;
-                    html += `<p style="text-align: left;">Навыки: ${partner.skills || 'Не указаны'}</p>`;
-                    html += `<p style="text-align: left;">Интересы: ${partner.interests || 'Не указаны'}</p>`;
+                    html += '<p style="text-align: left;">Компания: ' + (partner.company || 'Не указана') + '</p>';
+                    html += '<p style="text-align: left;">Должность: ' + (partner.position || 'Не указана') + '</p>';
+                    html += '<p style="text-align: left;">Цели: ' + (partner.goals || 'Не указаны') + '</p>';
+                    html += '<p style="text-align: left;">Навыки: ' + (partner.skills || 'Не указаны') + '</p>';
+                    html += '<p style="text-align: left;">Интересы: ' + (partner.interests || 'Не указаны') + '</p>';
                     
                     // Рекомендация с цветом
                     if (partner.average_rating > 0) {
-                        let ratingStyle = 'text-align: left;';
+                        var ratingStyle = 'text-align: left;';
                         if (partner.average_rating < 5) {
                             ratingStyle = 'text-align: left; color: #d73a49;';
                         } else if (partner.average_rating >= 8) {
                             ratingStyle = 'text-align: left; color: #068487;';
                         }
-                        html += `<p style="${ratingStyle}">Рекомендация: ${partner.average_rating}/10</p>`;
+                        html += '<p style="' + ratingStyle + '">Рекомендация: ' + partner.average_rating + '/10</p>';
                     } else {
-                        html += `<p style="text-align: left;">Нет рекомендаций</p>`;
+                        html += '<p style="text-align: left;">Нет рекомендаций</p>';
                     }
                     
                     // Активные задачи с отступом снизу
                     if (partner.task_count) {
-                        html += `<p style="text-align: left; margin-bottom: 20px;">Активных задач: ${partner.task_count}</p>`;
+                        html += '<p style="text-align: left; margin-bottom: 20px;">Активных задач: ' + partner.task_count + '</p>';
                     } else {
-                        html += `<p style="text-align: left; margin-bottom: 20px;">Активных задач: 0</p>`;
+                        html += '<p style="text-align: left; margin-bottom: 20px;">Активных задач: 0</p>';
                     }
                     
                     html += '</div>';
                     
                     // Action buttons
                     html += '<div class="rating-modal-actions">';
-                    html += `<button onclick="closeContactProfileModal()" class="rating-cancel-btn">Закрыть</button>`;
-                    html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">Написать</button>`;
+                    html += '<button onclick="closeContactProfileModal()" class="rating-cancel-btn">Закрыть</button>';
+                    html += '<button onclick="writeToContact(\'' + contactInfoEscaped + '\')" class="rating-submit-btn">Написать</button>';
                     html += '</div>';
                     
                     content.innerHTML = html;
