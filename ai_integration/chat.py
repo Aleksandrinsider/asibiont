@@ -2898,6 +2898,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         if 'tool_calls' in locals() and tool_calls:
             tool_calls_info = [safe_extract_tool_info(tc) for tc in tool_calls]
 
+        # Пост-обработка для автоматического обновления профиля
+        try:
+            from .utils import post_process_profile_update
+            await post_process_profile_update(user_id, original_message, db_session)
+        except Exception as e:
+            logger.warning(f"Failed to post-process profile update: {e}")
+
         return {
             'response': final_content,
             'tool_calls': tool_calls_info

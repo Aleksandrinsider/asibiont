@@ -3661,40 +3661,58 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         
         # Списочные поля (добавляются или заменяются в зависимости от replace_mode)
         if interests is not None:
-            if replace_mode:
-                profile.interests = interests
-                updates.append(f"интересы заменены: {interests}")
+            # Валидация
+            if len(interests.strip()) < 2 or len(interests.strip()) > 100:
+                logger.warning(f"Invalid interests length: {len(interests)}")
+            elif any(char in interests.lower() for char in ['<', '>', 'script', 'http']):
+                logger.warning(f"Invalid interests content: {interests}")
             else:
-                new_value, was_added = _add_to_list_field(profile.interests, interests)
-                if was_added:
-                    profile.interests = new_value
-                    added.append(f"интерес: {interests}")
+                if replace_mode:
+                    profile.interests = interests
+                    updates.append(f"интересы заменены: {interests}")
                 else:
-                    updates.append(f"интерес '{interests}' уже есть")
+                    new_value, was_added = _add_to_list_field(profile.interests, interests)
+                    if was_added:
+                        profile.interests = new_value
+                        added.append(f"интерес: {interests}")
+                    else:
+                        updates.append(f"интерес '{interests}' уже есть")
         
         if skills is not None:
-            if replace_mode:
-                profile.skills = skills
-                updates.append(f"навыки заменены: {skills}")
+            # Валидация
+            if len(skills.strip()) < 2 or len(skills.strip()) > 100:
+                logger.warning(f"Invalid skills length: {len(skills)}")
+            elif any(char in skills.lower() for char in ['<', '>', 'script', 'http']):
+                logger.warning(f"Invalid skills content: {skills}")
             else:
-                new_value, was_added = _add_to_list_field(profile.skills, skills)
-                if was_added:
-                    profile.skills = new_value
-                    added.append(f"навык: {skills}")
+                if replace_mode:
+                    profile.skills = skills
+                    updates.append(f"навыки заменены: {skills}")
                 else:
-                    updates.append(f"навык '{skills}' уже есть")
+                    new_value, was_added = _add_to_list_field(profile.skills, skills)
+                    if was_added:
+                        profile.skills = new_value
+                        added.append(f"навык: {skills}")
+                    else:
+                        updates.append(f"навык '{skills}' уже есть")
         
         if goals is not None:
-            if replace_mode:
-                profile.goals = goals
-                updates.append(f"цели заменены: {goals}")
+            # Валидация
+            if len(goals.strip()) < 2 or len(goals.strip()) > 200:
+                logger.warning(f"Invalid goals length: {len(goals)}")
+            elif any(char in goals.lower() for char in ['<', '>', 'script', 'http']):
+                logger.warning(f"Invalid goals content: {goals}")
             else:
-                new_value, was_added = _add_to_list_field(profile.goals, goals)
-                if was_added:
-                    profile.goals = new_value
-                    added.append(f"цель: {goals}")
+                if replace_mode:
+                    profile.goals = goals
+                    updates.append(f"цели заменены: {goals}")
                 else:
-                    updates.append(f"цель '{goals}' уже есть")
+                    new_value, was_added = _add_to_list_field(profile.goals, goals)
+                    if was_added:
+                        profile.goals = new_value
+                        added.append(f"цель: {goals}")
+                    else:
+                        updates.append(f"цель '{goals}' уже есть")
 
         # Обновляем время последнего обновления
         profile.updated_at = datetime.utcnow()

@@ -1353,3 +1353,211 @@ def extract_time_from_message(message):
                 return f"{hour:02d}:00"
     
     return None
+
+
+async def post_process_profile_update(user_id, message, db_session):
+    """
+    Пост-обработка сообщения для автоматического обновления профиля.
+    Анализирует сообщение и извлекает информацию о профиле, затем обновляет.
+    
+    Args:
+        user_id: ID пользователя
+        message: Сообщение пользователя
+        db_session: Сессия БД
+    
+    Returns:
+        None - обновление происходит автоматически
+    """
+    from .handlers import update_profile
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    if not message or not user_id:
+        return
+    
+    message_lower = message.lower().strip()
+    
+    # Простой анализ на наличие profile info
+    profile_indicators = [
+        'я', 'мне', 'у меня', 'работаю', 'занимаюсь', 'люблю', 'интересует',
+        'умею', 'знаю', 'специалист', 'опыт', 'навыки', 'интересы', 'цели',
+        'москва', 'питер', 'екатеринбург', 'новосибирск', 'казань', 'ростов',
+        'программирование', 'дизайн', 'маркетинг', 'бизнес', 'ии', 'ai', 'бот'
+    ]
+    
+    has_profile_info = any(indicator in message_lower for indicator in profile_indicators)
+    
+    if not has_profile_info:
+        return
+    
+    # Извлекаем данные профиля простым парсингом
+    profile_data = {}
+    
+    # Город
+    cities = {
+        'москва': 'Москва',
+        'москве': 'Москва', 
+        'питер': 'Санкт-Петербург',
+        'спб': 'Санкт-Петербург',
+        'екатеринбург': 'Екатеринбург',
+        'екб': 'Екатеринбург',
+        'новосибирск': 'Новосибирск',
+        'нск': 'Новосибирск',
+        'казань': 'Казань',
+        'ростов': 'Ростов-на-Дону',
+        'уфа': 'Уфа',
+        'челябинск': 'Челябинск',
+        'пермь': 'Пермь',
+        'красноярск': 'Красноярск',
+        'воронеж': 'Воронеж',
+        'волгоград': 'Волгоград',
+        'ярославль': 'Ярославль',
+        'омск': 'Омск',
+        'тюмень': 'Тюмень',
+        'иркутск': 'Иркутск'
+    }
+    
+    for city_key, city_name in cities.items():
+        if city_key in message_lower:
+            profile_data['city'] = city_name
+            break
+    
+    # Навыки
+    skill_patterns = [
+        r'работаю\s+с\s+(.+?)(?:\s|$|[.,!?;])',
+        r'занимаюсь\s+(.+?)(?:\s|$|[.,!?;])',
+        r'умею\s+(.+?)(?:\s|$|[.,!?;])',
+        r'знаю\s+(.+?)(?:\s|$|[.,!?;])',
+        r'специалист\s+(.+?)(?:\s|$|[.,!?;])',
+        r'разработал\s+(.+?)(?:\s|$|[.,!?;])',
+        r'создал\s+(.+?)(?:\s|$|[.,!?;])'
+    ]
+    
+    for pattern in skill_patterns:
+        import re
+        match = re.search(pattern, message_lower)
+        if match:
+            skill = match.group(1).strip()
+            if len(skill) > 2 and len(skill) < 50:
+                profile_data['skills'] = skill
+                break
+    
+    # Интересы
+    interest_patterns = [
+        r'люблю\s+(.+?)(?:\s|$|[.,!?;])',
+        r'интересует\s+(.+?)(?:\s|$|[.,!?;])',
+        r'увлекаюсь\s+(.+?)(?:\s|$|[.,!?;])',
+        r'нравится\s+(.+?)(?:\s|$|[.,!?;])'
+    ]
+    
+    for pattern in interest_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            interest = match.group(1).strip()
+            if len(interest) > 2 and len(interest) < 50:
+                profile_data['interests'] = interest
+                break
+    
+    # Цели
+    goal_patterns = [
+        r'хочу\s+(.+?)(?:\s|$|[.,!?;])',
+        r'планирую\s+(.+?)(?:\s|$|[.,!?;])',
+        r'мечтаю\s+(.+?)(?:\s|$|[.,!?;])',
+        r'цель\s+(.+?)(?:\s|$|[.,!?;])'
+    ]
+    
+    for pattern in goal_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            goal = match.group(1).strip()
+            if len(goal) > 2 and len(goal) < 100:
+                profile_data['goals'] = goal
+                break
+    
+    # Компания
+    company_patterns = [
+        r'работаю\s+в\s+(.+?)(?:\s|$|[.,!?;])',
+        r'компания\s+(.+?)(?:\s|$|[.,!?;])'
+    ]
+    
+    for pattern in company_patterns:
+        match = re.search(pattern, message_lower)
+        if match:
+            company = match.group(1).strip()
+            if len(company) > 2 and len(company) < 50:
+                profile_data['company'] = company.title()
+                break
+    
+    # Если есть данные для обновления - обновляем
+    if profile_data:
+        try:
+            logger.info(f"[PROFILE POST-PROCESS] Updating profile for user {user_id} with data: {profile_data}")
+            result = update_profile(
+                user_id=user_id,
+                city=profile_data.get('city'),
+                interests=profile_data.get('interests'),
+                skills=profile_data.get('skills'),
+                goals=profile_data.get('goals'),
+                company=profile_data.get('company'),
+                session=db_session
+            )
+            if result:
+                logger.info(f"[PROFILE POST-PROCESS] Profile updated: {result}")
+        except Exception as e:
+            logger.error(f"[PROFILE POST-PROCESS] Error updating profile: {e}")
+
+
+def get_context_from_db(user_id, limit=10):
+    """Get chat context from Interaction table"""
+    session = Session()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return []
+        
+        # Get history_cleared_at timestamp
+        cleared_at = user.history_cleared_at
+        
+        # Get last N interactions after clear timestamp
+        query = session.query(Interaction).filter(Interaction.user_id == user.id)
+        if cleared_at:
+            query = query.filter(Interaction.created_at > cleared_at)
+        
+        interactions = query.order_by(Interaction.created_at.asc()).limit(limit * 2).all()
+        
+        # Convert to context format - group by user-ai pairs
+        context = []
+        i = 0
+        while i < len(interactions) - 1:
+            # Find next user message
+            while i < len(interactions) and interactions[i].message_type != 'user':
+                i += 1
+            
+            if i >= len(interactions):
+                break
+                
+            user_msg = interactions[i]
+            i += 1
+            
+            # Find next ai message after user
+            while i < len(interactions) and interactions[i].message_type != 'ai':
+                i += 1
+            
+            if i >= len(interactions):
+                break
+                
+            ai_msg = interactions[i]
+            i += 1
+            
+            context.append({
+                'user': user_msg.content,
+                'agent': ai_msg.content
+            })
+        
+        return context
+    except Exception as e:
+        logger.error(f"Error getting context from DB: {e}")
+        return []
+    finally:
+        session.close()

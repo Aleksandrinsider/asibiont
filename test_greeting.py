@@ -6,6 +6,7 @@ sys.path.append(os.path.dirname(__file__))
 
 # Включаем бесплатный доступ для тестов
 os.environ["FREE_ACCESS_MODE"] = "1"
+os.environ["LOCAL"] = "1"
 
 from ai_integration.chat import chat_with_ai
 

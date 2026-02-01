@@ -312,7 +312,8 @@ async def update_profile_handler(message: Message):
         prompt = f"Обнови мой профиль: {text}"
     else:
         prompt = "Помоги обновить профиль"
-    context = []  # Simplified: no context in bot
+    from ai_integration.utils import get_context_from_db
+    context = get_context_from_db(user_id, limit=10)
     ai_result = await chat_with_ai(prompt, context, user_id)
     response = ai_result['response']
     await message.bot.send_message(message.chat.id, response)
@@ -335,7 +336,8 @@ async def find_partners_handler(message: Message):
     session.close()
     # Отправить запрос в ИИ
     try:
-        context = []  # Simplified: no context in bot
+        from ai_integration.utils import get_context_from_db
+        context = get_context_from_db(user_id, limit=10)
         ai_result = await chat_with_ai("Найди партнеров", context, user_id)
         response = ai_result['response']
         await message.bot.send_message(message.chat.id, response)

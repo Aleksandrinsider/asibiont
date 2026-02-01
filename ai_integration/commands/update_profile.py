@@ -51,38 +51,44 @@ class UpdateProfileCommand(BaseCommand):
                     break
                     break
 
-        # Interests
-        interest_keywords = ['люблю', 'интересует', 'увлекаюсь', 'хобби']
+        # Interests - расширенные паттерны
+        interest_keywords = ['люблю', 'интересует', 'увлекаюсь', 'хобби', 'интересуюсь', 'нравится', 'занимаюсь']
         for keyword in interest_keywords:
             if keyword in message_lower:
                 idx = message_lower.find(keyword)
                 if idx >= 0:
                     interest_part = message_lower[idx + len(keyword):].strip()
-                    words = interest_part.split()[:4]  # Max 4 words
+                    # Убираем лишние слова
+                    stop_words = ['что', 'и', 'а', 'но', 'или', 'да', 'нет', 'может', 'просто']
+                    words = [w for w in interest_part.split() if w not in stop_words][:4]
                     if words:
                         profile_data['interests'] = ' '.join(words)
                     break
 
-        # Skills
-        skill_keywords = ['умею', 'знаю', 'специалист', 'опыт в']
+        # Skills - расширенные паттерны
+        skill_keywords = ['умею', 'знаю', 'могу', 'специалист', 'опыт в', 'работаю с', 'разбираюсь в', 'занимаюсь', 'разработал', 'создал', 'делаю']
         for keyword in skill_keywords:
             if keyword in message_lower:
                 idx = message_lower.find(keyword)
                 if idx >= 0:
                     skill_part = message_lower[idx + len(keyword):].strip()
-                    words = skill_part.split()[:4]  # Max 4 words
+                    # Убираем лишние слова
+                    stop_words = ['что', 'и', 'а', 'но', 'или', 'да', 'нет', 'может', 'просто', 'очень', 'хорошо']
+                    words = [w for w in skill_part.split() if w not in stop_words][:4]
                     if words:
                         profile_data['skills'] = ' '.join(words)
                     break
 
-        # Goals
-        goal_keywords = ['хочу', 'планирую', 'мечтаю', 'цель']
+        # Goals - расширенные паттерны
+        goal_keywords = ['хочу', 'планирую', 'мечтаю', 'цель', 'намерен', 'собираюсь', 'стремлюсь']
         for keyword in goal_keywords:
             if keyword in message_lower:
                 idx = message_lower.find(keyword)
                 if idx >= 0:
                     goal_part = message_lower[idx + len(keyword):].strip()
-                    words = goal_part.split()[:6]  # Max 6 words
+                    # Убираем лишние слова
+                    stop_words = ['что', 'и', 'а', 'но', 'или', 'да', 'нет', 'может', 'просто', 'очень']
+                    words = [w for w in goal_part.split() if w not in stop_words][:6]
                     if words:
                         profile_data['goals'] = ' '.join(words)
                     break
