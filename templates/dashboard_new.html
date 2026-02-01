@@ -269,16 +269,16 @@
             notification.className = 'error-notification';
             if (type === 'success') {
                 notification.classList.add('success');
-                iconElement.textContent = '?';
+                iconElement.textContent = '';
             } else if (type === 'warning') {
                 notification.classList.add('warning');
-                iconElement.textContent = '⚠️';
+                iconElement.textContent = '';
             } else if (type === 'info') {
                 notification.classList.add('info');
-                iconElement.textContent = 'ℹ️';
+                iconElement.textContent = '';
             } else {
                 notification.classList.add('error');
-                iconElement.textContent = '?';
+                iconElement.textContent = '';
             }
             
             // Show notification
