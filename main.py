@@ -2401,17 +2401,17 @@ async def yookassa_webhook(request):
             promo_msg = f" СЃ РїСЂРѕРјРѕРєРѕРґРѕРј {promo_code}" if promo_code else ""
             await bot.send_message(int(user_id), f"РџРѕРґРїРёСЃРєР° {tier_name} Р°РєС‚РёРІРёСЂРѕРІР°РЅР°{promo_msg}! РўРµРїРµСЂСЊ Сѓ РІР°СЃ РґРѕСЃС‚СѓРї РєРѕ РІСЃРµРј РїСЂРµРјРёСѓРј-С„СѓРЅРєС†РёСЏРј.")
 
-            # Handle referral commission (20% of full tier price, not discounted amount)
+            # Handle referral commission (20% of payment amount)
             if user.referrer_id:
                 try:
                     referrer = session.query(User).filter_by(id=user.referrer_id).first()
                     if referrer:
-                        # Calculate commission from full tier price, not the discounted payment amount
-                        full_tier_price = TIER_PRICES.get(tier, 3000)  # Default to light tier price
-                        commission_amount = int(float(full_tier_price) * 0.20)
+                        # Calculate commission from actual payment amount
+                        payment_amount = float(payment['amount']['value'])
+                        commission_amount = int(payment_amount * 0.20)
                         referrer.referral_balance += commission_amount
                         session.commit()
-                        logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance}) from full tier price {full_tier_price} RUB")
+                        logger.info(f"Referral commission: {commission_amount} RUB added to referrer {referrer.telegram_id} (balance: {referrer.referral_balance}) from payment amount {payment_amount} RUB")
                         
                         # Notify referrer about commission
                         try:

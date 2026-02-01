@@ -152,20 +152,6 @@ async def start_handler(message: Message):
         logger.info(f"Created new user {user_id}")
         is_new_user = True
     
-    # If new user and came from referral link, add bonus to referrer
-    if is_new_user and referrer_id and referrer_id != user_id:
-        referrer = session.query(User).filter_by(telegram_id=referrer_id).first()
-        if referrer:
-            referrer_subscription = session.query(Subscription).filter_by(user_id=referrer.id).first()
-            if referrer_subscription:
-                # Add 5 days to referrer's subscription
-                if referrer_subscription.end_date:
-                    referrer_subscription.end_date += timedelta(days=5)
-                else:
-                    referrer_subscription.end_date = datetime.now(timezone.utc) + timedelta(days=5)
-                session.commit()
-                logger.info(f"Added 5 days to referrer {referrer_id} for new user {user_id}")
-    
     session.close()
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
