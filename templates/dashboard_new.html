@@ -43,7 +43,7 @@
             max-width: 400px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 16px;
             height: fit-content; /* Адаптивная высота колонки */
         }
         
@@ -62,7 +62,7 @@
             max-width: 450px;
             display: flex;
             flex-direction: column;
-            gap: 24px;
+            gap: 16px;
         }
 
         /* Мобильная версия - одноколоночный layout */
@@ -165,7 +165,6 @@
                     profileSection.style.flex = '0 0 auto';
                 }
                 if (peopleSection) {
-                    peopleSection.style.display = 'block'; // Показываем блок контактов
                     peopleSection.style.flex = '1 1 auto';
                 }
                 // Показываем фильтры и контакты при разворачивании профиля
@@ -181,7 +180,6 @@
                     profileSection.style.flex = '0 0 auto';
                 }
                 if (peopleSection) {
-                    peopleSection.style.display = 'none'; // Скрываем блок контактов
                     peopleSection.style.flex = '1 1 auto';
                 }
                 // Скрываем фильтры и контакты при сворачивании профиля
@@ -611,27 +609,12 @@
                             }
                             var profileSection = document.querySelector('.context-section');
                             var peopleSection = document.querySelector('.people-section');
-                            var contactFilterContent = document.getElementById('contact-filter-content');
-                            var peopleList = document.getElementById('people-list');
-                            
-                            if (isCollapsed) {
+                            if (isCollapsed === 'true') {
                                 if (profileSection) profileSection.style.flex = '0 0 auto';
-                                if (peopleSection) {
-                                    peopleSection.style.display = 'none'; // Скрываем блок контактов
-                                    peopleSection.style.flex = '1 1 auto';
-                                }
-                                // Скрываем фильтры и контакты при сворачивании профиля
-                                if (contactFilterContent) contactFilterContent.style.display = 'none';
-                                if (peopleList) peopleList.style.display = 'none';
+                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
                             } else {
                                 if (profileSection) profileSection.style.flex = '0 0 auto';
-                                if (peopleSection) {
-                                    peopleSection.style.display = 'block'; // Показываем блок контактов
-                                    peopleSection.style.flex = '1 1 auto';
-                                }
-                                // Показываем фильтры и контакты при разворачивании профиля
-                                if (contactFilterContent) contactFilterContent.style.display = '';
-                                if (peopleList) peopleList.style.display = '';
+                                if (peopleSection) peopleSection.style.flex = '1 1 auto';
                             }
                         })();
                     </script>
