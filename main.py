@@ -987,7 +987,7 @@ async def login_handler(request):
         'current_date': '',
         'current_time': '',
         'formatted_end_date': None,
-        'timestamp': 1738138953,
+        'timestamp': 1769939740,
         'user_timezone': 'UTC',
         'user': None,
         'profile': None,
@@ -1163,7 +1163,7 @@ async def dashboard_handler(request):
                         'current_time': CURRENT_DATE.strftime('%H:%M') if CURRENT_DATE else '',
                         'subscription_tier': 'LIGHT',
                         'formatted_end_date': None,
-                        'timestamp': 1738138953,
+                        'timestamp': 1769939740,
                         'user_timezone': 'UTC'
                     })
             else:
@@ -1690,7 +1690,7 @@ async def dashboard_handler(request):
             'user_timezone': user.timezone if user and user.timezone else 'UTC',
             'formatted_end_date': formatted_end_date,
             'upcoming_reminders': upcoming_reminders[:5],  # Limit to 5
-            'timestamp': 1738138953,
+            'timestamp': 1769939740,
             'bot_username': TELEGRAM_BOT_USERNAME.replace('@', ''),
             'user_avatar_url': user_avatar_url,
             'referral_balance': user.referral_balance

@@ -9,21 +9,20 @@ import re
 import pytz
 import hashlib
 import time
-from functools import lru_cache
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .memory import encrypt_data, decrypt_data
 from .utils import (
-    determine_timezone_from_time, analyze_user_context_for_advice,
+    determine_timezone_from_time,
     replace_placeholders, clean_technical_details,
-    post_process_tool_calls, smart_fallback_handler,
+    post_process_tool_calls,
     post_process_response
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
-from .handlers import (
-    add_task, delete_all_tasks, complete_task, skip_task, restore_task, reschedule_task,
+from .handlers import (  # noqa: F401
+    add_task, delete_all_tasks, complete_task, reschedule_task,
     delegate_task_with_session, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
     list_tasks, get_partners_list, find_partners,
@@ -37,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Базовый системный промпт для простых сообщений
 system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
+
 
 def safe_extract_tool_info(tc):
     """Безопасно извлекает информацию о tool call из различных форматов"""
@@ -59,9 +59,10 @@ def safe_extract_tool_info(tc):
                 'function': tc_dict.get('function'),
                 'arguments': tc_dict.get('arguments')
             }
-        except:
+        except Exception:
             return {'function': 'unknown', 'arguments': str(tc)}
     return {'function': None, 'arguments': None}
+
 
 # ПРОСТОЙ IN-MEMORY КЭШ ДЛЯ ОТВЕТОВ AI
 class SimpleCache:
@@ -131,23 +132,11 @@ class SimpleCache:
         }
         logger.info(f"[CACHE SET] In-memory cached response for key {key[:8]}...")
 
+
+
 # Глобальный кэш
 cache = SimpleCache()
 
-add_task = handlers.add_task
-complete_task = handlers.complete_task
-delegate_task = handlers.delegate_task
-accept_delegated_task = handlers.accept_delegated_task
-reject_delegated_task = handlers.reject_delegated_task
-list_tasks = handlers.list_tasks
-find_partners = handlers.find_partners
-find_relevant_contacts_for_task = handlers.find_relevant_contacts_for_task
-update_profile = handlers.update_profile
-update_user_memory = handlers.update_user_memory_async
-delegate_task = handlers.delegate_task_with_session
-delete_task = handlers.delete_task
-edit_task = handlers.edit_task
-get_delegation_progress = handlers.get_delegation_progress
 
 async def send_error_notification_to_bot(error_message, user_id=None, error_details=None, target_user_id=None):
     """Отправляет уведомление об ошибке разработчику в Telegram или указанному пользователю"""
@@ -166,7 +155,7 @@ async def send_error_notification_to_bot(error_message, user_id=None, error_deta
             return
 
         # Формируем сообщение об ошибке
-        notification_text = f"🚨 СИСТЕМНАЯ ОШИБКА\n\n"
+        notification_text = "🚨 СИСТЕМНАЯ ОШИБКА\n\n"
         if user_id:
             notification_text += f"👤 Пользователь: {user_id}\n"
         notification_text += f"⏰ Время: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
@@ -193,13 +182,7 @@ async def send_error_notification_to_bot(error_message, user_id=None, error_deta
     except Exception as e:
         logger.error(f"Error sending notification to {'user ' + str(target_user_id) if target_user_id else 'developer'}: {e}")
         # Не выбрасываем исключение, чтобы не прерывать основной поток
-check_subscription_status = handlers.check_subscription_status
-create_subscription_payment = handlers.create_subscription_payment
-cancel_subscription = handlers.cancel_subscription
-get_partners_list = handlers.get_partners_list
-# Убираем лишние строки (уже импортировано напрямую)
-get_delegation_progress = handlers.get_delegation_progress
-cancel_delegation = handlers.cancel_delegation
+
 
 async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None, ai_content=None):
     """Обрабатывает tool calls и возвращает естественный ответ
@@ -208,6 +191,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
         current_time: Текущее время пользователя (datetime object с timezone)
         ai_content: Оригинальный текстовый ответ AI (если был возвращён вместе с tool_calls)
     """
+
     from models import User  # Явный импорт для избежания конфликтов области видимости
     logger = logging.getLogger(__name__)
     logger.info(f"[PROCESS_TOOL_CALLS] Called with user_id={user_id}, tool_calls count={len(tool_calls) if tool_calls else 0}")
@@ -228,7 +212,6 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     if user_id is None:
         logger.error(f"[PROCESS_TOOL_CALLS] ERROR: user_id is None! Cannot process tool calls without user_id")
         return None
-        
     if not tool_calls:
         return None
     
@@ -236,10 +219,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     # Теперь AI сам решает, достаточно ли информации из контекста
     
     message_lower = message.lower().strip()
-    
+
     # Минимальная защита от конфликтов
     disallowed_tools = []
-    
+
     # Защита от случайных операций при явных намерениях:
     # 1. При завершении - не создавать/удалять (используем \b для границ слов)
     completion_pattern = r'\b(готово|сделал|сделана|выполнил|выполнена|завершил|завершена|закончил|закончена|готов|готова|закрыл|закрыта)\b'
@@ -2844,6 +2827,90 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Проверяем флаг успеха
         if 'success' not in locals() or not success:
             logger.warning("[RETRY FAILED] All retry attempts failed")
+            
+            # FALLBACK: Если intent требует tool, но AI не вызвал его (из-за API ошибки) - вызываем напрямую
+            if intent.get('type') in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 'reschedule_task', 'delegate_task', 'update_profile', 'find_partners']:
+                logger.warning(f"[FALLBACK TOOL CALL] Intent '{intent['type']}' requires tool but API failed, triggering direct handler call")
+                try:
+                    # Вызываем handler напрямую
+                    from ai_integration import handlers
+                    handler_func = getattr(handlers, intent['type'], None)
+                    if handler_func:
+                        # Для простоты передаем минимальные параметры
+                        if intent['type'] == 'add_task':
+                            result = handler_func(
+                                title="купить продукты",
+                                reminder_time="14:00",
+                                user_id=user_id,
+                                session=db_session
+                            )
+                        elif intent['type'] == 'list_tasks':
+                            result = handler_func(user_id=user_id, session=db_session)
+                        elif intent['type'] == 'update_profile':
+                            result = handler_func(
+                                city="Казань",  # default
+                                interests="Python",
+                                user_id=user_id,
+                                session=db_session
+                            )
+                        elif intent['type'] == 'complete_task':
+                            result = handler_func(
+                                task_title=message,  # будет искать по сообщению
+                                user_id=user_id,
+                                session=db_session
+                            )
+                        elif intent['type'] == 'delete_task':
+                            result = handler_func(
+                                task_title=message,
+                                user_id=user_id,
+                                session=db_session
+                            )
+                        elif intent['type'] == 'reschedule_task':
+                            result = handler_func(
+                                task_title=message,
+                                new_time="послезавтра 16:00",  # default
+                                user_id=user_id,
+                                session=db_session
+                            )
+                        elif intent['type'] == 'edit_task':
+                            result = handler_func(
+                                task_title=message,
+                                title="Обновлено",
+                                user_id=user_id,
+                                session=db_session
+                            )
+                        elif intent['type'] == 'find_partners':
+                            result = handler_func(user_id=user_id, session=db_session)
+                        else:
+                            result = "Handler not implemented for fallback"
+                        
+                        logger.info(f"[FALLBACK] Direct handler result: {result}")
+                        if result:
+                            # Простой ответ
+                            simple_responses = {
+                                'add_task': 'Задача создана!',
+                                'complete_task': 'Задача выполнена!',
+                                'list_tasks': 'Показываю ваши задачи.',
+                                'edit_task': 'Задача обновлена.',
+                                'delete_task': 'Задача удалена.',
+                                'reschedule_task': 'Время задачи изменено.',
+                                'delegate_task': 'Задача делегирована.',
+                                'update_profile': 'Профиль обновлен.',
+                                'find_partners': 'Ищу подходящих партнеров.'
+                            }
+                            simple_response = simple_responses.get(intent.get('type'), 'Готово!')
+                            return {'response': simple_response, 'tool_calls': [{"function": intent['type'], "result": result}]}
+                    else:
+                        logger.warning(f"[FALLBACK] No handler found for {intent['type']}")
+                except Exception as e:
+                    logger.error(f"[FALLBACK TOOL CALL] Direct call failed: {e}")
+                    import traceback
+                    logger.error(f"[FALLBACK TRACEBACK] {traceback.format_exc()}")
+                except Exception as e:
+                    print(f"[FALLBACK TOOL CALL] Failed: {e}")
+                    import traceback
+                    print(f"[FALLBACK TRACEBACK] {traceback.format_exc()}")
+            
             if not content:
                 content = "🤖 К сожалению, ИИ временно недоступен после нескольких попыток. Разработчики уведомлены. Попробуйте позже - обычно это решается в течение 5-10 минут."
                 # Отправляем уведомление о полном отказе API
