@@ -2678,3 +2678,340 @@ details[open] .details-content {
     }
 }
 
+/* ============================================================================
+   НОВАЯ МОБИЛЬНАЯ АДАПТАЦИЯ (до 768px)
+   Все блоки остаются видимыми, но адаптируются под мобильные экраны
+   ============================================================================ */
+@media (max-width: 768px) {
+    /* === БАЗОВЫЕ НАСТРОЙКИ ДЛЯ МОБИЛЬНЫХ === */
+    :root {
+        --header-height: 70px;
+        --mobile-padding: 8px;
+        --mobile-gap: 8px;
+    }
+
+    html, body {
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    /* Контейнер приложения */
+    .container {
+        padding: var(--mobile-padding) !important;
+        margin: 0 !important;
+        width: 100% !important;
+        min-height: calc(100vh - var(--header-height)) !important;
+    }
+
+    /* === ШАПКА (HEADER) === */
+    .app-header {
+        height: var(--header-height);
+        padding: 0 var(--mobile-padding);
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: #FFFFFF;
+        border-bottom: 1px solid #D1D9E0;
+    }
+
+    .header-content {
+        padding: 0 4px;
+        height: 100%;
+    }
+
+    .header-left {
+        gap: 6px;
+    }
+
+    .header-center {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .header-right {
+        gap: 6px;
+    }
+
+    /* Скрываем некоторые элементы header для компактности */
+    .logo,
+    .contact-search-desktop,
+    .header-left a[href*="aleksandrinsider"] {
+        display: none !important;
+    }
+
+    /* Аватар профиля */
+    .profile-avatar {
+        width: 50px;
+        height: 50px;
+    }
+
+    /* Информация в header */
+    .header-info {
+        font-size: 11px;
+        gap: 4px;
+    }
+
+    #header-time,
+    #header-date {
+        display: none;
+    }
+
+    /* === ОСНОВНАЯ РАСКЛАДКА === */
+    .main-layout {
+        flex-direction: column !important;
+        gap: var(--mobile-gap) !important;
+        margin-top: calc(var(--header-height) + 10px) !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Все колонки становятся полной ширины и располагаются вертикально */
+    .left-column,
+    .center-column,
+    .right-column {
+        width: 100% !important;
+        min-width: unset !important;
+        max-width: none !important;
+        flex: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    /* === АДАПТАЦИЯ БЛОКОВ === */
+    /* Все основные блоки */
+    .context-section,
+    .people-section,
+    .chat-section,
+    .task-stats-block,
+    .tasks-section-wrapper,
+    .profile-block,
+    .contacts-block,
+    .stats-block,
+    .admin-section,
+    .message-card,
+    .quick-actions,
+    .search-bar {
+        margin: 0 0 var(--mobile-gap) 0 !important;
+        padding: 12px !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Специфические настройки для некоторых блоков */
+    .task-stats-block {
+        order: -1; /* Показываем статистику задач первой */
+        margin-bottom: 12px !important;
+    }
+
+    .tasks-section {
+        max-height: 60vh; /* Ограничиваем высоту списка задач */
+        overflow-y: auto;
+    }
+
+    .chat-section {
+        min-height: 300px;
+        max-height: 50vh;
+    }
+
+    /* === КОНТАКТЫ И СООБЩЕНИЯ === */
+    .contacts-list,
+    .messages-list {
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+
+    .contact-item,
+    .message-item {
+        padding: 8px 12px;
+        margin-bottom: 4px;
+        border-radius: 6px;
+    }
+
+    /* === ФОРМЫ И ИНПУТЫ === */
+    input, textarea, select {
+        font-size: 16px !important; /* Предотвращает зум на iOS */
+        padding: 10px 12px !important;
+        border-radius: 6px !important;
+    }
+
+    /* === КНОПКИ === */
+    .cta-button,
+    .button,
+    button {
+        font-size: 14px !important;
+        padding: 12px 16px !important;
+        border-radius: 6px !important;
+        width: 100% !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* === ЗАГОЛОВКИ === */
+    h1 {
+        font-size: 20px !important;
+        margin-bottom: 8px !important;
+    }
+
+    h2 {
+        font-size: 18px !important;
+        margin-bottom: 6px !important;
+    }
+
+    h3 {
+        font-size: 16px !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* === СПИСКИ ЗАДАЧ === */
+    .task-item {
+        padding: 10px !important;
+        margin-bottom: 6px !important;
+        border-radius: 6px !important;
+    }
+
+    .task-item h4 {
+        font-size: 14px !important;
+    }
+
+    .task-item p {
+        font-size: 12px !important;
+    }
+
+    /* === ПРОФИЛЬ === */
+    .profile-content {
+        text-align: center;
+    }
+
+    .profile-avatar {
+        width: 60px !important;
+        height: 60px !important;
+        margin: 0 auto 8px !important;
+    }
+
+    /* === СТАТИСТИКА === */
+    .stats-content {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 8px !important;
+        border-radius: 6px !important;
+    }
+
+    /* === АДМИН ПАНЕЛЬ === */
+    .admin-section {
+        background: #FFF8E1 !important;
+        border-color: #FBC02D !important;
+    }
+
+    /* === УВЕДОМЛЕНИЯ === */
+    .error-notification,
+    .success-notification {
+        left: var(--mobile-padding) !important;
+        right: var(--mobile-padding) !important;
+        max-width: none !important;
+        font-size: 13px !important;
+        padding: 12px 16px !important;
+    }
+
+    /* === МОДАЛЬНЫЕ ОКНА === */
+    .rating-modal-content,
+    .search-modal-content {
+        width: 95% !important;
+        max-width: none !important;
+        margin: var(--mobile-padding) !important;
+    }
+
+    /* === ДОПОЛНИТЕЛЬНЫЕ АДАПТАЦИИ === */
+    /* Убираем некоторые декоративные элементы */
+    .message-card::after {
+        display: none;
+    }
+
+    /* Адаптация для очень маленьких элементов */
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .quick-actions .button {
+        flex: 1;
+        min-width: calc(50% - 2px);
+    }
+}
+
+/* ============================================================================
+   АДАПТАЦИЯ ДЛЯ ОЧЕНЬ МАЛЕНЬКИХ ЭКРАНОВ (до 480px)
+   ============================================================================ */
+@media (max-width: 480px) {
+    :root {
+        --header-height: 65px;
+        --mobile-padding: 6px;
+        --mobile-gap: 6px;
+    }
+
+    .app-header {
+        padding: 0 var(--mobile-padding);
+    }
+
+    .header-info {
+        font-size: 10px;
+    }
+
+    .profile-avatar {
+        width: 45px !important;
+        height: 45px !important;
+    }
+
+    /* Ещё более компактные блоки */
+    .context-section,
+    .people-section,
+    .chat-section,
+    .task-stats-block,
+    .tasks-section-wrapper,
+    .profile-block,
+    .contacts-block,
+    .stats-block,
+    .admin-section,
+    .message-card,
+    .quick-actions,
+    .search-bar {
+        padding: 8px !important;
+        margin-bottom: var(--mobile-gap) !important;
+    }
+
+    .task-item {
+        padding: 8px !important;
+    }
+
+    .cta-button,
+    .button,
+    button {
+        padding: 10px 14px !important;
+        font-size: 13px !important;
+    }
+
+    h1 {
+        font-size: 18px !important;
+    }
+
+    h2 {
+        font-size: 16px !important;
+    }
+
+    h3 {
+        font-size: 14px !important;
+    }
+
+    /* Статистика в одну колонку на очень маленьких экранах */
+    .stats-content {
+        grid-template-columns: 1fr;
+    }
+}
+
