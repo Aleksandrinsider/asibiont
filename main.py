@@ -3325,7 +3325,7 @@ async def api_partners_handler(request):
 
 
 async def api_elite_partners_handler(request):
-    """Get ALL Gold partners for Gold users (Premium status filter)"""
+    """Get ALL Premium partners for Premium users (Premium status filter)"""
     def pluralize_task(count):
         """РЎРєР»РѕРЅРµРЅРёРµ СЃР»РѕРІР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
         last_digit = count % 10
@@ -3741,7 +3741,7 @@ async def api_elite_partners_handler(request):
 
             partners_data.sort(key=sort_key)
 
-            logger.info(f"Returning {len(partners_data)} elite (Gold) partners for user {user_id}")
+            logger.info(f"Returning {len(partners_data)} elite (Premium) partners for user {user_id}")
             return web.json_response({'partners': partners_data})
 
         finally:
