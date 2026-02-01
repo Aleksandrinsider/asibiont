@@ -6063,7 +6063,7 @@
         function copyReferralLink(link) {
             navigator.clipboard.writeText(link).then(function() {
                 // Показываем уведомление об успешном копировании
-                showErrorNotification('Реферальная ссылка скопирована!', 'error', 5000);
+                showErrorNotification('Реферальная ссылка скопирована!', 'info', 5000);
             }).catch(function(err) {
                 console.error('Ошибка копирования: ', err);
                 // Fallback для старых браузеров
@@ -6073,7 +6073,7 @@
                 textArea.select();
                 try {
                     document.execCommand('copy');
-                    showErrorNotification('Реферальная ссылка скопирована!', 'error', 5000);
+                    showErrorNotification('Реферальная ссылка скопирована!', 'info', 5000);
                 } catch (fallbackErr) {
                     console.error('Fallback копирования тоже не сработал: ', fallbackErr);
                     showErrorNotification('Не удалось скопировать ссылку', 'error', 3000);
