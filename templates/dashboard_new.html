@@ -647,7 +647,7 @@
                             </div>
                             <p>Город: {{ profile.city or 'Не указан' }}</p>
                             {% if profile.birthdate %}
-                            <p>День рождения: {{ profile.birthdate }}</p>
+                            <p>День рождения: {{ profile.birthdate }} ({{ ((current_date | strptime('%d.%m.%Y')).year - (profile.birthdate | strptime('%d.%m.%Y')).year - (((current_date | strptime('%d.%m.%Y')).month, (current_date | strptime('%d.%m.%Y')).day) < ((profile.birthdate | strptime('%d.%m.%Y')).month, (profile.birthdate | strptime('%d.%m.%Y')).day)) | int) }} лет)</p>
                             {% else %}
                             <p>День рождения: Не указана</p>
                             {% endif %}
@@ -4357,6 +4357,20 @@
         let currentProfileUsername = null;
         let currentPartnersData = {}; // Store partner access info
         
+        function calculateAge(birthdateStr) {
+            if (!birthdateStr) return null;
+            const parts = birthdateStr.split('.');
+            if (parts.length !== 3) return null;
+            const birthDate = new Date(parts[2], parts[1] - 1, parts[0]);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        }
+        
         async function openContactProfileModal(username, canAccess = true) {
             console.log('openContactProfileModal called:', {username, canAccess, type: typeof username});
             
@@ -4428,7 +4442,9 @@
                     
                     html += `<p style="text-align: left;">Город: ${partner.city || 'Не указан'}</p>`;
                     if (partner.birthdate) {
-                        html += `<p style="text-align: left;">День рождения: ${partner.birthdate}</p>`;
+                        const age = calculateAge(partner.birthdate);
+                        const ageText = age !== null ? ` (${age} лет)` : '';
+                        html += `<p style="text-align: left;">День рождения: ${partner.birthdate}${ageText}</p>`;
                     } else {
                         html += `<p style="text-align: left;">День рождения: Не указана</p>`;
                     }
@@ -5741,7 +5757,15 @@
                         html += '</div>';
                         html += '<p>Город: ' + (data.profile.city || 'Не указан') + '</p>';
                         if (data.profile.birthdate) {
-                            html += '<p>День рождения: ' + data.profile.birthdate + '</p>';
+                            // Calculate age
+                            const birthDate = new Date(data.profile.birthdate);
+                            const today = new Date();
+                            let age = today.getFullYear() - birthDate.getFullYear();
+                            const monthDiff = today.getMonth() - birthDate.getMonth();
+                            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                                age--;
+                            }
+                            html += '<p>День рождения: ' + data.profile.birthdate + ' (' + age + ' лет)</p>';
                         }
                         html += '<p>Компания: ' + (data.profile.company || 'Не указана') + '</p>';
                         html += '<p>Должность: ' + (data.profile.position || 'Не указана') + '</p>';
