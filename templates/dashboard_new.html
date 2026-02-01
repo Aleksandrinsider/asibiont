@@ -195,6 +195,14 @@
         // User timezone from server
         const USER_TIMEZONE = '{{ user_timezone }}';
         
+        // Check if mobile styles applied
+        if (window.innerWidth <= 768) {
+            console.log('Mobile styles should be applied');
+            alert('Mobile detected: width ' + window.innerWidth);
+        } else {
+            console.log('Desktop styles: width ' + window.innerWidth);
+        }
+        
         // Helper function to convert UTC date to user timezone
         function toUserTimezone(date) {
             // Convert to UTC string, then parse in user's timezone
