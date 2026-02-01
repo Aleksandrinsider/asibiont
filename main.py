@@ -32,7 +32,7 @@ load_dotenv()
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher
 
-# РЎРєСЂС‹РІР°РµРј РЅРµРєСЂРёС‚РёС‡РЅС‹Рµ РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёСЏ
+# Скрываем некритичные предупреждения
 warnings.filterwarnings('ignore', message='Couldn\'t find ffmpeg or avconv')
 
 
@@ -41,15 +41,15 @@ def normalize_city(city):
     if not city:
         return None
     city = city.lower().strip()
-    # РњР°РїРїРёРЅРі СЂСѓСЃСЃРєРёС… РЅР°Р·РІР°РЅРёР№ РЅР° Р°РЅРіР»РёР№СЃРєРёРµ
+    # Маппинг русских названий на английские
     city_map = {
-        'РјРѕСЃРєРІР°': 'moscow',
-        'СЃР°РЅРєС‚-РїРµС‚РµСЂР±СѓСЂРі': 'saint petersburg',
-        'РїРµС‚РµСЂР±СѓСЂРі': 'saint petersburg',
+        'москва': 'moscow',
+        'санкт-петербург': 'saint petersburg',
+        'петербург': 'saint petersburg',
         'СЃРїР±': 'saint petersburg',
-        'РµРєР°С‚РµСЂРёРЅР±СѓСЂРі': 'yekaterinburg',
-        'РЅРѕРІРѕСЃРёР±РёСЂСЃРє': 'novosibirsk',
-        'РєР°Р·Р°РЅСЊ': 'kazan'
+        'екатеринбург': 'yekaterinburg',
+        'новосибирск': 'novosibirsk',
+        'казань': 'kazan'
     }
     return city_map.get(city, city)
 
@@ -607,30 +607,30 @@ try:
 
             test_users_data = [
                 # LIGHT tier users
-                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'РњРѕСЃРєРІР°', 'username': 'test1'},
-                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'РЎР°РЅРєС‚-РџРµС‚РµСЂР±СѓСЂРі', 'username': 'test2'},
-                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Р•РєР°С‚РµСЂРёРЅР±СѓСЂРі', 'username': 'test3'},
-                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'РќРѕРІРѕСЃРёР±РёСЂСЃРє', 'username': 'test4'},
+                {'telegram_id': 1001, 'tier': 'LIGHT', 'name': 'Test User 1', 'city': 'РњРѕСЃРєвР°', 'username': 'test1'},
+                {'telegram_id': 1002, 'tier': 'LIGHT', 'name': 'Test User 2', 'city': 'РЎР°наєС‚-РџРµС‚РµСЂР±СѓСЂРі', 'username': 'test2'},
+                {'telegram_id': 1003, 'tier': 'LIGHT', 'name': 'Test User 3', 'city': 'Р•РєР°С‚РµСЂРёна±СѓСЂРі', 'username': 'test3'},
+                {'telegram_id': 1004, 'tier': 'LIGHT', 'name': 'Test User 4', 'city': 'РќРѕвРѕСЃРёР±РёСЂСЃРє', 'username': 'test4'},
                 {'telegram_id': 1005, 'tier': 'LIGHT', 'name': 'Test User 5', 'city': 'РљР°Р·Р°РЅСЊ', 'username': 'test5'},
-                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'РќРёР¶РЅРёР№ РќРѕРІРіРѕСЂРѕРґ', 'username': 'test6'},
+                {'telegram_id': 1006, 'tier': 'LIGHT', 'name': 'Test User 6', 'city': 'РќРёР¶наёР№ РќРѕвРіРѕСЂРѕРґ', 'username': 'test6'},
                 {'telegram_id': 1007, 'tier': 'LIGHT', 'name': 'Test User 7', 'city': 'Р§РµР»СЏР±РёРЅСЃРє', 'username': 'test7'},
                 {'telegram_id': 1008, 'tier': 'LIGHT', 'name': 'Test User 8', 'city': 'РћРјСЃРє', 'username': 'test8'},
 
                 # STANDARD tier users
-                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Р РѕСЃС‚РѕРІ-РЅР°-Р”РѕРЅСѓ', 'username': 'test9'},
+                {'telegram_id': 1009, 'tier': 'STANDARD', 'name': 'Test User 9', 'city': 'Р РѕСЃС‚Рѕв-на°-Р”РѕРЅСѓ', 'username': 'test9'},
                 {'telegram_id': 1010, 'tier': 'STANDARD', 'name': 'Test User 10', 'city': 'РЈС„Р°', 'username': 'test10'},
                 {'telegram_id': 1011, 'tier': 'STANDARD', 'name': 'Test User 11', 'city': 'Р’РѕР»РіРѕРіСЂР°Рґ', 'username': 'test11'},
-                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'РљСЂР°СЃРЅРѕСЏСЂСЃРє', 'username': 'test12'},
-                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Р’РѕСЂРѕРЅРµР¶', 'username': 'test13'},
+                {'telegram_id': 1012, 'tier': 'STANDARD', 'name': 'Test User 12', 'city': 'РљСЂР°СЃнаѕСЏСЂСЃРє', 'username': 'test12'},
+                {'telegram_id': 1013, 'tier': 'STANDARD', 'name': 'Test User 13', 'city': 'Р’РѕСЂРѕнаµР¶', 'username': 'test13'},
                 {'telegram_id': 1014, 'tier': 'STANDARD', 'name': 'Test User 14', 'city': 'РџРµСЂРјСЊ', 'username': 'test14'},
 
                 # PREMIUM tier users
-                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'РљСЂР°СЃРЅРѕРґР°СЂ', 'username': 'test15'},
+                {'telegram_id': 1015, 'tier': 'PREMIUM', 'name': 'Test User 15', 'city': 'РљСЂР°СЃнаѕРґР°СЂ', 'username': 'test15'},
                 {'telegram_id': 1016, 'tier': 'PREMIUM', 'name': 'Test User 16', 'city': 'РўСЋРјРµРЅСЊ', 'username': 'test16'},
-                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Р‘Р°СЂРЅР°СѓР»', 'username': 'test17'},
-                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'РР¶РµРІСЃРє', 'username': 'test18'},
-                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Р’Р»Р°РґРёРІРѕСЃС‚РѕРє', 'username': 'test19'},
-                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'РЇСЂРѕСЃР»Р°РІР»СЊ', 'username': 'test20'},
+                {'telegram_id': 1017, 'tier': 'PREMIUM', 'name': 'Test User 17', 'city': 'Р‘Р°СЂна°СѓР»', 'username': 'test17'},
+                {'telegram_id': 1018, 'tier': 'PREMIUM', 'name': 'Test User 18', 'city': 'РР¶РµвСЃРє', 'username': 'test18'},
+                {'telegram_id': 1019, 'tier': 'PREMIUM', 'name': 'Test User 19', 'city': 'Р’Р»Р°РґРёвРѕСЃС‚РѕРє', 'username': 'test19'},
+                {'telegram_id': 1020, 'tier': 'PREMIUM', 'name': 'Test User 20', 'city': 'РЇСЂРѕСЃР»Р°вР»СЊ', 'username': 'test20'},
             ]
 
             now = datetime.now()
@@ -697,8 +697,8 @@ try:
                     # Task from user 1002 delegated to user 1001
                     task1 = Task(
                         user_id=user_1002.id,
-                        title="РџРѕРґРіРѕС‚РѕРІРёС‚СЊ РїСЂРµР·РµРЅС‚Р°С†РёСЋ РґР»СЏ РєР»РёРµРЅС‚Р°",
-                        description="РЎРѕР·РґР°С‚СЊ РїСЂРµР·РµРЅС‚Р°С†РёСЋ Рѕ РЅР°С€РёС… СѓСЃР»СѓРіР°С…",
+                        title="РџРѕРґРіРѕС‚РѕвРёС‚СЊ РїСЂРµР·РµРЅС‚Р°С†РёСЋ РґР»СЏ РєР»РёРµРЅС‚Р°",
+                        description="РЎРѕР·РґР°С‚СЊ РїСЂРµР·РµРЅС‚Р°С†РёСЋ Рѕ на°С€РёС… СѓСЃР»СѓРіР°С…",
                         status="pending",
                         created_at=now,
                         delegated_to_username=user_1001.username,
@@ -711,8 +711,8 @@ try:
                     # Task from user 1003 delegated to user 1001
                     task2 = Task(
                         user_id=user_1003.id,
-                        title="РџСЂРѕРІРµСЂРёС‚СЊ РєРѕРґ РЅР° РѕС€РёР±РєРё",
-                        description="Р РµРІСЊСЋ РєРѕРґР° РґР»СЏ РЅРѕРІРѕРіРѕ РјРѕРґСѓР»СЏ",
+                        title="РџСЂРѕвРµСЂРёС‚СЊ РєРѕРґ на° РѕС€РёР±РєРё",
+                        description="Р РµвСЊСЋ РєРѕРґР° РґР»СЏ наѕвРѕРіРѕ РјРѕРґСѓР»СЏ",
                         status="pending",
                         created_at=now,
                         delegated_to_username=user_1001.username,
@@ -725,8 +725,8 @@ try:
                 if user_1001 and user_1002:
                     task3 = Task(
                         user_id=user_1001.id,
-                        title="РћСЂРіР°РЅРёР·РѕРІР°С‚СЊ РІСЃС‚СЂРµС‡Сѓ СЃ РєРѕРјР°РЅРґРѕР№",
-                        description="Р—Р°РїР»Р°РЅРёСЂРѕРІР°С‚СЊ РµР¶РµРЅРµРґРµР»СЊРЅСѓСЋ РІСЃС‚СЂРµС‡Сѓ",
+                        title="РћСЂРіР°наёР·РѕвР°С‚СЊ вСЃС‚СЂРµС‡Сѓ СЃ РєРѕРјР°наґРѕР№",
+                        description="Р—Р°РїР»Р°наёСЂРѕвР°С‚СЊ РµР¶РµнаµРґРµР»СЊРЅСѓСЋ вСЃС‚СЂРµС‡Сѓ",
                         status="pending",
                         created_at=now,
                         delegated_to_username=user_1002.username,
@@ -827,49 +827,49 @@ def save_context_to_db(user_id, user_message, ai_message):
 
 async def get_timezone_from_ip(ip_address):
     """РћРїСЂРµРґРµР»СЏРµС‚ timezone РїРѕ IP Р°РґСЂРµСЃСѓ С‡РµСЂРµР· ipapi.co"""
-    # РњР°РїРїРёРЅРі Р°РЅРіР»РёР№СЃРєРёС… РЅР°Р·РІР°РЅРёР№ РіРѕСЂРѕРґРѕРІ РЅР° СЂСѓСЃСЃРєРёРµ
+    # РњР°РїРїРёнаі Р°наіР»РёР№СЃРєРёС… на°Р·вР°наёР№ РіРѕСЂРѕРґРѕв на° СЂСѓСЃСЃРєРёРµ
     city_mapping = {
-        'Moscow': 'РњРѕСЃРєРІР°',
-        'Saint Petersburg': 'РЎР°РЅРєС‚-РџРµС‚РµСЂР±СѓСЂРі',
+        'Moscow': 'РњРѕСЃРєвР°',
+        'Saint Petersburg': 'РЎР°наєС‚-РџРµС‚РµСЂР±СѓСЂРі',
         'Kazan': 'РљР°Р·Р°РЅСЊ',
-        'Novosibirsk': 'РќРѕРІРѕСЃРёР±РёСЂСЃРє',
-        'Yekaterinburg': 'Р•РєР°С‚РµСЂРёРЅР±СѓСЂРі',
-        'Nizhny Novgorod': 'РќРёР¶РЅРёР№ РќРѕРІРіРѕСЂРѕРґ',
+        'Novosibirsk': 'РќРѕвРѕСЃРёР±РёСЂСЃРє',
+        'Yekaterinburg': 'Р•РєР°С‚РµСЂРёна±СѓСЂРі',
+        'Nizhny Novgorod': 'РќРёР¶наёР№ РќРѕвРіРѕСЂРѕРґ',
         'Chelyabinsk': 'Р§РµР»СЏР±РёРЅСЃРє',
         'Omsk': 'РћРјСЃРє',
         'Samara': 'РЎР°РјР°СЂР°',
-        'Rostov-on-Don': 'Р РѕСЃС‚РѕРІ-РЅР°-Р”РѕРЅСѓ',
+        'Rostov-on-Don': 'Р РѕСЃС‚Рѕв-на°-Р”РѕРЅСѓ',
         'Ufa': 'РЈС„Р°',
-        'Krasnoyarsk': 'РљСЂР°СЃРЅРѕСЏСЂСЃРє',
-        'Voronezh': 'Р’РѕСЂРѕРЅРµР¶',
+        'Krasnoyarsk': 'РљСЂР°СЃнаѕСЏСЂСЃРє',
+        'Voronezh': 'Р’РѕСЂРѕнаµР¶',
         'Perm': 'РџРµСЂРјСЊ',
         'Volgograd': 'Р’РѕР»РіРѕРіСЂР°Рґ',
-        'Krasnodar': 'РљСЂР°СЃРЅРѕРґР°СЂ',
-        'Saratov': 'РЎР°СЂР°С‚РѕРІ',
+        'Krasnodar': 'РљСЂР°СЃнаѕРґР°СЂ',
+        'Saratov': 'РЎР°СЂР°С‚Рѕв',
         'Tyumen': 'РўСЋРјРµРЅСЊ',
         'Tolyatti': 'РўРѕР»СЊСЏС‚С‚Рё',
-        'Izhevsk': 'РР¶РµРІСЃРє',
-        'Barnaul': 'Р‘Р°СЂРЅР°СѓР»',
-        'Ulyanovsk': 'РЈР»СЊСЏРЅРѕРІСЃРє',
+        'Izhevsk': 'РР¶РµвСЃРє',
+        'Barnaul': 'Р‘Р°СЂна°СѓР»',
+        'Ulyanovsk': 'РЈР»СЊСЏнаѕвСЃРє',
         'Irkutsk': 'РСЂРєСѓС‚СЃРє',
-        'Khabarovsk': 'РҐР°Р±Р°СЂРѕРІСЃРє',
-        'Vladivostok': 'Р’Р»Р°РґРёРІРѕСЃС‚РѕРє',
-        'Yaroslavl': 'РЇСЂРѕСЃР»Р°РІР»СЊ',
+        'Khabarovsk': 'РҐР°Р±Р°СЂРѕвСЃРє',
+        'Vladivostok': 'Р’Р»Р°РґРёвРѕСЃС‚РѕРє',
+        'Yaroslavl': 'РЇСЂРѕСЃР»Р°вР»СЊ',
         'Vladimir': 'Р’Р»Р°РґРёРјРёСЂ',
-        'Ivanovo': 'РРІР°РЅРѕРІРѕ',
+        'Ivanovo': 'РвР°наѕвРѕ',
         'Bryansk': 'Р‘СЂСЏРЅСЃРє',
         'Smolensk': 'РЎРјРѕР»РµРЅСЃРє',
         'Kaluga': 'РљР°Р»СѓРіР°',
         'Tula': 'РўСѓР»Р°',
         'Ryazan': 'Р СЏР·Р°РЅСЊ',
-        'Moscow Oblast': 'РњРѕСЃРєРѕРІСЃРєР°СЏ РѕР±Р»Р°СЃС‚СЊ',
-        'Leningrad Oblast': 'Р›РµРЅРёРЅРіСЂР°РґСЃРєР°СЏ РѕР±Р»Р°СЃС‚СЊ'
+        'Moscow Oblast': 'РњРѕСЃРєРѕвСЃРєР°СЏ РѕР±Р»Р°СЃС‚СЊ',
+        'Leningrad Oblast': 'Р›РµнаёнаіСЂР°РґСЃРєР°СЏ РѕР±Р»Р°СЃС‚СЊ'
     }
 
     try:
-        # РРіРЅРѕСЂРёСЂСѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ IP
+        # РРінаѕСЂРёСЂСѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ IP
         if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
-            return 'Europe/Moscow', 'РњРѕСЃРєРІР°'  # РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РґР»СЏ Р»РѕРєР°Р»СЊРЅС‹С…
+            return 'Europe/Moscow', 'РњРѕСЃРєвР°'  # РџРѕ СѓРјРѕР»С‡Р°наёСЋ РґР»СЏ Р»РѕРєР°Р»СЊРЅС‹С…
 
         async with aiohttp.ClientSession() as session:
             async with session.get(f'https://ipapi.co/{ip_address}/json/', timeout=aiohttp.ClientTimeout(total=3)) as response:
@@ -878,7 +878,7 @@ async def get_timezone_from_ip(ip_address):
                     timezone = data.get('timezone')
                     city = data.get('city')
 
-                    # РџСЂРµРѕР±СЂР°Р·СѓРµРј Р°РЅРіР»РёР№СЃРєРѕРµ РЅР°Р·РІР°РЅРёРµ РіРѕСЂРѕРґР° РІ СЂСѓСЃСЃРєРѕРµ, РµСЃР»Рё РµСЃС‚СЊ РІ РјР°РїРїРёРЅРіРµ
+                    # РџСЂРµРѕР±СЂР°Р·СѓРµРј Р°наіР»РёР№СЃРєРѕРµ на°Р·вР°наёРµ РіРѕСЂРѕРґР° в СЂСѓСЃСЃРєРѕРµ, РµСЃР»Рё РµСЃС‚СЊ в РјР°РїРїРёнаіРµ
                     if city and city in city_mapping:
                         city = city_mapping[city]
 
@@ -890,7 +890,7 @@ async def get_timezone_from_ip(ip_address):
 
 
 async def get_user_avatar_url(bot, user_id, force_refresh=False):
-    """РџРѕР»СѓС‡Р°РµС‚ URL Р°РІР°С‚Р°СЂР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РёР· Telegram РёР»Рё Р‘Р”
+    """РџРѕР»СѓС‡Р°РµС‚ URL Р°вР°С‚Р°СЂР° РїРѕР»СЊР·РѕвР°С‚РµР»СЏ РёР· Telegram РёР»Рё Р‘Р”
     
     Args:
         bot: Telegram bot instance
@@ -903,12 +903,12 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
         try:
             user = db.query(User).filter(User.telegram_id == user_id).first()
             
-            # Р•СЃР»Рё РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ Рё РµСЃС‚СЊ РєСЌС€РёСЂРѕРІР°РЅРЅС‹Р№ Р°РІР°С‚Р°СЂ, РІРѕР·РІСЂР°С‰Р°РµРј РµРіРѕ
+            # Р•СЃР»Рё наµ С‚СЂРµР±СѓРµС‚СЃСЏ РїСЂРёРЅСѓРґРёС‚РµР»СЊнаѕРµ РѕР±наѕвР»РµнаёРµ Рё РµСЃС‚СЊ РєСЌС€РёСЂРѕвР°наЅС‹Р№ Р°вР°С‚Р°СЂ, вРѕР·вСЂР°С‰Р°РµРј РµРіРѕ
             if not force_refresh and user and user.photo_url:
                 logger.debug(f"Returning cached avatar for user {user_id}")
                 return user.photo_url
             
-            # Р—Р°РіСЂСѓР¶Р°РµРј СЃРІРµР¶РёР№ Р°РІР°С‚Р°СЂ РёР· Telegram
+            # Р—Р°РіСЂСѓР¶Р°РµРј СЃвРµР¶РёР№ Р°вР°С‚Р°СЂ РёР· Telegram
             if bot:
                 try:
                     photos = await bot.get_user_profile_photos(user_id, limit=1)
@@ -916,7 +916,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                         file = await bot.get_file(photos.photos[0][-1].file_id)
                         avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         
-                        # РЎРѕС…СЂР°РЅСЏРµРј РІ Р‘Р” РґР»СЏ РєСЌС€РёСЂРѕРІР°РЅРёСЏ
+                        # РЎРѕС…СЂР°РЅСЏРµРј в Р‘Р” РґР»СЏ РєСЌС€РёСЂРѕвР°наёСЏ
                         if user:
                             user.photo_url = avatar_url
                             db.commit()
@@ -936,7 +936,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
 
 
 def check_telegram_authentication(data):
-    # РџСЂРѕРІРµСЂРєР° Р°РІС‚РѕСЂРёР·Р°С†РёРё РѕС‚ Telegram
+    # РџСЂРѕвРµСЂРєР° Р°вС‚РѕСЂРёР·Р°С†РёРё РѕС‚ Telegram
     token = TELEGRAM_TOKEN
     if token.startswith('bot'):
         token = token[3:]  # Remove 'bot' prefix
@@ -952,7 +952,7 @@ async def health_handler(request):
 
 
 async def login_handler(request):
-    """РЎС‚СЂР°РЅРёС†Р° Р°РІС‚РѕСЂРёР·Р°С†РёРё"""
+    """РЎС‚СЂР°наёС†Р° Р°вС‚РѕСЂРёР·Р°С†РёРё"""
     session = await get_session(request)
     user_id = session.get('user_id')
 
@@ -962,7 +962,7 @@ async def login_handler(request):
         session.pop('history_cleared_timestamp', None)
         user_id = None
 
-    # Р•СЃР»Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓР¶Рµ Р·Р°Р»РѕРіРёРЅРµРЅ, СЂРµРґРёСЂРµРєС‚РёРј РЅР° dashboard
+    # Р•СЃР»Рё РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СѓР¶Рµ Р·Р°Р»РѕРіРёнаµРЅ, СЂРµРґРёСЂРµРєС‚РёРј на° dashboard
     if user_id:
         try:
             user_id = int(user_id)
@@ -970,11 +970,11 @@ async def login_handler(request):
         except (ValueError, TypeError):
             pass
 
-    # РџРѕРєР°Р·С‹РІР°РµРј СЃС‚СЂР°РЅРёС†Сѓ Р°РІС‚РѕСЂРёР·Р°С†РёРё
+    # РџРѕРєР°Р·С‹вР°РµРј СЃС‚СЂР°наёС†Сѓ Р°вС‚РѕСЂРёР·Р°С†РёРё
     bot_user = TELEGRAM_BOT_USERNAME.replace(
         '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
     
-    # Р¤РѕСЂРјРёСЂСѓРµРј auth_url РґР»СЏ РІРёРґР¶РµС‚Р° Telegram
+    # Р¤РѕСЂРјРёСЂСѓРµРј auth_url РґР»СЏ вРёРґР¶РµС‚Р° Telegram
     base_url = str(request.url.origin())
     auth_url = f"{base_url}/tg_auth"
     
@@ -1086,7 +1086,7 @@ async def auth_handler(request):
                 logger.error(f"Database error in auth_handler: {e}", exc_info=True)
                 if session_db:
                     session_db.rollback()
-                return web.Response(text='РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ Рє Р±Р°Р·Рµ РґР°РЅРЅС‹С…. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.', status=500)
+                return web.Response(text='РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµнаёСЏ Рє Р±Р°Р·Рµ РґР°наЅС‹С…. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.', status=500)
             finally:
                 if session_db:
                     session_db.close()
@@ -1132,7 +1132,7 @@ async def dashboard_handler(request):
         #     # Redirect to login page instead of showing login in dashboard
         #     return web.HTTPFound('/')
 
-        # РџРѕР»СѓС‡РёС‚СЊ Р·Р°РґР°С‡Рё РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+        # РџРѕР»СѓС‡РёС‚СЊ Р·Р°РґР°С‡Рё РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
         session_db = Session()
         try:
             # TEMPORARILY USE A TEST USER FOR TESTING
@@ -1173,21 +1173,21 @@ async def dashboard_handler(request):
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
             
-            # РџСЂРѕРІРµСЂРёС‚СЊ РїРѕРґРїРёСЃРєСѓ
+            # РџСЂРѕвРµСЂРёС‚СЊ РїРѕРґРїРёСЃРєСѓ
             subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
 
-            # РџСЂРѕРІРµСЂРёС‚СЊ Рё РѕР±РЅРѕРІРёС‚СЊ СЃС‚Р°С‚СѓСЃ РёСЃС‚РµРєС€РёС… РїРѕРґРїРёСЃРѕРє
+            # РџСЂРѕвРµСЂРёС‚СЊ Рё РѕР±наѕвРёС‚СЊ СЃС‚Р°С‚СѓСЃ РёСЃС‚РµРєС€РёС… РїРѕРґРїРёСЃРѕРє
             if subscription and subscription.status == 'active' and subscription.end_date:
                 now = datetime.now(pytz.UTC)
                 if subscription.end_date.tzinfo is None:
                     subscription.end_date = subscription.end_date.replace(tzinfo=pytz.UTC)
                 if subscription.end_date < now:
                     subscription.status = 'expired'
-                    # user.subscription_tier = SubscriptionTier.LIGHT  # РЎР±СЂРѕСЃРёС‚СЊ С‚Р°СЂРёС„ РЅР° Р±СЂРѕРЅР·Сѓ РїСЂРё РёСЃС‚РµС‡РµРЅРёРё - СѓР±СЂР°РЅРѕ РїРѕ РїСЂРѕСЃСЊР±Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+                    # user.subscription_tier = SubscriptionTier.LIGHT  # РЎР±СЂРѕСЃРёС‚СЊ С‚Р°СЂРёС„ на° Р±СЂРѕна·Сѓ РїСЂРё РёСЃС‚РµС‡РµнаёРё - СѓР±СЂР°наѕ РїРѕ РїСЂРѕСЃСЊР±Рµ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
                     session_db.commit()
                     logger.info(f"Subscription {subscription.id} expired, status set to 'expired'")
 
-            # РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ С‚Р°СЂРёС„ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ СЃ Р°РєС‚РёРІРЅРѕР№ РїРѕРґРїРёСЃРєРѕР№
+            # РЎРёРЅС…СЂРѕнаёР·РёСЂРѕвР°С‚СЊ С‚Р°СЂРёС„ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ СЃ Р°РєС‚РёвнаѕР№ РїРѕРґРїРёСЃРєРѕР№
             if subscription and subscription.status == 'active' and subscription.tier:
                 sub_tier = subscription.tier.value if hasattr(subscription.tier, 'value') else str(subscription.tier).upper()
                 user_tier = user.subscription_tier.value if user.subscription_tier else None
@@ -1206,7 +1206,7 @@ async def dashboard_handler(request):
             logger.info(
                 f"Subscription found: {subscription.id if subscription else None}, status: {subscription.status if subscription else None}, end_date: {subscription.end_date if subscription else None}, tier: {subscription.tier if subscription else None}, user_tier: {user.subscription_tier.value if user.subscription_tier else None}")
 
-            # Р’ FREE_ACCESS_MODE РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ Р°РєС‚РёРІРЅР°СЏ РїРѕРґРїРёСЃРєР°
+            # Р’ FREE_ACCESS_MODE наµ С‚СЂРµР±СѓРµС‚СЃСЏ Р°РєС‚Рёвна°СЏ РїРѕРґРїРёСЃРєР°
             from config import FREE_ACCESS_MODE
             if not FREE_ACCESS_MODE and (not subscription or subscription.status != 'active'):
                 logger.info("No active subscription, redirecting to subscription_tiers")
@@ -1223,13 +1223,13 @@ async def dashboard_handler(request):
                 logger.info(f"Task {task.id}: {task.title} (user_id: {task.user_id})")
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
 
-            # РџСЂРѕРІРµСЂСЏРµРј timestamp РѕС‡РёСЃС‚РєРё РёСЃС‚РѕСЂРёРё РёР· Р‘Р”
+            # РџСЂРѕвРµСЂСЏРµРј timestamp РѕС‡РёСЃС‚РєРё РёСЃС‚РѕСЂРёРё РёР· Р‘Р”
             history_cleared_timestamp = None
             if user.history_cleared_at:
                 history_cleared_timestamp = user.history_cleared_at.timestamp()
                 logger.info(f"History cleared timestamp from DB: {history_cleared_timestamp}")
 
-            # Р‘РµСЂРµРј РїРѕСЃР»РµРґРЅРёРµ 50 СЃРѕРѕР±С‰РµРЅРёР№, РЅРѕ С„РёР»СЊС‚СЂСѓРµРј РїРѕ timestamp РѕС‡РёСЃС‚РєРё
+            # Р‘РµСЂРµРј РїРѕСЃР»РµРґнаёРµ 50 СЃРѕРѕР±С‰РµнаёР№, наѕ С„РёР»СЊС‚СЂСѓРµРј РїРѕ timestamp РѕС‡РёСЃС‚РєРё
             if user:
                 all_interactions = list(
                     reversed(
@@ -1237,14 +1237,14 @@ async def dashboard_handler(request):
                             user_id=user.id).order_by(
                             Interaction.id.desc()).limit(50).all()))
                 if history_cleared_timestamp:
-                    # Р¤РёР»СЊС‚СЂСѓРµРј С‚РѕР»СЊРєРѕ СЃРѕРѕР±С‰РµРЅРёСЏ РїРѕСЃР»Рµ РѕС‡РёСЃС‚РєРё
+                    # Р¤РёР»СЊС‚СЂСѓРµРј С‚РѕР»СЊРєРѕ СЃРѕРѕР±С‰РµнаёСЏ РїРѕСЃР»Рµ РѕС‡РёСЃС‚РєРё
                     filtered_interactions = []
                     for i in all_interactions:
                         try:
                             # Р•СЃР»Рё created_at naive (Р±РµР· tzinfo), СЃС‡РёС‚Р°РµРј РµРіРѕ UTC Рё РїСЂРѕСЃС‚Рѕ Р±РµСЂРµРј timestamp
                             # Р•СЃР»Рё СЃ tzinfo, РёСЃРїРѕР»СЊР·СѓРµРј РµРіРѕ timestamp
                             if i.created_at.tzinfo is None:
-                                # Naive datetime - РёРЅС‚РµСЂРїСЂРµС‚РёСЂСѓРµРј РєР°Рє UTC РЅР°РїСЂСЏРјСѓСЋ С‡РµСЂРµР· replace
+                                # Naive datetime - РёРЅС‚РµСЂРїСЂРµС‚РёСЂСѓРµРј РєР°Рє UTC на°РїСЂСЏРјСѓСЋ С‡РµСЂРµР· replace
                                 interaction_ts = i.created_at.replace(tzinfo=dt_timezone.utc).timestamp()
                             else:
                                 interaction_ts = i.created_at.timestamp()
@@ -1256,7 +1256,7 @@ async def dashboard_handler(request):
                                 filtered_interactions.append(i)
                         except Exception as e:
                             logger.error(f"Error processing interaction {i.id} timestamp: {e}")
-                            # Р’ СЃР»СѓС‡Р°Рµ РѕС€РёР±РєРё РќР• РІРєР»СЋС‡Р°РµРј СЃРѕРѕР±С‰РµРЅРёРµ (Р±РµР·РѕРїР°СЃРЅРµРµ СЃРєСЂС‹С‚СЊ)
+                            # Р’ СЃР»СѓС‡Р°Рµ РѕС€РёР±РєРё РќР• вРєР»СЋС‡Р°РµРј СЃРѕРѕР±С‰РµнаёРµ (Р±РµР·РѕРїР°СЃнаµРµ СЃРєСЂС‹С‚СЊ)
 
                     interactions = filtered_interactions
                     logger.info(
@@ -1273,12 +1273,12 @@ async def dashboard_handler(request):
             user_subscription_tier = user.subscription_tier if user and user.subscription_tier else SubscriptionTier.LIGHT
             display_tier = user_subscription_tier.value if user_subscription_tier else 'LIGHT'
 
-            # РџРѕР»СѓС‡РёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹ РїРѕ РґРµР»РµРіРёСЂРѕРІР°РЅРёСЋ
-            delegating_to_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕРІР°Р»Рё РјРЅРµ Р·Р°РґР°С‡Рё
-            delegating_by_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕРІР°Р» Р·Р°РґР°С‡Рё
+            # РџРѕР»СѓС‡РёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹ РїРѕ РґРµР»РµРіРёСЂРѕвР°наёСЋ
+            delegating_to_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё
+            delegating_by_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
 
             try:
-                # РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РёР·Р±СЂР°РЅРЅС‹С… РєРѕРЅС‚Р°РєС‚РѕРІ
+                # РџРѕР»СѓС‡РёС‚СЊ СЃРїРёСЃРѕРє РёР·Р±СЂР°наЅС‹С… РєРѕРЅС‚Р°РєС‚Рѕв
                 favorite_contacts = []
                 if profile and profile.favorite_contacts:
                     try:
@@ -1287,7 +1287,7 @@ async def dashboard_handler(request):
                     except json.JSONDecodeError:
                         favorite_contacts = []
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕРІР°Р»Рё РјРЅРµ Р·Р°РґР°С‡Рё (СЏ РїРѕР»СѓС‡Р°СЋ Р·Р°РґР°С‡Рё РѕС‚ РЅРёС…)
+                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё (СЏ РїРѕР»СѓС‡Р°СЋ Р·Р°РґР°С‡Рё РѕС‚ наёС…)
                 delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_to_username.ilike(user.username.replace('@', '')),
                     Task.delegation_status.in_(['pending', 'accepted']),
@@ -1308,38 +1308,38 @@ async def dashboard_handler(request):
                                 'id': delegator.id,
                                 'username': delegator.username,
                                 'first_name': delegator.first_name,
-                                'reason': f'РґРµР»РµРіРёСЂРѕРІР°Р» {task_count} Р·Р°РґР°С‡',
+                                'reason': f'РґРµР»РµРіРёСЂРѕвР°Р» {task_count} Р·Р°РґР°С‡',
                                 'tasks': task_titles,
                                 'task_count': task_count
                             })
 
-                # Р”РѕР±Р°РІРёС‚СЊ РёР·Р±СЂР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹, Сѓ РєРѕС‚РѕСЂС‹С… РІСЃРµ Р·Р°РґР°С‡Рё РѕС‚РєР»РѕРЅРµРЅС‹, РЅРѕ РєРѕРЅС‚Р°РєС‚ РІ РёР·Р±СЂР°РЅРЅРѕРј
+                # Р”РѕР±Р°вРёС‚СЊ РёР·Р±СЂР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹, Сѓ РєРѕС‚РѕСЂС‹С… вСЃРµ Р·Р°РґР°С‡Рё РѕС‚РєР»РѕнаµРЅС‹, наѕ РєРѕРЅС‚Р°РєС‚ в РёР·Р±СЂР°наЅРѕРј
                 for favorite_username in favorite_contacts:
                     favorite_user = session_db.query(User).filter(
                         User.username.ilike(favorite_username)
                     ).first()
                     
                     if favorite_user and favorite_user.id != user.id and favorite_user.id not in delegator_ids:
-                        # РџСЂРѕРІРµСЂРёС‚СЊ, Р±С‹Р»Рё Р»Рё Сѓ СЌС‚РѕРіРѕ РєРѕРЅС‚Р°РєС‚Р° Р·Р°РґР°С‡Рё (РІРєР»СЋС‡Р°СЏ РѕС‚РєР»РѕРЅРµРЅРЅС‹Рµ)
+                        # РџСЂРѕвРµСЂРёС‚СЊ, Р±С‹Р»Рё Р»Рё Сѓ СЌС‚РѕРіРѕ РєРѕРЅС‚Р°РєС‚Р° Р·Р°РґР°С‡Рё (вРєР»СЋС‡Р°СЏ РѕС‚РєР»РѕнаµнаЅС‹Рµ)
                         all_tasks_from_favorite = session_db.query(Task).filter(
                             Task.user_id == favorite_user.id,
                             Task.delegated_to_username.ilike(user.username.replace('@', ''))
                         ).all()
                         
                         if all_tasks_from_favorite:
-                            # Р•СЃС‚СЊ РёСЃС‚РѕСЂРёСЏ РґРµР»РµРіРёСЂРѕРІР°РЅРёСЏ - РґРѕР±Р°РІР»СЏРµРј РІ СЃРїРёСЃРѕРє
+                            # Р•СЃС‚СЊ РёСЃС‚РѕСЂРёСЏ РґРµР»РµРіРёСЂРѕвР°наёСЏ - РґРѕР±Р°вР»СЏРµРј в СЃРїРёСЃРѕРє
                             rejected_count = sum(1 for t in all_tasks_from_favorite if t.status == 'rejected')
                             if rejected_count > 0:
                                 delegating_to_me.append({
                                     'id': favorite_user.id,
                                     'username': favorite_user.username,
                                     'first_name': favorite_user.first_name,
-                                    'reason': 'РІ РёР·Р±СЂР°РЅРЅРѕРј',
+                                    'reason': 'в РёР·Р±СЂР°наЅРѕРј',
                                     'tasks': [],
                                     'task_count': 0
                                 })
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕРІР°Р» Р·Р°РґР°С‡Рё
+                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
                 my_delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
@@ -1365,16 +1365,16 @@ async def dashboard_handler(request):
                                 'id': delegatee.id,
                                 'username': delegatee.username,
                                 'first_name': delegatee.first_name,
-                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕРІР°Р» {task_count} Р·Р°РґР°С‡',
+                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕвР°Р» {task_count} Р·Р°РґР°С‡',
                                 'tasks': task_titles,
                                 'task_count': task_count
                             })
 
-                # Р”РѕР±Р°РІР»СЏРµРј СЂРµРєРѕРјРµРЅРґРѕРІР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ РґР»СЏ РІСЃРµС… РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
-                # РџРѕР»СѓС‡Р°РµРј РІСЃРµ СЂРµРєРѕРјРµРЅРґРѕРІР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
+                # Р”РѕР±Р°вР»СЏРµРј СЂРµРєРѕРјРµнаґРѕвР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ РґР»СЏ вСЃРµС… РїРѕР»СЊР·РѕвР°С‚РµР»РµР№
+                # РџРѕР»СѓС‡Р°РµРј вСЃРµ СЂРµРєРѕРјРµнаґРѕвР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
                 all_partners = get_partners_list(user.id, session_db)
                 
-                # Р”РѕР±Р°РІР»СЏРµРј РєРѕРЅС‚Р°РєС‚С‹, РєРѕС‚РѕСЂС‹Рµ РµС‰Рµ РЅРµ РІ СЃРїРёСЃРєР°С… РґРµР»РµРіРёСЂРѕРІР°РЅРёСЏ
+                # Р”РѕР±Р°вР»СЏРµРј РєРѕРЅС‚Р°РєС‚С‹, РєРѕС‚РѕСЂС‹Рµ РµС‰Рµ наµ в СЃРїРёСЃРєР°С… РґРµР»РµРіРёСЂРѕвР°наёСЏ
                 existing_contact_ids = set()
                 for contact in delegating_to_me + delegating_by_me:
                     existing_contact_ids.add(contact['id'])
@@ -1382,20 +1382,20 @@ async def dashboard_handler(request):
                 for partner in all_partners:
                     partner_user = session_db.query(User).filter_by(id=partner.user_id).first()
                     if partner_user and partner_user.id not in existing_contact_ids and partner_user.id != user.id:
-                        # РћРїСЂРµРґРµР»СЏРµРј РїСЂРёС‡РёРЅСѓ СЂРµРєРѕРјРµРЅРґР°С†РёРё
+                        # РћРїСЂРµРґРµР»СЏРµРј РїСЂРёС‡РёРЅСѓ СЂРµРєРѕРјРµнаґР°С†РёРё
                         reason_parts = []
                         if hasattr(partner, 'common_interests') and partner.common_interests:
                             reason_parts.append(f"РѕР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹: {partner.common_interests}")
                         if hasattr(partner, 'common_skills') and partner.common_skills:
-                            reason_parts.append(f"РѕР±С‰РёРµ РЅР°РІС‹РєРё: {partner.common_skills}")
+                            reason_parts.append(f"РѕР±С‰РёРµ на°вС‹РєРё: {partner.common_skills}")
                         if hasattr(partner, 'common_goals') and partner.common_goals:
                             reason_parts.append(f"РѕР±С‰РёРµ С†РµР»Рё: {partner.common_goals}")
                         if hasattr(partner, 'task_relevance') and partner.task_relevance:
                             reason_parts.append(partner.task_relevance)
                         
-                        reason = ', '.join(reason_parts) if reason_parts else 'СЂРµРєРѕРјРµРЅРґРѕРІР°РЅ СЃРёСЃС‚РµРјРѕР№'
+                        reason = ', '.join(reason_parts) if reason_parts else 'СЂРµРєРѕРјРµнаґРѕвР°РЅ СЃРёСЃС‚РµРјРѕР№'
                         
-                        # Р”РѕР±Р°РІР»СЏРµРј РІ delegating_to_me РєР°Рє СЂРµРєРѕРјРµРЅРґРѕРІР°РЅРЅС‹Р№ РєРѕРЅС‚Р°РєС‚
+                        # Р”РѕР±Р°вР»СЏРµРј в delegating_to_me РєР°Рє СЂРµРєРѕРјРµнаґРѕвР°наЅС‹Р№ РєРѕРЅС‚Р°РєС‚
                         delegating_to_me.append({
                             'id': partner_user.id,
                             'username': partner_user.username,
@@ -1418,7 +1418,7 @@ async def dashboard_handler(request):
                 delegating_to_me = []
                 delegating_by_me = []
 
-            # РџРѕР»СѓС‡РёС‚СЊ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
+            # РџРѕР»СѓС‡РёС‚СЊ Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹
             blocked_contacts = []
             try:
                 if profile and profile.blocked_contacts:
@@ -1431,7 +1431,7 @@ async def dashboard_handler(request):
                                 'username': blocked_user.username,
                                 'first_name': blocked_user.first_name,
                                 'photo_url': blocked_user.photo_url,
-                                'reason': 'Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹Р№ РєРѕРЅС‚Р°РєС‚'
+                                'reason': 'Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹Р№ РєРѕРЅС‚Р°РєС‚'
                             })
             except Exception as e:
                 logger.error(f"Error getting blocked contacts: {e}")
@@ -1473,7 +1473,7 @@ async def dashboard_handler(request):
             user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
             user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
 
-            # РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚РѕРІ, СЃ РєРѕС‚РѕСЂС‹РјРё СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ
+            # РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚Рѕв, СЃ РєРѕС‚РѕСЂС‹РјРё СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ
             contacted_usernames = set()
             for interaction in interactions:
                 mentions = re.findall(r'@(\w+)', interaction.content)
@@ -1517,13 +1517,13 @@ async def dashboard_handler(request):
                     if username in contacted_usernames:
                         reasons.append('СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ')
                 if p.common_skills:
-                    reasons.append('РѕР±С‰РёРµ РЅР°РІС‹РєРё')
+                    reasons.append('РѕР±С‰РёРµ на°вС‹РєРё')
                 if p.common_interests:
                     reasons.append('РѕР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹')
                 if p.common_goals:
                     reasons.append('РѕР±С‰РёРµ С†РµР»Рё')
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('РёР· РІР°С€РµРіРѕ РіРѕСЂРѕРґР°')
+                    reasons.append('РёР· вР°С€РµРіРѕ РіРѕСЂРѕРґР°')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'РїРѕРґС…РѕРґСЏС‰РёР№ РєРѕРЅС‚Р°РєС‚'
 
         # Add photo_url to partners
@@ -1552,17 +1552,17 @@ async def dashboard_handler(request):
         current_time = user_now.strftime('%H:%M')
 
         months = [
-            'СЏРЅРІР°СЂСЏ',
-            'С„РµРІСЂР°Р»СЏ',
+            'СЏнаІР°СЂСЏ',
+            'С„РµвСЂР°Р»СЏ',
             'РјР°СЂС‚Р°',
             'Р°РїСЂРµР»СЏ',
             'РјР°СЏ',
             'РёСЋРЅСЏ',
             'РёСЋР»СЏ',
-            'Р°РІРіСѓСЃС‚Р°',
+            'Р°вРіСѓСЃС‚Р°',
             'СЃРµРЅС‚СЏР±СЂСЏ',
             'РѕРєС‚СЏР±СЂСЏ',
-            'РЅРѕСЏР±СЂСЏ',
+            'наѕСЏР±СЂСЏ',
             'РґРµРєР°Р±СЂСЏ']
         current_date = user_now.strftime('%d.%m.%Y')
 
@@ -1580,11 +1580,11 @@ async def dashboard_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task.overdue_text = f"РЅР° {days} РґРЅ."
+                        task.overdue_text = f"на {days} дн."
                     elif hours > 0:
-                        task.overdue_text = f"РЅР° {hours} С‡."
+                        task.overdue_text = f"на {hours} ч."
                     elif minutes > 0:
-                        task.overdue_text = f"РЅР° {minutes} РјРёРЅ."
+                        task.overdue_text = f"на {minutes} мин."
                     else:
                         task.overdue_text = ""
                 else:
@@ -1620,12 +1620,12 @@ async def dashboard_handler(request):
                             user_tz if user.timezone else pytz.UTC) > user_now and task.status == 'pending':
                         reminder_time_local = task.reminder_time.astimezone(
                             user_tz if user.timezone else pytz.UTC).strftime("%H:%M")
-                        upcoming_reminders.append(f"{task.title} РІ {reminder_time_local}")
+                        upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
 
-        # РџСЂРµРѕР±СЂР°Р·СѓРµРј Р·Р°РґР°С‡Рё РІ СЃР»РѕРІР°СЂРё РґР»СЏ JSON СЃРµСЂРёР°Р»РёР·Р°С†РёРё
+        # Преобразуем задачи в словари для JSON сериализации
         tasks_dict = []
         for task in tasks:
-            # РџРѕРґРіРѕС‚РѕРІРёРј reminder_time РІ ISO С„РѕСЂРјР°С‚Рµ РґР»СЏ JavaScript
+            # РџРѕРґРіРѕС‚РѕвРёРј reminder_time в ISO С„РѕСЂРјР°С‚Рµ РґР»СЏ JavaScript
             reminder_time_iso = None
             if task.reminder_time:
                 if task.reminder_time.tzinfo is None:
@@ -1638,7 +1638,7 @@ async def dashboard_handler(request):
                 'title': task.title,
                 'description': decrypt_data(task.description) if task.description else '',
                 'status': task.status,
-                'reminder_time': reminder_time_iso,  # Р”Р»СЏ РіСЂСѓРїРїРёСЂРѕРІРєРё РІ JS
+                'reminder_time': reminder_time_iso,  # Для группировки в JS
                 'reminder_time_local': getattr(task, 'reminder_time_local', None),
                 'overdue': getattr(task, 'overdue', False),
                 'overdue_text': getattr(task, 'overdue_text', None),
@@ -1749,9 +1749,9 @@ async def chat_handler(request):
             user = session_db.query(User).filter_by(telegram_id=user_id).first()
             logger.info(f"User found: {user is not None}")
 
-            # РљР РРўРР§РќРћ: РЎРѕС…СЂР°РЅСЏРµРј СЃРѕРѕР±С‰РµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ Р”Рћ РІС‹Р·РѕРІР° AI
-            # Р­С‚Рѕ РіР°СЂР°РЅС‚РёСЂСѓРµС‚, С‡С‚Рѕ СЃРѕРѕР±С‰РµРЅРёРµ РїРѕСЏРІРёС‚СЃСЏ РІ РёСЃС‚РѕСЂРёРё РґР°Р¶Рµ РµСЃР»Рё AI СѓРїР°РґРµС‚
-            # Р РїСЂРµРґРѕС‚РІСЂР°С‰Р°РµС‚ race condition СЃ РґСѓР±Р»РёРєР°С‚Р°РјРё
+            # РљР РРўРР§РќРћ: РЎРѕС…СЂР°РЅСЏРµРј СЃРѕРѕР±С‰РµнаёРµ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ Р”Рћ вС‹Р·РѕвР° AI
+            # Р­С‚Рѕ РіР°СЂР°РЅС‚РёСЂСѓРµС‚, С‡С‚Рѕ СЃРѕРѕР±С‰РµнаёРµ РїРѕСЏвРёС‚СЃСЏ в РёСЃС‚РѕСЂРёРё РґР°Р¶Рµ РµСЃР»Рё AI СѓРїР°РґРµС‚
+            # Р РїСЂРµРґРѕС‚вСЂР°С‰Р°РµС‚ race condition СЃ РґСѓР±Р»РёРєР°С‚Р°РјРё
             save_context_to_db(user_id, message, None)
             logger.info("User message saved to DB BEFORE AI call")
 
@@ -1838,17 +1838,17 @@ async def api_send_message_handler(request):
                 logger.info(f"[API_SEND_MESSAGE] AI response preview: '{response[:100]}...'")
                 if response is None or response == '':
                     logger.error("[API_SEND_MESSAGE] AI response is empty!")
-                    response = "РР·РІРёРЅРёС‚Рµ, РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ РІР°С€РµРіРѕ Р·Р°РїСЂРѕСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·."
+                    response = "РР·вРёнаёС‚Рµ, РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ вР°С€РµРіРѕ Р·Р°РїСЂРѕСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·."
             except Exception as e:
                 logger.error(f"[API_SEND_MESSAGE] Error calling AI chat: {e}", exc_info=True)
                 return web.json_response({'error': 'AI service error'}, status=500)
 
             # Check if response contains tier restriction error
-            if "Р”РµР»РµРіРёСЂРѕРІР°РЅРёРµ Р·Р°РґР°С‡ РґРѕСЃС‚СѓРїРЅРѕ С‚РѕР»СЊРєРѕ РЅР° С‚Р°СЂРёС„Р°С…" in response:
+            if "Р”РµР»РµРіРёСЂРѕвР°наёРµ Р·Р°РґР°С‡ РґРѕСЃС‚СѓРїнаѕ С‚РѕР»СЊРєРѕ на° С‚Р°СЂРёС„Р°С…" in response:
                 logger.info(f"[API_SEND_MESSAGE] Tier restriction detected for user {user_id}")
                 return web.json_response({
                     'error': 'tier_restriction',
-                    'message': 'рџҐ‰ Р”РµР»РµРіРёСЂРѕРІР°РЅРёРµ Р·Р°РґР°С‡ РґРѕСЃС‚СѓРїРЅРѕ С‚РѕР»СЊРєРѕ РЅР° С‚Р°СЂРёС„Р°С… РЎС‚Р°РЅРґР°СЂС‚ Рё РџСЂРµРјРёСѓРј',
+                    'message': 'рџҐ‰ Р”РµР»РµРіРёСЂРѕвР°наёРµ Р·Р°РґР°С‡ РґРѕСЃС‚СѓРїнаѕ С‚РѕР»СЊРєРѕ на° С‚Р°СЂРёС„Р°С… РЎС‚Р°наґР°СЂС‚ Рё РџСЂРµРјРёСѓРј',
                     'tier': 'LIGHT',
                     'upgrade_url': '/subscription_tiers'
                 }, status=403)
@@ -1879,7 +1879,7 @@ async def clear_history_handler(request):
     if not user_id:
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
-    # РћР±РЅРѕРІР»СЏРµРј history_cleared_at РІ Р‘Р”
+    # РћР±наѕвР»СЏРµРј history_cleared_at в Р‘Р”
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -1958,7 +1958,7 @@ async def clear_single_task_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # РС‰РµРј Р·Р°РґР°С‡Сѓ Р»РёР±Рѕ СЃСЂРµРґРё СЃРІРѕРёС…, Р»РёР±Рѕ СЃСЂРµРґРё РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹С… РјРЅРµ
+        # РС‰РµРј Р·Р°РґР°С‡Сѓ Р»РёР±Рѕ СЃСЂРµРґРё СЃвРѕРёС…, Р»РёР±Рѕ СЃСЂРµРґРё РґРµР»РµРіРёСЂРѕвР°наЅС‹С… Рјнаµ
         query_conditions = [Task.id == task_id, Task.user_id == user.id]
         if user.username:
             query_conditions.append(Task.delegated_to_username.ilike(user.username))
@@ -1981,7 +1981,7 @@ async def clear_single_task_handler(request):
 
 
 async def complete_task_handler(request):
-    """Р—Р°РІРµСЂС€Р°РµС‚ Р·Р°РґР°С‡Сѓ РїРѕ ID"""
+    """Р—Р°вРµСЂС€Р°РµС‚ Р·Р°РґР°С‡Сѓ РїРѕ ID"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -1999,7 +1999,7 @@ async def complete_task_handler(request):
         result = await complete_task(task_id=task_id, user_id=user_id)
         logger.info(f"[COMPLETE_TASK_HANDLER] Task {task_id} completed by user {user_id}: {result}")
         
-        # РџСЂРѕРІРµСЂСЏРµРј СЃС‚Р°С‚СѓСЃ Р·Р°РґР°С‡Рё РїРѕСЃР»Рµ Р·Р°РІРµСЂС€РµРЅРёСЏ
+        # РџСЂРѕвРµСЂСЏРµРј СЃС‚Р°С‚СѓСЃ Р·Р°РґР°С‡Рё РїРѕСЃР»Рµ Р·Р°вРµСЂС€РµнаёСЏ
         from models import Task
         db_session = Session()
         try:
@@ -2011,27 +2011,27 @@ async def complete_task_handler(request):
         finally:
             db_session.close()
         
-        # РћС‚РїСЂР°РІР»СЏРµРј СѓРІРµРґРѕРјР»РµРЅРёРµ РІ Telegram С‡РµСЂРµР· AI РѕР±СЂР°Р±РѕС‚РєСѓ, РєР°Рє Р±СѓРґС‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅР°РїРёСЃР°Р» Рѕ РІС‹РїРѕР»РЅРµРЅРёРё
+        # РћС‚РїСЂР°вР»СЏРµРј СѓвРµРґРѕРјР»РµнаёРµ в Telegram С‡РµСЂРµР· AI РѕР±СЂР°Р±РѕС‚РєСѓ, РєР°Рє Р±СѓРґС‚Рѕ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ на°РїРёСЃР°Р» Рѕ вС‹РїРѕР»наµнаёРё
         try:
             if 'bot' in request.app:
                 from models import Session as DBSession, User
                 from ai_integration.chat import chat_with_ai
                 db_session = DBSession()
                 try:
-                    # РќР°С…РѕРґРёРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РїРѕ user_id (СЌС‚Рѕ telegram_id)
+                    # РќР°С…РѕРґРёРј РїРѕР»СЊР·РѕвР°С‚РµР»СЏ РїРѕ user_id (СЌС‚Рѕ telegram_id)
                     user = db_session.query(User).filter_by(telegram_id=user_id).first()
                     if user:
                         from models import Task
                         task = db_session.query(Task).filter_by(id=task_id, user_id=user.id).first()
                         if task:
-                            # РћС‚РїСЂР°РІР»СЏРµРј СЃРѕРѕР±С‰РµРЅРёРµ С‡РµСЂРµР· AI, РєР°Рє Р±СѓРґС‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅР°РїРёСЃР°Р» Рѕ РІС‹РїРѕР»РЅРµРЅРёРё
-                            ai_message = f"СЏ РІС‹РїРѕР»РЅРёР» Р·Р°РґР°С‡Сѓ '{task.title}'"
+                            # РћС‚РїСЂР°вР»СЏРµРј СЃРѕРѕР±С‰РµнаёРµ С‡РµСЂРµР· AI, РєР°Рє Р±СѓРґС‚Рѕ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ на°РїРёСЃР°Р» Рѕ вС‹РїРѕР»наµнаёРё
+                            ai_message = f"СЏ вС‹РїРѕР»наёР» Р·Р°РґР°С‡Сѓ '{task.title}'"
                             try:
                                 ai_result = await chat_with_ai(ai_message, user_id=user_id)
                                 ai_response = ai_result['response']
                                 await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
                                 
-                                # РЎРѕС…СЂР°РЅСЏРµРј РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ РІ Р±Р°Р·Сѓ РґР°РЅРЅС‹С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РІ РІРµР±-РїР°РЅРµР»Рё
+                                # РЎРѕС…СЂР°РЅСЏРµРј вР·Р°РёРјРѕРґРµР№СЃС‚вРёРµ в Р±Р°Р·Сѓ РґР°наЅС‹С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµнаёСЏ в вРµР±-РїР°наµР»Рё
                                 interaction = Interaction(
                                     user_id=user.id,
                                     message_type='ai',
@@ -2043,12 +2043,12 @@ async def complete_task_handler(request):
                                 
                                 logger.info(f"Sent AI-processed task completion notification to Telegram user {user_id}")
                             except Exception as ai_error:
-                                # Fallback РЅР° РїСЂРѕСЃС‚РѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ, РµСЃР»Рё AI РЅРµ СЃСЂР°Р±РѕС‚Р°Р»
+                                # Fallback на° РїСЂРѕСЃС‚РѕРµ СѓвРµРґРѕРјР»РµнаёРµ, РµСЃР»Рё AI наµ СЃСЂР°Р±РѕС‚Р°Р»
                                 logger.warning(f"AI processing failed, using fallback: {ai_error}")
-                                notification_text = f"вњ… Р—Р°РґР°С‡Р° РІС‹РїРѕР»РЅРµРЅР°: {task.title}"
+                                notification_text = f"вњ… Р—Р°РґР°С‡Р° вС‹РїРѕР»наµна°: {task.title}"
                                 await request.app['bot'].send_message(chat_id=user_id, text=notification_text)
                                 
-                                # РЎРѕС…СЂР°РЅСЏРµРј fallback РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ РІ Р±Р°Р·Сѓ РґР°РЅРЅС‹С…
+                                # РЎРѕС…СЂР°РЅСЏРµРј fallback вР·Р°РёРјРѕРґРµР№СЃС‚вРёРµ в Р±Р°Р·Сѓ РґР°наЅС‹С…
                                 interaction = Interaction(
                                     user_id=user.id,
                                     message_type='ai',
@@ -2071,7 +2071,7 @@ async def complete_task_handler(request):
 
 
 async def restore_task_handler(request):
-    """Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµС‚ Р·Р°РґР°С‡Сѓ РІ СЂР°Р±РѕС‚Сѓ"""
+    """Р’РѕСЃСЃС‚Р°на°вР»РёвР°РµС‚ Р·Р°РґР°С‡Сѓ в СЂР°Р±РѕС‚Сѓ"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2128,26 +2128,26 @@ async def delete_task_handler(request):
 
     from ai_integration.handlers import delete_task
     try:
-        # РџРµСЂРµРґР°С‘Рј confirmed=True, РїРѕСЃРєРѕР»СЊРєСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓР¶Рµ РїРѕРґС‚РІРµСЂРґРёР» СѓРґР°Р»РµРЅРёРµ РІ UI
+        # РџРµСЂРµРґР°С‘Рј confirmed=True, РїРѕСЃРєРѕР»СЊРєСѓ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СѓР¶Рµ РїРѕРґС‚вРµСЂРґРёР» СѓРґР°Р»РµнаёРµ в UI
         result = await delete_task(task_id=task_id, user_id=user_id)
         logger.info(f"Task {task_id} deleted by user {user_id}: {result}")
         
-        # Р•СЃР»Рё СЂРµР·СѓР»СЊС‚Р°С‚ СЃРѕРґРµСЂР¶РёС‚ С„Р»Р°Рі, РѕР±СЂР°Р±РѕС‚Р°РµРј С‡РµСЂРµР· AI Рё РѕС‚РїСЂР°РІРёРј РІ Telegram
+        # Р•СЃР»Рё СЂРµР·СѓР»СЊС‚Р°С‚ СЃРѕРґРµСЂР¶РёС‚ С„Р»Р°Рі, РѕР±СЂР°Р±РѕС‚Р°РµРј С‡РµСЂРµР· AI Рё РѕС‚РїСЂР°вРёРј в Telegram
         if result.startswith('TASK_COMPLETED_ASK_RESULT:') or result.startswith('TASK_UPDATED:') or result.startswith('TASK_DELETED_ASK_REASON:'):
             try:
                 from ai_integration.chat import chat_with_ai
                 from models import Session as DBSession, User
                 db_session = DBSession()
                 try:
-                    # РћР±СЂР°Р±РѕС‚РєР° С‡РµСЂРµР· AI РґР»СЏ РіРµРЅРµСЂР°С†РёРё РµСЃС‚РµСЃС‚РІРµРЅРЅРѕРіРѕ РѕС‚РІРµС‚Р°
+                    # РћР±СЂР°Р±РѕС‚РєР° С‡РµСЂРµР· AI РґР»СЏ РіРµнаµСЂР°С†РёРё РµСЃС‚РµСЃС‚вРµнаЅРѕРіРѕ РѕС‚вРµС‚Р°
                     ai_result = await chat_with_ai(result, user_id=user_id, db_session=db_session)
                     ai_response = ai_result['response']
                     
-                    # РћС‚РїСЂР°РІР»СЏРµРј AI РѕС‚РІРµС‚ РІ Telegram РµСЃР»Рё Р±РѕС‚ РґРѕСЃС‚СѓРїРµРЅ
+                    # РћС‚РїСЂР°вР»СЏРµРј AI РѕС‚вРµС‚ в Telegram РµСЃР»Рё Р±РѕС‚ РґРѕСЃС‚СѓРїРµРЅ
                     if 'bot' in request.app and ai_response:
                         await request.app['bot'].send_message(chat_id=user_id, text=ai_response)
                         
-                        # РЎРѕС…СЂР°РЅСЏРµРј РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ РІ Р±Р°Р·Сѓ РґР°РЅРЅС‹С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РІ РІРµР±-РїР°РЅРµР»Рё
+                        # РЎРѕС…СЂР°РЅСЏРµРј вР·Р°РёРјРѕРґРµР№СЃС‚вРёРµ в Р±Р°Р·Сѓ РґР°наЅС‹С… РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµнаёСЏ в вРµР±-РїР°наµР»Рё
                         user = db_session.query(User).filter_by(telegram_id=user_id).first()
                         if user:
                             interaction = Interaction(
@@ -2172,7 +2172,7 @@ async def delete_task_handler(request):
 
 
 async def cancel_delegation_handler(request):
-    """РћС‚РјРµРЅСЏРµС‚ РґРµР»РµРіРёСЂРѕРІР°РЅРёРµ Р·Р°РґР°С‡Рё"""
+    """РћС‚РјРµРЅСЏРµС‚ РґРµР»РµРіРёСЂРѕвР°наёРµ Р·Р°РґР°С‡Рё"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2194,7 +2194,7 @@ async def cancel_delegation_handler(request):
 
 
 async def reschedule_task_handler(request):
-    """РџРµСЂРµРЅРѕСЃРёС‚ Р·Р°РґР°С‡Сѓ РЅР° РЅРѕРІРѕРµ РІСЂРµРјСЏ"""
+    """РџРµСЂРµнаѕСЃРёС‚ Р·Р°РґР°С‡Сѓ на° наѕвРѕРµ вСЂРµРјСЏ"""
     session = await get_session(request)
     user_id = session.get('user_id')
     if not user_id:
@@ -2397,7 +2397,7 @@ async def yookassa_webhook(request):
             subscription.tier = tier_enum
             user.subscription_tier = tier_enum
 
-            # Р•СЃР»Рё РїРѕРґРїРёСЃРєР° РµС‰Рµ Р°РєС‚РёРІРЅР°, РїСЂРѕРґР»РµРІР°РµРј РѕС‚ end_date, РёРЅР°С‡Рµ РѕС‚ С‚РµРєСѓС‰РµР№ РґР°С‚С‹
+            # Р•СЃР»Рё РїРѕРґРїРёСЃРєР° РµС‰Рµ Р°РєС‚Рёвна°, РїСЂРѕРґР»РµвР°РµРј РѕС‚ end_date, Рёна°С‡Рµ РѕС‚ С‚РµРєСѓС‰РµР№ РґР°С‚С‹
             now = datetime.now(pytz.UTC)
             if subscription.end_date and subscription.end_date > now:
                 subscription.end_date = subscription.end_date + timedelta(days=30)
@@ -2406,7 +2406,7 @@ async def yookassa_webhook(request):
 
             session.commit()
 
-            # Р›РѕРіРёСЂСѓРµРј РїР»Р°С‚РµР¶ РІ payment_history РґР»СЏ Р·Р°С‰РёС‚С‹ РѕС‚ РїРѕС‚РµСЂРё РґР°РЅРЅС‹С…
+            # Р›РѕРіРёСЂСѓРµРј РїР»Р°С‚РµР¶ в payment_history РґР»СЏ Р·Р°С‰РёС‚С‹ РѕС‚ РїРѕС‚РµСЂРё РґР°наЅС‹С…
             try:
                 payment_history = PaymentHistory(
                     user_id=user.id,
@@ -2434,7 +2434,7 @@ async def yookassa_webhook(request):
             from payments import get_tier_name, TIER_PRICES
             tier_name = get_tier_name(tier)
             promo_msg = f" СЃ РїСЂРѕРјРѕРєРѕРґРѕРј {promo_code}" if promo_code else ""
-            await bot.send_message(int(user_id), f"РџРѕРґРїРёСЃРєР° {tier_name} Р°РєС‚РёРІРёСЂРѕРІР°РЅР°{promo_msg}! РўРµРїРµСЂСЊ Сѓ РІР°СЃ РґРѕСЃС‚СѓРї РєРѕ РІСЃРµРј РїСЂРµРјРёСѓРј-С„СѓРЅРєС†РёСЏРј.")
+            await bot.send_message(int(user_id), f"РџРѕРґРїРёСЃРєР° {tier_name} Р°РєС‚РёвРёСЂРѕвР°на°{promo_msg}! РўРµРїРµСЂСЊ Сѓ вР°СЃ РґРѕСЃС‚СѓРї РєРѕ вСЃРµРј РїСЂРµРјРёСѓРј-С„СѓнаєС†РёСЏРј.")
 
             # Handle referral commission (20% of payment amount)
             if user.referrer_id:
@@ -2487,7 +2487,7 @@ async def get_user_id_from_request(request):
 
 async def api_partners_handler(request):
     def pluralize_task(count):
-        """РЎРєР»РѕРЅРµРЅРёРµ СЃР»РѕРІР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
+        """РЎРєР»РѕнаµнаёРµ СЃР»РѕвР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
         last_digit = count % 10
         last_two_digits = count % 100
 
@@ -2515,7 +2515,7 @@ async def api_partners_handler(request):
                 return web.json_response({'error': 'User not found'}, status=404)
             
             try:
-                partners = get_partners_list(user_id=user.id)  # РџРµСЂРµРґР°РµРј user.id (Р±Р°Р·РѕРІС‹Р№ ID), Р° РЅРµ telegram_id
+                partners = get_partners_list(user_id=user.id)  # РџРµСЂРµРґР°РµРј user.id (Р±Р°Р·РѕвС‹Р№ ID), Р° наµ telegram_id
                 logger.info(f"Got {len(partners)} partners from get_partners_list")
             except Exception as e:
                 logger.error(f"Error getting partners: {e}")
@@ -2562,12 +2562,12 @@ async def api_partners_handler(request):
                 user_id=user.id).order_by(
                 Interaction.created_at).all() if user else []
 
-            # РџРѕР»СѓС‡РёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹ РїРѕ РґРµР»РµРіРёСЂРѕРІР°РЅРёСЋ
-            delegating_to_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕРІР°Р»Рё РјРЅРµ Р·Р°РґР°С‡Рё
-            delegating_by_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕРІР°Р» Р·Р°РґР°С‡Рё
+            # РџРѕР»СѓС‡РёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹ РїРѕ РґРµР»РµРіРёСЂРѕвР°наёСЋ
+            delegating_to_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё
+            delegating_by_me = []  # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
 
             try:
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕРІР°Р»Рё РјРЅРµ Р·Р°РґР°С‡Рё (СЏ РїРѕР»СѓС‡Р°СЋ Р·Р°РґР°С‡Рё РѕС‚ РЅРёС…)
+                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Рјнаµ Р·Р°РґР°С‡Рё (СЏ РїРѕР»СѓС‡Р°СЋ Р·Р°РґР°С‡Рё РѕС‚ наёС…)
                 username_clean = user.username.replace('@', '') if user.username else ''
                 delegated_tasks = session_db.query(Task).filter(
                     or_(
@@ -2596,10 +2596,10 @@ async def api_partners_handler(request):
                                 'city': delegator_profile.city if delegator_profile else None,
                                 'company': delegator_profile.company if delegator_profile else None,
                                 'task_count': len(task_titles),
-                                'reason': f'РґРµР»РµРіРёСЂРѕРІР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}'
+                                'reason': f'РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕРІР°Р» Р·Р°РґР°С‡Рё
+                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
                 my_delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
@@ -2630,7 +2630,7 @@ async def api_partners_handler(request):
                                 'city': delegatee_profile.city if delegatee_profile else None,
                                 'company': delegatee_profile.company if delegatee_profile else None,
                                 'task_count': len(task_titles),
-                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕРІР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}'
+                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}'
                             })
 
             except Exception as e:
@@ -2660,7 +2660,7 @@ async def api_partners_handler(request):
             user_skills = set(s.strip().lower() for s in profile.skills.split(',')) if profile.skills else set()
             user_goals = set(g.strip().lower() for g in profile.goals.split(',')) if profile.goals else set()
 
-            # РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚РѕРІ, СЃ РєРѕС‚РѕСЂС‹РјРё СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ
+            # РџРѕР»СѓС‡Р°РµРј СЃРїРёСЃРѕРє РєРѕРЅС‚Р°РєС‚Рѕв, СЃ РєРѕС‚РѕСЂС‹РјРё СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ
             contacted_usernames = set()
             for interaction in interactions:
                 mentions = re.findall(r'@(\w+)', interaction.content)
@@ -2704,16 +2704,16 @@ async def api_partners_handler(request):
                     if username in contacted_usernames:
                         reasons.append('СѓР¶Рµ РѕР±С‰Р°Р»РёСЃСЊ')
                 if p.common_skills:
-                    reasons.append('РѕР±С‰РёРµ РЅР°РІС‹РєРё')
+                    reasons.append('РѕР±С‰РёРµ на°вС‹РєРё')
                 if p.common_interests:
                     reasons.append('РѕР±С‰РёРµ РёРЅС‚РµСЂРµСЃС‹')
                 if p.common_goals:
                     reasons.append('РѕР±С‰РёРµ С†РµР»Рё')
                 if p.city and profile.city and p.city.lower() == profile.city.lower():
-                    reasons.append('РёР· РІР°С€РµРіРѕ РіРѕСЂРѕРґР°')
+                    reasons.append('РёР· вР°С€РµРіРѕ РіРѕСЂРѕРґР°')
                 p.recommendation_reason = ', '.join(reasons) if reasons else 'РїРѕРґС…РѕРґСЏС‰РёР№ РєРѕРЅС‚Р°РєС‚'
 
-        # Calculate common_tasks for regular partners - СѓР»СѓС‡С€РµРЅРЅР°СЏ Р»РѕРіРёРєР° СЃ С‡Р°СЃС‚РёС‡РЅС‹Рј СЃРѕРІРїР°РґРµРЅРёРµРј
+        # Calculate common_tasks for regular partners - СѓР»СѓС‡С€РµнаЅР°СЏ Р»РѕРіРёРєР° СЃ С‡Р°СЃС‚РёС‡РЅС‹Рј СЃРѕвРїР°РґРµнаёРµРј
         for p in partners:
             if profile and p:
                 # Get user's tasks
@@ -2733,10 +2733,10 @@ async def api_partners_handler(request):
                             if task.title:
                                 partner_task_titles.add(task.title.lower().strip())
 
-                        # РўРѕС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ Р·Р°РґР°С‡
+                        # РўРѕС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ Р·Р°РґР°С‡
                         common_task_titles = user_task_titles & partner_task_titles
                         
-                        # Р§Р°СЃС‚РёС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕРІР° СЃРѕРІРїР°РґР°СЋС‚
+                        # Р§Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕвР° СЃРѕвРїР°РґР°СЋС‚
                         if not common_task_titles:
                             partial_matches = set()
                             for user_task in user_task_titles:
@@ -2745,7 +2745,7 @@ async def api_partners_handler(request):
                                     continue
                                 for partner_task in partner_task_titles:
                                     partner_words = set(partner_task.split())
-                                    # Р•СЃР»Рё СЃРѕРІРїР°РґР°РµС‚ >= 2 СЃР»РѕРІ
+                                    # Р•СЃР»Рё СЃРѕвРїР°РґР°РµС‚ >= 2 СЃР»Рѕв
                                     common_words = user_words & partner_words
                                     if len(common_words) >= 2:
                                         partial_matches.add(user_task)
@@ -2765,7 +2765,7 @@ async def api_partners_handler(request):
             try:
                 if not hasattr(p, 'user_id') or p.user_id is None:
                     continue  # Skip partners without user_id
-                # РџРѕР»СѓС‡Р°РµРј telegram_id РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РёР· Р±Р°Р·С‹
+                # РџРѕР»СѓС‡Р°РµРј telegram_id РїРѕР»СЊР·РѕвР°С‚РµР»СЏ РёР· Р±Р°Р·С‹
                 partner_user = session_db.query(User).filter_by(
                     id=p.user_id).first() if hasattr(
                     p, 'user_id') and p.user_id is not None else None
@@ -2795,21 +2795,21 @@ async def api_partners_handler(request):
                 logger.info(f"User {user.username} (id:{user.telegram_id}) has tier {user_tier} ({user_tier_str}), partner {partner_user.username if partner_user else 'unknown'} has tier {partner_tier} ({partner_tier_str})")
 
                 # Determine if user can access this contact
-                # LIGHT РІРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
-                # STANDARD РІРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
-                # PREMIUM РІРёРґРёС‚ РІСЃРµ РєРѕРЅС‚Р°РєС‚С‹ (LIGHT, STANDARD, PREMIUM)
+                # LIGHT вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                # STANDARD вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                # PREMIUM вРёРґРёС‚ вСЃРµ РєРѕРЅС‚Р°РєС‚С‹ (LIGHT, STANDARD, PREMIUM)
                 can_access = False
 
                 if user_tier_str.lower() == 'light':
-                    # LIGHT РІРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                    # LIGHT вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
                     can_access = (partner_tier_str.lower() in ['light', 'standard'])
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                 elif user_tier_str.lower() == 'standard':
-                    # STANDARD РІРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                    # STANDARD вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
                     can_access = (partner_tier_str.lower() in ['light', 'standard'])
                     logger.info(f"User {user_tier_str} checking partner {partner_tier_str}: can_access = {can_access}")
                 elif user_tier_str.lower() == 'premium':
-                    # PREMIUM РІРёРґРёС‚ РІСЃРµС…
+                    # PREMIUM вРёРґРёС‚ вСЃРµС…
                     can_access = True
                     logger.info(f"User {user_tier_str} can access all partners")
 
@@ -2865,7 +2865,7 @@ async def api_partners_handler(request):
                 logger.warning(f"Skipping delegating_to_me contact without username: user_id={contact.get('id')}")
                 continue
                 
-            # РџРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ РґРµР»РµРіР°С‚РѕСЂР° РґР»СЏ СЂР°СЃС‡РµС‚Р° РѕР±С‰РёС… РёРЅС‚РµСЂРµСЃРѕРІ/РЅР°РІС‹РєРѕРІ/С†РµР»РµР№
+            # РџРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ РґРµР»РµРіР°С‚РѕСЂР° РґР»СЏ СЂР°СЃС‡РµС‚Р° РѕР±С‰РёС… РёРЅС‚РµСЂРµСЃРѕв/на°вС‹РєРѕв/С†РµР»РµР№
             delegator_profile = session_db.query(UserProfile).filter_by(
                 user_id=contact['id']).first() if 'id' in contact else None
 
@@ -2918,10 +2918,10 @@ async def api_partners_handler(request):
                         if task.title:
                             delegator_task_titles.add(task.title.lower().strip())
 
-                    # РўРѕС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ Р·Р°РґР°С‡
+                    # РўРѕС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ Р·Р°РґР°С‡
                     common_task_titles = user_task_titles & delegator_task_titles
                     
-                    # Р§Р°СЃС‚РёС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕРІР° СЃРѕРІРїР°РґР°СЋС‚
+                    # Р§Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕвР° СЃРѕвРїР°РґР°СЋС‚
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
@@ -2955,8 +2955,8 @@ async def api_partners_handler(request):
                 except Exception as e:
                     logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
 
-            # Р”Р»СЏ РєРѕРЅС‚Р°РєС‚РѕРІ "Р”РµР»РµРіРёСЂСѓРµС‚ РјРЅРµ" РќР• РїСЂРёРјРµРЅСЏРµРј С„РёР»СЊС‚СЂ РїРѕ С‚Р°СЂРёС„Сѓ
-            # Р”РµР»РµРіРёСЂРѕРІР°РЅРЅС‹Рµ Р·Р°РґР°С‡Рё РґРѕР»Р¶РЅС‹ РІСЃРµРіРґР° РѕС‚РѕР±СЂР°Р¶Р°С‚СЊСЃСЏ РЅРµР·Р°РІРёСЃРёРјРѕ РѕС‚ С‚Р°СЂРёС„Р° РґРµР»РµРіР°С‚РѕСЂР°
+            # Для контактов "Делегирует мне" НЕ применяем фильтр по тарифу
+            # Делегированные задачи должны всегда отображаться независимо от тарифа делегатора
             delegator_tier = delegator.subscription_tier if delegator and delegator.subscription_tier else SubscriptionTier.LIGHT
             
             # Ensure tier is proper enum value
@@ -2971,7 +2971,7 @@ async def api_partners_handler(request):
                 'contact_info': contact['username'],
                 'telegram_id': delegator.telegram_id if delegator else None,
                 'can_access': True,  # Р’СЃРµРіРґР° РґРѕСЃС‚СѓРїРµРЅ
-                'required_tier': None,  # РќРµС‚ РѕРіСЂР°РЅРёС‡РµРЅРёР№
+                'required_tier': None,  # РќРµС‚ РѕРіСЂР°наёС‡РµнаёР№
                 'subscription_tier': delegator_tier.value if delegator_tier else 'light',
                 'photo_url': photo_url,
                 'first_name': contact['first_name'],
@@ -2996,7 +2996,7 @@ async def api_partners_handler(request):
                 logger.warning(f"Skipping delegation contact without username: user_id={contact.get('id')}")
                 continue
             
-            # РџРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ РґРµР»РµРіР°С‚Р° РґР»СЏ СЂР°СЃС‡РµС‚Р° РѕР±С‰РёС… РёРЅС‚РµСЂРµСЃРѕРІ/РЅР°РІС‹РєРѕРІ/С†РµР»РµР№
+            # РџРѕР»СѓС‡РёС‚СЊ РїСЂРѕС„РёР»СЊ РґРµР»РµРіР°С‚Р° РґР»СЏ СЂР°СЃС‡РµС‚Р° РѕР±С‰РёС… РёРЅС‚РµСЂРµСЃРѕв/на°вС‹РєРѕв/С†РµР»РµР№
             delegatee_profile = session_db.query(UserProfile).filter_by(
                 user_id=contact['id']).first() if 'id' in contact else None
             delegatee = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
@@ -3050,10 +3050,10 @@ async def api_partners_handler(request):
                         if task.title:
                             delegatee_task_titles.add(task.title.lower().strip())
 
-                    # РўРѕС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ Р·Р°РґР°С‡
+                    # РўРѕС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ Р·Р°РґР°С‡
                     common_task_titles = user_task_titles & delegatee_task_titles
                     
-                    # Р§Р°СЃС‚РёС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕРІР° СЃРѕРІРїР°РґР°СЋС‚
+                    # Р§Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ - РµСЃР»Рё С…РѕС‚СЏ Р±С‹ 2 СЃР»РѕвР° СЃРѕвРїР°РґР°СЋС‚
                     if not common_task_titles:
                         partial_matches = set()
                         for user_task in user_task_titles:
@@ -3101,11 +3101,11 @@ async def api_partners_handler(request):
             can_access = False
 
             if user_tier_str.lower() == 'light':
-                # LIGHT РІРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                # LIGHT вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
                 can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
             elif user_tier_str.lower() == 'standard':
-                # STANDARD РІРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
+                # STANDARD вРёРґРёС‚ LIGHT Рё STANDARD РєРѕРЅС‚Р°РєС‚С‹
                 can_access = (delegatee_tier_str.lower() in ['light', 'standard'])
                 logger.info(f"Delegatee check: User {user_tier_str} checking delegatee {delegatee_tier_str}: can_access = {can_access}")
             elif user_tier_str.lower() == 'premium':
@@ -3138,9 +3138,9 @@ async def api_partners_handler(request):
                     'type': 'delegating_by_me'
                 })
 
-        # РЎРѕСЂС‚РёСЂСѓРµРј partners_data: СЃРЅР°С‡Р°Р»Р° РїРѕ РіРѕСЂРѕРґСѓ (СЃРѕРІРїР°РґРµРЅРёРµ СЃ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј), РїРѕС‚РѕРј РїРѕ СЂРµР№С‚РёРЅРіСѓ
+        # РЎРѕСЂС‚РёСЂСѓРµРј partners_data: СЃна°С‡Р°Р»Р° РїРѕ РіРѕСЂРѕРґСѓ (СЃРѕвРїР°РґРµнаёРµ СЃ РїРѕР»СЊР·РѕвР°С‚РµР»РµРј), РїРѕС‚РѕРј РїРѕ СЂРµР№С‚РёнаіСѓ
 
-        # РЎРѕСЂС‚РёСЂСѓРµРј partners_data: СЃРЅР°С‡Р°Р»Р° РїРѕ РіРѕСЂРѕРґСѓ (СЃРѕРІРїР°РґРµРЅРёРµ СЃ РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј), РїРѕС‚РѕРј РїРѕ СЂРµР№С‚РёРЅРіСѓ
+        # РЎРѕСЂС‚РёСЂСѓРµРј partners_data: СЃна°С‡Р°Р»Р° РїРѕ РіРѕСЂРѕРґСѓ (СЃРѕвРїР°РґРµнаёРµ СЃ РїРѕР»СЊР·РѕвР°С‚РµР»РµРј), РїРѕС‚РѕРј РїРѕ СЂРµР№С‚РёнаіСѓ
         user_city = profile.city.lower() if profile and profile.city else None
 
         normalized_user_city = normalize_city(user_city)
@@ -3150,19 +3150,19 @@ async def api_partners_handler(request):
             same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
 
             rating = partner.get('average_rating', 0) or 0
-            # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёРЅРіР°:
-            # 1. Р’С‹СЃРѕРєРёР№ СЂРµР№С‚РёРЅРі (>= 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹РІР°РЅРёСЋ
-            # 2. РќРµС‚ СЂРµР№С‚РёРЅРіР° (0): РЅРµР№С‚СЂР°Р»СЊРЅРѕ, РІС‹С€Рµ РїР»РѕС…РёС…
-            # 3. РќРёР·РєРёР№ СЂРµР№С‚РёРЅРі (< 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹РІР°РЅРёСЋ
+            # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёнаіР°:
+            # 1. Р’С‹СЃРѕРєРёР№ СЂРµР№С‚Рёнаі (>= 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
+            # 2. РќРµС‚ СЂРµР№С‚РёнаіР° (0): наµР№С‚СЂР°Р»СЊнаѕ, вС‹С€Рµ РїР»РѕС…РёС…
+            # 3. РќРёР·РєРёР№ СЂРµР№С‚Рёнаі (< 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
             if rating >= 5:
                 rating_group = 0  # Р›СѓС‡С€Р°СЏ РіСЂСѓРїРїР°
-                rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹РІР°РЅРёСЋ
+                rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
             elif rating == 0:
-                rating_group = 1  # РЎСЂРµРґРЅСЏСЏ РіСЂСѓРїРїР° (РЅРµС‚ РґР°РЅРЅС‹С…)
+                rating_group = 1  # РЎСЂРµРґРЅСЏСЏ РіСЂСѓРїРїР° (наµС‚ РґР°наЅС‹С…)
                 rating_value = 0
             else:  # rating < 5
                 rating_group = 2  # РҐСѓРґС€Р°СЏ РіСЂСѓРїРїР°
-                rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹РІР°РЅРёСЋ
+                rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
 
             return (same_city, rating_group, rating_value)
 
@@ -3172,7 +3172,7 @@ async def api_partners_handler(request):
                 favorite_data = json.loads(profile.favorite_contacts)
                 for item in favorite_data:
                     favorite_username = None
-                    # РћРїСЂРµРґРµР»РёС‚СЊ username РїРѕ ID РёР»Рё РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РЅР°РїСЂСЏРјСѓСЋ
+                    # РћРїСЂРµРґРµР»РёС‚СЊ username РїРѕ ID РёР»Рё РёСЃРїРѕР»СЊР·РѕвР°С‚СЊ на°РїСЂСЏРјСѓСЋ
                     if isinstance(item, int):
                         # Р­С‚Рѕ user_id
                         fav_user = session_db.query(User).filter_by(id=item).first()
@@ -3209,7 +3209,7 @@ async def api_partners_handler(request):
 
                             user_tier_str = user_tier.value if hasattr(user_tier, 'value') else str(user_tier).lower()
 
-                            # РР·Р±СЂР°РЅРЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ РІСЃРµРіРґР° РґРѕСЃС‚СѓРїРЅС‹ РЅРµР·Р°РІРёСЃРёРјРѕ РѕС‚ С‚Р°СЂРёС„Р°
+                            # РР·Р±СЂР°наЅС‹Рµ РєРѕРЅС‚Р°РєС‚С‹ вСЃРµРіРґР° РґРѕСЃС‚СѓРїРЅС‹ наµР·Р°вРёСЃРёРјРѕ РѕС‚ С‚Р°СЂРёС„Р°
                             can_access = True
                             required_tier = None
 
@@ -3243,7 +3243,7 @@ async def api_partners_handler(request):
                                 'common_tasks': None,
                                 'average_rating': favorite_profile.average_rating if favorite_profile else 0,
                                 'rating_count': favorite_profile.rating_count if favorite_profile else 0,
-                                'reason': 'РёР·Р±СЂР°РЅРЅС‹Р№ РєРѕРЅС‚Р°РєС‚',
+                                'reason': 'РёР·Р±СЂР°наЅС‹Р№ РєРѕРЅС‚Р°РєС‚',
                                 'task_count': 0,
                                 'type': 'favorite'
                             })
@@ -3274,18 +3274,18 @@ async def api_partners_handler(request):
 
         # Filter partners_data but save blocked contacts info
         filtered_partners_data = []
-        blocked_partners_data = []  # РЎРѕС…СЂР°РЅСЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹С…
+        blocked_partners_data = []  # РЎРѕС…СЂР°РЅСЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹С…
         for partner in partners_data:
             partner_username = (partner.get('contact_info') or '').replace('@', '')
             if partner_username in blocked_by_me or partner_username in blocked_me:
-                blocked_partners_data.append(partner)  # РЎРѕС…СЂР°РЅСЏРµРј Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹Рµ
+                blocked_partners_data.append(partner)  # РЎРѕС…СЂР°РЅСЏРµРј Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹Рµ
                 continue  # Skip blocked contacts from main list
             filtered_partners_data.append(partner)
 
         partners_data = filtered_partners_data
         partners_data.sort(key=sort_key)
 
-        # Р”РѕР±Р°РІРёС‚СЊ С„Р»Р°Рі is_favorite РґР»СЏ РІСЃРµС… РєРѕРЅС‚Р°РєС‚РѕРІ
+        # Р”РѕР±Р°вРёС‚СЊ С„Р»Р°Рі is_favorite РґР»СЏ вСЃРµС… РєРѕРЅС‚Р°РєС‚Рѕв
         favorite_usernames = set()
         if profile and profile.favorite_contacts:
             try:
@@ -3302,7 +3302,7 @@ async def api_partners_handler(request):
             except json.JSONDecodeError:
                 pass
 
-        # РЈСЃС‚Р°РЅРѕРІРёС‚СЊ С„Р»Р°Рі is_favorite РґР»СЏ РІСЃРµС… РєРѕРЅС‚Р°РєС‚РѕРІ
+        # РЈСЃС‚Р°наѕвРёС‚СЊ С„Р»Р°Рі is_favorite РґР»СЏ вСЃРµС… РєРѕРЅС‚Р°РєС‚Рѕв
         for partner in partners_data:
             contact_info = partner.get('contact_info')
             if contact_info is None:
@@ -3313,13 +3313,13 @@ async def api_partners_handler(request):
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
         return web.json_response({
             'partners': partners_data,
-            'blocked_partners_info': blocked_partners_data  # Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅРЅС‹С…
+            'blocked_partners_info': blocked_partners_data  # Р”РѕР±Р°вР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ Р·Р°Р±Р»РѕРєРёСЂРѕвР°наЅС‹С…
         })
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
         return web.json_response({'partners': []}, status=200)
     finally:
-        # РќР° СЃР»СѓС‡Р°Р№ СЂР°РЅРЅРёС… РѕС€РёР±РѕРє Р·Р°РєСЂС‹РІР°РµРј СЃРµСЃСЃРёСЋ, РµСЃР»Рё РѕРЅР° РµС‰Рµ РѕС‚РєСЂС‹С‚Р°
+        # РќР° СЃР»СѓС‡Р°Р№ СЂР°наЅРёС… РѕС€РёР±РѕРє Р·Р°РєСЂС‹вР°РµРј СЃРµСЃСЃРёСЋ, РµСЃР»Рё Рѕна° РµС‰Рµ РѕС‚РєСЂС‹С‚Р°
         try:
             if 'session_db' in locals():
                 session_db.close()
@@ -3330,7 +3330,7 @@ async def api_partners_handler(request):
 async def api_elite_partners_handler(request):
     """Get ALL Premium partners for Premium users (Premium status filter)"""
     def pluralize_task(count):
-        """РЎРєР»РѕРЅРµРЅРёРµ СЃР»РѕРІР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
+        """РЎРєР»РѕнаµнаёРµ СЃР»РѕвР° 'Р·Р°РґР°С‡Р°' РїРѕ С‡РёСЃР»Сѓ"""
         last_digit = count % 10
         last_two_digits = count % 100
 
@@ -3507,7 +3507,7 @@ async def api_elite_partners_handler(request):
             delegating_by_me = []
             
             try:
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕРІР°Р»Рё Р·Р°РґР°С‡Рё РјРЅРµ (accepted delegation)
+                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рµ РґРµР»РµРіРёСЂРѕвР°Р»Рё Р·Р°РґР°С‡Рё Рјнаµ (accepted delegation)
                 delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_to_username.isnot(None),
                     Task.delegation_status == 'accepted',
@@ -3575,11 +3575,11 @@ async def api_elite_partners_handler(request):
                                     'average_rating': delegator_profile.average_rating if delegator_profile else 0,
                                     'rating_count': delegator_profile.rating_count if delegator_profile else 0,
                                     'task_count': len(task_titles),
-                                    'reason': f'РґРµР»РµРіРёСЂРѕРІР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}',
+                                    'reason': f'РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}',
                                     'type': 'delegation'
                                 })
 
-                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕРІР°Р» Р·Р°РґР°С‡Рё
+                # Р›СЋРґРё, РєРѕС‚РѕСЂС‹Рј СЏ РґРµР»РµРіРёСЂРѕвР°Р» Р·Р°РґР°С‡Рё
                 my_delegated_tasks = session_db.query(Task).filter(
                     Task.delegated_by == user.id,
                     Task.delegated_to_username.isnot(None),
@@ -3649,7 +3649,7 @@ async def api_elite_partners_handler(request):
                                 'average_rating': delegatee_profile.average_rating if delegatee_profile else 0,
                                 'rating_count': delegatee_profile.rating_count if delegatee_profile else 0,
                                 'task_count': len(task_titles),
-                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕРІР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}',
+                                'reason': f'СЏ РґРµР»РµРіРёСЂРѕвР°Р» {len(task_titles)} {pluralize_task(len(task_titles))}',
                                 'type': 'delegation'
                             })
 
@@ -3726,19 +3726,19 @@ async def api_elite_partners_handler(request):
                 same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
 
                 rating = partner.get('average_rating', 0) or 0
-                # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёРЅРіР°:
-                # 1. Р’С‹СЃРѕРєРёР№ СЂРµР№С‚РёРЅРі (>= 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹РІР°РЅРёСЋ
-                # 2. РќРµС‚ СЂРµР№С‚РёРЅРіР° (0): РЅРµР№С‚СЂР°Р»СЊРЅРѕ, РІС‹С€Рµ РїР»РѕС…РёС…
-                # 3. РќРёР·РєРёР№ СЂРµР№С‚РёРЅРі (< 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹РІР°РЅРёСЋ
+                # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёнаіР°:
+                # 1. Р’С‹СЃРѕРєРёР№ СЂРµР№С‚Рёнаі (>= 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
+                # 2. РќРµС‚ СЂРµР№С‚РёнаіР° (0): наµР№С‚СЂР°Р»СЊнаѕ, вС‹С€Рµ РїР»РѕС…РёС…
+                # 3. РќРёР·РєРёР№ СЂРµР№С‚Рёнаі (< 5): СЃРѕСЂС‚РёСЂСѓРµРј РїРѕ СѓР±С‹вР°наёСЋ
                 if rating >= 5:
                     rating_group = 0  # Р›СѓС‡С€Р°СЏ РіСЂСѓРїРїР°
-                    rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹РІР°РЅРёСЋ
+                    rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
                 elif rating == 0:
-                    rating_group = 1  # РЎСЂРµРґРЅСЏСЏ РіСЂСѓРїРїР° (РЅРµС‚ РґР°РЅРЅС‹С…)
+                    rating_group = 1  # РЎСЂРµРґРЅСЏСЏ РіСЂСѓРїРїР° (наµС‚ РґР°наЅС‹С…)
                     rating_value = 0
                 else:  # rating < 5
                     rating_group = 2  # РҐСѓРґС€Р°СЏ РіСЂСѓРїРїР°
-                    rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹РІР°РЅРёСЋ
+                    rating_value = -rating  # Р’РЅСѓС‚СЂРё РіСЂСѓРїРїС‹ РїРѕ СѓР±С‹вР°наёСЋ
 
                 return (same_city, rating_group, rating_value)
 
@@ -4000,7 +4000,7 @@ async def api_blocked_contacts_handler(request):
                                 if tasks_deleted > 0:
                                     # Notify blocked user via bot (don't await to avoid blocking)
                                     try:
-                                        message = f"@{user.username} РЅРµ РіРѕС‚РѕРІ РїСЂРёРЅРёРјР°С‚СЊ Р·Р°РґР°С‡Рё РѕС‚ РІР°СЃ. Р’Р°С€Рё РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹Рµ Р·Р°РґР°С‡Рё Р±С‹Р»Рё РѕС‚РєР»РѕРЅРµРЅС‹."
+                                        message = f"@{user.username} наµ РіРѕС‚Рѕв РїСЂРёнаёРјР°С‚СЊ Р·Р°РґР°С‡Рё РѕС‚ вР°СЃ. Р’Р°С€Рё РґРµР»РµРіРёСЂРѕвР°наЅС‹Рµ Р·Р°РґР°С‡Рё Р±С‹Р»Рё РѕС‚РєР»РѕнаµРЅС‹."
                                         # Schedule notification asynchronously to avoid blocking
                                         asyncio.create_task(bot.send_message(blocked_user.telegram_id, message))
                                     except Exception as e:
@@ -4094,7 +4094,7 @@ async def rate_user_handler(request):
                     session_db.commit()
 
             # Don't save to Interaction - show notification instead
-            success_message = f'РћС†РµРЅРєР° {rating}/10 РґР»СЏ @{rated_username} СЃРѕС…СЂР°РЅРµРЅР°'
+            success_message = f'РћС†РµнаєР° {rating}/10 РґР»СЏ @{rated_username} СЃРѕС…СЂР°наµна°'
 
             return web.json_response({
                 'success': True,
@@ -4162,8 +4162,8 @@ async def hide_contact_handler(request):
 
             session_db.commit()
 
-            # РЎРѕС…СЂР°РЅРёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РІ РёСЃС‚РѕСЂРёСЋ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёР№
-            success_message = f'@{username} СЃРєСЂС‹С‚ РЅР° {days} РґРЅРµР№'
+            # РЎРѕС…СЂР°наёС‚СЊ СЃРѕРѕР±С‰РµнаёРµ в РёСЃС‚РѕСЂРёСЋ вР·Р°РёРјРѕРґРµР№СЃС‚вРёР№
+            success_message = f'@{username} СЃРєСЂС‹С‚ на° {days} РґнаµР№'
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
@@ -4404,7 +4404,7 @@ async def api_accept_delegated_task_handler(request):
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Р—Р°РґР°С‡Р° "{task.title}" РїСЂРёРЅСЏС‚Р° Рё РІР·СЏС‚Р° РІ СЂР°Р±РѕС‚Сѓ'
+                content=f'Р—Р°РґР°С‡Р° "{task.title}" РїСЂРёРЅСЏС‚Р° Рё вР·СЏС‚Р° в СЂР°Р±РѕС‚Сѓ'
             )
             session_db.add(interaction)
 
@@ -4466,7 +4466,7 @@ async def api_reject_delegated_task_handler(request):
             interaction = Interaction(
                 user_id=user.id,
                 message_type='ai',
-                content=f'Р—Р°РґР°С‡Р° "{task.title}" РѕС‚РєР»РѕРЅРµРЅР°'
+                content=f'Р—Р°РґР°С‡Р° "{task.title}" РѕС‚РєР»Рѕнаµна°'
             )
             session_db.add(interaction)
 
@@ -4474,7 +4474,7 @@ async def api_reject_delegated_task_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': f'Р—Р°РґР°С‡Р° "{task.title}" РѕС‚РєР»РѕРЅРµРЅР°'
+                'message': f'Р—Р°РґР°С‡Р° "{task.title}" РѕС‚РєР»Рѕнаµна°'
             })
 
         finally:
@@ -4519,7 +4519,7 @@ async def api_update_profile_handler(request):
 
             return web.json_response({
                 'success': True,
-                'message': 'РџСЂРѕС„РёР»СЊ РѕР±РЅРѕРІР»РµРЅ'
+                'message': 'РџСЂРѕС„РёР»СЊ РѕР±наѕвР»РµРЅ'
             })
 
         finally:
@@ -4563,7 +4563,7 @@ async def get_feed_handler(request):
                             favorite_user_ids.append(item)
                             logger.info(f"Feed: Added favorite user_id: {item}")
                         elif isinstance(item, str):
-                            # Р­С‚Рѕ username - РЅР°Р№С‚Рё user_id
+                            # Р­С‚Рѕ username - на°Р№С‚Рё user_id
                             username_clean = item.replace('@', '')
                             fav_user = session_db.query(User).filter(
                                 or_(
@@ -4691,12 +4691,12 @@ async def get_feed_handler(request):
                     logger.error(f"Error processing post {post.id}: {post_error}")
                     continue
 
-            # РџСЂРѕРІРµСЂРёС‚СЊ, РµСЃС‚СЊ Р»Рё РЅРµРїСЂРѕС‡РёС‚Р°РЅРЅС‹Рµ РїРѕСЃС‚С‹
+            # РџСЂРѕвРµСЂРёС‚СЊ, РµСЃС‚СЊ Р»Рё наµРїСЂРѕС‡РёС‚Р°наЅС‹Рµ РїРѕСЃС‚С‹
             has_unread_posts = False
             if posts:
-                # РџРѕР»СѓС‡РёС‚СЊ ID РІСЃРµС… РїРѕСЃС‚РѕРІ
+                # РџРѕР»СѓС‡РёС‚СЊ ID вСЃРµС… РїРѕСЃС‚Рѕв
                 post_ids = [p.id for p in posts]
-                # РџСЂРѕРІРµСЂРёС‚СЊ, СЃРєРѕР»СЊРєРѕ РёР· РЅРёС… РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓР¶Рµ РІРёРґРµР»
+                # РџСЂРѕвРµСЂРёС‚СЊ, СЃРєРѕР»СЊРєРѕ РёР· наёС… РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СѓР¶Рµ вРёРґРµР»
                 viewed_count = session_db.query(PostView).filter(
                     PostView.user_id == user.id,
                     PostView.post_id.in_(post_ids)
@@ -4739,13 +4739,13 @@ async def mark_posts_viewed_handler(request):
             if not user:
                 return web.json_response({'error': 'User not found'}, status=404)
 
-            # РћС‚РјРµС‚РёС‚СЊ РїРѕСЃС‚С‹ РєР°Рє РїСЂРѕСЃРјРѕС‚СЂРµРЅРЅС‹Рµ (РёСЃРїРѕР»СЊР·СѓРµРј on_conflict_do_nothing РґР»СЏ РёР·Р±РµР¶Р°РЅРёСЏ РґСѓР±Р»РёРєР°С‚РѕРІ)
+            # РћС‚РјРµС‚РёС‚СЊ РїРѕСЃС‚С‹ РєР°Рє РїСЂРѕСЃРјРѕС‚СЂРµнаЅС‹Рµ (РёСЃРїРѕР»СЊР·СѓРµРј on_conflict_do_nothing РґР»СЏ РёР·Р±РµР¶Р°наёСЏ РґСѓР±Р»РёРєР°С‚Рѕв)
             for post_id in post_ids:
                 try:
-                    # РџСЂРѕРІРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё РїРѕСЃС‚
+                    # РџСЂРѕвРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚вСѓРµС‚ Р»Рё РїРѕСЃС‚
                     post = session_db.query(Post).filter_by(id=post_id).first()
                     if post:
-                        # РЎРѕР·РґР°РµРј Р·Р°РїРёСЃСЊ Рѕ РїСЂРѕСЃРјРѕС‚СЂРµ (РµСЃР»Рё РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚)
+                        # РЎРѕР·РґР°РµРј Р·Р°РїРёСЃСЊ Рѕ РїСЂРѕСЃРјРѕС‚СЂРµ (РµСЃР»Рё наµ СЃСѓС‰РµСЃС‚вСѓРµС‚)
                         existing_view = session_db.query(PostView).filter_by(
                             user_id=user.id, 
                             post_id=post_id
@@ -5166,7 +5166,7 @@ async def api_reminders_handler(request):
                 task.reminder_time = task.reminder_time.replace(tzinfo=pytz.UTC)
             if task.reminder_time.astimezone(user_tz) > user_now and task.status == 'pending':
                 reminder_time_local = task.reminder_time.astimezone(user_tz).strftime("%H:%M")
-                upcoming_reminders.append(f"{task.title} РІ {reminder_time_local}")
+                upcoming_reminders.append(f"{task.title} в {reminder_time_local}")
 
     return web.json_response({'reminders': upcoming_reminders[:5]})
 
@@ -5191,7 +5191,7 @@ async def on_startup(app):
     aiohttp_session.setup(app, storage)
     logger.info("Session middleware set up")
     
-    # РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј users.subscription_tier СЃ subscriptions.tier РїСЂРё СЃС‚Р°СЂС‚Рµ
+    # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј users.subscription_tier СЃ subscriptions.tier РїСЂРё СЃС‚Р°СЂС‚Рµ
     try:
         from datetime import datetime
         import pytz
@@ -5204,7 +5204,7 @@ async def on_startup(app):
             if not user:
                 continue
             
-            # РџСЂРѕРІРµСЂСЏРµРј, РЅРµ РёСЃС‚РµРєР»Р° Р»Рё РїРѕРґРїРёСЃРєР°
+            # РџСЂРѕвРµСЂСЏРµРј, наµ РёСЃС‚РµРєР»Р° Р»Рё РїРѕРґРїРёСЃРєР°
             now = datetime.now(pytz.UTC)
             if sub.end_date and sub.end_date.tzinfo is None:
                 sub.end_date = sub.end_date.replace(tzinfo=pytz.UTC)
@@ -5212,7 +5212,7 @@ async def on_startup(app):
             if sub.end_date and sub.end_date < now:
                 continue
             
-            # РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј С‚Р°СЂРёС„С‹
+            # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј С‚Р°СЂРёС„С‹
             user_tier_str = str(user.subscription_tier).split('.')[-1] if user.subscription_tier else None
             sub_tier_str = str(sub.tier).split('.')[-1] if sub.tier else None
             
@@ -5225,7 +5225,7 @@ async def on_startup(app):
             session_db.commit()
             logger.info(f"вњ… Synced {synced_count} user tiers with subscriptions on startup")
         
-        # РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј users.average_rating СЃ user_profiles.average_rating
+        # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј users.average_rating СЃ user_profiles.average_rating
         all_profiles = session_db.query(UserProfile).all()
         rating_synced_count = 0
         
@@ -5234,7 +5234,7 @@ async def on_startup(app):
             if not user:
                 continue
             
-            # РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј СЂРµР№С‚РёРЅРі
+            # РЎРёРЅС…СЂРѕнаёР·РёСЂСѓРµРј СЂРµР№С‚Рёнаі
             if user.average_rating != profile.average_rating or user.rating_count != profile.rating_count:
                 logger.info(f"Syncing rating for @{user.username}: users.{user.average_rating} -> profile.{profile.average_rating}")
                 user.average_rating = profile.average_rating
@@ -5325,7 +5325,7 @@ async def api_tasks_handler(request):
 
                 # Remove existing delegation markers from title to avoid duplication
                 import re
-                title = re.sub(r' - [Р”Рґ]РµР»РµРіРёСЂРѕРІР°РЅР° (РѕС‚|РЅР°) @\w+$', '', title)
+                title = re.sub(r' - [Р”Рґ]РµР»РµРіРёСЂРѕвР°на° (РѕС‚|на°) @\w+$', '', title)
 
                 # Check if task is delegated TO me or BY me
                 if user.username and (task.delegated_to_username.lower() == user.username.lower(
@@ -5333,10 +5333,10 @@ async def api_tasks_handler(request):
                     # Task delegated TO me
                     creator = session_db.query(User).filter_by(id=task.delegated_by).first()
                     if creator:
-                        title = f"{title} - Р”РµР»РµРіРёСЂРѕРІР°РЅР° РѕС‚ @{creator.username}"
+                        title = f"{title} - Р”РµР»РµРіРёСЂРѕвР°на° РѕС‚ @{creator.username}"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
-                    title = f"{title} - Р”РµР»РµРіРёСЂРѕРІР°РЅР° РЅР° @{delegated_username}"
+                    title = f"{title} - Р”РµР»РµРіРёСЂРѕвР°на° на° @{delegated_username}"
 
             task_data = {
                 'id': task.id,
@@ -5350,15 +5350,15 @@ async def api_tasks_handler(request):
                 'is_delegated': task.delegated_to_username is not None,
                 'delegation_status': task.delegation_status if hasattr(task, 'delegation_status') else None,
                 'delegated_to': task.delegated_to_username,
-                'delegated_to_username': task.delegated_to_username,  # Р”СѓР±Р»РёСЂСѓРµРј РґР»СЏ СѓРґРѕР±СЃС‚РІР°
-                'delegated_by': None,  # Р‘СѓРґРµС‚ СѓСЃС‚Р°РЅРѕРІР»РµРЅРѕ РЅРёР¶Рµ
+                'delegated_to_username': task.delegated_to_username,  # Р”СѓР±Р»РёСЂСѓРµРј РґР»СЏ СѓРґРѕР±СЃС‚вР°
+                'delegated_by': None,  # Р‘СѓРґРµС‚ СѓСЃС‚Р°наѕвР»Рµнаѕ наёР¶Рµ
                 'delegated_by_username': None,  # Username С‚РѕРіРѕ РєС‚Рѕ РїРѕСЂСѓС‡РёР»
-                'delegated_by_me': task.delegated_by == user.id  # True РµСЃР»Рё СЏ РґРµР»РµРіРёСЂРѕРІР°Р» СЌС‚Сѓ Р·Р°РґР°С‡Сѓ
+                'delegated_by_me': task.delegated_by == user.id  # True РµСЃР»Рё СЏ РґРµР»РµРіРёСЂРѕвР°Р» СЌС‚Сѓ Р·Р°РґР°С‡Сѓ
             }
             
             # РћРїСЂРµРґРµР»СЏРµРј delegated_by Рё delegated_by_username
             if task.delegated_by and task.delegated_by != user.id:
-                # Р—Р°РґР°С‡Р° Р±С‹Р»Р° РґРµР»РµРіРёСЂРѕРІР°РЅР° РјРЅРµ РєРµРј-С‚Рѕ
+                # Р—Р°РґР°С‡Р° Р±С‹Р»Р° РґРµР»РµРіРёСЂРѕвР°на° Рјнаµ РєРµРј-С‚Рѕ
                 delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
                 if delegator and delegator.username:
                     task_data['delegated_by'] = delegator.username
@@ -5369,7 +5369,7 @@ async def api_tasks_handler(request):
                 local_reminder = task.reminder_time.astimezone(user_tz)
                 task_data['reminder_time'] = local_reminder.isoformat()
                 task_data['reminder_time_local'] = local_reminder.strftime('%d.%m.%Y %H:%M')
-                # РџСЂРѕСЃСЂРѕС‡РєР° РґР»СЏ РЅРµР·Р°РІРµСЂС€РµРЅРЅС‹С… Р·Р°РґР°С‡ (pending РёР»Рё in_progress)
+                # РџСЂРѕСЃСЂРѕС‡РєР° РґР»СЏ наµР·Р°вРµСЂС€РµнаЅС‹С… Р·Р°РґР°С‡ (pending РёР»Рё in_progress)
                 task_data['overdue'] = local_reminder < user_now and task.status in ['pending', 'in_progress']
                 if task_data['overdue']:
                     delta = user_now - local_reminder
@@ -5378,11 +5378,11 @@ async def api_tasks_handler(request):
                     hours = (total_seconds % 86400) // 3600
                     minutes = (total_seconds % 3600) // 60
                     if days > 0:
-                        task_data['overdue_text'] = f'РЅР° {days} РґРЅ.'
+                        task_data['overdue_text'] = f'на {days} дн.'
                     elif hours > 0:
-                        task_data['overdue_text'] = f'РЅР° {hours} С‡.'
+                        task_data['overdue_text'] = f'на {hours} ч.'
                     else:
-                        task_data['overdue_text'] = f'РЅР° {minutes} РјРёРЅ.'
+                        task_data['overdue_text'] = f'на {minutes} мин.'
             tasks_data.append(task_data)
 
         return web.json_response({'tasks': tasks_data})
@@ -5394,7 +5394,7 @@ async def api_tasks_handler(request):
 
 
 async def api_delegations_handler(request):
-    """API РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ РґРµР»РµРіРёСЂРѕРІР°РЅРЅС‹С… Р·Р°РґР°С‡"""
+    """API РґР»СЏ РїРѕР»СѓС‡РµнаёСЏ РґРµР»РµРіРёСЂРѕвР°наЅС‹С… Р·Р°РґР°С‡"""
     session = await get_session(request)
     user_id = session.get('user_id')
     logger.info(f"API delegations handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
@@ -5462,7 +5462,7 @@ async def api_delegations_handler(request):
 
 
 async def api_interactions_handler(request):
-    """API РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ РёСЃС‚РѕСЂРёРё С‡Р°С‚Р°"""
+    """API РґР»СЏ РїРѕР»СѓС‡РµнаёСЏ РёСЃС‚РѕСЂРёРё С‡Р°С‚Р°"""
     session = await get_session(request)
     user_id = session.get('user_id')
     logger.info(f"API interactions handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
@@ -5533,7 +5533,7 @@ async def api_interactions_handler(request):
 
 
 async def api_search_contacts_handler(request):
-    """API РґР»СЏ РїРѕРёСЃРєР° РєРѕРЅС‚Р°РєС‚РѕРІ РїРѕ username"""
+    """API РґР»СЏ РїРѕРёСЃРєР° РєРѕРЅС‚Р°РєС‚Рѕв РїРѕ username"""
     try:
         session_obj = await get_session(request)
         user_id = session_obj.get('user_id')
@@ -5546,20 +5546,20 @@ async def api_search_contacts_handler(request):
 
         session_db = Session()
         try:
-            # РџРѕРёСЃРє РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РїРѕ username (С‡Р°СЃС‚РёС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ)
+            # РџРѕРёСЃРє РїРѕР»СЊР·РѕвР°С‚РµР»РµР№ РїРѕ username (С‡Р°СЃС‚РёС‡наѕРµ СЃРѕвРїР°РґРµнаёРµ)
             users = session_db.query(User).filter(
                 User.username.ilike(f'%{query}%')
             ).limit(20).all()
 
             contacts_data = []
             for user in users:
-                # РџСЂРѕРїСѓСЃРєР°РµРј С‚РµРєСѓС‰РµРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+                # РџСЂРѕРїСѓСЃРєР°РµРј С‚РµРєСѓС‰РµРіРѕ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
                 if user.telegram_id == user_id:
                     continue
 
                 profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
 
-                # РћР±РЅРѕРІР»СЏРµРј Р°РІР°С‚Р°СЂ РµСЃР»Рё РЅСѓР¶РЅРѕ
+                # РћР±наѕвР»СЏРµРј Р°вР°С‚Р°СЂ РµСЃР»Рё РЅСѓР¶наѕ
                 photo_url = user.photo_url
                 if user.telegram_id and 'bot' in request.app:
                     try:
@@ -5593,7 +5593,7 @@ async def api_search_contacts_handler(request):
 
 
 async def update_timezone_handler(request):
-    """РћР±РЅРѕРІР»СЏРµС‚ timezone РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ С‡РµСЂРµР· РІРµР±-РїР°РЅРµР»СЊ"""
+    """РћР±наѕвР»СЏРµС‚ timezone РїРѕР»СЊР·РѕвР°С‚РµР»СЏ С‡РµСЂРµР· вРµР±-РїР°наµР»СЊ"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id')
@@ -5606,7 +5606,7 @@ async def update_timezone_handler(request):
         if not timezone:
             return web.json_response({'status': 'error', 'message': 'Timezone required'}, status=400)
 
-        # РџСЂРѕРІРµСЂРєР° РІР°Р»РёРґРЅРѕСЃС‚Рё timezone
+        # РџСЂРѕвРµСЂРєР° вР°Р»РёРґнаѕСЃС‚Рё timezone
         try:
             pytz.timezone(timezone)
         except BaseException:
@@ -5629,7 +5629,7 @@ async def update_timezone_handler(request):
 
 
 async def api_profile_handler(request):
-    """API РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ Рё РѕР±РЅРѕРІР»РµРЅРёСЏ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ"""
+    """API РґР»СЏ РїРѕР»СѓС‡РµнаёСЏ Рё РѕР±наѕвР»РµнаёСЏ РїСЂРѕС„РёР»СЏ РїРѕР»СЊР·РѕвР°С‚РµР»СЏ"""
     try:
         session = await get_session(request)
         user_id = session.get('user_id') if session else None
@@ -5660,7 +5660,7 @@ async def api_profile_handler(request):
                     profile = UserProfile(user_id=user.id)
                     session_db.add(profile)
 
-                # Update profile fields (РїСѓСЃС‚С‹Рµ СЃС‚СЂРѕРєРё СѓРґР°Р»СЏСЋС‚ РґР°РЅРЅС‹Рµ)
+                # Update profile fields (РїСѓСЃС‚С‹Рµ СЃС‚СЂРѕРєРё СѓРґР°Р»СЏСЋС‚ РґР°наЅС‹Рµ)
                 if 'city' in data:
                     profile.city = data['city'].strip() if data['city'] and data['city'].strip() else None
                 if 'birthdate' in data:
@@ -5690,7 +5690,7 @@ async def api_profile_handler(request):
             logger.error(f"Error updating profile: {e}", exc_info=True)
             return web.json_response({'error': str(e)}, status=500)
 
-    # Get fresh data from database (СѓР±СЂР°Р»Рё РєРµС€РёСЂРѕРІР°РЅРёРµ РґР»СЏ РјРіРЅРѕРІРµРЅРЅРѕРіРѕ РѕР±РЅРѕРІР»РµРЅРёСЏ)
+    # Get fresh data from database (СѓР±СЂР°Р»Рё РєРµС€РёСЂРѕвР°наёРµ РґР»СЏ РјРінаѕвРµнаЅРѕРіРѕ РѕР±наѕвР»РµнаёСЏ)
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -5730,8 +5730,8 @@ async def api_profile_handler(request):
         user_now = base_now.astimezone(user_tz)
 
         months = [
-            'СЏРЅРІР°СЂСЏ', 'С„РµРІСЂР°Р»СЏ', 'РјР°СЂС‚Р°', 'Р°РїСЂРµР»СЏ', 'РјР°СЏ', 'РёСЋРЅСЏ',
-            'РёСЋР»СЏ', 'Р°РІРіСѓСЃС‚Р°', 'СЃРµРЅС‚СЏР±СЂСЏ', 'РѕРєС‚СЏР±СЂСЏ', 'РЅРѕСЏР±СЂСЏ', 'РґРµРєР°Р±СЂСЏ'
+            'СЏнаІР°СЂСЏ', 'С„РµвСЂР°Р»СЏ', 'РјР°СЂС‚Р°', 'Р°РїСЂРµР»СЏ', 'РјР°СЏ', 'РёСЋРЅСЏ',
+            'РёСЋР»СЏ', 'Р°вРіСѓСЃС‚Р°', 'СЃРµРЅС‚СЏР±СЂСЏ', 'РѕРєС‚СЏР±СЂСЏ', 'наѕСЏР±СЂСЏ', 'РґРµРєР°Р±СЂСЏ'
         ]
         current_time = user_now.strftime('%H:%M')
         current_date = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
@@ -5772,62 +5772,62 @@ async def api_profile_handler(request):
 
 
 async def extend_subscription_handler(request):
-    """РџРµСЂРµРЅР°РїСЂР°РІР»РµРЅРёРµ РЅР° СЃС‚СЂР°РЅРёС†Сѓ РІС‹Р±РѕСЂР° С‚Р°СЂРёС„Р°"""
+    """РџРµСЂРµна°РїСЂР°вР»РµнаёРµ на° СЃС‚СЂР°наёС†Сѓ вС‹Р±РѕСЂР° С‚Р°СЂРёС„Р°"""
     return web.HTTPFound('/subscription_tiers')
 
 
 @aiohttp_jinja2.template('subscription_tiers.html')
 async def subscription_tiers_handler(request):
-    """РЎС‚СЂР°РЅРёС†Р° РІС‹Р±РѕСЂР° С‚Р°СЂРёС„Р° РїРѕРґРїРёСЃРєРё"""
+    """РЎС‚СЂР°наёС†Р° вС‹Р±РѕСЂР° С‚Р°СЂРёС„Р° РїРѕРґРїРёСЃРєРё"""
     return {}
 
 
 async def apply_promo_code_handler(request):
-    """РџСЂРёРјРµРЅСЏРµС‚ РїСЂРѕРјРѕРєРѕРґ Рё Р°РєС‚РёРІРёСЂСѓРµС‚ РїРѕРґРїРёСЃРєСѓ"""
+    """РџСЂРёРјРµРЅСЏРµС‚ РїСЂРѕРјРѕРєРѕРґ Рё Р°РєС‚РёвРёСЂСѓРµС‚ РїРѕРґРїРёСЃРєСѓ"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
     if not user_id:
-        return web.json_response({'success': False, 'message': 'РќРµ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ'}, status=401)
+        return web.json_response({'success': False, 'message': 'РќРµ Р°вС‚РѕСЂРёР·РѕвР°РЅ'}, status=401)
 
     data = await request.post()
     promo_code = data.get('promo_code', '').strip().upper()
 
     if not promo_code:
-        return web.json_response({'success': False, 'message': 'Р’РІРµРґРёС‚Рµ РїСЂРѕРјРѕРєРѕРґ'})
+        return web.json_response({'success': False, 'message': 'Р’вРµРґРёС‚Рµ РїСЂРѕРјРѕРєРѕРґ'})
 
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
-            return web.json_response({'success': False, 'message': 'РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ'})
+            return web.json_response({'success': False, 'message': 'РџРѕР»СЊР·РѕвР°С‚РµР»СЊ наµ на°Р№РґРµРЅ'})
 
-        # РџСЂРѕРІРµСЂСЏРµРј РїСЂРѕРјРѕРєРѕРґ
+        # РџСЂРѕвРµСЂСЏРµРј РїСЂРѕРјРѕРєРѕРґ
         promo = session.query(PromoCode).filter_by(code=promo_code).first()
         if not promo:
-            return web.json_response({'success': False, 'message': 'РќРµРІРµСЂРЅС‹Р№ РїСЂРѕРјРѕРєРѕРґ'})
+            return web.json_response({'success': False, 'message': 'РќРµвРµСЂРЅС‹Р№ РїСЂРѕРјРѕРєРѕРґ'})
 
-        # РџСЂРѕРІРµСЂСЏРµРј СЃСЂРѕРє РґРµР№СЃС‚РІРёСЏ - РїСЂРёРІРѕРґРёРј РѕР±Рµ РґР°С‚С‹ Рє РѕРґРЅРѕРјСѓ С„РѕСЂРјР°С‚Сѓ
+        # РџСЂРѕвРµСЂСЏРµРј СЃСЂРѕРє РґРµР№СЃС‚вРёСЏ - РїСЂРёвРѕРґРёРј РѕР±Рµ РґР°С‚С‹ Рє РѕРґнаѕРјСѓ С„РѕСЂРјР°С‚Сѓ
         now = datetime.now(dt_timezone.utc)
         expires_at = promo.expires_at.replace(tzinfo=dt_timezone.utc) if promo.expires_at.tzinfo is None else promo.expires_at
         if expires_at < now:
-            return web.json_response({'success': False, 'message': 'РЎСЂРѕРє РґРµР№СЃС‚РІРёСЏ РїСЂРѕРјРѕРєРѕРґР° РёСЃС‚РµРє'})
+            return web.json_response({'success': False, 'message': 'РЎСЂРѕРє РґРµР№СЃС‚вРёСЏ РїСЂРѕРјРѕРєРѕРґР° РёСЃС‚РµРє'})
 
-        # РџСЂРѕРІРµСЂСЏРµРј Р»РёРјРёС‚ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёР№
+        # РџСЂРѕвРµСЂСЏРµРј Р»РёРјРёС‚ РёСЃРїРѕР»СЊР·РѕвР°наёР№
         if promo.max_uses is not None and promo.used_count >= promo.max_uses:
-            return web.json_response({'success': False, 'message': 'РџСЂРѕРјРѕРєРѕРґ РґРѕСЃС‚РёРі Р»РёРјРёС‚Р° РёСЃРїРѕР»СЊР·РѕРІР°РЅРёР№'})
+            return web.json_response({'success': False, 'message': 'РџСЂРѕРјРѕРєРѕРґ РґРѕСЃС‚РёРі Р»РёРјРёС‚Р° РёСЃРїРѕР»СЊР·РѕвР°наёР№'})
 
-        # РџСЂРѕРІРµСЂСЏРµРј, РёСЃРїРѕР»СЊР·РѕРІР°Р» Р»Рё СѓР¶Рµ СЌС‚РѕС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЌС‚РѕС‚ РїСЂРѕРјРѕРєРѕРґ
+        # РџСЂРѕвРµСЂСЏРµРј, РёСЃРїРѕР»СЊР·РѕвР°Р» Р»Рё СѓР¶Рµ СЌС‚РѕС‚ РїРѕР»СЊР·РѕвР°С‚РµР»СЊ СЌС‚РѕС‚ РїСЂРѕРјРѕРєРѕРґ
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id in used_by_users:
-            return web.json_response({'success': False, 'message': 'Р’С‹ СѓР¶Рµ РёСЃРїРѕР»СЊР·РѕРІР°Р»Рё СЌС‚РѕС‚ РїСЂРѕРјРѕРєРѕРґ'})
+            return web.json_response({'success': False, 'message': 'Р’С‹ СѓР¶Рµ РёСЃРїРѕР»СЊР·РѕвР°Р»Рё СЌС‚РѕС‚ РїСЂРѕРјРѕРєРѕРґ'})
 
-        # РђРєС‚РёРІРёСЂСѓРµРј РїРѕРґРїРёСЃРєСѓ
+        # РђРєС‚РёвРёСЂСѓРµРј РїРѕРґРїРёСЃРєСѓ
         start_date = now
         end_date = start_date + timedelta(days=promo.duration_days)
 
-        # РС‰РµРј СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ РїРѕРґРїРёСЃРєСѓ РёР»Рё СЃРѕР·РґР°РµРј РЅРѕРІСѓСЋ
+        # РС‰РµРј СЃСѓС‰РµСЃС‚вСѓСЋС‰СѓСЋ РїРѕРґРїРёСЃРєСѓ РёР»Рё СЃРѕР·РґР°РµРј наѕвСѓСЋ
         subscription = session.query(Subscription).filter_by(user_id=user.id).first()
         if not subscription:
             subscription = Subscription(
@@ -5849,48 +5849,48 @@ async def apply_promo_code_handler(request):
             subscription.end_date = end_date
             logger.info(f"Updated existing subscription for user {user.id}: tier {old_tier} -> {promo.tier}")
 
-        # РћР±РЅРѕРІР»СЏРµРј user.subscription_tier РґР»СЏ СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё
+        # РћР±наѕвР»СЏРµРј user.subscription_tier РґР»СЏ СЃРёРЅС…СЂРѕнаёР·Р°С†РёРё
         user.subscription_tier = promo.tier
 
-        # РћР±РЅРѕРІР»СЏРµРј СЃС‡РµС‚С‡РёРє РёСЃРїРѕР»СЊР·РѕРІР°РЅРёР№
+        # РћР±наѕвР»СЏРµРј СЃС‡РµС‚С‡РёРє РёСЃРїРѕР»СЊР·РѕвР°наёР№
         promo.used_count += 1
         if promo.max_uses is None or promo.used_count >= promo.max_uses:
             promo.is_used = True
 
-        # Р”РѕР±Р°РІР»СЏРµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РІ СЃРїРёСЃРѕРє РёСЃРїРѕР»СЊР·РѕРІР°РІС€РёС…
+        # Р”РѕР±Р°вР»СЏРµРј РїРѕР»СЊР·РѕвР°С‚РµР»СЏ в СЃРїРёСЃРѕРє РёСЃРїРѕР»СЊР·РѕвР°вС€РёС…
         import json
         used_by_users = json.loads(promo.used_by_users or '[]')
         if user.id not in used_by_users:
             used_by_users.append(user.id)
         promo.used_by_users = json.dumps(used_by_users)
 
-        # РЈСЃС‚Р°СЂРµРІС€РёРµ РїРѕР»СЏ РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё
+        # РЈСЃС‚Р°СЂРµвС€РёРµ РїРѕР»СЏ РґР»СЏ СЃРѕвРјРµСЃС‚РёРјРѕСЃС‚Рё
         promo.used_by_user_id = user.id
         promo.used_at = now
 
         session.commit()
         logger.info(f"Promo code {promo_code} activated for user {user.id}, subscription created/updated with tier {subscription.tier}")
 
-        # РЎРѕС…СЂР°РЅСЏРµРј Р·РЅР°С‡РµРЅРёСЏ РґРѕ Р·Р°РєСЂС‹С‚РёСЏ СЃРµСЃСЃРёРё
+        # РЎРѕС…СЂР°РЅСЏРµРј Р·на°С‡РµнаёСЏ РґРѕ Р·Р°РєСЂС‹С‚РёСЏ СЃРµСЃСЃРёРё
         tier_name = promo.tier.value if hasattr(promo.tier, 'value') else str(promo.tier)
         duration = promo.duration_days
         end_date_str = end_date.strftime("%d.%m.%Y")
 
         return web.json_response({
             'success': True,
-            'message': f'РџСЂРѕРјРѕРєРѕРґ Р°РєС‚РёРІРёСЂРѕРІР°РЅ! РџРѕРґРїРёСЃРєР° {tier_name} РЅР° {duration} РґРЅРµР№ РґРѕ {end_date_str}'
+            'message': f'РџСЂРѕРјРѕРєРѕРґ Р°РєС‚РёвРёСЂРѕвР°РЅ! РџРѕРґРїРёСЃРєР° {tier_name} на° {duration} РґнаµР№ РґРѕ {end_date_str}'
         })
 
     except Exception as e:
         logger.error(f"Error applying promo code: {e}", exc_info=True)
         session.rollback()
-        return web.json_response({'success': False, 'message': f'РћС€РёР±РєР° Р°РєС‚РёРІР°С†РёРё РїСЂРѕРјРѕРєРѕРґР°: {str(e)}'}, status=500)
+        return web.json_response({'success': False, 'message': f'РћС€РёР±РєР° Р°РєС‚РёвР°С†РёРё РїСЂРѕРјРѕРєРѕРґР°: {str(e)}'}, status=500)
     finally:
         session.close()
 
 
 async def create_payment_handler(request):
-    """РЎРѕР·РґР°РµС‚ РїР»Р°С‚РµР¶ РґР»СЏ РІС‹Р±СЂР°РЅРЅРѕРіРѕ С‚Р°СЂРёС„Р°"""
+    """РЎРѕР·РґР°РµС‚ РїР»Р°С‚РµР¶ РґР»СЏ вС‹Р±СЂР°наЅРѕРіРѕ С‚Р°СЂРёС„Р°"""
     session_obj = await get_session(request)
     user_id = session_obj.get('user_id')
 
@@ -5917,7 +5917,7 @@ async def create_payment_handler(request):
 
         payment_url = create_payment(
             amount=str(amount),
-            description=f"РџРѕРґРїРёСЃРєР° ASI Biont - {tier_name} РЅР° 30 РґРЅРµР№",
+            description=f"РџРѕРґРїРёСЃРєР° ASI Biont - {tier_name} на° 30 РґнаµР№",
             user_id=user_id,
             tier=tier
         )
@@ -5926,7 +5926,7 @@ async def create_payment_handler(request):
         return web.HTTPFound(payment_url)
     except Exception as e:
         logger.error(f"Error creating payment: {e}")
-        return web.Response(text=f'РћС€РёР±РєР° СЃРѕР·РґР°РЅРёСЏ РїР»Р°С‚РµР¶Р°: {str(e)}', status=500)
+        return web.Response(text=f'РћС€РёР±РєР° СЃРѕР·РґР°наёСЏ РїР»Р°С‚РµР¶Р°: {str(e)}', status=500)
 
 
 async def clear_database_handler(request):
@@ -5966,21 +5966,21 @@ async def add_test_users_handler(request):
         
         session = Session()
         
-        # Р”Р°РЅРЅС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
+        # Р”Р°наЅС‹Рµ РїРѕР»СЊР·РѕвР°С‚РµР»РµР№
         sport_users = [
-            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'С„СѓС‚Р±РѕР», Р±Р°СЃРєРµС‚Р±РѕР», РІРѕР»РµР№Р±РѕР»', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'sport_alex', 'telegram_id': 1000001, 'interests': 'С„СѓС‚Р±РѕР», Р±Р°СЃРєРµС‚Р±РѕР», вРѕР»РµР№Р±РѕР»', 'tier': SubscriptionTier.LIGHT},
             {'username': 'sport_maria', 'telegram_id': 1000002, 'interests': 'Р±РµРі, Р№РѕРіР°, РїРёР»Р°С‚РµСЃ', 'tier': SubscriptionTier.STANDARD},
-            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'С‚РµРЅРЅРёСЃ, РїР»Р°РІР°РЅРёРµ, РІРµР»РѕСЃРїРѕСЂС‚', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'С„РёС‚РЅРµСЃ, РєСЂРѕСЃСЃС„РёС‚, Р±РѕРґРёР±РёР»РґРёРЅРі', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'sport_ivan', 'telegram_id': 1000003, 'interests': 'С‚РµнаЅРёСЃ, РїР»Р°вР°наёРµ, вРµР»РѕСЃРїРѕСЂС‚', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'sport_olga', 'telegram_id': 1000004, 'interests': 'С„РёС‚наµСЃ, РєСЂРѕСЃСЃС„РёС‚, Р±РѕРґРёР±РёР»РґРёнаі', 'tier': SubscriptionTier.LIGHT},
             {'username': 'sport_dmitry', 'telegram_id': 1000005, 'interests': 'С…РѕРєРєРµР№, Р±РёР°С‚Р»РѕРЅ, Р»С‹Р¶Рё', 'tier': SubscriptionTier.STANDARD},
         ]
         
         business_users = [
-            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'СЃС‚Р°СЂС‚Р°РїС‹, РјР°СЂРєРµС‚РёРЅРі, РїСЂРѕРґР°Р¶Рё', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'РёРЅРІРµСЃС‚РёС†РёРё, С„РёРЅР°РЅСЃС‹, РєСЂРёРїС‚РѕРІР°Р»СЋС‚Р°', 'tier': SubscriptionTier.LIGHT},
-            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'СѓРїСЂР°РІР»РµРЅРёРµ РїСЂРѕРµРєС‚Р°РјРё, agile, scrum', 'tier': SubscriptionTier.STANDARD},
-            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, РѕРЅР»Р°Р№РЅ-С‚РѕСЂРіРѕРІР»СЏ, Р»РѕРіРёСЃС‚РёРєР°', 'tier': SubscriptionTier.PREMIUM},
-            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, СЂРµРєСЂСѓС‚РёРЅРі, РѕР±СѓС‡РµРЅРёРµ РїРµСЂСЃРѕРЅР°Р»Р°', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'biz_anna', 'telegram_id': 2000001, 'interests': 'СЃС‚Р°СЂС‚Р°РїС‹, РјР°СЂРєРµС‚Рёнаі, РїСЂРѕРґР°Р¶Рё', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'biz_sergey', 'telegram_id': 2000002, 'interests': 'РёнаІРµСЃС‚РёС†РёРё, С„Рёна°РЅСЃС‹, РєСЂРёРїС‚РѕвР°Р»СЋС‚Р°', 'tier': SubscriptionTier.LIGHT},
+            {'username': 'biz_elena', 'telegram_id': 2000003, 'interests': 'СѓРїСЂР°вР»РµнаёРµ РїСЂРѕРµРєС‚Р°РјРё, agile, scrum', 'tier': SubscriptionTier.STANDARD},
+            {'username': 'biz_maxim', 'telegram_id': 2000004, 'interests': 'e-commerce, Рѕна»Р°Р№РЅ-С‚РѕСЂРіРѕвР»СЏ, Р»РѕРіРёСЃС‚РёРєР°', 'tier': SubscriptionTier.PREMIUM},
+            {'username': 'biz_victoria', 'telegram_id': 2000005, 'interests': 'HR, СЂРµРєСЂСѓС‚Рёнаі, РѕР±СѓС‡РµнаёРµ РїРµСЂСЃРѕна°Р»Р°', 'tier': SubscriptionTier.LIGHT},
         ]
         
         all_users = sport_users + business_users
@@ -5991,13 +5991,13 @@ async def add_test_users_handler(request):
             existing_user = session.query(User).filter_by(telegram_id=user_data['telegram_id']).first()
             
             if existing_user:
-                # РџСЂРѕРІРµСЂСЏРµРј РµСЃС‚СЊ Р»Рё subscription
+                # РџСЂРѕвРµСЂСЏРµРј РµСЃС‚СЊ Р»Рё subscription
                 existing_sub = session.query(Subscription).filter_by(user_id=existing_user.id).first()
                 if existing_sub:
                     skipped.append(user_data['username'])
                     continue
                 else:
-                    # User РµСЃС‚СЊ, РЅРѕ subscription РЅРµС‚ - РґРѕР±Р°РІР»СЏРµРј С‚РѕР»СЊРєРѕ subscription
+                    # User РµСЃС‚СЊ, наѕ subscription наµС‚ - РґРѕР±Р°вР»СЏРµРј С‚РѕР»СЊРєРѕ subscription
                     end_date = datetime.now(dt_timezone.utc) + timedelta(days=365)
                     subscription = Subscription(
                         user_id=existing_user.id,

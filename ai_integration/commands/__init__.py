@@ -8,6 +8,9 @@ from .reschedule_task import RescheduleTaskCommand
 from .update_profile import UpdateProfileCommand
 from .find_partners import FindPartnersCommand
 from .delegate_task import DelegateTaskCommand
+from .accept_delegated_task import AcceptDelegatedTaskCommand
+from .reject_delegated_task import RejectDelegatedTaskCommand
+from .get_delegation_progress import GetDelegationProgressCommand
 from .conversation import ConversationCommand
 from .get_task_details import GetTaskDetailsCommand
 from .edit_task import EditTaskCommand

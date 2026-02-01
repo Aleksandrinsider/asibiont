@@ -304,12 +304,12 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task_title": {
-                        "type": "string",
-                        "description": "Название задачи",
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи для принятия",
                     },
                 },
-                "required": ["task_title"],
+                "required": ["task_id"],
             },
         },
     },
@@ -321,16 +321,16 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task_title": {
-                        "type": "string",
-                        "description": "Название задачи",
+                    "task_id": {
+                        "type": "integer",
+                        "description": "ID задачи для отклонения",
                     },
                     "reason": {
                         "type": "string",
                         "description": "Причина отказа",
                     },
                 },
-                "required": ["task_title"],
+                "required": ["task_id"],
             },
         },
     },
