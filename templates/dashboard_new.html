@@ -668,7 +668,9 @@
                             <p style="margin: 0; margin-bottom: 4px;">Баланс: {{ referral_balance or 0 }} рублей
                                 <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">вывести</a>
                             </p>
-                            <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: https://t.me/ASIBiontBot?start=ref{{ user.telegram_id }}</p>
+                            <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: 
+                                <a href="#" onclick="copyReferralLink('https://t.me/ASIBiontBot?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">копировать</a>
+                            </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>
                             {% else %}
                             <p style="margin: 0;">Подписка: информация загружается...</p>
@@ -5756,7 +5758,7 @@
                             html += '<p style="margin: 0; margin-bottom: 4px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
                             html += '<p style="margin: 0; margin-bottom: 4px;">Баланс: ' + (data.referral_balance || 0) + ' рублей <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">вывести</a></p>';
                             const refLink = 'https://t.me/ASIBiontBot?start=ref' + data.telegram_id;
-                            html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: ' + refLink + '</p>';
+                            html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">копировать</a></p>';
                             html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>';
                         } else {
                             html += '<p style="margin-bottom: 20px;">Подписка: информация загружается...</p>';
@@ -5953,6 +5955,28 @@
     <script>
         function logout() {
             window.location.href = '/logout';
+        }
+
+        function copyReferralLink(link) {
+            navigator.clipboard.writeText(link).then(function() {
+                // Показываем уведомление об успешном копировании
+                showErrorNotification('Ссылка скопирована в буфер обмена', 'success', 2000);
+            }).catch(function(err) {
+                console.error('Ошибка копирования: ', err);
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = link;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showErrorNotification('Ссылка скопирована в буфер обмена', 'success', 2000);
+                } catch (fallbackErr) {
+                    console.error('Fallback копирования тоже не сработал: ', fallbackErr);
+                    showErrorNotification('Не удалось скопировать ссылку', 'error', 3000);
+                }
+                document.body.removeChild(textArea);
+            });
         }
 
         function openSupport() {
