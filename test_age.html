@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Age Calculation</title>
+</head>
+<body>
+    <h1>Тест расчета возраста</h1>
+    <div id="result"></div>
+
+    <script>
+        function calculateAge(birthdateStr) {
+            if (!birthdateStr) return null;
+            const parts = birthdateStr.split('.');
+            if (parts.length !== 3) return null;
+            const birthDate = new Date(parts[2], parts[1] - 1, parts[0]);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
+        // Тест
+        const testDate = '04.06.1985';
+        const age = calculateAge(testDate);
+        document.getElementById('result').innerHTML = 
+            'Дата рождения: ' + testDate + '<br>' +
+            'Возраст: ' + age + ' лет<br>' +
+            'Текущая дата: ' + new Date().toLocaleDateString('ru-RU');
+    </script>
+</body>
+</html>
