@@ -2343,8 +2343,12 @@ def unique_interests(value):
             seen.add(i.lower())
     return ', '.join(unique)
 
+def strptime_filter(value, format_string):
+    return datetime.strptime(value, format_string)
+
 jinja_env = aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('templates'))
 jinja_env.filters['unique_interests'] = unique_interests
+jinja_env.filters['strptime'] = strptime_filter
 
 
 async def yookassa_webhook(request):
