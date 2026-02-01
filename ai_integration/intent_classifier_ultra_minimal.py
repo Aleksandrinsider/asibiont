@@ -1,11 +1,8 @@
 import json
 from typing import Optional
 import aiohttp
-import logging
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from .tools import TOOLS
-
-logger = logging.getLogger(__name__)
 
 class IntentClassifierUltraMinimal:
     """Ultra minimal intent classification - AI figures everything out"""
@@ -42,115 +39,29 @@ class IntentClassifierUltraMinimal:
                     else:
                         return "conversation"  # fallback
         except Exception as e:
-            logger.error(f"AI call failed: {e}")
+            print(f"AI call failed: {e}")
             return "conversation"  # fallback
 
     @classmethod
     async def classify_intent(cls, message: str, user_id: int) -> str:
-        """AI classification with context understanding"""
+        """Ultra minimal AI classification - let AI figure out everything"""
 
-        prompt = f"""Анализ намерения пользователя в боте задач.
+        # If no API key or test key, use local classification
+        if not DEEPSEEK_API_KEY or DEEPSEEK_API_KEY == 'test_key':
+            return cls._local_classify(message)
 
-ТВОЯ ЗАДАЧА: Определи операцию и верни ТОЛЬКО английское слово.
+        # Ultra minimal prompt - no command list at all
+        prompt = f"""
+Ты - ИИ-ассистент для управления задачами. Проанализируй сообщение пользователя и определи, какую операцию он хочет выполнить.
 
-ОПЕРАЦИИ:
-add_task - создание задачи с напоминанием (напомни, создай, добавь, нужно, поставь напоминание)
-complete_task - завершение задачи (готово, сделал, выполнил, закончил, завершил, проверил)
-list_tasks - показ задач (покажи, список, что у меня, мои дела, запланировано)
-get_task_details - получить детали задачи (расскажи подробнее о, детали задачи, покажи детали)
-delete_task - удаление одной задачи (удали задачу, убери встречу, отмени)
-delete_all_tasks - удаление всех задач (удали все, очисти все, убери все дела)
-reschedule_task - перенос времени задачи (перенеси, измени время, отложи, подвинь)
-edit_task - изменение задачи (измени задачу, отредактируй, добавь описание, поменяй название)
-delegate_task - делегирование задачи другому (делегируй, поручи @username)
-accept_delegated_task - принять делегированную задачу (приму, соглашусь, выполню)
-reject_delegated_task - отклонить делегированную задачу (отклоню, не могу, откажусь)
-get_delegation_progress - статус делегированных задач (где моя задача, как дела с поручением)
-find_partners - поиск партнеров (найди партнеров, ищу единомышленников, подбери коллег)
-find_relevant_contacts_for_task - поиск помощи для конкретной задачи (кто может помочь с, нужен дизайнер)
-update_profile - обновление профиля (я из Москвы, работаю программистом, люблю спорт)
-update_user_memory - сохранение в память (запомни что я, сохрани предпочтение, не забудь что)
-conversation - остальное (привет, спасибо, как дела, что умеешь)
+Возможные операции: создание задачи, просмотр задач, завершение задачи, удаление задачи, перенос задачи, обновление профиля, поиск партнеров, общий разговор.
 
-ПРИМЕРЫ КЛАССИФИКАЦИИ:
-"Напомни позвонить клиенту завтра в 10" → add_task
-"Создай задачу купить молоко через час" → add_task
-"Добавь задачу проверить почту" → add_task
-"Нужно сделать презентацию" → add_task
-"Поставь напоминание встреча" → add_task
-"Готово" → complete_task
-"Сделал презентацию" → complete_task
-"Выполнил задачу про почту" → complete_task
-"Закончил встречу" → complete_task
-"Уже проверил почту" → complete_task
-"Покажи мои задачи" → list_tasks
-"Что у меня запланировано" → list_tasks
-"Список задач" → list_tasks
-"Мои дела" → list_tasks
-"Расскажи про задачу звонок" → get_task_details
-"Покажи детали задачи про презентацию" → get_task_details
-"Что с задачей купить молоко" → get_task_details
-"Удали задачу про молоко" → delete_task
-"Убери встречу" → delete_task
-"Отмени напоминание про звонок" → delete_task
-"Удали все задачи" → delete_all_tasks
-"Очисти все напоминания" → delete_all_tasks
-"Убери все дела" → delete_all_tasks
-"Перенеси на завтра" → reschedule_task
-"Отложи задачу на час" → reschedule_task
-"Измени время встречи на 15:00" → reschedule_task
-"Измени задачу про продукты: добавь описание" → edit_task
-"Отредактируй задачу встреча: поменяй название" → edit_task
-"Добавь описание к задаче" → edit_task
-"Поручи задачу @ivanov" → delegate_task
-"Делегируй встречу Петру" → delegate_task
-"Соглашусь выполнить задачу от коллеги" → accept_delegated_task
-"Приму поручение" → accept_delegated_task
-"Отклоняю делегированную задачу" → reject_delegated_task
-"Не смогу выполнить поручение" → reject_delegated_task
-"Где моя делегированная задача" → get_delegation_progress
-"Как дела с поручением от Петра" → get_delegation_progress
-"Я из Москвы" → update_profile
-"Работаю программистом" → update_profile
-"Интересуюсь Python" → update_profile
-"Запомни что я предпочитаю работать утром" → update_user_memory
-"Сохрани: я не люблю телефонные звонки" → update_user_memory
-"Не забудь что у меня аллергия" → update_user_memory
-"Найди партнеров" → find_partners
-"Ищу единомышленников" → find_partners
-"Подбери коллег с похожими интересами" → find_partners
-"Кто может помочь с дизайном" → find_relevant_contacts_for_task
-"Нужен программист для проекта" → find_relevant_contacts_for_task
-"Кто разбирается в маркетинге" → find_relevant_contacts_for_task
-"Привет" → conversation
-"Спасибо" → conversation
-"Что ты умеешь" → conversation
-
-КРИТИЧНО:
-• Если "измени/отредактируй задачу" или "добавь описание/название" → edit_task, НЕ update_profile!
-• Если "перенеси/отложи" ИЛИ меняется только ВРЕМЯ → reschedule_task, НЕ edit_task!
-• Если "покажи детали/расскажи про задачу" → get_task_details, НЕ list_tasks!
-• Если "запомни что я/сохрани" про предпочтения/факты → update_user_memory, НЕ update_profile!
-• Если "я из/работаю/интересуюсь" → update_profile, НЕ update_user_memory!
-• Если "кто может помочь с X" или "нужен X для задачи" → find_relevant_contacts_for_task, НЕ find_partners!
-• Если "удали все/очисти все" → delete_all_tasks, НЕ delete_task!
-• Если "поручи/делегируй @username" → delegate_task, НЕ add_task!
-• Если "соглашусь/приму поручение" → accept_delegated_task!
-• Если "откажусь/отклоню поручение" → reject_delegated_task!
-• Если "где моя задача/как дела с поручением" → get_delegation_progress!
-• Иначе для создания новой задачи → add_task
-"Что ты умеешь" → conversation
-
-КРИТИЧНО:
-• Если видишь "каждый день/неделю/час" или "ежедневно/еженедельно" → conversation (объясни, что повторяющиеся задачи не поддерживаются)
-• Если "измени/отредактируй задачу" или "добавь описание к задаче" → edit_task, НЕ update_profile!
-• Если "перенеси/отложи" ИЛИ меняется ВРЕМЯ → reschedule_task, НЕ edit_task!
-• Если "кто может помочь с X" или "нужен X" → find_relevant_contacts_for_task, НЕ find_partners!
-• Иначе для создания задачи → add_task
+Верни ТОЛЬКО одно слово на английском: add_task, list_tasks, complete_task, delete_task, reschedule_task, update_profile, find_partners, или conversation.
 
 Сообщение: "{message}"
 
-Операция (одно английское слово):"""
+Операция:
+"""
 
         try:
             response = await cls._call_ai(prompt)
@@ -160,39 +71,190 @@ conversation - остальное (привет, спасибо, как дела
                 intent = response.strip().lower()
                 # Remove any extra text, keep only the first word
                 intent = intent.split()[0] if intent else "conversation"
-                
-                logger.info(f"[CLASSIFIER] Raw response: '{response}' -> parsed intent: '{intent}'")
+
+                # Map common variations to standard intents
+                intent_mapping = {
+                    'create_task': 'add_task',
+                    'new_task': 'add_task',
+                    'add': 'add_task',
+                    'create': 'add_task',
+                    'show_tasks': 'list_tasks',
+                    'view_tasks': 'list_tasks',
+                    'my_tasks': 'list_tasks',
+                    'finish_task': 'complete_task',
+                    'done': 'complete_task',
+                    'finish': 'complete_task',
+                    'готово': 'complete_task',
+                    'сделал': 'complete_task',
+                    'выполнил': 'complete_task',
+                    'завершил': 'complete_task',
+                    'я сделал': 'complete_task',
+                    'я доработал': 'complete_task',
+                    'я завершил': 'complete_task',
+                    'я выполнил': 'complete_task',
+                    'уже сделал': 'complete_task',
+                    'уже выполнил': 'complete_task',
+                    'уже завершил': 'complete_task',
+                    'remove_task': 'delete_task',
+                    'remove': 'delete_task',
+                    'erase': 'delete_task',
+                    'удали': 'delete_task',
+                    'убери': 'delete_task',
+                    'move_task': 'reschedule_task',
+                    'change_time': 'reschedule_task',
+                    'reschedule': 'reschedule_task',
+                    'перенеси': 'reschedule_task',
+                    'измени время': 'reschedule_task',
+                    'update': 'update_profile',
+                    'profile': 'update_profile',
+                    'я из': 'update_profile',
+                    'работаю': 'update_profile',
+                    'интересует': 'update_profile',
+                    'find': 'find_partners',
+                    'partners': 'find_partners',
+                    'search': 'find_partners',
+                    'найди': 'find_partners',
+                    'партнеры': 'find_partners',
+                    'chat': 'conversation',
+                    'talk': 'conversation',
+                    'hello': 'conversation',
+                    'hi': 'conversation',
+                    'привет': 'conversation'
+                }
+
+                intent = intent_mapping.get(intent, intent)
 
                 if intent in cls.INTENTS:
                     return intent
-                else:
-                    logger.warning(f"[CLASSIFIER] Intent '{intent}' not in INTENTS list, defaulting to conversation")
 
             return 'conversation'
 
         except Exception as e:
-            logger.error(f"Intent classification error: {e}")
+            print(f"Intent classification error: {e}")
             return 'conversation'
+
+    @classmethod
+    def _local_classify(cls, message: str) -> str:
+        """Local rule-based intent classification using intent_mapping"""
+        msg = message.lower().strip()
+        
+        # Direct mapping from intent_mapping
+        intent_mapping = {
+            'create_task': 'add_task',
+            'new_task': 'add_task',
+            'add': 'add_task',
+            'create': 'add_task',
+            'напомни': 'add_task',
+            'создай': 'add_task',
+            'добавь': 'add_task',
+            'нужно': 'add_task',
+            'поставь': 'add_task',
+            'show_tasks': 'list_tasks',
+            'view_tasks': 'list_tasks',
+            'my_tasks': 'list_tasks',
+            'покажи': 'list_tasks',
+            'список': 'list_tasks',
+            'задачи': 'list_tasks',
+            'дела': 'list_tasks',
+            'расскажи': 'get_task_details',
+            'детали': 'get_task_details',
+            'удали все': 'delete_all_tasks',
+            'очисти': 'delete_all_tasks',
+            'убери все': 'delete_all_tasks',
+            'измени задачу': 'edit_task',
+            'отредактируй': 'edit_task',
+            'поручи': 'delegate_task',
+            'делегируй': 'delegate_task',
+            'соглашусь': 'accept_delegated_task',
+            'приму': 'accept_delegated_task',
+            'откажусь': 'reject_delegated_task',
+            'не могу': 'reject_delegated_task',
+            'где': 'get_delegation_progress',
+            'как дела': 'get_delegation_progress',
+            'кто может': 'find_relevant_contacts_for_task',
+            'нужен': 'find_relevant_contacts_for_task',
+            'запомни': 'update_user_memory',
+            'сохрани': 'update_user_memory',
+            'finish_task': 'complete_task',
+            'done': 'complete_task',
+            'finish': 'complete_task',
+            'готово': 'complete_task',
+            'сделал': 'complete_task',
+            'выполнил': 'complete_task',
+            'завершил': 'complete_task',
+            'я сделал': 'complete_task',
+            'я доработал': 'complete_task',
+            'я завершил': 'complete_task',
+            'я выполнил': 'complete_task',
+            'уже сделал': 'complete_task',
+            'уже выполнил': 'complete_task',
+            'уже завершил': 'complete_task',
+            'remove_task': 'delete_task',
+            'remove': 'delete_task',
+            'erase': 'delete_task',
+            'удали': 'delete_task',
+            'убери': 'delete_task',
+            'move_task': 'reschedule_task',
+            'change_time': 'reschedule_task',
+            'reschedule': 'reschedule_task',
+            'перенеси': 'reschedule_task',
+            'отложи': 'reschedule_task',
+            'измени время': 'reschedule_task',
+            'update': 'update_profile',
+            'profile': 'update_profile',
+            'я из': 'update_profile',
+            'работаю': 'update_profile',
+            'интересует': 'update_profile',
+            'find': 'find_partners',
+            'partners': 'find_partners',
+            'search': 'find_partners',
+            'найди': 'find_partners',
+            'партнеры': 'find_partners',
+            'единомышленников': 'find_partners',
+            'chat': 'conversation',
+            'talk': 'conversation',
+            'hello': 'conversation',
+            'hi': 'conversation',
+            'привет': 'conversation'
+        }
+        
+        # Sort by length descending to match longer phrases first
+        sorted_keys = sorted(intent_mapping.keys(), key=len, reverse=True)
+        
+        # Check for matches in order of length
+        for key in sorted_keys:
+            if key in msg:
+                return intent_mapping[key]
+        
+        # Default
+        return 'conversation'
 
     @classmethod
     def get_command_class(cls, intent: str):
         """Map intent to command class"""
         from .commands import (
-            CreateTaskCommand, CompleteTaskCommand, ListTasksCommand,
-            DeleteTaskCommand, RescheduleTaskCommand, UpdateProfileCommand, 
-            FindPartnersCommand, DelegateTaskCommand, ConversationCommand
+            AddTaskCommand, CompleteTaskCommand, ListTasksCommand,
+            DeleteTaskCommand, RescheduleTaskCommand, EditTaskCommand,
+            SetRecurringTaskCommand, UpdateProfileCommand, FindPartnersCommand,
+            GetTaskDetailsCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
+            DelegateTaskCommand, GetDelegationProgressCommand
         )
 
         mapping = {
-            'add_task': CreateTaskCommand,
+            'add_task': AddTaskCommand,
             'complete_task': CompleteTaskCommand,
             'list_tasks': ListTasksCommand,
             'delete_task': DeleteTaskCommand,
             'reschedule_task': RescheduleTaskCommand,
+            'edit_task': EditTaskCommand,
+            'set_recurring_task': SetRecurringTaskCommand,
             'update_profile': UpdateProfileCommand,
             'find_partners': FindPartnersCommand,
+            'get_task_details': GetTaskDetailsCommand,
+            'update_user_memory': UpdateUserMemoryCommand,
+            'delete_all_tasks': DeleteAllTasksCommand,
             'delegate_task': DelegateTaskCommand,
-            'conversation': ConversationCommand,
+            'get_delegation_progress': GetDelegationProgressCommand,
         }
 
-        return mapping.get(intent, ConversationCommand)
+        return mapping.get(intent)
