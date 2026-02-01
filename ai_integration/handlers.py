@@ -213,37 +213,57 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
     task = Task(user_id=user.id, title=title, description=encrypt_data(description))
     if reminder_time:
         try:
-            # Get user timezone
-            user_tz = pytz.UTC
-            if user.timezone:
-                try:
-                    user_tz = pytz.timezone(user.timezone)
-                except pytz.exceptions.UnknownTimeZoneError:
-                    logging.warning(f"Unknown timezone {user.timezone}, using UTC")
-                    user_tz = pytz.UTC
-
-            # Use AI-powered flexible time parser
-            from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
-            
-            current_time = datetime.now(user_tz)
-            logger.info(f"[ADD_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
-            
-            parsed_time = parse_time_with_ai(reminder_time, current_time)
-            
-            # Fallback to simple parser if AI fails
-            if not parsed_time:
-                logger.info("[ADD_TASK] AI parsing failed, trying simple fallback")
-                parsed_time = parse_time_simple_fallback(reminder_time, current_time)
-            
-            if parsed_time:
-                # Convert to UTC for storage
-                task.reminder_time = parsed_time.astimezone(pytz.UTC)
-                logger.info(f"[ADD_TASK] Time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+            # Check if reminder_time is already a datetime object
+            if isinstance(reminder_time, datetime):
+                logger.info(f"[ADD_TASK] reminder_time is already datetime: {reminder_time}")
+                # Assume it's in user's timezone, convert to UTC
+                user_tz = pytz.UTC
+                if user.timezone:
+                    try:
+                        user_tz = pytz.timezone(user.timezone)
+                    except pytz.exceptions.UnknownTimeZoneError:
+                        logging.warning(f"Unknown timezone {user.timezone}, using UTC")
+                        user_tz = pytz.UTC
+                
+                # If datetime has no timezone, assume it's in user's timezone
+                if reminder_time.tzinfo is None:
+                    reminder_time = user_tz.localize(reminder_time)
+                
+                task.reminder_time = reminder_time.astimezone(pytz.UTC)
+                logger.info(f"[ADD_TASK] Used existing datetime: {reminder_time} -> UTC: {task.reminder_time}")
             else:
-                logger.warning(f"[ADD_TASK] Could not parse time '{reminder_time}'")
-                if close_session:
-                    session.close()
-                return f"❌ Не удалось распознать время '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
+                # Parse string time
+                # Get user timezone
+                user_tz = pytz.UTC
+                if user.timezone:
+                    try:
+                        user_tz = pytz.timezone(user.timezone)
+                    except pytz.exceptions.UnknownTimeZoneError:
+                        logging.warning(f"Unknown timezone {user.timezone}, using UTC")
+                        user_tz = pytz.UTC
+
+                # Use AI-powered flexible time parser
+                from ai_integration.time_parser import parse_time_with_ai, parse_time_simple_fallback
+                
+                current_time = datetime.now(user_tz)
+                logger.info(f"[ADD_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
+                
+                parsed_time = parse_time_with_ai(reminder_time, current_time)
+                
+                # Fallback to simple parser if AI fails
+                if not parsed_time:
+                    logger.info("[ADD_TASK] AI parsing failed, trying simple fallback")
+                    parsed_time = parse_time_simple_fallback(reminder_time, current_time)
+                
+                if parsed_time:
+                    # Convert to UTC for storage
+                    task.reminder_time = parsed_time.astimezone(pytz.UTC)
+                    logger.info(f"[ADD_TASK] Time parsed: '{reminder_time}' -> local: {parsed_time} -> UTC: {task.reminder_time}")
+                else:
+                    logger.warning(f"[ADD_TASK] Could not parse time '{reminder_time}'")
+                    if close_session:
+                        session.close()
+                    return f"❌ Не удалось распознать время '{reminder_time}'. Попробуй: 'завтра в 10:00', 'через 2 часа', '15:30'"
         except Exception as e:
             logging.warning(f"Error processing reminder_time '{reminder_time}' for task {title}: {e}")
             import traceback

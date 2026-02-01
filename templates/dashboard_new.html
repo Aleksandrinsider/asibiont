@@ -30,12 +30,11 @@
         /* Основные стили для layout */
         .main-layout {
             display: flex;
-            gap: 20px; /* Test change */
+            gap: 20px;
             width: 100%;
             max-width: none;
             margin: 0 auto;
             padding: 0 10px;
-            border: 2px solid blue; /* Test border */
         }
         
         .left-column {
@@ -6064,7 +6063,7 @@
         function copyReferralLink(link) {
             navigator.clipboard.writeText(link).then(function() {
                 // Показываем уведомление об успешном копировании
-                showErrorNotification('Реферальная ссылка скопирована!', 'success', 2000);
+                showErrorNotification('Реферальная ссылка скопирована!', 'error', 5000);
             }).catch(function(err) {
                 console.error('Ошибка копирования: ', err);
                 // Fallback для старых браузеров
@@ -6074,7 +6073,7 @@
                 textArea.select();
                 try {
                     document.execCommand('copy');
-                    showErrorNotification('Реферальная ссылка скопирована!', 'success', 2000);
+                    showErrorNotification('Реферальная ссылка скопирована!', 'error', 5000);
                 } catch (fallbackErr) {
                     console.error('Fallback копирования тоже не сработал: ', fallbackErr);
                     showErrorNotification('Не удалось скопировать ссылку', 'error', 3000);

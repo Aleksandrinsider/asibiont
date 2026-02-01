@@ -23,13 +23,13 @@ from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (  # noqa: F401
     add_task, delete_all_tasks, complete_task, reschedule_task,
-    delegate_task_with_session, check_subscription_status, accept_delegated_task,
+    delegate_task_with_session, delegate_task, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
     list_tasks, get_partners_list, find_partners,
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, delete_task
+    update_profile, delete_task, find_relevant_contacts_for_task
 )
 
 logger = logging.getLogger(__name__)
@@ -609,7 +609,7 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 tool_results.append({"function": func_name, "result": result})
 
             elif func_name == "update_user_memory":
-                result = await update_user_memory(
+                result = await update_user_memory_async(
                     memory_type=args.get("memory_type"),
                     content=args.get("content"),
                     user_id=user_id,
@@ -1895,37 +1895,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
         db_session.close()
 
-        # ============================================================================
-        # ПЕРЕХВАТЧИК ДЛЯ ПЕРЕНОСА ЗАДАЧ - КРИТИЧЕСКИ ВАЖНО!
-        # Если пользователь явно говорит "перенеси" или хочет изменить время - ФОРСИРУЕМ reschedule_task
-        # ============================================================================
-        message_lower = original_message.lower()
-        
-        # Проверка на явный перенос
-        if any(word in message_lower for word in ['перенес', 'перенеси', 'переноси', 'переносим']):
-            from .task_context import get_user_current_task
-            current_task = get_user_current_task(user)
-            
-            time_keywords = ['через', 'на час', 'минут', 'часа', 'завтра', 'послезавтра', 'в ', ':']
-            has_time = any(kw in message_lower for kw in time_keywords)
-            
-            if current_task and has_time:
-                logger.warning(f"[RESCHEDULE INTERCEPTOR] Detected reschedule request for '{current_task.title}' - FORCING reschedule_task")
-                original_message = f"ПЕРЕНЕСИ ВРЕМЯ задачи '{current_task.title}' {original_message}"
-        
-        # Проверка на изменение времени недавно созданной задачи ("давай лучше на X", "лучше на X")
-        elif any(phrase in message_lower for phrase in ['давай лучше', 'лучше на', 'давай на', 'поставь на', 'а давай']):
-            time_keywords = ['через', 'минут', 'часа', 'час', 'в ', ':']
-            has_time = any(kw in message_lower for kw in time_keywords)
-            
-            if has_time:
-                from .task_context import get_user_current_task
-                current_task = get_user_current_task(user)
-                
-                if current_task and current_task.status != 'completed':
-                    logger.warning(f"[TIME CHANGE INTERCEPTOR] Detected time change request for '{current_task.title}' - FORCING reschedule_task")
-                    original_message = f"ПЕРЕНЕСИ ВРЕМЯ задачи '{current_task.title}' {original_message}"
-
         # УЛУЧШЕННАЯ INTENT CLASSIFICATION с AI-powered анализом
         # Сначала пробуем AI классификацию для точного извлечения параметров
         try:
@@ -2296,6 +2265,96 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 "как эффективно",
                 "что можно сделать",
                 "как решить проблему"])
+
+        # ТЕСТОВЫЙ РЕЖИМ: Если API ключ тестовый, симулируем tool calls на основе intent
+        # ЗАКОММЕНТИРОВАНО: симуляция мешает тестированию реального fallback поведения
+        # if DEEPSEEK_API_KEY in ['test_key', 'test_key_for_local_classification'] or DEEPSEEK_API_KEY.startswith('test'):
+        #     logger.info(f"[TEST MODE] Using simulated tool calls for intent: {intent.get('type')}")
+        #     
+        #     # Имитируем tool calls на основе intent для тестирования
+        #     simulated_tool_calls = []
+        #     if intent.get('type') == 'add_task':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'add_task',
+        #             'arguments': '{"title": "Тестовая задача", "reminder_time": "2026-02-01 15:00"}'
+        #         }]
+        #     elif intent.get('type') == 'complete_task':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'complete_task',
+        #             'arguments': '{"task_title": "Тестовая задача"}'
+        #         }]
+        #     elif intent.get('type') == 'list_tasks':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'list_tasks',
+        #             'arguments': '{}'
+        #         }]
+        #     elif intent.get('type') == 'update_profile':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'update_profile',
+        #             'arguments': '{"city": "Москва"}'
+        #         }]
+        #     elif intent.get('type') == 'delegate_task':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'delegate_task',
+        #             'arguments': '{"title": "Тестовая задача", "delegated_to_username": "test_user"}'
+        #         }]
+        #     elif intent.get('type') == 'delete_task':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'delete_task',
+        #             'arguments': '{"task_title": "Тестовая задача"}'
+        #         }]
+        #     elif intent.get('type') == 'delete_all_tasks':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'delete_all_tasks',
+        #             'arguments': '{}'
+        #         }]
+        #     elif intent.get('type') == 'reschedule_task':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'reschedule_task',
+        #             'arguments': '{"task_title": "Тестовая задача", "new_time": "завтра в 16:00"}'
+        #         }]
+        #     elif intent.get('type') == 'find_partners':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'find_partners',
+        #             'arguments': '{}'
+        #         }]
+        #     elif intent.get('type') == 'find_relevant_contacts_for_task':
+        #         simulated_tool_calls = [{
+        #             'function': {
+        #                 'name': 'find_relevant_contacts_for_task',
+        #             'arguments': '{"task_description": "программирование"}'
+        #         }]
+        #     
+        #     if simulated_tool_calls:
+        #         logger.info(f"[TEST MODE] Simulating tool calls: {simulated_tool_calls}")
+        #         # Создаем новую сессию для process_tool_calls
+        #         from models import Session
+        #         test_session = Session()
+        #         try:
+        #             # Вызываем process_tool_calls напрямую
+        #             result = await process_tool_calls(
+        #                 simulated_tool_calls, intent, clean_message, user_id, test_session, 
+        #                 None, "https://api.deepseek.com/v1/chat/completions", {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}, system_prompt, user_now, current_time_str, 
+        #             original_message, mentions_str, is_advice_question, current_time=user_now
+        #         )
+        #         if result:
+        #             return {'response': result, 'tools_called': simulated_tool_calls}
+        #         else:
+        #             return {'response': "Действие выполнено", 'tools_called': simulated_tool_calls}
+        #     finally:
+        #         test_session.close()
+        #     
+        #     # Для conversation возвращаем простой ответ
+        #     return {'response': "Понятно, продолжим разговор.", 'tools_called': []}
 
         # Определяем, является ли сообщение запросом на управление задачами на основе intent
         is_task_request = intent.get('type') in [
@@ -2786,6 +2845,33 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         elif response.status == 401:
                             # Unauthorized - критическая ошибка
                             logger.error("API key invalid or expired (401)")
+                            # Пытаемся использовать локальный fallback вместо возврата ошибки
+                            try:
+                                from .intent_classifier_ultra_minimal import IntentClassifierUltraMinimal
+                                intent = IntentClassifierUltraMinimal._local_classify(original_message)
+                                logger.info(f"[FALLBACK] Using local intent classification: {intent}")
+                                
+                                # Получаем соответствующий command class
+                                command_class = IntentClassifierUltraMinimal.get_command_class(intent)
+                                if command_class:
+                                    logger.info(f"[FALLBACK] Found command class: {command_class.__name__}")
+                                    # Создаем экземпляр команды и выполняем
+                                    command = command_class(original_message)
+                                    result = await command.execute(user_id, db_session)
+                                    logger.info(f"[FALLBACK] Command executed successfully: {result}")
+                                    
+                                    # Возвращаем результат команды
+                                    if close_session:
+                                        db_session.close()
+                                    return {'response': result, 'tool_calls': [{'function': {'name': intent, 'arguments': '{}'}}]}
+                                else:
+                                    logger.warning(f"[FALLBACK] No command class found for intent: {intent}")
+                            except Exception as fallback_e:
+                                logger.error(f"[FALLBACK] Local fallback failed: {fallback_e}")
+                                import traceback
+                                logger.error(f"[FALLBACK] Traceback: {traceback.format_exc()}")
+                            
+                            # Если fallback не сработал, возвращаем ошибку
                             content = "🔐 Проблема с доступом к ИИ. Администраторы уже уведомлены и работают над решением. Попробуйте позже."
                             # Отправляем уведомление о проблеме с API key
                             asyncio.create_task(send_error_notification_to_bot(f"API authorization error (401) for user {user_id}", user_id, "API key may be invalid or expired", target_user_id=146333757))
@@ -2827,90 +2913,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         # Проверяем флаг успеха
         if 'success' not in locals() or not success:
             logger.warning("[RETRY FAILED] All retry attempts failed")
-            
-            # FALLBACK: Если intent требует tool, но AI не вызвал его (из-за API ошибки) - вызываем напрямую
-            if intent.get('type') in ['add_task', 'complete_task', 'list_tasks', 'edit_task', 'delete_task', 'reschedule_task', 'delegate_task', 'update_profile', 'find_partners']:
-                logger.warning(f"[FALLBACK TOOL CALL] Intent '{intent['type']}' requires tool but API failed, triggering direct handler call")
-                try:
-                    # Вызываем handler напрямую
-                    from ai_integration import handlers
-                    handler_func = getattr(handlers, intent['type'], None)
-                    if handler_func:
-                        # Для простоты передаем минимальные параметры
-                        if intent['type'] == 'add_task':
-                            result = handler_func(
-                                title="купить продукты",
-                                reminder_time="14:00",
-                                user_id=user_id,
-                                session=db_session
-                            )
-                        elif intent['type'] == 'list_tasks':
-                            result = handler_func(user_id=user_id, session=db_session)
-                        elif intent['type'] == 'update_profile':
-                            result = handler_func(
-                                city="Казань",  # default
-                                interests="Python",
-                                user_id=user_id,
-                                session=db_session
-                            )
-                        elif intent['type'] == 'complete_task':
-                            result = handler_func(
-                                task_title=message,  # будет искать по сообщению
-                                user_id=user_id,
-                                session=db_session
-                            )
-                        elif intent['type'] == 'delete_task':
-                            result = handler_func(
-                                task_title=message,
-                                user_id=user_id,
-                                session=db_session
-                            )
-                        elif intent['type'] == 'reschedule_task':
-                            result = handler_func(
-                                task_title=message,
-                                new_time="послезавтра 16:00",  # default
-                                user_id=user_id,
-                                session=db_session
-                            )
-                        elif intent['type'] == 'edit_task':
-                            result = handler_func(
-                                task_title=message,
-                                title="Обновлено",
-                                user_id=user_id,
-                                session=db_session
-                            )
-                        elif intent['type'] == 'find_partners':
-                            result = handler_func(user_id=user_id, session=db_session)
-                        else:
-                            result = "Handler not implemented for fallback"
-                        
-                        logger.info(f"[FALLBACK] Direct handler result: {result}")
-                        if result:
-                            # Простой ответ
-                            simple_responses = {
-                                'add_task': 'Задача создана!',
-                                'complete_task': 'Задача выполнена!',
-                                'list_tasks': 'Показываю ваши задачи.',
-                                'edit_task': 'Задача обновлена.',
-                                'delete_task': 'Задача удалена.',
-                                'reschedule_task': 'Время задачи изменено.',
-                                'delegate_task': 'Задача делегирована.',
-                                'update_profile': 'Профиль обновлен.',
-                                'find_partners': 'Ищу подходящих партнеров.'
-                            }
-                            simple_response = simple_responses.get(intent.get('type'), 'Готово!')
-                            return {'response': simple_response, 'tool_calls': [{"function": intent['type'], "result": result}]}
-                    else:
-                        logger.warning(f"[FALLBACK] No handler found for {intent['type']}")
-                except Exception as e:
-                    logger.error(f"[FALLBACK TOOL CALL] Direct call failed: {e}")
-                    import traceback
-                    logger.error(f"[FALLBACK TRACEBACK] {traceback.format_exc()}")
-                except Exception as e:
-                    print(f"[FALLBACK TOOL CALL] Failed: {e}")
-                    import traceback
-                    print(f"[FALLBACK TRACEBACK] {traceback.format_exc()}")
-            
             if not content:
                 content = "🤖 К сожалению, ИИ временно недоступен после нескольких попыток. Разработчики уведомлены. Попробуйте позже - обычно это решается в течение 5-10 минут."
                 # Отправляем уведомление о полном отказе API

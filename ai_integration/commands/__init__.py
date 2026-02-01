@@ -9,3 +9,8 @@ from .update_profile import UpdateProfileCommand
 from .find_partners import FindPartnersCommand
 from .delegate_task import DelegateTaskCommand
 from .conversation import ConversationCommand
+from .get_task_details import GetTaskDetailsCommand
+from .edit_task import EditTaskCommand
+from .find_relevant_contacts_for_task import FindRelevantContactsForTaskCommand
+from .update_user_memory import UpdateUserMemoryCommand
+from .delete_all_tasks import DeleteAllTasksCommand

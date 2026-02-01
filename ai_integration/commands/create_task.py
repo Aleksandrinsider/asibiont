@@ -5,13 +5,23 @@ from ..responses import generate_response
 
 class CreateTaskCommand(BaseCommand):
     async def execute(self, user_id, db_session):
-        # Use AI-extracted parameters if available, otherwise extract from message
-        if self.params.get('title'):
-            title = self.params['title']
-            reminder_time = self.params.get('reminder_time')
-            description = self.params.get('description', '')
-        else:
-            # Fallback to old extraction method
+        # Use AI-extracted parameters if available and valid, otherwise extract from message
+        title = self.params.get('title')
+        reminder_time = self.params.get('reminder_time')
+        description = self.params.get('description', '')
+
+        # Check if AI parameters are valid (not test/default values)
+        ai_params_valid = (
+            title and
+            title.strip() and
+            len(title.strip()) > 2 and
+            title.lower() not in ['тестовая задача', 'test task', 'test'] and
+            not title.startswith('Тест')
+        )
+
+        if not ai_params_valid:
+            # Fallback to local extraction method
+            print(f"[CREATE_TASK] AI params invalid ('{title}'), using local parser for: {self.message}")
             details = await extract_task_details(self.message, user_id)
             title = details['title']
             reminder_time = details['reminder_time']

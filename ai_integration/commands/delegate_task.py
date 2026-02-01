@@ -82,7 +82,7 @@ class DelegateTaskCommand(BaseCommand):
             task_title=task_title,
             executor_username=executor_username,
             deadline=deadline,
-            description=description or f"Делегировано @{executor_username}",
+            description=f"Делегировано @{executor_username}",
             delegator_id=user_id,
             session=db_session
         )
