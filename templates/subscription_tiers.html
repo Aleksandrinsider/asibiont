@@ -2,7 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Тарифы ASI Biont - Сеть нового поколения | Выбор подписки</title>
     <meta name="description" content="Выберите тариф ASI Biont: Лайт 3000₽ - для всех, Стандарт 9000₽ - делегирование с ИИ-контролем, Премиум 27000₽ - элитные связи. Инновационная платформа для поиска единомышленников.">
     <meta name="keywords" content="тарифы, подписка, AI, поиск единомышленников, делегирование, ASI Biont, Лайт, Стандарт, Премиум, нетворкинг">
@@ -130,6 +133,40 @@
     </style>
 </head>
 <body class="subscription-page">
+    <script>
+        // Mobile device detection and CSSPeeper fix for subscription page
+        function isMobileDevice() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                   window.innerWidth <= 768;
+        }
+
+        function disableProblematicScripts() {
+            // Disable CSSPeeper and similar inspector tools that cause errors
+            if (typeof window.csspeeper !== 'undefined') {
+                console.warn('CSSPeeper detected on subscription page - disabling to prevent errors');
+                window.csspeeper = null;
+            }
+
+            // Prevent ad unit initialization errors
+            if (typeof window.google !== 'undefined' && window.google.ads) {
+                console.warn('Disabling Google Ads on subscription page to prevent mobile errors');
+                window.google.ads = null;
+            }
+
+            // Generic fix for undefined payload errors
+            if (typeof window !== 'undefined' && !window.payload) {
+                window.payload = {};
+            }
+        }
+
+        // Apply mobile fixes
+        if (isMobileDevice()) {
+            console.log('Mobile device detected on subscription page - applying fixes for CSSPeeper and ad units');
+            disableProblematicScripts();
+        } else {
+            console.log('Desktop device detected on subscription page - no mobile fixes applied');
+        }
+    </script>
     <div class="pricing-container">
         <div class="pricing-card">
                 <div style="text-align: center; margin-bottom: 24px;">

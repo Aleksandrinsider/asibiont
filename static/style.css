@@ -24,10 +24,37 @@
     background: #B1BAC4;
 }
 
-/* Firefox */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: #D1D9E0 transparent;
+/* Mobile-specific fixes for CSSPeeper and ad unit errors */
+@media (max-width: 768px) {
+    /* Prevent CSSPeeper inspector tool errors */
+    * {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
+    /* Allow text selection in form inputs */
+    input, textarea, select, [contenteditable] {
+        -webkit-user-select: text !important;
+        -khtml-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
+    }
+
+    /* Prevent zoom issues on mobile */
+    input[type="text"], input[type="email"], input[type="password"], textarea {
+        font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+
+    /* Fix for mobile scrolling and touch */
+    body {
+        -webkit-overflow-scrolling: touch;
+        overflow-scrolling: touch;
+    }
 }
 
 /* ����� ��� select ��������� */

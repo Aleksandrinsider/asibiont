@@ -19,7 +19,7 @@ if sys.platform == 'win32':
 from ai_integration.chat import chat_with_ai
 from models import Session, User, Task, UserProfile, init_db
 
-TEST_USER_ID = 999000333  # Уникальный ID для диалогового теста
+TEST_USER_ID = 999000333999  # Уникальный ID для диалогового теста
 
 class InteractiveDialogueTester:
     """Тестер интерактивного диалога с ИИ"""
@@ -32,32 +32,6 @@ class InteractiveDialogueTester:
     async def setup(self):
         """Настройка тестовой среды"""
         self.session = Session()
-
-        # Создаем тестового пользователя
-        self.user = self.session.query(User).filter_by(telegram_id=TEST_USER_ID).first()
-        if not self.user:
-            self.user = User(
-                telegram_id=TEST_USER_ID,
-                username="test_user_dialogue",
-                first_name="Test",
-                last_name="Dialogue",
-                referral_balance=0
-            )
-            self.session.add(self.user)
-            self.session.commit()
-
-        # Создаем профиль
-        profile = self.session.query(UserProfile).filter_by(user_id=self.user.id).first()
-        if not profile:
-            profile = UserProfile(
-                user_id=self.user.id,
-                city="Москва",
-                interests="технологии, ИИ, бизнес",
-                skills="программирование, управление",
-                goals="развитие бизнеса, поиск партнеров"
-            )
-            self.session.add(profile)
-            self.session.commit()
 
         print("🚀 НАЧИНАЕМ ИНТЕРАКТИВНЫЙ ДИАЛОГ С ИИ")
         print("=" * 80)
@@ -148,6 +122,10 @@ class InteractiveDialogueTester:
             "Спасибо за помощь!"
         ]
         return messages[min(turn_number - 1, len(messages) - 1)]
+
+    async def generate_messages_with_ai(self, command_type, count):
+        """Генерирует тестовые сообщения для типа команды"""
+        return self.get_fallback_messages(command_type, count)
 
     async def run_interactive_dialogue(self, max_turns=10):
         """Запуск интерактивного диалога"""
@@ -247,6 +225,10 @@ class InteractiveDialogueTester:
             print("- Диалог слишком короткий, добавить продолжение")
         print("- Добавить обработку ошибок и edge cases")
         print("- Улучшить контекстную память между ходами")
+
+    def get_fallback_messages(self, command_type, count=1):
+        """Получить тестовые сообщения для типа команды"""
+        fallbacks = {
             "complete_task": [
                 "Готово, купил все продукты",
                 "Закончил подготовку отчета",
@@ -300,6 +282,11 @@ class InteractiveDialogueTester:
                 "Привет! Как дела?",
                 "Расскажи о себе",
                 "Что ты умеешь?"
+            ],
+            "add_task": [
+                "Создай задачу купить молоко завтра в 10 утра",
+                "Напомни мне позвонить в банк через час",
+                "Добавь задачу подготовить отчет на сегодня в 15:00"
             ]
         }
         
@@ -426,7 +413,7 @@ async def run_comprehensive_dialogue_test():
     print("🚀 НАЧИНАЕМ КОМПЛЕКСНОЕ ТЕСТИРОВАНИЕ ДИАЛОГОВ С ИИ")
     print("=" * 80)
 
-    tester = DialogueTester()
+    tester = InteractiveDialogueTester()
     tester.setup_test_user()
 
     try:
@@ -482,5 +469,5 @@ if __name__ == "__main__":
     # Инициализируем БД
     init_db()
 
-    # Запускаем интерактивный диалог
-    asyncio.run(run_interactive_dialogue_test())
+    # Запускаем комплексное тестирование диалогов
+    asyncio.run(run_comprehensive_dialogue_test())
