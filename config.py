@@ -43,9 +43,9 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TELEGRAM_TOKEN and not LOCAL:
     raise ValueError("TELEGRAM_TOKEN is required in production mode")
 
-TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "Asibiont_bot")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "asibiont_bot")
 if not TELEGRAM_BOT_USERNAME:
-    TELEGRAM_BOT_USERNAME = "Asibiont_bot"
+    TELEGRAM_BOT_USERNAME = "asibiont_bot"
 
 # Developer notifications
 # Set DEVELOPER_CHAT_ID to your Telegram user ID to receive error notifications

@@ -972,7 +972,7 @@ async def login_handler(request):
 
     # РџРѕРєР°Р·С‹вР°РµРј СЃС‚СЂР°наёС†Сѓ Р°вС‚РѕСЂРёР·Р°С†РёРё
     bot_user = TELEGRAM_BOT_USERNAME.replace(
-        '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'Asibiont_bot')
+        '@', '') if TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_USERNAME.startswith('@') else (TELEGRAM_BOT_USERNAME or 'asibiont_bot')
     
     # Р¤РѕСЂРјРёСЂСѓРµРј auth_url РґР»СЏ вРёРґР¶РµС‚Р° Telegram
     base_url = str(request.url.origin())
@@ -1664,7 +1664,7 @@ async def dashboard_handler(request):
         })
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_handler: {e}", exc_info=True)
-        bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'Asibiont_bot'
+        bot_user = TELEGRAM_BOT_USERNAME.replace('@', '') if TELEGRAM_BOT_USERNAME else 'asibiont_bot'
         return aiohttp_jinja2.render_template('dashboard_new.html', request, {
             'logged_in': False,
             'bot_username': bot_user,
