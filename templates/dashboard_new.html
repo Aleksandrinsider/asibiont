@@ -469,7 +469,7 @@
             <p style="margin: 0 0 8px 0; color: #374151; line-height: 1.5; font-size: 16px;">На данный момент панель управления доступна только для десктопов.</p>
             <p style="margin: 0 0 16px 0; color: #374151; line-height: 1.5; font-size: 16px;">С мобильного устройства пользуйтесь нашим Telegram ботом:</p>
             <img src="/static/asibiont.svg" alt="ASI Biont Logo" style="width: 120px; height: 120px; margin-bottom: 20px;">
-            <a href="https://t.me/ASI_Biont_Bot" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500; font-size: 16px;">https://t.me/ASI_Biont_Bot</a>
+            <a href="https://t.me/{{ bot_username }}" target="_blank" style="color: #068487; text-decoration: none; font-weight: 500; font-size: 16px;">https://t.me/{{ bot_username }}</a>
             <br><br>
             <a href="/" style="color: #6B7280; text-decoration: none; font-weight: 400; font-size: 14px;">Назад</a>
         </div>
@@ -561,7 +561,7 @@
                         {% if subscription_tier == 'LIGHT' %}Лайт{% elif subscription_tier == 'STANDARD' %}Стандарт{% elif subscription_tier == 'PREMIUM' %}Премиум{% else %}Тариф{% endif %}
                     </button>
                     
-                    <button onclick="window.open('https://t.me/ASI_Biont_Bot', '_blank')" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Открыть Telegram бота">
+                    <button onclick="window.open('https://t.me/{{ bot_username }}', '_blank')" style="padding: 8px; width: 32px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; margin-right: 8px;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Открыть Telegram бота">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151">
                             <path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.002.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/>
                         </svg>
@@ -673,7 +673,7 @@
                                 <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">вывести</a>
                             </p>
                             <p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: 
-                                <a href="#" onclick="copyReferralLink('https://t.me/ASI_Biont_Bot?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">копировать</a>
+                                <a href="#" onclick="copyReferralLink('https://t.me/{{ bot_username }}?start=ref{{ user.telegram_id }}'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">копировать</a>
                             </p>
                             <p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>
                             {% else %}
@@ -5799,7 +5799,7 @@
                         if (data.formatted_end_date) {
                             html += '<p style="margin: 0; margin-bottom: 4px;">Подписка: активна до ' + data.formatted_end_date + ' <a href="' + extendUrl + '" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">продлить</a></p>';
                             html += '<p style="margin: 0; margin-bottom: 4px;">Баланс: ' + (data.referral_balance || 0) + ' рублей <a href="https://t.me/aleksandrinsider" target="_blank" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">вывести</a></p>';
-                            const refLink = 'https://t.me/ASI_Biont_Bot?start=ref' + data.telegram_id;
+                            const refLink = 'https://t.me/{{ bot_username }}?start=ref' + data.telegram_id;
                             html += '<p style="margin: 0; margin-bottom: 4px;">Реферальная ссылка: <a href="#" onclick="copyReferralLink(\'' + refLink + '\'); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 12px; text-decoration: underline; margin-left: 8px;">копировать</a></p>';
                             html += '<p style="margin: 0; color: #6C727F; font-size: 12px;">20% с каждого платежа привлеченного пользователя</p>';
                         } else {
