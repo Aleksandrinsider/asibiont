@@ -121,8 +121,8 @@
 
         // Mobile device detection and CSSPeeper fix
         function isMobileDevice() {
-            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                   window.innerWidth <= 768;
+            // Only check user agent, not screen width to avoid false positives on narrow desktop windows
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
         function disableProblematicScripts() {
