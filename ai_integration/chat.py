@@ -1485,10 +1485,25 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
                 except Exception as e:
                     logger.error(f"Error setting user timezone: {e}")
-                    user_tz = pytz.UTC
-                    user_now = base_now
-                    current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+                    # Fallback to Moscow time for Russian users
+                    try:
+                        moscow_tz = pytz.timezone('Europe/Moscow')
+                        user_now = base_now.astimezone(moscow_tz)
+                        current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                        logger.info(f"[TIME CHECK] Fallback to Moscow time: {user_now}")
+                    except:
+                        pass  # Keep UTC if all fails
+            else:
+                # No timezone set - default to Moscow for Russian bot
+                try:
+                    moscow_tz = pytz.timezone('Europe/Moscow')
+                    user_now = base_now.astimezone(moscow_tz)
+                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                    logger.info(f"[TIME CHECK] No timezone set, using Moscow time: {user_now}")
+                except:
+                    pass  # Keep UTC if all fails
             
             # Получаем subscription_tier
             subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
