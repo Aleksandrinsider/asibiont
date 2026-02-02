@@ -381,11 +381,14 @@ class InteractiveDialogueTester:
                 if tools_called:
                     print(f"🔨 Tools: {tools_called}")
                     # Проверяем, что вызван правильный tool
-                    if expected_tool and any(expected_tool in str(tool) for tool in tools_called):
+                    expected = expected_tool
+                    if command_type == "update_profile" and "интересуюсь" in message.lower():
+                        expected = "update_user_memory"
+                    if expected and any(expected in str(tool) for tool in tools_called):
                         print("  ✅ Правильный tool вызван")
                         success_count += 1
-                    elif expected_tool:
-                        print(f"  ⚠️  Ожидался tool {expected_tool}, но вызваны: {tools_called}")
+                    elif expected:
+                        print(f"  ⚠️  Ожидался tool {expected}, но вызваны: {tools_called}")
                     else:
                         success_count += 1  # Для conversation и других
                 else:

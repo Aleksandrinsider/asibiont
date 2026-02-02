@@ -1127,49 +1127,17 @@ async def dashboard_handler(request):
 
         logged_in = bool(user_id)
 
-        # TEMPORARILY DISABLED AUTH CHECK FOR TESTING
-        # if not logged_in:
-        #     # Redirect to login page instead of showing login in dashboard
-        #     return web.HTTPFound('/')
+        # Redirect to login page if not logged in
+        if not logged_in:
+            return web.HTTPFound('/')
 
         # РџРѕР»СѓС‡РёС‚СЊ Р·Р°РґР°С‡Рё РїРѕР»СЊР·РѕвР°С‚РµР»СЏ
         session_db = Session()
         try:
-            # TEMPORARILY USE A TEST USER FOR TESTING
-            if not logged_in:
-                # Try to get first user from database for testing
-                test_user = session_db.query(User).first()
-                if test_user:
-                    user = test_user
-                    logger.info(f"Using test user: {user.id}, telegram_id: {user.telegram_id}")
-                else:
-                    # Create a dummy user for testing
-                    logger.info("No users found, creating dummy data for testing")
-                    return aiohttp_jinja2.render_template('dashboard_new.html', request, {
-                        'logged_in': False,
-                        'user': None,
-                        'profile': type('Profile', (), {
-                            'birthdate': '15.05.1990',
-                            'city': 'Москва',
-                            'company': 'Test Company',
-                            'position': 'Test Position'
-                        })(),
-                        'tasks': [],
-                        'messages': [],
-                        'partners': [],
-                        'subscription': None,
-                        'current_date': CURRENT_DATE.strftime('%d.%m.%Y') if CURRENT_DATE else '',
-                        'current_time': CURRENT_DATE.strftime('%H:%M') if CURRENT_DATE else '',
-                        'subscription_tier': 'LIGHT',
-                        'formatted_end_date': None,
-                        'timestamp': 1769939740,
-                        'user_timezone': 'UTC'
-                    })
-            else:
-                user = session_db.query(User).filter_by(telegram_id=user_id).first()
-                if not user:
-                    # Redirect to login page if user not found
-                    return web.HTTPFound('/')
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                # Redirect to login page if user not found
+                return web.HTTPFound('/')
 
             logger.info(f"User found: {user.id}, telegram_id: {user.telegram_id}")
             
