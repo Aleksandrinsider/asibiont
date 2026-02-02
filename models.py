@@ -24,7 +24,7 @@ class User(Base):
     first_name = Column(String(255))
     photo_url = Column(String(500))  # Telegram profile photo URL
     memory = Column(Text)  # Long-term memory for user info
-    timezone = Column(String(50), default='UTC')
+    timezone = Column(String(50), default='Europe/Moscow')
     do_not_disturb_until = Column(DateTime)
     pending_action = Column(Text)  # JSON for pending interactions
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))

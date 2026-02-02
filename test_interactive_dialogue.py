@@ -44,6 +44,10 @@ class InteractiveDialogueTester:
             )
             self.session.add(self.user)
             self.session.commit()
+        else:
+            # Обновляем timezone для существующего пользователя
+            self.user.timezone = "Europe/Moscow"
+            self.session.commit()
 
         # Создаем профиль
         profile = self.session.query(UserProfile).filter_by(user_id=self.user.id).first()
