@@ -172,8 +172,6 @@
             const profileSection = document.querySelector('.context-section');
             const peopleSection = document.querySelector('.people-section');
             const indicator = document.getElementById('profile-update-indicator');
-            const contactFilterContent = document.getElementById('contact-filter-content');
-            const peopleList = document.getElementById('people-list');
             if (!content) return; // nothing to toggle
             
             const isCollapsed = (content.style.display || '') === 'none';
@@ -186,9 +184,6 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Показываем фильтры и контакты при разворачивании профиля
-                if (contactFilterContent) contactFilterContent.style.display = '';
-                if (peopleList) peopleList.style.display = '';
                 // Скрываем индикатор при разворачивании
                 if (indicator) indicator.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'false');
@@ -201,9 +196,6 @@
                 if (peopleSection) {
                     peopleSection.style.flex = '1 1 auto';
                 }
-                // Скрываем фильтры и контакты при сворачивании профиля
-                if (contactFilterContent) contactFilterContent.style.display = 'none';
-                if (peopleList) peopleList.style.display = 'none';
                 localStorage.setItem('profileCollapsed', 'true');
             }
         }
