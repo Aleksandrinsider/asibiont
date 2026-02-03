@@ -1580,13 +1580,14 @@ def edit_task(
     return result
 
 
-def list_tasks(user_id=None, session=None, include_completed=False):
+def list_tasks(user_id=None, session=None, include_completed=False, filter_type=None):
     """Return list of user's tasks in plain text format
     
     Args:
         user_id: Telegram ID пользователя
         session: Database session (опционально)
         include_completed: Если True, показывает только выполненные задачи. По умолчанию False (активные)
+        filter_type: Тип фильтра: 'Фоновая' для worker задач (только премиум)
     """
     if user_id is None:
         logger.error("[LIST_TASKS] user_id is None")
@@ -1610,6 +1611,18 @@ def list_tasks(user_id=None, session=None, include_completed=False):
                 session.query(Task).filter(Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
             )
         tasks = query.all()
+
+        # ФИЛЬТРАЦИЯ ЗАДАЧ
+        if filter_type == "Фоновая":
+            # Проверяем премиум подписку для фильтра фоновых задач
+            if user.subscription_tier != SubscriptionTier.PREMIUM:
+                return "Фильтр 'Фоновая' доступен только на PREMIUM подписке. Обновите подписку для использования этой возможности."
+            
+            # Фильтруем только worker задачи (начинаются с "Worker:")
+            tasks = [t for t in tasks if t.title and t.title.startswith("Worker:")]
+            
+            if not tasks:
+                return "У вас нет фоновых задач. Создайте первую командой типа 'Мониторь золото каждый день'"
 
         if not tasks:
             return "У вас нет задач" if include_completed else "У вас нет активных задач. Добавьте первую задачу - просто напишите что нужно сделать!"

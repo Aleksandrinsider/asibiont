@@ -108,3 +108,7 @@ PREMIUM_DESCRIPTION = """
 OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
 if not OPENWEATHERMAP_API_KEY:
     logger.warning("OPENWEATHERMAP_API_KEY not set - weather monitoring will not work")
+
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+if not ALPHA_VANTAGE_API_KEY:
+    logger.warning("ALPHA_VANTAGE_API_KEY not set - market monitoring will not work")

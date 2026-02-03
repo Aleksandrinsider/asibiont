@@ -833,6 +833,7 @@
                                 <option value="assigned-to-me">Поручили мне</option>
                                 <option value="assigned-by-me"{% if subscription_tier == 'LIGHT' %} disabled{% endif %}>Поручил я{% if subscription_tier == 'LIGHT' %} (недоступно){% endif %}</option>
                                 <option value="overdue">Просрочено</option>
+                                <option value="background"{% if subscription_tier != 'PREMIUM' %} disabled{% endif %}>Фоновая{% if subscription_tier != 'PREMIUM' %} (PREMIUM){% endif %}</option>
                                 <option value="completed">Выполнено</option>
                             </select>
                         </div>
@@ -3148,6 +3149,9 @@
             } else if (currentTaskFilter === 'overdue') {
                 // С отставанием - просроченные задачи (неотклоненные)
                 filteredTasks = allTasksFromServer.filter(t => t.overdue === true && t.status !== 'rejected');
+            } else if (currentTaskFilter === 'background') {
+                // Фоновые задачи - задачи, начинающиеся с "Worker:"
+                filteredTasks = allTasksFromServer.filter(t => t.title && t.title.startsWith('Worker:'));
             } else {
                 // Все задачи - показываем незавершенные и неотклоненные
                 filteredTasks = allTasksFromServer.filter(t => t.status !== 'completed' && t.status !== 'rejected');

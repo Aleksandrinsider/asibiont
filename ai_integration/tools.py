@@ -81,6 +81,11 @@ TOOLS = [
                         "type": "boolean",
                         "description": "true для выполненных задач, false для активных",
                     },
+                    "filter_type": {
+                        "type": "string",
+                        "description": "Тип фильтра: 'Фоновая' для показа только фоновых задач (доступно только на PREMIUM)",
+                        "enum": ["Фоновая"]
+                    },
                 },
             },
         },
@@ -338,13 +343,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_worker_task",
-            "description": "Создать фоновую задачу (worker) для PREMIUM пользователей. Выполняется минимум раз в день. Только одна задача на пользователя. Поддерживает мониторинг золота и погоды.",
+            "description": "Создать фоновую задачу (worker) для PREMIUM пользователей. Выполняется минимум раз в день. Только одна задача на пользователя. Поддерживает мониторинг металлов, валют, акций с техническим анализом и анализом объемов.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_description": {
                         "type": "string",
-                        "description": "Описание задачи для worker, например 'Мониторинг погоды в Москве'"
+                        "description": "Описание задачи для worker, например 'Мониторинг золота' или 'Мониторинг погоды в Москве'"
                     },
                     "interval_minutes": {
                         "type": "integer",
@@ -353,11 +358,31 @@ TOOLS = [
                     },
                     "action": {
                         "type": "string",
-                        "description": "Тип действия: 'monitor_gold_market' для золота, 'monitor_weather' для погоды"
+                        "description": "Тип действия: 'monitor_asset' для металлов/валют/акций, 'monitor_weather' для погоды"
+                    },
+                    "asset_type": {
+                        "type": "string",
+                        "description": "Тип актива для мониторинга: 'metal' для металлов, 'currency' для валют, 'stock' для акций (только для monitor_asset)",
+                        "enum": ["metal", "currency", "stock"]
+                    },
+                    "symbol": {
+                        "type": "string",
+                        "description": "Символ актива: для металлов - 'GOLD' или 'SILVER', для валют - 'EURUSD', для акций - 'AAPL' (только для monitor_asset)"
+                    },                    "analysis_type": {
+                        "type": "string",
+                        "description": "Тип анализа: 'price_monitoring' - простой мониторинг цены, 'technical_analysis' - технический анализ с индикаторами, 'volume_analysis' - анализ объема торгов",
+                        "enum": ["price_monitoring", "technical_analysis", "volume_analysis"],
+                        "default": "price_monitoring"
+                    },
+                    "response_style": {
+                        "type": "string",
+                        "description": "Стиль ответа: 'formal' - формальный отчет, 'conversational' - разговорный стиль как у человека",
+                        "enum": ["formal", "conversational"],
+                        "default": "formal"
                     },
                     "threshold": {
                         "type": "number",
-                        "description": "Порог для уведомления: для золота - цена ниже порога, для погоды - температура ниже порога"
+                        "description": "Порог для уведомления: для активов - цена ниже порога, для погоды - температура ниже порога"
                     },
                     "city": {
                         "type": "string",

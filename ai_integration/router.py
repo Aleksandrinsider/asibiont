@@ -9,9 +9,18 @@ class CommandRouter:
         """Route message using pure AI classification"""
         
         # Always use AI for intent classification
-        intent = await IntentClassifierUltraMinimal.classify_intent(message, user_id)
+        intent_result = await IntentClassifierUltraMinimal.classify_intent(message, user_id)
+        
+        # Handle case where intent_result is dict with intent and params
+        if isinstance(intent_result, dict):
+            intent = intent_result.get('intent', 'conversation')
+            params = intent_result.get('params', {})
+        else:
+            intent = intent_result
+            params = {}
+        
         command_class = IntentClassifierUltraMinimal.get_command_class(intent)
 
-        # Create command with basic parameters
-        command = command_class(message)
+        # Create command with extracted parameters
+        command = command_class(message, **params)
         return command

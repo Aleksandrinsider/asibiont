@@ -6,7 +6,7 @@ import logging
 import asyncio
 import requests
 from subscription_service import check_subscription
-from config import OPENWEATHERMAP_API_KEY
+from config import OPENWEATHERMAP_API_KEY, ALPHA_VANTAGE_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,10 @@ class CreateWorkerTaskCommand(BaseCommand):
             threshold = self.params.get('threshold', 0)
             city = self.params.get('city', 'Moscow')  # Город по умолчанию
             weather_condition = self.params.get('weather_condition', '')  # Условие погоды
+            asset_type = self.params.get('asset_type', 'gold')  # Тип актива: gold, currency, stock
+            symbol = self.params.get('symbol', 'GOLD')  # Символ актива
+            analysis_type = self.params.get('analysis_type', 'price_monitoring')  # Тип анализа: price_monitoring, technical_analysis, volume_analysis
+            response_style = self.params.get('response_style', 'formal')  # Стиль ответа: formal, conversational
 
             # Проверяем тариф - только PREMIUM
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
@@ -45,7 +49,7 @@ class CreateWorkerTaskCommand(BaseCommand):
             # Создаем задачу в БД для отслеживания
             worker_task = Task(
                 title=f"Worker: {task_description}",
-                description=f"Фоновая задача: {action}, интервал {interval_minutes} мин, порог {threshold}, город {city}, условие {weather_condition}",
+                description=f"Фоновая задача: {action}, тип актива: {asset_type}, символ: {symbol}, анализ: {analysis_type}, стиль ответа: {response_style}, интервал {interval_minutes} мин, порог {threshold}, город {city}, условие {weather_condition}",
                 user_id=user.id,
                 status='active',
                 created_at=datetime.now(),
@@ -62,7 +66,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                     trigger="interval",
                     minutes=interval_minutes,
                     id=job_id,
-                    args=[user_id, action, threshold, worker_task.id, city, weather_condition],
+                    args=[user_id, action, threshold, worker_task.id, city, weather_condition, asset_type, symbol, analysis_type, response_style],
                     replace_existing=True
                 )
                 logger.info(f"Worker task created: {job_id}")
@@ -73,10 +77,12 @@ class CreateWorkerTaskCommand(BaseCommand):
             logger.error(f"Error creating worker task: {e}")
             return f"Ошибка при создании фоновой задачи: {str(e)}"
 
-    async def _execute_worker_action(self, user_id, action, threshold, task_id, city='Moscow', weather_condition=''):
+    async def _execute_worker_action(self, user_id, action, threshold, task_id, city='Moscow', weather_condition='', asset_type='gold', symbol='GOLD', analysis_type='price_monitoring', response_style='formal'):
         try:
             if action == 'monitor_gold_market':
                 await self._monitor_gold_market(user_id, threshold, task_id)
+            elif action == 'monitor_asset':
+                await self._monitor_asset(user_id, threshold, task_id, asset_type, symbol, analysis_type, response_style)
             elif action == 'monitor_weather':
                 await self._monitor_weather(user_id, threshold, task_id, city, weather_condition)
             # Можно добавить другие действия
@@ -85,15 +91,13 @@ class CreateWorkerTaskCommand(BaseCommand):
 
     async def _monitor_gold_market(self, user_id, threshold, task_id):
         try:
-            # Используем API для получения цены золота
-            # Пример: https://www.goldapi.io/ (нужен API key)
-            # Или https://metals-api.com/ (бесплатный tier доступен)
-            # Для демо используем placeholder
-            api_url = "https://api.metals-api.com/v1/latest?access_key=YOUR_API_KEY&base=USD&symbols=XAU"
+            # Используем Alpha Vantage API для получения цены золота
+            api_url = f"https://www.alphavantage.co/query?function=GOLD_SILVER_SPOT&symbol=GOLD&apikey={ALPHA_VANTAGE_API_KEY}"
             response = requests.get(api_url)
             if response.status_code == 200:
                 data = response.json()
-                current_price = data.get('rates', {}).get('XAU', 0)  # Цена золота в USD за унцию
+                # Alpha Vantage возвращает цену в формате "price": "2069.6627794950227"
+                current_price = float(data.get('price', 0))  # Цена золота в USD за унцию
                 if current_price and current_price < threshold:
                     # Отправляем уведомление пользователю
                     if REMINDER_SERVICE and REMINDER_SERVICE.bot:
@@ -103,10 +107,392 @@ class CreateWorkerTaskCommand(BaseCommand):
                     else:
                         logger.error("Bot not available for sending gold market alert")
             else:
-                logger.warning(f"Failed to fetch gold price: {response.status_code}, response: {response.text}")
+                logger.warning(f"Failed to fetch gold price from Alpha Vantage: {response.status_code}, response: {response.text}")
 
         except Exception as e:
             logger.error(f"Error monitoring gold market: {e}")
+
+    async def _monitor_asset(self, user_id, threshold, task_id, asset_type, symbol, analysis_type='price_monitoring', response_style='formal'):
+        try:
+            current_price = None
+            asset_name = symbol
+
+            if asset_type == 'metal':
+                # Металлы: золото, серебро
+                if symbol.upper() in ['GOLD', 'XAU']:
+                    api_url = f"https://www.alphavantage.co/query?function=GOLD_SILVER_SPOT&symbol=GOLD&apikey={ALPHA_VANTAGE_API_KEY}"
+                    asset_name = "золота"
+                elif symbol.upper() in ['SILVER', 'XAG']:
+                    api_url = f"https://www.alphavantage.co/query?function=GOLD_SILVER_SPOT&symbol=SILVER&apikey={ALPHA_VANTAGE_API_KEY}"
+                    asset_name = "серебра"
+                else:
+                    logger.error(f"Unsupported metal symbol: {symbol}")
+                    return
+
+                response = requests.get(api_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    current_price = float(data.get('price', 0))
+
+            elif asset_type == 'currency':
+                # Валюты: пары типа USD/EUR
+                if '/' in symbol:
+                    from_curr, to_curr = symbol.split('/', 1)
+                    api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_curr}&to_currency={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}"
+                    asset_name = f"{from_curr}/{to_curr}"
+                else:
+                    logger.error(f"Invalid currency pair format: {symbol}. Use FROM/TO format.")
+                    return
+
+                response = requests.get(api_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    exchange_rate = data.get('Realtime Currency Exchange Rate', {})
+                    current_price = float(exchange_rate.get('5. Exchange Rate', 0))
+
+            elif asset_type == 'stock':
+                # Акции: используем GLOBAL_QUOTE для текущей цены
+                api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
+                asset_name = f"акции {symbol}"
+
+                response = requests.get(api_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    quote = data.get('Global Quote', {})
+                    current_price = float(quote.get('05. price', 0))
+
+            else:
+                logger.error(f"Unsupported asset type: {asset_type}")
+                return
+
+            # Выполняем анализ в зависимости от типа
+            if analysis_type == 'price_monitoring':
+                # Простой мониторинг цены
+                if current_price and current_price < threshold:
+                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                        if response_style == 'conversational':
+                            message = await self._generate_conversational_message(
+                                analysis_type='price_monitoring',
+                                asset_name=asset_name,
+                                current_price=current_price,
+                                signals=[],
+                                recommendation="Возможность для покупки",
+                                threshold=threshold
+                            )
+                        else:
+                            message = f"🎉 Хорошая возможность для покупки {asset_name}! Текущая цена: ${current_price:.2f}, ниже порога ${threshold}"
+                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
+                        logger.info(f"Asset alert sent to user {user_id}: {asset_name} price {current_price}")
+                    else:
+                        logger.error("Bot not available for sending asset alert")
+                        
+            elif analysis_type == 'technical_analysis':
+                # Технический анализ с индикаторами
+                indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
+                if indicators:
+                    signals, recommendation = await self._analyze_asset_signals(symbol, asset_type, indicators)
+                    
+                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                        if response_style == 'conversational':
+                            message = await self._generate_conversational_message(
+                                analysis_type='technical_analysis',
+                                asset_name=asset_name,
+                                current_price=current_price,
+                                signals=signals,
+                                recommendation=recommendation,
+                                threshold=threshold
+                            )
+                        else:
+                            message = f"📊 Технический анализ {asset_name}:\n"
+                            message += f"Текущая цена: ${current_price:.2f}\n\n"
+                            message += "📈 Индикаторы:\n"
+                            for signal in signals:
+                                message += f"• {signal}\n"
+                            message += f"\n🎯 Рекомендация: {recommendation}"
+                        
+                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
+                        logger.info(f"Technical analysis sent to user {user_id}: {asset_name}, recommendation: {recommendation}")
+                    else:
+                        logger.error("Bot not available for sending technical analysis")
+                        
+            elif analysis_type == 'volume_analysis':
+                # Анализ объема торгов (для акций)
+                if asset_type == 'stock':
+                    indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
+                    if 'volume' in indicators and 'price' in indicators:
+                        volume = indicators['volume']
+                        price = indicators['price']
+                        
+                        # Простая логика анализа объема
+                        volume_threshold = 1000000  # Можно сделать настраиваемым
+                        
+                        if volume > volume_threshold:
+                            if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                                if response_style == 'conversational':
+                                    message = await self._generate_conversational_message(
+                                        analysis_type='volume_analysis',
+                                        asset_name=asset_name,
+                                        current_price=price,
+                                        signals=[f"Объем торгов: {volume:,}"],
+                                        recommendation="Высокий объем - следите за движением цены",
+                                        threshold=volume_threshold
+                                    )
+                                else:
+                                    message = f"📊 Анализ объема {asset_name}:\n"
+                                    message += f"Цена: ${price:.2f}\n"
+                                    message += f"Объем: {volume:,}\n"
+                                    message += f"🚨 Высокий объем торгов! Возможно значимое движение цены."
+                                
+                                await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
+                                logger.info(f"Volume analysis sent to user {user_id}: {asset_name}, volume: {volume}")
+                            else:
+                                logger.error("Bot not available for sending volume analysis")
+                        else:
+                            logger.info(f"Volume for {symbol} is normal: {volume}")
+                    else:
+                        logger.warning(f"Could not get volume data for {symbol}")
+                else:
+                    logger.warning(f"Volume analysis not supported for asset type: {asset_type}")
+
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch {asset_type} price for {symbol}: {response.status_code}, response: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Error monitoring asset {asset_type} {symbol}: {e}")
+
+    async def _get_technical_indicators(self, symbol, interval='daily', asset_type='stock'):
+        """Получить технические индикаторы для актива"""
+        try:
+            indicators = {}
+            
+            # RSI (Relative Strength Index)
+            rsi_url = f"https://www.alphavantage.co/query?function=RSI&symbol={symbol}&interval={interval}&time_period=14&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
+            rsi_response = requests.get(rsi_url)
+            if rsi_response.status_code == 200:
+                rsi_data = rsi_response.json()
+                rsi_values = rsi_data.get('Technical Analysis: RSI', {})
+                if rsi_values:
+                    latest_date = max(rsi_values.keys())
+                    indicators['rsi'] = float(rsi_values[latest_date]['RSI'])
+            
+            # MACD
+            macd_url = f"https://www.alphavantage.co/query?function=MACD&symbol={symbol}&interval={interval}&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
+            macd_response = requests.get(macd_url)
+            if macd_response.status_code == 200:
+                macd_data = macd_response.json()
+                macd_values = macd_data.get('Technical Analysis: MACD', {})
+                if macd_values:
+                    latest_date = max(macd_values.keys())
+                    macd_info = macd_values[latest_date]
+                    indicators['macd'] = float(macd_info['MACD'])
+                    indicators['macd_signal'] = float(macd_info['MACD_Signal'])
+                    indicators['macd_hist'] = float(macd_info['MACD_Hist'])
+            
+            # Bollinger Bands
+            bb_url = f"https://www.alphavantage.co/query?function=BBANDS&symbol={symbol}&interval={interval}&time_period=20&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
+            bb_response = requests.get(bb_url)
+            if bb_response.status_code == 200:
+                bb_data = bb_response.json()
+                bb_values = bb_data.get('Technical Analysis: BBANDS', {})
+                if bb_values:
+                    latest_date = max(bb_values.keys())
+                    bb_info = bb_values[latest_date]
+                    indicators['bb_upper'] = float(bb_info['Real Upper Band'])
+                    indicators['bb_middle'] = float(bb_info['Real Middle Band'])
+                    indicators['bb_lower'] = float(bb_info['Real Lower Band'])
+            
+            # Volume (для акций)
+            if asset_type == 'stock':
+                volume_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
+                volume_response = requests.get(volume_url)
+                if volume_response.status_code == 200:
+                    volume_data = volume_response.json()
+                    daily_data = volume_data.get('Time Series (Daily)', {})
+                    if daily_data:
+                        latest_date = max(daily_data.keys())
+                        day_data = daily_data[latest_date]
+                        indicators['volume'] = int(day_data['5. volume'])
+                        indicators['price'] = float(day_data['4. close'])
+            
+            return indicators
+            
+        except Exception as e:
+            logger.error(f"Error getting technical indicators for {symbol}: {e}")
+            return {}
+
+    async def _analyze_asset_signals(self, symbol, asset_type, indicators):
+        """Анализировать сигналы на основе технических индикаторов"""
+        signals = []
+        recommendation = "HOLD"
+        
+        try:
+            # Анализ RSI
+            if 'rsi' in indicators:
+                rsi = indicators['rsi']
+                if rsi > 70:
+                    signals.append(f"RSI {rsi:.2f}: Перекупленность (сигнал на продажу)")
+                    if recommendation == "HOLD":
+                        recommendation = "SELL"
+                elif rsi < 30:
+                    signals.append(f"RSI {rsi:.2f}: Перепроданность (сигнал на покупку)")
+                    if recommendation == "HOLD":
+                        recommendation = "BUY"
+                else:
+                    signals.append(f"RSI {rsi:.2f}: Нейтральная зона")
+            
+            # Анализ MACD
+            if 'macd' in indicators and 'macd_signal' in indicators and 'macd_hist' in indicators:
+                macd = indicators['macd']
+                signal = indicators['macd_signal']
+                hist = indicators['macd_hist']
+                
+                if hist > 0 and macd > signal:
+                    signals.append(f"MACD: Бычий сигнал (гистограмма положительная)")
+                    if recommendation == "HOLD":
+                        recommendation = "BUY"
+                elif hist < 0 and macd < signal:
+                    signals.append(f"MACD: Медвежий сигнал (гистограмма отрицательная)")
+                    if recommendation == "HOLD":
+                        recommendation = "SELL"
+                else:
+                    signals.append(f"MACD: Нейтральный сигнал")
+            
+            # Анализ Bollinger Bands
+            if 'bb_upper' in indicators and 'bb_middle' in indicators and 'bb_lower' in indicators and 'price' in indicators:
+                price = indicators['price']
+                upper = indicators['bb_upper']
+                middle = indicators['bb_middle']
+                lower = indicators['bb_lower']
+                
+                if price > upper:
+                    signals.append(f"Bollinger Bands: Цена выше верхней полосы (перекупленность)")
+                    if recommendation == "HOLD":
+                        recommendation = "SELL"
+                elif price < lower:
+                    signals.append(f"Bollinger Bands: Цена ниже нижней полосы (перепроданность)")
+                    if recommendation == "HOLD":
+                        recommendation = "BUY"
+                else:
+                    signals.append(f"Bollinger Bands: Цена в нормальном диапазоне")
+            
+            # Анализ объема (для акций)
+            if 'volume' in indicators:
+                volume = indicators['volume']
+                signals.append(f"Объем торгов: {volume:,}")
+                
+                # Здесь можно добавить сравнение с средним объемом
+                # Для простоты просто отмечаем высокий объем
+                if volume > 1000000:  # Пример порога
+                    signals.append("Высокий объем торгов")
+            
+        except Exception as e:
+            logger.error(f"Error analyzing signals for {symbol}: {e}")
+            signals.append(f"Ошибка анализа: {e}")
+        
+        return signals, recommendation
+
+    def _generate_conversational_message(self, asset_name, current_price, signals, recommendation, analysis_type):
+        """Генерирует естественное, разговорное сообщение"""
+        import random
+        
+        # Вводные фразы
+        intros = [
+            f"Смотрю на {asset_name}...",
+            f"Анализирую {asset_name} сейчас.",
+            f"Проверяю {asset_name} для тебя.",
+            f"Изучаю ситуацию с {asset_name}.",
+            f"Посмотрим на {asset_name}..."
+        ]
+        
+        # Описания цены
+        price_desc = f"Цена сейчас ${current_price:.2f}."
+        
+        # Разговорные описания сигналов
+        conversational_signals = []
+        for signal in signals:
+            if 'RSI' in signal:
+                # Формат: "RSI 75.23: Перекупленность (сигнал на продажу)"
+                try:
+                    rsi_part = signal.split('RSI ')[1]  # "75.23: Перекупленность (сигнал на продажу)"
+                    rsi_value = rsi_part.split(':')[0]  # "75.23"
+                    rsi_value = float(rsi_value)
+                    
+                    if 'Перекупленность' in signal:
+                        conversational_signals.append(f"RSI на уровне {rsi_value:.0f} - это уже зона перекупленности")
+                    elif 'Перепроданность' in signal:
+                        conversational_signals.append(f"RSI {rsi_value:.0f} показывает перепроданность")
+                    else:
+                        conversational_signals.append(f"RSI держится на {rsi_value:.0f}")
+                except (IndexError, ValueError):
+                    conversational_signals.append(signal)  # Fallback to original signal
+                    
+            elif 'MACD' in signal:
+                if 'Бычий сигнал' in signal:
+                    conversational_signals.append("MACD дает бычий сигнал")
+                elif 'Медвежий сигнал' in signal:
+                    conversational_signals.append("MACD показывает медвежий тренд")
+                else:
+                    conversational_signals.append("MACD в нейтральной зоне")
+                    
+            elif 'Bollinger' in signal:
+                if 'выше верхней' in signal:
+                    conversational_signals.append("Цена ушла выше верхней полосы Боллинджера")
+                elif 'ниже нижней' in signal:
+                    conversational_signals.append("Цена опустилась ниже нижней полосы Боллинджера")
+                else:
+                    conversational_signals.append("Цена в нормальном диапазоне Боллинджера")
+                    
+            elif 'Объем' in signal:
+                volume = signal.split(': ')[1]
+                conversational_signals.append(f"Объем торгов сегодня {volume}")
+            else:
+                conversational_signals.append(signal.lower())
+        
+        # Разговорные рекомендации
+        rec_descriptions = {
+            'BUY': [
+                "Похоже, хорошее время для покупки",
+                "Вижу возможности для роста",
+                "Рекомендую рассмотреть покупку",
+                "Сигналы указывают на потенциал роста"
+            ],
+            'SELL': [
+                "Лучше зафиксировать прибыль",
+                "Пора подумать о продаже",
+                "Сигналы показывают на снижение",
+                "Рекомендую выходить из позиции"
+            ],
+            'HOLD': [
+                "Лучше подождать развития ситуации",
+                "Пока наблюдаем, ситуация неясная",
+                "Рекомендую подождать лучших сигналов",
+                "Стоит понаблюдать за развитием"
+            ]
+        }
+        
+        # Заключительные фразы
+        conclusions = [
+            "Это мой анализ на текущий момент.",
+            "Конечно, рынок может измениться.",
+            "Всегда стоит диверсифицировать риски.",
+            "Рекомендую мониторить новости по этому активу.",
+            "Это не финансовый совет, а технический анализ."
+        ]
+        
+        # Собираем сообщение
+        intro = random.choice(intros)
+        signals_text = " ".join(conversational_signals)
+        rec_text = random.choice(rec_descriptions.get(recommendation, ["Ситуация требует наблюдения"]))
+        conclusion = random.choice(conclusions)
+        
+        if analysis_type == 'technical_analysis':
+            message = f"{intro} {price_desc} {signals_text}. {rec_text}. {conclusion}"
+        elif analysis_type == 'volume_analysis':
+            message = f"{intro} {price_desc} {signals_text}. Высокий объем может указывать на важные движения."
+        else:
+            message = f"{intro} {price_desc} Цена ниже порога, так что решил сообщить."
+        
+        return message
 
     async def _monitor_weather(self, user_id, threshold, task_id, city, weather_condition):
         try:

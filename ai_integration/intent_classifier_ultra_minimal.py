@@ -52,10 +52,20 @@ class IntentClassifierUltraMinimal:
         
         # Use local classification for better accuracy and reliability
         print(f"[INTENT] Using local classification for: {message[:50]}...")
-        return cls._local_classify(message)
+        result = cls._local_classify(message)
+        
+        # If result is dict, extract intent and store params for later use
+        if isinstance(result, dict):
+            intent = result.get('intent', 'conversation')
+            # Store params somewhere accessible to commands
+            cls._last_params = result.get('params', {})
+            return intent
+        else:
+            cls._last_params = {}
+            return result
 
     @classmethod
-    def _local_classify(cls, message: str) -> str:
+    def _local_classify(cls, message: str):
         """Local rule-based intent classification using improved patterns"""
         import re
         msg = message.lower().strip()
@@ -88,6 +98,20 @@ class IntentClassifierUltraMinimal:
         
         # Enhanced intent mapping with regex patterns and context analysis
         intent_patterns = {
+            # Create worker task patterns - check FIRST for monitoring commands
+            'create_worker_task': [
+                r'\b(создай|настрой|запланируй)\b.*\b(worker|фоновую задачу|мониторинг|автоматическ)\b',
+                r'\b(мониторь|следить|отслеживать)\b.*\b(рынок|золото|цену|каждый час|валют|акций|металл)\b',
+                r'\b(создай worker|фоновая задача)\b.*\b(для|чтобы|каждые)\b',
+                r'\b(автоматическ|периодическ)\b.*\b(проверка|мониторинг|анализ)\b',
+                r'\b(информируй|уведомляй)\b.*\b(когда|если)\b.*\b(хорошая|возможность)\b',
+                r'\b(мониторь|следить)\b.*\b(погоду|погод|температур)\b',
+                r'\b(уведом|сообщи)\b.*\b(если|когда)\b.*\b(дождь|снег|холодно|жарко)\b',
+                r'\b(мониторь|следить)\b.*\b(золото|серебро|валют|акций|металл|курс|цену)\b',
+                r'\b(создай|настрой)\b.*\b(мониторинг|отслеживание)\b.*\b(золота|серебра|валют|акций)\b',
+                r'\b(хочу|нужно)\b.*\b(мониторить|следить|отслеживать)\b.*\b(золото|серебро|валют|акций|металл)\b'
+            ],
+            
             # Add task patterns - more specific to avoid conflicts with list_tasks
             'add_task': [
                 r'\b(создай|добавь|напомни|поставь|нужно|запланируй|закажи|закажу|купить|сделать|подготовить|организовать)\b.*\b(завтра|сегодня|через|в|на|утром|вечером|днем)\b',
@@ -98,8 +122,6 @@ class IntentClassifierUltraMinimal:
                 r'\b(встреча|совещани|звонок|позвонить|написать|отправить|приехать|уйти|вернуться)\b.*\b(в|на|завтра|сегодня|через)\b',
                 r'\b(создай|добавь|напомни)\b.*\b(новую|ещё одну)\b.*\b(задач|дело)\b'  # Более специфично для создания
             ],
-            
-            # Complete task patterns
             'complete_task': [
                 r'\b(готово|сделал|выполнил|завершил|закончил|выполнена|завершена|закончена)\b',
                 r'\b(я сделал|я выполнил|я завершил|уже сделал|уже выполнил)\b',
@@ -116,7 +138,10 @@ class IntentClassifierUltraMinimal:
                 r'\b(расскажи|покажи)\b.*\b(что|какие)\b.*\b(дела|задачи)\b',
                 r'\b(у меня есть|есть ли)\b.*\b(задачи|дела)\b',
                 r'\b(запланирован|запланированы)\b.*\b(задачи|дела)\b',  # Добавлено для "запланированы"
-                r'\b(покажи|список)\b.*\b(на|для)\b.*\b(среду|неделю|месяц|день)\b'  # Добавлено для "на среду"
+                r'\b(покажи|список)\b.*\b(на|для)\b.*\b(среду|неделю|месяц|день)\b',  # Добавлено для "на среду"
+                r'\b(покажи|список)\b.*\b(фоновые|фоновая|worker)\b.*\b(задач|дела)\b',  # Фоновые задачи
+                r'\b(мониторинг|мониторинга)\b.*\b(задач|дела)\b',  # Задачи мониторинга
+                r'\b(автоматическ|автоматические)\b.*\b(задач|дела)\b'  # Автоматические задачи
             ],
             
             # Delete task patterns
@@ -208,12 +233,18 @@ class IntentClassifierUltraMinimal:
             # Create worker task patterns
             'create_worker_task': [
                 r'\b(создай|настрой|запланируй)\b.*\b(worker|фоновую задачу|мониторинг|автоматическ)\b',
-                r'\b(мониторь|следить|отслеживать)\b.*\b(рынок|золото|цену|каждый час)\b',
+                r'\b(мониторь|следить|отслеживать)\b.*\b(рынок|золото|цену|каждый час|валют|акций|металл)\b',
                 r'\b(создай worker|фоновая задача)\b.*\b(для|чтобы|каждые)\b',
                 r'\b(автоматическ|периодическ)\b.*\b(проверка|мониторинг|анализ)\b',
                 r'\b(информируй|уведомляй)\b.*\b(когда|если)\b.*\b(хорошая|возможность)\b',
                 r'\b(мониторь|следить)\b.*\b(погоду|погод|температур)\b',
-                r'\b(уведом|сообщи)\b.*\b(если|когда)\b.*\b(дождь|снег|холодно|жарко)\b'
+                r'\b(уведом|сообщи)\b.*\b(если|когда)\b.*\b(дождь|снег|холодно|жарко)\b',
+                r'\b(мониторь|следить)\b.*\b(золото|серебро|валют|акций|металл|курс|цену)\b',
+                r'\b(создай|настрой)\b.*\b(мониторинг|отслеживание)\b.*\b(золота|серебра|валют|акций)\b',
+                r'\b(техническ|анализ|индикатор|rsi|macd|bollinger)\b.*\b(анализ|мониторинг)\b',
+                r'\b(анализируй|проанализируй)\b.*\b(рынок|акции|валют|металл)\b',
+                r'\b(сигнал|рекомендаци)\b.*\b(покупк|продаж|техническ)\b',
+                r'\b(объем|volume)\b.*\b(торгов|анализ)\b'
             ],
             
             # Delete worker task patterns
@@ -258,7 +289,7 @@ class IntentClassifierUltraMinimal:
         }
         
         # Check patterns in order of priority (more specific first)
-        priority_order = ['complete_task', 'delete_all_tasks', 'delete_task', 'delegate_task', 'reschedule_task', 'add_task', 'list_tasks', 'edit_task', 'find_relevant_contacts_for_task', 'get_task_details', 'update_profile', 'update_user_memory', 'accept_delegated_task', 'reject_delegated_task', 'get_delegation_progress', 'find_partners']
+        priority_order = ['complete_task', 'delete_all_tasks', 'delete_task', 'delegate_task', 'reschedule_task', 'add_task', 'list_tasks', 'edit_task', 'find_relevant_contacts_for_task', 'get_task_details', 'update_profile', 'update_user_memory', 'accept_delegated_task', 'reject_delegated_task', 'get_delegation_progress', 'find_partners', 'create_worker_task', 'delete_worker_task']
         
         for intent in priority_order:
             if intent in intent_patterns:
@@ -289,6 +320,17 @@ class IntentClassifierUltraMinimal:
         for key, intent in simple_mapping.items():
             if key in msg:
                 return intent
+        
+        # SPECIAL CASE: Check for background tasks filter
+        background_patterns = [
+            r'\b(покажи|список)\b.*\b(фоновые|фоновая|worker)\b.*\b(задач|дела)\b',
+            r'\b(мониторинг|мониторинга)\b.*\b(задач|дела)\b',
+            r'\b(автоматическ|автоматические)\b.*\b(задач|дела)\b'
+        ]
+        
+        for pattern in background_patterns:
+            if re.search(pattern, msg, re.IGNORECASE):
+                return {'intent': 'list_tasks', 'params': {'filter_type': 'Фоновая'}}
         
         # Default to conversation
         return 'conversation'
