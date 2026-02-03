@@ -50,12 +50,12 @@ class ConversationCommand(BaseCommand):
             logger.error(f"[CONVERSATION FALLBACK] using_current_utc_time=True, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
         
         # ВАЖНО: Для вопросов о времени и приветствий используем ТОЛЬКО fallback, без AI
-        msg_lower = self.message.lower()
+        msg_lower = self.message.lower().strip()
         if any(phrase in msg_lower for phrase in ["сколько время", "который час", "какое время", "время сейчас", "сейчас время"]):
             return f"Сейчас {current_time_str} ({time_of_day}) 🕐"
         
         # Для приветствий тоже используем fallback
-        if any(phrase in msg_lower for phrase in ["привет", "здравствуй", "хай", "hello", "hi"]):
+        if "привет" in msg_lower or "здравствуй" in msg_lower or "хай" in msg_lower or "hello" in msg_lower or "hi" in msg_lower:
             greeting = f"Привет! 😊 Смотрю, сообщение отправлено в {current_time_str} ({time_of_day})."
             if time_of_day == "утро":
                 return f"{greeting} Хорошего начала дня! Чем могу помочь с задачами?"
