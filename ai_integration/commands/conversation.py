@@ -55,15 +55,18 @@ class ConversationCommand(BaseCommand):
         # Create a conversational prompt with time awareness
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
-КРИТИЧЕСКИ ВАЖНО: Текущее время пользователя {current_time_str} ({time_of_day})
+КРИТИЧЕСКИ ВАЖНО: Текущее время пользователя ТОЛЬКО {current_time_str} ({time_of_day})
 Дата: {current_date_str}
 
-СТРОГО ЗАПРЕЩЕНО использовать любое другое время кроме {current_time_str}!
+СТРОГО ЗАПРЕЩЕНО использовать любое другое время! НИКОГДА не используй текущее время сервера, свое знание времени или любое другое время кроме {current_time_str} ({time_of_day})!
+Если упоминаешь время, всегда говори "сейчас {current_time_str} ({time_of_day})" и ничего другого!
 
 Сообщение пользователя: {self.message}
 
 Ответь естественно и дружелюбно. Если упоминаешь время, используй ТОЛЬКО {current_time_str} ({time_of_day}).
-- ЕСЛИ СПРАШИВАЮТ О ВРЕМЕНИ, отвечай что сейчас {current_time_str} ({time_of_day})"""
+- ЕСЛИ СПРАШИВАЮТ О ВРЕМЕНИ, отвечай что сейчас {current_time_str} ({time_of_day})
+
+ПРИМЕР ОТВЕТА: "Привет! Сейчас {current_time_str} ({time_of_day}), отличное время для планирования задач!" """
 
         try:
             # Use AI for natural conversation response
