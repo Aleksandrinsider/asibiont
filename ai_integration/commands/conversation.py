@@ -62,7 +62,7 @@ class ConversationCommand(BaseCommand):
 
 Сообщение пользователя: {self.message}
 
-Ответь естественно и дружелюбно. Если упоминаешь время, используй ТОЛЬКО {current_time_str} ({time_of_day})."""
+Ответь естественно и дружелюбно. Если упоминаешь время, используй ТОЛЬКО {current_time_str} ({time_of_day}).
 - ЕСЛИ СПРАШИВАЮТ О ВРЕМЕНИ, отвечай что сейчас {current_time_str} ({time_of_day})"""
 
         try:
