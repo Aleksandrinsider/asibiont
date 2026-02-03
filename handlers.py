@@ -681,7 +681,7 @@ async def process_text_message(user_id, text, message, state):
         
         # Use new command-based architecture
         router = CommandRouter()
-        command = await router.route(text, user_id)
+        command = await router.route(text, user_id, message.date)
         
         # Create session for command execution
         db_session = Session()

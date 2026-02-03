@@ -11,13 +11,21 @@ class ConversationCommand(BaseCommand):
         # For conversation, we need to respond naturally without calling tools
         # But we still want to use AI for natural responses
         
-        # Get user timezone and current time
+        # Get user timezone and message time
         user = db_session.query(User).filter_by(telegram_id=user_id).first()
         user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
         
         try:
             tz = pytz.timezone(user_timezone)
-            user_now = datetime.now(tz)
+            # Use message time instead of current time
+            if self.message_time:
+                # message.date is in UTC, convert to user timezone
+                utc_time = self.message_time.replace(tzinfo=pytz.UTC)
+                user_now = utc_time.astimezone(tz)
+            else:
+                # Fallback to current time if no message time
+                user_now = datetime.now(tz)
+                
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             
@@ -32,16 +40,20 @@ class ConversationCommand(BaseCommand):
             else:
                 time_of_day = "ночь"
                 
-            print(f"DEBUG: user_timezone={user_timezone}, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
+            print(f"DEBUG: user_timezone={user_timezone}, message_time={self.message_time}, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
                 
         except Exception as e:
             # Fallback to Moscow time
             moscow_tz = pytz.timezone('Europe/Moscow')
-            user_now = datetime.now(moscow_tz)
+            if self.message_time:
+                utc_time = self.message_time.replace(tzinfo=pytz.UTC)
+                user_now = utc_time.astimezone(moscow_tz)
+            else:
+                user_now = datetime.now(moscow_tz)
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             time_of_day = "время"  # Generic fallback
-            print(f"DEBUG FALLBACK: current_time_str={current_time_str}, time_of_day={time_of_day}")
+            print(f"DEBUG FALLBACK: message_time={self.message_time}, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
         
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)

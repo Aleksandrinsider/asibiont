@@ -5,7 +5,7 @@ from .intent_classifier_ultra_minimal import IntentClassifierUltraMinimal
 class CommandRouter:
     """Fully AI-powered command routing - no patterns, pure AI understanding"""
 
-    async def route(self, message: str, user_id: int = None):
+    async def route(self, message: str, user_id: int = None, message_time: datetime = None):
         """Route message using pure AI classification"""
         
         # Always use AI for intent classification
@@ -22,5 +22,5 @@ class CommandRouter:
         command_class = IntentClassifierUltraMinimal.get_command_class(intent)
 
         # Create command with extracted parameters
-        command = command_class(message, **params)
+        command = command_class(message, message_time=message_time, **params)
         return command
