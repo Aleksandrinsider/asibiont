@@ -17,9 +17,8 @@ class ConversationCommand(BaseCommand):
         
         try:
             tz = pytz.timezone(user_timezone)
-            # Для разговоров используем текущее время, а не время отправки сообщения
-            # поскольку message.date может быть в локальном времени, а не UTC
-            user_now = datetime.now(tz)
+            # Правильная конвертация: текущее UTC время -> timezone пользователя
+            user_now = datetime.now(pytz.UTC).astimezone(tz)
                 
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
@@ -37,18 +36,18 @@ class ConversationCommand(BaseCommand):
                 
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f"[CONVERSATION] user_timezone={user_timezone}, using_current_time=True, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
+            logger.info(f"[CONVERSATION] user_timezone={user_timezone}, using_current_utc_time=True, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
                 
         except Exception as e:
             # Fallback to Moscow time
             moscow_tz = pytz.timezone('Europe/Moscow')
-            user_now = datetime.now(moscow_tz)
+            user_now = datetime.now(pytz.UTC).astimezone(moscow_tz)
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             time_of_day = "время"  # Generic fallback
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"[CONVERSATION FALLBACK] using_current_time=True, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
+            logger.error(f"[CONVERSATION FALLBACK] using_current_utc_time=True, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
         
         # ВАЖНО: Для вопросов о времени и приветствий используем ТОЛЬКО fallback, без AI
         msg_lower = self.message.lower()
