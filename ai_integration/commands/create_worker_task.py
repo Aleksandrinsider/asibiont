@@ -204,7 +204,8 @@ class CreateWorkerTaskCommand(BaseCommand):
                 # Технический анализ с индикаторами
                 try:
                     indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
-                    news_data = await self._get_asset_news(symbol, limit=10)  # Получаем новости
+                    # Новости включены, но ограничены для экономии API (максимум 3 новости)
+                    news_data = await self._get_asset_news(symbol, limit=3)
                     
                     if indicators:
                         signals, recommendation = await self._analyze_asset_signals(symbol, asset_type, indicators, news_data)
