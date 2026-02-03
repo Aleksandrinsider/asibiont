@@ -334,4 +334,33 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_worker_task",
+            "description": "Создать фоновую задачу (worker), которая выполняется периодически. Используй для мониторинга рынков, автоматических проверок или повторяющихся действий. Пример: мониторинг рынка золота каждый час для поиска хороших возможностей покупки.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_description": {
+                        "type": "string",
+                        "description": "Описание задачи для worker, например 'Мониторинг рынка золота для поиска возможностей покупки'"
+                    },
+                    "interval_minutes": {
+                        "type": "integer",
+                        "description": "Интервал выполнения в минутах, например 60 для ежечасного выполнения"
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Тип действия: 'monitor_gold_market' для мониторинга золота, 'custom_monitor' для других мониторингов"
+                    },
+                    "threshold": {
+                        "type": "number",
+                        "description": "Порог для уведомления, например цена золота ниже определенного уровня"
+                    }
+                },
+                "required": ["task_description", "interval_minutes", "action"]
+            }
+        }
+    },
 ]

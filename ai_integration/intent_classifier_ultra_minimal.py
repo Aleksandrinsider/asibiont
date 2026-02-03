@@ -198,6 +198,19 @@ class IntentClassifierUltraMinimal:
                 r'\b(кому-то|кому-нибудь|другому)\b.*\b(сделать|выполнить)\b',
                 r'\b(поручи|делегируй|передай)\b.*@',
                 r'@\w+.*\b(сделай|выполни|подготовь|организуй)\b',
+                r'\b(создай|настрой)\b.*\b(worker|фоновую задачу|мониторинг)\b',
+                r'\b(мониторь|следить|отслеживать)\b.*\b(рынок|золото|цену)\b',
+                r'\b(создай worker|фоновая задача)\b.*\b(для|чтобы)\b'
+            ],
+            
+            # Create worker task patterns
+            'create_worker_task': [
+                r'\b(создай|настрой|запланируй)\b.*\b(worker|фоновую задачу|мониторинг|автоматическ)\b',
+                r'\b(мониторь|следить|отслеживать)\b.*\b(рынок|золото|цену|каждый час)\b',
+                r'\b(создай worker|фоновая задача)\b.*\b(для|чтобы|каждые)\b',
+                r'\b(автоматическ|периодическ)\b.*\b(проверка|мониторинг|анализ)\b',
+                r'\b(информируй|уведомляй)\b.*\b(когда|если)\b.*\b(хорошая|возможность)\b'
+            ],
                 r'\b(задач|дело)\b.*@\w+',
                 r'\b(поручи|делегируй)\b.*\b(кому|кому-то)\b',
                 r'\b(передай|отдай)\b.*\b(задачу|дело)\b.*@\w+',
@@ -282,7 +295,8 @@ class IntentClassifierUltraMinimal:
             DeleteTaskCommand, RescheduleTaskCommand, UpdateProfileCommand, FindPartnersCommand,
             DelegateTaskCommand, ConversationCommand, GetTaskDetailsCommand,
             EditTaskCommand, FindRelevantContactsForTaskCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
-            AcceptDelegatedTaskCommand, RejectDelegatedTaskCommand, GetDelegationProgressCommand
+            AcceptDelegatedTaskCommand, RejectDelegatedTaskCommand, GetDelegationProgressCommand,
+            CreateWorkerTaskCommand
         )
 
         mapping = {
@@ -303,6 +317,7 @@ class IntentClassifierUltraMinimal:
             'accept_delegated_task': AcceptDelegatedTaskCommand,
             'reject_delegated_task': RejectDelegatedTaskCommand,
             'get_delegation_progress': GetDelegationProgressCommand,
+            'create_worker_task': CreateWorkerTaskCommand,
         }
 
         return mapping.get(intent)
