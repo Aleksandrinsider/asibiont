@@ -390,64 +390,113 @@ class CreateWorkerTaskCommand(BaseCommand):
         """Получить новости по активу из Alpha Vantage"""
         try:
             url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&limit={limit}"
-            response = requests.get(url)
 
-            if response.status_code == 200:
-                data = response.json()
-                news_feed = data.get('feed', [])
+            # Устанавливаем таймаут для запроса
+            timeout = aiohttp.ClientTimeout(total=30)
 
-                news_summary = []
-                sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        news_feed = data.get('feed', [])
 
-                for news in news_feed[:limit]:  # Ограничиваем количеством
-                    title = news.get('title', '')
-                    source = news.get('source', '')
-                    sentiment = news.get('overall_sentiment_label', 'neutral').lower()
-                    relevance = 0
+                        if not news_feed:
+                            logger.info(f"No news found for {symbol}")
+                            return {
+                                'news_count': 0,
+                                'dominant_sentiment': 'neutral',
+                                'sentiment_ratio': 0,
+                                'sentiment_counts': {'positive': 0, 'negative': 0, 'neutral': 0},
+                                'important_news': [],
+                                'message': 'Новости не найдены'
+                            }
 
-                    # Получаем релевантность для этого тикера
-                    ticker_sentiment = news.get('ticker_sentiment', [])
-                    for ts in ticker_sentiment:
-                        if ts.get('ticker') == symbol.upper():
-                            relevance = float(ts.get('relevance_score', 0))
-                            break
+                        news_summary = []
+                        sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
+                        total_relevance = 0
+                        relevance_count = 0
 
-                    # Считаем сентимент
-                    if sentiment in sentiment_counts:
-                        sentiment_counts[sentiment] += 1
+                        for news in news_feed[:limit]:  # Ограничиваем количеством
+                            title = news.get('title', '')
+                            source = news.get('source', '')
+                            sentiment = news.get('overall_sentiment_label', 'neutral').lower()
+                            relevance = 0
 
-                    # Добавляем важные новости (релевантность > 0.5)
-                    if relevance > 0.5:
-                        news_summary.append({
-                            'title': title,
-                            'source': source,
-                            'sentiment': sentiment,
-                            'relevance': relevance
-                        })
+                            # Получаем релевантность для этого тикера
+                            ticker_sentiment = news.get('ticker_sentiment', [])
+                            for ts in ticker_sentiment:
+                                if ts.get('ticker') == symbol.upper():
+                                    relevance = float(ts.get('relevance_score', 0))
+                                    break
 
-                # Определяем общий сентимент
-                total_news = sum(sentiment_counts.values())
-                if total_news > 0:
-                    dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
-                    sentiment_ratio = sentiment_counts[dominant_sentiment] / total_news
-                else:
-                    dominant_sentiment = 'neutral'
-                    sentiment_ratio = 0
+                            # Нормализуем сентимент к базовым категориям
+                            normalized_sentiment = self._normalize_sentiment(sentiment)
 
-                return {
-                    'news_count': len(news_summary),
-                    'dominant_sentiment': dominant_sentiment,
-                    'sentiment_ratio': sentiment_ratio,
-                    'sentiment_counts': sentiment_counts,
-                    'important_news': news_summary[:3]  # Только топ-3 новости
-                }
-            else:
-                logger.warning(f"Failed to fetch news for {symbol}: {response.status_code}")
-                return None
+                            # Считаем сентимент
+                            if normalized_sentiment in sentiment_counts:
+                                sentiment_counts[normalized_sentiment] += 1
 
+                            # Собираем статистику релевантности
+                            if relevance > 0:
+                                total_relevance += relevance
+                                relevance_count += 1
+
+                            # Добавляем важные новости (релевантность > 0.5)
+                            if relevance > 0.5:
+                                news_summary.append({
+                                    'title': title,
+                                    'source': source,
+                                    'sentiment': sentiment,  # Оригинальный сентимент
+                                    'normalized_sentiment': normalized_sentiment,  # Нормализованный
+                                    'relevance': relevance
+                                })
+
+                        # Определяем общий сентимент
+                        total_news = sum(sentiment_counts.values())
+                        if total_news > 0:
+                            dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
+                            sentiment_ratio = sentiment_counts[dominant_sentiment] / total_news
+                        else:
+                            dominant_sentiment = 'neutral'
+                            sentiment_ratio = 0
+
+                        # Вычисляем среднюю релевантность
+                        avg_relevance = total_relevance / relevance_count if relevance_count > 0 else 0
+
+                        return {
+                            'news_count': len(news_summary),
+                            'dominant_sentiment': dominant_sentiment,
+                            'sentiment_ratio': sentiment_ratio,
+                            'sentiment_counts': sentiment_counts,
+                            'important_news': news_summary[:3],  # Только топ-3 новости
+                            'average_relevance': avg_relevance,
+                            'total_news_processed': len(news_feed)
+                        }
+                    else:
+                        logger.warning(f"Failed to fetch news for {symbol}: HTTP {response.status}")
+                        return None
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout fetching news for {symbol}")
+            return None
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error fetching news for {symbol}: {e}")
+            return None
         except Exception as e:
             logger.error(f"Error fetching news for {symbol}: {e}")
             return None
+
+    def _normalize_sentiment(self, sentiment):
+        """Нормализовать сентимент к базовым категориям"""
+        sentiment = sentiment.lower()
+
+        # Маппинг детальных сентиментов к базовым
+        if sentiment in ['positive', 'somewhat-positive', 'bullish', 'somewhat-bullish']:
+            return 'positive'
+        elif sentiment in ['negative', 'somewhat-negative', 'bearish', 'somewhat-bearish']:
+            return 'negative'
+        else:
+            return 'neutral'
 
     async def _analyze_asset_signals(self, symbol, asset_type, indicators, news_data=None):
         """Анализировать сигналы на основе технических индикаторов"""
