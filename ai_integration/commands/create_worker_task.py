@@ -24,7 +24,7 @@ class CreateWorkerTaskCommand(BaseCommand):
             weather_condition = self.params.get('weather_condition', '')  # Условие погоды
             asset_type = self.params.get('asset_type', 'gold')  # Тип актива: metal, currency, commodity (stocks disabled)
             symbol = self.params.get('symbol', 'GOLD')  # Символ актива
-            analysis_type = self.params.get('analysis_type', 'price_monitoring')  # Тип анализа: price_monitoring, technical_analysis, volume_analysis
+            analysis_type = self.params.get('analysis_type', 'technical_analysis')  # Тип анализа: technical_analysis
             response_style = self.params.get('response_style', 'formal')  # Стиль ответа: formal, conversational
 
             # Проверяем тариф - только PREMIUM
@@ -73,7 +73,7 @@ class CreateWorkerTaskCommand(BaseCommand):
             logger.error(f"Error creating worker task: {e}")
             return f"Ошибка при создании фоновой задачи: {str(e)}"
 
-    async def _execute_worker_action(self, user_id, action, threshold, task_id, city='Moscow', weather_condition='', asset_type='gold', symbol='GOLD', analysis_type='price_monitoring', response_style='formal'):
+    async def _execute_worker_action(self, user_id, action, threshold, task_id, city='Moscow', weather_condition='', asset_type='gold', symbol='GOLD', analysis_type='technical_analysis', response_style='formal'):
         try:
             if action == 'monitor_asset':
                 await self._monitor_asset(user_id, threshold, task_id, asset_type, symbol, analysis_type, response_style)
@@ -83,7 +83,7 @@ class CreateWorkerTaskCommand(BaseCommand):
         except Exception as e:
             logger.error(f"Error executing worker action {action}: {e}")
 
-    async def _monitor_asset(self, user_id, threshold, task_id, asset_type, symbol, analysis_type='price_monitoring', response_style='formal'):
+    async def _monitor_asset(self, user_id, threshold, task_id, asset_type, symbol, analysis_type='technical_analysis', response_style='formal'):
         try:
             current_price = None
             asset_name = symbol
@@ -150,6 +150,13 @@ class CreateWorkerTaskCommand(BaseCommand):
                     pair = from_curr + to_curr
                 else:
                     pair = symbol.upper()
+                    # Для EURUSD разделяем на EUR и USD
+                    if len(pair) == 6:
+                        from_curr = pair[:3]
+                        to_curr = pair[3:]
+                    else:
+                        logger.error(f"Invalid currency pair format: {symbol}")
+                        return
                 
                 if pair not in forex_pairs:
                     logger.error(f"Unsupported forex pair: {symbol}. Supported: {forex_pairs}")
@@ -180,27 +187,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                 return
 
             # Выполняем анализ в зависимости от типа
-            if analysis_type == 'price_monitoring':
-                # Простой мониторинг цены
-                if current_price and current_price < threshold:
-                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
-                        if response_style == 'conversational':
-                            message = await self._generate_ai_conversational_message(
-                                analysis_type='price_monitoring',
-                                asset_name=asset_name,
-                                current_price=current_price,
-                                signals=[],
-                                recommendation="Возможность для покупки",
-                                threshold=threshold
-                            )
-                        else:
-                            message = f"🎉 Хорошая возможность для покупки {asset_name}! Текущая цена: ${current_price:.2f}, ниже порога ${threshold}"
-                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
-                        logger.info(f"Asset alert sent to user {user_id}: {asset_name} price {current_price}")
-                    else:
-                        logger.error("Bot not available for sending asset alert")
-                        
-            elif analysis_type == 'technical_analysis':
+            if analysis_type == 'technical_analysis':
                 # Технический анализ с индикаторами
                 try:
                     indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
@@ -245,45 +232,6 @@ class CreateWorkerTaskCommand(BaseCommand):
                         message = f"⚠️ Не удалось выполнить технический анализ для {asset_name}. Возможно, данные недоступны для этого актива."
                         await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
                         
-            elif analysis_type == 'volume_analysis':
-                # Анализ объема торгов (для акций)
-                if asset_type == 'stock':
-                    indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
-                    if 'volume' in indicators and 'price' in indicators:
-                        volume = indicators['volume']
-                        price = indicators['price']
-                        
-                        # Простая логика анализа объема
-                        volume_threshold = 1000000  # Можно сделать настраиваемым
-                        
-                        if volume > volume_threshold:
-                            if REMINDER_SERVICE and REMINDER_SERVICE.bot:
-                                if response_style == 'conversational':
-                                    message = await self._generate_ai_conversational_message(
-                                        analysis_type='volume_analysis',
-                                        asset_name=asset_name,
-                                        current_price=price,
-                                        signals=[f"Объем торгов: {volume:,}"],
-                                        recommendation="Высокий объем - следите за движением цены",
-                                        threshold=volume_threshold
-                                    )
-                                else:
-                                    message = f"📊 Анализ объема {asset_name}:\n"
-                                    message += f"Цена: ${price:.2f}\n"
-                                    message += f"Объем: {volume:,}\n"
-                                    message += f"🚨 Высокий объем торгов! Возможно значимое движение цены."
-                                
-                                await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
-                                logger.info(f"Volume analysis sent to user {user_id}: {asset_name}, volume: {volume}")
-                            else:
-                                logger.error("Bot not available for sending volume analysis")
-                        else:
-                            logger.info(f"Volume for {symbol} is normal: {volume}")
-                    else:
-                        logger.warning(f"Could not get volume data for {symbol}")
-                else:
-                    logger.warning(f"Volume analysis not supported for asset type: {asset_type}")
-
             if response.status_code != 200:
                 logger.warning(f"Failed to fetch {asset_type} price for {symbol}: {response.status_code}, response: {response.text}")
 
@@ -300,10 +248,15 @@ class CreateWorkerTaskCommand(BaseCommand):
                 # Для валют используем FX_DAILY для оптимизации
                 if '/' in symbol:
                     from_curr, to_curr = symbol.split('/', 1)
-                    api_url = f"https://www.alphavantage.co/query?function=FX_DAILY&from_symbol={from_curr}&to_symbol={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
-                    time_series_key = 'Time Series FX (Daily)'
                 else:
-                    return None
+                    # Для EURUSD разделяем на EUR и USD
+                    if len(symbol) == 6:
+                        from_curr = symbol[:3]
+                        to_curr = symbol[3:]
+                    else:
+                        return None
+                api_url = f"https://www.alphavantage.co/query?function=FX_DAILY&from_symbol={from_curr}&to_symbol={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+                time_series_key = 'Time Series FX (Daily)'
             elif asset_type == 'commodity':
                 # Для нефти используем специальный API для цены, но для технических индикаторов попробуем TIME_SERIES_DAILY
                 if symbol.upper() == 'WTI':
@@ -590,8 +543,6 @@ class CreateWorkerTaskCommand(BaseCommand):
             # Анализ ADX - отключен для экономии API запросов
 
             # Анализ CCI - отключен для экономии API запросов
-                else:
-                    signals.append(f"CCI {cci:.2f}: Нейтральная зона")
 
             # Анализ MFI - отключен для экономии API запросов
 
