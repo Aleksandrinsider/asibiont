@@ -49,9 +49,13 @@ class ConversationCommand(BaseCommand):
         # Create a conversational prompt with time awareness
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
-⏰ ТЕКУЩЕЕ ВРЕМЯ: {current_time_str} ({time_of_day}) | 📅 СЕГОДНЯ: {current_date_str}
+🚨 КРИТИЧЕСКИ ВАЖНО - ТЕКУЩЕЕ ВРЕМЯ И ДАТА:
+⏰ ТЕКУЩЕЕ ВРЕМЯ: {current_time_str} ({time_of_day})
+📅 СЕГОДНЯШНЯЯ ДАТА: {current_date_str}
 
-ОБЯЗАТЕЛЬНО ИСПОЛЬЗУЙ УКАЗАННОЕ ТЕКУЩЕЕ ВРЕМЯ В СВОИХ ОТВЕТАХ! НЕ ПРИДУМЫВАЙ ДРУГОЕ ВРЕМЯ!
+❗ ПРИ УПОМИНАНИИ ВРЕМЕНИ ОБЯЗАТЕЛЬНО ИСПОЛЬЗУЙ РОВНО ЭТИ ЗНАЧЕНИЯ: {current_time_str}
+❗ НЕ ПРИДУМЫВАЙ И НЕ НАЗЫВАЙ ДРУГОЕ ВРЕМЯ!
+❗ ЕСЛИ ГОВОРИШЬ О ВРЕМЕНИ, СКАЖИ "{current_time_str}" ИЛИ "{time_of_day}"
 
 ПОЛЬЗОВАТЕЛЬ: {self.message}
 
