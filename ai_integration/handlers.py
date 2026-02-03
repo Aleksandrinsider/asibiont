@@ -1710,8 +1710,13 @@ def list_tasks(user_id=None, session=None, include_completed=False):
         # Объединяем: сначала важные
         sorted_tasks = priority_tasks + today_tasks + upcoming_tasks + later_tasks
         
-        # Ограничиваем до MAX_TASKS_IN_RESPONSE
-        tasks_to_show = sorted_tasks[:MAX_TASKS_IN_RESPONSE]
+        # КРИТИЧНО: Просроченные задачи показываем ВСЕГДА, независимо от лимита
+        # Остальные задачи ограничиваем с учетом уже показанных просроченных
+        max_other_tasks = MAX_TASKS_IN_RESPONSE - len(priority_tasks)
+        other_tasks_to_show = (today_tasks + upcoming_tasks + later_tasks)[:max_other_tasks] if max_other_tasks > 0 else []
+        
+        # Итоговый список: ВСЕ просроченные + другие до лимита
+        tasks_to_show = priority_tasks + other_tasks_to_show
         hidden_count = len(sorted_tasks) - len(tasks_to_show)
 
         # Правильный подсчёт: только личные незавершённые задачи
@@ -1722,9 +1727,9 @@ def list_tasks(user_id=None, session=None, include_completed=False):
 
         # ФОРМАТИРОВАНИЕ ПО КАТЕГОРИЯМ с эмодзи для ясности
         if priority_tasks:
-            # Просроченные показываем всегда (КРИТИЧНО!)
+            # Просроченные показываем ВСЕГДА и ВСЕ (не ограничиваем)
             result += f"⚠️ ПРОСРОЧЕННЫЕ ({len(priority_tasks)}):\n"
-            for task in [t for t in tasks_to_show if t in priority_tasks]:
+            for task in priority_tasks:  # Показываем ВСЕ просроченные без фильтрации
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     delta = now - reminder_dt

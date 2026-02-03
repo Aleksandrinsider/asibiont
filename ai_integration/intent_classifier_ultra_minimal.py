@@ -60,6 +60,32 @@ class IntentClassifierUltraMinimal:
         import re
         msg = message.lower().strip()
         
+        # FIRST: Check for explicit conversation patterns (highest priority)
+        conversation_patterns = [
+            # Greetings and introductions
+            r'\b(привет|здравствуй|добрый|доброе|доброго|хай|hi|hello|hey)\b',
+            r'\b(как дела|как жизнь|как настроение)\b',
+            r'\b(расскажи о себе|кто ты|что ты|ты кто|ты что)\b',
+            r'\b(что ты умеешь|что можешь|твои возможности|твои функции)\b',
+            r'\b(давай поговорим|поговори со мной|хочу пообщаться)\b',
+            r'\b(спасибо|благодарю|спс)\b.*\b(за|что)\b',
+            r'\b(извини|прости|сорри)\b',
+            r'\b(пока|до свидания|до встречи|bye|goodbye)\b',
+            # General conversation starters
+            r'\b(что нового|что интересного|что происходит)\b',
+            r'\b(расскажи|поведай)\b.*\b(о себе|про себя)\b',
+            r'\b(ты знаешь|ты умеешь|ты можешь)\b.*\?',
+            r'\b(помоги|помощь|нужна помощь)\b.*\b(понять|разобраться)\b',
+            # Questions about the bot itself
+            r'\b(как ты работаешь|как ты функционируешь)\b',
+            r'\b(что ты думаешь|каково твое мнение)\b',
+            r'\b(ты живой|ты ИИ|ты искусственный интеллект)\b'
+        ]
+        
+        for pattern in conversation_patterns:
+            if re.search(pattern, msg, re.IGNORECASE):
+                return 'conversation'
+        
         # Enhanced intent mapping with regex patterns and context analysis
         intent_patterns = {
             # Add task patterns - more specific to avoid conflicts with list_tasks

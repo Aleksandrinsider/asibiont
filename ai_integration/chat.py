@@ -1570,6 +1570,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 time_context = "НОЧЬ: Предлагай отдых, подготовку ко сну, легкие задачи"
             
             user_memory += f"\nВРЕМЯ СУТОК: {time_context}"
+            user_memory += f"\nТОЧНОЕ ВРЕМЯ: Сейчас {user_now.strftime('%H:%M')} по местному времени ({tz_str})"
             profile_filled = False
             
             # Helper function to check if field is empty
