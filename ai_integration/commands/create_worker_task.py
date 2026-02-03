@@ -5,8 +5,11 @@ from datetime import datetime, timedelta
 import logging
 import asyncio
 import requests
+import aiohttp
+import json
 from subscription_service import check_subscription
-from config import OPENWEATHERMAP_API_KEY, ALPHA_VANTAGE_API_KEY
+from config import OPENWEATHERMAP_API_KEY, ALPHA_VANTAGE_API_KEY, DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from ai_integration.prompts import get_extended_system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -32,24 +35,17 @@ class CreateWorkerTaskCommand(BaseCommand):
             if user.subscription_tier != SubscriptionTier.PREMIUM:
                 return "Функция фоновых задач доступна только на тарифе PREMIUM. Обновите подписку для использования этой возможности."
 
-            # Проверяем минимальный интервал - не чаще раза в день
-            if interval_minutes < 1440:
-                interval_minutes = 1440
-                logger.info(f"Adjusted interval to minimum 1440 minutes for user {user_id}")
+            # Проверяем минимальный интервал - не чаще раза в час
+            if interval_minutes < 60:
+                interval_minutes = 60
+                logger.info(f"Adjusted interval to minimum 60 minutes for user {user_id}")
 
-            # Проверяем, что у пользователя нет уже worker'а
-            existing_worker = db_session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.title.like("Worker:%")
-            ).first()
-            
-            if existing_worker:
-                return "У вас уже настроена фоновая задача. Вы можете иметь только одну фоновую задачу. Удалите существующую перед созданием новой."
+            # Для PREMIUM пользователей нет ограничения на количество worker задач
 
             # Создаем задачу в БД для отслеживания
             worker_task = Task(
                 title=f"Worker: {task_description}",
-                description=f"Фоновая задача: {action}, тип актива: {asset_type}, символ: {symbol}, анализ: {analysis_type}, стиль ответа: {response_style}, интервал {interval_minutes} мин, порог {threshold}, город {city}, условие {weather_condition}",
+                description=f"Автоматическая задача: {action}, тип актива: {asset_type}, символ: {symbol}, анализ: {analysis_type}, стиль ответа: {response_style}, интервал {interval_minutes} мин, порог {threshold}, город {city}, условие {weather_condition}",
                 user_id=user.id,
                 status='active',
                 created_at=datetime.now(),
@@ -71,7 +67,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                 )
                 logger.info(f"Worker task created: {job_id}")
 
-            return f"Фоновая задача создана: {task_description}. Будет выполняться каждые {interval_minutes // 60} часов (минимум раз в день)."
+            return f"Автоматическая задача создана: {task_description}. Будет выполняться каждые {interval_minutes} минут (минимум раз в час)."
 
         except Exception as e:
             logger.error(f"Error creating worker task: {e}")
@@ -171,7 +167,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                 if current_price and current_price < threshold:
                     if REMINDER_SERVICE and REMINDER_SERVICE.bot:
                         if response_style == 'conversational':
-                            message = await self._generate_conversational_message(
+                            message = await self._generate_ai_conversational_message(
                                 analysis_type='price_monitoring',
                                 asset_name=asset_name,
                                 current_price=current_price,
@@ -189,12 +185,14 @@ class CreateWorkerTaskCommand(BaseCommand):
             elif analysis_type == 'technical_analysis':
                 # Технический анализ с индикаторами
                 indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
+                news_data = await self._get_asset_news(symbol, limit=10)  # Получаем новости
+                
                 if indicators:
-                    signals, recommendation = await self._analyze_asset_signals(symbol, asset_type, indicators)
+                    signals, recommendation = await self._analyze_asset_signals(symbol, asset_type, indicators, news_data)
                     
                     if REMINDER_SERVICE and REMINDER_SERVICE.bot:
                         if response_style == 'conversational':
-                            message = await self._generate_conversational_message(
+                            message = await self._generate_ai_conversational_message(
                                 analysis_type='technical_analysis',
                                 asset_name=asset_name,
                                 current_price=current_price,
@@ -229,7 +227,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                         if volume > volume_threshold:
                             if REMINDER_SERVICE and REMINDER_SERVICE.bot:
                                 if response_style == 'conversational':
-                                    message = await self._generate_conversational_message(
+                                    message = await self._generate_ai_conversational_message(
                                         analysis_type='volume_analysis',
                                         asset_name=asset_name,
                                         current_price=price,
@@ -320,7 +318,70 @@ class CreateWorkerTaskCommand(BaseCommand):
             logger.error(f"Error getting technical indicators for {symbol}: {e}")
             return {}
 
-    async def _analyze_asset_signals(self, symbol, asset_type, indicators):
+    async def _get_asset_news(self, symbol, limit=5):
+        """Получить новости по активу из Alpha Vantage"""
+        try:
+            url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&limit={limit}"
+            response = requests.get(url)
+
+            if response.status_code == 200:
+                data = response.json()
+                news_feed = data.get('feed', [])
+
+                news_summary = []
+                sentiment_counts = {'positive': 0, 'negative': 0, 'neutral': 0}
+
+                for news in news_feed[:limit]:  # Ограничиваем количеством
+                    title = news.get('title', '')
+                    source = news.get('source', '')
+                    sentiment = news.get('overall_sentiment_label', 'neutral').lower()
+                    relevance = 0
+
+                    # Получаем релевантность для этого тикера
+                    ticker_sentiment = news.get('ticker_sentiment', [])
+                    for ts in ticker_sentiment:
+                        if ts.get('ticker') == symbol.upper():
+                            relevance = float(ts.get('relevance_score', 0))
+                            break
+
+                    # Считаем сентимент
+                    if sentiment in sentiment_counts:
+                        sentiment_counts[sentiment] += 1
+
+                    # Добавляем важные новости (релевантность > 0.5)
+                    if relevance > 0.5:
+                        news_summary.append({
+                            'title': title,
+                            'source': source,
+                            'sentiment': sentiment,
+                            'relevance': relevance
+                        })
+
+                # Определяем общий сентимент
+                total_news = sum(sentiment_counts.values())
+                if total_news > 0:
+                    dominant_sentiment = max(sentiment_counts, key=sentiment_counts.get)
+                    sentiment_ratio = sentiment_counts[dominant_sentiment] / total_news
+                else:
+                    dominant_sentiment = 'neutral'
+                    sentiment_ratio = 0
+
+                return {
+                    'news_count': len(news_summary),
+                    'dominant_sentiment': dominant_sentiment,
+                    'sentiment_ratio': sentiment_ratio,
+                    'sentiment_counts': sentiment_counts,
+                    'important_news': news_summary[:3]  # Только топ-3 новости
+                }
+            else:
+                logger.warning(f"Failed to fetch news for {symbol}: {response.status_code}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching news for {symbol}: {e}")
+            return None
+
+    async def _analyze_asset_signals(self, symbol, asset_type, indicators, news_data=None):
         """Анализировать сигналы на основе технических индикаторов"""
         signals = []
         recommendation = "HOLD"
@@ -385,14 +446,43 @@ class CreateWorkerTaskCommand(BaseCommand):
                 if volume > 1000000:  # Пример порога
                     signals.append("Высокий объем торгов")
             
+            # Анализ новостей
+            if news_data:
+                news_count = news_data.get('news_count', 0)
+                dominant_sentiment = news_data.get('dominant_sentiment', 'neutral')
+                sentiment_ratio = news_data.get('sentiment_ratio', 0)
+                important_news = news_data.get('important_news', [])
+                
+                if news_count > 0:
+                    signals.append(f"Новостей за период: {news_count}")
+                    signals.append(f"Общий сентимент новостей: {dominant_sentiment} ({sentiment_ratio:.1%})")
+                    
+                    # Влияние сентимента на рекомендацию
+                    if dominant_sentiment == 'positive' and sentiment_ratio > 0.6:
+                        signals.append("Положительный новостной фон усиливает бычьи сигналы")
+                        if recommendation == "HOLD":
+                            recommendation = "BUY"
+                    elif dominant_sentiment == 'negative' and sentiment_ratio > 0.6:
+                        signals.append("Отрицательный новостной фон усиливает медвежьи сигналы")
+                        if recommendation == "HOLD":
+                            recommendation = "SELL"
+                    
+                    # Добавляем ключевые новости
+                    for news in important_news[:2]:  # Максимум 2 новости в сигналах
+                        title = news.get('title', '')[:80] + '...' if len(news.get('title', '')) > 80 else news.get('title', '')
+                        sentiment = news.get('sentiment', 'neutral')
+                        signals.append(f"Новость: {title} ({sentiment})")
+                else:
+                    signals.append("Новостей за период: нет значимых")
+            
         except Exception as e:
             logger.error(f"Error analyzing signals for {symbol}: {e}")
             signals.append(f"Ошибка анализа: {e}")
         
         return signals, recommendation
 
-    def _generate_conversational_message(self, asset_name, current_price, signals, recommendation, analysis_type):
-        """Генерирует естественное, разговорное сообщение"""
+    async def _generate_conversational_message(self, asset_name, current_price, signals, recommendation, analysis_type):
+        """Генерирует естественное, разговорное сообщение с использованием AI промпта"""
         import random
         
         # Вводные фразы
@@ -493,6 +583,97 @@ class CreateWorkerTaskCommand(BaseCommand):
             message = f"{intro} {price_desc} Цена ниже порога, так что решил сообщить."
         
         return message
+
+    async def _generate_ai_conversational_message(self, asset_name, current_price, signals, recommendation, analysis_type):
+        """Генерирует естественное, разговорное сообщение с использованием AI промпта"""
+        try:
+            # Создаем контекст для AI в том же формате, что используется в chat.py
+            ai_context = f"WORKER_ASSET_ANALYSIS: {asset_name}, цена ${current_price:.2f}, сигналы: {', '.join(signals)}, рекомендация: {recommendation}, тип анализа: {analysis_type}"
+            
+            # Используем специализированный промпт для финансового анализа
+            system_prompt = """Ты - ASI Biont, эксперт по финансовому анализу и инвестициям. Ты даешь профессиональные, но понятные рекомендации.
+
+ОСОБЕННОСТИ ТВОЕГО АНАЛИЗА:
+1. ТЕХНИЧЕСКИЙ АНАЛИЗ: Оценивай RSI, MACD, Bollinger Bands, объемы
+2. НОВОСТНОЙ ФОН: Учитывай сентимент новостей и их влияние на рынок
+3. РИСКИ: Всегда упоминай о рисках и важности диверсификации
+4. КОНТЕКСТ: Анализируй рыночные условия и внешние факторы
+
+СТИЛЬ: Профессиональный, но дружелюбный. Давай конкретные советы, но напоминай, что это не финансовый совет."""
+            
+            # Создаем инструкцию для генерации глубокого финансового анализа
+            tool_context_msg = f"""ФИНАНСОВЫЙ АНАЛИЗ АКТИВА:
+{ai_context}
+
+ИНСТРУКЦИЯ ДЛЯ ПРОФЕССИОНАЛЬНОГО АНАЛИЗА:
+
+1. ТЕХНИЧЕСКИЙ АНАЛИЗ:
+   - Оцени RSI, MACD, Bollinger Bands и объемы
+   - Объясни, что означают эти индикаторы
+   - Свяжи технические сигналы с ценовым движением
+
+2. НОВОСТНОЙ АНАЛИЗ:
+   - Учти сентимент новостей и их влияние
+   - Объясни, как новости могут влиять на цену
+   - Упомяни ключевые новости если они есть
+
+3. ОБЩАЯ РЕКОМЕНДАЦИЯ:
+   - Дай взвешенную рекомендацию BUY/SELL/HOLD
+   - Обосновывай рекомендацию фактами
+   - Упомяни временной горизонт
+
+4. РИСКИ И ПРЕДУПРЕЖДЕНИЯ:
+   - Всегда напоминай о рисках
+   - Говори о диверсификации портфеля
+   - Подчеркивай, что это не финансовый совет
+
+5. СТИЛЬ ОТВЕТА:
+   - Профессиональный, но доступный язык
+   - Используй аналогии для объяснения
+   - Будь честен о неопределенностях рынка
+   - Заканчивай практическими советами
+
+⚠️ КРИТИЧНО: Анализируй ВСЕ предоставленные данные, не придумывай информацию!"""
+
+            # Вызываем AI API
+            async with aiohttp.ClientSession() as session:
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Проанализируй актив {asset_name}"},
+                    {"role": "user", "content": tool_context_msg}
+                ]
+                
+                data = {
+                    "model": DEEPSEEK_MODEL,
+                    "messages": messages,
+                    "temperature": 0.8,
+                    "max_tokens": 1000
+                }
+                
+                headers = {
+                    "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                
+                async with session.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    json=data,
+                    headers=headers
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        ai_message = result['choices'][0]['message']['content'].strip()
+                        logger.info(f"Generated AI conversational message for {asset_name}: {ai_message[:100]}...")
+                        return ai_message
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"AI API error: {response.status}, {error_text}")
+                        
+        except Exception as e:
+            logger.error(f"Error generating AI conversational message: {e}")
+        
+        # Fallback: используем старую функцию
+        return await self._generate_conversational_message(asset_name, current_price, signals, recommendation, analysis_type)
 
     async def _monitor_weather(self, user_id, threshold, task_id, city, weather_condition):
         try:

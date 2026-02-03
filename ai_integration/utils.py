@@ -5,13 +5,22 @@ import pytz
 from models import Session, User, UserProfile, Task, Interaction
 from config import (
     DEEPSEEK_API_KEY,
-    DEEPSEEK_MODEL
+    DEEPSEEK_MODEL,
+    OPENWEATHERMAP_API_KEY,
+    NEWSAPI_API_KEY
 )
 import json
 import requests
 import hashlib
+import time
 
 logger = logging.getLogger(__name__)
+
+# Глобальный кеш для погоды (город -> {data, timestamp})
+weather_cache = {}
+
+# Глобальный кеш для новостей (ключ -> {data, timestamp})
+news_cache = {}
 
 
 def analyze_interaction_for_profile_update(user_id, message, ai_response):
@@ -1561,3 +1570,128 @@ def get_context_from_db(user_id, limit=10):
         return []
     finally:
         session.close()
+
+
+def get_weather_info(city, cache_ttl_minutes=30):
+    """
+    Получает информацию о погоде для города с кешированием.
+    Возвращает строку с описанием погоды или None при ошибке.
+    """
+    if not city or not OPENWEATHERMAP_API_KEY:
+        return None
+
+    # Нормализуем город
+    city = city.strip()
+    if not city:
+        return None
+
+    # Проверяем кеш
+    cache_key = city.lower()
+    now = time.time()
+
+    if cache_key in weather_cache:
+        cached = weather_cache[cache_key]
+        if now - cached['timestamp'] < (cache_ttl_minutes * 60):
+            logger.info(f"[WEATHER CACHE] Using cached weather for {city}")
+            return cached['data']
+
+    try:
+        # Запрашиваем погоду
+        api_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru"
+        response = requests.get(api_url, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            temp = data['main']['temp']
+            weather_desc = data['weather'][0]['description']
+            humidity = data['main']['humidity']
+            wind_speed = data['wind']['speed']
+
+            # Формируем строку погоды
+            weather_str = f"{city}: {temp}°C, {weather_desc}, влажность {humidity}%, ветер {wind_speed} м/с"
+
+            # Кешируем результат
+            weather_cache[cache_key] = {
+                'data': weather_str,
+                'timestamp': now
+            }
+
+            logger.info(f"[WEATHER] Fetched weather for {city}: {weather_str}")
+            return weather_str
+        else:
+            logger.warning(f"[WEATHER] Failed to fetch weather for {city}: {response.status_code}")
+            return None
+
+    except Exception as e:
+        logger.error(f"[WEATHER] Error fetching weather for {city}: {e}")
+        return None
+
+
+def get_news_info(city=None, cache_ttl_minutes=240):
+    """
+    Получает новости: общие для всех или по городу для премиум-пользователей.
+    Возвращает строку с кратким описанием новостей или None при ошибке.
+    """
+    if not NEWSAPI_API_KEY:
+        return None
+
+    # Ключ кеша зависит от города
+    if city and city.strip():
+        cache_key = f"news_{city.lower().strip()}"
+        search_query = f"{city} Россия"
+    else:
+        cache_key = "russian_news_general"
+        search_query = "Россия"
+
+    now = time.time()
+
+    # Проверяем кеш
+    if cache_key in news_cache:
+        cached = news_cache[cache_key]
+        if now - cached['timestamp'] < (cache_ttl_minutes * 60):
+            logger.info(f"[NEWS CACHE] Using cached news for {cache_key}")
+            return cached['data']
+
+    try:
+        # Запрашиваем новости
+        api_url = f"https://newsapi.org/v2/everything?q={search_query}&language=ru&sortBy=publishedAt&apiKey={NEWSAPI_API_KEY}&pageSize=5"
+        response = requests.get(api_url, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data.get('status') == 'ok' and data.get('articles'):
+                articles = data['articles']
+                news_items = []
+
+                for article in articles[:3]:  # Берем только 3 новости для краткости
+                    title = article.get('title', '').strip()
+                    if title and title != '[Removed]':
+                        news_items.append(f"• {title}")
+
+                if news_items:
+                    if city and city.strip():
+                        news_str = f"Новости {city}:\n" + "\n".join(news_items)
+                    else:
+                        news_str = "Свежие новости России:\n" + "\n".join(news_items)
+                else:
+                    news_str = "Новости временно недоступны"
+
+                # Кешируем результат
+                news_cache[cache_key] = {
+                    'data': news_str,
+                    'timestamp': now
+                }
+
+                logger.info(f"[NEWS] Fetched {len(news_items)} news items for {cache_key}")
+                return news_str
+            else:
+                logger.warning(f"[NEWS] No articles in response: {data}")
+                return None
+        else:
+            logger.warning(f"[NEWS] Failed to fetch news: {response.status_code} - {response.text}")
+            return None
+
+    except Exception as e:
+        logger.error(f"[NEWS] Error fetching news: {e}")
+        return None

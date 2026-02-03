@@ -370,7 +370,7 @@ class InteractiveDialogueTester:
                 # Отправляем сообщение
                 response = await asyncio.wait_for(
                     chat_with_ai(message, user_id=TEST_USER_ID),
-                    timeout=30.0
+                    timeout=60.0  # Увеличен до 60 секунд, чтобы соответствовать API таймауту
                 )
 
                 resp_text = response.get('response', '') if isinstance(response, dict) else str(response)

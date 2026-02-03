@@ -625,6 +625,18 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 )
                 tool_results.append({"function": func_name, "result": result})
 
+            elif func_name == "create_worker_task":
+                from .commands.create_worker_task import CreateWorkerTaskCommand
+                command = CreateWorkerTaskCommand(message=original_message, **args)
+                result = await command.execute(user_id, db_session)
+                tool_results.append({"function": func_name, "result": result})
+
+            elif func_name == "delete_worker_task":
+                from .commands.delete_worker_task import DeleteWorkerTaskCommand
+                command = DeleteWorkerTaskCommand(message=original_message, **args)
+                result = await command.execute(user_id, db_session)
+                tool_results.append({"function": func_name, "result": result})
+
             else:
                 logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
                 tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})
@@ -2179,6 +2191,43 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             except Exception as e:
                 logger.warning(f"[SYSTEM MESSAGE] Could not extract task details: {e}")
 
+        # Получаем информацию о погоде для всех пользователей (не только PREMIUM)
+        weather_info = None
+        if user:
+            try:
+                from .utils import get_weather_info
+                profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile and profile.city:
+                    weather_info = get_weather_info(profile.city)
+                    if weather_info:
+                        logger.info(f"[WEATHER] Added weather info to prompt: {weather_info}")
+            except Exception as e:
+                logger.warning(f"[WEATHER] Could not get weather info: {e}")
+
+        # Получаем информацию о новостях
+        # Общие новости для FREE (в рамках лимита), по городу для STANDARD/PREMIUM (за рамки лимита)
+        news_info = None
+        try:
+            from .utils import get_news_info
+            if subscription_tier in ['STANDARD', 'PREMIUM']:
+                # Для платных тарифов - новости по городу (даже за рамки лимита)
+                if profile and profile.city:
+                    news_info = get_news_info(city=profile.city)
+                    if news_info:
+                        logger.info(f"[NEWS] Added city-specific news for PREMIUM user {profile.city} (extra API call)")
+                else:
+                    # Если город не указан, всё равно даем общие новости для премиум
+                    news_info = get_news_info()
+                    if news_info:
+                        logger.info("[NEWS] Added general news for PREMIUM user (no city, but PREMIUM gets news)")
+            else:
+                # Для FREE тарифа - только общие новости (в рамках лимита)
+                news_info = get_news_info()
+                if news_info:
+                    logger.info("[NEWS] Added general news for FREE tier (within limits)")
+        except Exception as e:
+            logger.warning(f"[NEWS] Could not get news info: {e}")
+
         system_prompt = get_extended_system_prompt(
             user_now,
             current_time_str,
@@ -2187,7 +2236,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             mentions_str,
             user_memory,
             subscription_tier=subscription_tier,
-            message_type=message_type_for_prompt)
+            message_type=message_type_for_prompt,
+            weather_info=weather_info,
+            news_info=news_info)
         logger.info("[PROMPTS] Using extended prompt system")
 
         # УБРАЛИ CLARIFICATION INSTRUCTION - AI сам понимает когда нужно уточнение!

@@ -13,29 +13,34 @@ class DeleteWorkerTaskCommand(BaseCommand):
             if not user:
                 return "Пользователь не найден"
 
-            # Находим существующего worker'а
-            existing_worker = db_session.query(Task).filter(
+            # Находим все существующие worker задачи
+            existing_workers = db_session.query(Task).filter(
                 Task.user_id == user.id,
                 Task.title.like("Worker:%")
-            ).first()
+            ).all()
             
-            if not existing_worker:
+            if not existing_workers:
                 return "У вас нет активных фоновых задач."
 
-            # Удаляем задачу из scheduler
+            # Удаляем все задачи из scheduler
             if REMINDER_SERVICE:
-                job_id = f"worker_{existing_worker.id}_{user_id}"
-                try:
-                    REMINDER_SERVICE.scheduler.remove_job(job_id)
-                    logger.info(f"Worker job {job_id} removed from scheduler")
-                except Exception as e:
-                    logger.warning(f"Could not remove job {job_id}: {e}")
+                for worker_task in existing_workers:
+                    job_id = f"worker_{worker_task.id}_{user_id}"
+                    try:
+                        REMINDER_SERVICE.scheduler.remove_job(job_id)
+                        logger.info(f"Worker job {job_id} removed from scheduler")
+                    except Exception as e:
+                        logger.warning(f"Could not remove job {job_id}: {e}")
 
-            # Удаляем задачу из БД
-            db_session.delete(existing_worker)
+            # Удаляем все задачи из БД
+            deleted_count = 0
+            for worker_task in existing_workers:
+                db_session.delete(worker_task)
+                deleted_count += 1
+            
             db_session.commit()
 
-            return "Фоновая задача удалена. Теперь вы можете создать новую."
+            return f"Удалено {deleted_count} фоновых задач. Теперь вы можете создать новые."
 
         except Exception as e:
             logger.error(f"Error deleting worker task: {e}")

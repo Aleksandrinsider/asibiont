@@ -3,7 +3,7 @@
 import pytz
 
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None):
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None):
     """Get simplified system prompt for AI"""
 
     # Информация о подписке
@@ -15,11 +15,21 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         }.get(subscription_tier, subscription_tier)
         tier_info = f"\nПОДПИСКА: {tier_name}"
 
+    # Информация о погоде (для всех пользователей)
+    weather_context = ""
+    if weather_info:
+        weather_context = f"\n🌤️ ПОГОДА: {weather_info}"
+
+    # Информация о новостях (для всех пользователей)
+    news_context = ""
+    if news_info:
+        news_context = f"\n📰 НОВОСТИ: {news_info}"
+
     prompt = """Ты - ASI Biont, умный AI-агент из лаборатории искусственного интеллекта. 😊
 Твоя миссия: помогать людям находить единомышленников через их дела и задачи.
 
 ⏰ ТЕКУЩЕЕ ВРЕМЯ: {current_time_str} | 📅 СЕГОДНЯ: {current_date_str} | 👤 ПОЛЬЗОВАТЕЛЬ: {user_username}
-{tier_info}
+{tier_info}{weather_context}{news_context}
 
 {user_memory}
 
