@@ -22,7 +22,7 @@ class CreateWorkerTaskCommand(BaseCommand):
             threshold = self.params.get('threshold', 0)
             city = self.params.get('city', 'Moscow')  # Город по умолчанию
             weather_condition = self.params.get('weather_condition', '')  # Условие погоды
-            asset_type = self.params.get('asset_type', 'gold')  # Тип актива: metal, currency, stock, commodity
+            asset_type = self.params.get('asset_type', 'gold')  # Тип актива: metal, currency, commodity (stocks disabled)
             symbol = self.params.get('symbol', 'GOLD')  # Символ актива
             analysis_type = self.params.get('analysis_type', 'price_monitoring')  # Тип анализа: price_monitoring, technical_analysis, volume_analysis
             response_style = self.params.get('response_style', 'formal')  # Стиль ответа: formal, conversational
@@ -165,9 +165,9 @@ class CreateWorkerTaskCommand(BaseCommand):
                     current_price = float(exchange_rate.get('5. Exchange Rate', 0))
 
             elif asset_type == 'stock':
-                # Акции: используем GLOBAL_QUOTE для текущей цены
-                api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
-                asset_name = f"акции {symbol}"
+                # Акции отключены для экономии API запросов (25 в день)
+                logger.error("Stock monitoring is disabled to save API requests. Focus on metals, commodities, and currencies.")
+                return
 
                 response = requests.get(api_url)
                 if response.status_code == 200:
@@ -313,7 +313,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                     return None
                 time_series_key = 'Time Series (Daily)'
             else:
-                # Для акций и металлов используем TIME_SERIES_DAILY
+                # Для металлов используем TIME_SERIES_DAILY
                 api_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
                 time_series_key = 'Time Series (Daily)'
 
