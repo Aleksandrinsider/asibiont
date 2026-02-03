@@ -114,21 +114,36 @@ class CreateWorkerTaskCommand(BaseCommand):
             asset_name = symbol
 
             if asset_type == 'metal':
-                # Металлы: золото, серебро
-                if symbol.upper() in ['GOLD', 'XAU']:
-                    api_url = f"https://www.alphavantage.co/query?function=GOLD_SILVER_SPOT&symbol=GOLD&apikey={ALPHA_VANTAGE_API_KEY}"
-                    asset_name = "золота"
-                elif symbol.upper() in ['SILVER', 'XAG']:
-                    api_url = f"https://www.alphavantage.co/query?function=GOLD_SILVER_SPOT&symbol=SILVER&apikey={ALPHA_VANTAGE_API_KEY}"
-                    asset_name = "серебра"
+                # Металлы: золото, серебро, платина, палладий и другие
+                metal_symbols = {
+                    'GOLD': 'золота',
+                    'XAU': 'золота',
+                    'SILVER': 'серебра', 
+                    'XAG': 'серебра',
+                    'PLAT': 'платины',
+                    'PLATINUM': 'платины',
+                    'PALL': 'палладия',
+                    'PALLADIUM': 'палладия',
+                    'COPPER': 'меди',
+                    'ALUMINUM': 'алюминия',
+                    'ZINC': 'цинка',
+                    'NICKEL': 'никеля'
+                }
+                
+                symbol_upper = symbol.upper()
+                if symbol_upper in metal_symbols:
+                    asset_name = metal_symbols[symbol_upper]
+                    # Используем стандартный API для технических индикаторов
+                    api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol_upper}&apikey={ALPHA_VANTAGE_API_KEY}"
                 else:
-                    logger.error(f"Unsupported metal symbol: {symbol}")
+                    logger.error(f"Unsupported metal symbol: {symbol}. Supported: {list(metal_symbols.keys())}")
                     return
 
                 response = requests.get(api_url)
                 if response.status_code == 200:
                     data = response.json()
-                    current_price = float(data.get('price', 0))
+                    quote = data.get('Global Quote', {})
+                    current_price = float(quote.get('05. price', 0))
 
             elif asset_type == 'currency':
                 # Валюты: пары типа USD/EUR
@@ -184,34 +199,47 @@ class CreateWorkerTaskCommand(BaseCommand):
                         
             elif analysis_type == 'technical_analysis':
                 # Технический анализ с индикаторами
-                indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
-                news_data = await self._get_asset_news(symbol, limit=10)  # Получаем новости
-                
-                if indicators:
-                    signals, recommendation = await self._analyze_asset_signals(symbol, asset_type, indicators, news_data)
+                try:
+                    indicators = await self._get_technical_indicators(symbol, 'daily', asset_type)
+                    news_data = await self._get_asset_news(symbol, limit=10)  # Получаем новости
                     
-                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
-                        if response_style == 'conversational':
-                            message = await self._generate_ai_conversational_message(
-                                analysis_type='technical_analysis',
-                                asset_name=asset_name,
-                                current_price=current_price,
-                                signals=signals,
-                                recommendation=recommendation,
-                                threshold=threshold
-                            )
-                        else:
-                            message = f"📊 Технический анализ {asset_name}:\n"
-                            message += f"Текущая цена: ${current_price:.2f}\n\n"
-                            message += "📈 Индикаторы:\n"
-                            for signal in signals:
-                                message += f"• {signal}\n"
-                            message += f"\n🎯 Рекомендация: {recommendation}"
+                    if indicators:
+                        signals, recommendation = await self._analyze_asset_signals(symbol, asset_type, indicators, news_data)
                         
-                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
-                        logger.info(f"Technical analysis sent to user {user_id}: {asset_name}, recommendation: {recommendation}")
+                        if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                            if response_style == 'conversational':
+                                message = await self._generate_ai_conversational_message(
+                                    analysis_type='technical_analysis',
+                                    asset_name=asset_name,
+                                    current_price=current_price,
+                                    signals=signals,
+                                    recommendation=recommendation,
+                                    threshold=threshold
+                                )
+                            else:
+                                message = f"📊 Технический анализ {asset_name}:\n"
+                                message += f"Текущая цена: ${current_price:.2f}\n\n"
+                                message += "📈 Индикаторы:\n"
+                                for signal in signals:
+                                    message += f"• {signal}\n"
+                                message += f"\n🎯 Рекомендация: {recommendation}"
+                            
+                            await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
+                            logger.info(f"Technical analysis sent to user {user_id}: {asset_name}, recommendation: {recommendation}")
+                        else:
+                            logger.error("Bot not available for sending technical analysis")
                     else:
-                        logger.error("Bot not available for sending technical analysis")
+                        logger.warning(f"No indicators available for {symbol}, skipping technical analysis")
+                        if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                            message = f"⚠️ Технические индикаторы недоступны для {asset_name}. Возможно, данные временно недоступны."
+                            await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
+                            
+                except Exception as e:
+                    logger.error(f"Error in technical analysis for {symbol}: {e}")
+                    # Отправляем сообщение об ошибке
+                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                        message = f"⚠️ Не удалось выполнить технический анализ для {asset_name}. Возможно, данные недоступны для этого актива."
+                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
                         
             elif analysis_type == 'volume_analysis':
                 # Анализ объема торгов (для акций)
@@ -262,6 +290,19 @@ class CreateWorkerTaskCommand(BaseCommand):
         """Получить технические индикаторы для актива"""
         try:
             indicators = {}
+            
+            # Для металлов некоторые индикаторы могут быть недоступны
+            if asset_type == 'metal':
+                logger.info(f"Getting technical indicators for metal: {symbol}")
+                # Для металлов пробуем получить только основные индикаторы
+                # которые обычно доступны
+            
+            # Проверяем доступность данных для символа
+            test_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
+            test_response = requests.get(test_url)
+            if test_response.status_code != 200 or not test_response.json().get('Global Quote'):
+                logger.warning(f"Symbol {symbol} not available or invalid")
+                return None
 
             # RSI (Relative Strength Index)
             rsi_url = f"https://www.alphavantage.co/query?function=RSI&symbol={symbol}&interval={interval}&time_period=14&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
