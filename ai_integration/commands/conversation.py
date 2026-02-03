@@ -59,10 +59,22 @@ class ConversationCommand(BaseCommand):
             logger = logging.getLogger(__name__)
             logger.error(f"[CONVERSATION FALLBACK] message_time={self.message_time}, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
         
-        # ВАЖНО: Для вопросов о времени используем ТОЛЬКО fallback, без AI
+        # ВАЖНО: Для вопросов о времени и приветствий используем ТОЛЬКО fallback, без AI
         msg_lower = self.message.lower()
         if any(phrase in msg_lower for phrase in ["сколько время", "который час", "какое время", "время сейчас", "сейчас время"]):
             return f"Сейчас {current_time_str} ({time_of_day}) 🕐"
+        
+        # Для приветствий тоже используем fallback
+        if any(phrase in msg_lower for phrase in ["привет", "здравствуй", "хай", "hello", "hi"]):
+            greeting = f"Привет! 😊 Смотрю, сообщение отправлено в {current_time_str} ({time_of_day})."
+            if time_of_day == "утро":
+                return f"{greeting} Хорошего начала дня! Чем могу помочь с задачами?"
+            elif time_of_day == "день":
+                return f"{greeting} Как проходит день? Готов помочь с планированием!"
+            elif time_of_day == "вечер":
+                return f"{greeting} Добрый вечер! Что планируешь на вечер?"
+            else:
+                return f"{greeting} Поздний час, но я здесь, если нужна помощь!"
         
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)
@@ -112,23 +124,11 @@ class ConversationCommand(BaseCommand):
                         content = result["choices"][0]["message"]["content"].strip()
                         return content
                     else:
-                        # Fallback responses
-                        if "привет" in self.message.lower() or "здравствуй" in self.message.lower():
-                            greeting = f"Привет! Смотрю, сообщение отправлено в {current_time_str} ({time_of_day})."
-                            if time_of_day == "утро":
-                                return f"{greeting} Хорошего начала дня! Чем могу помочь с задачами?"
-                            elif time_of_day == "день":
-                                return f"{greeting} Как проходит день? Готов помочь с планированием!"
-                            elif time_of_day == "вечер":
-                                return f"{greeting} Добрый вечер! Что планируешь на вечер?"
-                            else:
-                                return f"{greeting} Поздний час, но я здесь, если нужна помощь!"
-                        elif "кто ты" in self.message.lower() or "ты кто" in self.message.lower():
+                        # Fallback responses (only for non-greeting/time messages)
+                        if "кто ты" in self.message.lower() or "ты кто" in self.message.lower():
                             return "Я ASI Biont - умный AI-помощник, который помогает людям находить единомышленников через их дела и задачи.\n\nМогу создавать напоминания, искать партнеров для активностей и многое другое!"
                         elif "что ты умеешь" in self.message.lower():
                             return "Я умею:\n• Создавать задачи с напоминаниями\n• Искать людей для совместных активностей\n• Управлять твоим расписанием\n• Помогать находить единомышленников\n\nПросто расскажи, что планируешь!"
-                        elif "сколько время" in self.message.lower() or "который час" in self.message.lower() or "время" in self.message.lower():
-                            return f"Сейчас {current_time_str} ({time_of_day}) по твоему времени."
                         else:
                             return f"Приятно пообщаться! 😊 Сообщение отправлено в {current_time_str} ({time_of_day}). Чем могу помочь с задачами или поиском единомышленников?"
         
