@@ -362,10 +362,13 @@ class InteractiveDialogueTester:
 
         success_count = 0
         total_tests = len(messages)
+        total_time = 0
+        errors = []
 
         for i, message in enumerate(messages, 1):
             print(f"\n🔹 ТЕСТ {i}/{total_tests}: {message}")
 
+            start_time = asyncio.get_event_loop().time()
             try:
                 # Отправляем сообщение
                 response = await asyncio.wait_for(
@@ -373,17 +376,20 @@ class InteractiveDialogueTester:
                     timeout=60.0  # Увеличен до 60 секунд, чтобы соответствовать API таймауту
                 )
 
+                end_time = asyncio.get_event_loop().time()
+                response_time = end_time - start_time
+                total_time += response_time
+
                 resp_text = response.get('response', '') if isinstance(response, dict) else str(response)
                 tools_called = response.get('tools_called', []) if isinstance(response, dict) else []
 
                 print(f"💬 Ответ: {resp_text[:150]}{'...' if len(resp_text) > 150 else ''}")
+                print(f"⏱️  Время ответа: {response_time:.2f} сек")
 
                 if tools_called:
                     print(f"🔨 Tools: {tools_called}")
                     # Проверяем, что вызван правильный tool
                     expected = expected_tool
-                    if command_type == "update_profile" and "интересуюсь" in message.lower():
-                        expected = "update_user_memory"
                     if expected and any(expected in str(tool) for tool in tools_called):
                         print("  ✅ Правильный tool вызван")
                         success_count += 1
@@ -402,13 +408,35 @@ class InteractiveDialogueTester:
                 await asyncio.sleep(0.5)
 
             except Exception as e:
+                end_time = asyncio.get_event_loop().time()
+                response_time = end_time - start_time
+                total_time += response_time
+
                 import traceback
+                error_info = {
+                    'message': message,
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'response_time': response_time
+                }
+                errors.append(error_info)
+
                 print(f"❌ Ошибка в тесте: {e}")
+                print(f"⏱️  Время до ошибки: {response_time:.2f} сек")
                 print(f"Error type: {type(e).__name__}")
-                print(f"Traceback: {traceback.format_exc()}")
 
         success_rate = (success_count / total_tests) * 100
+        avg_time = total_time / total_tests if total_tests > 0 else 0
+
         print(f"\n📊 РЕЗУЛЬТАТ КОМАНДЫ {command_type}: {success_count}/{total_tests} ({success_rate:.1f}%)")
+        print(f"⏱️  Среднее время ответа: {avg_time:.2f} сек")
+        print(f"📈 Всего времени: {total_time:.2f} сек")
+
+        if errors:
+            print(f"❌ Ошибок: {len(errors)}")
+            for error in errors:
+                print(f"  • {error['message'][:50]}...: {error['error_type']} ({error['response_time']:.2f} сек)")
+
         return success_rate >= 80  # 80% успешность считаем приемлемой
 
 async def run_comprehensive_dialogue_test():
@@ -437,18 +465,41 @@ async def run_comprehensive_dialogue_test():
 
         total_success = 0
         total_commands = len(commands_to_test)
+        total_execution_time = 0
+        command_times = []
+        total_errors = 0
+        commands_with_errors = 0
+        avg_response_time = 0
 
         for command_type, expected_tool in commands_to_test:
+            command_start_time = asyncio.get_event_loop().time()
             try:
                 success = await tester.test_command_dialogue(command_type, expected_tool)
+                command_end_time = asyncio.get_event_loop().time()
+                command_time = command_end_time - command_start_time
+                command_times.append(command_time)
+                total_execution_time += command_time
+
                 if success:
                     total_success += 1
-                    print(f"✅ КОМАНДА {command_type}: ПРОЙДЕНА")
+                    print(f"✅ КОМАНДА {command_type}: ПРОЙДЕНА ({command_time:.2f} сек)")
                 else:
-                    print(f"❌ КОМАНДА {command_type}: НЕ ПРОЙДЕНА")
+                    print(f"❌ КОМАНДА {command_type}: НЕ ПРОЙДЕНА ({command_time:.2f} сек)")
 
             except Exception as e:
-                print(f"💥 КРИТИЧЕСКАЯ ОШИБКА в команде {command_type}: {e}")
+                command_end_time = asyncio.get_event_loop().time()
+                command_time = command_end_time - command_start_time
+                command_times.append(command_time)
+                total_execution_time += command_time
+                total_errors += 1
+                commands_with_errors += 1
+
+                print(f"💥 КРИТИЧЕСКАЯ ОШИБКА в команде {command_type}: {e} ({command_time:.2f} сек)")
+
+        # Вычисляем статистику
+        max_command_times = max(command_times) if command_times else 0
+        min_command_times = min(command_times) if command_times else 0
+        avg_response_time = sum(command_times) / len(command_times) if command_times else 0
 
         # Финальный отчет
         print(f"\n{'='*80}")
@@ -457,6 +508,31 @@ async def run_comprehensive_dialogue_test():
         print(f"Команд протестировано: {total_commands}")
         print(f"Успешно: {total_success}")
         print(f"Успешность: {(total_success/total_commands)*100:.1f}%")
+
+        # Детальная статистика
+        print(f"\n📊 ДЕТАЛЬНАЯ СТАТИСТИКА:")
+        print(f"• Общее время выполнения: {total_execution_time:.2f} сек")
+        print(f"• Среднее время на команду: {total_execution_time/total_commands:.2f} сек")
+        print(f"• Максимальное время: {max_command_times:.2f} сек")
+        print(f"• Минимальное время: {min_command_times:.2f} сек")
+
+        if total_errors > 0:
+            print(f"• Всего ошибок: {total_errors}")
+            print(f"• Команд с ошибками: {commands_with_errors}")
+
+        # Рекомендации
+        print(f"\n💡 РЕКОМЕНДАЦИИ:")
+        if (total_success/total_commands)*100 >= 95:
+            print("• 🎉 Отличные результаты! Все команды работают стабильно")
+        elif (total_success/total_commands)*100 >= 80:
+            print("• ✅ Хорошие результаты, но есть место для улучшения")
+        else:
+            print("• ⚠️  Требуется доработка некоторых команд")
+
+        if avg_response_time > 10:
+            print("• 🐌 Высокое время ответа - рассмотрите оптимизацию API вызовов")
+        if total_errors > 0:
+            print("• 🔧 Есть ошибки - проверьте обработку исключений")
 
         if total_success == total_commands:
             print("🎉 ВСЕ КОМАНДЫ РАБОТАЮТ КОРРЕКТНО В ДИАЛОГЕ!")

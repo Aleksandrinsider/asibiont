@@ -1,3 +1,6 @@
+import asyncio
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -21,6 +24,39 @@ weather_cache = {}
 
 # Глобальный кеш для новостей (ключ -> {data, timestamp})
 news_cache = {}
+
+# Executor для фоновых задач
+background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="api_cache")
+
+
+def refresh_weather_cache_async(city, cache_ttl_minutes=30):
+    """
+    Асинхронно обновляет кэш погоды в фоне.
+    Не блокирует основной поток.
+    """
+    def _refresh():
+        try:
+            get_weather_info(city, cache_ttl_minutes=0)  # Принудительное обновление
+            logger.info(f"[WEATHER] Background refresh completed for {city}")
+        except Exception as e:
+            logger.error(f"[WEATHER] Background refresh failed for {city}: {e}")
+
+    background_executor.submit(_refresh)
+
+
+def refresh_news_cache_async(city=None, cache_ttl_minutes=120):  # Уменьшил до 2 часов для актуальности
+    """
+    Асинхронно обновляет кэш новостей в фоне.
+    Не блокирует основной поток.
+    """
+    def _refresh():
+        try:
+            get_news_info(city, cache_ttl_minutes=0)  # Принудительное обновление
+            logger.info(f"[NEWS] Background refresh completed for {city or 'general'}")
+        except Exception as e:
+            logger.error(f"[NEWS] Background refresh failed for {city or 'general'}: {e}")
+
+    background_executor.submit(_refresh)
 
 
 def analyze_interaction_for_profile_update(user_id, message, ai_response):
@@ -1574,7 +1610,8 @@ def get_context_from_db(user_id, limit=10):
 
 def get_weather_info(city, cache_ttl_minutes=30):
     """
-    Получает информацию о погоде для города с кешированием.
+    Получает информацию о погоде для города с умным кешированием.
+    Если кэш устарел - запускает фоновое обновление, но возвращает старые данные немедленно.
     Возвращает строку с описанием погоды или None при ошибке.
     """
     if not city or not OPENWEATHERMAP_API_KEY:
@@ -1591,10 +1628,27 @@ def get_weather_info(city, cache_ttl_minutes=30):
 
     if cache_key in weather_cache:
         cached = weather_cache[cache_key]
-        if now - cached['timestamp'] < (cache_ttl_minutes * 60):
-            logger.info(f"[WEATHER CACHE] Using cached weather for {city}")
-            return cached['data']
+        cache_age_minutes = (now - cached['timestamp']) / 60
 
+        if cache_age_minutes < cache_ttl_minutes:
+            # Данные свежие
+            logger.info(f"[WEATHER CACHE] Using fresh cached weather for {city} ({cache_age_minutes:.1f} min old)")
+            return cached['data']
+        else:
+            # Данные устарели, но есть старые - запускаем фоновое обновление
+            logger.info(f"[WEATHER CACHE] Data stale for {city} ({cache_age_minutes:.1f} min old), starting background refresh")
+            refresh_weather_cache_async(city, cache_ttl_minutes)
+            return cached['data']  # Возвращаем старые данные немедленно
+
+    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
+    logger.info(f"[WEATHER] No cache for {city}, loading synchronously")
+    return _load_weather_sync(city)
+
+
+def _load_weather_sync(city):
+    """
+    Синхронно загружает погоду (используется только при первом запросе или принудительном обновлении).
+    """
     try:
         # Запрашиваем погоду
         api_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru"
@@ -1611,9 +1665,10 @@ def get_weather_info(city, cache_ttl_minutes=30):
             weather_str = f"{city}: {temp}°C, {weather_desc}, влажность {humidity}%, ветер {wind_speed} м/с"
 
             # Кешируем результат
+            cache_key = city.lower()
             weather_cache[cache_key] = {
                 'data': weather_str,
-                'timestamp': now
+                'timestamp': time.time()
             }
 
             logger.info(f"[WEATHER] Fetched weather for {city}: {weather_str}")
@@ -1627,9 +1682,10 @@ def get_weather_info(city, cache_ttl_minutes=30):
         return None
 
 
-def get_news_info(city=None, cache_ttl_minutes=240):
+def get_news_info(city=None, cache_ttl_minutes=120):  # Уменьшил TTL до 2 часов для актуальности
     """
-    Получает новости: общие для всех или по городу для премиум-пользователей.
+    Получает новости с умным кешированием.
+    Если кэш устарел - запускает фоновое обновление, но возвращает старые данные немедленно.
     Возвращает строку с кратким описанием новостей или None при ошибке.
     """
     if not NEWSAPI_API_KEY:
@@ -1648,11 +1704,40 @@ def get_news_info(city=None, cache_ttl_minutes=240):
     # Проверяем кеш
     if cache_key in news_cache:
         cached = news_cache[cache_key]
-        if now - cached['timestamp'] < (cache_ttl_minutes * 60):
-            logger.info(f"[NEWS CACHE] Using cached news for {cache_key}")
-            return cached['data']
+        cache_age_minutes = (now - cached['timestamp']) / 60
 
+        if cache_age_minutes < cache_ttl_minutes:
+            # Данные свежие
+            logger.info(f"[NEWS CACHE] Using fresh cached news for {cache_key} ({cache_age_minutes:.1f} min old)")
+            return cached['data']
+        else:
+            # Данные устарели, но есть старые - запускаем фоновое обновление
+            logger.info(f"[NEWS CACHE] Data stale for {cache_key} ({cache_age_minutes:.1f} min old), starting background refresh")
+            refresh_news_cache_async(city, cache_ttl_minutes)
+            return cached['data']  # Возвращаем старые данные немедленно
+
+    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
+    logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously")
+    return _load_news_sync(city)
+
+    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
+    logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously")
+    return _load_news_sync(city)
+
+
+def _load_news_sync(city=None):
+    """
+    Синхронно загружает новости (используется только при первом запросе или принудительном обновлении).
+    """
     try:
+        # Определяем параметры запроса
+        if city and city.strip():
+            cache_key = f"news_{city.lower().strip()}"
+            search_query = f"{city} Россия"
+        else:
+            cache_key = "russian_news_general"
+            search_query = "Россия"
+
         # Запрашиваем новости
         api_url = f"https://newsapi.org/v2/everything?q={search_query}&language=ru&sortBy=publishedAt&apiKey={NEWSAPI_API_KEY}&pageSize=5"
         response = requests.get(api_url, timeout=10)
@@ -1680,7 +1765,7 @@ def get_news_info(city=None, cache_ttl_minutes=240):
                 # Кешируем результат
                 news_cache[cache_key] = {
                     'data': news_str,
-                    'timestamp': now
+                    'timestamp': time.time()
                 }
 
                 logger.info(f"[NEWS] Fetched {len(news_items)} news items for {cache_key}")
@@ -1695,3 +1780,31 @@ def get_news_info(city=None, cache_ttl_minutes=240):
     except Exception as e:
         logger.error(f"[NEWS] Error fetching news: {e}")
         return None
+
+
+def preload_common_data():
+    """
+    Предварительно загружает данные для популярных городов и общие новости.
+    Вызывается при старте бота для заполнения кэша.
+    """
+    logger.info("[CACHE] Starting preload of common data")
+
+    # Популярные города для предварительной загрузки
+    common_cities = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
+
+    # Загружаем погоду для популярных городов
+    for city in common_cities:
+        try:
+            logger.info(f"[CACHE] Preloading weather for {city}")
+            get_weather_info(city)
+        except Exception as e:
+            logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
+
+    # Загружаем общие новости
+    try:
+        logger.info("[CACHE] Preloading general news")
+        get_news_info()
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed to preload general news: {e}")
+
+    logger.info("[CACHE] Preload completed")

@@ -6121,6 +6121,15 @@ reminder_service = ReminderService(bot=bot if not LOCAL else None)
 reminder_service_module.REMINDER_SERVICE = reminder_service  # Set global variable for use in handlers
 logger.info("ReminderService initialized and set as global REMINDER_SERVICE")
 
+# Предварительная загрузка кэша погоды и новостей
+try:
+    from ai_integration.utils import preload_common_data
+    logger.info("Starting preload of weather/news cache...")
+    preload_common_data()
+    logger.info("Cache preload completed")
+except Exception as e:
+    logger.warning(f"Cache preload failed: {e}")
+
 # Start ReminderService on app startup
 
 
