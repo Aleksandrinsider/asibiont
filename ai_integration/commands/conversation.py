@@ -18,7 +18,7 @@ class ConversationCommand(BaseCommand):
         try:
             tz = pytz.timezone(user_timezone)
             # Правильная конвертация: текущее UTC время -> timezone пользователя
-            user_now = datetime.now(pytz.UTC).astimezone(tz)
+            user_now = datetime.utcnow().replace(tzinfo=pytz.UTC).astimezone(tz)
                 
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
@@ -41,7 +41,7 @@ class ConversationCommand(BaseCommand):
         except Exception as e:
             # Fallback to Moscow time
             moscow_tz = pytz.timezone('Europe/Moscow')
-            user_now = datetime.now(pytz.UTC).astimezone(moscow_tz)
+            user_now = datetime.utcnow().replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             time_of_day = "время"  # Generic fallback
