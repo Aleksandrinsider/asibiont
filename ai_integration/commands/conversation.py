@@ -56,7 +56,7 @@ class ConversationCommand(BaseCommand):
         
         # Для приветствий тоже используем fallback
         if "привет" in msg_lower or "здравствуй" in msg_lower or "хай" in msg_lower or "hello" in msg_lower or "hi" in msg_lower:
-            return f"Привет! 😊 Смотрю, сообщение отправлено в {current_time_str} ({time_of_day}). Как дела?"
+            return f"🔴 ТЕСТ 2026-02-03 23:10 🔴\nПривет! Смотрю, сообщение отправлено в {current_time_str} ({time_of_day}). Как дела?"
         
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)
