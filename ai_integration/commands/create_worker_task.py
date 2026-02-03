@@ -75,38 +75,13 @@ class CreateWorkerTaskCommand(BaseCommand):
 
     async def _execute_worker_action(self, user_id, action, threshold, task_id, city='Moscow', weather_condition='', asset_type='gold', symbol='GOLD', analysis_type='price_monitoring', response_style='formal'):
         try:
-            if action == 'monitor_gold_market':
-                await self._monitor_gold_market(user_id, threshold, task_id)
-            elif action == 'monitor_asset':
+            if action == 'monitor_asset':
                 await self._monitor_asset(user_id, threshold, task_id, asset_type, symbol, analysis_type, response_style)
             elif action == 'monitor_weather':
                 await self._monitor_weather(user_id, threshold, task_id, city, weather_condition)
             # Можно добавить другие действия
         except Exception as e:
             logger.error(f"Error executing worker action {action}: {e}")
-
-    async def _monitor_gold_market(self, user_id, threshold, task_id):
-        try:
-            # Используем Alpha Vantage API для получения цены золота
-            api_url = f"https://www.alphavantage.co/query?function=GOLD_SILVER_SPOT&symbol=GOLD&apikey={ALPHA_VANTAGE_API_KEY}"
-            response = requests.get(api_url)
-            if response.status_code == 200:
-                data = response.json()
-                # Alpha Vantage возвращает цену в формате "price": "2069.6627794950227"
-                current_price = float(data.get('price', 0))  # Цена золота в USD за унцию
-                if current_price and current_price < threshold:
-                    # Отправляем уведомление пользователю
-                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
-                        message = f"🎉 Хорошая возможность для покупки золота! Текущая цена: ${current_price:.2f} за унцию, ниже порога ${threshold}"
-                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
-                        logger.info(f"Gold market alert sent to user {user_id}: price {current_price}")
-                    else:
-                        logger.error("Bot not available for sending gold market alert")
-            else:
-                logger.warning(f"Failed to fetch gold price from Alpha Vantage: {response.status_code}, response: {response.text}")
-
-        except Exception as e:
-            logger.error(f"Error monitoring gold market: {e}")
 
     async def _monitor_asset(self, user_id, threshold, task_id, asset_type, symbol, analysis_type='price_monitoring', response_style='formal'):
         try:
