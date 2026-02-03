@@ -338,7 +338,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_worker_task",
-            "description": "Создать фоновую задачу (worker), которая выполняется периодически. Используй для мониторинга рынков, автоматических проверок или повторяющихся действий. Пример: мониторинг рынка золота каждый час для поиска хороших возможностей покупки.",
+            "description": "Создать фоновую задачу (worker) для PREMIUM пользователей. Выполняется минимум раз в день. Только одна задача на пользователя. Пример: мониторинг рынка золота для поиска возможностей покупки.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -348,18 +348,30 @@ TOOLS = [
                     },
                     "interval_minutes": {
                         "type": "integer",
-                        "description": "Интервал выполнения в минутах, например 60 для ежечасного выполнения"
+                        "description": "Интервал выполнения в минутах, минимум 1440 (24 часа)",
+                        "default": 1440
                     },
                     "action": {
                         "type": "string",
-                        "description": "Тип действия: 'monitor_gold_market' для мониторинга золота, 'custom_monitor' для других мониторингов"
+                        "description": "Тип действия: 'monitor_gold_market' для мониторинга золота"
                     },
                     "threshold": {
                         "type": "number",
                         "description": "Порог для уведомления, например цена золота ниже определенного уровня"
                     }
                 },
-                "required": ["task_description", "interval_minutes", "action"]
+                "required": ["task_description", "action"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_worker_task",
+            "description": "Удалить существующую фоновую задачу (worker). Используй когда пользователь хочет остановить или изменить свою фоновую задачу.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
             }
         }
     },

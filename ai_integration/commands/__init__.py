@@ -18,3 +18,4 @@ from .find_relevant_contacts_for_task import FindRelevantContactsForTaskCommand
 from .update_user_memory import UpdateUserMemoryCommand
 from .delete_all_tasks import DeleteAllTasksCommand
 from .create_worker_task import CreateWorkerTaskCommand
+from .delete_worker_task import DeleteWorkerTaskCommand

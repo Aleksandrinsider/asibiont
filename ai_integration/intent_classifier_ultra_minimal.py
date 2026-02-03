@@ -198,9 +198,11 @@ class IntentClassifierUltraMinimal:
                 r'\b(кому-то|кому-нибудь|другому)\b.*\b(сделать|выполнить)\b',
                 r'\b(поручи|делегируй|передай)\b.*@',
                 r'@\w+.*\b(сделай|выполни|подготовь|организуй)\b',
-                r'\b(создай|настрой)\b.*\b(worker|фоновую задачу|мониторинг)\b',
-                r'\b(мониторь|следить|отслеживать)\b.*\b(рынок|золото|цену)\b',
-                r'\b(создай worker|фоновая задача)\b.*\b(для|чтобы)\b'
+                r'\b(задач|дело)\b.*@\w+',
+                r'\b(поручи|делегируй)\b.*\b(кому|кому-то)\b',
+                r'\b(передай|отдай)\b.*\b(задачу|дело)\b.*@\w+',
+                r'\b(делегируй|поручи)\b.*\b(звонок|задачу|дело)\b.*@\w+',
+                r'\b(делегируй|поручи)\b.*@\w+.*\b(сделать|выполнить|подготовить)\b'
             ],
             
             # Create worker task patterns
@@ -211,11 +213,13 @@ class IntentClassifierUltraMinimal:
                 r'\b(автоматическ|периодическ)\b.*\b(проверка|мониторинг|анализ)\b',
                 r'\b(информируй|уведомляй)\b.*\b(когда|если)\b.*\b(хорошая|возможность)\b'
             ],
-                r'\b(задач|дело)\b.*@\w+',
-                r'\b(поручи|делегируй)\b.*\b(кому|кому-то)\b',
-                r'\b(передай|отдай)\b.*\b(задачу|дело)\b.*@\w+',
-                r'\b(делегируй|поручи)\b.*\b(звонок|задачу|дело)\b.*@\w+',
-                r'\b(делегируй|поручи)\b.*@\w+.*\b(сделать|выполнить|подготовить)\b'
+            
+            # Delete worker task patterns
+            'delete_worker_task': [
+                r'\b(удали|останови|выключи)\b.*\b(worker|фоновую задачу|мониторинг)\b',
+                r'\b(удали|останови)\b.*\b(мою|мою фоновую|мою автоматическ)\b.*\b(задач|мониторинг)\b',
+                r'\b(перестань|прекрати)\b.*\b(мониторить|отслеживать|проверять)\b',
+                r'\b(отключи|выключи)\b.*\b(автоматическ|периодическ)\b.*\b(задач|проверку)\b'
             ],
             
             # Update user memory patterns
@@ -296,7 +300,7 @@ class IntentClassifierUltraMinimal:
             DelegateTaskCommand, ConversationCommand, GetTaskDetailsCommand,
             EditTaskCommand, FindRelevantContactsForTaskCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
             AcceptDelegatedTaskCommand, RejectDelegatedTaskCommand, GetDelegationProgressCommand,
-            CreateWorkerTaskCommand
+            CreateWorkerTaskCommand, DeleteWorkerTaskCommand
         )
 
         mapping = {
@@ -318,6 +322,7 @@ class IntentClassifierUltraMinimal:
             'reject_delegated_task': RejectDelegatedTaskCommand,
             'get_delegation_progress': GetDelegationProgressCommand,
             'create_worker_task': CreateWorkerTaskCommand,
+            'delete_worker_task': DeleteWorkerTaskCommand,
         }
 
         return mapping.get(intent)
