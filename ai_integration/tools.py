@@ -338,13 +338,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_worker_task",
-            "description": "Создать фоновую задачу (worker) для PREMIUM пользователей. Выполняется минимум раз в день. Только одна задача на пользователя. Пример: мониторинг рынка золота для поиска возможностей покупки.",
+            "description": "Создать фоновую задачу (worker) для PREMIUM пользователей. Выполняется минимум раз в день. Только одна задача на пользователя. Поддерживает мониторинг золота и погоды.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "task_description": {
                         "type": "string",
-                        "description": "Описание задачи для worker, например 'Мониторинг рынка золота для поиска возможностей покупки'"
+                        "description": "Описание задачи для worker, например 'Мониторинг погоды в Москве'"
                     },
                     "interval_minutes": {
                         "type": "integer",
@@ -353,11 +353,20 @@ TOOLS = [
                     },
                     "action": {
                         "type": "string",
-                        "description": "Тип действия: 'monitor_gold_market' для мониторинга золота"
+                        "description": "Тип действия: 'monitor_gold_market' для золота, 'monitor_weather' для погоды"
                     },
                     "threshold": {
                         "type": "number",
-                        "description": "Порог для уведомления, например цена золота ниже определенного уровня"
+                        "description": "Порог для уведомления: для золота - цена ниже порога, для погоды - температура ниже порога"
+                    },
+                    "city": {
+                        "type": "string",
+                        "description": "Город для мониторинга погоды (только для monitor_weather)",
+                        "default": "Moscow"
+                    },
+                    "weather_condition": {
+                        "type": "string",
+                        "description": "Условие погоды для уведомления, например 'дождь', 'снег' (только для monitor_weather)"
                     }
                 },
                 "required": ["task_description", "action"]

@@ -103,3 +103,6 @@ PREMIUM_DESCRIPTION = """
 Для доступа ко всем функциям нужна активная подписка.
 Выберите тариф в веб-приложении или используйте команду /subscription
 """
+
+# External APIs
+OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY", "d6dcfe760e1b37dc74860e03d04fc713")

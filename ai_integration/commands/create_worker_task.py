@@ -6,6 +6,7 @@ import logging
 import asyncio
 import requests
 from subscription_service import check_subscription
+from config import OPENWEATHERMAP_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,8 @@ class CreateWorkerTaskCommand(BaseCommand):
             interval_minutes = self.params.get('interval_minutes', 1440)  # Минимальный интервал 24 часа
             action = self.params.get('action', '')
             threshold = self.params.get('threshold', 0)
+            city = self.params.get('city', 'Moscow')  # Город по умолчанию
+            weather_condition = self.params.get('weather_condition', '')  # Условие погоды
 
             # Проверяем тариф - только PREMIUM
             user = db_session.query(User).filter_by(telegram_id=user_id).first()
@@ -42,7 +45,7 @@ class CreateWorkerTaskCommand(BaseCommand):
             # Создаем задачу в БД для отслеживания
             worker_task = Task(
                 title=f"Worker: {task_description}",
-                description=f"Фоновая задача: {action}, интервал {interval_minutes} мин, порог {threshold}",
+                description=f"Фоновая задача: {action}, интервал {interval_minutes} мин, порог {threshold}, город {city}, условие {weather_condition}",
                 user_id=user.id,
                 status='active',
                 created_at=datetime.now(),
@@ -59,7 +62,7 @@ class CreateWorkerTaskCommand(BaseCommand):
                     trigger="interval",
                     minutes=interval_minutes,
                     id=job_id,
-                    args=[user_id, action, threshold, worker_task.id],
+                    args=[user_id, action, threshold, worker_task.id, city, weather_condition],
                     replace_existing=True
                 )
                 logger.info(f"Worker task created: {job_id}")
@@ -70,10 +73,12 @@ class CreateWorkerTaskCommand(BaseCommand):
             logger.error(f"Error creating worker task: {e}")
             return f"Ошибка при создании фоновой задачи: {str(e)}"
 
-    async def _execute_worker_action(self, user_id, action, threshold, task_id):
+    async def _execute_worker_action(self, user_id, action, threshold, task_id, city='Moscow', weather_condition=''):
         try:
             if action == 'monitor_gold_market':
                 await self._monitor_gold_market(user_id, threshold, task_id)
+            elif action == 'monitor_weather':
+                await self._monitor_weather(user_id, threshold, task_id, city, weather_condition)
             # Можно добавить другие действия
         except Exception as e:
             logger.error(f"Error executing worker action {action}: {e}")
@@ -102,3 +107,48 @@ class CreateWorkerTaskCommand(BaseCommand):
 
         except Exception as e:
             logger.error(f"Error monitoring gold market: {e}")
+
+    async def _monitor_weather(self, user_id, threshold, task_id, city, weather_condition):
+        try:
+            # Получаем текущую погоду через OpenWeatherMap API
+            api_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru"
+            response = requests.get(api_url)
+            
+            if response.status_code == 200:
+                data = response.json()
+                temp = data['main']['temp']
+                weather_desc = data['weather'][0]['description']
+                humidity = data['main']['humidity']
+                wind_speed = data['wind']['speed']
+                
+                # Проверяем условия для уведомления
+                should_notify = False
+                message_parts = []
+                
+                if threshold and temp < threshold:
+                    should_notify = True
+                    message_parts.append(f"Температура ниже {threshold}°C")
+                
+                if weather_condition and weather_condition.lower() in weather_desc.lower():
+                    should_notify = True
+                    message_parts.append(f"Погода: {weather_desc}")
+                
+                if should_notify:
+                    # Отправляем уведомление пользователю
+                    if REMINDER_SERVICE and REMINDER_SERVICE.bot:
+                        condition_text = ", ".join(message_parts) if message_parts else "условия выполнены"
+                        message = f"🌤️ Погода в {city}:\n" \
+                                 f"🌡️ Температура: {temp}°C\n" \
+                                 f"💧 Влажность: {humidity}%\n" \
+                                 f"💨 Ветер: {wind_speed} м/с\n" \
+                                 f"📝 {weather_desc}\n\n" \
+                                 f"⚠️ {condition_text}"
+                        await REMINDER_SERVICE.bot.send_message(chat_id=user_id, text=message)
+                        logger.info(f"Weather alert sent to user {user_id} for {city}: {temp}°C, {weather_desc}")
+                    else:
+                        logger.error("Bot not available for sending weather alert")
+            else:
+                logger.warning(f"Failed to fetch weather for {city}: {response.status_code}, response: {response.text}")
+
+        except Exception as e:
+            logger.error(f"Error monitoring weather: {e}")
