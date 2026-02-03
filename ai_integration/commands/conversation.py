@@ -61,15 +61,17 @@ class ConversationCommand(BaseCommand):
         # Create a conversational prompt with time awareness
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
-Текущее время: {current_time_str} ({time_of_day})
-Сегодняшняя дата: {current_date_str}
+Время отправки сообщения пользователем: {current_time_str} ({time_of_day})
+Дата: {current_date_str}
+
+ВАЖНО: Используй ТОЛЬКО указанное время отправки сообщения ({current_time_str}, {time_of_day}), не текущее время сервера или свое знание времени.
 
 Сообщение пользователя: {self.message}
 
 Это обычный разговор или приветствие. Ответь естественно и дружелюбно, без использования инструментов.
 
 Рекомендации:
-- Если это приветствие, поздоровайся с учётом времени суток (сейчас {time_of_day}, {current_time_str})
+- Если это приветствие, поздоровайся с учётом времени отправки сообщения (сейчас {time_of_day}, {current_time_str})
 - Если спрашивают о тебе, расскажи кратко о своих возможностях
 - Будь кратким и дружелюбным
 - Используй переносы строк для удобства чтения
@@ -103,7 +105,7 @@ class ConversationCommand(BaseCommand):
                     else:
                         # Fallback responses
                         if "привет" in self.message.lower() or "здравствуй" in self.message.lower():
-                            greeting = f"Привет! 😊 Смотрю, сейчас {current_time_str} ({time_of_day})."
+                            greeting = f"Привет! 😊 Смотрю, сообщение отправлено в {current_time_str} ({time_of_day})."
                             if time_of_day == "утро":
                                 return f"{greeting} Хорошего начала дня! Чем могу помочь с задачами?"
                             elif time_of_day == "день":
@@ -117,7 +119,7 @@ class ConversationCommand(BaseCommand):
                         elif "что ты умеешь" in self.message.lower():
                             return "Я умею:\n• Создавать задачи с напоминаниями\n• Искать людей для совместных активностей\n• Управлять твоим расписанием\n• Помогать находить единомышленников\n\nПросто расскажи, что планируешь!"
                         else:
-                            return f"Приятно пообщаться! 😊 Сейчас {current_time_str} ({time_of_day}). Чем могу помочь с задачами или поиском единомышленников?"
+                            return f"Приятно пообщаться! 😊 Сообщение отправлено в {current_time_str} ({time_of_day}). Чем могу помочь с задачами или поиском единомышленников?"
         
         except Exception as e:
             # Final fallback
