@@ -1489,21 +1489,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 try:
                     user_tz = pytz.timezone(tz_str)
                     user_now = base_now.astimezone(user_tz)
-                    # Определяем время суток
-                    hour = user_now.hour
-                    if 5 <= hour < 12:
-                        time_of_day = "утро"
-                    elif 12 <= hour < 17:
-                        time_of_day = "день"
-                    elif 17 <= hour < 23:
-                        time_of_day = "вечер"
-                    else:
-                        time_of_day = "ночь"
-                    # Формат времени С ТАЙМЗОНОЙ и временем суток для промпта: "15:43 (Europe/Moscow, вечер)"
-                    current_time_str = f"{user_now.strftime('%H:%M')} ({tz_str}, {time_of_day})"
+                    # Формат времени С ТАЙМЗОНОЙ для промпта: "15:43 (Europe/Moscow)"
+                    current_time_str = f"{user_now.strftime('%H:%M')} ({tz_str})"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                     logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
-                    logger.info(f"[TIME CHECK] Time of day: {time_of_day}")
                     logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
                     logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
                 except Exception as e:
@@ -1512,19 +1501,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     try:
                         moscow_tz = pytz.timezone('Europe/Moscow')
                         user_now = base_now.astimezone(moscow_tz)
-                        # Определяем время суток
-                        hour = user_now.hour
-                        if 5 <= hour < 12:
-                            time_of_day = "утро"
-                        elif 12 <= hour < 17:
-                            time_of_day = "день"
-                        elif 17 <= hour < 23:
-                            time_of_day = "вечер"
-                        else:
-                            time_of_day = "ночь"
-                        current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow, {time_of_day})"
+                        current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                         current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                        logger.info(f"[TIME CHECK] Fallback to Moscow time: {user_now}, time of day: {time_of_day}")
+                        logger.info(f"[TIME CHECK] Fallback to Moscow time: {user_now}")
                     except:
                         pass  # Keep UTC if all fails
             else:
@@ -1532,19 +1511,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 try:
                     moscow_tz = pytz.timezone('Europe/Moscow')
                     user_now = base_now.astimezone(moscow_tz)
-                    # Определяем время суток
-                    hour = user_now.hour
-                    if 5 <= hour < 12:
-                        time_of_day = "утро"
-                    elif 12 <= hour < 17:
-                        time_of_day = "день"
-                    elif 17 <= hour < 23:
-                        time_of_day = "вечер"
-                    else:
-                        time_of_day = "ночь"
-                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow, {time_of_day})"
+                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                    logger.info(f"[TIME CHECK] No timezone set, using Moscow time: {user_now}, time of day: {time_of_day}")
+                    logger.info(f"[TIME CHECK] No timezone set, using Moscow time: {user_now}")
                 except:
                     pass  # Keep UTC if all fails
             
