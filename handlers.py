@@ -692,7 +692,7 @@ async def process_text_message(user_id, text, message, state):
             await message.bot.send_message(message.chat.id, response_text)
         except Exception as e:
             logger.error(f"Error executing command for user {user_id}: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке команды.")
+            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке команды. TEST VERSION 2026-02-03")
             response_text = ""
         finally:
             db_session.close()
