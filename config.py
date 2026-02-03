@@ -105,4 +105,6 @@ PREMIUM_DESCRIPTION = """
 """
 
 # External APIs
-OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY", "d6dcfe760e1b37dc74860e03d04fc713")
+OPENWEATHERMAP_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
+if not OPENWEATHERMAP_API_KEY:
+    logger.warning("OPENWEATHERMAP_API_KEY not set - weather monitoring will not work")
