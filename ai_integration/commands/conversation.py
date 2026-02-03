@@ -49,35 +49,20 @@ class ConversationCommand(BaseCommand):
             logger = logging.getLogger(__name__)
             logger.error(f"[CONVERSATION FALLBACK] using_current_utc_time=True, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
         
-        # ВАЖНО: Для вопросов о времени и приветствий используем ТОЛЬКО fallback, без AI
-        msg_lower = self.message.lower().strip()
-        if any(phrase in msg_lower for phrase in ["сколько время", "который час", "какое время", "время сейчас", "сейчас время"]):
-            return f"Сейчас {current_time_str} ({time_of_day}) 🕐"
-        
-        # Для приветствий тоже используем fallback
-        if "привет" in msg_lower or "здравствуй" in msg_lower or "хай" in msg_lower or "hello" in msg_lower or "hi" in msg_lower:
-            return f"🔴 ТЕСТ 2026-02-03 23:10 🔴\nПривет! Смотрю, сообщение отправлено в {current_time_str} ({time_of_day}). Как дела?"
-        
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)
         
         # Create a conversational prompt with time awareness
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
-ОБЯЗАТЕЛЬНО ЗАПОМНИ: Сообщение пользователя отправлено в {current_time_str} ({time_of_day}) по времени пользователя.
-НИКОГДА не используй реальное текущее время сервера или свое знание времени.
-ВСЕГДА используй ТОЛЬКО время {current_time_str} ({time_of_day}) для любых упоминаний времени в ответе.
+КРИТИЧЕСКИ ВАЖНО: Текущее время пользователя {current_time_str} ({time_of_day})
+Дата: {current_date_str}
+
+СТРОГО ЗАПРЕЩЕНО использовать любое другое время кроме {current_time_str}!
 
 Сообщение пользователя: {self.message}
 
-Это обычный разговор или приветствие. Ответь естественно и дружелюбно, без использования инструментов.
-
-Рекомендации:
-- Если это приветствие, поздоровайся с учётом времени {current_time_str} ({time_of_day})
-- Если спрашивают о тебе, расскажи кратко о своих возможностях
-- Будь кратким и дружелюбным
-- Используй переносы строк для удобства чтения
-- Не предлагай создать задачи в обычном разговоре
+Ответь естественно и дружелюбно. Если упоминаешь время, используй ТОЛЬКО {current_time_str} ({time_of_day})."""
 - ЕСЛИ СПРАШИВАЮТ О ВРЕМЕНИ, отвечай что сейчас {current_time_str} ({time_of_day})"""
 
         try:
