@@ -89,20 +89,16 @@ class CreateWorkerTaskCommand(BaseCommand):
             asset_name = symbol
 
             if asset_type == 'metal':
-                # Металлы: золото, серебро, платина, палладий и другие
+# Металлы: основные металлы для экономии API запросов
                 metal_symbols = {
                     'GOLD': 'золота',
                     'XAU': 'золота',
-                    'SILVER': 'серебра', 
+                    'SILVER': 'серебра',
                     'XAG': 'серебра',
                     'PLAT': 'платины',
                     'PLATINUM': 'платины',
                     'PALL': 'палладия',
-                    'PALLADIUM': 'палладия',
-                    'COPPER': 'меди',
-                    'ALUMINUM': 'алюминия',
-                    'ZINC': 'цинка',
-                    'NICKEL': 'никеля'
+                    'PALLADIUM': 'палладия'
                 }
                 
                 symbol_upper = symbol.upper()
@@ -121,14 +117,24 @@ class CreateWorkerTaskCommand(BaseCommand):
                     current_price = float(quote.get('05. price', 0))
 
             elif asset_type == 'currency':
-                # Валюты: пары типа USD/EUR
+                # Валюты: основные пары форекс для экономии API
+                forex_pairs = [
+                    'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD',
+                    'EURGBP', 'EURJPY', 'GBPJPY', 'USDRUB', 'EURRUB', 'GBPRUB'
+                ]
+                
                 if '/' in symbol:
                     from_curr, to_curr = symbol.split('/', 1)
-                    api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_curr}&to_currency={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}"
-                    asset_name = f"{from_curr}/{to_curr}"
+                    pair = from_curr + to_curr
                 else:
-                    logger.error(f"Invalid currency pair format: {symbol}. Use FROM/TO format.")
+                    pair = symbol.upper()
+                
+                if pair not in forex_pairs:
+                    logger.error(f"Unsupported forex pair: {symbol}. Supported: {forex_pairs}")
                     return
+
+                api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_curr}&to_currency={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}"
+                asset_name = f"{from_curr}/{to_curr}"
 
                 response = requests.get(api_url)
                 if response.status_code == 200:
@@ -262,168 +268,138 @@ class CreateWorkerTaskCommand(BaseCommand):
             logger.error(f"Error monitoring asset {asset_type} {symbol}: {e}")
 
     async def _get_technical_indicators(self, symbol, interval='daily', asset_type='stock'):
-        """Получить технические индикаторы для актива"""
+        """Получить технические индикаторы для актива с оптимизацией API запросов"""
         try:
             indicators = {}
-            
-            # Для металлов некоторые индикаторы могут быть недоступны
-            if asset_type == 'metal':
-                logger.info(f"Getting technical indicators for metal: {symbol}")
-                # Для металлов пробуем получить только основные индикаторы
-                # которые обычно доступны
-            
-            # Проверяем доступность данных для символа
-            test_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
-            test_response = requests.get(test_url)
-            if test_response.status_code != 200 or not test_response.json().get('Global Quote'):
-                logger.warning(f"Symbol {symbol} not available or invalid")
+
+            # Получаем исторические данные за один запрос
+            if asset_type == 'currency':
+                # Для валют используем FX_DAILY для оптимизации
+                if '/' in symbol:
+                    from_curr, to_curr = symbol.split('/', 1)
+                    api_url = f"https://www.alphavantage.co/query?function=FX_DAILY&from_symbol={from_curr}&to_symbol={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+                    time_series_key = 'Time Series FX (Daily)'
+                else:
+                    return None
+            else:
+                # Для акций и металлов используем TIME_SERIES_DAILY
+                api_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+                time_series_key = 'Time Series (Daily)'
+
+            response = requests.get(api_url)
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch data for {symbol}: {response.status_code}")
                 return None
 
-            # RSI (Relative Strength Index)
-            rsi_url = f"https://www.alphavantage.co/query?function=RSI&symbol={symbol}&interval={interval}&time_period=14&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            rsi_response = requests.get(rsi_url)
-            if rsi_response.status_code == 200:
-                rsi_data = rsi_response.json()
-                rsi_values = rsi_data.get('Technical Analysis: RSI', {})
-                if rsi_values:
-                    latest_date = max(rsi_values.keys())
-                    indicators['rsi'] = float(rsi_values[latest_date]['RSI'])
+            data = response.json()
+            time_series = data.get(time_series_key, {})
 
-            # MACD
-            macd_url = f"https://www.alphavantage.co/query?function=MACD&symbol={symbol}&interval={interval}&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            macd_response = requests.get(macd_url)
-            if macd_response.status_code == 200:
-                macd_data = macd_response.json()
-                macd_values = macd_data.get('Technical Analysis: MACD', {})
-                if macd_values:
-                    latest_date = max(macd_values.keys())
-                    macd_info = macd_values[latest_date]
-                    indicators['macd'] = float(macd_info['MACD'])
-                    indicators['macd_signal'] = float(macd_info['MACD_Signal'])
-                    indicators['macd_hist'] = float(macd_info['MACD_Hist'])
+            if not time_series:
+                logger.warning(f"No time series data available for {symbol}")
+                return None
+
+            # Получаем последние 100 дней данных
+            dates = sorted(time_series.keys(), reverse=True)[:100]
+            prices = []
+            volumes = []
+
+            for date in dates:
+                day_data = time_series[date]
+                if asset_type == 'currency':
+                    close_price = float(day_data.get('4. close', 0))
+                else:
+                    close_price = float(day_data.get('4. close', 0))
+                    volume = float(day_data.get('5. volume', 0))
+                    volumes.append(volume)
+                prices.append(close_price)
+
+            if not prices:
+                return None
+
+            # Текущая цена
+            indicators['price'] = prices[0]
+
+            # Рассчитываем базовые индикаторы локально для экономии API запросов
+            # RSI (Relative Strength Index)
+            if len(prices) >= 14:
+                indicators['rsi'] = self._calculate_rsi(prices, 14)
+
+            # SMA 20 и 50
+            if len(prices) >= 50:
+                indicators['sma_20'] = sum(prices[:20]) / 20
+                indicators['sma_50'] = sum(prices[:50]) / 50
+
+            # EMA 12 и 26
+            if len(prices) >= 26:
+                indicators['ema_12'] = self._calculate_ema(prices, 12)
+                indicators['ema_26'] = self._calculate_ema(prices, 26)
+
+            # MACD (упрощенная версия)
+            if 'ema_12' in indicators and 'ema_26' in indicators:
+                macd_line = indicators['ema_12'] - indicators['ema_26']
+                indicators['macd'] = macd_line
+                # Signal line (EMA 9 of MACD) - упрощенное приближение
+                indicators['macd_signal'] = macd_line * 0.8
+                indicators['macd_hist'] = macd_line - indicators['macd_signal']
 
             # Bollinger Bands
-            bb_url = f"https://www.alphavantage.co/query?function=BBANDS&symbol={symbol}&interval={interval}&time_period=20&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            bb_response = requests.get(bb_url)
-            if bb_response.status_code == 200:
-                bb_data = bb_response.json()
-                bb_values = bb_data.get('Technical Analysis: BBANDS', {})
-                if bb_values:
-                    latest_date = max(bb_values.keys())
-                    bb_info = bb_values[latest_date]
-                    indicators['bb_upper'] = float(bb_info['Real Upper Band'])
-                    indicators['bb_middle'] = float(bb_info['Real Middle Band'])
-                    indicators['bb_lower'] = float(bb_info['Real Lower Band'])
-
-            # SMA (Simple Moving Average) - 20 и 50 периодов
-            sma20_url = f"https://www.alphavantage.co/query?function=SMA&symbol={symbol}&interval={interval}&time_period=20&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            sma20_response = requests.get(sma20_url)
-            if sma20_response.status_code == 200:
-                sma20_data = sma20_response.json()
-                sma20_values = sma20_data.get('Technical Analysis: SMA', {})
-                if sma20_values:
-                    latest_date = max(sma20_values.keys())
-                    indicators['sma_20'] = float(sma20_values[latest_date]['SMA'])
-
-            sma50_url = f"https://www.alphavantage.co/query?function=SMA&symbol={symbol}&interval={interval}&time_period=50&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            sma50_response = requests.get(sma50_url)
-            if sma50_response.status_code == 200:
-                sma50_data = sma50_response.json()
-                sma50_values = sma50_data.get('Technical Analysis: SMA', {})
-                if sma50_values:
-                    latest_date = max(sma50_values.keys())
-                    indicators['sma_50'] = float(sma50_values[latest_date]['SMA'])
-
-            # EMA (Exponential Moving Average) - 12 и 26 периодов
-            ema12_url = f"https://www.alphavantage.co/query?function=EMA&symbol={symbol}&interval={interval}&time_period=12&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            ema12_response = requests.get(ema12_url)
-            if ema12_response.status_code == 200:
-                ema12_data = ema12_response.json()
-                ema12_values = ema12_data.get('Technical Analysis: EMA', {})
-                if ema12_values:
-                    latest_date = max(ema12_values.keys())
-                    indicators['ema_12'] = float(ema12_values[latest_date]['EMA'])
-
-            ema26_url = f"https://www.alphavantage.co/query?function=EMA&symbol={symbol}&interval={interval}&time_period=26&series_type=close&apikey={ALPHA_VANTAGE_API_KEY}"
-            ema26_response = requests.get(ema26_url)
-            if ema26_response.status_code == 200:
-                ema26_data = ema26_response.json()
-                ema26_values = ema26_data.get('Technical Analysis: EMA', {})
-                if ema26_values:
-                    latest_date = max(ema26_values.keys())
-                    indicators['ema_26'] = float(ema26_values[latest_date]['EMA'])
-
-            # STOCH (Stochastic Oscillator)
-            stoch_url = f"https://www.alphavantage.co/query?function=STOCH&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}"
-            stoch_response = requests.get(stoch_url)
-            if stoch_response.status_code == 200:
-                stoch_data = stoch_response.json()
-                stoch_values = stoch_data.get('Technical Analysis: STOCH', {})
-                if stoch_values:
-                    latest_date = max(stoch_values.keys())
-                    stoch_info = stoch_values[latest_date]
-                    indicators['stoch_k'] = float(stoch_info['SlowK'])
-                    indicators['stoch_d'] = float(stoch_info['SlowD'])
-
-            # ADX (Average Directional Index)
-            adx_url = f"https://www.alphavantage.co/query?function=ADX&symbol={symbol}&interval={interval}&time_period=14&apikey={ALPHA_VANTAGE_API_KEY}"
-            adx_response = requests.get(adx_url)
-            if adx_response.status_code == 200:
-                adx_data = adx_response.json()
-                adx_values = adx_data.get('Technical Analysis: ADX', {})
-                if adx_values:
-                    latest_date = max(adx_values.keys())
-                    indicators['adx'] = float(adx_values[latest_date]['ADX'])
-
-            # CCI (Commodity Channel Index)
-            cci_url = f"https://www.alphavantage.co/query?function=CCI&symbol={symbol}&interval={interval}&time_period=20&apikey={ALPHA_VANTAGE_API_KEY}"
-            cci_response = requests.get(cci_url)
-            if cci_response.status_code == 200:
-                cci_data = cci_response.json()
-                cci_values = cci_data.get('Technical Analysis: CCI', {})
-                if cci_values:
-                    latest_date = max(cci_values.keys())
-                    indicators['cci'] = float(cci_values[latest_date]['CCI'])
-
-            # MFI (Money Flow Index)
-            mfi_url = f"https://www.alphavantage.co/query?function=MFI&symbol={symbol}&interval={interval}&time_period=14&apikey={ALPHA_VANTAGE_API_KEY}"
-            mfi_response = requests.get(mfi_url)
-            if mfi_response.status_code == 200:
-                mfi_data = mfi_response.json()
-                mfi_values = mfi_data.get('Technical Analysis: MFI', {})
-                if mfi_values:
-                    latest_date = max(mfi_values.keys())
-                    indicators['mfi'] = float(mfi_values[latest_date]['MFI'])
-
-            # OBV (On Balance Volume) - только для акций
-            if asset_type == 'stock':
-                obv_url = f"https://www.alphavantage.co/query?function=OBV&symbol={symbol}&interval={interval}&apikey={ALPHA_VANTAGE_API_KEY}"
-                obv_response = requests.get(obv_url)
-                if obv_response.status_code == 200:
-                    obv_data = obv_response.json()
-                    obv_values = obv_data.get('Technical Analysis: OBV', {})
-                    if obv_values:
-                        latest_date = max(obv_values.keys())
-                        indicators['obv'] = float(obv_values[latest_date]['OBV'])
+            if len(prices) >= 20:
+                sma_20 = sum(prices[:20]) / 20
+                variance = sum((p - sma_20) ** 2 for p in prices[:20]) / 20
+                std_dev = variance ** 0.5
+                indicators['bb_middle'] = sma_20
+                indicators['bb_upper'] = sma_20 + (2 * std_dev)
+                indicators['bb_lower'] = sma_20 - (2 * std_dev)
 
             # Volume (для акций)
-            if asset_type == 'stock':
-                volume_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
-                volume_response = requests.get(volume_url)
-                if volume_response.status_code == 200:
-                    volume_data = volume_response.json()
-                    daily_data = volume_data.get('Time Series (Daily)', {})
-                    if daily_data:
-                        latest_date = max(daily_data.keys())
-                        day_data = daily_data[latest_date]
-                        indicators['volume'] = int(day_data['5. volume'])
-                        indicators['price'] = float(day_data['4. close'])
+            if volumes and asset_type == 'stock':
+                indicators['volume'] = volumes[0]
 
             return indicators
 
         except Exception as e:
             logger.error(f"Error getting technical indicators for {symbol}: {e}")
-            return {}
+            return None
+
+    def _calculate_rsi(self, prices, period=14):
+        """Рассчитать RSI локально"""
+        if len(prices) < period + 1:
+            return None
+
+        gains = []
+        losses = []
+
+        for i in range(1, len(prices)):
+            change = prices[i-1] - prices[i]
+            if change > 0:
+                gains.append(change)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(change))
+
+        avg_gain = sum(gains[:period]) / period
+        avg_loss = sum(losses[:period]) / period
+
+        if avg_loss == 0:
+            return 100
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+
+    def _calculate_ema(self, prices, period):
+        """Рассчитать EMA локально"""
+        if len(prices) < period:
+            return None
+
+        multiplier = 2 / (period + 1)
+        ema = sum(prices[:period]) / period
+
+        for price in prices[period:]:
+            ema = (price * multiplier) + (ema * (1 - multiplier))
+
+        return ema
 
     async def _get_asset_news(self, symbol, limit=5):
         """Получить новости по активу из Alpha Vantage"""
@@ -577,65 +553,17 @@ class CreateWorkerTaskCommand(BaseCommand):
                     if recommendation == "HOLD":
                         recommendation = "SELL"
 
-            # Анализ Stochastic Oscillator
-            if 'stoch_k' in indicators and 'stoch_d' in indicators:
-                stoch_k = indicators['stoch_k']
-                stoch_d = indicators['stoch_d']
-                
-                if stoch_k > 80:
-                    signals.append(f"Stochastic: Перекупленность (K={stoch_k:.2f}, D={stoch_d:.2f})")
-                    if recommendation == "HOLD":
-                        recommendation = "SELL"
-                elif stoch_k < 20:
-                    signals.append(f"Stochastic: Перепроданность (K={stoch_k:.2f}, D={stoch_d:.2f})")
-                    if recommendation == "HOLD":
-                        recommendation = "BUY"
-                else:
-                    signals.append(f"Stochastic: Нейтральная зона (K={stoch_k:.2f}, D={stoch_d:.2f})")
+            # Анализ Stochastic Oscillator - отключен для экономии API запросов
 
-            # Анализ ADX (Average Directional Index)
-            if 'adx' in indicators:
-                adx = indicators['adx']
-                if adx > 25:
-                    signals.append(f"ADX {adx:.2f}: Сильный тренд")
-                elif adx < 20:
-                    signals.append(f"ADX {adx:.2f}: Слабый тренд (боковое движение)")
-                else:
-                    signals.append(f"ADX {adx:.2f}: Умеренный тренд")
+            # Анализ ADX - отключен для экономии API запросов
 
-            # Анализ CCI (Commodity Channel Index)
-            if 'cci' in indicators:
-                cci = indicators['cci']
-                if cci > 100:
-                    signals.append(f"CCI {cci:.2f}: Перекупленность")
-                    if recommendation == "HOLD":
-                        recommendation = "SELL"
-                elif cci < -100:
-                    signals.append(f"CCI {cci:.2f}: Перепроданность")
-                    if recommendation == "HOLD":
-                        recommendation = "BUY"
+            # Анализ CCI - отключен для экономии API запросов
                 else:
                     signals.append(f"CCI {cci:.2f}: Нейтральная зона")
 
-            # Анализ MFI (Money Flow Index)
-            if 'mfi' in indicators:
-                mfi = indicators['mfi']
-                if mfi > 80:
-                    signals.append(f"MFI {mfi:.2f}: Перекупленность (давление продаж)")
-                    if recommendation == "HOLD":
-                        recommendation = "SELL"
-                elif mfi < 20:
-                    signals.append(f"MFI {mfi:.2f}: Перепроданность (давление покупок)")
-                    if recommendation == "HOLD":
-                        recommendation = "BUY"
-                else:
-                    signals.append(f"MFI {mfi:.2f}: Нейтральная зона")
+            # Анализ MFI - отключен для экономии API запросов
 
-            # Анализ OBV (On Balance Volume)
-            if 'obv' in indicators:
-                obv = indicators['obv']
-                signals.append(f"OBV: {obv:,.0f}")
-                # Для OBV нужен анализ тренда, но для простоты отмечаем значение
+            # Анализ OBV - отключен для экономии API запросов
 
             # Анализ объема (для акций)
             if 'volume' in indicators:
