@@ -3,6 +3,7 @@ from ..chat import chat_with_ai  # Import existing chat processing
 from ai_integration.utils import get_context_from_db  # Import context loading
 import pytz
 from datetime import datetime
+from models import User
 
 class ConversationCommand(BaseCommand):
     async def execute(self, user_id, db_session):
@@ -11,7 +12,7 @@ class ConversationCommand(BaseCommand):
         # But we still want to use AI for natural responses
         
         # Get user timezone and current time
-        user = db_session.query(db_session.query()._entities[0].__class__).filter_by(telegram_id=user_id).first()
+        user = db_session.query(User).filter_by(telegram_id=user_id).first()
         user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
         
         try:
