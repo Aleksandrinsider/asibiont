@@ -40,7 +40,9 @@ class ConversationCommand(BaseCommand):
             else:
                 time_of_day = "ночь"
                 
-            print(f"DEBUG: user_timezone={user_timezone}, message_time={self.message_time}, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[CONVERSATION] user_timezone={user_timezone}, message_time={self.message_time}, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
                 
         except Exception as e:
             # Fallback to Moscow time
@@ -53,7 +55,14 @@ class ConversationCommand(BaseCommand):
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             time_of_day = "время"  # Generic fallback
-            print(f"DEBUG FALLBACK: message_time={self.message_time}, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"[CONVERSATION FALLBACK] message_time={self.message_time}, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
+        
+        # ВАЖНО: Для вопросов о времени используем ТОЛЬКО fallback, без AI
+        msg_lower = self.message.lower()
+        if any(phrase in msg_lower for phrase in ["сколько время", "который час", "какое время", "время сейчас", "сейчас время"]):
+            return f"Сейчас {current_time_str} ({time_of_day}) 🕐"
         
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)
