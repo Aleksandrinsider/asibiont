@@ -22,7 +22,7 @@ class CreateWorkerTaskCommand(BaseCommand):
             threshold = self.params.get('threshold', 0)
             city = self.params.get('city', 'Moscow')  # Город по умолчанию
             weather_condition = self.params.get('weather_condition', '')  # Условие погоды
-            asset_type = self.params.get('asset_type', 'gold')  # Тип актива: gold, currency, stock
+            asset_type = self.params.get('asset_type', 'gold')  # Тип актива: metal, currency, stock, commodity
             symbol = self.params.get('symbol', 'GOLD')  # Символ актива
             analysis_type = self.params.get('analysis_type', 'price_monitoring')  # Тип анализа: price_monitoring, technical_analysis, volume_analysis
             response_style = self.params.get('response_style', 'formal')  # Стиль ответа: formal, conversational
@@ -116,11 +116,33 @@ class CreateWorkerTaskCommand(BaseCommand):
                     quote = data.get('Global Quote', {})
                     current_price = float(quote.get('05. price', 0))
 
+            elif asset_type == 'commodity':
+                # Товары: нефть WTI и Brent
+                if symbol.upper() in ['WTI', 'BRENT']:
+                    if symbol.upper() == 'WTI':
+                        api_url = f"https://www.alphavantage.co/query?function=WTI&interval=monthly&apikey={ALPHA_VANTAGE_API_KEY}"
+                        asset_name = "нефти WTI"
+                    else:  # BRENT
+                        api_url = f"https://www.alphavantage.co/query?function=BRENT&interval=monthly&apikey={ALPHA_VANTAGE_API_KEY}"
+                        asset_name = "нефти Brent"
+                else:
+                    logger.error(f"Unsupported commodity: {symbol}. Supported: WTI, BRENT")
+                    return
+
+                response = requests.get(api_url)
+                if response.status_code == 200:
+                    data = response.json()
+                    # Для нефти API возвращает данные в формате data['data'][0]['value']
+                    if 'data' in data and len(data['data']) > 0:
+                        current_price = float(data['data'][0]['value'])
+                    else:
+                        logger.error(f"Invalid oil price data format for {symbol}")
+                        return
+
             elif asset_type == 'currency':
                 # Валюты: основные пары форекс для экономии API
                 forex_pairs = [
-                    'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD',
-                    'EURGBP', 'EURJPY', 'GBPJPY', 'USDRUB', 'EURRUB', 'GBPRUB'
+                    'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'USDCAD', 'NZDUSD', 'USDRUB'
                 ]
                 
                 if '/' in symbol:
@@ -281,6 +303,15 @@ class CreateWorkerTaskCommand(BaseCommand):
                     time_series_key = 'Time Series FX (Daily)'
                 else:
                     return None
+            elif asset_type == 'commodity':
+                # Для нефти используем специальный API для цены, но для технических индикаторов попробуем TIME_SERIES_DAILY
+                if symbol.upper() == 'WTI':
+                    api_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=WTI&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+                elif symbol.upper() == 'BRENT':
+                    api_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=BRENT&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
+                else:
+                    return None
+                time_series_key = 'Time Series (Daily)'
             else:
                 # Для акций и металлов используем TIME_SERIES_DAILY
                 api_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}&outputsize=compact"
