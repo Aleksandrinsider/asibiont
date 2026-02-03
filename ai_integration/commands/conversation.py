@@ -32,6 +32,8 @@ class ConversationCommand(BaseCommand):
             else:
                 time_of_day = "ночь"
                 
+            print(f"DEBUG: user_timezone={user_timezone}, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
+                
         except Exception as e:
             # Fallback to Moscow time
             moscow_tz = pytz.timezone('Europe/Moscow')
@@ -39,6 +41,7 @@ class ConversationCommand(BaseCommand):
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             time_of_day = "время"  # Generic fallback
+            print(f"DEBUG FALLBACK: current_time_str={current_time_str}, time_of_day={time_of_day}")
         
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)
@@ -47,6 +50,8 @@ class ConversationCommand(BaseCommand):
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
 ⏰ ТЕКУЩЕЕ ВРЕМЯ: {current_time_str} ({time_of_day}) | 📅 СЕГОДНЯ: {current_date_str}
+
+ОБЯЗАТЕЛЬНО ИСПОЛЬЗУЙ УКАЗАННОЕ ТЕКУЩЕЕ ВРЕМЯ В СВОИХ ОТВЕТАХ! НЕ ПРИДУМЫВАЙ ДРУГОЕ ВРЕМЯ!
 
 ПОЛЬЗОВАТЕЛЬ: {self.message}
 
@@ -62,6 +67,7 @@ class ConversationCommand(BaseCommand):
 - Учитывай время суток в ответах (утро/день/вечер/ночь)
 - Разделяй предложения на абзацы для лучшей читаемости
 - Используй переносы строк между логическими блоками
+- ОБЯЗАТЕЛЬНО УПОМИНАЙ ТЕКУЩЕЕ ВРЕМЯ В ОТВЕТЕ, ЕСЛИ ЭТО ПРИВЕТСТВИЕ
 
 Ответь на сообщение пользователя:"""
 
