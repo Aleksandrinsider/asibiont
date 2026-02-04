@@ -119,3 +119,46 @@ if not ALPHA_VANTAGE_API_KEY:
 NEWSAPI_API_KEY = os.getenv("NEWSAPI_API_KEY")
 if not NEWSAPI_API_KEY:
     logger.warning("NEWSAPI_API_KEY not set - news integration will not work")
+
+# Redis Configuration
+REDIS_ENABLED = os.getenv("REDIS_ENABLED", "True").lower() in ("true", "1", "yes")
+
+if REDIS_ENABLED:
+    # Check for Railway Redis variables first
+    railway_host = os.getenv("REDIS_HOST")
+    railway_port = os.getenv("REDIS_PORT")
+    railway_password = os.getenv("REDIS_PASSWORD")
+
+    if railway_host and railway_port and railway_password:
+        # Railway Redis with individual variables
+        REDIS_HOST = railway_host
+        REDIS_PORT = int(railway_port)
+        REDIS_USERNAME = ""  # Railway Redis doesn't use username
+        REDIS_PASSWORD = railway_password
+        logger.info("[CONFIG] Using Railway Redis (individual variables)")
+    else:
+        # Check for Railway Redis URL
+        railway_redis_url = os.getenv("REDIS_URL") or os.getenv("RAILWAY_REDIS_URL")
+        if railway_redis_url:
+            # Parse Railway Redis URL: redis://username:password@host:port
+            import re
+            match = re.match(r'redis://([^:]+):([^@]+)@([^:]+):(\d+)', railway_redis_url)
+            if match:
+                REDIS_USERNAME, REDIS_PASSWORD, REDIS_HOST, REDIS_PORT = match.groups()
+                REDIS_PORT = int(REDIS_PORT)
+                logger.info("[CONFIG] Using Railway Redis (URL)")
+            else:
+                logger.warning("[CONFIG] Invalid Railway Redis URL format")
+                REDIS_ENABLED = False
+        else:
+            # Use external Redis variables
+            REDIS_HOST = os.getenv("REDIS_HOST", "redis-18169.c300.eu-central-1-1.ec2.cloud.redislabs.com")
+            REDIS_PORT = int(os.getenv("REDIS_PORT", 18169))
+            REDIS_USERNAME = os.getenv("REDIS_USERNAME", "default")
+            REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "LnTts6f2dnlRVOf1tvwahzXZcun60kO8")
+            logger.info("[CONFIG] Using external Redis")
+else:
+    REDIS_HOST = REDIS_PORT = REDIS_USERNAME = REDIS_PASSWORD = None
+    logger.info("[CONFIG] Redis disabled")
+
+# Redis client will be initialized in utils.py if enabled

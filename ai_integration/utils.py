@@ -10,23 +10,96 @@ from config import (
     DEEPSEEK_API_KEY,
     DEEPSEEK_MODEL,
     OPENWEATHERMAP_API_KEY,
-    NEWSAPI_API_KEY
+    ALPHA_VANTAGE_API_KEY,
+    NEWSAPI_API_KEY,
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_USERNAME,
+    REDIS_PASSWORD,
+    REDIS_ENABLED
 )
 import json
 import requests
 import hashlib
 import time
+import redis
 
 logger = logging.getLogger(__name__)
 
-# Глобальный кеш для погоды (город -> {data, timestamp})
-weather_cache = {}
+# Redis client initialization
+redis_client = None
+if REDIS_ENABLED:
+    try:
+        # Prepare connection parameters
+        redis_kwargs = {
+            'host': REDIS_HOST,
+            'port': REDIS_PORT,
+            'decode_responses': True,
+            'password': REDIS_PASSWORD,
+        }
+        # Only add username if it's not empty (Railway Redis doesn't use username)
+        if REDIS_USERNAME and REDIS_USERNAME.strip():
+            redis_kwargs['username'] = REDIS_USERNAME
 
-# Глобальный кеш для новостей (ключ -> {data, timestamp})
+        redis_client = redis.Redis(**redis_kwargs)
+        # Test connection
+        redis_client.ping()
+        logger.info("[REDIS] Connected successfully")
+    except Exception as e:
+        logger.warning(f"[REDIS] Failed to connect: {e}. Falling back to in-memory cache")
+        redis_client = None
+else:
+    logger.info("[CACHE] Redis disabled, using in-memory cache")
+
+# Fallback in-memory caches (used if Redis is unavailable)
+weather_cache = {}
 news_cache = {}
+finance_cache = {}
 
 # Executor для фоновых задач
 background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="api_cache")
+
+
+def _redis_get(cache_key):
+    """Получить данные из Redis"""
+    if redis_client:
+        try:
+            data = redis_client.get(cache_key)
+            if data:
+                return json.loads(data)
+        except Exception as e:
+            logger.warning(f"[REDIS] Failed to get {cache_key}: {e}")
+    return None
+
+
+def _redis_set(cache_key, data, ttl_seconds):
+    """Сохранить данные в Redis с TTL"""
+    if redis_client:
+        try:
+            redis_client.setex(cache_key, ttl_seconds, json.dumps(data))
+            return True
+        except Exception as e:
+            logger.warning(f"[REDIS] Failed to set {cache_key}: {e}")
+    return False
+
+
+def _memory_get(cache_dict, cache_key):
+    """Получить данные из in-memory кеша"""
+    if cache_key in cache_dict:
+        cached = cache_dict[cache_key]
+        if time.time() - cached['timestamp'] < 3600:  # 1 hour fallback TTL
+            return cached['data']
+        else:
+            del cache_dict[cache_key]  # Remove expired
+    return None
+
+
+def _memory_set(cache_dict, cache_key, data):
+    """Сохранить данные в in-memory кеш"""
+    cache_dict[cache_key] = {
+        'data': data,
+        'timestamp': time.time()
+    }
 
 
 def refresh_weather_cache_async(city, cache_ttl_minutes=30):
@@ -55,6 +128,21 @@ def refresh_news_cache_async(city=None, cache_ttl_minutes=120):  # Уменьш�
             logger.info(f"[NEWS] Background refresh completed for {city or 'general'}")
         except Exception as e:
             logger.error(f"[NEWS] Background refresh failed for {city or 'general'}: {e}")
+
+    background_executor.submit(_refresh)
+
+
+def refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes=15):
+    """
+    Асинхронно обновляет кэш финансовых данных в фоне.
+    Не блокирует основной поток.
+    """
+    def _refresh():
+        try:
+            get_finance_info(symbol, asset_type, cache_ttl_minutes=0)  # Принудительное обновление
+            logger.info(f"[FINANCE] Background refresh completed for {symbol} ({asset_type})")
+        except Exception as e:
+            logger.error(f"[FINANCE] Background refresh failed for {symbol} ({asset_type}): {e}")
 
     background_executor.submit(_refresh)
 
@@ -1622,23 +1710,29 @@ def get_weather_info(city, cache_ttl_minutes=30):
     if not city:
         return None
 
-    # Проверяем кеш
-    cache_key = city.lower()
-    now = time.time()
+    cache_key = f"weather_{city.lower()}"
+    ttl_seconds = cache_ttl_minutes * 60
 
-    if cache_key in weather_cache:
-        cached = weather_cache[cache_key]
-        cache_age_minutes = (now - cached['timestamp']) / 60
+    # Проверяем Redis кеш
+    cached_data = _redis_get(cache_key)
+    if cached_data:
+        logger.info(f"[WEATHER CACHE] Using Redis cached weather for {city}")
+        # Запускаем фоновое обновление если данные старше половины TTL
+        if redis_client:
+            try:
+                ttl_left = redis_client.ttl(cache_key)
+                if ttl_left < ttl_seconds / 2:
+                    refresh_weather_cache_async(city, cache_ttl_minutes)
+            except:
+                pass
+        return cached_data
 
-        if cache_age_minutes < cache_ttl_minutes:
-            # Данные свежие
-            logger.info(f"[WEATHER CACHE] Using fresh cached weather for {city} ({cache_age_minutes:.1f} min old)")
-            return cached['data']
-        else:
-            # Данные устарели, но есть старые - запускаем фоновое обновление
-            logger.info(f"[WEATHER CACHE] Data stale for {city} ({cache_age_minutes:.1f} min old), starting background refresh")
-            refresh_weather_cache_async(city, cache_ttl_minutes)
-            return cached['data']  # Возвращаем старые данные немедленно
+    # Проверяем in-memory fallback
+    cached_data = _memory_get(weather_cache, cache_key)
+    if cached_data:
+        logger.info(f"[WEATHER CACHE] Using memory cached weather for {city}")
+        refresh_weather_cache_async(city, cache_ttl_minutes)
+        return cached_data
 
     # Нет данных в кэше - загружаем синхронно (только при первом запросе)
     logger.info(f"[WEATHER] No cache for {city}, loading synchronously")
@@ -1666,10 +1760,9 @@ def _load_weather_sync(city):
 
             # Кешируем результат
             cache_key = city.lower()
-            weather_cache[cache_key] = {
-                'data': weather_str,
-                'timestamp': time.time()
-            }
+            redis_key = f"weather_{cache_key}"
+            _redis_set(redis_key, weather_str, 30 * 60)  # 30 minutes TTL
+            _memory_set(weather_cache, redis_key, weather_str)
 
             logger.info(f"[WEATHER] Fetched weather for {city}: {weather_str}")
             return weather_str
@@ -1699,26 +1792,28 @@ def get_news_info(city=None, cache_ttl_minutes=120):  # Уменьшил TTL д�
         cache_key = "russian_news_general"
         search_query = "Россия"
 
-    now = time.time()
+    ttl_seconds = cache_ttl_minutes * 60
 
-    # Проверяем кеш
-    if cache_key in news_cache:
-        cached = news_cache[cache_key]
-        cache_age_minutes = (now - cached['timestamp']) / 60
+    # Проверяем Redis кеш
+    cached_data = _redis_get(cache_key)
+    if cached_data:
+        logger.info(f"[NEWS CACHE] Using Redis cached news for {cache_key}")
+        # Запускаем фоновое обновление если данные старше половины TTL
+        if redis_client:
+            try:
+                ttl_left = redis_client.ttl(cache_key)
+                if ttl_left < ttl_seconds / 2:
+                    refresh_news_cache_async(city, cache_ttl_minutes)
+            except:
+                pass
+        return cached_data
 
-        if cache_age_minutes < cache_ttl_minutes:
-            # Данные свежие
-            logger.info(f"[NEWS CACHE] Using fresh cached news for {cache_key} ({cache_age_minutes:.1f} min old)")
-            return cached['data']
-        else:
-            # Данные устарели, но есть старые - запускаем фоновое обновление
-            logger.info(f"[NEWS CACHE] Data stale for {cache_key} ({cache_age_minutes:.1f} min old), starting background refresh")
-            refresh_news_cache_async(city, cache_ttl_minutes)
-            return cached['data']  # Возвращаем старые данные немедленно
-
-    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
-    logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously")
-    return _load_news_sync(city)
+    # Проверяем in-memory fallback
+    cached_data = _memory_get(news_cache, cache_key)
+    if cached_data:
+        logger.info(f"[NEWS CACHE] Using memory cached news for {cache_key}")
+        refresh_news_cache_async(city, cache_ttl_minutes)
+        return cached_data
 
     # Нет данных в кэше - загружаем синхронно (только при первом запросе)
     logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously")
@@ -1763,10 +1858,8 @@ def _load_news_sync(city=None):
                     news_str = "Новости временно недоступны"
 
                 # Кешируем результат
-                news_cache[cache_key] = {
-                    'data': news_str,
-                    'timestamp': time.time()
-                }
+                _redis_set(cache_key, news_str, 120 * 60)  # 2 hours TTL
+                _memory_set(news_cache, cache_key, news_str)
 
                 logger.info(f"[NEWS] Fetched {len(news_items)} news items for {cache_key}")
                 return news_str
@@ -1782,7 +1875,116 @@ def _load_news_sync(city=None):
         return None
 
 
+def get_finance_info(symbol, asset_type, cache_ttl_minutes=15):
+    """
+    Получает финансовую информацию с умным кешированием.
+    Если кэш устарел - запускает фоновое обновление, но возвращает старые данные немедленно.
+    Возвращает словарь с данными или None при ошибке.
+    """
+    if not ALPHA_VANTAGE_API_KEY:
+        return None
+
+    cache_key = f"{asset_type}_{symbol.lower()}"
+    ttl_seconds = cache_ttl_minutes * 60
+
+    # Проверяем Redis кеш
+    cached_data = _redis_get(cache_key)
+    if cached_data:
+        logger.info(f"[FINANCE CACHE] Using Redis cached data for {symbol} ({asset_type})")
+        # Запускаем фоновое обновление если данные старше половины TTL
+        if redis_client:
+            try:
+                ttl_left = redis_client.ttl(cache_key)
+                if ttl_left < ttl_seconds / 2:
+                    refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes)
+            except:
+                pass
+        return cached_data
+
+    # Проверяем in-memory fallback
+    cached_data = _memory_get(finance_cache, cache_key)
+    if cached_data:
+        logger.info(f"[FINANCE CACHE] Using memory cached data for {symbol} ({asset_type})")
+        refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes)
+        return cached_data
+
+    # Нет данных в кэше - загружаем синхронно (только при первом запросе)
+    logger.info(f"[FINANCE] No cache for {symbol} ({asset_type}), loading synchronously")
+    return _load_finance_sync(symbol, asset_type)
+
+
+def _load_finance_sync(symbol, asset_type):
+    """
+    Синхронно загружает финансовые данные (используется только при первом запросе или принудительном обновлении).
+    """
+    try:
+        # Определяем API URL в зависимости от типа актива
+        if asset_type == 'stock':
+            api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol.upper()}&apikey={ALPHA_VANTAGE_API_KEY}"
+        elif asset_type == 'commodity' and symbol.upper() in ['WTI', 'BRENT']:
+            if symbol.upper() == 'WTI':
+                api_url = f"https://www.alphavantage.co/query?function=WTI&interval=monthly&apikey={ALPHA_VANTAGE_API_KEY}"
+            else:
+                api_url = f"https://www.alphavantage.co/query?function=BRENT&interval=monthly&apikey={ALPHA_VANTAGE_API_KEY}"
+        elif asset_type == 'currency':
+            # Для валют предполагаем формат FROM/TO
+            if '/' in symbol:
+                from_curr, to_curr = symbol.split('/', 1)
+                api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_curr}&to_currency={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}"
+            else:
+                logger.error(f"Invalid currency format: {symbol}. Use FROM/TO format")
+                return None
+        else:
+            logger.error(f"Unsupported asset type: {asset_type} for symbol {symbol}")
+            return None
+
+        response = requests.get(api_url, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            # Кешируем результат
+            cache_key = f"{asset_type}_{symbol.lower()}"
+            _redis_set(cache_key, data, 15 * 60)  # 15 minutes TTL
+            _memory_set(finance_cache, cache_key, data)
+
+            logger.info(f"[FINANCE] Fetched data for {symbol} ({asset_type})")
+            return data
+        else:
+            logger.warning(f"[FINANCE] Failed to fetch data for {symbol} ({asset_type}): {response.status_code}")
+            return None
+
+    except Exception as e:
+        logger.error(f"[FINANCE] Error fetching data for {symbol} ({asset_type}): {e}")
+        return None
+
+
 def preload_common_data():
+    """
+    Предварительно загружает данные для популярных городов и общие новости.
+    Вызывается при старте бота для заполнения кэша.
+    """
+    logger.info("[CACHE] Starting preload of common data")
+
+    # Популярные города для предварительной загрузки
+    common_cities = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
+
+    # Загружаем погоду для популярных городов
+    for city in common_cities:
+        try:
+            logger.info(f"[CACHE] Preloading weather for {city}")
+            get_weather_info(city)
+        except Exception as e:
+            logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
+
+    # Загружаем общие новости
+    try:
+        logger.info("[CACHE] Preloading general news")
+        get_news_info()
+    except Exception as e:
+        logger.warning(f"[CACHE] Failed to preload general news: {e}")
+
+    logger.info("[CACHE] Preload completed")
     """
     Предварительно загружает данные для популярных городов и общие новости.
     Вызывается при старте бота для заполнения кэша.

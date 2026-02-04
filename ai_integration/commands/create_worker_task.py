@@ -10,6 +10,7 @@ import json
 from subscription_service import check_subscription
 from config import OPENWEATHERMAP_API_KEY, ALPHA_VANTAGE_API_KEY, DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from ai_integration.prompts import get_extended_system_prompt
+from ai_integration.utils import get_finance_info
 
 logger = logging.getLogger(__name__)
 
@@ -104,40 +105,36 @@ class CreateWorkerTaskCommand(BaseCommand):
                 symbol_upper = symbol.upper()
                 if symbol_upper in metal_symbols:
                     asset_name = metal_symbols[symbol_upper]
-                    # Используем стандартный API для технических индикаторов
-                    api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol_upper}&apikey={ALPHA_VANTAGE_API_KEY}"
+                    # Получаем данные через кеш
+                    data = get_finance_info(symbol, 'stock')  # Металлы как акции
+                    if data and 'Global Quote' in data:
+                        quote = data['Global Quote']
+                        current_price = float(quote.get('05. price', 0))
+                    else:
+                        logger.error(f"Failed to get cached data for metal {symbol}")
+                        return
                 else:
                     logger.error(f"Unsupported metal symbol: {symbol}. Supported: {list(metal_symbols.keys())}")
                     return
-
-                response = requests.get(api_url)
-                if response.status_code == 200:
-                    data = response.json()
-                    quote = data.get('Global Quote', {})
-                    current_price = float(quote.get('05. price', 0))
 
             elif asset_type == 'commodity':
                 # Товары: нефть WTI и Brent
                 if symbol.upper() in ['WTI', 'BRENT']:
                     if symbol.upper() == 'WTI':
-                        api_url = f"https://www.alphavantage.co/query?function=WTI&interval=monthly&apikey={ALPHA_VANTAGE_API_KEY}"
                         asset_name = "нефти WTI"
                     else:  # BRENT
-                        api_url = f"https://www.alphavantage.co/query?function=BRENT&interval=monthly&apikey={ALPHA_VANTAGE_API_KEY}"
                         asset_name = "нефти Brent"
+                    
+                    # Получаем данные через кеш
+                    data = get_finance_info(symbol, 'commodity')
+                    if data and 'data' in data and len(data['data']) > 0:
+                        current_price = float(data['data'][0]['value'])
+                    else:
+                        logger.error(f"Failed to get cached data for commodity {symbol}")
+                        return
                 else:
                     logger.error(f"Unsupported commodity: {symbol}. Supported: WTI, BRENT")
                     return
-
-                response = requests.get(api_url)
-                if response.status_code == 200:
-                    data = response.json()
-                    # Для нефти API возвращает данные в формате data['data'][0]['value']
-                    if 'data' in data and len(data['data']) > 0:
-                        current_price = float(data['data'][0]['value'])
-                    else:
-                        logger.error(f"Invalid oil price data format for {symbol}")
-                        return
 
             elif asset_type == 'currency':
                 # Валюты: основные пары форекс для экономии API
@@ -162,14 +159,16 @@ class CreateWorkerTaskCommand(BaseCommand):
                     logger.error(f"Unsupported forex pair: {symbol}. Supported: {forex_pairs}")
                     return
 
-                api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={from_curr}&to_currency={to_curr}&apikey={ALPHA_VANTAGE_API_KEY}"
                 asset_name = f"{from_curr}/{to_curr}"
-
-                response = requests.get(api_url)
-                if response.status_code == 200:
-                    data = response.json()
-                    exchange_rate = data.get('Realtime Currency Exchange Rate', {})
+                
+                # Получаем данные через кеш
+                data = get_finance_info(symbol, 'currency')
+                if data and 'Realtime Currency Exchange Rate' in data:
+                    exchange_rate = data['Realtime Currency Exchange Rate']
                     current_price = float(exchange_rate.get('5. Exchange Rate', 0))
+                else:
+                    logger.error(f"Failed to get cached data for currency {symbol}")
+                    return
 
             elif asset_type == 'stock':
                 # Акции отключены для экономии API запросов (25 в день)
