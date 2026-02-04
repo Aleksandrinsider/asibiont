@@ -12,6 +12,20 @@ class ConversationCommand(BaseCommand):
         # Get user timezone and message time FIRST
         user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
         
+        # Simple response cache for common questions
+        message_lower = self.message.lower().strip()
+        simple_responses = {
+            "кто ты": "Я ASI Biont - умный AI-помощник, который помогает людям находить единомышленников через их дела и задачи.",
+            "что ты умеешь": "Я умею создавать задачи с напоминаниями, искать людей для совместных активностей, управлять расписанием и помогать находить единомышленников.",
+            "что ты можешь": "Я умею создавать задачи с напоминаниями, искать людей для совместных активностей, управлять расписанием и помогать находить единомышленников.",
+            "помоги": "Расскажи, что планируешь! Я могу создать задачу, найти партнеров или помочь с организацией.",
+            "help": "Tell me what you're planning! I can create tasks, find partners, or help with organization."
+        }
+        
+        for key, response in simple_responses.items():
+            if key in message_lower:
+                return response
+        
         try:
             tz = pytz.timezone(user_timezone)
             # Use message time if available, otherwise current UTC time
@@ -73,8 +87,9 @@ class ConversationCommand(BaseCommand):
                 logger.warning(f"[CONVERSATION] Could not decrypt user memory: {e}")
                 user_memory = ""
         
-        # Get user context for personalized response
-        context = get_context_from_db(user.telegram_id, limit=5)
+        # Get user context for personalized response (DISABLED for performance)
+        # context = get_context_from_db(user.telegram_id, limit=3)  # Disabled to improve speed
+        context = []  # Empty context for faster responses
         
         # Create a conversational prompt with time awareness and anti-hallucination rules
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
@@ -122,11 +137,11 @@ class ConversationCommand(BaseCommand):
                 "model": DEEPSEEK_MODEL,
                 "messages": messages,
                 "temperature": 0.0,
-                "max_tokens": 100
+                "max_tokens": 70  # Reduced from 100 for faster responses
             }
             
             async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=8)) as response:
                     if response.status == 200:
                         result = await response.json()
                         content = result["choices"][0]["message"]["content"].strip()
