@@ -1124,6 +1124,52 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
     return final_content
 
 
+async def _async_post_processing(user, conversation_context, user_id, message, final_content, db_session):
+    """Асинхронная пост-обработка, которая не блокирует ответ пользователю"""
+    try:
+        # Сохраняем ответ AI в контекст разговора
+        conversation_context.append({
+            'role': 'assistant',
+            'content': final_content,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        # Ограничиваем контекст до последних 20 сообщений
+        if len(conversation_context) > 20:
+            conversation_context = conversation_context[-20:]
+
+        # Создаем новую сессию для асинхронной работы
+        from main import get_db_session
+        async_db_session = get_db_session()
+
+        try:
+            user.conversation_context = json.dumps(conversation_context)
+            async_db_session.commit()
+            logger.info(f"Async saved conversation context for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to async save conversation context: {e}")
+        finally:
+            async_db_session.close()
+
+        # Сохраняем взаимодействие в таблицу Interaction для dashboard
+        try:
+            from main import save_context_to_db
+            save_context_to_db(user_id, message, final_content)
+            logger.info(f"Async saved interaction to database: user={user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to async save interaction to database: {e}")
+
+        # Пост-обработка для автоматического обновления профиля
+        try:
+            from .utils import post_process_profile_update
+            await post_process_profile_update(user_id, message, async_db_session)
+            logger.info(f"Async post-processed profile update for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to async post-process profile update: {e}")
+
+    except Exception as e:
+        logger.error(f"Error in async post-processing: {e}")
+
+
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
     # Force rebuild v3.0 - FIXED clean_content issue
     logger = logging.getLogger(__name__)
@@ -3025,7 +3071,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         final_content = content
         final_content = replace_placeholders(final_content, user_now, current_time_str)
 
-        # Пост-обработка
+        # Пост-обработка - ДЕЛАЕМ АСИНХРОННОЙ, ЧТОБЫ НЕ БЛОКИРОВАТЬ ОТВЕТ
         final_content = post_process_response(final_content, user_id, db_session)
 
         # Финальная проверка
@@ -3033,41 +3079,17 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             logger.warning("[FINAL FALLBACK] Content empty after processing, using fallback")
             final_content = "Хорошо, понял. Продолжим работу!"
 
-        # Сохраняем ответ AI в контекст разговора
+        # НЕ БЛОКИРУЕМ ОТВЕТ ПОЛЬЗОВАТЕЛЮ - делаем пост-обработку в фоне
         if user:
-            conversation_context.append({
-                'role': 'assistant',
-                'content': final_content,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
-            # Ограничиваем контекст до последних 20 сообщений
-            if len(conversation_context) > 20:
-                conversation_context = conversation_context[-20:]
-            try:
-                user.conversation_context = json.dumps(conversation_context)
-                db_session.commit()
-            except Exception as e:
-                logger.warning(f"Failed to save conversation context: {e}")
-
-        # Сохраняем взаимодействие в таблицу Interaction для dashboard
-        try:
-            from main import save_context_to_db
-            save_context_to_db(user_id, message, final_content)
-            logger.info(f"Saved interaction to database: user={user_id}")
-        except Exception as e:
-            logger.warning(f"Failed to save interaction to database: {e}")
+            # Создаем задачу для фоновой обработки
+            asyncio.create_task(_async_post_processing(
+                user, conversation_context, user_id, message, final_content, db_session
+            ))
 
         # Собираем информацию о tool calls для отладки
         tool_calls_info = []
         if 'tool_calls' in locals() and tool_calls:
             tool_calls_info = [safe_extract_tool_info(tc) for tc in tool_calls]
-
-        # Пост-обработка для автоматического обновления профиля
-        try:
-            from .utils import post_process_profile_update
-            await post_process_profile_update(user_id, original_message, db_session)
-        except Exception as e:
-            logger.warning(f"Failed to post-process profile update: {e}")
 
         return {
             'response': final_content,
