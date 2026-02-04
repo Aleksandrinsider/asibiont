@@ -1,6 +1,7 @@
 from .base_command import BaseCommand
 from ..chat import chat_with_ai  # Import existing chat processing
 from ai_integration.utils import get_context_from_db  # Import context loading
+from ai_integration.memory import decrypt_data
 import pytz
 from datetime import datetime
 from models import User
@@ -17,8 +18,9 @@ class ConversationCommand(BaseCommand):
         
         try:
             tz = pytz.timezone(user_timezone)
-            # Правильная конвертация: текущее UTC время -> timezone пользователя
-            user_now = datetime.utcnow().replace(tzinfo=pytz.UTC).astimezone(tz)
+            # Use message time if available, otherwise current UTC time
+            base_time = self.message_time if self.message_time else datetime.utcnow().replace(tzinfo=pytz.UTC)
+            user_now = base_time.astimezone(tz)
                 
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
@@ -36,23 +38,34 @@ class ConversationCommand(BaseCommand):
                 
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f"[CONVERSATION] user_timezone={user_timezone}, using_current_utc_time=True, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
+            logger.info(f"[CONVERSATION] user_timezone={user_timezone}, message_time={self.message_time}, user_now={user_now}, current_time_str={current_time_str}, time_of_day={time_of_day}")
                 
         except Exception as e:
             # Fallback to Moscow time
             moscow_tz = pytz.timezone('Europe/Moscow')
-            user_now = datetime.utcnow().replace(tzinfo=pytz.UTC).astimezone(moscow_tz)
+            base_time = self.message_time if self.message_time else datetime.utcnow().replace(tzinfo=pytz.UTC)
+            user_now = base_time.astimezone(moscow_tz)
             current_time_str = user_now.strftime('%H:%M')
             current_date_str = user_now.strftime('%d.%m.%Y')
             time_of_day = "время"  # Generic fallback
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"[CONVERSATION FALLBACK] using_current_utc_time=True, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
+            logger.error(f"[CONVERSATION FALLBACK] message_time={self.message_time}, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
+        
+        # Get user memory
+        user_memory = ""
+        if user and user.memory:
+            try:
+                decrypted = decrypt_data(user.memory)
+                user_memory = f"\nИнформация о пользователе: {decrypted}"
+            except Exception as e:
+                logger.warning(f"[CONVERSATION] Could not decrypt user memory: {e}")
+                user_memory = ""
         
         # Get user context for personalized response
         context = get_context_from_db(user_id, limit=5)
         
-        # Create a conversational prompt with time awareness
+        # Create a conversational prompt with time awareness and anti-hallucination rules
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
 КРИТИЧЕСКИ ВАЖНО: Текущее время пользователя ТОЛЬКО {current_time_str} ({time_of_day})
@@ -61,6 +74,16 @@ class ConversationCommand(BaseCommand):
 СТРОГО ЗАПРЕЩЕНО использовать любое другое время! НИКОГДА не используй текущее время сервера, свое знание времени или любое другое время кроме {current_time_str} ({time_of_day})!
 Если упоминаешь время, всегда говори "сейчас {current_time_str} ({time_of_day})" и ничего другого!
 
+{user_memory}
+
+🚨 КРИТИЧНЫЕ ПРАВИЛА ПРОТИВ ГАЛЛЮЦИНАЦИЙ:
+1. ⏰ ВРЕМЯ: СТРОГО используй ТОЛЬКО время из "Текущее время пользователя ТОЛЬКО {current_time_str} ({time_of_day})"! НЕ придумывай время!
+2. 📅 ДАТА: СТРОГО используй ТОЛЬКО дату из "Дата: {current_date_str}"! НЕ придумывай даты!
+3. 👥 ПРОФИЛЬ: НЕ выдумывай информацию о пользователе! Используй ТОЛЬКО данные из раздела "Информация о пользователе"! Если данных нет - не упоминай их!
+4. 🎯 ЗАДАЧИ: НЕ выдумывай задачи! НЕ упоминай активные задачи, если их нет в информации!
+5. 📞 КОНТАКТЫ: НЕ выдумывай контакты! НЕ упоминай партнеров или контакты, если их нет в информации!6. 🚫 ЗАПРЕЩЕНО: Не анализируй профиль, не предлагай действия, не упоминай время дня как "середина дня", не говори о планах, не упоминай контакты!
+7. 💬 ОБЩЕНИЕ: Для приветствий отвечай кратко, только приветствие и упоминание времени если логично. НЕ анализируй, НЕ предлагаешь, НЕ упоминаешь данные профиля!
+8. 📜 ИСТОРИЯ: ИГНОРИРУЙ ЛЮБУЮ ПРЕДЫДУЩУЮ ИСТОРИЮ ДИАЛОГА! НЕ используй информацию из прошлых сообщений! Отвечай ТОЛЬКО на основе предоставленных данных в этом промпте!
 Сообщение пользователя: {self.message}
 
 Ответь естественно и дружелюбно. Если упоминаешь время, используй ТОЛЬКО {current_time_str} ({time_of_day}).
