@@ -9,8 +9,15 @@ from models import User
 class ConversationCommand(BaseCommand):
     async def execute(self, user_id, db_session):
         """Handle conversational messages without tool calls"""
-        # For conversation, we need to respond naturally without calling tools
-        # But we still want to use AI for natural responses
+        # For simple greetings, return a fixed response to avoid hallucinations
+        message_lower = self.message.lower().strip()
+        
+        if message_lower in ['привет', 'hi', 'hello', 'здравствуй', 'hey']:
+            # Simple greeting - return fixed response
+            return f"Привет! 😊 Сейчас {current_time_str} ({time_of_day})."
+        
+        # For other conversation, use AI but with strict controls
+        # ... existing code ...
         
         # Get user timezone and message time
         user = db_session.query(User).filter_by(telegram_id=user_id).first()
@@ -106,7 +113,7 @@ class ConversationCommand(BaseCommand):
             data = {
                 "model": DEEPSEEK_MODEL,
                 "messages": messages,
-                "temperature": 0.7,
+                "temperature": 0.0,
                 "max_tokens": 100
             }
             

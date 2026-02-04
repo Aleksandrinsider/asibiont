@@ -2,12 +2,17 @@ import re
 from datetime import datetime
 from .commands import *
 from .intent_classifier_ultra_minimal import IntentClassifierUltraMinimal
+import pytz
 
 class CommandRouter:
     """Fully AI-powered command routing - no patterns, pure AI understanding"""
 
     async def route(self, message: str, user_id: int = None, message_time: datetime = None):
         """Route message using pure AI classification"""
+        
+        # Make message_time timezone-aware if provided
+        if message_time and message_time.tzinfo is None:
+            message_time = message_time.replace(tzinfo=pytz.UTC)
         
         # Always use AI for intent classification
         intent_result = await IntentClassifierUltraMinimal.classify_intent(message, user_id)

@@ -24,24 +24,48 @@ class IntentClassifierUltraMinimal:
             url = "https://api.deepseek.com/v1/chat/completions"
             headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
 
+            system_prompt = """Ты - классификатор намерений для AI-агента управления задачами.
+            
+На основе сообщения пользователя определи его намерение и верни ТОЛЬКО одно слово из списка:
+- add_task (создание задачи)
+- complete_task (завершение задачи)
+- list_tasks (просмотр задач)
+- delete_task (удаление задачи)
+- reschedule_task (перенос задачи)
+- update_profile (обновление профиля)
+- find_partners (поиск партнеров)
+- delegate_task (делегирование задачи)
+- conversation (общий разговор, приветствия, вопросы о боте)
+
+Верни ТОЛЬКО одно слово без объяснений."""
+
             data = {
                 "model": DEEPSEEK_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
                 "temperature": 0.1,
-                "max_tokens": 30
+                "max_tokens": 20
             }
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     if response.status == 200:
                         result = await response.json()
-                        return result["choices"][0]["message"]["content"].strip()
+                        intent = result["choices"][0]["message"]["content"].strip().lower()
+                        # Validate intent
+                        valid_intents = ['add_task', 'complete_task', 'list_tasks', 'delete_task', 'reschedule_task', 'update_profile', 'find_partners', 'delegate_task', 'conversation']
+                        if intent in valid_intents:
+                            return intent
+                        else:
+                            return None  # Use local classification
                     elif response.status == 401:
                         # API authentication failed - use local classification
                         print(f"API 401 error - switching to local classification")
                         return None  # Signal to use local classification
                     else:
-                        return "conversation"  # fallback
+                        return None  # Use local classification
         except Exception as e:
             print(f"AI call failed: {e}")
             return None  # Signal to use local classification
