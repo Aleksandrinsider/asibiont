@@ -12,20 +12,6 @@ class ConversationCommand(BaseCommand):
         # Get user timezone and message time FIRST
         user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
         
-        # Simple response cache for common questions
-        message_lower = self.message.lower().strip()
-        simple_responses = {
-            "кто ты": "Я ASI Biont - умный AI-помощник, который помогает людям находить единомышленников через их дела и задачи.",
-            "что ты умеешь": "Я умею создавать задачи с напоминаниями, искать людей для совместных активностей, управлять расписанием и помогать находить единомышленников.",
-            "что ты можешь": "Я умею создавать задачи с напоминаниями, искать людей для совместных активностей, управлять расписанием и помогать находить единомышленников.",
-            "помоги": "Расскажи, что планируешь! Я могу создать задачу, найти партнеров или помочь с организацией.",
-            "help": "Tell me what you're planning! I can create tasks, find partners, or help with organization."
-        }
-        
-        for key, response in simple_responses.items():
-            if key in message_lower:
-                return response
-        
         try:
             tz = pytz.timezone(user_timezone)
             # Use message time if available, otherwise current UTC time
