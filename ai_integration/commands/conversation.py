@@ -7,20 +7,9 @@ from datetime import datetime
 from models import User
 
 class ConversationCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):
         """Handle conversational messages without tool calls"""
-        # For simple greetings, return a fixed response to avoid hallucinations
-        message_lower = self.message.lower().strip()
-        
-        if message_lower in ['привет', 'hi', 'hello', 'здравствуй', 'hey']:
-            # Simple greeting - return fixed response
-            return f"Привет! 😊 Сейчас {current_time_str} ({time_of_day})."
-        
-        # For other conversation, use AI but with strict controls
-        # ... existing code ...
-        
-        # Get user timezone and message time
-        user = db_session.query(User).filter_by(telegram_id=user_id).first()
+        # Get user timezone and message time FIRST
         user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
         
         try:
@@ -59,6 +48,17 @@ class ConversationCommand(BaseCommand):
             logger = logging.getLogger(__name__)
             logger.error(f"[CONVERSATION FALLBACK] message_time={self.message_time}, current_time_str={current_time_str}, time_of_day={time_of_day}, error={e}")
         
+        # For simple greetings, return a fixed response to avoid hallucinations
+        message_lower = self.message.lower().strip()
+        
+        if message_lower in ['привет', 'hi', 'hello', 'здравствуй', 'hey']:
+            # Simple greeting - return fixed response
+            print(f"[CONVERSATION] Fixed response for greeting: {self.message}")
+            return f"Привет! 😊 Сейчас {current_time_str} ({time_of_day})."
+        
+        # For other conversation, use AI but with strict controls
+        print(f"[CONVERSATION] Using AI for: {self.message}")
+        
         # Get user memory
         user_memory = ""
         if user and user.memory:
@@ -70,7 +70,7 @@ class ConversationCommand(BaseCommand):
                 user_memory = ""
         
         # Get user context for personalized response
-        context = get_context_from_db(user_id, limit=5)
+        context = get_context_from_db(user.telegram_id, limit=5)
         
         # Create a conversational prompt with time awareness and anti-hallucination rules
         conversation_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
