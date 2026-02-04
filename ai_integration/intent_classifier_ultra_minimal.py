@@ -72,10 +72,16 @@ class IntentClassifierUltraMinimal:
 
     @classmethod
     async def classify_intent(cls, message: str, user_id: int) -> str:
-        """Use local classification for reliability"""
+        """Use AI classification first, fallback to local"""
         
-        # Use local classification for better accuracy and reliability
-        print(f"[INTENT] Using local classification for: {message[:50]}...")
+        # Try AI classification first
+        ai_result = await cls._call_ai(message)
+        if ai_result:
+            print(f"[INTENT] AI classified '{message[:50]}...' as: {ai_result}")
+            return ai_result
+        
+        # Fallback to local classification
+        print(f"[INTENT] AI failed, using local classification for: {message[:50]}...")
         result = cls._local_classify(message)
         
         # If result is dict, extract intent and store params for later use
