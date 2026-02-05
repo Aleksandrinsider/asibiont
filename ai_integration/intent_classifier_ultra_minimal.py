@@ -88,11 +88,8 @@ class IntentClassifierUltraMinimal:
         # If result is dict, extract intent and store params for later use
         if isinstance(result, dict):
             intent = result.get('intent', 'conversation')
-            # Store params somewhere accessible to commands
-            cls._last_params = result.get('params', {})
             return intent
         else:
-            cls._last_params = {}
             return result
 
     @classmethod
