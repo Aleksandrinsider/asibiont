@@ -29,7 +29,7 @@ from .handlers import (  # noqa: F401
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, smart_update_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks,
+    update_profile, smart_update_profile, show_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks,
     analyze_goal_progress
 )
 
@@ -527,6 +527,17 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
                 tool_results.append({"function": func_name, "result": result})
                 logger.info(f"[UPDATE_PROFILE] Added to tool_results: {result[:100]}")
+
+            elif func_name == "show_profile":
+                try:
+                    result = show_profile(user_id=user_id, session=db_session)
+                    logger.info(f"[SHOW_PROFILE] Result: {result[:100]}...")
+                except Exception as e:
+                    logger.error(f"[SHOW_PROFILE] Exception: {e}")
+                    result = f"Ошибка получения профиля: {str(e)}"
+
+                tool_results.append({"function": func_name, "result": result})
+                logger.info(f"[SHOW_PROFILE] Added to tool_results: {result[:100]}")
 
             elif func_name == "smart_update_profile":
                 try:
@@ -1547,47 +1558,20 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             else:
                 user_username = "user"
                 
-            # Get user current time FIRST before using it (moved BEFORE subscription check)
+            # Get user current time - simplified approach
             base_now = datetime.now(pytz.UTC)
-            logger.info(f"[TIME CHECK] Real UTC now: {base_now}")
-            logger.info(f"[TIME CHECK] Formatted: {base_now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-            user_now = base_now  # Default to base_now
-            # Формат времени С ТАЙМЗОНОЙ для промпта
-            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-            user_tz = pytz.UTC  # Default
+            user_now = base_now  # Default to UTC
+            current_time_str = base_now.strftime('%H:%M')
+            current_date_str = base_now.strftime('%Y-%m-%d')
+            
+            # Simple timezone handling - just Moscow for Russian users
             if user and user.timezone:
-                tz_str = user.timezone
-                logger.info(f"User timezone: {tz_str}")
                 try:
-                    user_tz = pytz.timezone(tz_str)
+                    user_tz = pytz.timezone(user.timezone)
                     user_now = base_now.astimezone(user_tz)
-                    # Формат времени С ТАЙМЗОНОЙ для промпта: "15:43 (Europe/Moscow)"
-                    current_time_str = f"{user_now.strftime('%H:%M')} ({tz_str})"
-                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                    logger.info(f"[TIME CHECK] User local time ({tz_str}): {user_now}")
-                    logger.info(f"[TIME CHECK] Formatted for prompt: {current_time_str}")
-                    logger.info(f"[TIME CHECK] Full date for prompt: {user_now.strftime('%Y-%m-%d')}")
-                except Exception as e:
-                    logger.error(f"Error setting user timezone: {e}")
-                    # Fallback to Moscow time for Russian users
-                    try:
-                        moscow_tz = pytz.timezone('Europe/Moscow')
-                        user_now = base_now.astimezone(moscow_tz)
-                        current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                        current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                        logger.info(f"[TIME CHECK] Fallback to Moscow time: {user_now}")
-                    except:
-                        pass  # Keep UTC if all fails
-            else:
-                # No timezone set - default to Moscow for Russian bot
-                try:
-                    moscow_tz = pytz.timezone('Europe/Moscow')
-                    user_now = base_now.astimezone(moscow_tz)
-                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                    logger.info(f"[TIME CHECK] No timezone set, using Moscow time: {user_now}")
+                    current_time_str = user_now.strftime('%H:%M')
                 except:
-                    pass  # Keep UTC if all fails
+                    pass  # Keep UTC if fails
             
             # Получаем subscription_tier
             subscription_tier = user.subscription_tier.value if user and hasattr(user, 'subscription_tier') and user.subscription_tier else None
@@ -1654,7 +1638,6 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 time_context = "НОЧЬ: Предлагай отдых, подготовку ко сну, легкие задачи"
             
             user_memory += f"\nВРЕМЯ СУТОК: {time_context}"
-            user_memory += f"\nТОЧНОЕ ВРЕМЯ: Сейчас {user_now.strftime('%H:%M')} по местному времени ({tz_str})"
             profile_filled = False
             
             # Helper function to check if field is empty
@@ -2552,7 +2535,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             action_intents = [
                 'add_task', 'get_task_details', 'complete_task', 
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
-                'update_profile', 'find_partners', 'find_relevant_contacts_for_task', 'update_user_memory', 'delete_all_tasks'
+                'update_profile', 'show_profile', 'find_partners', 'find_relevant_contacts_for_task', 'update_user_memory', 'delete_all_tasks'
             ]
             logger.info(f"[TOOL CHOICE CHECK] intent type: '{intent.get('type')}', in action_intents: {intent.get('type') in action_intents}")
             print(f"[DEBUG] TOOL CHOICE CHECK: intent={intent}, type={intent.get('type')}")  # DEBUG OUTPUT

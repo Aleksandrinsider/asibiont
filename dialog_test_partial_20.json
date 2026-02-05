@@ -1,4 +1,5 @@
 {
+  "partial_results_up_to_iteration": 20,
   "conversations": [
     {
       "iteration": 1,
@@ -722,40 +723,5 @@
       }
     }
   ],
-  "summary": {
-    "average_quality": 7.8,
-    "average_personalization": 5.85,
-    "commands_executed": {
-      "list_tasks": 8,
-      "update_profile": 6,
-      "find_partners": 5,
-      "add_task": 2,
-      "reschedule_task": 1
-    },
-    "data_considered": {
-      "profile_data": 18,
-      "weather": 17,
-      "tasks": 19,
-      "news": 9
-    },
-    "context_awareness": {
-      "profile_mentions": 18,
-      "weather_mentions": 17,
-      "news_mentions": 9,
-      "tasks_considered": 19,
-      "time_awareness": 20,
-      "total_personalization": 117,
-      "complex_links": {
-        "news_to_tasks": 8,
-        "tasks_to_goals": 17,
-        "weather_to_advice": 3,
-        "proactive_suggestions": 15,
-        "total_comprehensive": 43
-      }
-    },
-    "issues": {
-      "повторение времени": 2
-    },
-    "total_iterations": 20
-  }
+  "timestamp": "2026-02-05T07:58:03.048353+00:00"
 }

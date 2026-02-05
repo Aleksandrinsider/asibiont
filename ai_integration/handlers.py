@@ -8,7 +8,7 @@ import pytz
 from models import Session, Task, User, UserProfile, SubscriptionTier, Subscription, Goal
 from sqlalchemy import or_, and_, func
 
-from .memory import encrypt_data, decrypt_data
+from .memory import encrypt_data, decrypt_data, LongTermMemory
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
 from .task_search import find_task_flexible
 
@@ -398,6 +398,28 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
         session.commit()
         task_id = task.id
         logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
+
+        # Save to long-term memory for project context
+        try:
+            ltm = LongTermMemory(user.telegram_id)
+            # Determine project based on task content
+            project_name = "General Tasks"
+            if any(keyword in title.lower() for keyword in ['ml', 'machine learning', 'python', 'нейрон', 'алгоритм', 'курс']):
+                project_name = "ML Learning Journey"
+            elif any(keyword in title.lower() for keyword in ['бег', 'спорт', 'фитнес']):
+                project_name = "Fitness Goals"
+            elif any(keyword in title.lower() for keyword in ['работа', 'проект', 'встреча']):
+                project_name = "Work Projects"
+            
+            tasks = [title]
+            insights = [f"Created task: {title}"]
+            if description:
+                insights.append(f"Description: {description}")
+            
+            ltm.save_project_context(project_name, tasks, insights)
+            logger.info(f"[ADD_TASK] Saved task to long-term memory project: {project_name}")
+        except Exception as e:
+            logger.warning(f"Could not save to long-term memory: {e}")
 
     # Schedule reminder if specified
     if task.reminder_time:
@@ -2614,6 +2636,51 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         'ai': ['искусственный интеллект', 'машинное обучение', 'ml'],
     }
     
+    # Гибкие связи желаний с навыками (расширенные синонимы и пересечения)
+    flexible_skill_mappings = {
+        # Заработок и бизнес
+        'заработать': ['маркетинг', 'продажи', 'бизнес', 'финансы', 'предпринимательство', 'партнерская сеть', 'инвестиции', 'консалтинг', 'стартап', 'фриланс', 'монетизация'],
+        'деньги': ['финансы', 'инвестиции', 'бизнес', 'продажи', 'маркетинг'],
+        'доход': ['бизнес', 'продажи', 'инвестиции', 'фриланс'],
+        'богатство': ['инвестиции', 'бизнес', 'финансы', 'предпринимательство'],
+        
+        # Спорт и здоровье
+        'спорт': ['тренер', 'фитнес', 'спорт', 'йога', 'бег', 'плавание', 'футбол', 'баскетбол', 'волейбол', 'теннис', 'гимнастика', 'здоровье'],
+        'тренировка': ['тренер', 'фитнес', 'спорт', 'здоровье'],
+        'фитнес': ['тренер', 'фитнес', 'спорт', 'здоровье', 'питание'],
+        'здоровье': ['врач', 'диетолог', 'психолог', 'массажист', 'натуропат', 'тренер', 'фитнес'],
+        'бег': ['тренер', 'бег', 'спорт', 'здоровье'],
+        'йога': ['тренер', 'йога', 'медитация', 'растяжка', 'здоровье'],
+        
+        # Обучение и развитие
+        'обучение': ['преподаватель', 'учитель', 'ментор', 'курсы', 'обучение', 'коучинг', 'тренинг', 'развитие'],
+        'курс': ['преподаватель', 'учитель', 'курсы', 'обучение'],
+        'учить': ['преподаватель', 'учитель', 'ментор', 'коучинг'],
+        'развитие': ['ментор', 'коучинг', 'психолог', 'обучение'],
+        
+        # Творчество
+        'творчество': ['дизайнер', 'фотограф', 'художник', 'музыкант', 'писатель', 'видео', 'арт', 'креатив'],
+        'дизайн': ['дизайнер', 'арт', 'креатив'],
+        'фото': ['фотограф', 'арт'],
+        'музыка': ['музыкант', 'арт'],
+        'искусство': ['художник', 'арт', 'дизайнер'],
+        
+        # Технологии
+        'программирование': ['программист', 'разработчик', 'it', 'ai', 'машинное обучение', 'data science', 'python', 'javascript'],
+        'ai': ['ai', 'машинное обучение', 'data science', 'программист', 'разработчик'],
+        'технологии': ['it', 'программист', 'разработчик', 'ai', 'стартап'],
+        'стартап': ['предприниматель', 'стартапер', 'бизнес', 'технологии', 'инвестиции'],
+        
+        # Путешествия
+        'путешествия': ['гид', 'туроператор', 'путешественник', 'фотограф'],
+        'туризм': ['гид', 'туроператор', 'путешественник'],
+        
+        # Бизнес общее
+        'бизнес': ['предприниматель', 'стартапер', 'инвестор', 'консультант', 'менеджер', 'маркетинг', 'продажи'],
+        'предпринимательство': ['предприниматель', 'стартапер', 'бизнес', 'инвестиции'],
+        'инвестиции': ['инвестор', 'финансы', 'бизнес'],
+    }
+    
     # Снижаем минимальную длину до 2 символов чтобы захватить "AI", "ML", "бег"
     words = [w.lower().strip() for w in task_description.split() if len(w) >= 2 and w.lower() not in stop_words]
     task_keywords.update(words)
@@ -2626,6 +2693,11 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         for key, syns in synonyms.items():
             if len(word) > 4 and (key in word or any(syn in word for syn in syns if len(syn) > 3)):
                 task_keywords.update([key] + syns)
+    
+    # Добавить навыки из гибких связей на основе ключевых слов задачи
+    for word in task_keywords.copy():  # copy чтобы не изменять во время итерации
+        if word in flexible_skill_mappings:
+            task_keywords.update(flexible_skill_mappings[word])
     
     logger.info(f"[FIND_RELEVANT] Task keywords: {task_keywords}")
     
@@ -2683,6 +2755,14 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                 relevance_score += len(interest_match) * 4
                 match_reasons.append(f"интересы: {', '.join(list(interest_match)[:2])}")
         
+        # ПРИОРИТЕТ 4: Цели контакта совпадают с задачей пользователя
+        if hasattr(partner, 'goals') and partner.goals:
+            partner_goals = set(g.lower().strip() for g in partner.goals.split(','))
+            goal_match = task_keywords & partner_goals
+            if goal_match:
+                relevance_score += len(goal_match) * 6  # Цели важны
+                match_reasons.append(f"цели: {', '.join(list(goal_match)[:2])}")
+        
         # Используем уже вычисленную релевантность из get_partners_list
         if hasattr(partner, 'task_relevance_score') and partner.task_relevance_score > 0:
             relevance_score += partner.task_relevance_score
@@ -2690,7 +2770,6 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                 match_reasons.append(partner.task_relevance)
         
         if relevance_score > 0:
-            # Получить username пользователя
             partner_user = session.query(User).filter_by(id=partner.user_id).first()
             if partner_user and partner_user.username:
                 relevant_contacts.append({
@@ -2762,6 +2841,37 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     
     reverse_matches.sort(key=lambda x: x['score'], reverse=True)
     
+    # УЧЕТ СУЩЕСТВУЮЩИХ ЗАДАЧ ПОЛЬЗОВАТЕЛЯ: предложить партнеров для активных задач
+    user_tasks_suggestions = []
+    if user_profile and user_profile.interests:
+        # Получить активные задачи пользователя
+        active_tasks = session.query(Task).filter_by(user_id=user.id, status='pending').all()
+        
+        for task in active_tasks:
+            task_title_lower = task.title.lower()
+            # Проверить, подходит ли задача для поиска партнеров (спорт, обучение, бизнес)
+            if any(keyword in task_title_lower for keyword in ['пробежка', 'бег', 'тренировка', 'спорт', 'йога', 'плавание', 'футбол', 'обучение', 'курс', 'программирование', 'стартап', 'бизнес']):
+                # Найти партнеров для этой задачи
+                task_contacts = []
+                for partner in all_partners:
+                    partner_user = session.query(User).filter_by(id=partner.user_id).first()
+                    if not partner_user or not partner_user.username:
+                        continue
+                    
+                    # Простая проверка совпадения интересов/навыков с задачей
+                    partner_interests = set(i.lower().strip() for i in (partner.interests or '').split(','))
+                    partner_skills = set(s.lower().strip() for s in (partner.skills or '').split(','))
+                    
+                    task_words = set(w.lower() for w in task.title.split() if len(w) > 2)
+                    if task_words & (partner_interests | partner_skills):
+                        task_contacts.append(partner_user.username)
+                
+                if task_contacts:
+                    user_tasks_suggestions.append({
+                        'task': task.title,
+                        'contacts': task_contacts[:3]  # Максимум 3 контакта на задачу
+                    })
+    
     # Формирование ответа
     result_lines = []
     
@@ -2787,6 +2897,15 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
             if contact['city']:
                 line += f" | {contact['city']}"
             result_lines.append(line)
+    
+    # Добавить предложения для существующих задач пользователя
+    if user_tasks_suggestions:
+        if result_lines:
+            result_lines.append("")
+        result_lines.append("💡 Также для твоих задач:")
+        for suggestion in user_tasks_suggestions:
+            contacts_str = ', '.join(f"@{c}" for c in suggestion['contacts'])
+            result_lines.append(f"• {suggestion['task']}: {contacts_str}")
     
     if result_lines:
         return '\n'.join(result_lines)
@@ -3700,6 +3819,56 @@ def suggest_trends_and_opportunities(user_id=None, focus_area=None, num_suggesti
             session.close()
 
 
+def _merge_similar_goals(current_goals: str, new_goals: str) -> tuple[str, bool, str]:
+    """
+    Умно объединяет похожие цели, избегая дубликатов.
+    
+    Args:
+        current_goals: Текущие цели через запятую
+        new_goals: Новые цели для добавления
+        
+    Returns:
+        (обновленные_цели, было_ли_изменение, описание_изменения)
+    """
+    if not new_goals or not new_goals.strip():
+        return current_goals, False, "Ничего не добавлено"
+    
+    # Разбираем текущие цели
+    current_list = []
+    if current_goals:
+        current_list = [goal.strip() for goal in current_goals.split(',') if goal.strip()]
+    
+    # Разбираем новые цели
+    new_list = [goal.strip() for goal in new_goals.split(',') if goal.strip()]
+    
+    # Нормализуем для сравнения (нижний регистр, убираем лишние слова)
+    def normalize_goal(goal: str) -> str:
+        goal_lower = goal.lower()
+        # Убираем общие слова
+        remove_words = ['хочу', 'хотелось бы', 'планирую', 'намерен', 'мечтаю', 'стремлюсь', 'желаю']
+        for word in remove_words:
+            goal_lower = goal_lower.replace(word, '').strip()
+        return goal_lower
+    
+    current_normalized = {normalize_goal(g): g for g in current_list}
+    added_goals = []
+    
+    for new_goal in new_list:
+        normalized = normalize_goal(new_goal)
+        if normalized not in current_normalized:
+            added_goals.append(new_goal)
+            current_normalized[normalized] = new_goal
+    
+    if not added_goals:
+        return current_goals, False, "Цели уже есть в профиле"
+    
+    # Объединяем
+    all_goals = current_list + added_goals
+    result = ', '.join(all_goals)
+    
+    return result, True, f"Добавлены новые цели: {', '.join(added_goals)}"
+
+
 def _add_to_list_field(current_value: str, new_value: str) -> tuple[str, bool]:
     """
     Добавляет новое значение в поле-список (через запятую).
@@ -4470,6 +4639,138 @@ def analyze_goal_progress(user_id: int) -> str:
     except Exception as e:
         logger.error(f"Ошибка при анализе прогресса целей для пользователя {user_id}: {e}")
         return "❌ Не удалось проанализировать прогресс по целям"
+
+
+def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
+    """Показать информацию о профиле пользователя"""
+    try:
+        if session is None:
+            from .. import SessionLocal
+            session = SessionLocal()
+            should_close = True
+        else:
+            should_close = close_session
+
+        try:
+            # Получаем профиль пользователя
+            profile = session.query(UserProfile).filter_by(user_id=user_id).first()
+            user = session.query(User).filter_by(id=user_id).first()
+
+            if not user:
+                return "❌ Пользователь не найден"
+
+            profile_info = []
+
+            # Основная информация
+            username = f"@{user.username}" if user.username else "без имени"
+            profile_info.append(f"👤 **Профиль пользователя {username}**")
+
+            if not profile:
+                profile_info.append("📝 Профиль еще не заполнен")
+                profile_info.append("")
+                profile_info.append("💡 *Заполните профиль, чтобы получить персонализированные рекомендации и найти подходящих партнеров*")
+                return "\n".join(profile_info)
+
+            # Город
+            if profile.city:
+                profile_info.append(f"🏙️ **Город:** {profile.city}")
+
+            # Дата рождения и знак зодиака
+            if profile.birthdate:
+                profile_info.append(f"🎂 **Дата рождения:** {profile.birthdate}")
+                if profile.zodiac_sign:
+                    profile_info.append(f"♈ **Знак зодиака:** {profile.zodiac_sign}")
+
+            # Работа
+            work_info = []
+            if profile.company:
+                work_info.append(f"компания «{profile.company}»")
+            if profile.position:
+                work_info.append(f"должность «{profile.position}»")
+            if work_info:
+                profile_info.append(f"💼 **Работа:** {', '.join(work_info)}")
+
+            # Навыки
+            if profile.skills:
+                try:
+                    skills_list = json.loads(profile.skills) if profile.skills.startswith('[') else [s.strip() for s in profile.skills.split(',')]
+                    if skills_list:
+                        profile_info.append(f"🛠️ **Навыки:** {', '.join(skills_list[:10])}" + ("..." if len(skills_list) > 10 else ""))
+                except:
+                    profile_info.append(f"🛠️ **Навыки:** {profile.skills[:200]}" + ("..." if len(profile.skills) > 200 else ""))
+
+            # Интересы
+            if profile.interests:
+                try:
+                    interests_list = json.loads(profile.interests) if profile.interests.startswith('[') else [i.strip() for i in profile.interests.split(',')]
+                    if interests_list:
+                        profile_info.append(f"🎯 **Интересы:** {', '.join(interests_list[:10])}" + ("..." if len(interests_list) > 10 else ""))
+                except:
+                    profile_info.append(f"🎯 **Интересы:** {profile.interests[:200]}" + ("..." if len(profile.interests) > 200 else ""))
+
+            # Цели
+            if profile.goals:
+                profile_info.append(f"🎯 **Цели:** {profile.goals[:300]}" + ("..." if len(profile.goals) > 300 else ""))
+
+            # Био
+            if profile.bio:
+                profile_info.append(f"📖 **О себе:** {profile.bio[:300]}" + ("..." if len(profile.bio) > 300 else ""))
+
+            # Языки
+            if profile.languages:
+                profile_info.append(f"🌍 **Языки:** {profile.languages}")
+
+            # Текущие планы
+            if profile.current_plans:
+                profile_info.append(f"📅 **Текущие планы:** {profile.current_plans[:200]}" + ("..." if len(profile.current_plans) > 200 else ""))
+
+            # Статистика задач
+            stats = []
+            if profile.total_tasks_created > 0:
+                stats.append(f"создано задач: {profile.total_tasks_created}")
+            if profile.completed_tasks > 0:
+                stats.append(f"выполнено: {profile.completed_tasks}")
+            if profile.average_completion_time > 0:
+                hours = profile.average_completion_time // 60
+                minutes = profile.average_completion_time % 60
+                time_str = f"{hours}ч {minutes}м" if hours > 0 else f"{minutes}м"
+                stats.append(f"среднее время выполнения: {time_str}")
+            if stats:
+                profile_info.append(f"📊 **Статистика:** {', '.join(stats)}")
+
+            # Рейтинг
+            if profile.rating_count > 0:
+                profile_info.append(f"⭐ **Рейтинг:** {profile.average_rating}/10 (на основе {profile.rating_count} оценок)")
+
+            # Последняя активность
+            if profile.last_activity:
+                from datetime import datetime, timezone
+                # Убедимся, что оба datetime имеют одинаковый timezone
+                now = datetime.now(timezone.utc)
+                if profile.last_activity.tzinfo is None:
+                    # Если last_activity naive, добавим UTC timezone
+                    last_activity_aware = profile.last_activity.replace(tzinfo=timezone.utc)
+                else:
+                    last_activity_aware = profile.last_activity
+                
+                delta = now - last_activity_aware
+                if delta.days > 0:
+                    activity_str = f"{delta.days} дней назад"
+                elif delta.seconds // 3600 > 0:
+                    activity_str = f"{delta.seconds // 3600} часов назад"
+                else:
+                    activity_str = f"{delta.seconds // 60} минут назад"
+                profile_info.append(f"🕒 **Последняя активность:** {activity_str}")
+
+            return "\n".join(profile_info)
+
+        finally:
+            if should_close and session:
+                session.close()
+
+    except Exception as e:
+        logger.error(f"Ошибка при получении профиля пользователя {user_id}: {e}")
+        return "❌ Не удалось получить информацию о профиле"
 
 
 

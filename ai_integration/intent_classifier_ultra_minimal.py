@@ -16,6 +16,7 @@ class IntentClassifierUltraMinimal:
 
     # Add conversation as fallback
     INTENTS['conversation'] = 'Общий разговор или непонятный запрос'
+    INTENTS['show_profile'] = 'Показать информацию о профиле пользователя'
 
     @classmethod
     async def _call_ai(cls, prompt: str) -> str:
@@ -32,7 +33,8 @@ class IntentClassifierUltraMinimal:
 - list_tasks (просмотр задач)
 - delete_task (удаление задачи)
 - reschedule_task (перенос задачи)
-- update_profile (обновление профиля)
+- update_profile (обновление/изменение профиля)
+- show_profile (просмотр/показ профиля)
 - find_partners (общий поиск партнеров/единомышленников)
 - find_relevant_contacts_for_task (поиск контактов для конкретной задачи или специалиста)
 - delegate_task (делегирование задачи)
@@ -372,7 +374,7 @@ class IntentClassifierUltraMinimal:
             DelegateTaskCommand, ConversationCommand, GetTaskDetailsCommand,
             EditTaskCommand, FindRelevantContactsForTaskCommand, UpdateUserMemoryCommand, DeleteAllTasksCommand,
             AcceptDelegatedTaskCommand, RejectDelegatedTaskCommand, GetDelegationProgressCommand,
-            CreateWorkerTaskCommand, DeleteWorkerTaskCommand
+            CreateWorkerTaskCommand, DeleteWorkerTaskCommand, ShowProfileCommand
         )
 
         mapping = {
@@ -382,6 +384,7 @@ class IntentClassifierUltraMinimal:
             'delete_task': DeleteTaskCommand,
             'reschedule_task': RescheduleTaskCommand,
             'update_profile': UpdateProfileCommand,
+            'show_profile': ShowProfileCommand,
             'find_partners': FindPartnersCommand,
             'delegate_task': DelegateTaskCommand,
             'conversation': ConversationCommand,
