@@ -11,7 +11,7 @@ from .handlers import (
     edit_task, delete_task, get_task_details,
     find_partners, update_profile, smart_update_profile,
     create_subscription_payment, check_subscription_status,
-    cancel_subscription, get_partners_list, check_delegation_deadlines, restore_task, update_user_memory_async
+    cancel_subscription, get_partners_list, check_delegation_deadlines, restore_task, update_user_memory_async, analyze_tasks
 )
 
 __all__ = [
@@ -46,4 +46,5 @@ __all__ = [
     'get_partners_list',
     'check_delegation_deadlines',
     'restore_task',
+    'analyze_tasks',
 ]

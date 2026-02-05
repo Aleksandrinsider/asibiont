@@ -185,7 +185,7 @@ async def send_error_notification_to_bot(error_message, user_id=None, error_deta
         # Не выбрасываем исключение, чтобы не прерывать основной поток
 
 
-async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None, ai_content=None):
+async def process_tool_calls(tool_calls, intent, message, user_id, db_session, session_http, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question=False, current_time=None, ai_content=None, current_date_str=None, user_username=None, user_memory=None, subscription_tier=None):
     """Обрабатывает tool calls и возвращает естественный ответ
     
     Args:
@@ -1028,26 +1028,25 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 fallback_message = list_tasks_result
             # Для других случаев ai_context уже установлен выше
 
-            # Добавляем контекст профиля для list_tasks
+            # Добавляем контекст профиля для ВСЕХ tool calls
             profile_context = ""
-            if has_list_tasks and list_tasks_result:
-                try:
-                    db_session_local = Session()
-                    prof = db_session_local.query(UserProfile).filter_by(user_id=user_id).first()
-                    if prof:
-                        profile_data = []
-                        if prof.city: profile_data.append(f"город: {prof.city}")
-                        if prof.company: profile_data.append(f"компания: {prof.company}")
-                        if prof.position: profile_data.append(f"должность: {prof.position}")
-                        if prof.interests: profile_data.append(f"интересы: {prof.interests}")
-                        if prof.skills: profile_data.append(f"навыки: {prof.skills}")
-                        if prof.goals: profile_data.append(f"цели: {prof.goals}")
-                        if prof.current_plans: profile_data.append(f"планы: {prof.current_plans}")
-                        if profile_data:
-                            profile_context = f"\n\nДАННЫЕ ПОЛЬЗОВАТЕЛЯ: {', '.join(profile_data)}"
-                    db_session_local.close()
-                except Exception as e:
-                    logger.warning(f"Failed to get profile context: {e}")
+            try:
+                db_session_local = Session()
+                prof = db_session_local.query(UserProfile).filter_by(user_id=user_id).first()
+                if prof:
+                    profile_data = []
+                    if prof.city: profile_data.append(f"город: {prof.city}")
+                    if prof.company: profile_data.append(f"компания: {prof.company}")
+                    if prof.position: profile_data.append(f"должность: {prof.position}")
+                    if prof.interests: profile_data.append(f"интересы: {prof.interests}")
+                    if prof.skills: profile_data.append(f"навыки: {prof.skills}")
+                    if prof.goals: profile_data.append(f"цели: {prof.goals}")
+                    if prof.current_plans: profile_data.append(f"планы: {prof.current_plans}")
+                    if profile_data:
+                        profile_context = f"\n\nДАННЫЕ ПОЛЬЗОВАТЕЛЯ: {', '.join(profile_data)}"
+                db_session_local.close()
+            except Exception as e:
+                logger.warning(f"Failed to get profile context: {e}")
 
             # ФОРМИРУЕМ КОНТЕКСТ ДЛЯ AI: результаты + профиль + инструкции
             # Ограничиваем длину ai_context для предотвращения превышения лимита токенов
@@ -1059,9 +1058,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 {ai_context}{profile_context}
 
 ИНСТРУКЦИЯ ДЛЯ ФИНАЛЬНОГО ОТВЕТА:
-Сгенерируй ЕСТЕСТВЕННЫЙ, ПЕРСОНАЛИЗИРОВАННЫЙ ответ, который интегрирует результат действия в живой диалог:
+Сгенерируй ЕСТЕСТВЕННЫЙ, ГЛУБОКО ПЕРСОНАЛИЗИРОВАННЫЙ ответ, который интегрирует результат действия в живой диалог:
 
-1. СТИЛЬ И ТОН:
+1. ОБЯЗАТЕЛЬНАЯ ПЕРСОНАЛИЗАЦИЯ (КРИТИЧНО):
+   - В КАЖДОМ ответе ОБЯЗАТЕЛЬНО упомяни минимум 3 разных элемента из профиля пользователя
+   - Используй навыки, интересы, цели, компанию, город в каждом совете
+   - Адаптируй советы под конкретные данные пользователя
+   - Пример: "Учитывая твои навыки в Python и интерес к стартапам, эта задача поможет в развитии AI-проекта"
+
+2. СТИЛЬ И ТОН:
    - Общайся как умный друг, НЕ как робот-помощник
    - Избегай формальности: "Отлично!", "Замечательно!", "Конечно!"
    - Разнообразь структуру ответов, не используй шаблоны
@@ -1116,8 +1121,15 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
             logger.info(f"[AI CONTEXT] fallback_message={fallback_message[:200]}")
             logger.info(f"[AI CONTEXT] tool_context_msg={tool_context_msg[:300]}")
 
+            # Создаем расширенный system_prompt для персонализированного ответа
+            natural_response_prompt = get_extended_system_prompt(
+                user_now, current_time_str, current_date_str, user_username, mentions_str, 
+                user_memory, context=None, intent=None, subscription_tier=subscription_tier, 
+                message_type='tool_response', weather_info=None, news_info=None
+            )
+
             # Добавляем контекст в messages
-            messages = [{"role": "system", "content": system_prompt}]
+            messages = [{"role": "system", "content": natural_response_prompt}]
             messages.append({"role": "user", "content": original_message})
             messages.append({"role": "user", "content": tool_context_msg})
 
@@ -2526,6 +2538,11 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             tool_choice = "none"
             parallel_tool_calls = False
             logger.info(f"[TOOL CHOICE] NONE for system message")
+        elif intent.get('type') == 'conversation':
+            # Conversation - без tools, только текст
+            tool_choice = "none"
+            parallel_tool_calls = False
+            logger.info(f"[TOOL CHOICE] NONE for conversation")
         else:
             # AI сам решает - доверяем его интеллекту
             tool_choice = "auto"
@@ -2533,15 +2550,21 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             
             # Принудительный вызов ТОЛЬКО для явных команд
             action_intents = [
-                'add_task', 'get_task_details', 'complete_task', 
+                'add_task', 'get_task_details', 'complete_task', 'list_tasks',
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
                 'update_profile', 'show_profile', 'find_partners', 'find_relevant_contacts_for_task', 'update_user_memory', 'delete_all_tasks'
             ]
             logger.info(f"[TOOL CHOICE CHECK] intent type: '{intent.get('type')}', in action_intents: {intent.get('type') in action_intents}")
             print(f"[DEBUG] TOOL CHOICE CHECK: intent={intent}, type={intent.get('type')}")  # DEBUG OUTPUT
             if intent.get('type') in action_intents:
+                # СПЕЦИАЛЬНЫЕ ПРАВИЛА: некоторые intents ВСЕГДА требуют specific tool
+                always_specific = ['list_tasks', 'add_task', 'complete_task', 'find_partners', 'find_relevant_contacts_for_task']
+                if intent.get('type') in always_specific:
+                    tool_choice = {"type": "function", "function": {"name": intent['type']}}
+                    logger.info(f"[TOOL CHOICE] ALWAYS SPECIFIC for {intent['type']}")
+                    print(f"[DEBUG] ALWAYS SPECIFIC tool_choice: {intent['type']}")  # DEBUG OUTPUT
                 # Если confidence высокий, используем конкретный tool
-                if intent.get('confidence', 0) > 0.6:
+                elif intent.get('confidence', 0) > 0.6:
                     tool_choice = {"type": "function", "function": {"name": intent['type']}}
                     logger.info(f"[TOOL CHOICE] SPECIFIC for {intent['type']} (confidence: {intent.get('confidence')})")
                     print(f"[DEBUG] SPECIFIC tool_choice: {intent['type']}")  # DEBUG OUTPUT
@@ -2725,8 +2748,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                             func_name = safe_extract_tool_info(tc)['function']
                                             logger.info(f"[AI RESPONSE] Calling tool: {func_name}")
                                     else:
-                                        logger.warning(f"[AI RESPONSE] No tool_calls in response! Expected tool for message: {original_message[:100]}")
-                                        print(f"[DEBUG] NO TOOL_CALLS! Message response: {message_response}")  # DEBUG
+                                        # Проверяем, ожидались ли tool calls
+                                        expected_tools = tool_choice not in ["none", None] and not (isinstance(tool_choice, dict) and tool_choice.get("type") == "function" and tool_choice.get("function", {}).get("name") in ["conversation"])
+                                        if expected_tools:
+                                            logger.warning(f"[AI RESPONSE] No tool_calls in response! Expected tool for message: {original_message[:100]}")
+                                            print(f"[DEBUG] NO TOOL_CALLS! Message response: {message_response}")  # DEBUG
+                                        else:
+                                            logger.info(f"[AI RESPONSE] No tool_calls expected for this message type")
                                 else:
                                     logger.error(f"No choices in API response: {result}")
                                     content = "Извините, произошла ошибка при обработке запроса."
@@ -2768,7 +2796,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                             # ПЕРВИЧНАЯ ОБРАБОТКА TOOL CALLS
                             validation_failed = False
                             if tool_calls:
-                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=content)
+                                result = await process_tool_calls(tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=content, current_date_str=current_date_str, user_username=user_username, user_memory=user_memory, subscription_tier=subscription_tier)
                                 # Всегда возвращаем информацию о tool_calls, даже если result пустой
                                 tool_calls_info = [safe_extract_tool_info(tc) for tc in tool_calls]
                                 print(f"[DEBUG] Returning with tool_calls: {tool_calls_info}")  # DEBUG
@@ -2886,7 +2914,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                                                     
                                                     if retry_tool_calls:
                                                         logger.info(f"[HALLUCINATION FIX] Retry successful, got {len(retry_tool_calls)} tool calls")
-                                                        result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=retry_content)
+                                                        result = await process_tool_calls(retry_tool_calls, intent, message, user_id, db_session, session, url, headers, system_prompt, user_now, current_time_str, original_message, mentions_str, is_advice_question, current_time=user_now, ai_content=retry_content, current_date_str=current_date_str, user_username=user_username, user_memory=user_memory, subscription_tier=subscription_tier)
                                                         if result:
                                                             return {'response': result, 'tool_calls': [safe_extract_tool_info(tc) for tc in retry_tool_calls]}
                                                     else:

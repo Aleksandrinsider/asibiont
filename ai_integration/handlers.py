@@ -4773,5 +4773,101 @@ def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
         return "❌ Не удалось получить информацию о профиле"
 
 
+async def analyze_tasks(user_id, session=None):
+    """Анализирует ближайшие задачи и предлагает немедленные действия"""
+    should_close = False
+    if session is None:
+        session = Session()
+        should_close = True
+
+    try:
+        # Получаем пользователя для timezone
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        # Получаем ближайшие задачи (сегодня-завтра)
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        
+        # Конвертируем в timezone пользователя
+        if user.timezone:
+            try:
+                user_tz = pytz.timezone(user.timezone)
+                user_now = now.astimezone(user_tz)
+                user_today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+                user_today_end = user_today_start + timedelta(days=1)
+                user_tomorrow_end = user_today_start + timedelta(days=2)
+            except:
+                user_now = now
+                user_today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                user_today_end = user_today_start + timedelta(days=1)
+                user_tomorrow_end = user_today_start + timedelta(days=2)
+        else:
+            user_now = now
+            user_today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            user_today_end = user_today_start + timedelta(days=1)
+            user_tomorrow_end = user_today_start + timedelta(days=2)
+
+        # Получаем задачи на сегодня и завтра
+        tasks_today = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'pending',
+            Task.reminder_time >= user_today_start,
+            Task.reminder_time < user_today_end
+        ).order_by(Task.reminder_time).all()
+
+        tasks_tomorrow = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'pending',
+            Task.reminder_time >= user_today_end,
+            Task.reminder_time < user_tomorrow_end
+        ).order_by(Task.reminder_time).all()
+
+        # Анализируем и предлагаем действия
+        analysis = []
+        
+        if tasks_today:
+            analysis.append(f"📅 Сегодня ({len(tasks_today)} задач):")
+            for task in tasks_today[:3]:  # Показываем максимум 3
+                time_str = task.reminder_time.astimezone(user_tz).strftime('%H:%M') if user.timezone else task.reminder_time.strftime('%H:%M')
+                analysis.append(f"• {time_str}: {task.title}")
+        
+        if tasks_tomorrow:
+            analysis.append(f"\n📅 Завтра ({len(tasks_tomorrow)} задач):")
+            for task in tasks_tomorrow[:2]:  # Показываем максимум 2
+                time_str = task.reminder_time.astimezone(user_tz).strftime('%H:%M') if user.timezone else task.reminder_time.strftime('%H:%M')
+                analysis.append(f"• {time_str}: {task.title}")
+
+        if not tasks_today and not tasks_tomorrow:
+            analysis.append("У тебя нет ближайших задач. Отличная возможность начать что-то новое!")
+
+        # Предлагаем немедленные действия
+        suggestions = []
+        if tasks_today:
+            next_task = tasks_today[0]
+            time_diff = (next_task.reminder_time - user_now).total_seconds() / 3600
+            if time_diff <= 2:  # Следующая задача в ближайшие 2 часа
+                suggestions.append(f"Ближайшая задача '{next_task.title}' через {int(time_diff * 60)} минут")
+            elif time_diff <= 4:  # В ближайшие 4 часа
+                suggestions.append(f"У тебя есть время подготовиться к '{next_task.title}' в {next_task.reminder_time.astimezone(user_tz).strftime('%H:%M')}")
+
+        if not tasks_today and not tasks_tomorrow:
+            suggestions.append("Предлагаю создать задачу на сегодня - например, 15-минутную прогулку или изучение новой технологии")
+
+        result = "\n".join(analysis)
+        if suggestions:
+            result += "\n\n💡 " + "\n💡 ".join(suggestions)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Ошибка при анализе задач пользователя {user_id}: {e}")
+        return "❌ Не удалось проанализировать задачи"
+    finally:
+        if should_close and session:
+            session.close()
+
+
 
 
