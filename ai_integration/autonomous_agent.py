@@ -24,11 +24,44 @@ class HybridAutonomousAgent:
 
     def __init__(self):
         self.execution_history = []  # История выполнения
-        self.available_tools = self._get_available_tools()  # Доступные инструменты
+        self.available_tools = self._discover_handlers()  # Динамическое обнаружение handlers
         self.context_memory = []  # Краткосрочная память контекста
+        self.success_patterns = {}  # Паттерны успешных действий
+        self.user_preferences = {}  # Предпочтения пользователей
 
-    def _get_available_tools(self):
-        """Получить список доступных инструментов (handlers)"""
+    def _discover_handlers(self):
+        """Динамически обнаружить все доступные handlers"""
+        from . import handlers
+        import inspect
+        
+        discovered = {}
+        
+        # Автоматически находим все функции в handlers
+        for name, func in inspect.getmembers(handlers, inspect.isfunction):
+            if not name.startswith('_'):  # Игнорируем приватные
+                # Извлекаем сигнатуру функции
+                sig = inspect.signature(func)
+                params = [p for p in sig.parameters.keys() if p != 'user_id']
+                
+                # Пытаемся получить описание из docstring
+                doc = inspect.getdoc(func) or f"Функция {name}"
+                first_line = doc.split('\n')[0]
+                
+                discovered[name] = {
+                    "description": first_line,
+                    "params": params,
+                    "required": []  # AI сам определит обязательные
+                }
+        
+        # Добавляем базовый набор, если автообнаружение не сработало
+        if not discovered:
+            discovered = self._get_default_tools()
+        
+        logger.info(f"[AGENT] Discovered {len(discovered)} handlers: {list(discovered.keys())}")
+        return discovered
+    
+    def _get_default_tools(self):
+        """Базовый набор инструментов (fallback)"""
         return {
             "add_task": {
                 "description": "Создать новую задачу с напоминанием",
@@ -118,7 +151,7 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: AI планирует стратегию выполнения запроса
+        ШАГ 1: AI планирует стратегию выполнения запроса с учетом предыдущего опыта
         Возвращает список действий, которые нужно выполнить
         """
         
@@ -135,6 +168,25 @@ class HybridAutonomousAgent:
                     "actions": [],
                     "response_strategy": "сообщить об ошибке"
                 }
+            
+            # Получаем задачи
+            tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status != 'completed'
+            ).limit(10).all()
+            tasks_summary = [{"title": t.title, "due_date": str(t.due_date) if t.due_date else None} for t in tasks]
+            
+            # Анализируем историю для похожих паттернов
+            learning_context = ""
+            recent_success = [
+                e for e in self.execution_history[-10:]
+                if e.get('user_id') == user_id and e.get('success')
+            ]
+            if recent_success:
+                learning_context = "\n\nУСПЕШНЫЙ ОПЫТ ПОЛЬЗОВАТЕЛЯ:\n"
+                for entry in recent_success[-3:]:
+                    actions_used = ", ".join([a.get('tool', '') for a in entry.get('plan', {}).get('actions', [])])
+                    learning_context += f"- '{entry['message'][:50]}' → использовал: {actions_used}\n"
             
             # Получаем задачи
             tasks = session.query(Task).filter(
@@ -171,6 +223,7 @@ class HybridAutonomousAgent:
 
 ТЕКУЩИЕ ЗАДАЧИ:
 {json.dumps(tasks_summary, indent=2, ensure_ascii=False)}
+{learning_context}
 
 ЗАДАЧА: Проанализируй запрос и составь ПЛАН действий в JSON формате:
 
@@ -186,6 +239,7 @@ class HybridAutonomousAgent:
 - Минимум действий для достижения цели
 - Извлекай параметры из запроса пользователя
 - Для задач про активности добавляй find_relevant_contacts_for_task
+- УЧИСЬ: примени успешные паттерны из истории если они релевантны
 """
 
         messages = [
@@ -375,18 +429,25 @@ class HybridAutonomousAgent:
                 user_id
             )
             
-            # Сохраняем в историю
-            self.execution_history.append({
+            # Сохраняем в историю и обучаемся
+            entry = {
                 'message': user_message,
+                'user_id': user_id,
                 'plan': plan,
                 'results': execution_results,
                 'response': response,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            })
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'success': all(r.get('success', False) for r in execution_results)
+            }
+            self.execution_history.append(entry)
+            
+            # Обучаемся на успешных паттернах
+            if entry['success'] and actions:
+                self._learn_from_success(user_message, plan, user_id)
             
             # Ограничиваем размер истории
-            if len(self.execution_history) > 20:
-                self.execution_history = self.execution_history[-20:]
+            if len(self.execution_history) > 50:  # Больше истории для обучения
+                self.execution_history = self.execution_history[-50:]
             
             return response
             
@@ -395,6 +456,38 @@ class HybridAutonomousAgent:
             import traceback
             traceback.print_exc()
             return "Извините, произошла ошибка при обработке запроса. Попробуйте переформулировать."
+
+
+    def _learn_from_success(self, message, plan, user_id):
+        """Обучение на успешных паттернах"""
+        intent = plan.get('intent', '')
+        actions = plan.get('actions', [])
+        
+        # Сохраняем успешный паттерн
+        pattern_key = f"{user_id}:{intent}"
+        if pattern_key not in self.success_patterns:
+            self.success_patterns[pattern_key] = []
+        
+        self.success_patterns[pattern_key].append({
+            'message': message,
+            'actions': [a.get('tool') for a in actions],
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Ограничиваем размер паттернов
+        if len(self.success_patterns[pattern_key]) > 5:
+            self.success_patterns[pattern_key] = self.success_patterns[pattern_key][-5:]
+    
+    def get_similar_patterns(self, user_id, intent):
+        """Получить похожие успешные паттерны"""
+        pattern_key = f"{user_id}:{intent}"
+        return self.success_patterns.get(pattern_key, [])
+    
+    def adapt_to_user(self, user_id, preference_key, value):
+        """Адаптация под предпочтения пользователя"""
+        if user_id not in self.user_preferences:
+            self.user_preferences[user_id] = {}
+        self.user_preferences[user_id][preference_key] = value
 
 
 # Глобальный экземпляр агента
