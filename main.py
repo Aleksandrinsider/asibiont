@@ -6166,6 +6166,19 @@ async def ensure_database_schema(app):
         else:
             logger.info("вњ… pending_delegator_report column already exists")
             
+        # Check if goal_id column exists
+        if 'goal_id' not in columns:
+            logger.info("Adding goal_id column to tasks table...")
+            with engine.connect() as conn:
+                conn.execute(sql_text("""
+                    ALTER TABLE tasks 
+                    ADD COLUMN goal_id INTEGER REFERENCES goals(id)
+                """))
+                conn.commit()
+            logger.info("вњ… Successfully added goal_id column")
+        else:
+            logger.info("вњ… goal_id column already exists")
+            
     except Exception as e:
         logger.error(f"Error during database schema check: {e}")
 
