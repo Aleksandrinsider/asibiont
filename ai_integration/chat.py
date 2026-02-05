@@ -22,7 +22,7 @@ from .utils import (
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
 from .handlers import (  # noqa: F401
-    add_task, delete_all_tasks, complete_task, reschedule_task,
+    add_task, list_tasks, complete_task, reschedule_task,
     delegate_task_with_session, delegate_task, check_subscription_status, accept_delegated_task,
     reject_delegated_task, get_delegation_progress, cancel_delegation, edit_task,
     list_tasks, get_partners_list, find_partners,
@@ -41,7 +41,7 @@ system_prompt = "Ты - ASI Biont, умный AI-помощник для упр�
 
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
-    """Новая функция чата с использованием автономного агента"""
+    """Функция чата с использованием tools-based подхода"""
 
     logger.info(f"[CHAT_WITH_AI] START - user_id={user_id}, message='{message[:50]}...'")
 
@@ -50,8 +50,46 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
 
     try:
-        # Используем автономного агента вместо старой логики
-        return await autonomous_chat_with_ai(message, context, user_id, file_content, db_session, message_type)
+        # Получаем информацию о пользователе
+        session = Session() if db_session is None else db_session
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                logger.error(f"[CHAT_WITH_AI] User not found: {user_id}")
+                return {'response': "Пользователь не найден", 'tool_calls': []}
+
+            # Получаем профиль пользователя
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+            # Получаем системный промпт
+            system_prompt = get_extended_system_prompt(
+                user_now=None,
+                current_time_str=None,
+                current_date_str=None,
+                user_username=user.username or "пользователь",
+                mentions_str="",
+                user_memory=user.memory or "",
+                context=context,
+                intent=None,
+                subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
+                message_type=message_type,
+                weather_info=None,
+                news_info=None
+            )
+
+            # Вызываем AI с tools
+            response_data = await call_ai_with_tools(
+                user_message=message,
+                system_prompt=system_prompt,
+                user_id=user_id,
+                context=context
+            )
+
+            return response_data
+
+        finally:
+            if db_session is None:
+                session.close()
 
     except Exception as e:
         logger.error(f"[CHAT_WITH_AI] ERROR: {e}")
@@ -1027,6 +1065,152 @@ def validate_response_compliance(content, msg_type):
             issues.append("No completion confirmation")
     
     return len(issues) == 0, issues
+
+
+async def call_ai_with_tools(user_message, system_prompt, user_id, context=None):
+    """Вызов AI с инструментами для обработки запроса"""
+
+    try:
+        # Создаем сообщение для AI
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        # Добавляем контекст разговора
+        if context:
+            for msg in context[-5:]:  # Последние 5 сообщений
+                if msg.get('user'):
+                    messages.append({"role": "user", "content": msg['user']})
+                if msg.get('agent'):
+                    messages.append({"role": "assistant", "content": msg['agent']})
+
+        # Добавляем текущее сообщение пользователя
+        messages.append({"role": "user", "content": user_message})
+
+        # Вызываем AI API
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "model": DEEPSEEK_MODEL,
+                "messages": messages,
+                "tools": TOOLS,
+                "tool_choice": "auto",
+                "temperature": 0.7,
+                "max_tokens": 1000
+            }
+
+            headers = {
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            }
+
+            logger.info(f"[AI_CALL] Sending request to {DEEPSEEK_MODEL}")
+
+            async with session.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.info(f"[AI_CALL] Response received, choices: {len(data.get('choices', []))}")
+
+                    choice = data['choices'][0]
+                    message = choice['message']
+
+                    # Проверяем, есть ли tool calls
+                    tool_calls = message.get('tool_calls', [])
+                    response_text = message.get('content', '')
+
+                    # Если есть tool calls, выполняем их
+                    if tool_calls:
+                        logger.info(f"[AI_CALL] Executing {len(tool_calls)} tool calls")
+                        tool_results = []
+
+                        for tool_call in tool_calls:
+                            try:
+                                function_name = tool_call['function']['name']
+                                function_args = json.loads(tool_call['function']['arguments'])
+
+                                logger.info(f"[TOOL_CALL] {function_name} with args: {function_args}")
+
+                                # Выполняем функцию
+                                if function_name == 'add_task':
+                                    result = add_task(
+                                        user_id=user_id,
+                                        title=function_args.get('title'),
+                                        description=function_args.get('description', ''),
+                                        reminder_time=function_args.get('reminder_time'),
+                                        is_recurring=function_args.get('is_recurring', False),
+                                        recurrence_pattern=function_args.get('recurrence_pattern'),
+                                        recurrence_interval=function_args.get('recurrence_interval')
+                                    )
+                                elif function_name == 'complete_task':
+                                    result = complete_task(user_id=user_id, task_title=function_args.get('task_title'))
+                                elif function_name == 'list_tasks':
+                                    result = list_tasks(user_id=user_id)
+                                elif function_name == 'reschedule_task':
+                                    result = reschedule_task(
+                                        user_id=user_id,
+                                        task_title=function_args.get('task_title'),
+                                        new_time=function_args.get('new_time')
+                                    )
+                                elif function_name == 'find_relevant_contacts_for_task':
+                                    result = find_relevant_contacts_for_task(
+                                        user_id=user_id,
+                                        task_description=function_args.get('task_description'),
+                                        limit=function_args.get('limit', 5)
+                                    )
+                                elif function_name == 'update_profile':
+                                    result = update_profile(user_id=user_id, **function_args)
+                                elif function_name == 'analyze_tasks':
+                                    result = analyze_tasks(user_id=user_id)
+                                else:
+                                    result = f"Функция {function_name} не поддерживается"
+
+                                tool_results.append(str(result))
+
+                            except Exception as e:
+                                logger.error(f"[TOOL_CALL] Error executing {function_name}: {e}")
+                                tool_results.append(f"Ошибка при выполнении {function_name}: {e}")
+
+                        # Формируем итоговый ответ
+                        if response_text:
+                            final_response = response_text
+                        else:
+                            final_response = "Выполнено: " + "; ".join(tool_results)
+
+                    else:
+                        # Нет tool calls, возвращаем текстовый ответ
+                        final_response = response_text or "Извините, я не понял запрос"
+
+                    # Проверяем соответствие промпту
+                    is_compliant, issues = validate_response_compliance(final_response, "response")
+                    if not is_compliant:
+                        logger.warning(f"[RESPONSE] Non-compliant response: {issues}")
+                        final_response = "Извините, произошла ошибка при формировании ответа. Попробуйте переформулировать запрос."
+
+                    return {
+                        'response': final_response,
+                        'tool_calls': tool_calls
+                    }
+
+                else:
+                    error_text = await response.text()
+                    logger.error(f"[AI_CALL] API error {response.status}: {error_text}")
+                    return {
+                        'response': "Извините, произошла ошибка при обращении к AI. Попробуйте позже.",
+                        'tool_calls': []
+                    }
+
+    except Exception as e:
+        logger.error(f"[AI_CALL] Exception: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'response': f"Извините, произошла техническая ошибка: {str(e)}",
+            'tool_calls': []
+        }
 
 
 # Функции для работы с задачами
