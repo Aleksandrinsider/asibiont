@@ -3930,43 +3930,45 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
 
         analysis = []
         
-        # Анализ сроков
+        # Анализ только ближайших задач (сегодня-завтра)
         now = datetime.now(timezone.utc)
-        urgent_tasks = [t for t in tasks if t.due_date and (t.due_date - now).total_seconds() < 3600]  # менее часа
-        if urgent_tasks:
-            analysis.append(f"🚨 Срочные задачи (менее часа): {', '.join([t.title for t in urgent_tasks])}")
+        tomorrow = now + timedelta(days=1)
+        urgent_tasks = [t for t in tasks if t.due_date and t.due_date <= tomorrow]
         
-        # Анализ пересечений по времени
+        if urgent_tasks:
+            analysis.append(f"🚨 Ближайшие задачи: {', '.join([t.title for t in urgent_tasks])}")
+        
+        # Анализ конфликтов только на ближайшие дни
         time_conflicts = []
-        for i, task1 in enumerate(tasks):
-            for task2 in tasks[i+1:]:
+        for i, task1 in enumerate(urgent_tasks):
+            for task2 in urgent_tasks[i+1:]:
                 if task1.due_date and task2.due_date:
                     time_diff = abs((task1.due_date - task2.due_date).total_seconds())
                     if time_diff < 1800:  # менее 30 минут
                         time_conflicts.append(f"'{task1.title}' и '{task2.title}'")
         
         if time_conflicts:
-            analysis.append(f"⚠️ Возможные конфликты по времени: {', '.join(time_conflicts)}")
+            analysis.append(f"⚠️ Конфликты сегодня-завтра: {', '.join(time_conflicts)}")
         
-        # Рекомендации
+        # Простые рекомендации для немедленных действий
         recommendations = []
-        if len(tasks) > 5:
-            recommendations.append("У тебя много задач. Рассмотри приоритизацию или делегирование.")
+        if len(urgent_tasks) > 3:
+            recommendations.append("Слишком много дел на ближайшие дни. Начни с самой срочной.")
         
         if urgent_tasks:
-            recommendations.append("Сосредоточься на срочных задачах сначала.")
+            recommendations.append("Сосредоточься на ближайших задачах - что можно сделать прямо сейчас?")
         
         if time_conflicts:
-            recommendations.append("Перенеси некоторые задачи, чтобы избежать пересечений.")
+            recommendations.append("Разбери конфликты: перенеси одну задачу или начни с более важной.")
         
-        # Анализ прогресса
+        # Анализ просроченных задач
         overdue_tasks = [t for t in tasks if t.due_date and t.due_date < now]
         if overdue_tasks:
-            recommendations.append(f"Просроченные задачи: {', '.join([t.title for t in overdue_tasks])}. Обнови сроки или статус.")
+            recommendations.append(f"Просрочено: {', '.join([t.title for t in overdue_tasks])}. Что с ними делать - перенести или отменить?")
         
-        result = "📊 Анализ задач:\n" + "\n".join(analysis) if analysis else "Все задачи в порядке."
+        result = "📊 Ближайшие задачи:\n" + "\n".join(analysis) if analysis else "На ближайшие дни задач нет."
         if recommendations:
-            result += "\n\n💡 Рекомендации:\n" + "\n".join(recommendations)
+            result += "\n\n💡 Что делать сейчас:\n" + "\n".join(recommendations)
         
         return result
 
@@ -4010,46 +4012,39 @@ def auto_reminder(user_id: int, task_title: str, reminder_type: str, session=Non
         if not task:
             return f"Задача '{task_title}' не найдена."
 
-        # Создать автоматические напоминания на основе типа
+        # Создать напоминания только на ближайшее время
         now = datetime.now(timezone.utc)
         reminders = []
         
         if reminder_type == 'progress':
-            # Напоминания о прогрессе каждые 2 часа
-            for hours in [2, 4, 6]:
-                reminder_time = now + timedelta(hours=hours)
+            # Короткие напоминания для проверки прогресса
+            for minutes in [15, 30, 60]:
+                reminder_time = now + timedelta(minutes=minutes)
                 if task.due_date and reminder_time < task.due_date:
-                    reminders.append(f"Прогресс через {hours} часов")
+                    reminders.append(f"Через {minutes} минут проверить прогресс")
         
         elif reminder_type == 'deadline':
-            # Напоминания перед дедлайном
+            # Напоминание только если дедлайн близко
             if task.due_date:
                 time_to_deadline = task.due_date - now
-                if time_to_deadline.total_seconds() > 3600:  # более часа
-                    reminders.append("За час до дедлайна")
-                if time_to_deadline.total_seconds() > 86400:  # более дня
-                    reminders.append("За день до дедлайна")
+                if time_to_deadline.total_seconds() > 0 and time_to_deadline.total_seconds() < 7200:  # менее 2 часов
+                    reminders.append("Через час проверить готовность")
         
         elif reminder_type == 'context':
-            # Контекстные напоминания (утро, вечер)
+            # Только утреннее напоминание если сейчас утро
             user_tz = session.query(User).filter_by(id=user_id).first().timezone or 'Europe/Moscow'
             tz = pytz.timezone(user_tz)
             user_now = now.astimezone(tz)
             
-            # Утреннее напоминание
-            morning = user_now.replace(hour=9, minute=0, second=0, microsecond=0)
-            if morning > user_now:
-                reminders.append("Утреннее напоминание в 9:00")
-            
-            # Вечернее напоминание
-            evening = user_now.replace(hour=18, minute=0, second=0, microsecond=0)
-            if evening > user_now:
-                reminders.append("Вечернее напоминание в 18:00")
+            if user_now.hour < 12:  # утро
+                morning = user_now.replace(hour=9, minute=0, second=0, microsecond=0)
+                if morning > user_now:
+                    reminders.append("Сегодня в 9:00 напомнить о задаче")
 
         if reminders:
-            return f"✅ Настроены автоматические напоминания для '{task.title}': {', '.join(reminders)}"
+            return f"✅ Настроил напоминания для '{task.title}': {', '.join(reminders)}"
         else:
-            return f"Для задачи '{task.title}' не требуется дополнительных напоминаний."
+            return f"Для '{task.title}' дополнительные напоминания не нужны - действуй сейчас!"
 
     except Exception as e:
         logger.error(f"Ошибка при настройке напоминаний для пользователя {user_id}: {e}")
