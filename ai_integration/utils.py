@@ -55,6 +55,92 @@ finance_cache = {}
 background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="api_cache")
 
 
+def _redis_get(key):
+    """Get data from Redis cache"""
+    if redis_client:
+        try:
+            return redis_client.get(key)
+        except Exception as e:
+            logger.warning(f"[REDIS] Failed to get {key}: {e}")
+    return None
+
+
+def _redis_set(key, value, ttl_seconds):
+    """Set data in Redis cache with TTL"""
+    if redis_client:
+        try:
+            redis_client.setex(key, ttl_seconds, value)
+        except Exception as e:
+            logger.warning(f"[REDIS] Failed to set {key}: {e}")
+
+
+def _memory_get(cache_dict, key):
+    """Get data from in-memory cache"""
+    return cache_dict.get(key)
+
+
+def _memory_set(cache_dict, key, value):
+    """Set data in in-memory cache"""
+    cache_dict[key] = value
+
+
+def refresh_weather_cache_async(city, cache_ttl_minutes):
+    """Refresh weather cache asynchronously"""
+    background_executor.submit(_refresh_weather_cache, city, cache_ttl_minutes)
+
+
+def _refresh_weather_cache(city, cache_ttl_minutes):
+    """Internal function to refresh weather cache"""
+    try:
+        weather_data = _load_weather_sync(city)
+        if weather_data:
+            cache_key = f"weather_{city.lower()}"
+            _redis_set(cache_key, weather_data, cache_ttl_minutes * 60)
+            _memory_set(weather_cache, cache_key, weather_data)
+            logger.info(f"[WEATHER CACHE] Refreshed cache for {city}")
+    except Exception as e:
+        logger.error(f"[WEATHER CACHE] Failed to refresh cache for {city}: {e}")
+
+
+def refresh_news_cache_async(city, cache_ttl_minutes):
+    """Refresh news cache asynchronously"""
+    background_executor.submit(_refresh_news_cache, city, cache_ttl_minutes)
+
+
+def _refresh_news_cache(city, cache_ttl_minutes):
+    """Internal function to refresh news cache"""
+    try:
+        news_data = _load_news_sync(city)
+        if news_data:
+            if city and city.strip():
+                cache_key = f"news_{city.lower().strip()}"
+            else:
+                cache_key = "russian_news_general"
+            _redis_set(cache_key, news_data, cache_ttl_minutes * 60)
+            _memory_set(news_cache, cache_key, news_data)
+            logger.info(f"[NEWS CACHE] Refreshed cache for {cache_key}")
+    except Exception as e:
+        logger.error(f"[NEWS CACHE] Failed to refresh cache for {city}: {e}")
+
+
+def refresh_finance_cache_async(symbol, asset_type, cache_ttl_minutes):
+    """Refresh finance cache asynchronously"""
+    background_executor.submit(_refresh_finance_cache, symbol, asset_type, cache_ttl_minutes)
+
+
+def _refresh_finance_cache(symbol, asset_type, cache_ttl_minutes):
+    """Internal function to refresh finance cache"""
+    try:
+        finance_data = _load_finance_sync(symbol, asset_type)
+        if finance_data:
+            cache_key = f"{asset_type}_{symbol.lower()}"
+            _redis_set(cache_key, finance_data, cache_ttl_minutes * 60)
+            _memory_set(finance_cache, cache_key, finance_data)
+            logger.info(f"[FINANCE CACHE] Refreshed cache for {symbol} ({asset_type})")
+    except Exception as e:
+        logger.error(f"[FINANCE CACHE] Failed to refresh cache for {symbol} ({asset_type}): {e}")
+
+
 def determine_timezone_from_time(user_time_str, user_id):
     """Определяет timezone пользователя на основе введенного времени"""
     import re
@@ -440,6 +526,10 @@ def get_context_from_db(user_id, limit=10):
         return []
     finally:
         session.close()
+
+
+def get_weather_info(city, cache_ttl_minutes=30):
+    """Get weather information for a city with caching"""
     # Нормализуем город
     city = city.strip()
     if not city:
@@ -468,6 +558,13 @@ def get_context_from_db(user_id, limit=10):
     # Нет данных в кэше - загружаем синхронно (только при первом запросе)
     logger.info(f"[WEATHER] No cache for {city}, loading synchronously")
     return _load_weather_sync(city)
+
+
+def _load_weather_sync(city):
+    """Load weather data synchronously from API"""
+    try:
+        api_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru"
+        response = requests.get(api_url, timeout=10)
         if response.status_code == 200:
             data = response.json()
             temp = data['main']['temp']
@@ -489,6 +586,10 @@ def get_context_from_db(user_id, limit=10):
     except Exception as e:
         logger.error(f"[WEATHER] Error fetching weather for {city}: {e}")
         return None
+
+
+def get_news_info(city=None, cache_ttl_minutes=120):
+    """Get news information with caching"""
     # Ключ кеша зависит от города
     if city and city.strip():
         cache_key = f"news_{city.lower().strip()}"
@@ -519,6 +620,18 @@ def get_context_from_db(user_id, limit=10):
     # Нет данных в кэше - загружаем синхронно (только при первом запросе)
     logger.info(f"[NEWS] No cache for {cache_key}, loading synchronously")
     return _load_news_sync(city)
+
+
+def _load_news_sync(city=None):
+    """Load news data synchronously from API"""
+    try:
+        # Ключ кеша зависит от города
+        if city and city.strip():
+            cache_key = f"news_{city.lower().strip()}"
+            search_query = f"{city} Россия"
+        else:
+            cache_key = "russian_news_general"
+            search_query = "Россия"
         # Запрашиваем новости
         api_url = f"https://newsapi.org/v2/everything?q={search_query}&language=ru&sortBy=publishedAt&apiKey={NEWSAPI_API_KEY}&pageSize=5"
         response = requests.get(api_url, timeout=10)
@@ -552,6 +665,10 @@ def get_context_from_db(user_id, limit=10):
     except Exception as e:
         logger.error(f"[NEWS] Error fetching news: {e}")
         return None
+
+
+def get_finance_info(symbol, asset_type='stock', cache_ttl_minutes=15):
+    """Get finance information with caching"""
     cache_key = f"{asset_type}_{symbol.lower()}"
     ttl_seconds = cache_ttl_minutes * 60
     # Проверяем Redis кеш
@@ -576,6 +693,18 @@ def get_context_from_db(user_id, limit=10):
     # Нет данных в кэше - загружаем синхронно (только при первом запросе)
     logger.info(f"[FINANCE] No cache for {symbol} ({asset_type}), loading synchronously")
     return _load_finance_sync(symbol, asset_type)
+
+
+def _load_finance_sync(symbol, asset_type='stock'):
+    """Load finance data synchronously from API"""
+    try:
+        if asset_type == 'stock':
+            api_url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}"
+        elif asset_type == 'crypto':
+            api_url = f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency={symbol}&to_currency=USD&apikey={ALPHA_VANTAGE_API_KEY}"
+        else:
+            logger.warning(f"[FINANCE] Unsupported asset type: {asset_type}")
+            return None
         response = requests.get(api_url, timeout=10)
         if response.status_code == 200:
             data = response.json()
@@ -613,6 +742,12 @@ def preload_common_data():
     except Exception as e:
         logger.warning(f"[CACHE] Failed to preload general news: {e}")
     logger.info("[CACHE] Preload completed")
+
+
+def get_personalized_news(user_id, session=None):
+    """
+    Получает персонализированные новости на основе профиля пользователя.
+    
     Args:
         user_id: ID пользователя Telegram
         session: Сессия БД (опционально)
@@ -731,6 +866,21 @@ def preload_common_data():
     finally:
         if close_session:
             db_session.close()
+
+
+def _load_news_for_category(category):
+    """Load news for a specific category"""
+    try:
+        category_queries = {
+            'politics': 'Россия политика OR правительство OR президент',
+            'economy': 'Россия экономика OR бизнес OR финансы',
+            'technology': 'Россия технологии OR IT OR стартапы OR AI',
+            'sports': 'Россия спорт OR футбол OR хоккей',
+            'science': 'Россия наука OR исследования OR медицина',
+            'culture': 'Россия культура OR искусство OR театр OR музыка',
+            'education': 'Россия образование OR университет OR школа',
+            'real_estate': 'Россия недвижимость OR жилье OR строительство'
+        }
         query = category_queries.get(category, 'Россия')
         category_names = {
             'politics': 'Политика',
@@ -762,3 +912,40 @@ def preload_common_data():
     except Exception as e:
         logger.error(f"[NEWS CATEGORY] Error loading news for {category}: {e}")
         return None
+
+
+def generate_task_recommendations(title, description, user_id):
+    """Generate task recommendations based on title and description"""
+    # Simple stub implementation - can be enhanced later
+    recommendations = []
+    
+    # Basic recommendations based on keywords
+    title_lower = (title or "").lower()
+    desc_lower = (description or "").lower()
+    
+    if any(word in title_lower + desc_lower for word in ['встреча', 'митап', 'конференция']):
+        recommendations.append("Подготовьте презентацию или вопросы для обсуждения")
+        recommendations.append("Проверьте время и место за день до события")
+    
+    if any(word in title_lower + desc_lower for word in ['спорт', 'тренировка', 'бег']):
+        recommendations.append("Возьмите с собой воду и полотенце")
+        recommendations.append("Сделайте разминку перед началом")
+    
+    if any(word in title_lower + desc_lower for word in ['работа', 'проект', 'задача']):
+        recommendations.append("Разбейте задачу на маленькие шаги")
+        recommendations.append("Установите таймер для работы без отвлечений")
+    
+    # Return up to 3 recommendations
+    return recommendations[:3] if recommendations else []
+
+
+def post_process_tool_calls(tool_calls, user_id):
+    """Post-process tool calls - stub implementation"""
+    # This function was removed during cleanup, keeping as stub
+    return tool_calls
+
+
+def post_process_response(response, user_id):
+    """Post-process response - stub implementation"""
+    # This function was removed during cleanup, keeping as stub
+    return response
