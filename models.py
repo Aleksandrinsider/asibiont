@@ -19,8 +19,8 @@ class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True)
-    telegram_id = Column(BigInteger, unique=True, nullable=False)
-    username = Column(String(255))
+    telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)  # Индекс для быстрого поиска по telegram_id
+    username = Column(String(255), index=True)  # Индекс для поиска по username
     first_name = Column(String(255))
     photo_url = Column(String(500))  # Telegram profile photo URL
     memory = Column(Text)  # Long-term memory for user info
@@ -28,18 +28,18 @@ class User(Base):
     timezone = Column(String(50), default='Europe/Moscow')
     do_not_disturb_until = Column(DateTime)
     pending_action = Column(Text)  # JSON for pending interactions
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки пользователей
     updated_at = Column(
         DateTime, default=datetime.datetime.now(
             datetime.timezone.utc), onupdate=datetime.datetime.now(
             datetime.timezone.utc))
-    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT)  # User's subscription tier
+    subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.LIGHT, index=True)  # Индекс для фильтрации по подписке
     average_rating = Column(Integer, default=0)  # Average rating from other users (0-10)
     rating_count = Column(Integer, default=0)  # Number of ratings received (synced from UserProfile)
     history_cleared_at = Column(DateTime)  # When user cleared chat history
     conversation_state = Column(String(100), default='normal')  # Current conversation state
     pending_task_data = Column(Text)  # JSON for pending task creation data
-    last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    last_interaction_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для активных пользователей
     conversation_context = Column(Text)  # JSON array of recent messages for context
     current_task_id = Column(Integer, ForeignKey('tasks.id'))  # Currently discussed task
     referral_balance = Column(Integer, default=0)  # Referral earnings in kopecks
@@ -52,32 +52,32 @@ class Task(Base):
     __tablename__ = 'tasks'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Индекс для быстрого поиска задач пользователя
     title = Column(String(255), nullable=False)
     description = Column(Text)
     due_date = Column(DateTime)
-    status = Column(String(50), default='pending')  # pending, completed, etc.
-    reminder_time = Column(DateTime)
+    status = Column(String(50), default='pending', index=True)  # Индекс для фильтрации по статусу
+    reminder_time = Column(DateTime, index=True)  # Индекс для поиска по времени напоминания
     reminder_sent = Column(Boolean, default=False)
     result_check_sent = Column(Boolean, default=False)
     estimated_duration = Column(Integer)  # in minutes
     delegated_by = Column(Integer, ForeignKey('users.id'))  # User who delegated the task
-    delegated_to_username = Column(String(255))  # Username of the person who should do it
-    delegation_status = Column(String(50), default=None)  # None, pending, accepted, rejected
+    delegated_to_username = Column(String(255), index=True)  # Индекс для поиска делегированных задач
+    delegation_status = Column(String(50), default=None, index=True)  # Индекс для статуса делегирования
     delegation_details = Column(Text)  # Additional details about delegation
     completion_notes = Column(Text)  # Notes about task completion/result
     actual_completion_time = Column(DateTime)  # When task was actually completed
     skipped_reason = Column(String(255))  # Reason if task was skipped/cancelled
     overdue_reminders_sent = Column(Integer, default=0)  # Number of overdue reminders sent
     recommendations = Column(Text)  # JSON array of AI-generated recommendations
-    is_recurring = Column(Boolean, default=False)  # Whether this is a recurring task
+    is_recurring = Column(Boolean, default=False, index=True)  # Индекс для повторяющихся задач
     recurrence_pattern = Column(String(50))  # daily, weekly, monthly, yearly
     recurrence_interval = Column(Integer, default=1)  # Every N days/weeks/months
     recurrence_end_date = Column(DateTime)  # When to stop recurring
     parent_task_id = Column(Integer, ForeignKey('tasks.id'))  # For recurring task instances
     pending_delegator_report = Column(BigInteger)  # Telegram ID of delegator waiting for completion report
     goal_id = Column(Integer, ForeignKey('goals.id'))  # Link to goal this task contributes to
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по дате создания
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])
     goal = relationship("Goal", backref="tasks")
@@ -87,10 +87,10 @@ class Interaction(Base):
     __tablename__ = 'interactions'
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    message_type = Column(String(50))  # user, ai
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Индекс для поиска взаимодействий пользователя
+    message_type = Column(String(50), index=True)  # Индекс для фильтрации по типу сообщения
     content = Column(Text)
-    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), index=True)  # Индекс для сортировки по времени
 
     user = relationship("User", backref="interactions")
 

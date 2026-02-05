@@ -1749,13 +1749,28 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         if not user:
             return "У вас пока нет задач"
 
-        # Get user tasks or delegated tasks
-        query = session.query(Task).filter(Task.user_id == user.id)
+        # Get user tasks or delegated tasks - ОПТИМИЗИРОВАННЫЙ ЗАПРОС
+        # Используем отдельные запросы для лучшей производительности
+        base_query = session.query(Task).filter(Task.user_id == user.id)
+        
+        # Для больших объемов данных ограничиваем количество загружаемых задач
+        MAX_TASKS_TO_LOAD = 500  # Максимум задач для загрузки в память
+        
+        # Сначала получаем только активные задачи с лимитом
+        active_tasks_query = base_query.filter(Task.status != 'completed').limit(MAX_TASKS_TO_LOAD)
+        
+        # Получаем делегированные задачи отдельно
         if user.username and user.username.strip():
-            query = query.union(
-                session.query(Task).filter(Task.delegated_to_username.ilike((user.username or "").replace('@', '')))
-            )
-        tasks = query.all()
+            delegated_query = session.query(Task).filter(
+                Task.delegated_to_username.ilike((user.username or "").replace('@', ''))
+            ).limit(MAX_TASKS_TO_LOAD // 2)  # Меньше лимит для делегированных
+            delegated_tasks = delegated_query.all()
+        else:
+            delegated_tasks = []
+        
+        # Объединяем результаты
+        my_active_tasks = active_tasks_query.all()
+        all_active_tasks = my_active_tasks + delegated_tasks
 
         # ФИЛЬТРАЦИЯ ЗАДАЧ
         if filter_type == "Автоматические":
@@ -4313,9 +4328,10 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
         analysis = []
         
         # Анализ только ближайших задач (сегодня-завтра)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(pytz.UTC)
         tomorrow = now + timedelta(days=1)
-        urgent_tasks = [t for t in tasks if t.due_date and t.due_date <= tomorrow]
+        # Конвертируем даты задач в UTC для корректного сравнения
+        urgent_tasks = [t for t in tasks if t.due_date and t.due_date.replace(tzinfo=pytz.UTC) <= tomorrow]
         
         if urgent_tasks:
             analysis.append(f"🚨 Ближайшие задачи: {', '.join([t.title for t in urgent_tasks])}")
@@ -4325,7 +4341,10 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
         for i, task1 in enumerate(urgent_tasks):
             for task2 in urgent_tasks[i+1:]:
                 if task1.due_date and task2.due_date:
-                    time_diff = abs((task1.due_date - task2.due_date).total_seconds())
+                    # Убеждаемся, что даты имеют timezone info
+                    dt1 = task1.due_date if task1.due_date.tzinfo else task1.due_date.replace(tzinfo=pytz.UTC)
+                    dt2 = task2.due_date if task2.due_date.tzinfo else task2.due_date.replace(tzinfo=pytz.UTC)
+                    time_diff = abs((dt1 - dt2).total_seconds())
                     if time_diff < 1800:  # менее 30 минут
                         time_conflicts.append(f"'{task1.title}' и '{task2.title}'")
         

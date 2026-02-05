@@ -32,6 +32,11 @@ class HybridAutonomousAgent:
         self.success_patterns = {}  # Паттерны успешных действий
         self.user_preferences = {}  # Предпочтения пользователей
         
+        # КЭШИРОВАНИЕ для производительности
+        self.user_cache = {}  # Кэш пользователей (user_id -> user_data)
+        self.tasks_cache = {}  # Кэш задач (user_id -> tasks_list, expires in 30 sec)
+        self.cache_expiry = {}  # Время истечения кэша
+        
         # Загружаем статистику, если есть
         self.tool_discovery.load_stats()
 
@@ -78,53 +83,82 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: AI планирует стратегию выполнения запроса с учетом предыдущего опыта
-        Возвращает список действий, которые нужно выполнить
+        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - ПРАВИЛА + AI ДЛЯ ОБЩЕНИЯ
         """
-        
-        # Получаем релевантные инструменты для данного контекста и пользователя
-        relevant_tools = self.tool_discovery.get_tools_for_context(user_message, user_id)
-        tools_info = json.dumps(relevant_tools, indent=2, ensure_ascii=False)
-        
-        # Получаем информацию о пользователе
+
+        message_lower = user_message.lower()
+
+        # СТРОГИЕ ПРАВИЛА ДЛЯ КОМАНД (БЕЗ AI)
+        command_patterns = {
+            'delete_task': ['удали', 'сотри', 'удалить'],
+            'list_tasks': ['покажи', 'список', 'мои'],
+            'reschedule_task': ['перенеси', 'отложи', 'измени'],
+            'find_relevant_contacts_for_task': ['контакты', 'поможет'],
+            'find_partners': ['единомышленники', 'познакомься', 'найди'],
+            'complete_task': ['готово', 'сделал', 'завершил', 'выполнил'],
+            'add_task': ['создай', 'добавь', 'напомни'],
+            'delegate_task': ['делегируй', 'передай', 'поручи'],
+            'update_profile': ['обнови'],
+            'update_user_memory': ['запомни']
+        }
+
+        # Проверяем на команды задач
+        for intent, keywords in command_patterns.items():
+            if any(keyword in message_lower for keyword in keywords):
+                # Специальные проверки для некоторых команд
+                if intent in ['delete_task', 'list_tasks', 'reschedule_task', 'add_task', 'complete_task', 'delegate_task']:
+                    # Для этих команд обязательно должно быть слово "задач" ИЛИ другие признаки
+                    if ('задач' in message_lower or 
+                        intent == 'complete_task' or  # "готово" не требует "задач"
+                        intent == 'delegate_task'):   # "делегируй" не требует "задач"
+                        return self._create_command_plan(intent, user_message)
+                else:
+                    return self._create_command_plan(intent, user_message)
+
+        # ЕСЛИ НЕ КОМАНДА - ИСПОЛЬЗУЕМ AI ДЛЯ ОБЩЕГО ОБЩЕНИЯ
+        return await self._plan_general_chat(user_message, user_id)
+
+    def _create_command_plan(self, intent, user_message):
+        """Создает план для команды"""
+        params = {}
+        if intent == 'delete_task':
+            params = {"task_title": self._extract_task_title(user_message)}
+        elif intent == 'complete_task':
+            params = {"task_title": self._extract_task_title(user_message)}
+        elif intent == 'reschedule_task':
+            params = {
+                "task_title": self._extract_task_title(user_message),
+                "new_time": self._extract_time(user_message)
+            }
+        elif intent == 'add_task':
+            title, time_str = self._extract_task_info(user_message)
+            params = {"title": title, "reminder_time": time_str}
+        elif intent == 'find_relevant_contacts_for_task':
+            params = {"task_description": user_message}
+
+        return {
+            "intent": intent,
+            "actions": [{
+                "tool": intent,
+                "params": params,
+                "reason": f"Распознано по ключевым словам: {intent}"
+            }],
+            "response_strategy": "execute_action"
+        }
+
+    async def _plan_general_chat(self, user_message, user_id):
+        """AI планирование для общего общения"""
+        # Получаем информацию о пользователе для контекста - ИСПОЛЬЗУЕМ КЭШ
         session = Session()
         try:
-            user = session.query(User).filter_by(telegram_id=user_id).first()
+            user = self._get_cached_user(user_id, session)
             if not user:
                 return {
-                    "intent": "пользователь не найден",
-                    "needs_context": False,
+                    "intent": "general_chat",
                     "actions": [],
-                    "response_strategy": "сообщить об ошибке"
+                    "response_strategy": "natural_response"
                 }
-            
-            # Получаем задачи
-            tasks = session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status != 'completed'
-            ).limit(10).all()
-            tasks_summary = [{"title": t.title, "due_date": str(t.due_date) if t.due_date else None} for t in tasks]
-            
-            # Анализируем историю для похожих паттернов
-            learning_context = ""
-            recent_success = [
-                e for e in self.execution_history[-10:]
-                if e.get('user_id') == user_id and e.get('success')
-            ]
-            if recent_success:
-                learning_context = "\n\nУСПЕШНЫЙ ОПЫТ ПОЛЬЗОВАТЕЛЯ:\n"
-                for entry in recent_success[-3:]:
-                    actions_used = ", ".join([a.get('tool', '') for a in entry.get('plan', {}).get('actions', [])])
-                    learning_context += f"- '{entry['message'][:50]}' → использовал: {actions_used}\n"
-            
-            # Получаем задачи
-            tasks = session.query(Task).filter(
-                Task.user_id == user.id,
-                Task.status != 'completed'
-            ).limit(10).all()
-            tasks_summary = [{"title": t.title, "due_date": str(t.due_date) if t.due_date else None} for t in tasks]
-            
-            # Получаем базовый промпт
+
             base_prompt = get_extended_system_prompt(
                 user_now=None,
                 current_time_str=None,
@@ -132,7 +166,7 @@ class HybridAutonomousAgent:
                 user_username=user.username or "пользователь",
                 mentions_str="",
                 user_memory=user.memory or "",
-                context=context,
+                context=None,
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
                 message_type=None,
@@ -141,66 +175,25 @@ class HybridAutonomousAgent:
             )
         finally:
             session.close()
-        
-        # Дополняем базовый промпт инструкциями для планирования
-        system_prompt = f"{base_prompt}\n\n" + f"""\n---
 
-РЕЖИМ: ПЛАНИРОВАНИЕ ДЕЙСТВИЙ
+        system_prompt = f"{base_prompt}\n\n" + """Ты ведешь естественный разговор. Можешь предлагать идеи, задавать вопросы, давать советы. Но НЕ ВЫЗЫВАЙ ИНСТРУМЕНТЫ для команд - это уже обработано правилами выше.
 
-ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
-{tools_info}
-
-ТЕКУЩИЕ ЗАДАЧИ:
-{json.dumps(tasks_summary, indent=2, ensure_ascii=False)}
-{learning_context}
-
-ЗАДАЧА: Проанализируй запрос и составь ПЛАН действий в JSON формате:
-
-{{
-    "intent": "намерение пользователя",
-    "actions": [
-        {{"tool": "название", "params": {{}}, "reason": "зачем"}}
-    ]
-}}
-
-ПРАВИЛА:
-- Используй ТОЛЬКО инструменты из списка
-- Минимум действий для достижения цели
-- Извлекай параметры из запроса пользователя
-- Для задач про активности добавляй find_relevant_contacts_for_task
-- УЧИСЬ: примени успешные паттерны из истории если они релевантны
-"""
+Если пользователь хочет пообщаться - отвечай естественно и полезно."""
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Запрос: {user_message}"}
+            {"role": "user", "content": f"Сообщение: {user_message}"}
         ]
 
         response = await self.call_ai(messages)
         content = response['choices'][0]['message']['content']
 
-        try:
-            # Извлекаем JSON
-            import re
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                plan = json.loads(json_match.group())
-                return plan
-            else:
-                return {
-                    "intent": "не распознано",
-                    "needs_context": False,
-                    "actions": [],
-                    "response_strategy": "ответить естественно"
-                }
-        except Exception as e:
-            logger.error(f"Ошибка парсинга плана: {e}")
-            return {
-                "intent": "ошибка парсинга",
-                "needs_context": False,
-                "actions": [],
-                "response_strategy": "извиниться и попросить переформулировать"
-            }
+        return {
+            "intent": "general_chat",
+            "actions": [],
+            "response_strategy": "natural_response",
+            "ai_response": content
+        }
 
     async def execute_actions(self, actions, user_id):
         """
@@ -232,6 +225,19 @@ class HybridAutonomousAgent:
                 
                 # Добавляем user_id к параметрам
                 params['user_id'] = user_id
+                
+                # Исправляем известные проблемы с параметрами
+                if tool_name == 'find_relevant_contacts_for_task':
+                    logger.info(f"[AGENT] Original params for {tool_name}: {params}")
+                    if 'description' in params and 'task_description' not in params:
+                        params['task_description'] = params.pop('description')
+                        logger.info(f"[AGENT] Fixed parameter: description -> task_description")
+                    elif 'task_description' not in params:
+                        # Если нет task_description, берем из сообщения или устанавливаем по умолчанию
+                        params['task_description'] = params.get('task_description', 'помощь с задачей')
+                        logger.info(f"[AGENT] Added default task_description: {params['task_description']}")
+                
+                logger.info(f"[AGENT] Executing {tool_name} with final params: {params}")
                 
                 # Выполняем handler
                 result = await handler_func(**params) if asyncio.iscoroutinefunction(handler_func) else handler_func(**params)
@@ -340,6 +346,79 @@ class HybridAutonomousAgent:
         
         return content.strip()
 
+    def _get_cached_user(self, user_id, session):
+        """Получить пользователя из кэша или базы данных"""
+        import time
+        
+        current_time = time.time()
+        
+        # Проверяем кэш (кэш на 5 минут)
+        if user_id in self.user_cache and user_id in self.cache_expiry:
+            if current_time < self.cache_expiry[user_id]:
+                return self.user_cache[user_id]
+        
+        # Загружаем из базы
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if user:
+            self.user_cache[user_id] = user
+            self.cache_expiry[user_id] = current_time + 300  # 5 минут
+        
+        return user
+
+    def _get_cached_tasks(self, user_id, session, force_refresh=False):
+        """Получить задачи пользователя из кэша или базы данных"""
+        import time
+        
+        current_time = time.time()
+        cache_key = f"tasks_{user_id}"
+        
+        # Проверяем кэш (кэш на 30 секунд для задач)
+        if not force_refresh and cache_key in self.tasks_cache and cache_key in self.cache_expiry:
+            if current_time < self.cache_expiry[cache_key]:
+                return self.tasks_cache[cache_key]
+        
+        # Загружаем из базы с оптимизацией
+        tasks = session.query(Task).filter(
+            Task.user_id == user_id,
+            Task.status != 'completed'
+        ).limit(100).all()  # Ограничиваем для производительности
+        
+        self.tasks_cache[cache_key] = tasks
+        self.cache_expiry[cache_key] = current_time + 30  # 30 секунд
+        
+        return tasks
+
+    def _extract_task_title(self, message):
+        """Извлекает название задачи из сообщения"""
+        # Простая эвристика - берем текст после ключевых слов
+        words = message.lower().split()
+        keywords = ['задачу', 'задачи', 'task']
+        for i, word in enumerate(words):
+            if any(kw in word for kw in keywords):
+                # Берем следующие слова как название задачи
+                remaining = ' '.join(words[i+1:])
+                if remaining:
+                    return remaining.strip()
+        return message.strip()
+
+    def _extract_time(self, message):
+        """Извлекает время из сообщения"""
+        # Простая эвристика для времени
+        message_lower = message.lower()
+        if 'завтра' in message_lower:
+            return 'завтра'
+        elif 'сегодня' in message_lower:
+            return 'сегодня'
+        elif 'через' in message_lower:
+            return 'через час'
+        return None
+
+    def _extract_task_info(self, message):
+        """Извлекает название задачи и время"""
+        title = self._extract_task_title(message)
+        time_str = self._extract_time(message)
+        return title, time_str
+
     async def process_request(self, user_message, user_id, context=None):
         """
         Основной процесс обработки запроса:
@@ -363,15 +442,48 @@ class HybridAutonomousAgent:
             else:
                 logger.info(f"[AGENT] No actions to execute, direct response")
             
-            # ШАГ 3: Рефлексия и ответ
-            logger.info(f"[AGENT] Step 3: Reflecting and generating response")
-            response = await self.reflect_and_respond(
-                user_message, 
-                plan, 
-                execution_results, 
-                context,
-                user_id
-            )
+            # ШАГ 3: Формирование ответа
+            if execution_results:
+                # Были выполнены действия - формируем ответ на основе результатов
+                logger.info(f"[AGENT] Step 3: Generating response from execution results")
+                response_parts = []
+                for result in execution_results:
+                    if result['success']:
+                        tool_name = result['tool']
+                        if tool_name == 'add_task':
+                            response_parts.append("✅ Задача создана!")
+                        elif tool_name == 'complete_task':
+                            response_parts.append("✅ Задача выполнена!")
+                        elif tool_name == 'delete_task':
+                            response_parts.append("✅ Задача удалена!")
+                        elif tool_name == 'list_tasks':
+                            tasks = result.get('result', [])
+                            if tasks:
+                                response_parts.append(f"📝 У вас {len(tasks)} активных задач")
+                            else:
+                                response_parts.append("📝 У вас нет активных задач")
+                        elif tool_name == 'reschedule_task':
+                            response_parts.append("✅ Время задачи изменено!")
+                        elif tool_name == 'find_relevant_contacts_for_task':
+                            response_parts.append("👥 Контакты найдены!")
+                        elif tool_name == 'find_partners':
+                            response_parts.append("🤝 Единомышленники найдены!")
+                        else:
+                            response_parts.append(f"✅ {tool_name} выполнен")
+                    else:
+                        response_parts.append(f"❌ Ошибка: {result['error']}")
+                
+                response = " ".join(response_parts)
+            else:
+                # Общее общение - используем AI
+                logger.info(f"[AGENT] Step 3: AI generating natural response")
+                response = await self.reflect_and_respond(
+                    user_message, 
+                    plan, 
+                    execution_results, 
+                    context,
+                    user_id
+                )
             
             # Сохраняем в историю и обучаемся
             entry = {
@@ -461,9 +573,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         response_text = await agent.process_request(message, user_id, context)
 
         # Возвращаем в формате, ожидаемом остальным кодом
+        # Для тестирования возвращаем tool_calls из плана
+        tool_calls = []
+        try:
+            # Попробуем извлечь информацию о вызванных инструментах из истории
+            if agent.execution_history:
+                last_execution = agent.execution_history[-1]
+                if last_execution.get('plan', {}).get('actions'):
+                    for action in last_execution['plan']['actions']:
+                        tool_calls.append({
+                            'function': {
+                                'name': action.get('tool', ''),
+                                'arguments': json.dumps(action.get('params', {}))
+                            }
+                        })
+        except Exception as e:
+            logger.warning(f"Could not extract tool calls: {e}")
+
         return {
             'response': response_text,
-            'tool_calls': []  # Автономный агент управляет вызовами инструментов самостоятельно
+            'tool_calls': tool_calls
         }
 
     except Exception as e:
