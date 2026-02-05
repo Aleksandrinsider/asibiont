@@ -250,9 +250,9 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
     return None
 
 
-def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False):
+def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1):
     """Add a new task"""
-    logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}")
+    logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}, is_recurring={is_recurring} (type: {type(is_recurring)}), recurrence_pattern={recurrence_pattern}, recurrence_interval={recurrence_interval}")
     
     if user_id is None:
         logger.error("[ADD_TASK] ERROR: user_id is None! Cannot create task without user_id")
@@ -379,47 +379,68 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 task.due_date = local_dt.astimezone(pytz.UTC)
             except ValueError:
                 pass
-        session.add(task)
+    
+    # Set recurring task fields
+    logger.info(f"[ADD_TASK] About to set recurring fields: is_recurring={is_recurring} (type: {type(is_recurring)}), pattern={recurrence_pattern}, interval={recurrence_interval}")
+    if is_recurring:
+        # Handle string boolean values from AI
+        if isinstance(is_recurring, str):
+            task.is_recurring = is_recurring.lower() in ('true', '1', 'yes')
+            logger.info(f"[ADD_TASK] Converted string '{is_recurring}' to boolean: {task.is_recurring}")
+        else:
+            task.is_recurring = bool(is_recurring)
+            logger.info(f"[ADD_TASK] Used boolean value: {task.is_recurring}")
+        
+        if task.is_recurring:
+            task.recurrence_pattern = recurrence_pattern
+            task.recurrence_interval = int(recurrence_interval) if recurrence_interval else 1
+            logger.info(f"[ADD_TASK] Set recurring task: pattern={recurrence_pattern}, interval={task.recurrence_interval}")
+        else:
+            logger.info(f"[ADD_TASK] is_recurring was '{is_recurring}' (falsy), task not marked as recurring")
+    else:
+        logger.info(f"[ADD_TASK] is_recurring is falsy: {is_recurring} (type: {type(is_recurring)})")
+    
+    session.add(task)
 
-        # Generate recommendations
-        try:
-            logger.info(f"[ADD_TASK] Generating recommendations for task '{title}'")
-            recommendations = generate_task_recommendations(title, description, user.telegram_id)
-            logger.info(f"[ADD_TASK] Generated {len(recommendations) if recommendations else 0} recommendations")
-            if recommendations:
-                task.recommendations = json.dumps(recommendations, ensure_ascii=False)
-                logger.info(f"[ADD_TASK] Saved recommendations to task: {task.recommendations}")
-        except Exception as e:
-            logging.warning(f"Could not generate recommendations for task {title}: {e}")
-            import traceback
-            traceback.print_exc()
-            session.rollback()
+    # Generate recommendations
+    try:
+        logger.info(f"[ADD_TASK] Generating recommendations for task '{title}'")
+        recommendations = generate_task_recommendations(title, description, user.telegram_id)
+        logger.info(f"[ADD_TASK] Generated {len(recommendations) if recommendations else 0} recommendations")
+        if recommendations:
+            task.recommendations = json.dumps(recommendations, ensure_ascii=False)
+            logger.info(f"[ADD_TASK] Saved recommendations to task: {task.recommendations}")
+    except Exception as e:
+        logging.warning(f"Could not generate recommendations for task {title}: {e}")
+        import traceback
+        traceback.print_exc()
+        session.rollback()
 
-        session.commit()
-        task_id = task.id
-        logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
+    session.commit()
+    task_id = task.id
+    logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
 
-        # Save to long-term memory for project context
-        try:
-            ltm = LongTermMemory(user.telegram_id)
-            # Determine project based on task content
-            project_name = "General Tasks"
-            if any(keyword in title.lower() for keyword in ['ml', 'machine learning', 'python', 'нейрон', 'алгоритм', 'курс']):
-                project_name = "ML Learning Journey"
-            elif any(keyword in title.lower() for keyword in ['бег', 'спорт', 'фитнес']):
-                project_name = "Fitness Goals"
-            elif any(keyword in title.lower() for keyword in ['работа', 'проект', 'встреча']):
-                project_name = "Work Projects"
-            
-            tasks = [title]
-            insights = [f"Created task: {title}"]
-            if description:
-                insights.append(f"Description: {description}")
-            
-            ltm.save_project_context(project_name, tasks, insights)
-            logger.info(f"[ADD_TASK] Saved task to long-term memory project: {project_name}")
-        except Exception as e:
-            logger.warning(f"Could not save to long-term memory: {e}")
+    # Save to long-term memory for project context
+    try:
+        ltm = LongTermMemory(user.telegram_id)
+        # Determine project based on task content
+        project_name = "General Tasks"
+        if any(keyword in title.lower() for keyword in ['ml', 'machine learning', 'python', 'нейрон', 'алгоритм', 'курс']):
+            project_name = "ML Learning Journey"
+        elif any(keyword in title.lower() for keyword in ['бег', 'спорт', 'фитнес']):
+            project_name = "Fitness Goals"
+        elif any(keyword in title.lower() for keyword in ['работа', 'проект', 'встреча']):
+            project_name = "Work Projects"
+        
+        tasks = [title]
+        insights = [f"Created task: {title}"]
+        if description:
+            insights.append(f"Description: {description}")
+        
+        ltm.save_project_context(project_name, tasks, insights)
+        logger.info(f"[ADD_TASK] Saved task to long-term memory project: {project_name}")
+    except Exception as e:
+        logger.warning(f"Could not save to long-term memory: {e}")
 
     # Schedule reminder if specified
     if task.reminder_time:

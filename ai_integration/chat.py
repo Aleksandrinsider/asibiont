@@ -428,6 +428,9 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                         reminder_time=reminder_time,
                         user_id=user_id,
                         session=db_session,
+                        is_recurring=args.get("is_recurring", False),
+                        recurrence_pattern=args.get("recurrence_pattern"),
+                        recurrence_interval=args.get("recurrence_interval", 1),
                     )
                     tool_results.append({"function": func_name, "result": result})
 

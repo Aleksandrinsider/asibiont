@@ -43,6 +43,20 @@ TOOLS = [
                         "type": "string",
                         "description": "⚠️ ОБЯЗАТЕЛЬНО для задач! Время напоминания в ЛЮБОМ формате: 'завтра в 9:00', 'через 2 часа', 'послезавтра в 14:30', '15:00', 'YYYY-MM-DD HH:MM'. ЕСЛИ пользователь НЕ УКАЗАЛ - СПРОСИ 'на когда?' перед вызовом add_task(). НЕ СОЗДАВАЙ задачу без времени молча!",
                     },
+                    "is_recurring": {
+                        "type": "boolean",
+                        "description": "Установи true если задача повторяющаяся (ежедневно, еженедельно и т.д.). Ключевые слова: 'каждый день', 'ежедневно', 'каждую неделю', 'еженедельно', 'повторять', 'регулярно'.",
+                    },
+                    "recurrence_pattern": {
+                        "type": "string",
+                        "description": "Паттерн повторения: 'daily', 'weekly', 'monthly', 'yearly'. Только если is_recurring=true.",
+                        "enum": ["daily", "weekly", "monthly", "yearly"]
+                    },
+                    "recurrence_interval": {
+                        "type": "integer",
+                        "description": "Интервал повторения (каждые N дней/недель/месяцев). По умолчанию 1. Только если is_recurring=true.",
+                        "default": 1
+                    },
                 },
                 "required": ["title", "reminder_time"],
             },

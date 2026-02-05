@@ -34,7 +34,10 @@ class CreateTaskCommand(BaseCommand):
             description=description,
             reminder_time=reminder_time,
             user_id=user_id,
-            session=db_session
+            session=db_session,
+            is_recurring=self.params.get('is_recurring', False),
+            recurrence_pattern=self.params.get('recurrence_pattern'),
+            recurrence_interval=self.params.get('recurrence_interval', 1)
         )
 
         # Generate response

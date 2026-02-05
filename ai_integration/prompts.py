@@ -108,7 +108,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    - ПРЕДЛОЖЕНИЯ ДЕЙСТВИЙ БЕЗ ПОДТВЕРЖДЕНИЯ: НИКОГДА не вызывай tools только потому что "предложил" действие - жди явного подтверждения пользователя!
 
 7. ДОСТУПНЫЕ ИНСТРУМЕНТЫ
-   - add_task(title, description, reminder_time) - создать задачу
+   - add_task(title, description, reminder_time, is_recurring, recurrence_pattern, recurrence_interval) - создать задачу (повторяющаяся если is_recurring=true)
    - complete_task(task_title) - завершить задачу
    - delete_task(task_title) - удалить задачу
    - list_tasks() - показать все задачи
@@ -133,6 +133,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - Личные данные → update_profile()
 - "Запомни что я люблю" → update_user_memory()
 - "Что делать сейчас", "ближайшие задачи" → analyze_tasks()
+- ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ: "каждый день", "ежедневно", "каждую неделю", "еженедельно", "повторять", "регулярно" → add_task() с is_recurring=true, recurrence_pattern="daily"/"weekly"/"monthly"
 - ПОДТВЕРЖДЕНИЯ: "да", "давай", "согласен", "хорошо", "ок", "создай", "сделай", "выполни" (после любого предложения действия) → выполнить предложенное действие с ранее указанными параметрами
 - Если видишь возможность предложить полезный контакт → find_relevant_contacts_for_task()
 - АВТОМАТИЧЕСКИ: при анализе контекста предлагай add_task() для полезных задач и find_relevant_contacts_for_task() для задач, подходящих для сотрудничества
