@@ -401,6 +401,39 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "analyze_tasks",
+            "description": "Анализировать связи между задачами и предлагать оптимизацию. Автоматически выявляет зависимости, риски и предлагает улучшения процессов. Вызывай когда есть несколько активных задач или при планировании новых.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "auto_reminder",
+            "description": "Настроить автоматические напоминания для задач. Создает умные напоминания с учетом контекста и прогресса. Вызывай для важных задач или когда пользователь просит о напоминаниях.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_title": {
+                        "type": "string",
+                        "description": "Название задачи для настройки напоминаний"
+                    },
+                    "reminder_type": {
+                        "type": "string",
+                        "description": "Тип напоминания: 'progress' для проверки прогресса, 'deadline' для приближения срока, 'context' для контекстных напоминаний",
+                        "enum": ["progress", "deadline", "context"]
+                    }
+                },
+                "required": ["task_title", "reminder_type"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_worker_task",
             "description": "Удалить существующую фоновую задачу (worker). Используй когда пользователь хочет остановить или изменить свою фоновую задачу.",
             "parameters": {

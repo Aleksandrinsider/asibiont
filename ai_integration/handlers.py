@@ -3687,6 +3687,26 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
         if city is not None:
             profile.city = city
             updates.append(f"город: {city}")
+            # Обновляем timezone на основе города
+            city_timezone_map = {
+                'москва': 'Europe/Moscow',
+                'пермь': 'Europe/Moscow',
+                'санкт-петербург': 'Europe/Moscow',
+                'екатеринбург': 'Asia/Yekaterinburg',
+                'новосибирск': 'Asia/Novosibirsk',
+                'карачи': 'Asia/Karachi',
+                'дубай': 'Asia/Dubai',
+                'лондон': 'Europe/London',
+                'нью-йорк': 'America/New_York',
+                'токио': 'Asia/Tokyo',
+                'пекин': 'Asia/Shanghai',
+                'бангкок': 'Asia/Bangkok',
+                'сидней': 'Australia/Sydney',
+            }
+            tz = city_timezone_map.get(city.lower())
+            if tz:
+                user.timezone = tz
+                updates.append(f"timezone: {tz}")
         if birth_date is not None:
             profile.birthdate = birth_date
             updates.append(f"день рождения: {birth_date}")
@@ -3877,6 +3897,163 @@ async def update_user_memory_async(memory_type: str = 'general', content: str = 
         session.rollback()
         logger.error(f"Ошибка при сохранении памяти пользователя {user_id}: {e}")
         return f"❌ Ошибка при сохранении: {e}"
+
+    finally:
+        if close_session:
+            session.close()
+
+
+def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str:
+    """
+    Анализирует связи между задачами пользователя и предлагает оптимизацию.
+    
+    Args:
+        user_id: ID пользователя
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Анализ и рекомендации по оптимизации задач
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Получаем активные задачи пользователя
+        tasks = session.query(Task).filter_by(user_id=user_id, status='pending').order_by(Task.due_date).all()
+        
+        if not tasks:
+            return "У тебя нет активных задач для анализа."
+
+        analysis = []
+        
+        # Анализ сроков
+        now = datetime.now(timezone.utc)
+        urgent_tasks = [t for t in tasks if t.due_date and (t.due_date - now).total_seconds() < 3600]  # менее часа
+        if urgent_tasks:
+            analysis.append(f"🚨 Срочные задачи (менее часа): {', '.join([t.title for t in urgent_tasks])}")
+        
+        # Анализ пересечений по времени
+        time_conflicts = []
+        for i, task1 in enumerate(tasks):
+            for task2 in tasks[i+1:]:
+                if task1.due_date and task2.due_date:
+                    time_diff = abs((task1.due_date - task2.due_date).total_seconds())
+                    if time_diff < 1800:  # менее 30 минут
+                        time_conflicts.append(f"'{task1.title}' и '{task2.title}'")
+        
+        if time_conflicts:
+            analysis.append(f"⚠️ Возможные конфликты по времени: {', '.join(time_conflicts)}")
+        
+        # Рекомендации
+        recommendations = []
+        if len(tasks) > 5:
+            recommendations.append("У тебя много задач. Рассмотри приоритизацию или делегирование.")
+        
+        if urgent_tasks:
+            recommendations.append("Сосредоточься на срочных задачах сначала.")
+        
+        if time_conflicts:
+            recommendations.append("Перенеси некоторые задачи, чтобы избежать пересечений.")
+        
+        # Анализ прогресса
+        overdue_tasks = [t for t in tasks if t.due_date and t.due_date < now]
+        if overdue_tasks:
+            recommendations.append(f"Просроченные задачи: {', '.join([t.title for t in overdue_tasks])}. Обнови сроки или статус.")
+        
+        result = "📊 Анализ задач:\n" + "\n".join(analysis) if analysis else "Все задачи в порядке."
+        if recommendations:
+            result += "\n\n💡 Рекомендации:\n" + "\n".join(recommendations)
+        
+        return result
+
+    except Exception as e:
+        logger.error(f"Ошибка при анализе задач пользователя {user_id}: {e}")
+        return "Не удалось проанализировать задачи."
+
+    finally:
+        if close_session:
+            session.close()
+
+
+def auto_reminder(user_id: int, task_title: str, reminder_type: str, session=None, close_session: bool = True) -> str:
+    """
+    Настраивает автоматические умные напоминания для задачи.
+    
+    Args:
+        user_id: ID пользователя
+        task_title: Название задачи
+        reminder_type: Тип напоминания ('progress', 'deadline', 'context')
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+
+    Returns:
+        Сообщение о настройке напоминаний
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Найти задачу
+        task = session.query(Task).filter(
+            Task.user_id == user_id,
+            Task.title.ilike(f'%{task_title}%'),
+            Task.status == 'pending'
+        ).first()
+        
+        if not task:
+            return f"Задача '{task_title}' не найдена."
+
+        # Создать автоматические напоминания на основе типа
+        now = datetime.now(timezone.utc)
+        reminders = []
+        
+        if reminder_type == 'progress':
+            # Напоминания о прогрессе каждые 2 часа
+            for hours in [2, 4, 6]:
+                reminder_time = now + timedelta(hours=hours)
+                if task.due_date and reminder_time < task.due_date:
+                    reminders.append(f"Прогресс через {hours} часов")
+        
+        elif reminder_type == 'deadline':
+            # Напоминания перед дедлайном
+            if task.due_date:
+                time_to_deadline = task.due_date - now
+                if time_to_deadline.total_seconds() > 3600:  # более часа
+                    reminders.append("За час до дедлайна")
+                if time_to_deadline.total_seconds() > 86400:  # более дня
+                    reminders.append("За день до дедлайна")
+        
+        elif reminder_type == 'context':
+            # Контекстные напоминания (утро, вечер)
+            user_tz = session.query(User).filter_by(id=user_id).first().timezone or 'Europe/Moscow'
+            tz = pytz.timezone(user_tz)
+            user_now = now.astimezone(tz)
+            
+            # Утреннее напоминание
+            morning = user_now.replace(hour=9, minute=0, second=0, microsecond=0)
+            if morning > user_now:
+                reminders.append("Утреннее напоминание в 9:00")
+            
+            # Вечернее напоминание
+            evening = user_now.replace(hour=18, minute=0, second=0, microsecond=0)
+            if evening > user_now:
+                reminders.append("Вечернее напоминание в 18:00")
+
+        if reminders:
+            return f"✅ Настроены автоматические напоминания для '{task.title}': {', '.join(reminders)}"
+        else:
+            return f"Для задачи '{task.title}' не требуется дополнительных напоминаний."
+
+    except Exception as e:
+        logger.error(f"Ошибка при настройке напоминаний для пользователя {user_id}: {e}")
+        return "Не удалось настроить напоминания."
 
     finally:
         if close_session:
