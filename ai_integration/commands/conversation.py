@@ -5,6 +5,7 @@ from ai_integration.memory import decrypt_data
 import pytz
 from datetime import datetime
 from models import User
+import re
 
 class ConversationCommand(BaseCommand):
     async def execute(self, user, db_session):
@@ -121,13 +122,28 @@ class ConversationCommand(BaseCommand):
                     if response.status == 200:
                         result = await response.json()
                         content = result["choices"][0]["message"]["content"].strip()
+                        # Remove formatting as per requirements
+                        lines = content.split('\n')
+                        cleaned_lines = []
+                        for line in lines:
+                            line = line.strip()
+                            # Remove markdown formatting
+                            line = re.sub(r'\*\*(.*?)\*\*', r'\1', line)  # Bold
+                            line = re.sub(r'\*(.*?)\*', r'\1', line)  # Italic
+                            line = re.sub(r'#{1,6}\s*', '', line)  # Headers
+                            if line.startswith(('•', '-', '*', '1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.')):
+                                line = line[1:].strip()  # Remove list marker
+                            cleaned_lines.append(line)
+                        content = ' '.join(cleaned_lines).strip()
+                        content = re.sub(r'\s+', ' ', content)  # Clean extra spaces
+                        return content
                         return content
                     else:
                         # Fallback responses (only for non-greeting/time messages)
                         if "кто ты" in self.message.lower() or "ты кто" in self.message.lower():
                             return "Я ASI Biont - умный AI-помощник, который помогает людям находить единомышленников через их дела и задачи.\n\nМогу создавать напоминания, искать партнеров для активностей и многое другое!"
                         elif "что ты умеешь" in self.message.lower():
-                            return "Я умею:\n• Создавать задачи с напоминаниями\n• Искать людей для совместных активностей\n• Управлять твоим расписанием\n• Помогать находить единомышленников\n\nПросто расскажи, что планируешь!"
+                            return "Я помогаю управлять задачами, создавать напоминания, искать единомышленников для совместных активностей и организовывать расписание. Расскажи, что планируешь, и я помогу!"
                         else:
                             return f"Приятно пообщаться! 😊 Сообщение отправлено в {current_time_str} ({time_of_day}). Чем могу помочь с задачами или поиском единомышленников?"
         
