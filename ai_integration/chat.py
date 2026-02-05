@@ -1132,6 +1132,8 @@ async def call_ai_with_tools(user_message, system_prompt, user_id, context=None)
                                         task_description=function_args.get('task_description'),
                                         limit=function_args.get('limit', 5)
                                     )
+                                elif function_name == 'find_partners':
+                                    result = find_partners(user_id=user_id)
                                 elif function_name == 'update_profile':
                                     result = update_profile(user_id=user_id, **function_args)
                                 elif function_name == 'analyze_tasks':
@@ -1139,27 +1141,78 @@ async def call_ai_with_tools(user_message, system_prompt, user_id, context=None)
                                 else:
                                     result = f"Функция {function_name} не поддерживается"
 
-                                tool_results.append(str(result))
+                                tool_results.append({
+                                    'tool_call_id': tool_call.get('id'),
+                                    'name': function_name,
+                                    'content': str(result)
+                                })
 
                             except Exception as e:
                                 logger.error(f"[TOOL_CALL] Error executing {function_name}: {e}")
-                                tool_results.append(f"Ошибка при выполнении {function_name}: {e}")
+                                tool_results.append({
+                                    'tool_call_id': tool_call.get('id'),
+                                    'name': function_name,
+                                    'content': f"Ошибка: {e}"
+                                })
 
-                        # Формируем итоговый ответ
-                        if response_text:
-                            final_response = response_text
-                        else:
-                            final_response = "Выполнено: " + "; ".join(tool_results)
+                        # Отправляем результаты инструментов обратно в AI для формирования ответа
+                        # Добавляем результаты как контекст для AI
+                        tool_results_text = "\n\n".join([
+                            f"Результат {tr['name']}:\n{tr['content']}"
+                            for tr in tool_results
+                        ])
+                        
+                        # Добавляем результаты как системное сообщение для контекста
+                        messages.append({
+                            "role": "user",
+                            "content": f"""Результаты выполнения инструментов:
+
+{tool_results_text}
+
+Теперь сформулируй человечный и понятный ответ пользователю, используя эти результаты. 
+Если контактов не найдено - объясни почему и что делать дальше.
+Если найдены - покажи их и расскажи как с ними связаться.
+Отвечай кратко и по делу."""
+                        })
+                        
+                        # Второй запрос к AI для формирования итогового ответа
+                        payload_second = {
+                            "model": DEEPSEEK_MODEL,
+                            "messages": messages,
+                            "temperature": 0.7,
+                            "max_tokens": 500
+                        }
+                        
+                        logger.info(f"[AI_CALL] Sending tool results back to AI for final response")
+                        
+                        async with session.post(
+                            "https://api.deepseek.com/v1/chat/completions",
+                            json=payload_second,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as response_second:
+                            if response_second.status == 200:
+                                data_second = await response_second.json()
+                                final_response = data_second['choices'][0]['message'].get('content', '')
+                                
+                                if not final_response:
+                                    # Fallback если AI не вернул текст
+                                    final_response = "Выполнено: " + "; ".join([tr['content'] for tr in tool_results])
+                            else:
+                                # Fallback при ошибке второго запроса
+                                final_response = "Выполнено: " + "; ".join([tr['content'] for tr in tool_results])
 
                     else:
                         # Нет tool calls, возвращаем текстовый ответ
                         final_response = response_text or "Извините, я не понял запрос"
 
-                    # Проверяем соответствие промпту
-                    is_compliant, issues = validate_response_compliance(final_response, "response")
-                    if not is_compliant:
-                        logger.warning(f"[RESPONSE] Non-compliant response: {issues}")
-                        final_response = "Извините, произошла ошибка при формировании ответа. Попробуйте переформулировать запрос."
+                    # Проверяем соответствие промпту только для ответов БЕЗ tool calls
+                    # Ответы после tool calls могут быть длиннее и не требуют валидации
+                    if not tool_calls:
+                        is_compliant, issues = validate_response_compliance(final_response, "response")
+                        if not is_compliant:
+                            logger.warning(f"[RESPONSE] Non-compliant response: {issues}")
+                            final_response = "Извините, произошла ошибка при формировании ответа. Попробуйте переформулировать запрос."
 
                     return {
                         'response': final_response,
