@@ -121,7 +121,7 @@ if not NEWSAPI_API_KEY:
     logger.warning("NEWSAPI_API_KEY not set - news integration will not work")
 
 # Redis Configuration
-REDIS_ENABLED = os.getenv("REDIS_ENABLED", "True").lower() in ("true", "1", "yes")
+REDIS_ENABLED = os.getenv("REDIS_ENABLED", "True").lower() in ("true", "1", "yes") and not LOCAL
 
 if REDIS_ENABLED:
     # Check for Railway Redis variables first
