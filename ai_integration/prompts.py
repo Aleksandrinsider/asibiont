@@ -25,6 +25,18 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     if news_info:
         news_context = f"\nНОВОСТИ: {news_info}"
 
+    # Инструкции по использованию новостей
+    news_instructions = ""
+    if news_info:
+        news_instructions = """
+
+ИСПОЛЬЗОВАНИЕ НОВОСТЕЙ В РАЗГОВОРАХ:
+- Будь в курсе текущих событий и используй новости для более релевантных ответов
+- Если разговор касается актуальных тем (политика, экономика, спорт, культура), естественно упомяни связанные новости
+- Не навязывай новости - интегрируй их органично в контекст разговора
+- Используй новости для добавления глубины и актуальности твоим ответам
+- Приветствуй пользователя с упоминанием свежих новостей, если это уместно"""
+
     prompt = f"""Ты - ASI Biont, умный AI-помощник для управления задачами.
 
 Текущая дата: {current_date_str}
@@ -32,7 +44,7 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 Пользователь: {user_username}
 {tier_info}{weather_context}{news_context}
 
-{user_memory}
+{user_memory}{news_instructions}
 
 ОСНОВНЫЕ ПРАВИЛА:
 

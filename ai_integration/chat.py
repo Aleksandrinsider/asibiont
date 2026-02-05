@@ -2306,35 +2306,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                         }
                         expected_tz = city_timezones.get(profile.city)
                         if expected_tz and user.timezone != expected_tz:
-                            inconsistency_note = f"\nВНИМАНИЕ: Город {profile.city} обычно имеет timezone {expected_tz}, но установлено {user.timezone}. Возможно, пользователь переехал или timezone указан неправильно. Уточни у пользователя, изменилось ли что-то."
+                            inconsistency_note = f"\nПРИМЕЧАНИЕ: Город {profile.city} обычно имеет timezone {expected_tz}, но установлено {user.timezone}."
                             user_memory += inconsistency_note
                             logger.info(f"[PROFILE CHECK] Detected timezone inconsistency for {profile.city}: expected {expected_tz}, got {user.timezone}")
             except Exception as e:
                 logger.warning(f"[WEATHER] Could not get weather info: {e}")
 
-        # Получаем информацию о новостях
-        # Общие новости для FREE (в рамках лимита), по городу для STANDARD/PREMIUM (за рамки лимита)
+        # Получаем информацию о новостях с умной фильтрацией по релевантности
         news_info = None
         try:
-            from .utils import get_news_info
-            if subscription_tier in ['STANDARD', 'PREMIUM']:
-                # Для платных тарифов - новости по городу (даже за рамки лимита)
-                if profile and profile.city:
-                    news_info = get_news_info(city=profile.city)
-                    if news_info:
-                        logger.info(f"[NEWS] Added city-specific news for PREMIUM user {profile.city} (extra API call)")
-                else:
-                    # Если город не указан, всё равно даем общие новости для премиум
-                    news_info = get_news_info()
-                    if news_info:
-                        logger.info("[NEWS] Added general news for PREMIUM user (no city, but PREMIUM gets news)")
+            from .utils import get_filtered_news_for_user
+            
+            # Получаем отфильтрованные новости на основе профиля пользователя
+            news_info = get_filtered_news_for_user(user_id, db_session)
+            if news_info:
+                logger.info(f"[NEWS] Added filtered news for user {user_id}")
             else:
-                # Для FREE тарифа - только общие новости (в рамках лимита)
-                news_info = get_news_info()
-                if news_info:
-                    logger.info("[NEWS] Added general news for FREE tier (within limits)")
+                logger.info(f"[NEWS] No relevant filtered news found for user {user_id}")
+                
         except Exception as e:
-            logger.warning(f"[NEWS] Could not get news info: {e}")
+            logger.warning(f"[NEWS] Could not get filtered news info: {e}")
 
         system_prompt = get_extended_system_prompt(
             user_now,
