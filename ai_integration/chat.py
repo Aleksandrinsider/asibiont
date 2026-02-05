@@ -29,7 +29,8 @@ from .handlers import (  # noqa: F401
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, smart_update_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks, auto_reminder
+    update_profile, smart_update_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks, auto_reminder,
+    analyze_goal_progress
 )
 
 logger = logging.getLogger(__name__)
@@ -654,6 +655,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
                 result = await command.execute(user_id, db_session)
                 tool_results.append({"function": func_name, "result": result})
 
+            elif func_name == "analyze_goal_progress":
+                result = analyze_goal_progress(user_id=user_id)
+                tool_results.append({"function": func_name, "result": result})
+
             else:
                 logger.warning(f"[TOOL CALL] Unknown function: {func_name}")
                 tool_results.append({"function": func_name, "result": f"Неизвестная функция: {func_name}"})
@@ -886,6 +891,10 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
             elif "Задача.*делегирована" in result_text or "делегирована" in result_text:
                 natural_responses.append("TASK_DELEGATED: Задача успешно делегирована")
+
+            elif "🎉 Поздравляем!" in result_text or "📊 Проанализировал" in result_text:
+                # Обработка результатов анализа прогресса целей
+                natural_responses.append(result_text)
 
             elif "NEED_TIME_FOR_TASK:" in result_text:
                 # AI должен спросить о времени для задачи - передаем контекст для естественного ответа

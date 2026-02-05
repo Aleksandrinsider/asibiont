@@ -75,9 +75,11 @@ class Task(Base):
     recurrence_end_date = Column(DateTime)  # When to stop recurring
     parent_task_id = Column(Integer, ForeignKey('tasks.id'))  # For recurring task instances
     pending_delegator_report = Column(BigInteger)  # Telegram ID of delegator waiting for completion report
+    goal_id = Column(Integer, ForeignKey('goals.id'))  # Link to goal this task contributes to
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="tasks", foreign_keys=[user_id])
+    goal = relationship("Goal", backref="tasks")
 
 
 class Interaction(Base):
@@ -123,6 +125,41 @@ class UserProfile(Base):
     interaction_count = Column(Integer, default=0)  # Total interactions with AI
 
     user = relationship("User", backref="profile")
+
+
+class Goal(Base):
+    __tablename__ = 'goals'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+    status = Column(String(50), default='active')  # active, completed, paused, cancelled
+    priority = Column(String(20), default='medium')  # low, medium, high, critical
+    category = Column(String(100))  # work, personal, health, learning, etc.
+    target_date = Column(DateTime)  # When goal should be achieved
+    completed_at = Column(DateTime)  # When goal was actually completed
+    progress_percentage = Column(Integer, default=0)  # 0-100
+    progress_notes = Column(Text)  # Notes about progress
+    related_tasks = Column(Text)  # JSON array of related task IDs
+    success_criteria = Column(Text)  # How to measure success
+    created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), onupdate=datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="goals")
+
+    def is_overdue(self):
+        """Check if goal is overdue"""
+        if self.target_date and self.status == 'active':
+            return datetime.datetime.now(datetime.timezone.utc) > self.target_date
+        return False
+
+    def days_until_target(self):
+        """Calculate days until target date"""
+        if self.target_date:
+            delta = self.target_date - datetime.datetime.now(datetime.timezone.utc)
+            return delta.days
+        return None
 
 
 class UserRating(Base):
