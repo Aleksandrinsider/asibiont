@@ -62,6 +62,7 @@ background_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="api_
 
 def _redis_get(cache_key, timeout_seconds=5):
     """Получить данные из Redis с таймаутом"""
+    global redis_client  # Объявляем глобальную переменную в начале функции
     if redis_client:
         try:
             # Устанавливаем таймаут для операции
@@ -72,13 +73,13 @@ def _redis_get(cache_key, timeout_seconds=5):
         except Exception as e:
             logger.warning(f"[REDIS] Failed to get {cache_key}: {e}")
             # При ошибке Redis отключаем его на время
-            global redis_client
             redis_client = None
     return None
 
 
 def _redis_set(cache_key, data, ttl_seconds, timeout_seconds=5):
     """Сохранить данные в Redis с TTL и таймаутом"""
+    global redis_client  # Объявляем глобальную переменную в начале функции
     if redis_client:
         try:
             # Устанавливаем таймаут для операции
@@ -88,7 +89,6 @@ def _redis_set(cache_key, data, ttl_seconds, timeout_seconds=5):
         except Exception as e:
             logger.warning(f"[REDIS] Failed to set {cache_key}: {e}")
             # При ошибке Redis отключаем его на время
-            global redis_client
             redis_client = None
     return False
 
