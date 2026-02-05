@@ -6,56 +6,93 @@ import asyncio
 import aiohttp
 import json
 import logging
+from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 
 logger = logging.getLogger(__name__)
 
-class AutonomousAgent:
-    """Полностью автономный агент - сам генерирует весь код и логику"""
+class HybridAutonomousAgent:
+    """
+    Улучшенный гибридный автономный агент с:
+    - Планированием стратегии
+    - Использованием готовых handlers
+    - Self-reflection
+    - Адаптацией к ошибкам
+    """
 
     def __init__(self):
-        self.generated_code = {}  # Хранилище сгенерированного кода
         self.execution_history = []  # История выполнения
-        self.db_schema = self._get_db_schema()  # Схема базы данных
+        self.available_tools = self._get_available_tools()  # Доступные инструменты
+        self.context_memory = []  # Краткосрочная память контекста
 
-    def _get_db_schema(self):
-        """Получить реальную схему базы данных из существующих моделей"""
-        try:
-            # Импортируем модели для получения реальной схемы
-            schema = {}
-
-            # User model
-            user_columns = {}
-            for column in User.__table__.columns:
-                user_columns[column.name] = str(column.type)
-            schema['users'] = user_columns
-
-            # Task model
-            task_columns = {}
-            for column in Task.__table__.columns:
-                task_columns[column.name] = str(column.type)
-            schema['tasks'] = task_columns
-
-            # UserProfile model
-            profile_columns = {}
-            for column in UserProfile.__table__.columns:
-                profile_columns[column.name] = str(column.type)
-            schema['user_profiles'] = profile_columns
-
-            return schema
-
-        except Exception as e:
-            logger.warning(f"Не удалось получить схему из моделей: {e}")
-            # Fallback на упрощенную схему
-            return {
-                'users': {'id': 'INTEGER', 'telegram_id': 'INTEGER', 'username': 'VARCHAR'},
-                'tasks': {'id': 'INTEGER', 'user_id': 'INTEGER', 'title': 'VARCHAR', 'description': 'TEXT', 'due_date': 'DATETIME'},
-                'user_profiles': {'user_id': 'INTEGER', 'total_tasks': 'INTEGER'}
+    def _get_available_tools(self):
+        """Получить список доступных инструментов (handlers)"""
+        return {
+            "add_task": {
+                "description": "Создать новую задачу с напоминанием",
+                "params": ["title", "description", "reminder_time", "is_recurring", "recurrence_pattern"],
+                "required": ["title", "reminder_time"]
+            },
+            "list_tasks": {
+                "description": "Получить список задач пользователя",
+                "params": ["filter_type", "sort_by", "limit"],
+                "required": []
+            },
+            "complete_task": {
+                "description": "Отметить задачу как выполненную", 
+                "params": ["task_title", "completion_note"],
+                "required": ["task_title"]
+            },
+            "reschedule_task": {
+                "description": "Перенести задачу на другое время",
+                "params": ["task_title", "new_time"],
+                "required": ["task_title", "new_time"]
+            },
+            "delete_task": {
+                "description": "Удалить задачу",
+                "params": ["task_title"],
+                "required": ["task_title"]
+            },
+            "edit_task": {
+                "description": "Редактировать существующую задачу",
+                "params": ["task_title", "new_title", "new_description", "new_reminder_time"],
+                "required": ["task_title"]
+            },
+            "get_task_details": {
+                "description": "Получить подробную информацию о задаче",
+                "params": ["task_title"],
+                "required": ["task_title"]
+            },
+            "find_relevant_contacts_for_task": {
+                "description": "Найти релевантные контакты для задачи/активности",
+                "params": ["task_description", "limit"],
+                "required": ["task_description"]
+            },
+            "delegate_task": {
+                "description": "Делегировать задачу другому пользователю",
+                "params": ["task_title", "worker_username", "deadline"],
+                "required": ["task_title", "worker_username"]
+            },
+            "show_profile": {
+                "description": "Показать профиль пользователя",
+                "params": [],
+                "required": []
+            },
+            "update_profile": {
+                "description": "Обновить профиль пользователя",
+                "params": ["field", "value"],
+                "required": ["field", "value"]
+            },
+            "check_subscription_status": {
+                "description": "Проверить статус подписки",
+                "params": [],
+                "required": []
             }
+        }
 
     async def call_ai(self, messages, **kwargs):
-        """Универсальный вызов AI"""
+        """Универсальный вызов AI API"""
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -66,7 +103,7 @@ class AutonomousAgent:
             "model": DEEPSEEK_MODEL,
             "messages": messages,
             "temperature": 0.7,
-            "max_tokens": 3000,
+            "max_tokens": 2000,
             **kwargs
         }
 
@@ -75,297 +112,380 @@ class AutonomousAgent:
                 if response.status == 200:
                     return await response.json()
                 else:
-                    raise Exception(f"AI call failed: {response.status} {await response.text()}")
+                    error_text = await response.text()
+                    raise Exception(f"AI call failed: {response.status} {error_text}")
 
-    async def analyze_and_generate_code(self, user_message, user_id, context=None):
-        """AI анализирует запрос и генерирует весь необходимый код"""
-
-        schema_info = f"""
-        СХЕМА БАЗЫ ДАННЫХ:
-        {json.dumps(self.db_schema, indent=2, ensure_ascii=False)}
-
-        ДОСТУПНЫЕ МОДУЛИ:
-        - sqlite3 (для работы с SQLite)
-        - datetime, json, asyncio
-        - aiohttp (для API вызовов)
+    async def plan_strategy(self, user_message, user_id, context=None):
         """
-
-        # Добавляем контекст разговора если есть
-        context_info = ""
+        ШАГ 1: AI планирует стратегию выполнения запроса
+        Возвращает список действий, которые нужно выполнить
+        """
+        
+        tools_info = json.dumps(self.available_tools, indent=2, ensure_ascii=False)
+        
+        # Получаем краткую информацию о текущих задачах
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                tasks = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status != 'completed'
+                ).limit(10).all()
+                tasks_summary = [{"title": t.title, "due_date": str(t.due_date) if t.due_date else None} for t in tasks]
+            else:
+                tasks_summary = []
+        finally:
+            session.close()
+        
+        context_str = ""
         if context and len(context) > 0:
-            context_info = f"\nКОНТЕКСТ РАЗГОВОРА:\n" + "\n".join([f"- {msg.get('content', '')[:100]}..." for msg in context[-5:]])
+            recent_context = context[-5:]  # Последние 5 сообщений
+            context_str = "\n".join([f"{msg.get('role', 'user')}: {msg.get('content', '')[:100]}" for msg in recent_context])
 
-        system_prompt = f"""Ты - ПРОДВИНУТЫЙ АВТОНОМНЫЙ AI-АГЕНТ для управления задачами.
+        system_prompt = f"""Ты - СТРАТЕГИЧЕСКИЙ ПЛАНИРОВЩИК для AI-ассистента управления задачами.
 
-{schema_info}{context_info}
+ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+{tools_info}
 
-ТВОЯ ЗАДАЧА: Проанализировать запрос пользователя и сгенерировать ВЕСЬ необходимый код для его выполнения.
+ТЕКУЩИЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:
+{json.dumps(tasks_summary, indent=2, ensure_ascii=False)}
+
+КОНТЕКСТ РАЗГОВОРА:
+{context_str}
+
+ТВОЯ ЗАДАЧА: Проанализировать запрос и составить ПЛАН действий.
 
 ВЕРНИ JSON в ТОЧНО таком формате:
 {{
-    "analysis": "подробный анализ запроса",
+    "intent": "краткое описание намерения пользователя",
+    "needs_context": true/false,
     "actions": [
         {{
-            "type": "sql_query",
-            "description": "что делает запрос",
-            "query": "SQL запрос",
-            "params": ["параметры"]
-        }},
-        {{
-            "type": "python_code",
-            "description": "что делает код",
-            "code": "Python код для выполнения",
-            "imports": ["импорты"]
-        }},
-        {{
-            "type": "api_call",
-            "description": "что делает API вызов",
-            "url": "endpoint",
-            "method": "GET/POST",
-            "data": {{}}
-        }},
-        {{
-            "type": "direct_response",
-            "response": "естественный ответ пользователю"
+            "tool": "название_инструмента",
+            "params": {{"param1": "value1"}},
+            "reason": "зачем вызываем этот инструмент"
         }}
     ],
-    "response_template": "шаблон ответа с {{placeholders}}"
+    "response_strategy": "как сформировать ответ пользователю"
 }}
 
-СТИЛЬ ОТВЕТОВ:
-1. БУДЬ КОНВЕРСАЦИОННЫМ: используй "я", "ты", дружелюбный тон
-2. ДАВАЙ ДЕТАЛЬНЫЕ ОТВЕТЫ: конкретное время, полезная информация
-3. ДОБАВЛЯЙ КОНТЕКСТ: сколько задач, что дальше, советы
-4. БУДЬ ПОМОЩНИКОМ: предлагай альтернативы, давай рекомендации
-
 ПРАВИЛА:
-1. Используй ТОЛЬКО предоставленную схему БД
-2. Генерируй самодостаточный код
-3. Не используй внешние функции или модули проекта
-4. Для работы с БД генерируй стандартные SQL запросы (SELECT, INSERT, UPDATE, DELETE)
-5. Используй ? для плейсхолдеров в SQL запросах
-6. Параметры передавай как простой массив значений: ["value1", "value2", 123]
-7. Все действия должны быть выполнимы автономно
-8. Для INSERT: INSERT INTO table (col1, col2) VALUES (?, ?)
-9. Для WHERE условий: WHERE col = ?
-10. Давай естественные, полезные ответы как опытный ассистент"""
+1. Используй ТОЛЬКО инструменты из списка ДОСТУПНЫЕ ИНСТРУМЕНТЫ
+2. По возможности планируй МИНИМАЛЬНОЕ количество действий
+3. Если нужна информация о задачах - сначала вызови list_tasks или get_task_details
+4. Для создания задачи ВСЕГДА требуй reminder_time
+5. Для завершения/переноса/удаления задачи нужен task_title (ключевое слово из названия)
+6. Если пользователь создает задачу про активность (спорт, встречи) - добавь find_relevant_contacts_for_task
+7. Будь конкретным в параметрах - извлекай их из запроса пользователя
+
+ПРИМЕРЫ:
+
+Запрос: "создай задачу купить молоко завтра в 9"
+План:
+{{
+    "intent": "создать задачу о покупке",
+    "needs_context": false,
+    "actions": [
+        {{
+            "tool": "add_task",
+            "params": {{"title": "Купить молоко", "reminder_time": "завтра в 9:00"}},
+            "reason": "пользователь хочет создать задачу"
+        }}
+    ],
+    "response_strategy": "подтвердить создание задачи с деталями"
+}}
+
+Запрос: "покажи мои задачи"
+План:
+{{
+    "intent": "просмотреть список задач",
+    "needs_context": false,
+    "actions": [
+        {{
+            "tool": "list_tasks",
+            "params": {{}},
+            "reason": "получить список задач пользователя"
+        }}
+    ],
+    "response_strategy": "показать задачи в понятном формате"
+}}
+
+Запрос: "готово, купил молоко"
+План:
+{{
+    "intent": "отметить задачу выполненной",
+    "needs_context": false,
+    "actions": [
+        {{
+            "tool": "complete_task",
+            "params": {{"task_title": "молоко"}},
+            "reason": "завершить задачу по ключевому слову"
+        }}
+    ],
+    "response_strategy": "поздравить с выполнением"
+}}
+
+Запрос: "перенеси встречу на завтра"
+План:
+{{
+    "intent": "перенести задачу",
+    "needs_context": true,
+    "actions": [
+        {{
+            "tool": "reschedule_task",
+            "params": {{"task_title": "встреч", "new_time": "завтра"}},
+            "reason": "перенести задачу со словом 'встреч'"
+        }}
+    ],
+    "response_strategy": "подтвердить перенос с новым временем"
+}}"""
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Запрос пользователя: {user_message}\nUser ID: {user_id}"}
+            {"role": "user", "content": f"Запрос: {user_message}"}
         ]
 
         response = await self.call_ai(messages)
         content = response['choices'][0]['message']['content']
 
         try:
-            plan = json.loads(content)
-            return plan
-        except json.JSONDecodeError:
-            # Попытка извлечь JSON
+            # Извлекаем JSON
             import re
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
-                try:
-                    return json.loads(json_match.group())
-                except:
-                    pass
-            # Fallback
+                plan = json.loads(json_match.group())
+                return plan
+            else:
+                return {
+                    "intent": "не распознано",
+                    "needs_context": False,
+                    "actions": [],
+                    "response_strategy": "ответить естественно"
+                }
+        except Exception as e:
+            logger.error(f"Ошибка парсинга плана: {e}")
             return {
-                "analysis": "Не удалось распознать запрос",
-                "actions": [{
-                    "type": "direct_response",
-                    "response": "Извините, не удалось обработать запрос. Попробуйте переформулировать."
-                }],
-                "response_template": "Извините, не удалось обработать запрос. Попробуйте переформулировать."
+                "intent": "ошибка парсинга",
+                "needs_context": False,
+                "actions": [],
+                "response_strategy": "извиниться и попросить переформулировать"
             }
 
-    async def execute_action(self, action, user_id):
-        """Выполнение действия"""
-
-        action_type = action.get('type')
-
-        if action_type == 'sql_query':
-            return await self.execute_sql_query(action, user_id)
-        elif action_type == 'python_code':
-            return await self.execute_python_code(action, user_id)
-        elif action_type == 'api_call':
-            return await self.execute_api_call(action)
-        elif action_type == 'direct_response':
-            return action.get('response', 'OK')
-        else:
-            return f"Неизвестный тип действия: {action_type}"
-
-    async def execute_sql_query(self, action, user_id):
-        """Выполнение SQL запроса через sqlite3"""
-
-        query = action.get('query', '')
-        params = action.get('params', [])
-
-        try:
-            # Используем sqlite3 напрямую, как указано в правилах
-            import sqlite3
-            from config import DATABASE_URL
-
-            # Подключаемся к базе данных
-            conn = sqlite3.connect(DATABASE_URL.replace('sqlite:///', ''))
-            cursor = conn.cursor()
-
-            # Выполняем запрос
-            if params:
-                cursor.execute(query, tuple(params))
-            else:
-                cursor.execute(query)
-
-            # Получаем результаты
-            if query.strip().upper().startswith(('SELECT', 'SHOW')):
-                # Для SELECT запросов
-                rows = cursor.fetchall()
-                column_names = [desc[0] for desc in cursor.description] if cursor.description else []
-                if rows:
-                    # Преобразуем в список словарей
-                    formatted_results = [dict(zip(column_names, row)) for row in rows]
-                    conn.close()
-                    return formatted_results
-                else:
-                    conn.close()
-                    return []
-            else:
-                # Для INSERT, UPDATE, DELETE - коммитим изменения
-                conn.commit()
-                conn.close()
-                return f"Запрос выполнен успешно"
-
-        except Exception as e:
-            # Попытка закрыть соединение в случае ошибки
+    async def execute_actions(self, actions, user_id):
+        """
+        ШАГ 2: Выполнить запланированные действия через готовые handlers
+        """
+        # Импортируем handlers
+        from . import handlers
+        
+        results = []
+        
+        for action in actions:
+            tool_name = action.get('tool')
+            params = action.get('params', {})
+            reason = action.get('reason', '')
+            
+            logger.info(f"[AGENT] Executing {tool_name} with params {params} - {reason}")
+            
             try:
-                conn.close()
-            except:
-                pass
-            return f"Ошибка выполнения SQL: {str(e)}"
+                # Получаем функцию handler
+                handler_func = getattr(handlers, tool_name, None)
+                
+                if handler_func is None:
+                    results.append({
+                        "tool": tool_name,
+                        "success": False,
+                        "error": f"Handler {tool_name} not found"
+                    })
+                    continue
+                
+                # Добавляем user_id к параметрам
+                params['user_id'] = user_id
+                
+                # Выполняем handler
+                result = await handler_func(**params) if asyncio.iscoroutinefunction(handler_func) else handler_func(**params)
+                
+                results.append({
+                    "tool": tool_name,
+                    "success": True,
+                    "result": result,
+                    "reason": reason
+                })
+                
+            except Exception as e:
+                logger.error(f"[AGENT] Error executing {tool_name}: {e}")
+                import traceback
+                traceback.print_exc()
+                results.append({
+                    "tool": tool_name,
+                    "success": False,
+                    "error": str(e),
+                    "reason": reason
+                })
+        
+        return results
 
-    async def execute_python_code(self, action, user_id):
-        """Выполнение Python кода"""
+    async def reflect_and_respond(self, user_message, plan, execution_results, context=None):
+        """
+        ШАГ 3: AI рефлексирует над результатами и формирует естественный ответ
+        """
+        
+        results_summary = []
+        for result in execution_results:
+            if result['success']:
+                results_summary.append(f"✅ {result['tool']}: {result['reason']}\nРезультат: {str(result['result'])[:200]}")
+            else:
+                results_summary.append(f"❌ {result['tool']}: {result['error']}")
+        
+        results_text = "\n\n".join(results_summary)
+        
+        context_str = ""
+        if context and len(context) > 0:
+            recent = context[-3:]
+            context_str = "\n".join([f"{m.get('role')}: {m.get('content', '')[:80]}" for m in recent])
+        
+        system_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
 
-        code = action.get('code', '')
-        imports = action.get('imports', [])
+ЗАПРОС ПОЛЬЗОВАТЕЛЯ: {user_message}
 
-        try:
-            # Создаем пространство имен
-            namespace = {
-                'user_id': user_id,
-                'asyncio': asyncio,
-                'json': json,
-                'datetime': None,
-                'result': None
-            }
+ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ:
+{results_text}
 
-            # Импортируем необходимые модули
-            for imp in imports:
-                try:
-                    if imp == 'datetime':
-                        import datetime
-                        namespace['datetime'] = datetime
-                    elif imp == 'json':
-                        namespace['json'] = json
-                    elif imp == 'asyncio':
-                        namespace['asyncio'] = asyncio
-                except ImportError:
-                    pass
+КОНТЕКСТ:
+{context_str}
 
-            # Выполняем код
-            exec(code, namespace)
-            result = namespace.get('result')
+ТВОЯ ЗАДАЧА: Сформировать ЕСТЕСТВЕННЫЙ, ДРУЖЕЛЮБНЫЙ ответ пользователю.
 
-            return result if result is not None else "Код выполнен успешно"
+ПРАВИЛА ОТВЕТА:
+1. Говори от первого лица: "Я создал задачу", "Вот твои задачи"
+2. Будь конкретным: указывай время, детали, количества
+3. Давай полезный контекст: что дальше, советы, альтернативы
+4. Используй эмодзи умеренно: ✅ 📝 ⏰ 🎯
+5. Если была ошибка - объясни причину и предложи решение
+6. Структурируй информацию для читаемости
+7. Завершай ответ полезным действием или вопросом
 
-        except Exception as e:
-            return f"Ошибка выполнения кода: {str(e)}"
+ПРИМЕРЫ:
 
-    async def execute_api_call(self, action):
-        """Выполнение API вызова"""
+Создание задачи:
+"✅ Отлично! Я создал задачу 'Купить молоко' на завтра в 9:00. Напомню тебе за 30 минут. Хочешь добавить что-то еще?"
 
-        url = action.get('url', '')
-        method = action.get('method', 'GET')
-        data = action.get('data', {})
+Список задач:
+"📝 У тебя сейчас 5 активных задач:
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                if method.upper() == 'POST':
-                    async with session.post(url, json=data) as response:
-                        return await response.json()
-                else:
-                    async with session.get(url) as response:
-                        return await response.json()
-        except Exception as e:
-            return f"Ошибка API вызова: {str(e)}"
+1. ⏰ Купить молоко - завтра в 9:00
+2. ⏰ Встреча с командой - сегодня в 15:00
+3. ⏰ Позвонить маме - через 2 часа
+
+Ближайшая - встреча через 3 часа. Готов?"
+
+Выполнение задачи:
+"🎉 Отлично! Задача 'Купить молоко' выполнена! У тебя осталось 4 задачи. Следующая - встреча с командой в 15:00."
+
+Верни ТОЛЬКО текст ответа, без JSON, без технических деталей."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Сформулируй ответ"}
+        ]
+
+        response = await self.call_ai(messages, temperature=0.8)
+        content = response['choices'][0]['message']['content']
+        
+        return content.strip()
 
     async def process_request(self, user_message, user_id, context=None):
-        """Основная функция обработки запроса"""
-
-        # Анализируем и генерируем план
-        plan = await self.analyze_and_generate_code(user_message, user_id, context)
-
-        # Выполняем действия
-        results = []
-        for action in plan.get('actions', []):
-            result = await self.execute_action(action, user_id)
-            results.append(result)
-
-            # Сохраняем в истории
+        """
+        Основной процесс обработки запроса:
+        1. Планирование стратегии
+        2. Выполнение действий
+        3. Рефлексия и формирование ответа
+        """
+        
+        try:
+            # ШАГ 1: Планирование
+            logger.info(f"[AGENT] Step 1: Planning strategy for '{user_message[:50]}...'")
+            plan = await self.plan_strategy(user_message, user_id, context)
+            
+            actions = plan.get('actions', [])
+            
+            # ШАГ 2: Выполнение
+            execution_results = []
+            if actions:
+                logger.info(f"[AGENT] Step 2: Executing {len(actions)} actions")
+                execution_results = await self.execute_actions(actions, user_id)
+            else:
+                logger.info(f"[AGENT] No actions to execute, direct response")
+            
+            # ШАГ 3: Рефлексия и ответ
+            logger.info(f"[AGENT] Step 3: Reflecting and generating response")
+            response = await self.reflect_and_respond(
+                user_message, 
+                plan, 
+                execution_results, 
+                context
+            )
+            
+            # Сохраняем в историю
             self.execution_history.append({
-                'action': action,
-                'result': result,
-                'timestamp': asyncio.get_event_loop().time()
+                'message': user_message,
+                'plan': plan,
+                'results': execution_results,
+                'response': response,
+                'timestamp': datetime.now(timezone.utc).isoformat()
             })
+            
+            # Ограничиваем размер истории
+            if len(self.execution_history) > 20:
+                self.execution_history = self.execution_history[-20:]
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"[AGENT] Error processing request: {e}")
+            import traceback
+            traceback.print_exc()
+            return "Извините, произошла ошибка при обработке запроса. Попробуйте переформулировать."
 
-        # Формируем ответ
-        response_template = plan.get('response_template', 'Выполнено: {results}')
-
-        # Заменяем плейсхолдеры
-        response = response_template
-        if '{results}' in response:
-            response = response.replace('{results}', '\n'.join(str(r) for r in results))
-
-        return response
 
 # Глобальный экземпляр агента
 _autonomous_agent = None
 
 def get_autonomous_agent():
-    """Получить экземпляр автономного агента"""
+    """Получить экземпляр гибридного автономного агента"""
     global _autonomous_agent
     if _autonomous_agent is None:
-        _autonomous_agent = AutonomousAgent()
+        _autonomous_agent = HybridAutonomousAgent()
     return _autonomous_agent
 
 async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
-    """Новая функция чата с использованием автономного агента"""
+    """Функция чата с использованием улучшенного гибридного автономного агента"""
 
-    logger.info(f"[CHAT_WITH_AI] START - user_id={user_id}, message='{message[:50]}...'")
+    logger.info(f"[HYBRID_AGENT] START - user_id={user_id}, message='{message[:50]}...'")
 
     if user_id is None:
-        logger.error("[CHAT_WITH_AI] ERROR: user_id is None!")
+        logger.error("[HYBRID_AGENT] ERROR: user_id is None!")
         return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
 
     try:
-        # Получаем автономного агента
+        # Получаем гибридного автономного агента
         agent = get_autonomous_agent()
 
-        # Обрабатываем запрос через автономного агента
+        # Обрабатываем запрос через улучшенного агента
         response_text = await agent.process_request(message, user_id, context)
 
         # Возвращаем в формате, ожидаемом остальным кодом
         return {
             'response': response_text,
-            'tool_calls': []  # Автономный агент не использует tool_calls
+            'tool_calls': []  # Автономный агент управляет вызовами инструментов самостоятельно
         }
 
     except Exception as e:
-        logger.error(f"[CHAT_WITH_AI] ERROR: {e}")
+        logger.error(f"[HYBRID_AGENT] ERROR: {e}")
         import traceback
         traceback.print_exc()
         return {
-            'response': f"Извините, произошла ошибка при обработке запроса: {str(e)}",
+            'response': f"Извините, произошла ошибка: {str(e)}",
             'tool_calls': []
         }
