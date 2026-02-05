@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
+from .prompts import get_extended_system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -123,123 +124,69 @@ class HybridAutonomousAgent:
         
         tools_info = json.dumps(self.available_tools, indent=2, ensure_ascii=False)
         
-        # Получаем краткую информацию о текущих задачах
+        # Получаем информацию о пользователе
         session = Session()
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
-            if user:
-                tasks = session.query(Task).filter(
-                    Task.user_id == user.id,
-                    Task.status != 'completed'
-                ).limit(10).all()
-                tasks_summary = [{"title": t.title, "due_date": str(t.due_date) if t.due_date else None} for t in tasks]
-            else:
-                tasks_summary = []
+            if not user:
+                return {
+                    "intent": "пользователь не найден",
+                    "needs_context": False,
+                    "actions": [],
+                    "response_strategy": "сообщить об ошибке"
+                }
+            
+            # Получаем задачи
+            tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status != 'completed'
+            ).limit(10).all()
+            tasks_summary = [{"title": t.title, "due_date": str(t.due_date) if t.due_date else None} for t in tasks]
+            
+            # Получаем базовый промпт
+            base_prompt = get_extended_system_prompt(
+                user_now=None,
+                current_time_str=None,
+                current_date_str=None,
+                user_username=user.username or "пользователь",
+                mentions_str="",
+                user_memory=user.memory or "",
+                context=context,
+                intent=None,
+                subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
+                message_type=None,
+                weather_info=None,
+                news_info=None
+            )
         finally:
             session.close()
         
-        context_str = ""
-        if context and len(context) > 0:
-            recent_context = context[-5:]  # Последние 5 сообщений
-            context_str = "\n".join([f"{msg.get('role', 'user')}: {msg.get('content', '')[:100]}" for msg in recent_context])
+        # Дополняем базовый промпт инструкциями для планирования
+        system_prompt = f"{base_prompt}\n\n" + f"""\n---
 
-        system_prompt = f"""Ты - СТРАТЕГИЧЕСКИЙ ПЛАНИРОВЩИК для AI-ассистента управления задачами.
+РЕЖИМ: ПЛАНИРОВАНИЕ ДЕЙСТВИЙ
 
 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
 {tools_info}
 
-ТЕКУЩИЕ ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:
+ТЕКУЩИЕ ЗАДАЧИ:
 {json.dumps(tasks_summary, indent=2, ensure_ascii=False)}
 
-КОНТЕКСТ РАЗГОВОРА:
-{context_str}
+ЗАДАЧА: Проанализируй запрос и составь ПЛАН действий в JSON формате:
 
-ТВОЯ ЗАДАЧА: Проанализировать запрос и составить ПЛАН действий.
-
-ВЕРНИ JSON в ТОЧНО таком формате:
 {{
-    "intent": "краткое описание намерения пользователя",
-    "needs_context": true/false,
+    "intent": "намерение пользователя",
     "actions": [
-        {{
-            "tool": "название_инструмента",
-            "params": {{"param1": "value1"}},
-            "reason": "зачем вызываем этот инструмент"
-        }}
-    ],
-    "response_strategy": "как сформировать ответ пользователю"
+        {{"tool": "название", "params": {{}}, "reason": "зачем"}}
+    ]
 }}
 
 ПРАВИЛА:
-1. Используй ТОЛЬКО инструменты из списка ДОСТУПНЫЕ ИНСТРУМЕНТЫ
-2. По возможности планируй МИНИМАЛЬНОЕ количество действий
-3. Если нужна информация о задачах - сначала вызови list_tasks или get_task_details
-4. Для создания задачи ВСЕГДА требуй reminder_time
-5. Для завершения/переноса/удаления задачи нужен task_title (ключевое слово из названия)
-6. Если пользователь создает задачу про активность (спорт, встречи) - добавь find_relevant_contacts_for_task
-7. Будь конкретным в параметрах - извлекай их из запроса пользователя
-
-ПРИМЕРЫ:
-
-Запрос: "создай задачу купить молоко завтра в 9"
-План:
-{{
-    "intent": "создать задачу о покупке",
-    "needs_context": false,
-    "actions": [
-        {{
-            "tool": "add_task",
-            "params": {{"title": "Купить молоко", "reminder_time": "завтра в 9:00"}},
-            "reason": "пользователь хочет создать задачу"
-        }}
-    ],
-    "response_strategy": "подтвердить создание задачи с деталями"
-}}
-
-Запрос: "покажи мои задачи"
-План:
-{{
-    "intent": "просмотреть список задач",
-    "needs_context": false,
-    "actions": [
-        {{
-            "tool": "list_tasks",
-            "params": {{}},
-            "reason": "получить список задач пользователя"
-        }}
-    ],
-    "response_strategy": "показать задачи в понятном формате"
-}}
-
-Запрос: "готово, купил молоко"
-План:
-{{
-    "intent": "отметить задачу выполненной",
-    "needs_context": false,
-    "actions": [
-        {{
-            "tool": "complete_task",
-            "params": {{"task_title": "молоко"}},
-            "reason": "завершить задачу по ключевому слову"
-        }}
-    ],
-    "response_strategy": "поздравить с выполнением"
-}}
-
-Запрос: "перенеси встречу на завтра"
-План:
-{{
-    "intent": "перенести задачу",
-    "needs_context": true,
-    "actions": [
-        {{
-            "tool": "reschedule_task",
-            "params": {{"task_title": "встреч", "new_time": "завтра"}},
-            "reason": "перенести задачу со словом 'встреч'"
-        }}
-    ],
-    "response_strategy": "подтвердить перенос с новым временем"
-}}"""
+- Используй ТОЛЬКО инструменты из списка
+- Минимум действий для достижения цели
+- Извлекай параметры из запроса пользователя
+- Для задач про активности добавляй find_relevant_contacts_for_task
+"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -326,7 +273,7 @@ class HybridAutonomousAgent:
         
         return results
 
-    async def reflect_and_respond(self, user_message, plan, execution_results, context=None):
+    async def reflect_and_respond(self, user_message, plan, execution_results, context=None, user_id=None):
         """
         ШАГ 3: AI рефлексирует над результатами и формирует естественный ответ
         """
@@ -340,50 +287,50 @@ class HybridAutonomousAgent:
         
         results_text = "\n\n".join(results_summary)
         
-        context_str = ""
-        if context and len(context) > 0:
-            recent = context[-3:]
-            context_str = "\n".join([f"{m.get('role')}: {m.get('content', '')[:80]}" for m in recent])
+        # Получаем информацию о пользователе для базового промпта
+        session = Session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first() if user_id else None
+            
+            # Получаем базовый промпт
+            base_prompt = get_extended_system_prompt(
+                user_now=None,
+                current_time_str=None,
+                current_date_str=None,
+                user_username=user.username if user else "пользователь",
+                mentions_str="",
+                user_memory=user.memory if user else "",
+                context=context,
+                intent=None,
+                subscription_tier=getattr(user, 'subscription_tier', 'FREE') if user else 'FREE',
+                message_type=None,
+                weather_info=None,
+                news_info=None
+            )
+        finally:
+            session.close()
         
-        system_prompt = f"""Ты - ASI Biont, дружелюбный AI-помощник для управления задачами.
+        # Дополняем базовый промпт инструкциями для ответа
+        system_prompt = f"{base_prompt}\n\n" + f"""\n---
 
-ЗАПРОС ПОЛЬЗОВАТЕЛЯ: {user_message}
+РЕЖИМ: ФОРМИРОВАНИЕ ОТВЕТА
+
+ЗАПРОС: {user_message}
 
 ВЫПОЛНЕННЫЕ ДЕЙСТВИЯ:
 {results_text}
 
-КОНТЕКСТ:
-{context_str}
+ЗАДАЧА: Сформируй естественный дружелюбный ответ.
 
-ТВОЯ ЗАДАЧА: Сформировать ЕСТЕСТВЕННЫЙ, ДРУЖЕЛЮБНЫЙ ответ пользователю.
+ПРАВИЛА:
+- Говори от первого лица: "Я создал", "Вот твои задачи"
+- Будь конкретным: укажи время, детали, количество
+- Используй 1-2 эмодзи: ✅ 📝 ⏰ 🎯
+- Завершай полезным предложением или вопросом
+- БЕЗ форматирования, списков, жирного текста
 
-ПРАВИЛА ОТВЕТА:
-1. Говори от первого лица: "Я создал задачу", "Вот твои задачи"
-2. Будь конкретным: указывай время, детали, количества
-3. Давай полезный контекст: что дальше, советы, альтернативы
-4. Используй эмодзи умеренно: ✅ 📝 ⏰ 🎯
-5. Если была ошибка - объясни причину и предложи решение
-6. Структурируй информацию для читаемости
-7. Завершай ответ полезным действием или вопросом
-
-ПРИМЕРЫ:
-
-Создание задачи:
-"✅ Отлично! Я создал задачу 'Купить молоко' на завтра в 9:00. Напомню тебе за 30 минут. Хочешь добавить что-то еще?"
-
-Список задач:
-"📝 У тебя сейчас 5 активных задач:
-
-1. ⏰ Купить молоко - завтра в 9:00
-2. ⏰ Встреча с командой - сегодня в 15:00
-3. ⏰ Позвонить маме - через 2 часа
-
-Ближайшая - встреча через 3 часа. Готов?"
-
-Выполнение задачи:
-"🎉 Отлично! Задача 'Купить молоко' выполнена! У тебя осталось 4 задачи. Следующая - встреча с командой в 15:00."
-
-Верни ТОЛЬКО текст ответа, без JSON, без технических деталей."""
+Верни ТОЛЬКО текст ответа.
+"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -424,7 +371,8 @@ class HybridAutonomousAgent:
                 user_message, 
                 plan, 
                 execution_results, 
-                context
+                context,
+                user_id
             )
             
             # Сохраняем в историю
