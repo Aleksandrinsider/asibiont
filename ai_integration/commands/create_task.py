@@ -4,7 +4,8 @@ from ..parsers import extract_task_details
 from ..responses import generate_response
 
 class CreateTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Use AI-extracted parameters if available and valid, otherwise extract from message
         title = self.params.get('title')
         reminder_time = self.params.get('reminder_time')

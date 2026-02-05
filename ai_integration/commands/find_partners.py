@@ -3,7 +3,7 @@ from .. import handlers
 from ..responses import generate_response
 
 class FindPartnersCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):`n        user_id = user.telegram_id
         # For find_partners, we don't need complex parsing
         # The handler will use user's profile to find matches
 

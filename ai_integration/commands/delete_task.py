@@ -2,7 +2,7 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class DeleteTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):`n        user_id = user.telegram_id
         # For PoC, use message as task_title
         task_title = self.message
 

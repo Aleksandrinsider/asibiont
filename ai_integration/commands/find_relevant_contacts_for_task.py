@@ -2,7 +2,7 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class FindRelevantContactsForTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):`n        user_id = user.telegram_id
         # Extract task description from message
         task_description = self.params.get('task_description', self.message)
         

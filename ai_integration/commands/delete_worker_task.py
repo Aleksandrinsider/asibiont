@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DeleteWorkerTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):`n        user_id = user.telegram_id
         try:
             # Находим пользователя
             user = db_session.query(User).filter_by(telegram_id=user_id).first()

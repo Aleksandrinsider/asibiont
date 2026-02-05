@@ -2,7 +2,8 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class CompleteTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Extract task title from message more intelligently
         task_title = self.params.get('task_title')
         

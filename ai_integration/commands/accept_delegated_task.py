@@ -2,7 +2,7 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class AcceptDelegatedTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):`n        user_id = user.telegram_id
         # Extract task_id from params
         task_id = self.params.get('task_id')
         

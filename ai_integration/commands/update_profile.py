@@ -3,7 +3,7 @@ from .. import handlers
 from ..responses import generate_response
 
 class UpdateProfileCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):`n        user_id = user.telegram_id
         # Extract profile information from message
         message_lower = self.message.lower()
 

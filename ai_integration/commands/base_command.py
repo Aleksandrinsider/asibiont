@@ -9,5 +9,5 @@ class BaseCommand(ABC):
         self.params = kwargs
 
     @abstractmethod
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):
         pass

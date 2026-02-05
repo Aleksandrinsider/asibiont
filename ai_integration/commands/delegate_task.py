@@ -3,7 +3,8 @@ from .. import handlers
 from ..responses import generate_response
 
 class DelegateTaskCommand(BaseCommand):
-    async def execute(self, user_id, db_session):
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Парсинг команды делегирования
         message_lower = self.message.lower()
 
