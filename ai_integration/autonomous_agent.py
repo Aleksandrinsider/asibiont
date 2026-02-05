@@ -5,9 +5,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import asyncio
 import aiohttp
 import json
+import logging
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+from models import Session, User, Task, UserProfile, Subscription
 
-class FullyAutonomousAgent:
+logger = logging.getLogger(__name__)
+
+class AutonomousAgent:
     """Полностью автономный агент - сам генерирует весь код и логику"""
 
     def __init__(self):
@@ -19,9 +23,6 @@ class FullyAutonomousAgent:
         """Получить реальную схему базы данных из существующих моделей"""
         try:
             # Импортируем модели для получения реальной схемы
-            from models import User, Task, UserProfile, Subscription
-
-            # Получаем схему из SQLAlchemy моделей
             schema = {}
 
             # User model
@@ -45,7 +46,7 @@ class FullyAutonomousAgent:
             return schema
 
         except Exception as e:
-            print(f"Не удалось получить схему из моделей: {e}")
+            logger.warning(f"Не удалось получить схему из моделей: {e}")
             # Fallback на упрощенную схему
             return {
                 'users': {'id': 'INTEGER', 'telegram_id': 'INTEGER', 'username': 'VARCHAR'},
@@ -76,7 +77,7 @@ class FullyAutonomousAgent:
                 else:
                     raise Exception(f"AI call failed: {response.status} {await response.text()}")
 
-    async def analyze_and_generate_code(self, user_message, user_id):
+    async def analyze_and_generate_code(self, user_message, user_id, context=None):
         """AI анализирует запрос и генерирует весь необходимый код"""
 
         schema_info = f"""
@@ -89,9 +90,14 @@ class FullyAutonomousAgent:
         - aiohttp (для API вызовов)
         """
 
+        # Добавляем контекст разговора если есть
+        context_info = ""
+        if context and len(context) > 0:
+            context_info = f"\nКОНТЕКСТ РАЗГОВОРА:\n" + "\n".join([f"- {msg.get('content', '')[:100]}..." for msg in context[-5:]])
+
         system_prompt = f"""Ты - ПРОДВИНУТЫЙ АВТОНОМНЫЙ AI-АГЕНТ для управления задачами.
 
-{schema_info}
+{schema_info}{context_info}
 
 ТВОЯ ЗАДАЧА: Проанализировать запрос пользователя и сгенерировать ВЕСЬ необходимый код для его выполнения.
 
@@ -141,7 +147,8 @@ class FullyAutonomousAgent:
 6. Параметры передавай как простой массив значений: ["value1", "value2", 123]
 7. Все действия должны быть выполнимы автономно
 8. Для INSERT: INSERT INTO table (col1, col2) VALUES (?, ?)
-9. Для WHERE условий: WHERE col = ?"""
+9. Для WHERE условий: WHERE col = ?
+10. Давай естественные, полезные ответы как опытный ассистент"""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -201,7 +208,7 @@ class FullyAutonomousAgent:
             from config import DATABASE_URL
 
             # Подключаемся к базе данных
-            conn = sqlite3.connect(DATABASE_URL)
+            conn = sqlite3.connect(DATABASE_URL.replace('sqlite:///', ''))
             cursor = conn.cursor()
 
             # Выполняем запрос
@@ -233,33 +240,6 @@ class FullyAutonomousAgent:
             # Попытка закрыть соединение в случае ошибки
             try:
                 conn.close()
-            except:
-                pass
-            return f"Ошибка выполнения SQL: {str(e)}"
-
-            # Получаем результаты
-            if query.strip().upper().startswith(('SELECT', 'SHOW')):
-                # Для SELECT запросов
-                rows = result.fetchall()
-                if rows:
-                    # Преобразуем в список словарей
-                    column_names = result.keys()
-                    formatted_results = [dict(zip(column_names, row)) for row in rows]
-                    session.close()
-                    return formatted_results
-                else:
-                    session.close()
-                    return []
-            else:
-                # Для INSERT, UPDATE, DELETE
-                session.commit()
-                session.close()
-                return f"Запрос выполнен успешно"
-
-        except Exception as e:
-            # Попытка закрыть сессию в случае ошибки
-            try:
-                session.close()
             except:
                 pass
             return f"Ошибка выполнения SQL: {str(e)}"
@@ -320,11 +300,11 @@ class FullyAutonomousAgent:
         except Exception as e:
             return f"Ошибка API вызова: {str(e)}"
 
-    async def process_request(self, user_message, user_id):
+    async def process_request(self, user_message, user_id, context=None):
         """Основная функция обработки запроса"""
 
         # Анализируем и генерируем план
-        plan = await self.analyze_and_generate_code(user_message, user_id)
+        plan = await self.analyze_and_generate_code(user_message, user_id, context)
 
         # Выполняем действия
         results = []
@@ -349,35 +329,43 @@ class FullyAutonomousAgent:
 
         return response
 
-async def demo_fully_autonomous_agent():
-    """Демо полностью автономного агента"""
+# Глобальный экземпляр агента
+_autonomous_agent = None
 
-    agent = FullyAutonomousAgent()
+def get_autonomous_agent():
+    """Получить экземпляр автономного агента"""
+    global _autonomous_agent
+    if _autonomous_agent is None:
+        _autonomous_agent = AutonomousAgent()
+    return _autonomous_agent
 
-    test_requests = [
-        "Создай задачу 'позвонить другу' на завтра в 15:00",
-        "Покажи все мои задачи",
-        "Найди пользователей с похожими интересами",
-        "Создай задачу и сразу покажи список задач",
-        "Расскажи о себе"
-    ]
+async def chat_with_ai(message, context=None, user_id=None, file_content=None, db_session=None, message_type=None):
+    """Новая функция чата с использованием автономного агента"""
 
-    user_id = 123456789
+    logger.info(f"[CHAT_WITH_AI] START - user_id={user_id}, message='{message[:50]}...'")
 
-    for request in test_requests:
-        print(f"\n{'='*60}")
-        print(f"ЗАПРОС: {request}")
-        print(f"{'='*60}")
+    if user_id is None:
+        logger.error("[CHAT_WITH_AI] ERROR: user_id is None!")
+        return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
 
-        try:
-            response = await agent.process_request(request, user_id)
-            print(f"ОТВЕТ: {response}")
-        except Exception as e:
-            print(f"ОШИБКА: {e}")
-            import traceback
-            traceback.print_exc()
+    try:
+        # Получаем автономного агента
+        agent = get_autonomous_agent()
 
-        print(f"\n📊 История действий: {len(agent.execution_history)}")
+        # Обрабатываем запрос через автономного агента
+        response_text = await agent.process_request(message, user_id, context)
 
-if __name__ == "__main__":
-    asyncio.run(demo_fully_autonomous_agent())
+        # Возвращаем в формате, ожидаемом остальным кодом
+        return {
+            'response': response_text,
+            'tool_calls': []  # Автономный агент не использует tool_calls
+        }
+
+    except Exception as e:
+        logger.error(f"[CHAT_WITH_AI] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'response': f"Извините, произошла ошибка при обработке запроса: {str(e)}",
+            'tool_calls': []
+        }

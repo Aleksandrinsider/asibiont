@@ -1,5 +1,4 @@
 from .base_command import BaseCommand
-from ..chat import chat_with_ai  # Import existing chat processing
 from ai_integration.utils import get_context_from_db  # Import context loading
 from ai_integration.memory import decrypt_data
 import pytz

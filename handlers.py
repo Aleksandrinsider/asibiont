@@ -10,7 +10,6 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 
 router = Router()
 from ai_integration import chat_with_ai
-from ai_integration.router import CommandRouter
 from models import Session, User, Subscription, Task
 from config import WEBHOOK_URL
 from config import WEB_APP_URL, FREE_ACCESS_MODE
@@ -679,20 +678,16 @@ async def process_text_message(user_id, text, message, state):
         
         context = []  # Simplified: no context in bot
         
-        # Use new command-based architecture
-        router = CommandRouter()
-        command = await router.route(text, user_id, message.date)
-        
-        # Create session for command execution
+        # Use autonomous agent instead of command router
+        from ai_integration import chat_with_ai
         db_session = Session()
         try:
-            result = await command.execute(user_id, db_session)
-            # Extract response text from result dict
+            result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session)
             response_text = result.get('response', '') if isinstance(result, dict) else str(result)
             await message.bot.send_message(message.chat.id, response_text)
         except Exception as e:
-            logger.error(f"Error executing command for user {user_id}: {e}", exc_info=True)
-            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке команды. TEST VERSION 2026-02-03")
+            logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
+            await message.bot.send_message(message.chat.id, "Извините, произошла ошибка при обработке сообщения.")
             response_text = ""
         finally:
             db_session.close()

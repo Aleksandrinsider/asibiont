@@ -1276,7 +1276,6 @@ class ReminderService:
         logger.info(f"=== STARTING DELEGATION CHECK for task {task_id}, type: {check_type} ===")
 
         from ai_integration.handlers import check_delegation_deadlines, generate_progress_request
-        from ai_integration import chat_with_ai
         import asyncio
 
         db = Session()
