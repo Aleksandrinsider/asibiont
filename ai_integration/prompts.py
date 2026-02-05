@@ -102,7 +102,6 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
    - get_task_details(task_title) - получить детали задачи
    - delete_all_tasks() - удалить все задачи
    - analyze_tasks() - проанализировать связи между задачами
-   - auto_reminder(task_title, reminder_type) - настроить умные напоминания
 
 РАСПОЗНАВАНИЕ КОМАНД:
 - "Создай задачу", "напомни" → add_task()
@@ -115,7 +114,6 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - Личные данные → update_profile()
 - "Запомни что я люблю" → update_user_memory()
 - "Что делать сейчас", "ближайшие задачи" → analyze_tasks()
-- "Напомни скоро", "напомни через час" → auto_reminder()
 - Если видишь возможность предложить полезный контакт → find_relevant_contacts_for_task()
 - АВТОМАТИЧЕСКИ: при анализе контекста предлагай add_task() для полезных задач и find_relevant_contacts_for_task() для задач, подходящих для сотрудничества
 

@@ -436,28 +436,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "auto_reminder",
-            "description": "Настраивает КОРОТКИЕ напоминания для немедленных действий. Только на ближайшие часы, не на дни вперед.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task_title": {
-                        "type": "string",
-                        "description": "Название задачи для настройки напоминаний"
-                    },
-                    "reminder_type": {
-                        "type": "string",
-                        "description": "Тип напоминания: 'progress' для проверки прогресса через минуты, 'deadline' для напоминания за час, 'context' для утреннего напоминания",
-                        "enum": ["progress", "deadline", "context"]
-                    }
-                },
-                "required": ["task_title", "reminder_type"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "delete_worker_task",
             "description": "Удалить существующую фоновую задачу (worker). Используй когда пользователь хочет остановить или изменить свою фоновую задачу.",
             "parameters": {
