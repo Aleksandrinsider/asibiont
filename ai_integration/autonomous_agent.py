@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .prompts import get_extended_system_prompt
+from .dynamic_tools import tool_discovery
 
 logger = logging.getLogger(__name__)
 
@@ -20,110 +21,36 @@ class HybridAutonomousAgent:
     - Использованием готовых handlers
     - Self-reflection
     - Адаптацией к ошибкам
+    - Динамическим обнаружением инструментов
     """
 
     def __init__(self):
         self.execution_history = []  # История выполнения
-        self.available_tools = self._discover_handlers()  # Динамическое обнаружение handlers
+        self.tool_discovery = tool_discovery  # Используем глобальный экземпляр
+        self._initialize_tools()  # Инициализация инструментов
         self.context_memory = []  # Краткосрочная память контекста
         self.success_patterns = {}  # Паттерны успешных действий
         self.user_preferences = {}  # Предпочтения пользователей
+        
+        # Загружаем статистику, если есть
+        self.tool_discovery.load_stats()
 
-    def _discover_handlers(self):
-        """Динамически обнаружить все доступные handlers"""
-        from . import handlers
-        import inspect
-        
-        discovered = {}
-        
-        # Автоматически находим все функции в handlers
-        for name, func in inspect.getmembers(handlers, inspect.isfunction):
-            if not name.startswith('_'):  # Игнорируем приватные
-                # Извлекаем сигнатуру функции
-                sig = inspect.signature(func)
-                params = [p for p in sig.parameters.keys() if p != 'user_id']
-                
-                # Пытаемся получить описание из docstring
-                doc = inspect.getdoc(func) or f"Функция {name}"
-                first_line = doc.split('\n')[0]
-                
-                discovered[name] = {
-                    "description": first_line,
-                    "params": params,
-                    "required": []  # AI сам определит обязательные
-                }
-        
-        # Добавляем базовый набор, если автообнаружение не сработало
-        if not discovered:
-            discovered = self._get_default_tools()
-        
-        logger.info(f"[AGENT] Discovered {len(discovered)} handlers: {list(discovered.keys())}")
-        return discovered
+    def _initialize_tools(self):
+        """Инициализирует динамическую систему инструментов"""
+        # Обнаруживаем инструменты из handlers модуля
+        try:
+            from . import handlers
+            self.tool_discovery.discover_tools_from_module(handlers)
+            logger.info(f"[AGENT] Initialized {len(self.tool_discovery.discovered_tools)} dynamic tools")
+        except Exception as e:
+            logger.error(f"[AGENT] Failed to initialize dynamic tools: {e}")
+            # Fallback на базовые инструменты
+            self._init_default_tools()
     
-    def _get_default_tools(self):
-        """Базовый набор инструментов (fallback)"""
-        return {
-            "add_task": {
-                "description": "Создать новую задачу с напоминанием",
-                "params": ["title", "description", "reminder_time", "is_recurring", "recurrence_pattern"],
-                "required": ["title", "reminder_time"]
-            },
-            "list_tasks": {
-                "description": "Получить список задач пользователя",
-                "params": ["filter_type", "sort_by", "limit"],
-                "required": []
-            },
-            "complete_task": {
-                "description": "Отметить задачу как выполненную", 
-                "params": ["task_title", "completion_note"],
-                "required": ["task_title"]
-            },
-            "reschedule_task": {
-                "description": "Перенести задачу на другое время",
-                "params": ["task_title", "new_time"],
-                "required": ["task_title", "new_time"]
-            },
-            "delete_task": {
-                "description": "Удалить задачу",
-                "params": ["task_title"],
-                "required": ["task_title"]
-            },
-            "edit_task": {
-                "description": "Редактировать существующую задачу",
-                "params": ["task_title", "new_title", "new_description", "new_reminder_time"],
-                "required": ["task_title"]
-            },
-            "get_task_details": {
-                "description": "Получить подробную информацию о задаче",
-                "params": ["task_title"],
-                "required": ["task_title"]
-            },
-            "find_relevant_contacts_for_task": {
-                "description": "Найти релевантные контакты для задачи/активности",
-                "params": ["task_description", "limit"],
-                "required": ["task_description"]
-            },
-            "delegate_task": {
-                "description": "Делегировать задачу другому пользователю",
-                "params": ["task_title", "worker_username", "deadline"],
-                "required": ["task_title", "worker_username"]
-            },
-            "show_profile": {
-                "description": "Показать профиль пользователя",
-                "params": [],
-                "required": []
-            },
-            "update_profile": {
-                "description": "Обновить профиль пользователя",
-                "params": ["field", "value"],
-                "required": ["field", "value"]
-            },
-            "check_subscription_status": {
-                "description": "Проверить статус подписки",
-                "params": [],
-                "required": []
-            }
-        }
+    def _init_default_tools(self):
+        """Инициализирует базовый набор инструментов (fallback)"""
+        logger.warning("[AGENT] Using fallback default tools")
+        # Здесь можно добавить базовый набор, если динамическое обнаружение не сработало
 
     async def call_ai(self, messages, **kwargs):
         """Универсальный вызов AI API"""
@@ -155,7 +82,9 @@ class HybridAutonomousAgent:
         Возвращает список действий, которые нужно выполнить
         """
         
-        tools_info = json.dumps(self.available_tools, indent=2, ensure_ascii=False)
+        # Получаем релевантные инструменты для данного контекста и пользователя
+        relevant_tools = self.tool_discovery.get_tools_for_context(user_message, user_id)
+        tools_info = json.dumps(relevant_tools, indent=2, ensure_ascii=False)
         
         # Получаем информацию о пользователе
         session = Session()
@@ -307,6 +236,14 @@ class HybridAutonomousAgent:
                 # Выполняем handler
                 result = await handler_func(**params) if asyncio.iscoroutinefunction(handler_func) else handler_func(**params)
                 
+                # Обучаемся на успешном выполнении
+                self.tool_discovery.learn_from_success(
+                    func_name=tool_name,
+                    user_id=user_id,
+                    context=reason,
+                    result=result
+                )
+                
                 results.append({
                     "tool": tool_name,
                     "success": True,
@@ -318,6 +255,13 @@ class HybridAutonomousAgent:
                 logger.error(f"[AGENT] Error executing {tool_name}: {e}")
                 import traceback
                 traceback.print_exc()
+                
+                # Обучаемся на ошибке
+                self.tool_discovery.learn_from_failure(
+                    func_name=tool_name,
+                    error=str(e)
+                )
+                
                 results.append({
                     "tool": tool_name,
                     "success": False,
