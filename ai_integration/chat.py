@@ -2247,6 +2247,32 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     weather_info = get_weather_info(profile.city)
                     if weather_info:
                         logger.info(f"[WEATHER] Added weather info to prompt: {weather_info}")
+                        
+                    # Проверяем несоответствие timezone и города
+                    if user.timezone:
+                        city_timezones = {
+                            'Москва': 'Europe/Moscow',
+                            'Санкт-Петербург': 'Europe/Moscow',
+                            'Екатеринбург': 'Asia/Yekaterinburg',
+                            'Новосибирск': 'Asia/Novosibirsk',
+                            'Пермь': 'Asia/Yekaterinburg',  # Пермь UTC+5
+                            'Казань': 'Europe/Moscow',
+                            'Нижний Новгород': 'Europe/Moscow',
+                            'Челябинск': 'Asia/Yekaterinburg',
+                            'Омск': 'Asia/Omsk',
+                            'Самара': 'Europe/Samara',
+                            'Ростов-на-Дону': 'Europe/Moscow',
+                            'Уфа': 'Asia/Yekaterinburg',
+                            'Красноярск': 'Asia/Krasnoyarsk',
+                            'Воронеж': 'Europe/Moscow',
+                            'Волгоград': 'Europe/Volgograd',
+                            'Краснодар': 'Europe/Moscow',
+                        }
+                        expected_tz = city_timezones.get(profile.city)
+                        if expected_tz and user.timezone != expected_tz:
+                            inconsistency_note = f"\nВНИМАНИЕ: Город {profile.city} обычно имеет timezone {expected_tz}, но установлено {user.timezone}. Возможно, пользователь переехал или timezone указан неправильно. Уточни у пользователя, изменилось ли что-то."
+                            user_memory += inconsistency_note
+                            logger.info(f"[PROFILE CHECK] Detected timezone inconsistency for {profile.city}: expected {expected_tz}, got {user.timezone}")
             except Exception as e:
                 logger.warning(f"[WEATHER] Could not get weather info: {e}")
 
