@@ -165,7 +165,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "update_profile",
-            "description": "АВТОМАТИЧЕСКОЕ ИЗВЛЕЧЕНИЕ И ОБНОВЛЕНИЕ ПРОФИЛЯ! ВАЖНО: ДОБАВЛЯЕТ данные в списочные поля (interests, skills, goals), НЕ заменяет их. Вызывай при ЛЮБОМ упоминании личных данных. ПРИМЕРЫ: 'я из Москвы' → update_profile(city='Москва'), 'работаю в ASI Biont' → update_profile(company='ASI Biont'), 'умею программировать' → update_profile(skills='программирование') [ДОБАВИТ к существующим], 'люблю покер' → update_profile(interests='покер') [ДОБАВИТ к существующим], 'хочу развивать бизнес' → update_profile(goals='развивать бизнес') [ДОБАВИТ к существующим]. Функция автоматически проверяет дубликаты. НИКОГДА не удаляй существующие данные, если пользователь явно не попросил.",
+            "description": "АВТОМАТИЧЕСКОЕ ИЗВЛЕЧЕНИЕ И ОБНОВЛЕНИЕ ПРОФИЛЯ! ДОБАВЛЯЕТ данные в списочные поля (interests, skills), НЕ заменяет их. Для целей (goals) использует УМНОЕ ОБЪЕДИНЕНИЕ - проверяет семантическое сходство и объединяет похожие цели вместо дублирования. Вызывай при ЛЮБОМ упоминании личных данных. ПРИМЕРЫ: 'я из Москвы' → update_profile(city='Москва'), 'работаю в ASI Biont' → update_profile(company='ASI Biont'), 'умею программировать' → update_profile(skills='программирование') [ДОБАВИТ к существующим], 'люблю покер' → update_profile(interests='покер') [ДОБАВИТ к существующим], 'хочу развивать бизнес' → update_profile(goals='развивать бизнес') [УМНО ОБЪЕДИНИТ с похожими целями]. Функция автоматически проверяет дубликаты и объединяет похожие цели.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -175,8 +175,36 @@ TOOLS = [
                     "position": {"type": "string", "description": "Должность, роль в компании. Примеры: Директор, Разработчик, Менеджер"},
                     "skills": {"type": "string", "description": "Профессиональные навыки через запятую. Примеры: Управление, разработка, Python, дизайн"},
                     "interests": {"type": "string", "description": "Личные интересы и хобби через запятую. Примеры: ИИ, технологии, бизнес, книги, спорт"},
-                    "goals": {"type": "string", "description": "Цели, планы, желания. Примеры: развивать бизнес, изучить Python, найти партнеров"},
+                    "goals": {"type": "string", "description": "Цели, планы, желания. Примеры: развивать бизнес, изучить Python, найти партнеров. Функция УМНО объединит похожие цели."},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "smart_update_profile",
+            "description": "УМНОЕ РЕДАКТИРОВАНИЕ ПРОФИЛЯ С ВЫБОРОМ ДЕЙСТВИЯ. Используй когда нужно ТОЧНО КОНТРОЛИРОВАТЬ как обновить профиль: добавить, заменить или умно объединить. Для целей поддерживает семантическое объединение похожих целей. ПРИМЕРЫ: 'замени все цели на новую' → smart_update_profile(field='goals', value='новая цель', action='replace'), 'добавь навык Python' → smart_update_profile(field='skills', value='Python', action='add'), 'обнови город' → smart_update_profile(field='city', value='Москва', action='replace').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "field": {
+                        "type": "string",
+                        "description": "Поле для обновления",
+                        "enum": ["goals", "interests", "skills", "city", "company", "position"]
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Новое значение для поля"
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Действие: 'add' - добавить к существующим, 'replace' - заменить полностью, 'merge' - умно объединить (только для goals)",
+                        "enum": ["add", "replace", "merge"],
+                        "default": "add"
+                    }
+                },
+                "required": ["field", "value"]
             },
         },
     },

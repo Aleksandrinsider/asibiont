@@ -29,7 +29,7 @@ from .handlers import (  # noqa: F401
     generate_delegation_notification_async, generate_progress_request, schedule_delegation_monitoring,
     check_delegation_deadlines, update_user_memory_async, delete_task_sync, create_subscription_payment,
     cancel_subscription, get_task_details,
-    update_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks, auto_reminder
+    update_profile, smart_update_profile, delete_task, find_relevant_contacts_for_task, analyze_tasks, auto_reminder
 )
 
 logger = logging.getLogger(__name__)
@@ -526,6 +526,23 @@ async def process_tool_calls(tool_calls, intent, message, user_id, db_session, s
 
                 tool_results.append({"function": func_name, "result": result})
                 logger.info(f"[UPDATE_PROFILE] Added to tool_results: {result[:100]}")
+
+            elif func_name == "smart_update_profile":
+                try:
+                    result = smart_update_profile(
+                        user_id=user_id,
+                        field=args.get("field"),
+                        value=args.get("value"),
+                        action=args.get("action", "add"),
+                        session=db_session,
+                    )
+                    logger.info(f"[SMART_UPDATE_PROFILE] Result: {result}")
+                except Exception as e:
+                    logger.error(f"[SMART_UPDATE_PROFILE] Exception: {e}")
+                    result = f"Ошибка умного обновления профиля: {str(e)}"
+
+                tool_results.append({"function": func_name, "result": result})
+                logger.info(f"[SMART_UPDATE_PROFILE] Added to tool_results: {result[:100]}")
 
             elif func_name == "delegate_task":
                 result = delegate_task(

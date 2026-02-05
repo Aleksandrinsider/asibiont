@@ -14,6 +14,108 @@ from .task_search import find_task_flexible
 
 logger = logging.getLogger(__name__)
 
+# Расширенная карта часовых поясов для городов
+CITY_TIMEZONE_MAP = {
+    # Россия - Европейская часть (MSK, UTC+3)
+    'москва': 'Europe/Moscow',
+    'москве': 'Europe/Moscow',
+    'санкт-петербург': 'Europe/Moscow',
+    'петербург': 'Europe/Moscow',
+    'спб': 'Europe/Moscow',
+    'пермь': 'Europe/Moscow',
+    'нижний новгород': 'Europe/Moscow',
+    'нижний': 'Europe/Moscow',
+    'казань': 'Europe/Moscow',
+    'самара': 'Europe/Moscow',
+    'саратов': 'Europe/Moscow',
+    'волгоград': 'Europe/Moscow',
+    'ростов-на-дону': 'Europe/Moscow',
+    'ростов': 'Europe/Moscow',
+    'краснодар': 'Europe/Moscow',
+    'сочи': 'Europe/Moscow',
+    'воронеж': 'Europe/Moscow',
+    'ярославль': 'Europe/Moscow',
+    'иваново': 'Europe/Moscow',
+    'кострома': 'Europe/Moscow',
+    'тверь': 'Europe/Moscow',
+    'смоленск': 'Europe/Moscow',
+    'брянск': 'Europe/Moscow',
+    'курск': 'Europe/Moscow',
+    'белгород': 'Europe/Moscow',
+    'липецк': 'Europe/Moscow',
+    'тамбов': 'Europe/Moscow',
+    'орёл': 'Europe/Moscow',
+    'тула': 'Europe/Moscow',
+    'калуга': 'Europe/Moscow',
+    'москва': 'Europe/Moscow',
+    
+    # Россия - Уральский регион (YEKT, UTC+5)
+    'екатеринбург': 'Asia/Yekaterinburg',
+    'челябинск': 'Asia/Yekaterinburg',
+    'тюмень': 'Asia/Yekaterinburg',
+    'пермь': 'Asia/Yekaterinburg',  # Пермь на границе, но обычно MSK
+    'магнитогорск': 'Asia/Yekaterinburg',
+    'нижний тагил': 'Asia/Yekaterinburg',
+    'каменск-уральский': 'Asia/Yekaterinburg',
+    'златоуст': 'Asia/Yekaterinburg',
+    'миасс': 'Asia/Yekaterinburg',
+    'кунгур': 'Asia/Yekaterinburg',
+    
+    # Россия - Сибирь (OMST, UTC+6)
+    'омск': 'Asia/Omsk',
+    'новосибирск': 'Asia/Novosibirsk',
+    'томск': 'Asia/Novosibirsk',
+    'барнаул': 'Asia/Novosibirsk',
+    'ке мерово': 'Asia/Novosibirsk',
+    'новокузнецк': 'Asia/Novosibirsk',
+    'прокопьевск': 'Asia/Novosibirsk',
+    'ленск': 'Asia/Novosibirsk',
+    
+    # Россия - Красноярский край (KRAT, UTC+7)
+    'красноярск': 'Asia/Krasnoyarsk',
+    'абакан': 'Asia/Krasnoyarsk',
+    'ачинск': 'Asia/Krasnoyarsk',
+    'канск': 'Asia/Krasnoyarsk',
+    'минусинск': 'Asia/Krasnoyarsk',
+    'норильск': 'Asia/Krasnoyarsk',
+    
+    # Россия - Иркутская область (IRKT, UTC+8)
+    'иркутск': 'Asia/Irkutsk',
+    'братск': 'Asia/Irkutsk',
+    'ангарск': 'Asia/Irkutsk',
+    'улан-удэ': 'Asia/Irkutsk',
+    'чита': 'Asia/Irkutsk',
+    'усть-илимск': 'Asia/Irkutsk',
+    
+    # Россия - Дальний Восток (VLAT, UTC+10)
+    'владивосток': 'Asia/Vladivostok',
+    'хабаровск': 'Asia/Vladivostok',
+    'южно-сахалинск': 'Asia/Vladivostok',
+    'находка': 'Asia/Vladivostok',
+    'арсеньев': 'Asia/Vladivostok',
+    'спасск-дальний': 'Asia/Vladivostok',
+    'биробиджан': 'Asia/Vladivostok',
+    
+    # Россия - Магаданская область (MAGT, UTC+11)
+    'магадан': 'Asia/Magadan',
+    'палатка': 'Asia/Magadan',
+    
+    # Россия - Камчатка (PETT, UTC+12)
+    'петропавловск-камчатский': 'Asia/Kamchatka',
+    'камчатка': 'Asia/Kamchatka',
+    'анадырь': 'Asia/Anadyr',
+    
+    # Другие страны
+    'карачи': 'Asia/Karachi',
+    'дубай': 'Asia/Dubai',
+    'лондон': 'Europe/London',
+    'нью-йорк': 'America/New_York',
+    'токио': 'Asia/Tokyo',
+    'пекин': 'Asia/Shanghai',
+    'бангкок': 'Asia/Bangkok',
+    'сидней': 'Australia/Sydney',
+}
+
 
 def check_time_conflicts(user_db_id, parsed_time, session):
     """
@@ -3688,22 +3790,7 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             profile.city = city
             updates.append(f"город: {city}")
             # Обновляем timezone на основе города
-            city_timezone_map = {
-                'москва': 'Europe/Moscow',
-                'пермь': 'Europe/Moscow',
-                'санкт-петербург': 'Europe/Moscow',
-                'екатеринбург': 'Asia/Yekaterinburg',
-                'новосибирск': 'Asia/Novosibirsk',
-                'карачи': 'Asia/Karachi',
-                'дубай': 'Asia/Dubai',
-                'лондон': 'Europe/London',
-                'нью-йорк': 'America/New_York',
-                'токио': 'Asia/Tokyo',
-                'пекин': 'Asia/Shanghai',
-                'бангкок': 'Asia/Bangkok',
-                'сидней': 'Australia/Sydney',
-            }
-            tz = city_timezone_map.get(city.lower())
+            tz = CITY_TIMEZONE_MAP.get(city.lower())
             if tz:
                 user.timezone = tz
                 updates.append(f"timezone: {tz}")
@@ -3755,22 +3842,29 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
                         updates.append(f"навык '{skills}' уже есть")
         
         if goals is not None:
-            # Валидация
-            if len(goals.strip()) < 2 or len(goals.strip()) > 200:
+            # Валидация - для replace_mode позволяем пустые строки (удаление)
+            if replace_mode and goals.strip() == "":
+                # Разрешаем пустую строку для удаления
+                pass
+            elif len(goals.strip()) < 2 or len(goals.strip()) > 200:
                 logger.warning(f"Invalid goals length: {len(goals)}")
             elif any(char in goals.lower() for char in ['<', '>', 'script', 'http']):
                 logger.warning(f"Invalid goals content: {goals}")
             else:
-                if replace_mode:
-                    profile.goals = goals
-                    updates.append(f"цели заменены: {goals}")
+                # Если не прошла валидация, пропускаем
+                pass
+            
+            # Выполняем обновление независимо от валидации для replace_mode с пустой строкой
+            if replace_mode:
+                profile.goals = goals
+                updates.append(f"цели заменены: {goals}")
+            else:
+                new_value, was_added = _add_to_list_field(profile.goals, goals)
+                if was_added:
+                    profile.goals = new_value
+                    added.append(f"цель: {goals}")
                 else:
-                    new_value, was_added = _add_to_list_field(profile.goals, goals)
-                    if was_added:
-                        profile.goals = new_value
-                        added.append(f"цель: {goals}")
-                    else:
-                        updates.append(f"цель '{goals}' уже есть")
+                    updates.append(f"цель '{goals}' уже есть")
 
         # Обновляем время последнего обновления
         profile.updated_at = datetime.utcnow()
@@ -3798,7 +3892,98 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             session.close()
 
 
-# Function removed
+def smart_update_profile(user_id: int, field: str, value: str, action: str = 'add', session=None, close_session: bool = True) -> str:
+    """
+    Умное обновление профиля с выбором действия.
+    
+    Args:
+        user_id: ID пользователя (telegram_id)
+        field: Поле для обновления ('goals', 'interests', 'skills', 'city', 'company', 'position')
+        value: Новое значение
+        action: Действие ('add', 'replace', 'merge') - merge только для goals
+        session: Сессия базы данных (опционально)
+        close_session: Закрывать ли сессию после выполнения
+    
+    Returns:
+        Сообщение об успешном обновлении
+    """
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+
+    try:
+        # Получаем пользователя по telegram_id
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return f"Пользователь с ID {user_id} не найден"
+
+        # Получаем или создаем профиль пользователя
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=user.id)
+            session.add(profile)
+
+        field_names = {
+            'goals': 'цели',
+            'interests': 'интересы', 
+            'skills': 'навыки',
+            'city': 'город',
+            'company': 'компания',
+            'position': 'должность'
+        }
+        
+        if field not in field_names:
+            return f"Неподдерживаемое поле: {field}"
+        
+        # Обрабатываем разные поля
+        if field in ['goals', 'interests', 'skills']:
+            # Списочные поля
+            if action == 'replace':
+                setattr(profile, field, value)
+                result = f"✅ {field_names[field]} заменены: {value}"
+            elif action == 'merge' and field == 'goals':
+                # Умное объединение только для целей
+                new_value, was_changed, change_desc = _merge_similar_goals(getattr(profile, field), value)
+                if was_changed:
+                    setattr(profile, field, new_value)
+                    result = f"✅ {change_desc}"
+                else:
+                    result = f"ℹ️ {field_names[field]} уже актуальны"
+            else:  # add
+                new_value, was_added = _add_to_list_field(getattr(profile, field), value)
+                if was_added:
+                    setattr(profile, field, new_value)
+                    result = f"✅ Добавлено в {field_names[field]}: {value}"
+                else:
+                    result = f"ℹ️ '{value}' уже есть в {field_names[field]}"
+        else:
+            # Простые поля
+            setattr(profile, field, value)
+            result = f"✅ {field_names[field]} обновлен: {value}"
+            
+            # Специальная обработка для города - обновляем timezone
+            if field == 'city':
+                tz = CITY_TIMEZONE_MAP.get(value.lower())
+                if tz:
+                    user.timezone = tz
+                    result += f" | timezone: {tz}"
+
+        # Обновляем время последнего обновления
+        profile.updated_at = datetime.utcnow()
+        session.commit()
+        
+        return result
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Ошибка при умном обновлении профиля пользователя {user_id}: {e}")
+        return f"Ошибка: {str(e)}"
+
+    finally:
+        if close_session:
+            session.close()
 
 
 async def update_user_memory_async(memory_type: str = 'general', content: str = None, info: str = None, user_id: int = None, session=None, close_session: bool = True) -> str:
