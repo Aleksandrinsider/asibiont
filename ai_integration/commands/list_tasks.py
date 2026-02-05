@@ -2,7 +2,8 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class ListTasksCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Get filter type from parameters (default to None for all tasks)
         filter_type = self.params.get('filter_type', None)
         
@@ -15,3 +16,5 @@ class ListTasksCommand(BaseCommand):
         )
 
         return result
+
+

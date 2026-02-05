@@ -97,3 +97,4 @@ class DelegateTaskCommand(BaseCommand):
             response_msg = result
 
         return await generate_response('task_delegated', message=response_msg)
+

@@ -2,7 +2,8 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class EditTaskCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Extract task title and new values from message
         # This is a complex command that needs parsing
         # For now, use the message as task_title and assume basic editing
@@ -33,3 +34,5 @@ class EditTaskCommand(BaseCommand):
         )
 
         return result
+
+

@@ -2,7 +2,8 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class UpdateUserMemoryCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Extract memory info from message
         info = self.params.get('info', self.message)
         
@@ -14,3 +15,5 @@ class UpdateUserMemoryCommand(BaseCommand):
         )
 
         return result
+
+

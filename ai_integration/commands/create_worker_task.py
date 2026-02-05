@@ -15,7 +15,8 @@ from ai_integration.utils import get_finance_info
 logger = logging.getLogger(__name__)
 
 class CreateWorkerTaskCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         try:
             task_description = self.params.get('task_description', '')
             interval_minutes = self.params.get('interval_minutes', 1440)  # Минимальный интервал 24 часа
@@ -879,3 +880,5 @@ class CreateWorkerTaskCommand(BaseCommand):
 
         except Exception as e:
             logger.error(f"Error monitoring weather: {e}")
+
+

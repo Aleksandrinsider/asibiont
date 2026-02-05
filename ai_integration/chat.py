@@ -1698,16 +1698,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     if priority_fields:
                         # Спрашиваем только об одном поле за раз, естественно в контексте
                         field_to_ask = priority_fields[0]  # Берем первое по приоритету
-                        user_memory += f"\n💡 ЕСЛИ ПОДХОДИТ КОНТЕКСТ: можешь ненавязчиво спросить о {field_to_ask}е для персонализации советов (только если разговор естественным образом к этому ведет)"
-                    else:
-                        # Если основные поля заполнены, не спрашиваем вообще
-                        pass
+                        user_memory += f"\n💡 ВАЖНО: АКТИВНО СПРАШИВАЙ О {field_to_ask.upper()}Е! Это критично для персонализации. Задай вопрос естественно в контексте разговора, например: 'Кстати, в каком городе ты живешь?' или 'Расскажи о своих интересах, чтобы я мог давать более точные советы'"
+                    
+                    # Всегда спрашиваем о целях, если они не заполнены
+                    if is_empty_field(profile.goals):
+                        user_memory += f"\n🎯 ОБЯЗАТЕЛЬНО СПРОСИ О ЦЕЛЯХ! Цели - ключ к персонализации. Задай вопрос: 'Какие у тебя цели на ближайший месяц?' или 'Чего ты хочешь достичь в ближайшее время?'"
+                    
+                    # Если профиль почти пустой, делай акцент на заполнении
+                    if len(profile_info) < 2:
+                        user_memory += f"\n⚠️ ПРОФИЛЬ ПОЧТИ ПУСТОЙ! ОБЯЗАТЕЛЬНО ЗАДАЙ ВОПРОСЫ для заполнения основных данных (город, интересы, навыки, цели). Начни с: 'Расскажи немного о себе - где живешь, чем занимаешься, какие у тебя интересы?'"
 
                 profile_filled = len(profile_info) >= 3  # Профиль считается заполненным если есть хотя бы 3 поля
                 logger.info(f"[PROFILE DEBUG] Profile filled status: {profile_filled}, fields count: {len(profile_info)}")
 
                 # ДЕМОНСТРАЦИЯ ВОЗМОЖНОСТЕЙ: каждые 5-7 взаимодействий
                 interaction_count = getattr(profile, 'interaction_count', 0) or 0
+
+                # РЕГУЛЯРНЫЕ ВОПРОСЫ О ЦЕЛЯХ: Каждые 3-4 взаимодействия спрашиваем о целях
+                if profile_filled and interaction_count > 0 and interaction_count % 4 == 0:
+                    user_memory += f"\n🎯 СПРОСИ ОБ АКТУАЛЬНЫХ ЦЕЛЯХ: 'Какие у тебя приоритеты на этой неделе?' или 'Над чем работаешь сейчас?' - это поможет давать более релевантные предложения"
+
                 if interaction_count > 0 and interaction_count % 6 == 0:  # Каждые 6 взаимодействий
                     # Ротация возможностей для разнообразия
                     capability_rotation = interaction_count // 6 % 4
@@ -2525,7 +2535,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             action_intents = [
                 'add_task', 'get_task_details', 'complete_task', 
                 'delete_task', 'edit_task', 'reschedule_task', 'delegate_task', 
-                'update_profile', 'find_partners', 'update_user_memory', 'delete_all_tasks'
+                'update_profile', 'find_partners', 'find_relevant_contacts_for_task', 'update_user_memory', 'delete_all_tasks'
             ]
             logger.info(f"[TOOL CHOICE CHECK] intent type: '{intent.get('type')}', in action_intents: {intent.get('type') in action_intents}")
             print(f"[DEBUG] TOOL CHOICE CHECK: intent={intent}, type={intent.get('type')}")  # DEBUG OUTPUT

@@ -30,3 +30,4 @@ class CompleteTaskCommand(BaseCommand):
         )
 
         return result
+

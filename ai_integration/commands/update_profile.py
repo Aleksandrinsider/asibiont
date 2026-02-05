@@ -3,7 +3,8 @@ from .. import handlers
 from ..responses import generate_response
 
 class UpdateProfileCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Extract profile information from message
         message_lower = self.message.lower()
 
@@ -152,3 +153,5 @@ class UpdateProfileCommand(BaseCommand):
 
         # Generate natural response without mentioning the action
         return result if result else "Профиль обновлен"
+
+

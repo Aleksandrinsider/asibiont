@@ -33,7 +33,8 @@ class IntentClassifierUltraMinimal:
 - delete_task (удаление задачи)
 - reschedule_task (перенос задачи)
 - update_profile (обновление профиля)
-- find_partners (поиск партнеров)
+- find_partners (общий поиск партнеров/единомышленников)
+- find_relevant_contacts_for_task (поиск контактов для конкретной задачи или специалиста)
 - delegate_task (делегирование задачи)
 - conversation (общий разговор, приветствия, вопросы о боте)
 

@@ -4,7 +4,8 @@ from ..parsers import extract_task_details
 from ..responses import generate_response
 
 class RescheduleTaskCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Extract task title and new time from message
         message_lower = self.message.lower()
 
@@ -66,3 +67,5 @@ class RescheduleTaskCommand(BaseCommand):
 
         # Generate response
         return await generate_response('task_rescheduled', message=result)
+
+

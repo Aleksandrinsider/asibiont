@@ -11,3 +11,5 @@ class BaseCommand(ABC):
     @abstractmethod
     async def execute(self, user, db_session):
         pass
+
+

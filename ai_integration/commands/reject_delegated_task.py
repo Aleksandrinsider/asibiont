@@ -2,7 +2,8 @@ from .base_command import BaseCommand
 from .. import handlers
 
 class RejectDelegatedTaskCommand(BaseCommand):
-    async def execute(self, user, db_session):`n        user_id = user.telegram_id
+    async def execute(self, user, db_session):
+        user_id = user.telegram_id
         # Extract task_id from params
         task_id = self.params.get('task_id')
         
@@ -20,3 +21,5 @@ class RejectDelegatedTaskCommand(BaseCommand):
         result = handlers.reject_delegated_task(task_id, user_id=user_id)
         
         return result
+
+

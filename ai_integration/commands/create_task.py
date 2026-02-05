@@ -39,3 +39,4 @@ class CreateTaskCommand(BaseCommand):
 
         # Generate response
         return await generate_response('task_created', message=result)
+

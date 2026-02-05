@@ -28,6 +28,10 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+def get_db_session():
+    """Get a new database session"""
+    return Session()
+
 # Aiogram imports
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher

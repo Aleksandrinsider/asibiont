@@ -154,3 +154,4 @@ class ConversationCommand(BaseCommand):
         except Exception as e:
             # Final fallback
             return "Привет! Я здесь, чтобы помочь с задачами и найти тебе единомышленников. Что планируешь?"
+
