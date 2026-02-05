@@ -136,6 +136,10 @@ class ConversationCommand(BaseCommand):
                             cleaned_lines.append(line)
                         content = ' '.join(cleaned_lines).strip()
                         content = re.sub(r'\s+', ' ', content)  # Clean extra spaces
+                        # Limit response length to 2-4 paragraphs
+                        sentences = content.split('. ')
+                        if len(sentences) > 10:  # Roughly limit to avoid too long
+                            content = '. '.join(sentences[:10]) + '.'
                         return content
                         return content
                     else:
