@@ -329,33 +329,20 @@ class DynamicToolDiscovery:
     
     def get_tools_for_context(self, context: str, user_id: Optional[int] = None) -> List[Dict]:
         """
-        Возвращает наиболее релевантные инструменты для данного контекста
+        Возвращает наиболее релевантные инструменты для данного контекста.
+        Гибридный подход: просто возвращаем все приоритизированные инструменты,
+        пусть AI сам решает через DeepSeek tool_calls какие использовать.
         
         Args:
-            context: Контекст запроса пользователя
+            context: Контекст запроса пользователя (не используется в гибридном подходе)
             user_id: ID пользователя
             
         Returns:
-            Список релевантных инструментов
+            Список приоритизированных инструментов
         """
-        # Получаем приоритизированный список
-        all_tools = self.get_prioritized_tools(user_id)
-        
-        # Фильтруем по контексту (простая эвристика)
-        context_lower = context.lower()
-        relevant_tools = []
-        
-        for tool in all_tools:
-            description = tool["function"]["description"].lower()
-            
-            # Проверяем совпадение ключевых слов
-            keywords = ["создай", "удали", "измени", "покажи", "найди", "делегируй"]
-            matches = sum(1 for keyword in keywords if keyword in context_lower and keyword in description)
-            
-            if matches > 0 or len(relevant_tools) < 10:  # Минимум 10 инструментов
-                relevant_tools.append(tool)
-        
-        return relevant_tools[:20]  # Максимум 20 инструментов
+        # Гибридный подход: возвращаем все приоритизированные инструменты
+        # AI сам решит через DeepSeek какие инструменты вызвать
+        return self.get_prioritized_tools(user_id)
     
     def save_stats(self, filepath: str = "tool_stats.json"):
         """Сохраняет статистику использования"""
