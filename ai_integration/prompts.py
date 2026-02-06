@@ -232,6 +232,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
 4. ИСПОЛЬЗОВАНИЕ ИНСТРУМЕНТОВ:
    - Используй инструменты только когда нужно: add_task, complete_task, delete_task, list_tasks, reschedule_task, delegate_task, find_relevant_contacts_for_task, find_partners, update_profile, update_user_memory, edit_task, get_task_details, delete_all_tasks, analyze_tasks
+   - ⚠️ КРИТИЧНО: add_task() ТОЛЬКО после уточнения времени! Если время НЕ указано - спроси "На какое время?"
+   - ЗАПРЕЩЕНО создавать задачи с дефолтным временем (10:00, 9:00) без уточнения у пользователя
    - Не используй инструменты в каждом ответе или при приветствиях/общем общении
    - После вызова инструмента объясняй естественно, продолжая разговор
    - Строго: если intent = конкретный инструмент - вызывай только его
