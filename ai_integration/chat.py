@@ -106,6 +106,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             news_info = get_news_info(user_city) if user_city else get_news_info()
             logger.info(f"[CONTEXT] Weather: {bool(weather_info)}, News: {bool(news_info)}")
 
+            # Расшифровываем память пользователя
+            decrypted_memory = ""
+            if user.memory:
+                try:
+                    decrypted_memory = decrypt_data(user.memory)
+                except Exception as e:
+                    logger.error(f"Error decrypting user memory: {e}")
+
             # Получаем системный промпт с проактивным контекстом
             system_prompt = get_extended_system_prompt(
                 user_now=user_now,
@@ -113,7 +121,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 current_date_str=current_date_str,
                 user_username=user.username or "пользователь",
                 mentions_str="",
-                user_memory=user.memory or "",
+                user_memory=decrypted_memory,
                 context=context,
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),

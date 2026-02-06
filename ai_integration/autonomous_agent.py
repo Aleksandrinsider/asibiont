@@ -324,13 +324,22 @@ class HybridAutonomousAgent:
                 weather_info = get_weather_info(profile.city)
                 news_info = get_news_info(profile.city)
 
+            # Расшифровываем память
+            decrypted_memory = ""
+            if user.memory:
+                try:
+                    from .memory import decrypt_data
+                    decrypted_memory = decrypt_data(user.memory)
+                except Exception as e:
+                    logger.error(f"Error decrypting memory: {e}")
+
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
                 current_time_str=current_time_str,
                 current_date_str=current_date_str,
                 user_username=user.username or "пользователь",
                 mentions_str="",
-                user_memory=user.memory or "",
+                user_memory=decrypted_memory,
                 context=None,
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
@@ -517,6 +526,15 @@ class HybridAutonomousAgent:
                 except:
                     pass  # Оставляем UTC
             
+            # Расшифровываем память
+            decrypted_memory = ""
+            if user and user.memory:
+                try:
+                    from .memory import decrypt_data
+                    decrypted_memory = decrypt_data(user.memory)
+                except Exception as e:
+                    logger.error(f"Error decrypting memory: {e}")
+
             # Получаем базовый промпт
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
@@ -524,7 +542,7 @@ class HybridAutonomousAgent:
                 current_date_str=current_date_str,
                 user_username=user.username if user else "пользователь",
                 mentions_str="",
-                user_memory=user.memory if user else "",
+                user_memory=decrypted_memory,
                 context=context,
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE') if user else 'FREE',
