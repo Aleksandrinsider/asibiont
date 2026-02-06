@@ -194,43 +194,35 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - ПРАВИЛА + AI ДЛЯ ОБЩЕНИЯ
+        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - МИНИМАЛЬНЫЕ ПРАВИЛА + AI С TOOLS
+        
+        Стратегия: ТОЛЬКО критические команды через правила, остальное через AI
         """
 
         message_lower = user_message.lower()
 
-        # СТРОГИЕ ПРАВИЛА ДЛЯ КОМАНД (БЕЗ AI)
+        # ТОЛЬКО КРИТИЧЕСКИЕ КОМАНДЫ с жесткими правилами
+        # Остальное (edit_task, delete_task и т.д.) - через AI с TOOLS
         command_patterns = {
-            'delete_task': ['удали', 'сотри', 'удалить'],
-            'list_tasks': ['покажи', 'список', 'мои'],
-            'reschedule_task': ['перенеси', 'отложи'],
-            'edit_task': ['измени', 'отредактируй', 'поменяй'],
-            'find_relevant_contacts_for_task': ['контакты', 'поможет'],
-            'find_partners': ['единомышленники', 'познакомься', 'найди'],
-            'complete_task': ['готово', 'сделал', 'завершил', 'выполнил'],
-            'add_task': ['создай', 'добавь', 'напомни'],
-            'delegate_task': ['делегируй', 'передай', 'поручи'],
-            'update_profile': ['обнови'],
-            'update_user_memory': ['запомни'],
-            'analyze_goal_progress': ['проанализируй цел', 'анализ цел'],
-            'get_task_details': ['расскажи о задаче', 'подробно о задаче']
+            'list_tasks': ['покажи задач', 'список задач', 'мои задач'],
+            'complete_task': ['готово', 'сделал', 'завершил', 'выполнил', 'закончил'],
+            'add_task': ['создай задач', 'добавь задач', 'напомни'],
         }
 
-        # Проверяем на команды задач
+        # Проверяем только критические команды
         for intent, keywords in command_patterns.items():
             if any(keyword in message_lower for keyword in keywords):
-                # Специальные проверки для некоторых команд
-                if intent in ['delete_task', 'list_tasks', 'reschedule_task', 'edit_task', 'add_task', 'complete_task', 'delegate_task']:
-                    # Для этих команд обязательно должно быть слово "задач" ИЛИ другие признаки
-                    if ('задач' in message_lower or
-                        'встреч' in message_lower or  # "встречу" тоже работа с задачами
-                        intent == 'complete_task' or  # "готово" не требует "задач"
-                        intent == 'delegate_task'):   # "делегируй" не требует "задач"
-                        return self._create_command_plan(intent, user_message)
-                else:
+                if intent == 'list_tasks' and ('задач' in message_lower or 'дел' in message_lower):
                     return self._create_command_plan(intent, user_message)
+                elif intent == 'complete_task':
+                    return self._create_command_plan(intent, user_message)
+                elif intent == 'add_task' and ('задач' in message_lower or 'дел' in message_lower):
+                    # Проверяем, не перенос ли это (тогда не создаем новую)
+                    if not any(word in message_lower for word in ['перенес', 'отлож', 'подвин']):
+                        return self._create_command_plan(intent, user_message)
 
-        # ЕСЛИ НЕ КОМАНДА - ИСПОЛЬЗУЕМ AI ДЛЯ ОБЩЕГО ОБЩЕНИЯ
+        # ВСЁ ОСТАЛЬНОЕ ЧЕРЕЗ AI С TOOLS - гибридный подход!
+        # AI сам решит когда вызывать edit_task, delete_task, reschedule_task и т.д.
         return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
@@ -274,7 +266,10 @@ class HybridAutonomousAgent:
         }
 
     async def _plan_general_chat(self, user_message, user_id):
-        """AI планирование для общего общения"""
+        """
+        AI планирование с TOOLS - гибридный подход.
+        AI сам решает какие инструменты вызвать через DeepSeek tool_calls.
+        """
         # Получаем информацию о пользователе для контекста - ИСПОЛЬЗУЕМ КЭШ
         session = Session()
         try:

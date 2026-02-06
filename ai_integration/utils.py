@@ -419,13 +419,28 @@ def clean_technical_details(text):
     import re
     
     # КРИТИЧЕСКИ ВАЖНО: Удаляем DeepSeek DSML теги (вызовы функций через спец. формат)
-    # Удаляем все от начала DSML тега до конца строки/текста
-    text = re.sub(r'<｜DSML｜[^>]*>', "", text, flags=re.DOTALL)  # Удаляем отдельные теги
-    text = re.sub(r'<\|DSML\|[^>]*>', "", text, flags=re.DOTALL)  # альтернативная кодировка
-    text = re.sub(r'<｜DSML｜.*', "", text, flags=re.DOTALL)  # Удаляем от тега до конца
-    text = re.sub(r'<\|DSML\|.*', "", text, flags=re.DOTALL)  # альтернативная кодировка
-    # Удаляем любые оставшиеся DSML следы
-    text = re.sub(r'DSML\|.*', "", text, flags=re.DOTALL)
+    # Стратегия: удаляем всё после первого DSML тега до конца текста
+    if '<｜DSML｜' in text or '<|DSML|' in text or '</｜DSML｜' in text or '</|DSML|' in text:
+        # Находим первый DSML тег и обрезаем всё после него
+        dsml_patterns = [
+            r'<｜DSML｜.*',
+            r'<\|DSML\|.*',
+            r'</｜DSML｜.*',
+            r'</\|DSML\|.*'
+        ]
+        for pattern in dsml_patterns:
+            match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
+            if match:
+                # Обрезаем текст до начала DSML тега
+                text = text[:match.start()]
+                break
+    
+    # Дополнительная очистка оставшихся DSML следов
+    text = re.sub(r'<｜DSML｜[^>]*>', "", text, flags=re.DOTALL)
+    text = re.sub(r'<\|DSML\|[^>]*>', "", text, flags=re.DOTALL)
+    text = re.sub(r'</｜DSML｜[^>]*>', "", text, flags=re.DOTALL)
+    text = re.sub(r'</\|DSML\|[^>]*>', "", text, flags=re.DOTALL)
+    text = re.sub(r'DSML.*?>', "", text, flags=re.DOTALL)
     
     # Удаляем вызовы функций в квадратных скобках: [add_task(...)]
     before = text
