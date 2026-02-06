@@ -2487,12 +2487,14 @@ def get_partners_list(user_id=None, session=None):
                         partner.task_relevance_score += 10  # Максимальный приоритет для точных совпадений
                         logger.info(f"[PARTNERS] @{partner_user.username} has exact same active tasks: {exact_task_matches}")
     
-    # Пересортируем партнеров с учетом релевантности для задач
+    # Пересортируем партнеров с учетом релевантности для задач + Premium-приоритета
     # Сначала релевантные для задач (по убыванию score), потом остальные
     relevant_for_tasks = [p for p in sorted_partners if p.task_relevance_score > 0]
-    relevant_for_tasks.sort(key=lambda p: p.task_relevance_score, reverse=True)
+    # Сортируем с учётом: (1) task_relevance_score, (2) Premium-приоритет, (3) рейтинг
+    relevant_for_tasks.sort(key=lambda p: (p.task_relevance_score, get_tier_priority(p), p.average_rating or 0), reverse=True)
     
     not_relevant_for_tasks = [p for p in sorted_partners if p.task_relevance_score == 0]
+    # not_relevant_for_tasks уже отсортирован по (tier_priority, rating) на строках 2323-2324
     
     sorted_partners = relevant_for_tasks + not_relevant_for_tasks
     
