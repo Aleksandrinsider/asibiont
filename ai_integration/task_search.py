@@ -30,6 +30,35 @@ def apply_stemming(text: str) -> str:
     return text
 
 
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Вычисляет расстояние Левенштейна между двумя строками"""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
+
+
+def similarity_ratio(s1: str, s2: str) -> float:
+    """Вычисляет коэффициент схожести двух строк (0.0 - 1.0)"""
+    distance = levenshtein_distance(s1.lower(), s2.lower())
+    max_len = max(len(s1), len(s2))
+    if max_len == 0:
+        return 1.0
+    return 1.0 - (distance / max_len)
+
+
 def find_task_flexible(
     session: Session,
     user: User,
@@ -112,14 +141,14 @@ def find_task_flexible(
         return None
     
     # Python-level поиск с улучшенным алгоритмом
-    best_match = None
-    best_score = 0
+    candidates = []  # Список (задача, score)
     
     for task in tasks:
         title_lower = task.title.lower()
         title_words = [w for w in title_lower.split() if w not in stop_words and len(w) > 2]
         
         matched_keywords = 0
+        fuzzy_matches = 0
         
         # Проверка каждого ключевого слова
         for keyword in search_keywords:
@@ -127,30 +156,73 @@ def find_task_flexible(
             
             # Прямое совпадение в названии
             if keyword in title_lower:
-                matched_keywords += 1
+                matched_keywords += 2  # Повышенный вес для точного совпадения
                 continue
             
             # Stemming совпадение
             if keyword_stem != keyword and keyword_stem in title_lower:
-                matched_keywords += 1
+                matched_keywords += 1.5
                 continue
             
-            # Проверка по словам
+            # Проверка по словам с fuzzy matching
+            best_word_match = 0
             for word in title_words:
                 word_stem = apply_stemming(word)
-                if keyword == word_stem or keyword_stem == word_stem or keyword in word or word in keyword:
-                    matched_keywords += 1
+                
+                # Точное совпадение stem
+                if keyword == word_stem or keyword_stem == word_stem:
+                    matched_keywords += 1.5
                     break
+                
+                # Частичное совпадение
+                if keyword in word or word in keyword:
+                    matched_keywords += 1.2
+                    break
+                
+                # Fuzzy matching для близких слов (опечатки, однокоренные)
+                similarity = similarity_ratio(keyword, word)
+                # Пороги: 60%+ отличное совпадение, 40%+ допустимое для русского языка
+                if similarity >= 0.6:  # Очень хорошее совпадение
+                    best_word_match = max(best_word_match, similarity * 1.5)  # Повышенный вес
+                elif similarity >= 0.4:  # Допустимое совпадение (звонок -> позвонить)
+                    best_word_match = max(best_word_match, similarity)
+            
+            if best_word_match > 0:
+                fuzzy_matches += best_word_match
         
-        # Рассчитываем процент совпадения
-        score = matched_keywords / len(search_keywords) if search_keywords else 0
+        # Рассчитываем итоговый score
+        total_score = matched_keywords + fuzzy_matches
+        normalized_score = total_score / (len(search_keywords) * 2)  # Нормализуем к 0-1
         
-        # Если совпадает хотя бы 50% ключевых слов (или минимум 2 слова)
-        if score >= 0.5 or matched_keywords >= 2:
-            logger.info(f"[FIND_TASK] Task '{task.title}' score: {score:.2f} ({matched_keywords}/{len(search_keywords)})")
-            if score > best_score or (score == best_score and matched_keywords > 0):
-                best_score = score
-                best_match = task
+        # Если score > 0.2 (20% совпадение для одного слова) - считаем кандидатом
+        if normalized_score >= 0.2 or matched_keywords >= 1:
+            logger.info(f"[FIND_TASK] Task '{task.title}' score: {normalized_score:.2f} (matched: {matched_keywords:.1f}, fuzzy: {fuzzy_matches:.2f})")
+            candidates.append((task, normalized_score))
+    
+    # Сортируем кандидатов по score
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    
+    # Если найден только один кандидат - возвращаем его
+    if len(candidates) == 1:
+        logger.info(f"[FIND_TASK] ✅ Single match found: '{candidates[0][0].title}'")
+        return candidates[0][0]
+    
+    # Если несколько кандидатов - берем лучший если он заметно лучше других
+    if len(candidates) > 1:
+        best_task, best_score = candidates[0]
+        second_score = candidates[1][1] if len(candidates) > 1 else 0
+        
+        # Если лучший кандидат заметно лучше второго (разница > 20%) - возвращаем его
+        if best_score - second_score > 0.2:
+            logger.info(f"[FIND_TASK] ✅ Clear winner: '{best_task.title}' ({best_score:.2f} vs {second_score:.2f})")
+            return best_task
+        
+        # Иначе возвращаем список для выбора
+        logger.info(f"[FIND_TASK] ⚠️ Multiple similar matches found: {len(candidates)}")
+        return candidates[0][0]  # Пока возвращаем лучший
+    
+    best_match = candidates[0][0] if candidates else None
+    best_score = candidates[0][1] if candidates else 0
     
     if best_match:
         logger.info(f"[FIND_TASK] Best match: '{best_match.title}' (score: {best_score:.2f})")

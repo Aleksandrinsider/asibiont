@@ -140,6 +140,15 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 db_session=session,
                 message_type=message_type
             )
+            
+            # Отмечаем что Premium рекомендации были показаны (если были в промпте)
+            if proactive_context and "ПРЕМИУМ РЕКОМЕНДАЦИИ" in proactive_context:
+                try:
+                    from ai_integration.premium_simple import mark_recommendation_shown
+                    mark_recommendation_shown(user_id, session)
+                    logger.info(f"[PREMIUM] Marked recommendations as shown for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"[PREMIUM] Failed to mark recommendations: {e}")
 
             return response_data
 

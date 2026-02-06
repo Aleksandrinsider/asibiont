@@ -11,6 +11,7 @@ from sqlalchemy import or_, and_, func
 from .memory import encrypt_data, decrypt_data, LongTermMemory
 from .utils import parse_relative_time, parse_natural_time, parse_time_to_datetime, generate_task_recommendations
 from .task_search import find_task_flexible
+from .dialog_context import get_user_context, resolve_task_reference
 
 logger = logging.getLogger(__name__)
 
@@ -420,6 +421,26 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     task_id = task.id
     logger.info(f"[ADD_TASK] Task '{title}' created successfully with ID {task_id}, reminder_time: {task.reminder_time}")
 
+    # PREMIUM AUTOMATION: Real-time триггер для Premium пользователей
+    try:
+        from models import SubscriptionTier
+        if user.subscription_tier == SubscriptionTier.PREMIUM:
+            logger.info(f"[ADD_TASK] Premium user detected, triggering automation for task {task_id}")
+            from ai_integration.premium_simple import trigger_premium_automation_realtime
+            import asyncio
+            
+            # Запускаем в фоне, не блокируем создание задачи
+            asyncio.create_task(
+                trigger_premium_automation_realtime(
+                    premium_user_id=user.telegram_id,
+                    task_id=task_id,
+                    task_description=f"{title}. {description}" if description else title
+                )
+            )
+            logger.info(f"[ADD_TASK] Premium automation triggered for task {task_id}")
+    except Exception as e:
+        logger.warning(f"[ADD_TASK] Failed to trigger Premium automation: {e}")
+
     # Save to long-term memory for project context
     try:
         ltm = LongTermMemory(user.telegram_id)
@@ -470,6 +491,12 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         time_str = local_time.strftime('%H:%M')
         date_str = local_time.strftime('%d.%m.%Y')
         result_msg += f" с напоминанием на {date_str} в {time_str}"
+
+    # Обновляем контекст диалога для последующих местоимений
+    if user_id:
+        context = get_user_context(user_id)
+        context.update(action="add_task", task=task, result=result_msg)
+        logger.info(f"[ADD_TASK] Updated dialog context with task '{task.title}'")
 
     if close_session:
         session.close()

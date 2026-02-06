@@ -124,6 +124,7 @@ class UserProfile(Base):
     favorite_contacts = Column(Text)  # JSON array of favorite contact usernames
     blocked_contacts = Column(Text)  # JSON array of blocked contact usernames
     interaction_count = Column(Integer, default=0)  # Total interactions with AI
+    pending_premium_recommendations = Column(Text)  # JSON array of Premium recommendations to mention in dialogue
 
     user = relationship("User", backref="profile")
 
