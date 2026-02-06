@@ -2304,6 +2304,7 @@ def get_partners_list(user_id=None, session=None):
     logger.info(f"[PARTNERS] Total partners found: {len(partners)}")
 
     # Sort: first users from same city, then others
+    # Within each group: PREMIUM first (priority), then by rating
     user_city = user_profile.city.lower() if user_profile.city else None
     partners_same_city = []
     partners_other_city = []
@@ -2315,9 +2316,18 @@ def get_partners_list(user_id=None, session=None):
         else:
             partners_other_city.append(partner)
 
-    # Sort each group by average rating
-    partners_same_city.sort(key=lambda p: (p.average_rating or 0), reverse=True)
-    partners_other_city.sort(key=lambda p: (p.average_rating or 0), reverse=True)
+    # Helper function to get subscription tier priority (PREMIUM=3, STANDARD=2, LIGHT=1, None=0)
+    def get_tier_priority(partner_profile):
+        partner_user = session.query(User).filter_by(id=partner_profile.user_id).first()
+        if not partner_user:
+            return 0
+        partner_subscription = session.query(Subscription).filter_by(user_id=partner_user.id, status='active').first()
+        tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
+        return {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(tier, 0)
+    
+    # Sort each group by: tier priority (descending), then rating (descending)
+    partners_same_city.sort(key=lambda p: (get_tier_priority(p), p.average_rating or 0), reverse=True)
+    partners_other_city.sort(key=lambda p: (get_tier_priority(p), p.average_rating or 0), reverse=True)
 
     # Combine: first from same city, then others
     sorted_partners = partners_same_city + partners_other_city
