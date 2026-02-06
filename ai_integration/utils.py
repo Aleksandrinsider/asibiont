@@ -417,6 +417,12 @@ def clean_technical_details(text):
     logger = logging.getLogger(__name__)
     original_text = text
     import re
+    
+    # КРИТИЧЕСКИ ВАЖНО: Удаляем DeepSeek DSML теги (вызовы функций через спец. формат)
+    # Удаляем все от начала DSML тега до конца строки/текста
+    text = re.sub(r'<｜DSML｜.*', "", text, flags=re.DOTALL)
+    text = re.sub(r'<\|DSML\|.*', "", text, flags=re.DOTALL)  # альтернативная кодировка
+    
     # Удаляем вызовы функций в квадратных скобках: [add_task(...)]
     before = text
     text = re.sub(r"\[[\w_]+\([^]]*\)\]", "", text)
