@@ -2838,6 +2838,11 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         if relevance_score > 0:
             partner_user = session.query(User).filter_by(id=partner.user_id).first()
             if partner_user and partner_user.username:
+                # Получаем tier для Premium-приоритета
+                partner_subscription = session.query(Subscription).filter_by(user_id=partner_user.id, status='active').first()
+                partner_tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
+                tier_priority = {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(partner_tier, 0)
+                
                 relevant_contacts.append({
                     'username': partner_user.username,
                     'name': partner_user.username,
@@ -2845,7 +2850,8 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     'skills': partner.skills or '',
                     'city': partner.city or '',
                     'score': relevance_score,
-                    'reasons': match_reasons
+                    'reasons': match_reasons,
+                    'tier_priority': tier_priority
                 })
     
     # ПРИОРИТЕТНАЯ СОРТИРОВКА: сначала свой город, потом другие (как в get_partners_list)
@@ -2859,9 +2865,9 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         else:
             contacts_other_city.append(contact)
     
-    # Сортируем каждую группу по баллам
-    contacts_same_city.sort(key=lambda x: x['score'], reverse=True)
-    contacts_other_city.sort(key=lambda x: x['score'], reverse=True)
+    # Сортируем каждую группу по: (1) Premium-приоритет, (2) баллы релевантности
+    contacts_same_city.sort(key=lambda x: (x.get('tier_priority', 0), x['score']), reverse=True)
+    contacts_other_city.sort(key=lambda x: (x.get('tier_priority', 0), x['score']), reverse=True)
     
     # Объединяем: СНАЧАЛА свой город, ПОТОМ остальные
     sorted_contacts = contacts_same_city + contacts_other_city
