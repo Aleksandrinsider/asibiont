@@ -627,10 +627,10 @@
                                             {% set tier_glow = '#FFD700' %}
                                         {% endif %}
                                         {% if user_avatar_url %}
-                                        <img src="{{ user_avatar_url }}" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                        <div style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <img src="{{ user_avatar_url }}" alt="Аватар" onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid white; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div onclick="openContactProfileModal('{{ user.username }}')" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid white; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% else %}
-                                        <div style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
+                                        <div onclick="openContactProfileModal('{{ user.username }}')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid white; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -5730,10 +5730,10 @@
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
-                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px;">';
+                            html += '<img src="' + data.user_avatar_url + '" alt="Аватар" onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; margin-bottom: 8px; cursor: pointer;">';
                         } else {
                             const initial = (data.profile.username || data.first_name || 'U')[0].toUpperCase();
-                            html += '<div style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px;">' + initial + '</div>';
+                            html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 1px solid #D1D9E0; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
                         }
                         html += '<p style="margin: 0; font-weight: 600; color: #374151; font-size: 16px;">' + (data.first_name || 'Пользователь') + '</p>';
                         html += '<p style="margin: 0; color: #374151; font-size: 13px; margin-bottom: 8px;">@' + (data.profile.username || 'неизвестен') + '</p>';
