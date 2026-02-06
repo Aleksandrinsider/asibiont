@@ -155,11 +155,35 @@ class HybridAutonomousAgent:
         finally:
             session.close()
 
+        # Добавляем контекст последних сообщений, если есть
+        context_text = ""
+        if context:
+            try:
+                import json
+                # Если context - это строка JSON, парсим её
+                if isinstance(context, str):
+                    context_data = json.loads(context)
+                else:
+                    context_data = context
+                
+                # Берем последние 3 сообщения для контекста
+                if isinstance(context_data, list) and len(context_data) > 0:
+                    recent_messages = context_data[-3:] if len(context_data) >= 3 else context_data
+                    context_text = "\n\nПОСЛЕДНИЕ СООБЩЕНИЯ (для понимания контекста):\n"
+                    for msg in recent_messages:
+                        if isinstance(msg, dict):
+                            role = "Пользователь" if msg.get('role') == 'user' else "Ассистент"
+                            content = msg.get('content', '')
+                            context_text += f"{role}: {content}\n"
+            except Exception as e:
+                logger.error(f"Error processing context for planning: {e}")
+                context_text = ""
+
         # AI планирует действия на основе контекста
         planning_prompt = f"""Ты - планировщик действий для AI-помощника. Проанализируй запрос пользователя и определи, нужны ли инструменты.
 
 СЕЙЧАС: {current_time_str}, {current_date_str}
-Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}
+Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_text}
 
 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
 
@@ -167,6 +191,8 @@ class HybridAutonomousAgent:
 - add_task(title, reminder_time, description="", is_recurring=False, recurrence_pattern=None) - создать задачу с напоминанием
 - list_tasks(filter_type=None) - показать список задач (filter_type: "today", "overdue", "upcoming", "recurring")
 - complete_task(task_title) - отметить задачу выполненной
+- skip_task(task_title) - пропустить/отложить задачу на потом
+- restore_task(task_title) - восстановить удаленную задачу
 - delete_task(task_title) - удалить задачу
 - delete_all_tasks() - удалить все задачи (только по прямой просьбе)
 - reschedule_task(task_title, new_time) - перенести задачу на другое время
@@ -180,7 +206,8 @@ class HybridAutonomousAgent:
 - get_delegation_progress() - проверить статус делегированных задач
 - cancel_delegation(task_id) - отменить делегирование
 - find_relevant_contacts_for_task(task_description) - найти контакты, которые могут помочь с задачей
-- find_partners() - найти единомышленников по интересам и целям
+- find_partners() - найти единомышленников по интересам и целям (показывает список с контекстом)
+- suggest_trends_and_opportunities(focus_area=None, num_suggestions=3) - предложить тренды и возможности для развития
 
 ПРОФИЛЬ И ПАМЯТЬ:
 - update_profile(city=None, birthdate=None, company=None, position=None, goals=None, skills=None, interests=None) - обновить данные профиля
@@ -189,7 +216,7 @@ class HybridAutonomousAgent:
 
 АНАЛИТИКА:
 - analyze_tasks() - анализ задач с AI-рекомендациями по оптимизации
-- analyze_goal_progress() - анализ прогресса по целям
+- analyze_goal_achievement() - детальный анализ достижения целей с метриками и прогрессом
 
 ПОДПИСКА:
 - check_subscription_status() - проверить статус подписки
@@ -199,6 +226,12 @@ class HybridAutonomousAgent:
 ЗАПРОС: "{user_message}"
 
 ЗАДАЧА: Определи, нужны ли инструменты для выполнения запроса. Если нужны - укажи какие и параметры.
+
+ВАЖНО О ПОДТВЕРЖДЕНИЯХ:
+Если в последних сообщениях ассистент предложил создать задачу, а пользователь ответил подтверждением ("да", "отлично", "давай", "согласен", "сделай", "конечно"), то:
+1. Извлеки детали задачи из предложения ассистента (название, время)
+2. Создай task с инструментом add_task
+3. Если время не указано явно, используй "сегодня до вечера" или "завтра"
 
 Верни JSON:
 {{
@@ -213,12 +246,17 @@ class HybridAutonomousAgent:
 - "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
 - "напомни через 5 минут позвонить" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "позвонить", "reminder_time": "через 5 минут"}}, "reason": "создание напоминания"}}], "response_type": "execute_and_respond"}}
 - "мои задачи?" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "показать список"}}], "response_type": "execute_and_respond"}}
+- "отложи задачу отчет" → {{"needs_tools": true, "tools": [{{"tool": "skip_task", "params": {{"task_title": "отчет"}}, "reason": "отложить задачу"}}], "response_type": "execute_and_respond"}}
+- "верни удаленную задачу" → {{"needs_tools": true, "tools": [{{"tool": "restore_task", "params": {{}}, "reason": "восстановить задачу"}}], "response_type": "execute_and_respond"}}
 - "делегируй задачу отчет Ивану" → {{"needs_tools": true, "tools": [{{"tool": "delegate_task", "params": {{"title": "отчет", "delegated_to_username": "Иван", "description": "", "reminder_time": "сегодня"}}, "reason": "делегирование задачи"}}], "response_type": "execute_and_respond"}}
+- "покажи моих партнеров" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "найти партнеров"}}], "response_type": "execute_and_respond"}}
+- "какие тренды в маркетинге?" → {{"needs_tools": true, "tools": [{{"tool": "suggest_trends_and_opportunities", "params": {{"focus_area": "маркетинг"}}, "reason": "тренды"}}], "response_type": "execute_and_respond"}}
 - "кто может помочь с маркетингом?" → {{"needs_tools": true, "tools": [{{"tool": "find_relevant_contacts_for_task", "params": {{"task_description": "маркетинг"}}, "reason": "поиск контактов"}}], "response_type": "execute_and_respond"}}
 - "обнови мой город на Москва" → {{"needs_tools": true, "tools": [{{"tool": "update_profile", "params": {{"city": "Москва"}}, "reason": "обновление профиля"}}], "response_type": "execute_and_respond"}}
 - "запомни что я предпочитаю работать утром" → {{"needs_tools": true, "tools": [{{"tool": "update_user_memory", "params": {{"info": "предпочитает работать утром"}}, "reason": "сохранение предпочтений"}}], "response_type": "execute_and_respond"}}
 - "как дела?" → {{"needs_tools": false, "response_type": "just_chat"}}
 - "проанализируй мои задачи" → {{"needs_tools": true, "tools": [{{"tool": "analyze_tasks", "params": {{}}, "reason": "анализ задач"}}], "response_type": "execute_and_respond"}}
+- "как мой прогресс по целям?" → {{"needs_tools": true, "tools": [{{"tool": "analyze_goal_achievement", "params": {{}}, "reason": "анализ достижения целей"}}], "response_type": "execute_and_respond"}}
 
 Верни ТОЛЬКО JSON, без дополнительного текста."""
 
