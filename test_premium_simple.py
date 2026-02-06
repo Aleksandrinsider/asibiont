@@ -97,21 +97,56 @@ async def test():
         else:
             print("  [EMPTY] Nothing!")
         
+        # Check what Premium will see
+        print("\n[CHECK] What Premium will see in next chat:")
+        premium_prompt = get_premium_recommendations_for_prompt(premium.telegram_id, session)
+        if premium_prompt:
+            print(premium_prompt[:800])
+        else:
+            print("  [EMPTY] Nothing!")
+        
+        # Check Premium profile
+        session.refresh(premium_profile)
+        print("\n[CHECK] Premium's profile:")
+        if premium_profile.pending_premium_recommendations:
+            recs = json.loads(premium_profile.pending_premium_recommendations)
+            print(f"  Found {len(recs)} notifications")
+            for i, rec in enumerate(recs, 1):
+                print(f"\n  Notification #{i}:")
+                print(f"    Type: {rec.get('type', 'N/A')}")
+                if rec.get('type') == 'partner_found':
+                    print(f"    Partner: @{rec.get('partner_username', 'N/A')}")
+                    print(f"    Goal: {rec.get('goal', 'N/A')[:60]}")
+                    print(f"    Match: {rec.get('match_reason', 'N/A')}")
+        else:
+            print("  [EMPTY] No notifications!")
+        
         #==FINAL CONCLUSIONS==
         print("\n\n" + "="*70)
         print("CONCLUSIONS")
         print("="*70)
         
-        print("\n[PROBLEM] Implementation != Description!")
-        print("\nDESCRIPTION: 'AI on autopilot: finds partners, initiates collaborations'")
-        print("\nREALITY:")
-        print("  1. Premium creates task")
-        print("  2. System finds relevant person")
-        print("  3. Recommendation SAVED to person's profile")
-        print("  4. When person messages bot (maybe in a week), AI mentions it")
-        print("  5. Premium gets NO notifications about found partners")
-        print("  6. No automatic messages/contact initiation")
-        print("\nThis is NOT 'autopilot', it's PASSIVE matching via AI dialogue")
+        if premium_profile.pending_premium_recommendations:
+            print("\n[SUCCESS] Premium now sees partner notifications!")
+            print("\nImplementation now matches description:")
+            print("  1. Premium creates task")
+            print("  2. System finds relevant person")
+            print("  3. Recommendation saved to partner's profile")
+            print("  4. NOTIFICATION saved to Premium's profile")
+            print("  5. Premium sees: 'Found partner @username for your goal X'")
+            print("  6. Partner sees opportunity when they message bot")
+            print("\nThis is 'autopilot with notifications' - Premium knows who was found!")
+        else:
+            print("\n[PROBLEM] Implementation != Description!")
+            print("\nDESCRIPTION: 'AI on autopilot: finds partners, initiates collaborations'")
+            print("\nREALITY:")
+            print("  1. Premium creates task")
+            print("  2. System finds relevant person")
+            print("  3. Recommendation SAVED to person's profile")
+            print("  4. When person messages bot (maybe in a week), AI mentions it")
+            print("  5. Premium gets NO notifications about found partners")
+            print("  6. No automatic messages/contact initiation")
+            print("\nThis is NOT 'autopilot', it's PASSIVE matching via AI dialogue")
         
     finally:
         # Cleanup

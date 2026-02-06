@@ -143,12 +143,14 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
         # Сохраняем рекомендации в профили (макс 3 за раз для real-time)
         saved_count = 0
         saved_details = []
+        partners_found = []  # Для уведомления Premium
         
         for user_data in relevant_users[:3]:
             user = user_data['user']
             matching_goal = user_data['matching_goal']
             match_reason = user_data['match_reason']
             
+            # Сохраняем рекомендацию партнёру
             success = save_recommendation_to_profile(
                 session=session,
                 target_user_id=user.telegram_id,
@@ -163,6 +165,23 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
                     "goal": matching_goal['goal'],
                     "match_reason": match_reason
                 })
+                
+                # Сохраняем уведомление Premium о найденном партнёре
+                save_partner_notification_to_premium(
+                    session=session,
+                    premium_user_id=premium_user_id,
+                    partner_username=user.username or f"User_{user.telegram_id}",
+                    partner_telegram_id=user.telegram_id,
+                    matching_goal=matching_goal,
+                    match_reason=match_reason,
+                    task_id=task_id
+                )
+                
+                partners_found.append({
+                    "username": user.username or f"User_{user.telegram_id}",
+                    "telegram_id": user.telegram_id,
+                    "match_reason": match_reason
+                })
         
         # Обновляем cooldown
         if task_id:
@@ -175,7 +194,9 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
             "items_analyzed": len(analysis),
             "relevant_users_found": len(relevant_users),
             "recommendations_saved": saved_count,
+            "partners_notified_to_premium": len(partners_found),
             "saved_details": saved_details,
+            "partners_found": partners_found,
             "timestamp": datetime.now(pytz.UTC).isoformat()
         }
         
@@ -588,6 +609,85 @@ def save_recommendation_to_profile(session: SessionType,
         return False
 
 
+def save_partner_notification_to_premium(session: SessionType,
+                                         premium_user_id: int,
+                                         partner_username: str,
+                                         partner_telegram_id: int,
+                                         matching_goal: Dict[str, Any],
+                                         match_reason: str,
+                                         task_id: Optional[int] = None) -> bool:
+    """
+    Сохраняет уведомление о найденном партнёре в профиль Premium-пользователя
+    
+    Premium увидит в своём промпте: "Найден релевантный партнёр @username для твоей цели X"
+    
+    Args:
+        session: DB session
+        premium_user_id: Telegram ID Premium пользователя
+        partner_username: Username найденного партнёра
+        partner_telegram_id: Telegram ID партнёра
+        matching_goal: Цель для которой найден партнёр
+        match_reason: Почему этот партнёр релевантен
+        task_id: ID задачи которая инициировала поиск
+    
+    Returns:
+        bool: True если успешно сохранено
+    """
+    
+    try:
+        # Получаем Premium пользователя
+        premium_user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+        if not premium_user:
+            logger.warning(f"[PREMIUM_AUTO] Premium user {premium_user_id} not found")
+            return False
+        
+        # Получаем профиль
+        profile = session.query(UserProfile).filter_by(user_id=premium_user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=premium_user.id)
+            session.add(profile)
+        
+        # Парсим существующие уведомления
+        existing = []
+        if profile.pending_premium_recommendations:
+            try:
+                existing = json.loads(profile.pending_premium_recommendations)
+                if not isinstance(existing, list):
+                    existing = []
+            except:
+                existing = []
+        
+        # Добавляем уведомление о найденном партнёре
+        notification = {
+            "type": "partner_found",
+            "partner_username": partner_username,
+            "partner_id": partner_telegram_id,
+            "goal": matching_goal.get('goal', 'Unknown'),
+            "opportunity": matching_goal.get('opportunity', ''),
+            "match_reason": match_reason,
+            "task_id": task_id,
+            "timestamp": datetime.now(pytz.UTC).isoformat(),
+            "shown_count": 0,
+            "max_shows": 3,
+            "priority": "medium"
+        }
+        
+        # Добавляем (макс 10 уведомлений)
+        existing.append(notification)
+        existing = existing[-10:]
+        
+        profile.pending_premium_recommendations = json.dumps(existing, ensure_ascii=False)
+        session.commit()
+        
+        logger.info(f"[PREMIUM_AUTO] Saved partner notification to Premium {premium_user_id}: {partner_username}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_AUTO] Failed to save partner notification: {e}")
+        session.rollback()
+        return False
+
+
 def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = None) -> str:
     """
     Получает Premium рекомендации для добавления в системный промпт
@@ -652,9 +752,14 @@ def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = 
             if profile and profile.pending_premium_recommendations:
                 saved = json.loads(profile.pending_premium_recommendations)
                 if isinstance(saved, list):
-                    # Фильтруем task_created (остальные генерируем real-time)
-                    task_created = [r for r in saved if r.get('type') == 'task_created' and r.get('shown_count', 0) < 3]
-                    all_insights.extend(task_created)
+                    # Загружаем сохранённые уведомления (task_created, partner_found)
+                    # Показываем task_created и partner_found максимум 3 раза
+                    saved_insights = [
+                        r for r in saved 
+                        if r.get('type') in ['task_created', 'partner_found'] 
+                        and r.get('shown_count', 0) < r.get('max_shows', 3)
+                    ]
+                    all_insights.extend(saved_insights)
         except Exception as e:
             logger.warning(f"[PREMIUM_RT] Error loading saved insights: {e}")
         
@@ -735,7 +840,7 @@ def _check_deadlines_and_stuck_quick(user: User, session: SessionType) -> List[D
         active_tasks = session.query(Task).filter(
             and_(
                 Task.user_id == user.id,
-                Task.completed == False
+                Task.status.in_(['pending', 'in_progress'])
             )
         ).all()
         
@@ -743,8 +848,8 @@ def _check_deadlines_and_stuck_quick(user: User, session: SessionType) -> List[D
         
         for task in active_tasks:
             # Проверяем дедлайны
-            if task.deadline:
-                deadline_dt = task.deadline
+            if task.due_date:
+                deadline_dt = task.due_date
                 if not deadline_dt.tzinfo:
                     deadline_dt = pytz.UTC.localize(deadline_dt)
                 
@@ -755,27 +860,27 @@ def _check_deadlines_and_stuck_quick(user: User, session: SessionType) -> List[D
                     insights.append({
                         "type": "deadline_alert",
                         "task_id": task.id,
-                        "task_title": task.description[:50],
+                        "task_title": task.description[:50] if task.description else task.title[:50],
                         "days_left": days_left,
                         "priority": "high" if days_left == 1 else "medium"
                     })
             
-            # Проверяем застопоренные
-            if task.updated_at:
-                updated_dt = task.updated_at
-                if not updated_dt.tzinfo:
-                    updated_dt = pytz.UTC.localize(updated_dt)
+            # Проверяем застопоренные (по created_at, так как updated_at нет)
+            if task.created_at:
+                created_dt = task.created_at
+                if not created_dt.tzinfo:
+                    created_dt = pytz.UTC.localize(created_dt)
                 
-                days_stuck = (now - updated_dt).days
+                days_since_created = (now - created_dt).days
                 
-                # Застопорилась >= 3 дней
-                if days_stuck >= 3:
+                # Задача создана > 5 дней назад и статус всё ещё pending
+                if days_since_created >= 5 and task.status == 'pending':
                     insights.append({
                         "type": "stuck_task",
                         "task_id": task.id,
-                        "task_title": task.description[:50],
-                        "days_stuck": days_stuck,
-                        "priority": "high" if days_stuck >= 5 else "medium"
+                        "task_title": task.description[:50] if task.description else task.title[:50],
+                        "days_stuck": days_since_created,
+                        "priority": "high" if days_since_created >= 7 else "medium"
                     })
         
         return insights
@@ -889,6 +994,12 @@ def _format_insight_for_prompt(insight: Dict[str,Any]) -> str:
             relevance = insight.get('relevance', '')
             return f"- Тренд: {trend_text} ({relevance})"
         
+        elif insight_type == 'partner_found':
+            partner = insight.get('partner_username', 'пользователь')
+            goal = insight.get('goal', 'твоя цель')
+            match_reason = insight.get('match_reason', '')
+            return f"- Найден партнёр @{partner} для '{goal}' — {match_reason}"
+        
         else:
             # Неизвестный тип - пробуем generic формат
             return f"- {insight.get('opportunity', insight.get('insight', ''))}"
@@ -896,13 +1007,6 @@ def _format_insight_for_prompt(insight: Dict[str,Any]) -> str:
     except Exception as e:
         logger.error(f"[PREMIUM_AUTO] Error formatting insight {insight_type}: {e}")
         return ""
-        
-    except Exception as e:
-        logger.error(f"[PREMIUM_AUTO] Error getting recommendations for prompt: {e}")
-        return ""
-    finally:
-        if close_session:
-            session.close()
 
 
 def mark_recommendation_shown(user_id: int, session: SessionType = None):
