@@ -17,7 +17,9 @@ from .utils import (
     determine_timezone_from_time,
     replace_placeholders, clean_technical_details,
     post_process_tool_calls,
-    post_process_response
+    post_process_response,
+    get_news_info,
+    get_weather_info
 )
 from .prompts import get_extended_system_prompt
 from .tools import TOOLS
@@ -97,6 +99,13 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             proactive_context = generate_proactive_context(user_id, session)
             logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
 
+            # Получаем погоду и новости для контекста
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            user_city = profile.city if profile and profile.city else None
+            weather_info = get_weather_info(user_city) if user_city else None
+            news_info = get_news_info(user_city) if user_city else get_news_info()
+            logger.info(f"[CONTEXT] Weather: {bool(weather_info)}, News: {bool(news_info)}")
+
             # Получаем системный промпт с проактивным контекстом
             system_prompt = get_extended_system_prompt(
                 user_now=user_now,
@@ -109,8 +118,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
                 message_type=message_type,
-                weather_info=None,
-                news_info=None,
+                weather_info=weather_info,
+                news_info=news_info,
                 proactive_context=proactive_context
             )
 

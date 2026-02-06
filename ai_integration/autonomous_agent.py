@@ -315,6 +315,15 @@ class HybridAutonomousAgent:
                 except:
                     pass  # Оставляем UTC
 
+            # Получаем погоду и новости
+            weather_info = None
+            news_info = None
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and profile.city:
+                from .utils import get_weather_info, get_news_info
+                weather_info = get_weather_info(profile.city)
+                news_info = get_news_info(profile.city)
+
             base_prompt = get_extended_system_prompt(
                 user_now=user_now,
                 current_time_str=current_time_str,
@@ -326,8 +335,8 @@ class HybridAutonomousAgent:
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
                 message_type=None,
-                weather_info=None,
-                news_info=None
+                weather_info=weather_info,
+                news_info=news_info
             )
         finally:
             session.close()
@@ -455,15 +464,17 @@ class HybridAutonomousAgent:
             # Получаем данные профиля
             profile_data = {}
             weather_info = None
+            news_info = None
             if user:
                 from models import UserProfile
                 profile = session.query(UserProfile).filter_by(user_id=user.id).first()
                 if profile:
                     if profile.city:
                         profile_data['city'] = profile.city
-                        # Получаем погоду для города
-                        from .utils import get_weather_info
+                        # Получаем погоду и новости для города
+                        from .utils import get_weather_info, get_news_info
                         weather_info = get_weather_info(profile.city)
+                        news_info = get_news_info(profile.city)
                     if profile.birthdate:
                         profile_data['birthdate'] = profile.birthdate
                     if profile.company:
@@ -519,7 +530,7 @@ class HybridAutonomousAgent:
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE') if user else 'FREE',
                 message_type=None,
                 weather_info=weather_info,
-                news_info=None,
+                news_info=news_info,
                 profile_data=profile_data
             )
         finally:
