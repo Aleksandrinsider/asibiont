@@ -1893,124 +1893,130 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         hidden_count = len(sorted_tasks) - len(tasks_to_show)
 
         # Правильный подсчёт: только личные незавершённые задачи
-        result = f"У вас {len(my_tasks)} {'задача' if len(my_tasks) == 1 else ('задачи' if 2 <= len(my_tasks) <= 4 else 'задач')}"
+        result = f"У тебя {len(my_tasks)} {'задача' if len(my_tasks) == 1 else ('задачи' if 2 <= len(my_tasks) <= 4 else 'задач')}"
         if delegated_to_me:
-            result += f" + {len(delegated_to_me)} делегированных"
-        result += "\n\n"
+            result += f" плюс {len(delegated_to_me)} делегированных"
+        result += ". "
 
-        # ФОРМАТИРОВАНИЕ ПО КАТЕГОРИЯМ с эмодзи для ясности
+        # ФОРМАТИРОВАНИЕ В ПОВЕСТВОВАТЕЛЬНОМ СТИЛЕ
         if priority_tasks:
-            # Просроченные показываем ВСЕГДА и ВСЕ (не ограничиваем)
-            result += f"⚠️ ПРОСРОЧЕННЫЕ ({len(priority_tasks)}):\n"
-            for task in priority_tasks:  # Показываем ВСЕ просроченные без фильтрации
+            result += f"Просроченные задачи: "
+            for i, task in enumerate(priority_tasks):
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     delta = now - reminder_dt
                     days = delta.days
                     hours = delta.seconds // 3600
                     if days > 0:
-                        delay_str = f"{days}д {hours}ч" if hours else f"{days}д"
+                        delay_str = f"{days} дней {hours} часов" if hours else f"{days} дней"
                     else:
-                        delay_str = f"{hours}ч"
-                    result += f"  {task.id}. {task.title} (просрочено на {delay_str})\n"
+                        delay_str = f"{hours} часов"
+                    result += f"'{task.title}' просрочена на {delay_str}"
+                    if i < len(priority_tasks) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
                 except:
-                    result += f"  {task.id}. {task.title}\n"
-            result += "\n"
+                    result += f"'{task.title}'"
+                    if i < len(priority_tasks) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
         
         if today_tasks:
-            result += f"📅 СЕГОДНЯ ({len(today_tasks)}):\n"
-            for task in [t for t in tasks_to_show if t in today_tasks]:
+            result += f"Сегодня запланированы: "
+            for i, task in enumerate(today_tasks[:5]):  # Ограничиваем до 5
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     time_str = reminder_dt.strftime("%H:%M")
-                    result += f"  {task.id}. {task.title} ({time_str})\n"
+                    result += f"'{task.title}' в {time_str}"
+                    if i < len(today_tasks[:5]) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
                 except:
-                    result += f"  {task.id}. {task.title}\n"
-            result += "\n"
+                    result += f"'{task.title}'"
+                    if i < len(today_tasks[:5]) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
         
         if upcoming_tasks and len(tasks_to_show) > len(priority_tasks) + len(today_tasks):
-            result += f"🔜 ЗАВТРА ({len(upcoming_tasks)}):\n"
-            for task in [t for t in tasks_to_show if t in upcoming_tasks]:
+            result += f"Завтра: "
+            for i, task in enumerate(upcoming_tasks[:3]):  # Ограничиваем до 3
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     time_str = reminder_dt.strftime("%H:%M")
-                    result += f"  {task.id}. {task.title} ({time_str})\n"
+                    result += f"'{task.title}' в {time_str}"
+                    if i < len(upcoming_tasks[:3]) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
                 except:
-                    result += f"  {task.id}. {task.title}\n"
-            result += "\n"
+                    result += f"'{task.title}'"
+                    if i < len(upcoming_tasks[:3]) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
         
-        # Остальные задачи (если есть место в топ-20)
-        remaining_later = [t for t in tasks_to_show if t in later_tasks]
+        # Остальные задачи
+        remaining_later = [t for t in tasks_to_show if t in later_tasks][:3]  # Максимум 3
         if remaining_later:
-            result += f"📋 ПОЗЖЕ ({len(later_tasks)}):\n"
-            for task in remaining_later[:5]:  # Максимум 5 из будущих
+            result += f"Позже запланированы: "
+            for i, task in enumerate(remaining_later):
                 try:
                     if task.reminder_time:
                         reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
-                        time_str = reminder_dt.strftime("%d.%m %H:%M")
-                        result += f"  {task.id}. {task.title} ({time_str})\n"
+                        time_str = reminder_dt.strftime("%d.%m в %H:%M")
+                        result += f"'{task.title}' {time_str}"
                     else:
-                        result += f"  {task.id}. {task.title}\n"
+                        result += f"'{task.title}'"
+                    if i < len(remaining_later) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
                 except:
-                    result += f"  {task.id}. {task.title}\n"
-            result += "\n"
+                    result += f"'{task.title}'"
+                    if i < len(remaining_later) - 1:
+                        result += ", "
+                    else:
+                        result += ". "
         
         # Показываем сколько задач скрыто
         if hidden_count > 0:
-            result += f"💡 Ещё {hidden_count} {'задача' if hidden_count == 1 else ('задачи' if 2 <= hidden_count <= 4 else 'задач')} не {'показана' if hidden_count == 1 else 'показаны'}. Сфокусируйтесь на приоритетных!\n\n"
+            result += f"Всего у тебя {len(sorted_tasks)} задач, но я показал только самые важные. "
         
         # Show delegated tasks
         if delegated_to_me:
-            result += "\nДелегированные мне:\n"
-            for task in delegated_to_me[:5]:
-                # Get delegator info
+            result += "Делегированные тебе задачи: "
+            for i, task in enumerate(delegated_to_me[:3]):  # Максимум 3
                 delegator_info = "неизвестно"
                 if task.delegated_by:
                     delegator = session.query(User).filter_by(id=task.delegated_by).first()
                     if delegator and delegator.username:
                         delegator_info = f"@{delegator.username}"
                 
-                # Add delegation status indicator
                 delegation_status_text = ""
                 if task.delegation_status == "pending":
-                    delegation_status_text = " [ОЖИДАЕТ ПРИНЯТИЯ]"
+                    delegation_status_text = " ожидает принятия"
                 elif task.delegation_status == "accepted":
-                    delegation_status_text = " [ПРИНЯТО]"
+                    delegation_status_text = " принято"
                 elif task.delegation_status == "rejected":
-                    delegation_status_text = " [ОТКЛОНЕНО]"
+                    delegation_status_text = " отклонено"
                 
-                # Add time status indicator
-                time_status_text = ""
-                reminder_info = ""
-                if task.reminder_time:
-                    try:
-                        reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
-                        if reminder_dt < now:
-                            delta = now - reminder_dt
-                            days = delta.days
-                            hours = (delta.seconds // 3600)
-                            time_status_text = " [ПРОСРОЧЕНО]"
-                            if days > 0:
-                                reminder_info = f" - просрочено на {days} д {hours} ч" if hours else f" - просрочено на {days} д"
-                            else:
-                                reminder_info = f" - просрочено на {hours} ч"
-                        else:
-                            time_status_text = " [АКТУАЛЬНО]"
-                            tz_name = user_tz.zone if user_tz != pytz.UTC else 'UTC'
-                            reminder_info = f" - {reminder_dt.strftime('%d.%m.%Y %H:%M')} ({tz_name})"
-                    except Exception as e:
-                        logger.warning(f"Failed to process reminder time for delegated task {task.id}: {e}")
-                        pass
-                
-                result += f"- {task.title} (от {delegator_info}){delegation_status_text}{time_status_text}{reminder_info}\n"
+                result += f"'{task.title}' от {delegator_info}{delegation_status_text}"
+                if i < len(delegated_to_me[:3]) - 1:
+                    result += ", "
+                else:
+                    result += ". "
 
         # Brief recommendation
         if overdue_count > 0:
-            result += f"\n\n{overdue_count} просроченных - стоит разобраться"
+            result += f"У тебя {overdue_count} просроченных задач - стоит разобраться с ними."
         elif len(active_tasks) == 1:
-            result += "\n\nОдна задача - отличный фокус"
+            result += "Одна задача - отличный фокус на цели."
         elif len(active_tasks) > 5:
-            result += "\n\nМного задач - приоритизируй"
+            result += "Много задач - лучше приоритизировать самые важные."
 
         logger.info(f"[LIST_TASKS] Returning {len(active_tasks)} active tasks for user {user_id}")
         return result.strip()
@@ -2570,7 +2576,7 @@ def find_partners(user_id=None, session=None):
     
     # Сначала показываем избранные контакты
     if favorite_partners:
-        response += "⭐ Избранные контакты:\n"
+        response += "Избранные контакты: "
         for idx, p in enumerate(favorite_partners[:2], 1):  # Максимум 2 избранных
             partner_user = session.query(User).filter_by(id=p.user_id).first()
             if partner_user and partner_user.username:
@@ -2587,14 +2593,18 @@ def find_partners(user_id=None, session=None):
                     info_parts.append(f"город: {p.city}")
 
                 info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-                response += f"⭐ @{partner_user.username}\n   {info_str}\n"
+                response += f"@{partner_user.username} ({info_str})"
+                if idx < len(favorite_partners[:2]):
+                    response += "; "
+                else:
+                    response += ". "
         
         if recommended_partners:
             response += "\n"
     
     # Затем показываем рекомендованных
     if recommended_partners:
-        response += "💡 Рекомендованные контакты:\n"
+        response += "Рекомендованные контакты: "
         for idx, p in enumerate(recommended_partners[:3], 1):  # Максимум 3 рекомендованных
             partner_user = session.query(User).filter_by(id=p.user_id).first()
             if partner_user and partner_user.username:
@@ -2611,7 +2621,11 @@ def find_partners(user_id=None, session=None):
                     info_parts.append(f"город: {p.city}")
 
                 info_str = ", ".join(info_parts) if info_parts else "профиль в разработке"
-                response += f"{idx}. @{partner_user.username}\n   {info_str}\n"
+                response += f"@{partner_user.username} ({info_str})"
+                if idx < len(recommended_partners[:3]):
+                    response += "; "
+                else:
+                    response += "."
     
     if not favorite_partners and not recommended_partners:
         response = "По твоему профилю пока не нашлось подходящих людей. Заполни профиль (интересы, навыки, город), и я найду единомышленников!"

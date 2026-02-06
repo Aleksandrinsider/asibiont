@@ -1,11 +1,14 @@
 import os
 import logging
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timezone
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Timezone settings
+TIMEZONE = timezone.utc
 
 # App settings first
 PORT = int(os.getenv("PORT", 8080))
