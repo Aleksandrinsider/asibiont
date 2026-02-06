@@ -2541,6 +2541,202 @@ def get_partners_list(user_id=None, session=None):
     return sorted_partners[:50]  # Увеличено с 20 до 50
 
 
+def analyze_group_opportunities(user_id, session):
+    """
+    Анализирует задачи ВСЕХ пользователей и находит возможности для объединения:
+    - Похожие задачи в близкое время
+    - Общие интересы/активности
+    - Конкретные предложения с @username и временем
+    
+    Returns:
+        Строка с конкретным предложением присоединиться или None
+    """
+    from datetime import datetime, timedelta
+    import pytz
+    
+    user = session.query(User).filter_by(id=user_id).first()
+    if not user:
+        return None
+    
+    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+    if not profile:
+        return None
+    
+    # Получаем текущее время пользователя
+    base_now = datetime.now(pytz.UTC)
+    user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
+    user_now = base_now.astimezone(user_tz)
+    
+    # Получаем ближайшие задачи других пользователей (следующие 48 часов)
+    next_48h = user_now + timedelta(hours=48)
+    
+    # Ищем релевантных партнеров
+    partners = get_partners_list(user.id, session)
+    if not partners:
+        return None
+    
+    # Анализируем их задачи
+    partner_activities = []
+    for partner in partners[:10]:  # Топ-10 партнеров
+        partner_user = session.query(User).filter_by(id=partner.user_id).first()
+        if not partner_user or not partner_user.username:
+            continue
+        
+        # Получаем активные задачи партнера
+        partner_tasks = session.query(Task).filter(
+            Task.user_id == partner_user.id,
+            Task.status.in_(['pending', 'active', 'in_progress']),
+            Task.reminder_time.isnot(None),
+            Task.reminder_time >= base_now,
+            Task.reminder_time <= base_now + timedelta(hours=48)
+        ).order_by(Task.reminder_time.asc()).limit(5).all()
+        
+        for task in partner_tasks:
+            # Проверяем релевантность по интересам
+            if profile.interests:
+                user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                task_text = f"{task.title} {task.description or ''}".lower()
+                
+                # Ищем совпадения интересов в тексте задачи
+                relevant = False
+                matched_interest = None
+                for interest in user_interests:
+                    interest_words = interest.split()
+                    if any(word in task_text for word in interest_words if len(word) >= 4):
+                        relevant = True
+                        matched_interest = interest
+                        break
+                
+                if relevant:
+                    # Форматируем время
+                    task_time = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                    time_str = task_time.strftime('%H:%M')
+                    
+                    # Определяем день
+                    if task_time.date() == user_now.date():
+                        day_str = "сегодня"
+                    elif task_time.date() == (user_now + timedelta(days=1)).date():
+                        day_str = "завтра"
+                    else:
+                        day_str = task_time.strftime('%d.%m')
+                    
+                    partner_activities.append({
+                        'username': partner_user.username,
+                        'activity': task.title,
+                        'time': f"{day_str} в {time_str}",
+                        'interest': matched_interest
+                    })
+    
+    # Возвращаем первое найденное предложение
+    if partner_activities:
+        activity = partner_activities[0]
+        return f"👥 @{activity['username']} {activity['activity']} {activity['time']}. Присоединяйся?"
+    
+    # Если нет конкретных задач, анализируем goals
+    if profile.goals:
+        user_goals = set(g.strip().lower() for g in profile.goals.split(','))
+        for partner in partners[:5]:
+            partner_profile = session.query(UserProfile).filter_by(user_id=partner.user_id).first()
+            if partner_profile and partner_profile.goals:
+                partner_user = session.query(User).filter_by(id=partner.user_id).first()
+                if partner_user and partner_user.username:
+                    partner_goals = set(g.strip().lower() for g in partner_profile.goals.split(','))
+                    common_goals = user_goals & partner_goals
+                    if common_goals:
+                        goal = list(common_goals)[0]
+                        return f"🎯 @{partner_user.username} тоже хочет '{goal}'. Можете объединиться!"
+    
+    # ГРУППОВОЙ АНАЛИЗ: Находим группы с похожими задачами/целями
+    # Собираем все задачи всех пользователей за последние 7 дней
+    week_ago = base_now - timedelta(days=7)
+    all_recent_tasks = session.query(Task).filter(
+        Task.status.in_(['pending', 'active', 'in_progress']),
+        Task.created_at >= week_ago,
+        Task.user_id != user.id  # Исключаем текущего пользователя
+    ).all()
+    
+    # Динамически группируем задачи по общим значимым словам
+    from collections import defaultdict
+    
+    # Стоп-слова для фильтрации
+    stop_words = {'в', 'на', 'с', 'для', 'по', 'из', 'к', 'о', 'от', 'и', 'а', 'но', 'что', 'как', 'это', 
+                  'все', 'еще', 'уже', 'только', 'так', 'здесь', 'там', 'тут', 'где', 'когда', 'мой', 'твой',
+                  'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'my', 'your'}
+    
+    # Извлекаем значимые слова из задач
+    word_to_tasks = defaultdict(list)
+    for task in all_recent_tasks:
+        task_text = f"{task.title} {task.description or ''}".lower()
+        words = [w.strip('.,!?;:()[]{}') for w in task_text.split()]
+        
+        # Берем только значимые слова (>= 4 символа, не стоп-слова)
+        significant_words = [w for w in words if len(w) >= 4 and w not in stop_words]
+        
+        task_user = session.query(User).filter_by(id=task.user_id).first()
+        if not task_user or not task_user.username:
+            continue
+        
+        for word in significant_words:
+            word_to_tasks[word].append({
+                'username': task_user.username,
+                'task': task.title,
+                'user_id': task.user_id
+            })
+    
+    # Находим слова, которые встречаются у 3+ разных пользователей
+    group_opportunities = []
+    for word, tasks_list in word_to_tasks.items():
+        # Убираем дубликаты по user_id
+        unique_users = {}
+        for task_info in tasks_list:
+            if task_info['user_id'] not in unique_users:
+                unique_users[task_info['user_id']] = task_info
+        
+        if len(unique_users) >= 3:
+            # Проверяем релевантность этого слова для текущего пользователя
+            user_text = ''
+            if profile.interests:
+                user_text += ' ' + profile.interests.lower()
+            if profile.goals:
+                user_text += ' ' + profile.goals.lower()
+            if profile.skills:
+                user_text += ' ' + profile.skills.lower()
+            
+            # Если слово релевантно пользователю (есть в его профиле или похожие корни)
+            is_relevant = False
+            
+            # Прямое совпадение
+            if word in user_text:
+                is_relevant = True
+            # Проверка по корням (первые 5 символов)
+            elif len(word) >= 5:
+                for ut in user_text.split():
+                    if len(ut) >= 5 and (word[:5] in ut or ut[:5] in word):
+                        is_relevant = True
+                        break
+            
+            if is_relevant:
+                group_opportunities.append({
+                    'topic': word,
+                    'users': unique_users,
+                    'count': len(unique_users)
+                })
+    
+    # Возвращаем первую найденную групповую возможность
+    if group_opportunities:
+        # Сортируем по количеству участников
+        group_opportunities.sort(key=lambda x: x['count'], reverse=True)
+        best_group = group_opportunities[0]
+        
+        usernames = [f"@{info['username']}" for info in list(best_group['users'].values())[:3]]
+        count = best_group['count']
+        topic = best_group['topic']
+        
+        return f"💡 {count} человек работают над задачами связанными с '{topic}' — организовать обсуждение? Участники: {', '.join(usernames)}"
+    
+    return None
+
+
 def find_partners(user_id=None, session=None):
     """Find potential partners based on user profile - FULL implementation here"""
     # Due to size limit, implementing key part only

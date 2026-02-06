@@ -88,7 +88,7 @@ def generate_proactive_context(user_id, session):
             proactive_hints.append(f"💡 Интересы пользователя: {', '.join(interests_list)}")
             
             # Ищем партнеров с похожими интересами
-            from .handlers import get_partners_list
+            from .handlers import get_partners_list, analyze_group_opportunities
             try:
                 partners = get_partners_list(user.id, session)
                 if partners:
@@ -106,6 +106,11 @@ def generate_proactive_context(user_id, session):
                     
                     if top_partners:
                         proactive_hints.append(f"🤝 Доступны для активностей: {'; '.join(top_partners[:2])}")
+                
+                # Анализируем возможности для групповых мероприятий
+                group_opportunities = analyze_group_opportunities(user.id, session)
+                if group_opportunities:
+                    proactive_hints.append(group_opportunities)
             except Exception as e:
                 logger.debug(f"Could not fetch partners: {e}")
         
