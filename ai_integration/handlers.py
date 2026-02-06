@@ -1771,6 +1771,9 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         # Объединяем результаты
         my_active_tasks = active_tasks_query.all()
         all_active_tasks = my_active_tasks + delegated_tasks
+        
+        # Базовый список задач для дальнейшей обработки
+        tasks = all_active_tasks
 
         # ФИЛЬТРАЦИЯ ЗАДАЧ
         if filter_type == "Автоматические":
@@ -4333,8 +4336,14 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
         close_session = False
 
     try:
+        # Получаем пользователя по telegram_id
+        from models import User
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "У тебя нет активных задач для анализа."
+        
         # Получаем активные задачи пользователя
-        tasks = session.query(Task).filter_by(user_id=user_id, status='pending').order_by(Task.due_date).all()
+        tasks = session.query(Task).filter_by(user_id=user.id, status='pending').order_by(Task.reminder_time).all()
         
         if not tasks:
             return "У тебя нет активных задач для анализа."
@@ -4344,8 +4353,14 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
         # Анализ только ближайших задач (сегодня-завтра)
         now = datetime.now(pytz.UTC)
         tomorrow = now + timedelta(days=1)
-        # Конвертируем даты задач в UTC для корректного сравнения
-        urgent_tasks = [t for t in tasks if t.due_date and t.due_date.replace(tzinfo=pytz.UTC) <= tomorrow]
+        # Фильтруем задачи по reminder_time (который всегда в UTC)
+        urgent_tasks = []
+        for t in tasks:
+            if t.reminder_time:
+                # Убеждаемся, что reminder_time имеет timezone
+                reminder = t.reminder_time if t.reminder_time.tzinfo else pytz.UTC.localize(t.reminder_time)
+                if reminder <= tomorrow:
+                    urgent_tasks.append(t)
         
         if urgent_tasks:
             analysis.append(f"🚨 Ближайшие задачи: {', '.join([t.title for t in urgent_tasks])}")
@@ -4354,10 +4369,10 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
         time_conflicts = []
         for i, task1 in enumerate(urgent_tasks):
             for task2 in urgent_tasks[i+1:]:
-                if task1.due_date and task2.due_date:
+                if task1.reminder_time and task2.reminder_time:
                     # Убеждаемся, что даты имеют timezone info
-                    dt1 = task1.due_date if task1.due_date.tzinfo else task1.due_date.replace(tzinfo=pytz.UTC)
-                    dt2 = task2.due_date if task2.due_date.tzinfo else task2.due_date.replace(tzinfo=pytz.UTC)
+                    dt1 = task1.reminder_time if task1.reminder_time.tzinfo else pytz.UTC.localize(task1.reminder_time)
+                    dt2 = task2.reminder_time if task2.reminder_time.tzinfo else pytz.UTC.localize(task2.reminder_time)
                     time_diff = abs((dt1 - dt2).total_seconds())
                     if time_diff < 1800:  # менее 30 минут
                         time_conflicts.append(f"'{task1.title}' и '{task2.title}'")
@@ -4377,7 +4392,13 @@ def analyze_tasks(user_id: int, session=None, close_session: bool = True) -> str
             recommendations.append("Разбери конфликты: перенеси одну задачу или начни с более важной.")
         
         # Анализ просроченных задач
-        overdue_tasks = [t for t in tasks if t.due_date and t.due_date < now]
+        overdue_tasks = []
+        for t in tasks:
+            if t.reminder_time:
+                reminder = t.reminder_time if t.reminder_time.tzinfo else pytz.UTC.localize(t.reminder_time)
+                if reminder < now:
+                    overdue_tasks.append(t)
+        
         if overdue_tasks:
             recommendations.append(f"Просрочено: {', '.join([t.title for t in overdue_tasks])}. Что с ними делать - перенести или отменить?")
         
@@ -4706,19 +4727,22 @@ def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
     """Показать информацию о профиле пользователя"""
     try:
         if session is None:
-            from .. import SessionLocal
+            from models import Session as SessionLocal
             session = SessionLocal()
             should_close = True
         else:
             should_close = close_session
 
         try:
-            # Получаем профиль пользователя
-            profile = session.query(UserProfile).filter_by(user_id=user_id).first()
-            user = session.query(User).filter_by(id=user_id).first()
+            # Получаем пользователя по telegram_id
+            from models import User
+            user = session.query(User).filter_by(telegram_id=user_id).first()
 
             if not user:
                 return "❌ Пользователь не найден"
+            
+            # Получаем профиль пользователя
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
             profile_info = []
 
@@ -4907,7 +4931,9 @@ async def analyze_tasks(user_id, session=None):
         suggestions = []
         if tasks_today:
             next_task = tasks_today[0]
-            time_diff = (next_task.reminder_time - user_now).total_seconds() / 3600
+            # Убеждаемся, что reminder_time aware
+            reminder = next_task.reminder_time if next_task.reminder_time.tzinfo else pytz.UTC.localize(next_task.reminder_time)
+            time_diff = (reminder - user_now).total_seconds() / 3600
             if time_diff <= 2:  # Следующая задача в ближайшие 2 часа
                 suggestions.append(f"Ближайшая задача '{next_task.title}' через {int(time_diff * 60)} минут")
             elif time_diff <= 4:  # В ближайшие 4 часа
