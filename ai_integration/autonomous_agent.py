@@ -115,6 +115,15 @@ class HybridAutonomousAgent:
                 else:
                     return self._create_command_plan(intent, user_message)
 
+        # СПЕЦИАЛЬНАЯ ОБРАБОТКА ВОПРОСОВ О ВРЕМЕНИ
+        time_keywords = ['время', 'времени', 'час', 'сколько времени', 'который час']
+        if any(keyword in message_lower for keyword in time_keywords):
+            return {
+                "intent": "time_query",
+                "actions": [],
+                "response_strategy": "direct_time_response"
+            }
+
         # ЕСЛИ НЕ КОМАНДА - ИСПОЛЬЗУЕМ AI ДЛЯ ОБЩЕГО ОБЩЕНИЯ
         return await self._plan_general_chat(user_message, user_id)
 
@@ -159,10 +168,50 @@ class HybridAutonomousAgent:
                     "response_strategy": "natural_response"
                 }
 
+            # Устанавливаем время пользователя (как в chat.py)
+            from datetime import datetime
+            import pytz
+            base_now = datetime.now(pytz.UTC)
+            user_now = base_now  # Default to UTC
+            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+            current_date_str = user_now.strftime("%Y-%m-%d")
+            
+            months = [
+                'января',
+                'февраля',
+                'марта',
+                'апреля',
+                'мая',
+                'июня',
+                'июля',
+                'августа',
+                'сентября',
+                'октября',
+                'ноября',
+                'декабря']
+            
+            # Get user timezone if available, default to Moscow if not set
+            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                user_now = base_now.astimezone(user_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+            except Exception as e:
+                logger.error(f"Error setting user timezone for chat: {e}")
+                # Fallback to Moscow time
+                try:
+                    moscow_tz = pytz.timezone('Europe/Moscow')
+                    user_now = base_now.astimezone(moscow_tz)
+                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                except:
+                    pass  # Keep UTC if all fails
+
             base_prompt = get_extended_system_prompt(
-                user_now=None,
-                current_time_str=None,
-                current_date_str=None,
+                user_now,
+                current_time_str,
+                current_date_str,
                 user_username=user.username or "пользователь",
                 mentions_str="",
                 user_memory=user.memory or "",
@@ -427,6 +476,8 @@ class HybridAutonomousAgent:
         3. Рефлексия и формирование ответа
         """
         
+        from datetime import datetime, timezone
+        
         try:
             # ШАГ 1: Планирование
             logger.info(f"[AGENT] Step 1: Planning strategy for '{user_message[:50]}...'")
@@ -474,6 +525,33 @@ class HybridAutonomousAgent:
                         response_parts.append(f"❌ Ошибка: {result['error']}")
                 
                 response = " ".join(response_parts)
+            elif plan.get('response_strategy') == 'direct_time_response':
+                # Специальная обработка для вопросов о времени
+                logger.info(f"[AGENT] Step 3: Direct time response")
+                # Получаем актуальное время пользователя
+                session = Session()
+                try:
+                    user = self._get_cached_user(user_id, session)
+                    if user:
+                        from datetime import datetime
+                        import pytz
+                        base_now = datetime.now(pytz.UTC)
+                        user_now = base_now
+                        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+                        
+                        user_timezone = user.timezone if user.timezone else 'Europe/Moscow'
+                        try:
+                            user_tz = pytz.timezone(user_timezone)
+                            user_now = base_now.astimezone(user_tz)
+                            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                        except Exception as e:
+                            logger.error(f"Error setting user timezone: {e}")
+                        
+                        response = f"Сейчас {current_time_str}. ⏰"
+                    else:
+                        response = "Сейчас время по UTC. ⏰"
+                finally:
+                    session.close()
             else:
                 # Общее общение - используем AI
                 logger.info(f"[AGENT] Step 3: AI generating natural response")

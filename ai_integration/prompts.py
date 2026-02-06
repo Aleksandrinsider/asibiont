@@ -38,6 +38,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 
     prompt = f"""Ты - ASI Biont, умный AI-помощник для управления задачами.
 
+СЕЙЧАС: {current_time_str}, {current_date_str}
+НИКОГДА НЕ ГАЛЛЮЦИНИРУЙ ВРЕМЯ - ИСПОЛЬЗУЙ ТОЛЬКО УКАЗАННОЕ ВЫШЕ!
 Пользователь: {user_username}
 {tier_info}{weather_context}{news_context}
 
