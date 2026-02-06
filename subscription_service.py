@@ -1,5 +1,6 @@
 from models import Session, Subscription, User, PaymentHistory, SubscriptionTier
 import datetime
+import pytz
 from config import FREE_ACCESS_MODE
 from payments import create_payment
 import logging
@@ -23,7 +24,7 @@ def check_subscription(user_id):
             if sub.end_date is None:
                 return True
             # Handle both offset-naive and offset-aware datetimes
-            now = datetime.datetime.now(datetime.timezone.utc)
+            now = datetime.datetime.now(pytz.UTC)
             if sub.end_date.tzinfo is None:
                 # end_date is offset-naive, make now offset-naive too
                 now_naive = now.replace(tzinfo=None)
@@ -93,7 +94,7 @@ def activate_subscription(user_id, plan='monthly', tier='light'):
         sub = session.query(Subscription).filter_by(user_id=user.id).first()
         
         # Calculate dates
-        start_date = datetime.datetime.now(datetime.timezone.utc)
+        start_date = datetime.datetime.now(pytz.UTC)
         duration_days = 30 if plan == 'monthly' else 365
         end_date = start_date + datetime.timedelta(days=duration_days)
         

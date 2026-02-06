@@ -7,7 +7,7 @@ import aiohttp
 import json
 import logging
 import pytz
-from datetime import datetime, timezone
+from datetime import datetime
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .prompts import get_extended_system_prompt
@@ -136,8 +136,7 @@ class HybridAutonomousAgent:
                 for task in tasks:
                     if task.reminder_time:
                         try:
-                            from datetime import timezone
-                            reminder_dt = task.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_now.tzinfo)
+                            reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_now.tzinfo)
                             if reminder_dt < user_now:
                                 overdue.append(task.title)
                             elif reminder_dt.date() == user_now.date():
@@ -761,8 +760,6 @@ class HybridAutonomousAgent:
         2. Выполнение действий
         3. Рефлексия и формирование ответа
         """
-        
-        from datetime import datetime, timezone
         
         try:
             # ШАГ 1: Планирование

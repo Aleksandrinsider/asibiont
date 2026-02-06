@@ -2,7 +2,7 @@
 
 import pytz
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def generate_proactive_context(user_id, session):
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         
         # Определяем текущее время пользователя
-        base_now = datetime.now(timezone.utc)
+        base_now = datetime.now(pytz.UTC)
         user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
         try:
             user_tz = pytz.timezone(user_timezone)

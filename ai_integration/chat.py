@@ -4,7 +4,7 @@ import json
 import logging
 import asyncio
 import traceback
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 import re
 import pytz
 import hashlib
@@ -194,8 +194,6 @@ async def generate_reminder(user_id, task_title, task_id=None):
         db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
-        from datetime import datetime
-        import pytz
         base_now = datetime.now(pytz.UTC)
         user_now = base_now  # Default to UTC
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
@@ -313,8 +311,8 @@ async def generate_result_check(user_id, task_title):
             db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
-        from datetime import datetime
-        import pytz
+
+
         base_now = datetime.now(pytz.UTC)
         user_now = base_now  # Default to UTC
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
@@ -795,8 +793,8 @@ async def generate_daily_report(user_id):
                 user_memory = ""
 
         # Используем единый унифицированный промпт для всех AI-сообщений
-        from datetime import datetime
-        import pytz
+
+
         base_now = datetime.now(pytz.UTC)
         user_now = base_now  # Default to UTC
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
@@ -934,8 +932,8 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
             db_session.close()
 
         # Используем единый унифицированный промпт для всех AI-сообщений
-        from datetime import datetime
-        import pytz
+
+
         base_now = datetime.now(pytz.UTC)
         user_now = base_now  # Default to UTC
         current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"

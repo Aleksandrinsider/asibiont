@@ -3,7 +3,7 @@
 import logging
 import json
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 import pytz
 from models import Session, Task, User, UserProfile, SubscriptionTier, Subscription, Goal
 from sqlalchemy import or_, and_, func
@@ -627,7 +627,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             return f"✅ Задача '{task.title}' уже выполнена"
         
         task.status = "completed"
-        task.actual_completion_time = datetime.now(timezone.utc)
+        task.actual_completion_time = datetime.now(pytz.UTC)
         
         # Сохраняем заметку о результате выполнения
         if completion_note:
@@ -681,7 +681,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         logger.info(f"[COMPLETE_TASK] Returning marker to request result: {result}")
         
         # Schedule result check - уточнение результата выполнения через 1 час
-        result_check_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        result_check_time = datetime.now(pytz.UTC) + timedelta(hours=1)
         try:
             from reminder_service import REMINDER_SERVICE
             if REMINDER_SERVICE:
@@ -695,7 +695,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
         if profile:
             completion_time = (
-                datetime.now(timezone.utc) - task.created_at.replace(tzinfo=timezone.utc)
+                datetime.now(pytz.UTC) - task.created_at.replace(tzinfo=pytz.UTC)
             ).total_seconds() / 60
             profile.completed_tasks = (profile.completed_tasks or 0) + 1
             profile.interaction_count = (profile.interaction_count or 0) + 1  # Увеличиваем счетчик взаимодействий
@@ -3372,11 +3372,11 @@ def schedule_delegation_monitoring(task_id, delegator_id, recipient_id, deadline
             logger.info(f"No deadline for task {task_id}, skipping monitoring")
             return
 
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(pytz.UTC)
         
         # Ensure deadline is timezone-aware
         if deadline.tzinfo is None:
-            deadline = deadline.replace(tzinfo=timezone.utc)
+            deadline = deadline.replace(tzinfo=pytz.UTC)
         
         time_until_deadline = deadline - current_time
 
@@ -3430,7 +3430,7 @@ def check_delegation_deadlines():
     """Check for overdue delegated tasks and send reminders"""
     session = Session()
     try:
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now(pytz.UTC)
 
         # Find accepted delegated tasks that are overdue
         overdue_tasks = session.query(Task).filter(
@@ -4510,7 +4510,7 @@ async def update_user_memory_async(memory_type: str = 'general', content: str = 
         current_memory = user.memory or ""
 
         # Добавить новую информацию с типом
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        timestamp = datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M")
         new_memory_entry = f"[{timestamp}] {memory_type.upper()}: {content}"
 
         if current_memory:
@@ -4581,7 +4581,7 @@ def analyze_goal_achievement(user_id: int, session=None, close_session: bool = T
             if goal_analysis.get("should_complete"):
                 # Цель достигнута - отмечаем как выполненную
                 goal.status = 'completed'
-                goal.completed_at = datetime.now(timezone.utc)
+                goal.completed_at = datetime.now(pytz.UTC)
                 goal.progress_percentage = 100
                 goal.progress_notes = goal_analysis.get("completion_reason", "Цель достигнута автоматически")
                 
@@ -4601,7 +4601,7 @@ def analyze_goal_achievement(user_id: int, session=None, close_session: bool = T
                 if new_progress > old_progress:
                     goal.progress_percentage = new_progress
                     goal.progress_notes = goal_analysis.get("progress_reason", "")
-                    goal.updated_at = datetime.now(timezone.utc)
+                    goal.updated_at = datetime.now(pytz.UTC)
                     
                     results["progress_updates"].append({
                         "goal_id": goal.id,
@@ -4947,12 +4947,11 @@ def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
 
             # Последняя активность
             if profile.last_activity:
-                from datetime import datetime, timezone
                 # Убедимся, что оба datetime имеют одинаковый timezone
-                now = datetime.now(timezone.utc)
+                now = datetime.now(pytz.UTC)
                 if profile.last_activity.tzinfo is None:
                     # Если last_activity naive, добавим UTC timezone
-                    last_activity_aware = profile.last_activity.replace(tzinfo=timezone.utc)
+                    last_activity_aware = profile.last_activity.replace(tzinfo=pytz.UTC)
                 else:
                     last_activity_aware = profile.last_activity
                 
@@ -4990,8 +4989,7 @@ async def analyze_tasks(user_id, session=None):
             return "Пользователь не найден"
 
         # Получаем ближайшие задачи (сегодня-завтра)
-        from datetime import datetime, timezone, timedelta
-        now = datetime.now(timezone.utc)
+        now = datetime.now(pytz.UTC)
         
         # Конвертируем в timezone пользователя
         if user.timezone:
