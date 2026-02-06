@@ -6,12 +6,13 @@ from datetime import datetime, timedelta
 import pytz
 import json
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-import requests
+import aiohttp
+import asyncio
 
 logger = logging.getLogger(__name__)
 
 
-def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None:
+async def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None:
     """
     Использует DeepSeek для парсинга любого формата времени.
     
@@ -68,14 +69,14 @@ def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None
             "temperature": 0.0
         }
         
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        
-        if response.status_code != 200:
-            logger.error(f"DeepSeek API error: {response.status_code}")
-            return None
-        
-        result = response.json()
-        content = result["choices"][0]["message"]["content"].strip()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status != 200:
+                    logger.error(f"DeepSeek API error: {response.status}")
+                    return None
+                
+                result = await response.json()
+                content = result["choices"][0]["message"]["content"].strip()
         
         # Remove markdown code blocks if present
         if content.startswith("```"):

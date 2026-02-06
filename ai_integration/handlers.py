@@ -250,7 +250,7 @@ def find_nearest_free_slot(user_db_id, target_time, session, search_range_hours=
     return None
 
 
-def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1):
+async def add_task(title, description="", reminder_time=None, due_date=None, user_id=None, session=None, ignore_conflicts=False, is_recurring=False, recurrence_pattern=None, recurrence_interval=1):
     """Add a new task"""
     logger.info(f"[ADD_TASK] Called with title='{title}', user_id={user_id}, reminder_time={reminder_time}, is_recurring={is_recurring} (type: {type(is_recurring)}), recurrence_pattern={recurrence_pattern}, recurrence_interval={recurrence_interval}")
     
@@ -350,7 +350,7 @@ def add_task(title, description="", reminder_time=None, due_date=None, user_id=N
                 current_time = datetime.now(user_tz)
                 logger.info(f"[ADD_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
                 
-                parsed_time = parse_time_with_ai(reminder_time, current_time)
+                parsed_time = await parse_time_with_ai(reminder_time, current_time)
                 
                 # Fallback to simple parser if AI fails
                 if not parsed_time:
@@ -1023,7 +1023,7 @@ async def reschedule_task(task_title=None, new_time=None, user_id=None, session=
             
             local_dt = None
             try:
-                local_dt = parse_time_with_ai(new_time, current_time)
+                local_dt = await parse_time_with_ai(new_time, current_time)
             except Exception as e:
                 logger.error(f"[RESCHEDULE_TASK] AI parsing error: {e}")
             
@@ -1601,7 +1601,7 @@ def cancel_delegation(task_id, user_id=None):
         return f"Ошибка при отмене делегирования: {str(e)}"
 
 
-def edit_task(
+async def edit_task(
         task_id=None,
         task_title=None,
         title=None,
@@ -1673,7 +1673,7 @@ def edit_task(
                 current_time = datetime.now(user_tz)
                 logger.info(f"[EDIT_TASK] Parsing time '{reminder_time}' with AI, current: {current_time}")
                 
-                parsed_time = parse_time_with_ai(reminder_time, current_time)
+                parsed_time = await parse_time_with_ai(reminder_time, current_time)
                 
                 # Fallback to simple parser if AI fails
                 if not parsed_time:

@@ -1107,7 +1107,7 @@ async def call_ai_with_tools(user_message, system_prompt, user_id, context=None)
 
                                 # Выполняем функцию
                                 if function_name == 'add_task':
-                                    result = add_task(
+                                    result = await add_task(
                                         user_id=user_id,
                                         title=function_args.get('title'),
                                         description=function_args.get('description', ''),
@@ -1117,11 +1117,11 @@ async def call_ai_with_tools(user_message, system_prompt, user_id, context=None)
                                         recurrence_interval=function_args.get('recurrence_interval')
                                     )
                                 elif function_name == 'complete_task':
-                                    result = complete_task(user_id=user_id, task_title=function_args.get('task_title'))
+                                    result = await complete_task(user_id=user_id, task_title=function_args.get('task_title'))
                                 elif function_name == 'list_tasks':
                                     result = list_tasks(user_id=user_id)
                                 elif function_name == 'reschedule_task':
-                                    result = reschedule_task(
+                                    result = await reschedule_task(
                                         user_id=user_id,
                                         task_title=function_args.get('task_title'),
                                         new_time=function_args.get('new_time')
