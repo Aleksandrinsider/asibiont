@@ -155,110 +155,58 @@ class HybridAutonomousAgent:
         finally:
             session.close()
 
-        # Добавляем контекст последних сообщений, если есть
-        context_text = ""
-        if context:
-            try:
-                import json
-                # Если context - это строка JSON, парсим её
-                if isinstance(context, str):
-                    context_data = json.loads(context)
-                else:
-                    context_data = context
-                
-                # Берем последние 3 сообщения для контекста
-                if isinstance(context_data, list) and len(context_data) > 0:
-                    recent_messages = context_data[-3:] if len(context_data) >= 3 else context_data
-                    context_text = "\n\nПОСЛЕДНИЕ СООБЩЕНИЯ (для понимания контекста):\n"
-                    for msg in recent_messages:
-                        if isinstance(msg, dict):
-                            role = "Пользователь" if msg.get('role') == 'user' else "Ассистент"
-                            content = msg.get('content', '')
-                            context_text += f"{role}: {content}\n"
-            except Exception as e:
-                logger.error(f"Error processing context for planning: {e}")
-                context_text = ""
-
         # AI планирует действия на основе контекста
-        planning_prompt = f"""Ты - планировщик действий для AI-помощника. Проанализируй запрос пользователя и определи, нужны ли инструменты.
+        planning_prompt = f"""Планировщик действий. Определи нужны ли инструменты.
 
-СЕЙЧАС: {current_time_str}, {current_date_str}
-Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_text}
+КОНТЕКСТ:
+Время: {current_time_str}, {current_date_str}
+Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}
 
-ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+ИНСТРУМЕНТЫ И ИХ ПАРАМЕТРЫ:
+Задачи:
+- add_task: title (обязат.), reminder_time (обязат.), description, due_date, is_recurring, recurrence_pattern
+- list_tasks: БЕЗ ПАРАМЕТРОВ
+- complete_task: task_title или task_id, completion_note (если только "готово" без названия - попросить уточнить)
+- delete_task: task_title или task_id, reason
+- reschedule_task: task_title (обязат.), new_time (обязат.)
+- edit_task: task_title, new_title, new_description, new_reminder_time
 
-УПРАВЛЕНИЕ ЗАДАЧАМИ:
-- add_task(title, reminder_time, description="", is_recurring=False, recurrence_pattern=None) - создать задачу с напоминанием
-- list_tasks(filter_type=None) - показать список задач (filter_type: "today", "overdue", "upcoming", "recurring")
-- complete_task(task_title) - отметить задачу выполненной
-- skip_task(task_title) - пропустить/отложить задачу на потом
-- restore_task(task_title) - восстановить удаленную задачу
-- delete_task(task_title) - удалить задачу
-- delete_all_tasks() - удалить все задачи (только по прямой просьбе)
-- reschedule_task(task_title, new_time) - перенести задачу на другое время
-- edit_task(task_title, new_title=None, new_description=None, new_time=None) - редактировать детали задачи
-- get_task_details(task_title) - получить подробную информацию о задаче
+Делегирование и партнёры:
+- find_partners: БЕЗ ПАРАМЕТРОВ (использует профиль user_id автоматически)
+- find_relevant_contacts_for_task: task_description (обязат.), limit
+- delegate_task: task_title, delegated_to_username
 
-ДЕЛЕГИРОВАНИЕ И СОТРУДНИЧЕСТВО:
-- delegate_task(title, description, reminder_time, delegated_to_username, delegation_details="") - делегировать задачу другому пользователю
-- accept_delegated_task(task_id) - принять делегированную задачу
-- reject_delegated_task(task_id) - отклонить делегированную задачу
-- get_delegation_progress() - проверить статус делегированных задач
-- cancel_delegation(task_id) - отменить делегирование
-- find_relevant_contacts_for_task(task_description) - найти контакты, которые могут помочь с задачей
-- find_partners() - найти единомышленников по интересам и целям (показывает список с контекстом)
-- suggest_trends_and_opportunities(focus_area=None, num_suggestions=3) - предложить тренды и возможности для развития
+Профиль:
+- update_profile: company, position, city, birthdate, goals, skills, interests
+- update_user_memory: info (обязат.) - текст для запоминания
 
-ПРОФИЛЬ И ПАМЯТЬ:
-- update_profile(city=None, birthdate=None, company=None, position=None, goals=None, skills=None, interests=None) - обновить данные профиля
-- update_user_memory(info) - сохранить важную информацию о пользователе в долговременную память
-- show_profile() - показать текущий профиль пользователя
+Аналитика:
+- analyze_tasks: БЕЗ ПАРАМЕТРОВ
 
-АНАЛИТИКА:
-- analyze_tasks() - анализ задач с AI-рекомендациями по оптимизации
-- analyze_goal_achievement() - детальный анализ достижения целей с метриками и прогрессом
+Запрос: "{user_message}"
 
-ПОДПИСКА:
-- check_subscription_status() - проверить статус подписки
-- create_subscription_payment(tier) - создать платеж для подписки (tier: "STANDARD", "PREMIUM")
-- cancel_subscription() - отменить подписку
+КРИТИЧЕСКИ ВАЖНО:
+- Используй ТОЛЬКО параметры из списка выше
+- НЕ добавляй параметры goal, interests, description если их нет в сигнатуре
+- find_partners и analyze_tasks - БЕЗ ПАРАМЕТРОВ
+- find_relevant_contacts_for_task требует ТОЛЬКО task_description
 
-ЗАПРОС: "{user_message}"
+ПОДТВЕРЖДЕНИЯ: Если ассистент предложил задачу, а юзер ответил "да"/"отлично"/"давай" - извлеки детали и создай task.
 
-ЗАДАЧА: Определи, нужны ли инструменты для выполнения запроса. Если нужны - укажи какие и параметры.
-
-ВАЖНО О ПОДТВЕРЖДЕНИЯХ:
-Если в последних сообщениях ассистент предложил создать задачу, а пользователь ответил подтверждением ("да", "отлично", "давай", "согласен", "сделай", "конечно"), то:
-1. Извлеки детали задачи из предложения ассистента (название, время)
-2. Создай task с инструментом add_task
-3. Если время не указано явно, используй "сегодня до вечера" или "завтра"
-
-Верни JSON:
+JSON:
 {{
   "needs_tools": true/false,
-  "tools": [
-    {{"tool": "имя_инструмента", "params": {{"param1": "value1"}}, "reason": "зачем"}}
-  ],
-  "response_type": "execute_and_respond" или "just_chat"
+  "tools": [{{"tool": "имя", "params": {{"param": "value"}}, "reason": "зачем"}}],
+  "response_type": "execute_and_respond"|"just_chat"
 }}
 
 Примеры:
 - "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
-- "напомни через 5 минут позвонить" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "позвонить", "reminder_time": "через 5 минут"}}, "reason": "создание напоминания"}}], "response_type": "execute_and_respond"}}
-- "мои задачи?" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "показать список"}}], "response_type": "execute_and_respond"}}
-- "отложи задачу отчет" → {{"needs_tools": true, "tools": [{{"tool": "skip_task", "params": {{"task_title": "отчет"}}, "reason": "отложить задачу"}}], "response_type": "execute_and_respond"}}
-- "верни удаленную задачу" → {{"needs_tools": true, "tools": [{{"tool": "restore_task", "params": {{}}, "reason": "восстановить задачу"}}], "response_type": "execute_and_respond"}}
-- "делегируй задачу отчет Ивану" → {{"needs_tools": true, "tools": [{{"tool": "delegate_task", "params": {{"title": "отчет", "delegated_to_username": "Иван", "description": "", "reminder_time": "сегодня"}}, "reason": "делегирование задачи"}}], "response_type": "execute_and_respond"}}
-- "покажи моих партнеров" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "найти партнеров"}}], "response_type": "execute_and_respond"}}
-- "какие тренды в маркетинге?" → {{"needs_tools": true, "tools": [{{"tool": "suggest_trends_and_opportunities", "params": {{"focus_area": "маркетинг"}}, "reason": "тренды"}}], "response_type": "execute_and_respond"}}
-- "кто может помочь с маркетингом?" → {{"needs_tools": true, "tools": [{{"tool": "find_relevant_contacts_for_task", "params": {{"task_description": "маркетинг"}}, "reason": "поиск контактов"}}], "response_type": "execute_and_respond"}}
-- "обнови мой город на Москва" → {{"needs_tools": true, "tools": [{{"tool": "update_profile", "params": {{"city": "Москва"}}, "reason": "обновление профиля"}}], "response_type": "execute_and_respond"}}
-- "запомни что я предпочитаю работать утром" → {{"needs_tools": true, "tools": [{{"tool": "update_user_memory", "params": {{"info": "предпочитает работать утром"}}, "reason": "сохранение предпочтений"}}], "response_type": "execute_and_respond"}}
-- "как дела?" → {{"needs_tools": false, "response_type": "just_chat"}}
-- "проанализируй мои задачи" → {{"needs_tools": true, "tools": [{{"tool": "analyze_tasks", "params": {{}}, "reason": "анализ задач"}}], "response_type": "execute_and_respond"}}
-- "как мой прогресс по целям?" → {{"needs_tools": true, "tools": [{{"tool": "analyze_goal_achievement", "params": {{}}, "reason": "анализ достижения целей"}}], "response_type": "execute_and_respond"}}
+- "создай задачу X завтра" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "X", "reminder_time": "завтра"}}, "reason": "создание"}}]}}
+- "мои задачи" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "список"}}]}}
+- "найди единомышленников" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "поиск"}}]}}
 
-Верни ТОЛЬКО JSON, без дополнительного текста."""
+ТОЛЬКО JSON:"""
 
         messages = [
             {"role": "system", "content": planning_prompt},

@@ -1137,7 +1137,7 @@ async def call_ai_with_tools(user_message, system_prompt, user_id, context=None)
                                 elif function_name == 'update_profile':
                                     result = update_profile(user_id=user_id, **function_args)
                                 elif function_name == 'analyze_tasks':
-                                    result = analyze_tasks(user_id=user_id)
+                                    result = await analyze_tasks(user_id=user_id)
                                 else:
                                     result = f"Функция {function_name} не поддерживается"
 

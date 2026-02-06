@@ -102,12 +102,12 @@ async def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime 
                 second=0,
                 microsecond=0
             )
+            
+            logger.info(f"✅ AI parsed '{time_str}' → {result_dt}")
+            return result_dt
         except (ValueError, KeyError) as e:
             logger.error(f"❌ Invalid date/time from AI: {parsed}, error: {e}")
             return None
-        
-        logger.info(f"✅ AI parsed '{time_str}' → {result_dt}")
-        return result_dt
         
     except Exception as e:
         logger.error(f"❌ AI time parsing failed: {e}")
