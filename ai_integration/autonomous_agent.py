@@ -6,6 +6,7 @@ import asyncio
 import aiohttp
 import json
 import logging
+import pytz
 from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
@@ -286,10 +287,39 @@ class HybridAutonomousAgent:
                     "response_strategy": "natural_response"
                 }
 
+            # Определяем текущее время пользователя
+            base_now = datetime.now(pytz.UTC)
+            user_now = base_now
+            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+            current_date_str = user_now.strftime("%Y-%m-%d")
+            
+            months = [
+                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+            ]
+            
+            # Получаем timezone пользователя, по умолчанию Москва
+            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                user_now = base_now.astimezone(user_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+            except Exception as e:
+                logger.error(f"Error setting user timezone: {e}")
+                # Fallback на московское время
+                try:
+                    moscow_tz = pytz.timezone('Europe/Moscow')
+                    user_now = base_now.astimezone(moscow_tz)
+                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                except:
+                    pass  # Оставляем UTC
+
             base_prompt = get_extended_system_prompt(
-                user_now=None,
-                current_time_str=None,
-                current_date_str=None,
+                user_now=user_now,
+                current_time_str=current_time_str,
+                current_date_str=current_date_str,
                 user_username=user.username or "пользователь",
                 mentions_str="",
                 user_memory=user.memory or "",
@@ -448,11 +478,40 @@ class HybridAutonomousAgent:
                     if profile.interests:
                         profile_data['interests'] = profile.interests
             
+            # Определяем текущее время польз ователя
+            base_now = datetime.now(pytz.UTC)
+            user_now = base_now
+            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+            current_date_str = user_now.strftime("%Y-%m-%d")
+            
+            months = [
+                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+            ]
+            
+            # Получаем timezone пользователя, по умолчанию Москва
+            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                user_now = base_now.astimezone(user_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+            except Exception as e:
+                logger.error(f"Error setting user timezone: {e}")
+                # Fallback на московское время
+                try:
+                    moscow_tz = pytz.timezone('Europe/Moscow')
+                    user_now = base_now.astimezone(moscow_tz)
+                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                except:
+                    pass  # Оставляем UTC
+            
             # Получаем базовый промпт
             base_prompt = get_extended_system_prompt(
-                user_now=None,
-                current_time_str=None,
-                current_date_str=None,
+                user_now=user_now,
+                current_time_str=current_time_str,
+                current_date_str=current_date_str,
                 user_username=user.username if user else "пользователь",
                 mentions_str="",
                 user_memory=user.memory if user else "",

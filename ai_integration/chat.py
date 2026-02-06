@@ -61,6 +61,37 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Получаем профиль пользователя
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
+            # Определяем текущее время пользователя
+            base_now = datetime.now(pytz.UTC)
+            user_now = base_now
+            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+            current_date_str = user_now.strftime("%Y-%m-%d")
+            
+            months = [
+                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+            ]
+            
+            # Получаем timezone пользователя, по умолчанию Москва
+            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                user_now = base_now.astimezone(user_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                logger.info(f"[DATETIME] User timezone: {user_timezone}, current_time_str: {current_time_str}, current_date_str: {current_date_str}")
+            except Exception as e:
+                logger.error(f"Error setting user timezone: {e}")
+                # Fallback на московское время
+                try:
+                    moscow_tz = pytz.timezone('Europe/Moscow')
+                    user_now = base_now.astimezone(moscow_tz)
+                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
+                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+                    logger.info(f"[DATETIME] Fallback to Moscow: {current_time_str}, {current_date_str}")
+                except:
+                    pass  # Оставляем UTC
+
             # Генерируем проактивный контекст
             from .prompts import generate_proactive_context
             proactive_context = generate_proactive_context(user_id, session)
@@ -68,9 +99,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
 
             # Получаем системный промпт с проактивным контекстом
             system_prompt = get_extended_system_prompt(
-                user_now=None,
-                current_time_str=None,
-                current_date_str=None,
+                user_now=user_now,
+                current_time_str=current_time_str,
+                current_date_str=current_date_str,
                 user_username=user.username or "пользователь",
                 mentions_str="",
                 user_memory=user.memory or "",
