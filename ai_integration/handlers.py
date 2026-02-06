@@ -2269,14 +2269,8 @@ def get_partners_list(user_id=None, session=None):
         
         logger.info(f"[PARTNERS] Checking {profile_user.username}: profile_tier={profile_user_tier}, user_tier={user_tier}")
         
-        # КРИТИЧНАЯ ФИЛЬТРАЦИЯ ПО ТАРИФАМ:
-        # LIGHT: видят LIGHT + STANDARD (не видят PREMIUM)
-        # STANDARD: видят LIGHT + STANDARD (не видят PREMIUM)
-        # PREMIUM: видят всех
-        
-        if user_tier in ['LIGHT', 'STANDARD'] and profile_user_tier == 'PREMIUM':
-            logger.info(f"[PARTNERS] Skipping PREMIUM user {profile_user.username} for {user_tier} user")
-            continue
+        # НОВАЯ ЛОГИКА: ВСЕ видят ВСЕХ (включая PREMIUM)
+        # PREMIUM получает преимущество через приоритет в сортировке, а не фильтрацию
         
         # Специальное правило для PREMIUM: они видят ВСЕХ (даже без совпадений)
         if user_tier == 'PREMIUM':
