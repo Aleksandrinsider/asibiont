@@ -83,50 +83,155 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - ПРАВИЛА + AI ДЛЯ ОБЩЕНИЯ
+        ШАГ 1: AI-ПЛАНИРОВАНИЕ БЕЗ ЖЕСТКИХ ПРАВИЛ
+        AI анализирует запрос и сам решает, какие инструменты нужны
         """
+        
+        # Получаем контекст пользователя
+        session = Session()
+        try:
+            user = self._get_cached_user(user_id, session)
+            if not user:
+                return {
+                    "intent": "general_chat",
+                    "actions": [],
+                    "response_strategy": "natural_response"
+                }
 
-        message_lower = user_message.lower()
+            # Получаем текущее время
+            from datetime import datetime
+            import pytz
+            base_now = datetime.now(pytz.UTC)
+            user_now = base_now
+            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
+            current_date_str = user_now.strftime("%Y-%m-%d")
+            
+            months = [
+                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+            ]
+            
+            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+            try:
+                user_tz = pytz.timezone(user_timezone)
+                user_now = base_now.astimezone(user_tz)
+                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
+                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
+            except Exception as e:
+                logger.error(f"Error setting user timezone: {e}")
 
-        # СТРОГИЕ ПРАВИЛА ДЛЯ КОМАНД (БЕЗ AI)
-        command_patterns = {
-            'delete_task': ['удали', 'сотри', 'удалить'],
-            'list_tasks': ['покажи', 'список', 'мои'],
-            'reschedule_task': ['перенеси', 'отложи', 'измени'],
-            'find_relevant_contacts_for_task': ['контакты', 'поможет'],
-            'find_partners': ['единомышленники', 'познакомься', 'найди'],
-            'complete_task': ['готово', 'сделал', 'завершил', 'выполнил'],
-            'add_task': ['создай', 'добавь', 'напомни', 'запланируем'],
-            'delegate_task': ['делегируй', 'передай', 'поручи'],
-            'update_profile': ['обнови'],
-            'update_user_memory': ['запомни']
-        }
+            # Получаем список задач для контекста
+            tasks = self._get_cached_tasks(user_id, session)
+            tasks_summary = ""
+            if tasks:
+                active_tasks = [t for t in tasks if t.status != 'completed']
+                if active_tasks:
+                    tasks_summary = f"\nТекущие задачи ({len(active_tasks)}):\n"
+                    for t in active_tasks[:5]:  # Первые 5
+                        tasks_summary += f"- {t.title} (напоминание: {t.reminder_time})\n"
 
-        # Проверяем на команды задач
-        for intent, keywords in command_patterns.items():
-            if any(keyword in message_lower for keyword in keywords):
-                # Специальные проверки для некоторых команд
-                if intent in ['delete_task', 'list_tasks', 'reschedule_task', 'add_task', 'complete_task', 'delegate_task']:
-                    # Для этих команд обязательно должно быть слово "задач" ИЛИ другие признаки
-                    if ('задач' in message_lower or 
-                        intent == 'complete_task' or  # "готово" не требует "задач"
-                        intent == 'delegate_task' or  # "делегируй" не требует "задач"
-                        intent == 'add_task'):        # "напомни", "запланируем" не требуют "задач"
-                        return self._create_command_plan(intent, user_message)
-                else:
-                    return self._create_command_plan(intent, user_message)
+            # Получаем профиль
+            profile_data = {}
+            from models import UserProfile
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile:
+                if profile.city:
+                    profile_data['city'] = profile.city
+                if profile.goals:
+                    profile_data['goals'] = profile.goals
+                if profile.interests:
+                    profile_data['interests'] = profile.interests
+            
+            profile_summary = ""
+            if profile_data:
+                profile_summary = "\nПрофиль:\n"
+                if 'city' in profile_data:
+                    profile_summary += f"Город: {profile_data['city']}\n"
+                if 'goals' in profile_data:
+                    profile_summary += f"Цели: {profile_data['goals']}\n"
+                if 'interests' in profile_data:
+                    profile_summary += f"Интересы: {profile_data['interests']}\n"
 
-        # СПЕЦИАЛЬНАЯ ОБРАБОТКА ВОПРОСОВ О ВРЕМЕНИ
-        time_keywords = ['время', 'времени', 'час', 'сколько времени', 'который час']
-        if any(keyword in message_lower for keyword in time_keywords):
+        finally:
+            session.close()
+
+        # AI планирует действия на основе контекста
+        planning_prompt = f"""Ты - планировщик действий для AI-помощника. Проанализируй запрос пользователя и определи, нужны ли инструменты.
+
+СЕЙЧАС: {current_time_str}, {current_date_str}
+Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}
+
+ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+- add_task(title, reminder_time) - создать задачу с напоминанием
+- list_tasks() - показать список задач
+- complete_task(task_title) - отметить задачу выполненной
+- delete_task(task_title) - удалить задачу
+- reschedule_task(task_title, new_time) - перенести задачу
+- find_relevant_contacts_for_task(task_description) - найти контакты для помощи
+- find_partners() - найти единомышленников
+- update_profile(...) - обновить профиль
+- update_user_memory(memory_entry) - сохранить информацию
+
+ЗАПРОС: "{user_message}"
+
+ЗАДАЧА: Определи, нужны ли инструменты для выполнения запроса. Если нужны - укажи какие и параметры.
+
+Верни JSON:
+{{
+  "needs_tools": true/false,
+  "tools": [
+    {{"tool": "имя_инструмента", "params": {{"param1": "value1"}}, "reason": "зачем"}}
+  ],
+  "response_type": "execute_and_respond" или "just_chat"
+}}
+
+Примеры:
+- "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
+- "напомни через 5 минут позвонить" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "позвонить", "reminder_time": "через 5 минут"}}, "reason": "создание напоминания"}}], "response_type": "execute_and_respond"}}
+- "мои задачи?" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "показать список"}}], "response_type": "execute_and_respond"}}
+- "как дела?" → {{"needs_tools": false, "response_type": "just_chat"}}
+
+Верни ТОЛЬКО JSON, без дополнительного текста."""
+
+        messages = [
+            {"role": "system", "content": planning_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        try:
+            response = await self.call_ai(messages, temperature=0.3)
+            content = response['choices'][0]['message']['content'].strip()
+            
+            # Extract JSON from response
+            import json
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                plan_data = json.loads(json_match.group())
+            else:
+                plan_data = json.loads(content)
+            
+            if plan_data.get('needs_tools'):
+                return {
+                    "intent": "tool_execution",
+                    "actions": plan_data.get('tools', []),
+                    "response_strategy": "execute_action"
+                }
+            else:
+                return {
+                    "intent": "general_chat",
+                    "actions": [],
+                    "response_strategy": "natural_response"
+                }
+                
+        except Exception as e:
+            logger.error(f"[AGENT] Error in AI planning: {e}")
+            # Fallback - простое общение
             return {
-                "intent": "time_query",
+                "intent": "general_chat",
                 "actions": [],
-                "response_strategy": "direct_time_response"
+                "response_strategy": "natural_response"
             }
-
-        # ЕСЛИ НЕ КОМАНДА - ИСПОЛЬЗУЕМ AI ДЛЯ ОБЩЕГО ОБЩЕНИЯ
-        return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
         """Создает план для команды"""
@@ -460,16 +565,28 @@ class HybridAutonomousAgent:
             if current_time < self.cache_expiry[cache_key]:
                 return self.tasks_cache[cache_key]
         
-        # Загружаем из базы с оптимизацией
-        tasks = session.query(Task).filter(
-            Task.user_id == user_id,
-            Task.status != 'completed'
-        ).limit(100).all()  # Ограничиваем для производительности
-        
-        self.tasks_cache[cache_key] = tasks
-        self.cache_expiry[cache_key] = current_time + 30  # 30 секунд
-        
-        return tasks
+        # Загружаем из базы с оптимизацией и обработкой ошибок
+        try:
+            from models import User
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return []
+            
+            tasks = session.query(Task).filter(
+                Task.user_id == user.id
+            ).limit(100).all()  # Ограничиваем для производительности
+            
+            # Фильтруем невыполненные задачи (status != 'completed')
+            active_tasks = [t for t in tasks if t.status != 'completed']
+            
+            self.tasks_cache[cache_key] = active_tasks
+            self.cache_expiry[cache_key] = current_time + 30  # 30 секунд
+            
+            return active_tasks
+        except Exception as e:
+            logger.error(f"Error loading tasks: {e}")
+            # Возвращаем пустой список в случае ошибки
+            return []
 
     def _extract_task_title(self, message):
         """Извлекает название задачи из сообщения"""
@@ -563,33 +680,6 @@ class HybridAutonomousAgent:
                     context,
                     user_id
                 )
-            elif plan.get('response_strategy') == 'direct_time_response':
-                # Специальная обработка для вопросов о времени
-                logger.info(f"[AGENT] Step 3: Direct time response")
-                # Получаем актуальное время пользователя
-                session = Session()
-                try:
-                    user = self._get_cached_user(user_id, session)
-                    if user:
-                        from datetime import datetime
-                        import pytz
-                        base_now = datetime.now(pytz.UTC)
-                        user_now = base_now
-                        current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-                        
-                        user_timezone = user.timezone if user.timezone else 'Europe/Moscow'
-                        try:
-                            user_tz = pytz.timezone(user_timezone)
-                            user_now = base_now.astimezone(user_tz)
-                            current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-                        except Exception as e:
-                            logger.error(f"Error setting user timezone: {e}")
-                        
-                        response = f"Сейчас {current_time_str}. ⏰"
-                    else:
-                        response = "Сейчас время по UTC. ⏰"
-                finally:
-                    session.close()
             else:
                 # Общее общение - используем AI
                 logger.info(f"[AGENT] Step 3: AI generating natural response")
