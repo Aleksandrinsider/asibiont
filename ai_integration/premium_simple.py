@@ -74,7 +74,7 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
     # Проверяем cooldown (не чаще 1 раза в 30 минут на задачу)
     if task_id and not _check_cooldown(premium_user_id, task_id, minutes=30):
         logger.info(f"[PREMIUM_RT] Cooldown active for task {task_id}, skipping")
-return {"status": "cooldown", "recommendations_saved": 0}
+        return {"status": "cooldown", "recommendations_saved": 0}
     
     session = Session()
     try:
@@ -93,7 +93,7 @@ return {"status": "cooldown", "recommendations_saved": 0}
         active_tasks = session.query(Task).filter(
             and_(
                 Task.user_id == user_id,
-                Task.completed == False
+                Task.status.in_(['pending', 'in_progress'])
             )
         ).order_by(Task.created_at.desc()).limit(10).all()
         
@@ -1125,7 +1125,7 @@ async def check_deadlines_and_stuck_tasks(premium_user_id: int, session: Optiona
         active_tasks = session.query(Task).filter(
             and_(
                 Task.user_id == premium_user.id,
-                Task.completed == False
+                Task.status.in_(['pending', 'in_progress'])
             )
         ).all()
         
@@ -1153,15 +1153,15 @@ async def check_deadlines_and_stuck_tasks(premium_user_id: int, session: Optiona
                         "created_at": now.isoformat()
                     })
             
-            # Проверяем застопоренные (без updated_at изменений)
-            if task.updated_at:
-                updated_dt = task.updated_at
+            # Проверяем застопоренные (без created_at изменений, так как updated_at нет)
+            if task.created_at:
+                created_dt = task.created_at
                 if not updated_dt.tzinfo:
                     updated_dt = pytz.UTC.localize(updated_dt)
                 
-                days_stuck = (now - updated_dt).days
+                days_stuck = (now - created_dt).days
                 
-                # Застопорилась > 3 дней
+                # Застопорилась > 3 дней (по created_at, так как updated_at нет)
                 if days_stuck >= 3:
                     insights.append({
                         "type": "stuck_task",
@@ -1313,7 +1313,7 @@ async def find_reverse_matching(premium_user_id: int, session: Optional[SessionT
             and_(
                 Task.user_id != premium_user.id,
                 Task.created_at >= week_ago,
-                Task.completed == False
+                Task.status.in_(['pending', 'in_progress'])
             )
         ).all()
         
