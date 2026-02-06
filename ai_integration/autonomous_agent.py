@@ -458,8 +458,33 @@ class HybridAutonomousAgent:
 
     def _extract_time(self, message):
         """Извлекает время из сообщения"""
-        # Простая эвристика для времени
+        import re
         message_lower = message.lower()
+        
+        # Ищем паттерны времени
+        time_patterns = [
+            r'через (\d+) (минут|час|часа|часов|дней|дня)',
+            r'завтра(?: в (\d{1,2}:\d{2}))?',
+            r'сегодня(?: в (\d{1,2}:\d{2}))?',
+            r'в (\d{1,2}:\d{2})',
+            r'(\d{1,2}:\d{2})'
+        ]
+        
+        for pattern in time_patterns:
+            match = re.search(pattern, message_lower)
+            if match:
+                if 'через' in pattern:
+                    return f'через {match.group(1)} {match.group(2)}'
+                elif 'завтра' in pattern:
+                    time_part = match.group(1) if match.group(1) else ''
+                    return f'завтра {time_part}'.strip()
+                elif 'сегодня' in pattern:
+                    time_part = match.group(1) if match.group(1) else ''
+                    return f'сегодня {time_part}'.strip()
+                else:
+                    return match.group(1) if match.group(1) else match.group(0)
+        
+        # Fallback
         if 'завтра' in message_lower:
             return 'завтра'
         elif 'сегодня' in message_lower:
@@ -501,36 +526,15 @@ class HybridAutonomousAgent:
             
             # ШАГ 3: Формирование ответа
             if execution_results:
-                # Были выполнены действия - формируем ответ на основе результатов
-                logger.info(f"[AGENT] Step 3: Generating response from execution results")
-                response_parts = []
-                for result in execution_results:
-                    if result['success']:
-                        tool_name = result['tool']
-                        if tool_name == 'add_task':
-                            response_parts.append("✅ Задача создана!")
-                        elif tool_name == 'complete_task':
-                            response_parts.append("✅ Задача выполнена!")
-                        elif tool_name == 'delete_task':
-                            response_parts.append("✅ Задача удалена!")
-                        elif tool_name == 'list_tasks':
-                            tasks = result.get('result', [])
-                            if tasks:
-                                response_parts.append(f"📝 У вас {len(tasks)} активных задач")
-                            else:
-                                response_parts.append("📝 У вас нет активных задач")
-                        elif tool_name == 'reschedule_task':
-                            response_parts.append("✅ Время задачи изменено!")
-                        elif tool_name == 'find_relevant_contacts_for_task':
-                            response_parts.append("👥 Контакты найдены!")
-                        elif tool_name == 'find_partners':
-                            response_parts.append("🤝 Единомышленники найдены!")
-                        else:
-                            response_parts.append(f"✅ {tool_name} выполнен")
-                    else:
-                        response_parts.append(f"❌ Ошибка: {result['error']}")
-                
-                response = " ".join(response_parts)
+                # Были выполнены действия - формируем естественный ответ через AI
+                logger.info(f"[AGENT] Step 3: Generating natural response from execution results")
+                response = await self.reflect_and_respond(
+                    user_message, 
+                    plan, 
+                    execution_results, 
+                    context,
+                    user_id
+                )
             elif plan.get('response_strategy') == 'direct_time_response':
                 # Специальная обработка для вопросов о времени
                 logger.info(f"[AGENT] Step 3: Direct time response")

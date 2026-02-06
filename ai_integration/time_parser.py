@@ -116,9 +116,27 @@ def parse_time_with_ai(time_str: str, current_time: datetime) -> datetime | None
 def parse_time_simple_fallback(time_str: str, current_time: datetime) -> datetime | None:
     """
     Простой fallback для базовых форматов если AI не доступен.
-    Парсит только HH:MM.
+    Парсит HH:MM, "через N минут/часов/дней".
     """
+    import re
     try:
+        time_str = time_str.lower().strip()
+        
+        # "через N минут/часов/дней"
+        через_match = re.match(r'через (\d+) (минут|час|часа|часов|дней|дня)', time_str)
+        if через_match:
+            num = int(через_match.group(1))
+            unit = через_match.group(2)
+            if 'минут' in unit:
+                delta = timedelta(minutes=num)
+            elif 'час' in unit:
+                delta = timedelta(hours=num)
+            elif 'дней' in unit or 'дня' in unit:
+                delta = timedelta(days=num)
+            result = current_time + delta
+            logger.info(f"✅ Simple fallback parsed '{time_str}' → {result}")
+            return result
+        
         # Only HH:MM format
         if ':' in time_str:
             time_part = time_str.strip()
