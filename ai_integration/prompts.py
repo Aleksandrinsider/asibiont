@@ -2,7 +2,7 @@
 
 import pytz
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None):
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None):
     """Get optimized system prompt for AI agent"""
 
     # Subscription info
@@ -23,11 +23,32 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
 - При обсуждении актуальных тем (политика, экономика, спорт, культура) связывай с новостями
 - Будь лаконичным: новости для глубины, но не затягивай разговор""" if news_info else ""
 
+    # Profile context
+    profile_context = ""
+    if profile_data:
+        profile_parts = []
+        if profile_data.get('city'):
+            profile_parts.append(f"Город: {profile_data['city']}")
+        if profile_data.get('birthdate'):
+            profile_parts.append(f"День рождения: {profile_data['birthdate']}")
+        if profile_data.get('company'):
+            profile_parts.append(f"Компания: {profile_data['company']}")
+        if profile_data.get('position'):
+            profile_parts.append(f"Должность: {profile_data['position']}")
+        if profile_data.get('goals'):
+            profile_parts.append(f"Цели: {profile_data['goals']}")
+        if profile_data.get('skills'):
+            profile_parts.append(f"Навыки: {profile_data['skills']}")
+        if profile_data.get('interests'):
+            profile_parts.append(f"Интересы: {profile_data['interests']}")
+        if profile_parts:
+            profile_context = "\nПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n" + "\n".join(profile_parts)
+
     prompt = f"""Ты - ASI Biont, умный AI-помощник для управления задачами.
 
 СЕЙЧАС: {current_time_str}, {current_date_str}
 НИКОГДА НЕ ГАЛЛЮЦИНИРУЙ ВРЕМЯ - ИСПОЛЬЗУЙ ТОЛЬКО УКАЗАННОЕ ВЫШЕ!
-Пользователь: {user_username}{tier_info}{weather_context}{news_context}
+Пользователь: {user_username}{tier_info}{weather_context}{news_context}{profile_context}
 
 {user_memory}{news_instructions}
 

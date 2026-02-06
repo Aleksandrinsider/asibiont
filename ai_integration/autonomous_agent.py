@@ -96,7 +96,7 @@ class HybridAutonomousAgent:
             'find_relevant_contacts_for_task': ['контакты', 'поможет'],
             'find_partners': ['единомышленники', 'познакомься', 'найди'],
             'complete_task': ['готово', 'сделал', 'завершил', 'выполнил'],
-            'add_task': ['создай', 'добавь', 'напомни'],
+            'add_task': ['создай', 'добавь', 'напомни', 'запланируем'],
             'delegate_task': ['делегируй', 'передай', 'поручи'],
             'update_profile': ['обнови'],
             'update_user_memory': ['запомни']
@@ -110,7 +110,8 @@ class HybridAutonomousAgent:
                     # Для этих команд обязательно должно быть слово "задач" ИЛИ другие признаки
                     if ('задач' in message_lower or 
                         intent == 'complete_task' or  # "готово" не требует "задач"
-                        intent == 'delegate_task'):   # "делегируй" не требует "задач"
+                        intent == 'delegate_task' or  # "делегируй" не требует "задач"
+                        intent == 'add_task'):        # "напомни", "запланируем" не требуют "задач"
                         return self._create_command_plan(intent, user_message)
                 else:
                     return self._create_command_plan(intent, user_message)
@@ -348,29 +349,29 @@ class HybridAutonomousAgent:
             user = session.query(User).filter_by(telegram_id=user_id).first() if user_id else None
             
             # Получаем данные профиля
-            profile_data = ""
+            profile_data = {}
             weather_info = None
             if user:
                 from models import UserProfile
                 profile = session.query(UserProfile).filter_by(user_id=user.id).first()
                 if profile:
                     if profile.city:
-                        profile_data += f"Город: {profile.city}\n"
+                        profile_data['city'] = profile.city
                         # Получаем погоду для города
                         from .utils import get_weather_info
                         weather_info = get_weather_info(profile.city)
                     if profile.birthdate:
-                        profile_data += f"Дата рождения: {profile.birthdate}\n"
+                        profile_data['birthdate'] = profile.birthdate
                     if profile.company:
-                        profile_data += f"Компания: {profile.company}\n"
+                        profile_data['company'] = profile.company
                     if profile.position:
-                        profile_data += f"Должность: {profile.position}\n"
+                        profile_data['position'] = profile.position
                     if profile.goals:
-                        profile_data += f"Цели: {profile.goals}\n"
+                        profile_data['goals'] = profile.goals
                     if profile.skills:
-                        profile_data += f"Навыки: {profile.skills}\n"
+                        profile_data['skills'] = profile.skills
                     if profile.interests:
-                        profile_data += f"Интересы: {profile.interests}\n"
+                        profile_data['interests'] = profile.interests
             
             # Получаем базовый промпт
             base_prompt = get_extended_system_prompt(
@@ -385,7 +386,8 @@ class HybridAutonomousAgent:
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE') if user else 'FREE',
                 message_type=None,
                 weather_info=weather_info,
-                news_info=None
+                news_info=None,
+                profile_data=profile_data
             )
         finally:
             session.close()

@@ -1808,6 +1808,31 @@ async def api_send_message_handler(request):
                     logger.info(f"[API_SEND_MESSAGE] String response, length: {len(response) if response else 0}")
                 
                 logger.info(f"[API_SEND_MESSAGE] AI response preview: '{response[:100]}...'")
+                
+                # Execute tool calls if any
+                if tool_calls:
+                    logger.info(f"[API_SEND_MESSAGE] Executing {len(tool_calls)} tool calls")
+                    from ai_integration import handlers
+                    for tool_call in tool_calls:
+                        try:
+                            func_name = tool_call.get('function', {}).get('name')
+                            args = tool_call.get('function', {}).get('arguments', '{}')
+                            args_dict = json.loads(args) if args else {}
+                            logger.info(f"[API_SEND_MESSAGE] Executing {func_name} with args {args_dict}")
+                            
+                            func = getattr(handlers, func_name, None)
+                            if func:
+                                if asyncio.iscoroutinefunction(func):
+                                    await func(user_id=user_id, **args_dict)
+                                else:
+                                    func(user_id=user_id, **args_dict)
+                                logger.info(f"[API_SEND_MESSAGE] Tool {func_name} executed successfully")
+                            else:
+                                logger.error(f"[API_SEND_MESSAGE] Tool {func_name} not found in handlers")
+                        except Exception as e:
+                            logger.error(f"[API_SEND_MESSAGE] Error executing tool {func_name}: {e}")
+                else:
+                    logger.info(f"[API_SEND_MESSAGE] No tool calls to execute")
                 if response is None or response == '':
                     logger.error("[API_SEND_MESSAGE] AI response is empty!")
                     response = "РР·вРёнаёС‚Рµ, РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР° РїСЂРё РѕР±СЂР°Р±РѕС‚РєРµ вР°С€РµРіРѕ Р·Р°РїСЂРѕСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·."
