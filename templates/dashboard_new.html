@@ -5697,36 +5697,6 @@
                         }
                     }
                     
-                    // Всегда обновляем аватар в шапке
-                    const headerInfoContainer = document.querySelector('.header-info');
-                    if (headerInfoContainer) {
-                        let headerAvatarSmall = headerInfoContainer.querySelector('.header-avatar-small');
-                        if (!headerAvatarSmall) {
-                            // Create header avatar if it doesn't exist
-                            headerAvatarSmall = document.createElement('div');
-                            headerAvatarSmall.className = 'header-avatar-small';
-                            headerAvatarSmall.style.marginLeft = '10px';
-                            const logoutButton = headerInfoContainer.querySelector('.logout-button');
-                            if (logoutButton) {
-                                headerInfoContainer.insertBefore(headerAvatarSmall, logoutButton);
-                            } else {
-                                headerInfoContainer.appendChild(headerAvatarSmall);
-                            }
-                        }
-                        // Обновляем содержимое только если есть данные
-                        if (headerAvatarSmall && data.user_avatar_url) {
-                            // Обновляем только если URL изменился или элемент пустой
-                            const currentImg = headerAvatarSmall.querySelector('img');
-                            if (!currentImg || !currentImg.src.includes(data.user_avatar_url.split('?')[0])) {
-                                headerAvatarSmall.innerHTML = `<img src="${data.user_avatar_url}" alt="Аватар" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #D1D9E0; background: #F6F8FA; cursor: pointer;" onerror="this.onerror=null; setTimeout(() => { if(this.src.includes('?')) { this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex'; } else { this.src=this.src+'?retry=1'; } }, 1000);" onclick="openContactProfileModal('${data.profile?.username || ''}')">`;
-                            }
-                        } else if (headerAvatarSmall && !headerAvatarSmall.innerHTML && data.profile && (data.profile.username || data.first_name)) {
-                            // Показываем инициал только если элемент пустой и нет аватара
-                            const initial = (data.profile.username || data.first_name || 'U').charAt(0).toUpperCase();
-                            headerAvatarSmall.innerHTML = `<div style="width: 56px; height: 56px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 16px;">${initial}</div>`;
-                        }
-                    }
-                    
                     // Обновляем секцию профиля только если данные изменились
                     if (profileDataChanged) {
                         // Update profile section
