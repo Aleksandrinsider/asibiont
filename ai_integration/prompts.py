@@ -135,15 +135,26 @@ def generate_proactive_context(user_id, session):
         if proactive_hints:
             context = "\n\n" + "="*50 + "\nПРОАКТИВНЫЙ КОНТЕКСТ (используй для конкретных предложений):\n" + "\n".join(proactive_hints) + "\n" + "="*50
             
-            # Добавляем Premium рекомендации если есть
+            # Добавляем рекомендации в зависимости от типа пользователя
             try:
-                from ai_integration.premium_simple import get_premium_recommendations_for_prompt
-                premium_section = get_premium_recommendations_for_prompt(user_id, session)
-                if premium_section:
-                    context += premium_section
-                    logger.info(f"[PROACTIVE] Added Premium recommendations for user {user_id}")
+                from models import SubscriptionTier
+                
+                if user.subscription_tier == SubscriptionTier.PREMIUM:
+                    # Premium видит автоматизацию и найденных партнёров
+                    from ai_integration.premium_simple import get_premium_recommendations_for_prompt
+                    premium_section = get_premium_recommendations_for_prompt(user_id, session)
+                    if premium_section:
+                        context += premium_section
+                        logger.info(f"[PROACTIVE] Added Premium recommendations for user {user_id}")
+                else:
+                    # НЕ-Premium видит приглашения к коллаборациям
+                    from ai_integration.premium_simple import get_partner_recommendations_for_prompt
+                    partner_section = get_partner_recommendations_for_prompt(user_id, session)
+                    if partner_section:
+                        context += partner_section
+                        logger.info(f"[PROACTIVE] Added collaboration opportunities for user {user_id}")
             except Exception as e:
-                logger.warning(f"[PROACTIVE] Failed to get Premium recommendations: {e}")
+                logger.warning(f"[PROACTIVE] Failed to get recommendations: {e}")
             
             return context
         

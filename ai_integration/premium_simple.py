@@ -156,7 +156,10 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
                 target_user_id=user.telegram_id,
                 premium_goal=matching_goal,
                 match_reason=match_reason,
-                premium_user_id=premium_user_id  # Для обратной связи
+                premium_user_id=premium_user_id,  # Для обратной связи
+                premium_username=premium_user.username,
+                premium_interests=getattr(premium_profile, 'interests', None),
+                premium_skills=getattr(premium_profile, 'skills', None)
             )
             
             if success:
@@ -545,7 +548,10 @@ def save_recommendation_to_profile(session: SessionType,
                                    target_user_id: int,
                                    premium_goal: Dict[str, Any],
                                    match_reason: str,
-                                   premium_user_id: Optional[int] = None) -> bool:
+                                   premium_user_id: Optional[int] = None,
+                                   premium_username: Optional[str] = None,
+                                   premium_interests: Optional[str] = None,
+                                   premium_skills: Optional[str] = None) -> bool:
     """
     Сохраняет рекомендацию в профиль пользователя для интеграции в промпт
     
@@ -558,6 +564,9 @@ def save_recommendation_to_profile(session: SessionType,
         premium_goal: Цель Premium пользователя
         match_reason: Почему этот пользователь релевантен
         premium_user_id: Telegram ID Premium (для обратной связи)
+        premium_username: Username Premium пользователя (для отображения)
+        premium_interests: Интересы Premium (для коллаборации)
+        premium_skills: Навыки Premium (для коллаборации)
     
     Returns:
         bool: True если успешно сохранено
@@ -593,6 +602,9 @@ def save_recommendation_to_profile(session: SessionType,
             "opportunity": premium_goal.get('opportunity', premium_goal.get('goal', 'Unknown')),
             "match_reason": match_reason,
             "premium_user_id": premium_user_id,  # Для обратной связи
+            "premium_username": premium_username or 'пользователь',  # Для отображения
+            "premium_interests": premium_interests,  # Для коллаборации
+            "premium_skills": premium_skills,  # Для коллаборации
             "timestamp": datetime.now(pytz.UTC).isoformat(),
             "shown_count": 0,  # Сколько раз упоминалось в диалоге
             "max_shows": 3  # Макс упоминаний перед удалением
@@ -898,6 +910,108 @@ def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = 
             session.close()
 
 
+def get_partner_recommendations_for_prompt(user_id: int, session: SessionType = None) -> str:
+    """
+    Получает рекомендации коллабораций для НЕ-Premium пользователей
+    
+    Показывает приглашения к коллаборациям от Premium пользователей
+    в формате win-win: совместная работа над общей целью.
+    
+    Args:
+        user_id: Telegram ID пользователя
+        session: DB session (опционально)
+    
+    Returns:
+        str: Форматированный текст для промпта или пустая строка
+    """
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    try:
+        # Получаем пользователя
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return ""
+        
+        # Получаем профиль с рекомендациями
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        if not profile or not profile.pending_premium_recommendations:
+            return ""
+        
+        # Парсим рекомендации
+        try:
+            recommendations = json.loads(profile.pending_premium_recommendations)
+            if not isinstance(recommendations, list):
+                return ""
+        except:
+            return ""
+        
+        # Фильтруем активные рекомендации коллабораций
+        active_collabs = [
+            r for r in recommendations
+            if r.get('type') == 'task_created'
+            and r.get('shown_count', 0) < r.get('max_shows', 3)
+        ]
+        
+        if not active_collabs:
+            return ""
+        
+        # Форматируем для партнёра (макс 2 коллаборации)
+        collab_items = []
+        for rec in active_collabs[:2]:
+            premium_user = rec.get('premium_username', 'пользователь')
+            goal = rec.get('goal', 'проект')
+            match_reason = rec.get('match_reason', '')
+            premium_interests = rec.get('premium_interests', '')
+            premium_skills = rec.get('premium_skills', '')
+            
+            # Формируем описание коллаборации
+            collab_text = f"- Коллаборация: @{premium_user} работает над '{goal}'"
+            
+            # Добавляем релевантность
+            if match_reason:
+                collab_text += f"\n  Релевантно: {match_reason}"
+            
+            # Добавляем навыки Premium для взаимной выгоды
+            context_parts = []
+            if premium_interests:
+                context_parts.append(f"интересы: {premium_interests}")
+            if premium_skills:
+                context_parts.append(f"навыки: {premium_skills}")
+            
+            if context_parts:
+                collab_text += f"\n  Контекст Premium: {', '.join(context_parts)}"
+            
+            collab_items.append(collab_text)
+        
+        if not collab_items:
+            return ""
+        
+        # Формируем промпт секцию
+        prompt_section = "\n\n" + "="*50
+        prompt_section += "\nВОЗМОЖНОСТИ КОЛЛАБОРАЦИЙ (упомяни ЕСТЕСТВЕННО если релевантно):\n\n"
+        prompt_section += "\n\n".join(collab_items)
+        prompt_section += "\n\nВАЖНО:"
+        prompt_section += "\n- Упоминай ТОЛЬКО если пользователь говорит о похожих темах"
+        prompt_section += "\n- Преподноси как взаимовыгодное сотрудничество, не как 'работу'"
+        prompt_section += "\n- Короткое упоминание (1-2 предложения): 'Кстати, @user работает над похожим...'"
+        prompt_section += "\n- Если не подходит момент - лучше пропусти"
+        prompt_section += "\n- Акцент на общих интересах и взаимной пользе 🤝"
+        prompt_section += "\n" + "="*50
+        
+        return prompt_section
+    
+    except Exception as e:
+        logger.error(f"[PARTNER_COLLAB] Error getting recommendations: {e}")
+        return ""
+    finally:
+        if close_session:
+            session.close()
+
+
 def _check_deadlines_and_stuck_quick(user: User, session: SessionType) -> List[Dict[str, Any]]:
     """
     Быстрая проверка дедлайнов и застопоренных задач (без async, < 0.2 сек)
@@ -1138,8 +1252,12 @@ def mark_recommendation_shown(user_id: int, session: SessionType = None):
             if rec.get('type') == 'task_created' and rec.get('shown_count', 0) < 3:
                 rec['shown_count'] = rec.get('shown_count', 0) + 1
         
-        # Удаляем task_created которые показали 3 раза
-        active = [r for r in recommendations if r.get('type') == 'task_created' and r.get('shown_count', 0) < 3]
+        # Удаляем task_created которые показали 3 раза, сохраняем остальные типы
+        active = [
+            r for r in recommendations 
+            if (r.get('type') == 'task_created' and r.get('shown_count', 0) < 3) or 
+               (r.get('type') in ['partner_found', 'partner_progress'])
+        ]
         
         if active:
             profile.pending_premium_recommendations = json.dumps(active, ensure_ascii=False)
