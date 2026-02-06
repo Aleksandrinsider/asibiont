@@ -347,6 +347,31 @@ class HybridAutonomousAgent:
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first() if user_id else None
             
+            # Получаем данные профиля
+            profile_data = ""
+            weather_info = None
+            if user:
+                from models import UserProfile
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile:
+                    if profile.city:
+                        profile_data += f"Город: {profile.city}\n"
+                        # Получаем погоду для города
+                        from .utils import get_weather_info
+                        weather_info = get_weather_info(profile.city)
+                    if profile.birthdate:
+                        profile_data += f"Дата рождения: {profile.birthdate}\n"
+                    if profile.company:
+                        profile_data += f"Компания: {profile.company}\n"
+                    if profile.position:
+                        profile_data += f"Должность: {profile.position}\n"
+                    if profile.goals:
+                        profile_data += f"Цели: {profile.goals}\n"
+                    if profile.skills:
+                        profile_data += f"Навыки: {profile.skills}\n"
+                    if profile.interests:
+                        profile_data += f"Интересы: {profile.interests}\n"
+            
             # Получаем базовый промпт
             base_prompt = get_extended_system_prompt(
                 user_now=None,
@@ -359,14 +384,15 @@ class HybridAutonomousAgent:
                 intent=None,
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE') if user else 'FREE',
                 message_type=None,
-                weather_info=None,
+                weather_info=weather_info,
                 news_info=None
             )
         finally:
             session.close()
         
         # Дополняем базовый промпт инструкциями для ответа
-        system_prompt = f"{base_prompt}\n\n" + f"""\n---
+        profile_section = f"\nПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n{profile_data}" if profile_data else ""
+        system_prompt = f"{base_prompt}{profile_section}\n\n" + f"""\n---
 
 РЕЖИМ: ФОРМИРОВАНИЕ ОТВЕТА
 
