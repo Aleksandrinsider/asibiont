@@ -155,7 +155,8 @@ async def trigger_premium_automation_realtime(premium_user_id: int,
                 session=session,
                 target_user_id=user.telegram_id,
                 premium_goal=matching_goal,
-                match_reason=match_reason
+                match_reason=match_reason,
+                premium_user_id=premium_user_id  # Для обратной связи
             )
             
             if success:
@@ -543,7 +544,8 @@ def find_relevant_users_for_goals(session: SessionType,
 def save_recommendation_to_profile(session: SessionType,
                                    target_user_id: int,
                                    premium_goal: Dict[str, Any],
-                                   match_reason: str) -> bool:
+                                   match_reason: str,
+                                   premium_user_id: Optional[int] = None) -> bool:
     """
     Сохраняет рекомендацию в профиль пользователя для интеграции в промпт
     
@@ -555,6 +557,7 @@ def save_recommendation_to_profile(session: SessionType,
         target_user_id: Telegram ID получателя
         premium_goal: Цель Premium пользователя
         match_reason: Почему этот пользователь релевантен
+        premium_user_id: Telegram ID Premium (для обратной связи)
     
     Returns:
         bool: True если успешно сохранено
@@ -585,9 +588,11 @@ def save_recommendation_to_profile(session: SessionType,
         
         # Добавляем новую рекомендацию
         recommendation = {
+            "type": "task_created",
             "goal": premium_goal.get('goal', 'Unknown'),
             "opportunity": premium_goal.get('opportunity', premium_goal.get('goal', 'Unknown')),
             "match_reason": match_reason,
+            "premium_user_id": premium_user_id,  # Для обратной связи
             "timestamp": datetime.now(pytz.UTC).isoformat(),
             "shown_count": 0,  # Сколько раз упоминалось в диалоге
             "max_shows": 3  # Макс упоминаний перед удалением
@@ -688,6 +693,78 @@ def save_partner_notification_to_premium(session: SessionType,
         return False
 
 
+def save_partner_progress_notification(session: SessionType,
+                                       premium_user_id: int,
+                                       partner_username: str,
+                                       partner_telegram_id: int,
+                                       action_type: str,
+                                       task_title: str,
+                                       original_goal: Optional[str] = None) -> bool:
+    """
+    Сохраняет уведомление Premium о прогрессе партнёра
+    
+    Premium увидит: "Партнёр @username начал работу над X" или "завершил задачу X"
+    
+    Args:
+        session: DB session
+        premium_user_id: Telegram ID Premium пользователя
+        partner_username: Username партнёра
+        partner_telegram_id: Telegram ID партнёра
+        action_type: 'started' или 'completed'
+        task_title: Название задачи партнёра
+        original_goal: Исходная цель Premium к которой это относится
+    
+    Returns:
+        bool: True если успешно
+    """
+    
+    try:
+        premium_user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+        if not premium_user:
+            return False
+        
+        profile = session.query(UserProfile).filter_by(user_id=premium_user.id).first()
+        if not profile:
+            profile = UserProfile(user_id=premium_user.id)
+            session.add(profile)
+        
+        existing = []
+        if profile.pending_premium_recommendations:
+            try:
+                existing = json.loads(profile.pending_premium_recommendations)
+                if not isinstance(existing, list):
+                    existing = []
+            except:
+                existing = []
+        
+        notification = {
+            "type": "partner_progress",
+            "partner_username": partner_username,
+            "partner_id": partner_telegram_id,
+            "action": action_type,  # 'started' or 'completed'
+            "task_title": task_title,
+            "original_goal": original_goal,
+            "timestamp": datetime.now(pytz.UTC).isoformat(),
+            "shown_count": 0,
+            "max_shows": 2,
+            "priority": "high" if action_type == 'completed' else "medium"
+        }
+        
+        existing.append(notification)
+        existing = existing[-10:]
+        
+        profile.pending_premium_recommendations = json.dumps(existing, ensure_ascii=False)
+        session.commit()
+        
+        logger.info(f"[PREMIUM_PROGRESS] Saved progress notification to Premium {premium_user_id}: {partner_username} {action_type}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_PROGRESS] Failed to save progress notification: {e}")
+        session.rollback()
+        return False
+
+
 def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = None) -> str:
     """
     Получает Premium рекомендации для добавления в системный промпт
@@ -752,11 +829,11 @@ def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = 
             if profile and profile.pending_premium_recommendations:
                 saved = json.loads(profile.pending_premium_recommendations)
                 if isinstance(saved, list):
-                    # Загружаем сохранённые уведомления (task_created, partner_found)
-                    # Показываем task_created и partner_found максимум 3 раза
+                    # Загружаем сохранённые уведомления
+                    # task_created, partner_found, partner_progress
                     saved_insights = [
                         r for r in saved 
-                        if r.get('type') in ['task_created', 'partner_found'] 
+                        if r.get('type') in ['task_created', 'partner_found', 'partner_progress'] 
                         and r.get('shown_count', 0) < r.get('max_shows', 3)
                     ]
                     all_insights.extend(saved_insights)
@@ -999,6 +1076,18 @@ def _format_insight_for_prompt(insight: Dict[str,Any]) -> str:
             goal = insight.get('goal', 'твоя цель')
             match_reason = insight.get('match_reason', '')
             return f"- Найден партнёр @{partner} для '{goal}' — {match_reason}"
+        
+        elif insight_type == 'partner_progress':
+            partner = insight.get('partner_username', 'партнёр')
+            action = insight.get('action', 'обновил')
+            task = insight.get('task_title', 'задачу')
+            
+            if action == 'started':
+                return f"- @{partner} начал работу: '{task}'"
+            elif action == 'completed':
+                return f"- @{partner} завершил задачу: '{task}' ✓"
+            else:
+                return f"- @{partner} обновил: '{task}'"
         
         else:
             # Неизвестный тип - пробуем generic формат

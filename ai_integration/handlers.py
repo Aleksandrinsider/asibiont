@@ -448,6 +448,37 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
                 )
             )
             logger.info(f"[ADD_TASK] Premium automation triggered for task {task_id}")
+        else:
+            # Проверяем: если это НЕ Premium, но партнёр с рекомендациями от Premium
+            logger.info(f"[ADD_TASK] Non-Premium user, checking for Premium recommendations")
+            from ai_integration.premium_simple import save_partner_progress_notification
+            
+            # Получаем профиль и проверяем рекомендации
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and profile.pending_premium_recommendations:
+                try:
+                    recommendations = json.loads(profile.pending_premium_recommendations)
+                    if isinstance(recommendations, list):
+                        # Находим все Premium ID которые отправили рекомендации
+                        premium_ids = set()
+                        for rec in recommendations:
+                            if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
+                                premium_ids.add(rec.get('premium_user_id'))
+                        
+                        # Уведомляем каждого Premium о том что партнёр начал работу
+                        for premium_id in premium_ids:
+                            save_partner_progress_notification(
+                                session=session,
+                                premium_user_id=premium_id,
+                                partner_username=user.username or f"User_{user.telegram_id}",
+                                partner_telegram_id=user.telegram_id,
+                                action_type='started',
+                                task_title=title,
+                                original_goal=None  # TODO: можно добавить связь
+                            )
+                            logger.info(f"[ADD_TASK] Notified Premium {premium_id} about partner {user.telegram_id} starting task")
+                except Exception as e:
+                    logger.warning(f"[ADD_TASK] Failed to notify Premium about partner progress: {e}")
     except Exception as e:
         logger.warning(f"[ADD_TASK] Failed to trigger Premium automation: {e}")
 
@@ -674,6 +705,41 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         try:
             session.commit()
             logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
+            
+            # Уведомляем Premium пользователей о завершении задачи партнёром
+            try:
+                from ai_integration.premium_simple import save_partner_progress_notification
+                from models import SubscriptionTier
+                
+                # Проверяем: если это НЕ Premium, но партнёр с рекомендациями
+                if user.subscription_tier != SubscriptionTier.PREMIUM:
+                    profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                    if profile and profile.pending_premium_recommendations:
+                        try:
+                            recommendations = json.loads(profile.pending_premium_recommendations)
+                            if isinstance(recommendations, list):
+                                premium_ids = set()
+                                for rec in recommendations:
+                                    if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
+                                        premium_ids.add(rec.get('premium_user_id'))
+                                
+                                # Уведомляем каждого Premium о завершении
+                                for premium_id in premium_ids:
+                                    save_partner_progress_notification(
+                                        session=session,
+                                        premium_user_id=premium_id,
+                                        partner_username=user.username or f"User_{user.telegram_id}",
+                                        partner_telegram_id=user.telegram_id,
+                                        action_type='completed',
+                                        task_title=task.title,
+                                        original_goal=None
+                                    )
+                                    logger.info(f"[COMPLETE_TASK] Notified Premium {premium_id} about partner completing task")
+                        except Exception as e:
+                            logger.warning(f"[COMPLETE_TASK] Failed to notify Premium: {e}")
+            except Exception as e:
+                logger.warning(f"[COMPLETE_TASK] Failed Premium notification: {e}")
+                
         except Exception as e:
             logger.error(f"[COMPLETE_TASK] Commit failed: {e}")
             session.rollback()
