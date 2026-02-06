@@ -634,6 +634,10 @@ class HybridAutonomousAgent:
             # Просто текстовый ответ без tool calls
             content = message.get('content', '')
         
+        # КРИТИЧЕСКИ ВАЖНО: Очищаем от технических деталей и DSML тегов
+        from .utils import clean_technical_details
+        content = clean_technical_details(content)
+        
         return content.strip()
 
     def _get_cached_user(self, user_id, session):
