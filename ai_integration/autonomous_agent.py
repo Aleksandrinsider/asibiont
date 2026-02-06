@@ -203,8 +203,16 @@ JSON:
 Примеры:
 - "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
 - "создай задачу X завтра" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "X", "reminder_time": "завтра"}}, "reason": "создание"}}]}}
+- "напомни через 5 минут про реферальную программу" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Начать работу над реферальной программой", "reminder_time": "через 5 минут", "description": "Поиск партнеров и формирование предложения"}}, "reason": "напоминание"}}]}}
+- "напомни заняться этим вопросом" (контекст: реферальная программа) → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Продолжить разработку реферальной программы", "reminder_time": "через 10 минут", "description": "Вернуться к обсуждению реферальной программы"}}, "reason": "напоминание"}}]}}
+- "создай задачу зарядка" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Утренняя зарядка", "reminder_time": "каждый день в 7:00", "description": "Физические упражнения"}}, "reason": "создание"}}]}}
 - "мои задачи" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "список"}}]}}
 - "найди единомышленников" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "поиск"}}]}}
+
+КРИТИЧЕСКИ ВАЖНО:
+- ЗАПРЕЩЕНО создавать title="Заняться вопросом"
+- ЗАПРЕЩЕНО title короче 15 символов БЕЗ description
+- ОБЯЗАТЕЛЬНО используй контекст диалога для конкретности
 
 ТОЛЬКО JSON:"""
 
