@@ -4,3 +4,72 @@
 ================================================================================
 
 1. Тест: 'привет' (ожидается: general_chat)
+   ✅ УСПЕХ: intent=general_chat, actions=0
+2. Тест: 'как дела?' (ожидается: general_chat)
+   ✅ УСПЕХ: intent=general_chat, actions=0
+3. Тест: 'спасибо' (ожидается: general_chat)
+   ✅ УСПЕХ: intent=general_chat, actions=0
+4. Тест: 'создай задачу купить молоко завтра' (ожидается: add_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: add_task
+5. Тест: 'напомни позвонить маме через 2 часа' (ожидается: add_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: add_task
+6. Тест: 'добавь задачу сдать отчет в пятницу в 15:00' (ожидается: add_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: add_task
+7. Тест: 'задача: сходить в спортзал сегодня вечером' (ожидается: add_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: add_task
+8. Тест: 'мои задачи' (ожидается: list_tasks)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: list_tasks
+9. Тест: 'покажи задачи' (ожидается: list_tasks)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: list_tasks
+10. Тест: 'что у меня на сегодня' (ожидается: list_tasks)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: list_tasks
+11. Тест: 'готово' (ожидается: complete_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: complete_task
+12. Тест: 'задача выполнена' (ожидается: complete_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: complete_task
+13. Тест: 'я сделал купить молоко' (ожидается: complete_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: complete_task
+14. Тест: 'удали задачу купить молоко' (ожидается: delete_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: delete_task
+15. Тест: 'сотри эту задачу' (ожидается: delete_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: delete_task
+16. Тест: 'перенеси на завтра' (ожидается: reschedule_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: reschedule_task
+17. Тест: 'отложи задачу на вечер' (ожидается: reschedule_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: reschedule_task
+18. Тест: 'что делать сейчас' (ожидается: analyze_tasks)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: list_tasks
+19. Тест: 'проанализируй мои дела' (ожидается: analyze_tasks)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: analyze_tasks
+20. Тест: 'найди единомышленников' (ожидается: find_partners)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: find_partners
+21. Тест: 'кто может помочь с проектом' (ожидается: find_relevant_contacts_for_task)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: find_partners
+22. Тест: 'обновь мой профиль' (ожидается: update_profile)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: update_profile
+23. Тест: 'запомни что я люблю программирование' (ожидается: update_user_memory)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: update_user_memory
+24. Тест: 'да' (ожидается: confirmation)
+   ✅ УСПЕХ: intent=tool_execution, actions=1
+      Инструменты: add_task
+25. Тест: 'давай' (ожидается: confirmation)

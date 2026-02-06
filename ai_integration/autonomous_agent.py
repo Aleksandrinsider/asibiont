@@ -155,12 +155,17 @@ class HybridAutonomousAgent:
         finally:
             session.close()
 
+        # Добавляем контекст диалога если есть
+        context_info = ""
+        if context:
+            context_info = f"\nКОНТЕКСТ ДИАЛОГА: {context}\n(ОБЯЗАТЕЛЬНО используй этот контекст для конкретизации задач!)"
+
         # AI планирует действия на основе контекста
         planning_prompt = f"""Планировщик действий. Определи нужны ли инструменты.
 
 КОНТЕКСТ:
 Время: {current_time_str}, {current_date_str}
-Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}
+Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_info}
 
 ИНСТРУМЕНТЫ И ИХ ПАРАМЕТРЫ:
 Задачи:
