@@ -57,6 +57,109 @@ class HybridAutonomousAgent:
         logger.warning("[AGENT] Using fallback default tools")
         # Здесь можно добавить базовый набор, если динамическое обнаружение не сработало
 
+    async def _generate_proactive_context(self, user_id, session, user_now):
+        """
+        ПРОАКТИВНАЯ ЛОГИКА: Генерирует контекст для проактивных предложений
+        Анализирует: время суток, интересы, задачи, доступных людей
+        Возвращает строку с контекстом для AI
+        """
+        from models import UserProfile, Task, User
+        from datetime import datetime, timedelta
+        
+        proactive_hints = []
+        
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return ""
+            
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if not profile:
+                return ""
+            
+            # АНАЛИЗ ВРЕМЕНИ СУТОК
+            hour = user_now.hour
+            if 6 <= hour < 12:
+                time_context = "утро"
+                time_suggestions = ["энергичные активности", "планирование дня", "спорт"]
+            elif 12 <= hour < 18:
+                time_context = "день"
+                time_suggestions = ["рабочие встречи", "обучение", "продуктивные задачи"]
+            elif 18 <= hour < 23:
+                time_context = "вечер"
+                time_suggestions = ["отдых", "социальные активности", "анализ дня", "спорт"]
+            else:
+                time_context = "ночь"
+                time_suggestions = ["отдых", "подготовка ко сну"]
+            
+            proactive_hints.append(f"Сейчас {time_context} - подходит для: {', '.join(time_suggestions)}")
+            
+            # АНАЛИЗ ИНТЕРЕСОВ И ЦЕЛЕЙ
+            if profile.interests:
+                interests_list = [i.strip() for i in profile.interests.split(',')[:3]]
+                proactive_hints.append(f"Интересы пользователя: {', '.join(interests_list)}")
+                
+                # Поиск людей с похожими интересами
+                from .handlers import get_partners_list
+                partners = get_partners_list(user.id, session)
+                if partners:
+                    # Берем топ-3 партнера
+                    top_partners = []
+                    for p in partners[:3]:
+                        partner_user = session.query(User).filter_by(id=p.user_id).first()
+                        if partner_user and partner_user.username:
+                            # Найти общие интересы
+                            if p.interests:
+                                partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                                user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                                common = user_interests & partner_interests
+                                if common:
+                                    top_partners.append(f"@{partner_user.username} (интересы: {', '.join(list(common)[:2])})")
+                    
+                    if top_partners:
+                        proactive_hints.append(f"Доступны для активностей: {'; '.join(top_partners[:2])}")
+            
+            if profile.goals:
+                goals_list = [g.strip() for g in profile.goals.split(',')[:2]]
+                proactive_hints.append(f"Цели: {', '.join(goals_list)}")
+            
+            # АНАЛИЗ ЗАДАЧ
+            tasks = session.query(Task).filter(
+                Task.user_id == user.id,
+                Task.status.in_(['pending', 'active', 'in_progress'])
+            ).order_by(Task.reminder_time.asc()).limit(5).all()
+            
+            if tasks:
+                overdue = []
+                today = []
+                for task in tasks:
+                    if task.reminder_time:
+                        try:
+                            from datetime import timezone
+                            reminder_dt = task.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_now.tzinfo)
+                            if reminder_dt < user_now:
+                                overdue.append(task.title)
+                            elif reminder_dt.date() == user_now.date():
+                                today.append(task.title)
+                        except:
+                            pass
+                
+                if overdue:
+                    proactive_hints.append(f"⚠️ Просроченные задачи: {', '.join(overdue[:2])}")
+                if today:
+                    proactive_hints.append(f"📅 Сегодня запланировано: {', '.join(today[:2])}")
+            
+            # Формируем итоговый проактивный контекст
+            if proactive_hints:
+                return "\n\nПРОАКТИВНЫЙ КОНТЕКСТ (используй для предложений):\n" + "\n".join(proactive_hints) + "\n\nНа основе этого контекста предложи 1-2 конкретных действия с указанием времени и людей."
+            
+        except Exception as e:
+            logger.error(f"[PROACTIVE] Error generating proactive context: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return ""
+
     async def call_ai(self, messages, **kwargs):
         """Универсальный вызов AI API"""
         url = "https://api.deepseek.com/v1/chat/completions"
@@ -152,6 +255,9 @@ class HybridAutonomousAgent:
                 if 'interests' in profile_data:
                     profile_summary += f"Интересы: {profile_data['interests']}\n"
 
+            # ПРОАКТИВНЫЙ КОНТЕКСТ: анализируем ситуацию для предложений
+            proactive_context = await self._generate_proactive_context(user_id, session, user_now)
+
         finally:
             session.close()
 
@@ -165,7 +271,7 @@ class HybridAutonomousAgent:
 
 КОНТЕКСТ:
 Время: {current_time_str}, {current_date_str}
-Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_info}
+Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_info}{proactive_context}
 
 ИНСТРУМЕНТЫ И ИХ ПАРАМЕТРЫ:
 Задачи:
@@ -196,6 +302,12 @@ class HybridAutonomousAgent:
 - find_partners и analyze_tasks - БЕЗ ПАРАМЕТРОВ
 - find_relevant_contacts_for_task требует ТОЛЬКО task_description
 
+ПРОАКТИВНОСТЬ - АВТОМАТИЧЕСКИЕ ДЕЙСТВИЯ:
+- При создании задачи про спорт/обучение/встречу/проект → АВТОМАТИЧЕСКИ добавь find_relevant_contacts_for_task
+- При упоминании цели → АВТОМАТИЧЕСКИ добавь find_partners для поиска людей с похожими целями
+- При просроченных задачах из ПРОАКТИВНОГО КОНТЕКСТА → предложи делегирование или помощь
+- Если в ПРОАКТИВНОМ КОНТЕКСТЕ есть люди → интегрируй их в предложения с конкретными активностями
+
 ПОДТВЕРЖДЕНИЯ: Если ассистент предложил задачу, а юзер ответил "да"/"отлично"/"давай" - извлеки детали и создай task.
 
 JSON:
@@ -207,7 +319,9 @@ JSON:
 
 Примеры:
 - "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
+- "создай задачу пробежка завтра в 19:00" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Пробежка в парке", "reminder_time": "завтра в 19:00"}}, "reason": "создание"}}, {{"tool": "find_relevant_contacts_for_task", "params": {{"task_description": "пробежка"}}, "reason": "найти компанию"}}]}}
 - "создай задачу X завтра" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "X", "reminder_time": "завтра"}}, "reason": "создание"}}]}}
+- "хочу развивать бизнес" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "найти партнеров по бизнесу"}}]}}
 - "напомни через 5 минут про реферальную программу" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Начать работу над реферальной программой", "reminder_time": "через 5 минут", "description": "Поиск партнеров и формирование предложения"}}, "reason": "напоминание"}}]}}
 - "напомни заняться этим вопросом" (контекст: реферальная программа) → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Продолжить разработку реферальной программы", "reminder_time": "через 10 минут", "description": "Вернуться к обсуждению реферальной программы"}}, "reason": "напоминание"}}]}}
 - "создай задачу зарядка" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Утренняя зарядка", "reminder_time": "каждый день в 7:00", "description": "Физические упражнения"}}, "reason": "создание"}}]}}
@@ -218,6 +332,7 @@ JSON:
 - ЗАПРЕЩЕНО создавать title="Заняться вопросом"
 - ЗАПРЕЩЕНО title короче 15 символов БЕЗ description
 - ОБЯЗАТЕЛЬНО используй контекст диалога для конкретности
+- При создании задач про АКТИВНОСТИ - всегда добавляй find_relevant_contacts_for_task
 
 ТОЛЬКО JSON:"""
 
