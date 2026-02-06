@@ -160,8 +160,10 @@ class HybridAutonomousAgent:
         
         return ""
 
-    async def call_ai(self, messages, **kwargs):
-        """Универсальный вызов AI API"""
+    async def call_ai(self, messages, use_tools=False, **kwargs):
+        """Универсальный вызов AI API с опциональными tools"""
+        from .tools import TOOLS
+        
         url = "https://api.deepseek.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -175,6 +177,12 @@ class HybridAutonomousAgent:
             "max_tokens": 2000,
             **kwargs
         }
+        
+        # Добавляем tools если нужно (HYBRID APPROACH)
+        if use_tools:
+            data["tools"] = TOOLS
+            data["tool_choice"] = "auto"  # DeepSeek сам решает
+            logger.info(f"[HYBRID] Calling AI with {len(TOOLS)} tools available")
 
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=data) as response:
@@ -266,73 +274,31 @@ class HybridAutonomousAgent:
         if context:
             context_info = f"\nКОНТЕКСТ ДИАЛОГА: {context}\n(ОБЯЗАТЕЛЬНО используй этот контекст для конкретизации задач!)"
 
-        # AI планирует действия на основе контекста
-        planning_prompt = f"""Планировщик действий. Определи нужны ли инструменты.
+        # УПРОЩЕННЫЙ ПЛАНИРОВЩИК: только анализ context, tools выберет AI
+        planning_prompt = f"""Анализ запроса для проактивного ответа.
 
 КОНТЕКСТ:
 Время: {current_time_str}, {current_date_str}
 Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_info}{proactive_context}
 
-ИНСТРУМЕНТЫ И ИХ ПАРАМЕТРЫ:
-Задачи:
-- add_task: title (обязат.), reminder_time (обязат.), description, due_date, is_recurring, recurrence_pattern
-- list_tasks: БЕЗ ПАРАМЕТРОВ
-- complete_task: task_title или task_id, completion_note (если только "готово" без названия - попросить уточнить)
-- delete_task: task_title или task_id, reason
-- reschedule_task: task_title (обязат.), new_time (обязат.)
-- edit_task: task_title, new_title, new_description, new_reminder_time
-
-Делегирование и партнёры:
-- find_partners: БЕЗ ПАРАМЕТРОВ (использует профиль user_id автоматически)
-- find_relevant_contacts_for_task: task_description (обязат.), limit
-- delegate_task: task_title, delegated_to_username
-
-Профиль:
-- update_profile: company, position, city, birthdate, goals, skills, interests
-- update_user_memory: info (обязат.) - текст для запоминания
-
-Аналитика:
-- analyze_tasks: БЕЗ ПАРАМЕТРОВ
-
 Запрос: "{user_message}"
 
-КРИТИЧЕСКИ ВАЖНО:
-- Используй ТОЛЬКО параметры из списка выше
-- НЕ добавляй параметры goal, interests, description если их нет в сигнатуре
-- find_partners и analyze_tasks - БЕЗ ПАРАМЕТРОВ
-- find_relevant_contacts_for_task требует ТОЛЬКО task_description
-
-ПРОАКТИВНОСТЬ - АВТОМАТИЧЕСКИЕ ДЕЙСТВИЯ:
-- При создании задачи про спорт/обучение/встречу/проект → АВТОМАТИЧЕСКИ добавь find_relevant_contacts_for_task
-- При упоминании цели → АВТОМАТИЧЕСКИ добавь find_partners для поиска людей с похожими целями
-- При просроченных задачах из ПРОАКТИВНОГО КОНТЕКСТА → предложи делегирование или помощь
-- Если в ПРОАКТИВНОМ КОНТЕКСТЕ есть люди → интегрируй их в предложения с конкретными активностями
-
-ПОДТВЕРЖДЕНИЯ: Если ассистент предложил задачу, а юзер ответил "да"/"отлично"/"давай" - извлеки детали и создай task.
+Не планируй инструменты - их выберет AI автоматически.
+Твоя задача - определить тип запроса и проактивные подсказки.
 
 JSON:
 {{
-  "needs_tools": true/false,
-  "tools": [{{"tool": "имя", "params": {{"param": "value"}}, "reason": "зачем"}}],
-  "response_type": "execute_and_respond"|"just_chat"
+  "intent_type": "command"|"question"|"task_management"|"general_chat"|"proactive_opportunity",
+  "context_needed": true если нужны данные из БД для ответа,
+  "proactive_hints": "краткие подсказки для AI что может быть полезно пользователю сейчас",
+  "user_goal_evident": true если видна конкретная цель пользователя
 }}
 
 Примеры:
-- "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
-- "создай задачу пробежка завтра в 19:00" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Пробежка в парке", "reminder_time": "завтра в 19:00"}}, "reason": "создание"}}, {{"tool": "find_relevant_contacts_for_task", "params": {{"task_description": "пробежка"}}, "reason": "найти компанию"}}]}}
-- "создай задачу X завтра" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "X", "reminder_time": "завтра"}}, "reason": "создание"}}]}}
-- "хочу развивать бизнес" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "найти партнеров по бизнесу"}}]}}
-- "напомни через 5 минут про реферальную программу" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Начать работу над реферальной программой", "reminder_time": "через 5 минут", "description": "Поиск партнеров и формирование предложения"}}, "reason": "напоминание"}}]}}
-- "напомни заняться этим вопросом" (контекст: реферальная программа) → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Продолжить разработку реферальной программы", "reminder_time": "через 10 минут", "description": "Вернуться к обсуждению реферальной программы"}}, "reason": "напоминание"}}]}}
-- "создай задачу зарядка" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "Утренняя зарядка", "reminder_time": "каждый день в 7:00", "description": "Физические упражнения"}}, "reason": "создание"}}]}}
-- "мои задачи" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "список"}}]}}
-- "найди единомышленников" → {{"needs_tools": true, "tools": [{{"tool": "find_partners", "params": {{}}, "reason": "поиск"}}]}}
-
-КРИТИЧЕСКИ ВАЖНО:
-- ЗАПРЕЩЕНО создавать title="Заняться вопросом"
-- ЗАПРЕЩЕНО title короче 15 символов БЕЗ description
-- ОБЯЗАТЕЛЬНО используй контекст диалога для конкретности
-- При создании задач про АКТИВНОСТИ - всегда добавляй find_relevant_contacts_for_task
+- "привет" → {{"intent_type": "general_chat", "context_needed": false, "proactive_hints": "утреннее приветствие, можно предложить планирование дня"}}
+- "мои задачи" → {{"intent_type": "task_management", "context_needed": true, "proactive_hints": "показать задачи, предложить приоритизацию"}}
+- "создай задачу пробежка" → {{"intent_type": "command", "context_needed": false, "proactive_hints": "спортивная активность - предложить партнера, учесть погоду", "user_goal_evident": true}}
+- "как дела?" → {{"intent_type": "question", "context_needed": true, "proactive_hints": "спросить о прогрессе по задачам и целям"}}
 
 ТОЛЬКО JSON:"""
 
@@ -669,11 +635,56 @@ JSON:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "Сформулируй ответ"}
+            {"role": "user", "content": user_message}
         ]
 
-        response = await self.call_ai(messages, temperature=0.8)
-        content = response['choices'][0]['message']['content']
+        # КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: используем tools для автоматического вызова
+        response = await self.call_ai(messages, use_tools=True, temperature=0.7)
+        
+        message = response['choices'][0]['message']
+        tool_calls = message.get('tool_calls', [])
+        
+        # Если AI запросил tool calls - выполняем их
+        if tool_calls:
+            logger.info(f"[HYBRID] AI requested {len(tool_calls)} tool calls")
+            
+            # Извлекаем actions из tool_calls
+            new_actions = []
+            for tool_call in tool_calls:
+                func = tool_call['function']
+                new_actions.append({
+                    'tool': func['name'],
+                    'params': json.loads(func['arguments']),
+                    'reason': f"AI auto-decision: {func['name']}"
+                })
+            
+            # ВЫПОЛНЯЕМ НОВЫЕ ИНСТРУМЕНТЫ
+            new_results = await self.execute_actions(new_actions, user_id)
+            execution_results.extend(new_results)
+            
+            # ПОВТОРНЫЙ ВЫЗОВ AI с результатами tool calls
+            messages.append(message)  # Assistant message с tool_calls
+            
+            # Добавляем результаты каждого tool call
+            for i, tool_call in enumerate(tool_calls):
+                result_content = json.dumps(
+                    new_results[i]['result'] if new_results[i]['success'] 
+                    else {'error': new_results[i]['error']},
+                    ensure_ascii=False
+                )
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call['id'],
+                    "content": result_content
+                })
+            
+            # Финальный ответ БЕЗ tools
+            logger.info(f"[HYBRID] Getting final response after tool execution")
+            final_response = await self.call_ai(messages, use_tools=False, temperature=0.7)
+            content = final_response['choices'][0]['message']['content']
+        else:
+            # Просто текстовый ответ без tool calls
+            content = message.get('content', '')
         
         return content.strip()
 
