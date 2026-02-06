@@ -427,11 +427,21 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         if user.subscription_tier == SubscriptionTier.PREMIUM:
             logger.info(f"[ADD_TASK] Premium user detected, triggering automation for task {task_id}")
             from ai_integration.premium_simple import trigger_premium_automation_realtime
+            from ai_integration.premium_scheduler import on_premium_task_created
             import asyncio
             
             # Запускаем в фоне, не блокируем создание задачи
             asyncio.create_task(
                 trigger_premium_automation_realtime(
+                    premium_user_id=user.telegram_id,
+                    task_id=task_id,
+                    task_description=f"{title}. {description}" if description else title
+                )
+            )
+            
+            # Триггерим сбор market opportunities и других инсайтов
+            asyncio.create_task(
+                on_premium_task_created(
                     premium_user_id=user.telegram_id,
                     task_id=task_id,
                     task_description=f"{title}. {description}" if description else title

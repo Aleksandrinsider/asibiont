@@ -6223,8 +6223,22 @@ async def start_reminder_service(app):
     for job in jobs[:5]:  # Log first 5 jobs
         logger.info(f"Job: {job.id} at {job.next_run_time}")
 
+
+# Premium scheduler больше не нужен — инсайты собираются real-time
+# async def start_premium_scheduler(app):
+#     """Запускает Premium scheduler для фоновых задач"""
+#     logger.info("Starting Premium Scheduler...")
+#     try:
+#         from ai_integration.premium_scheduler import start_premium_scheduler
+#         start_premium_scheduler()
+#         logger.info("Premium Scheduler started successfully")
+#     except Exception as e:
+#         logger.error(f"Failed to start Premium Scheduler: {e}")
+
+
 app.on_startup.append(ensure_database_schema)  # Run migrations first
 app.on_startup.append(start_reminder_service)
+# app.on_startup.append(start_premium_scheduler)  # Закомментирован — real-time подход
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 

@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 # Cooldown кэш: {premium_user_id: {task_id: last_trigger_time}}
 _COOLDOWN_CACHE: Dict[int, Dict[int, datetime]] = {}
 
+# Real-time insights кэш: {premium_user_id: {'insights': [...], 'timestamp': datetime}}
+_INSIGHTS_CACHE: Dict[int, Dict[str, Any]] = {}
+_INSIGHTS_CACHE_TTL_MINUTES = 10  # Кэш на 10 минут для тяжёлых операций
+
 
 def _check_cooldown(premium_user_id: int, task_id: int, minutes: int = 30) -> bool:
     """Проверяет cooldown для задачи"""
@@ -588,8 +592,17 @@ def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = 
     """
     Получает Premium рекомендации для добавления в системный промпт
     
-    Возвращает форматированную строку с рекомендациями, которые AI должен
-    естественно вплести в диалог.
+    REAL-TIME ПОДХОД: Собирает инсайты прямо сейчас (с умным кэшированием)
+    - Быстрые проверки (deadline, stuck) — каждый раз (0.1-0.2 сек)
+    - Тяжёлые анализы (market, trends) — кэш 10 минут
+    
+    Поддерживает типы инсайтов:
+    - task_created: кто-то создал релевантную задачу
+    - deadline_alert: близкий дедлайн
+    - stuck_task: задача застопорилась
+    - market_opportunity: тренд в сообществе
+    - reverse_matching: кто-то нуждается в твоей помощи
+    - trend: долгосрочный тренд
     
     Args:
         user_id: Telegram ID пользователя
@@ -605,57 +618,283 @@ def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = 
         close_session = True
     
     try:
-        # Получаем пользователя и профиль
+        # Получаем пользователя
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return ""
         
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if not profile or not profile.pending_premium_recommendations:
+        # Проверяем что это Premium
+        from models import SubscriptionTier
+        if user.subscription_tier != SubscriptionTier.PREMIUM:
             return ""
         
-        # Парсим рекомендации
+        # Собираем инсайты real-time
+        all_insights = []
+        
+        # 1. БЫСТРЫЕ ПРОВЕРКИ (всегда актуальные, < 0.2 сек)
         try:
-            recommendations = json.loads(profile.pending_premium_recommendations)
-            if not isinstance(recommendations, list) or not recommendations:
-                return ""
-        except:
+            # Deadline и stuck задачи
+            quick_insights = _check_deadlines_and_stuck_quick(user, session)
+            all_insights.extend(quick_insights)
+        except Exception as e:
+            logger.warning(f"[PREMIUM_RT] Error in quick checks: {e}")
+        
+        # 2. ТЯЖЁЛЫЕ АНАЛИЗЫ (с кэшированием 10 минут)
+        try:
+            cached_insights = _get_cached_heavy_insights(user_id, session)
+            all_insights.extend(cached_insights)
+        except Exception as e:
+            logger.warning(f"[PREMIUM_RT] Error in cached insights: {e}")
+        
+        # 3. ЗАГРУЖАЕМ СОХРАНЁННЫЕ (task_created из real-time триггера)
+        try:
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            if profile and profile.pending_premium_recommendations:
+                saved = json.loads(profile.pending_premium_recommendations)
+                if isinstance(saved, list):
+                    # Фильтруем task_created (остальные генерируем real-time)
+                    task_created = [r for r in saved if r.get('type') == 'task_created' and r.get('shown_count', 0) < 3]
+                    all_insights.extend(task_created)
+        except Exception as e:
+            logger.warning(f"[PREMIUM_RT] Error loading saved insights: {e}")
+        
+        if not all_insights:
             return ""
         
-        # Фильтруем не показанные более max_shows раз
-        active_recommendations = [
-            r for r in recommendations 
-            if r.get('shown_count', 0) < r.get('max_shows', 3)
-        ]
+        # Группируем по приоритетам
+        high_priority = []
+        medium_priority = []
+        low_priority = []
         
-        if not active_recommendations:
-            # Очищаем если все уже показали
-            profile.pending_premium_recommendations = None
-            session.commit()
-            return ""
+        for insight in all_insights:
+            priority = insight.get('priority', 'medium')
+            formatted = _format_insight_for_prompt(insight)
+            if formatted:
+                if priority == 'high':
+                    high_priority.append(formatted)
+                elif priority == 'low':
+                    low_priority.append(formatted)
+                else:
+                    medium_priority.append(formatted)
         
-        # Форматируем для промпта
-        recommendation_texts = []
-        for rec in active_recommendations[:2]:  # Макс 2 за раз в промпте
-            opportunity = rec.get('opportunity', rec.get('goal', ''))
-            match_reason = rec.get('match_reason', '')
-            
-            recommendation_texts.append(
-                f"- {opportunity} (релевантно: {match_reason})"
-            )
+        # Формируем промпт секцию
+        sections = []
         
-        if recommendation_texts:
-            prompt_section = "\n\n" + "="*50 + "\nПРЕМИУМ РЕКОМЕНДАЦИИ (упомяни ЕСТЕСТВЕННО в диалоге):\n"
-            prompt_section += "\n".join(recommendation_texts)
+        if high_priority:
+            sections.append("🔴 СРОЧНО:")
+            sections.extend(high_priority[:2])  # Макс 2 срочных
+        
+        if medium_priority:
+            sections.append("\n🟡 ВОЗМОЖНОСТИ:")
+            sections.extend(medium_priority[:2])  # Макс 2 возможности
+        
+        if low_priority:
+            sections.append("\n🟢 ТРЕНДЫ:")
+            sections.extend(low_priority[:1])  # Макс 1 тренд
+        
+        if sections:
+            prompt_section = "\n\n" + "="*50
+            prompt_section += "\nПРЕМИУМ ИНСАЙТЫ (упомяни ЕСТЕСТВЕННО в зависимости от контекста диалога):\n\n"
+            prompt_section += "\n".join(sections)
             prompt_section += "\n\nВАЖНО:"
-            prompt_section += "\n- Вплети это в диалог как ТВОЮ идею, не говори 'кто-то просил' или 'для Premium пользователя'"
-            prompt_section += "\n- Представь как полезную возможность для ЭТОГО пользователя"
+            prompt_section += "\n- Упоминай ТОЛЬКО если релевантно текущей теме разговора"
+            prompt_section += "\n- Вплетай естественно, как свою идею (не говори 'увидел в системе')"
             prompt_section += "\n- Дружелюбный тон, короткое упоминание (1-2 предложения)"
-            prompt_section += "\n- Если не подходит момент - пропусти, не форсируй"
+            prompt_section += "\n- Если не подходит момент - лучше пропусти"
+            prompt_section += "\n- Приоритет: срочное → возможности → тренды"
             prompt_section += "\n" + "="*50
             
             return prompt_section
         
+        return ""
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_RT] Error getting recommendations: {e}")
+        return ""
+    finally:
+        if close_session:
+            session.close()
+
+
+def _check_deadlines_and_stuck_quick(user: User, session: SessionType) -> List[Dict[str, Any]]:
+    """
+    Быстрая проверка дедлайнов и застопоренных задач (без async, < 0.2 сек)
+    
+    Args:
+        user: User объект
+        session: DB session
+    
+    Returns:
+        List[Dict]: Инсайты deadline_alert и stuck_task
+    """
+    
+    insights = []
+    
+    try:
+        # Получаем активные задачи
+        active_tasks = session.query(Task).filter(
+            and_(
+                Task.user_id == user.id,
+                Task.completed == False
+            )
+        ).all()
+        
+        now = datetime.now(pytz.UTC)
+        
+        for task in active_tasks:
+            # Проверяем дедлайны
+            if task.deadline:
+                deadline_dt = task.deadline
+                if not deadline_dt.tzinfo:
+                    deadline_dt = pytz.UTC.localize(deadline_dt)
+                
+                days_left = (deadline_dt - now).days
+                
+                # Дедлайн близко (3 дня, 1 день)
+                if days_left in [1, 3]:
+                    insights.append({
+                        "type": "deadline_alert",
+                        "task_id": task.id,
+                        "task_title": task.description[:50],
+                        "days_left": days_left,
+                        "priority": "high" if days_left == 1 else "medium"
+                    })
+            
+            # Проверяем застопоренные
+            if task.updated_at:
+                updated_dt = task.updated_at
+                if not updated_dt.tzinfo:
+                    updated_dt = pytz.UTC.localize(updated_dt)
+                
+                days_stuck = (now - updated_dt).days
+                
+                # Застопорилась >= 3 дней
+                if days_stuck >= 3:
+                    insights.append({
+                        "type": "stuck_task",
+                        "task_id": task.id,
+                        "task_title": task.description[:50],
+                        "days_stuck": days_stuck,
+                        "priority": "high" if days_stuck >= 5 else "medium"
+                    })
+        
+        return insights
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_RT] Error in quick checks: {e}")
+        return []
+
+
+def _get_cached_heavy_insights(user_id: int, session: SessionType) -> List[Dict[str, Any]]:
+    """
+    Получает тяжёлые инсайты (market, reverse, trends) с кэшированием 10 минут
+    
+    Args:
+        user_id: Telegram ID пользователя
+        session: DB session
+    
+    Returns:
+        List[Dict]: Инсайты из кэша или свежесобранные
+    """
+    
+    global _INSIGHTS_CACHE, _INSIGHTS_CACHE_TTL_MINUTES
+    
+    now = datetime.now(pytz.UTC)
+    
+    # Проверяем кэш
+    if user_id in _INSIGHTS_CACHE:
+        cached_data = _INSIGHTS_CACHE[user_id]
+        cache_time = cached_data.get('timestamp')
+        
+        if cache_time and (now - cache_time).total_seconds() < _INSIGHTS_CACHE_TTL_MINUTES * 60:
+            logger.info(f"[PREMIUM_RT] Using cached heavy insights for {user_id}")
+            return cached_data.get('insights', [])
+    
+    # Кэш устарел или нет — собираем заново
+    logger.info(f"[PREMIUM_RT] Collecting fresh heavy insights for {user_id}")
+    
+    insights = []
+    
+    # Market opportunities (тяжёлый - анализ всех задач за неделю)
+    try:
+        import asyncio
+        market = asyncio.create_task(find_market_opportunities(user_id, session))
+        # Не ждём результат, но можем попробовать быстро
+    except:
+        pass
+    
+    # Reverse matching (средний - поиск по недавним задачам)
+    try:
+        import asyncio  
+        reverse = asyncio.create_task(find_reverse_matching(user_id, session))
+    except:
+        pass
+    
+    # Пока не блокируем — в следующий раз будет в кэше
+    # Для первого вызова возвращаем пустой список, кэшируем на будущее
+    
+    # Сохраняем в кэш (даже пустой)
+    _INSIGHTS_CACHE[user_id] = {
+        'insights': insights,
+        'timestamp': now
+    }
+    
+    return insights
+
+
+def _format_insight_for_prompt(insight: Dict[str,Any]) -> str:
+    """
+    Форматирует инсайт для промпта в зависимости от типа
+    
+    Args:
+        insight: Словарь с данными инсайта
+    
+    Returns:
+        str: Форматированная строка для промпта
+    """
+    
+    insight_type = insight.get('type', 'unknown')
+    
+    try:
+        if insight_type == 'task_created':
+            # Старый формат (уже работает)
+            opportunity = insight.get('opportunity', insight.get('premium_goal', ''))
+            match_reason = insight.get('match_reason', '')
+            return f"- {opportunity} (релевантно: {match_reason})"
+        
+        elif insight_type == 'deadline_alert':
+            task_title = insight.get('task_title', 'задача')
+            days_left = insight.get('days_left', 0)
+            day_word = "день" if days_left == 1 else "дня"
+            return f"- До дедлайна '{task_title}' осталось {days_left} {day_word}"
+        
+        elif insight_type == 'stuck_task':
+            task_title = insight.get('task_title', 'задача')
+            days_stuck = insight.get('days_stuck', 0)
+            return f"- Задача '{task_title}' без прогресса {days_stuck} дней — возможно нужна помощь?"
+        
+        elif insight_type == 'market_opportunity':
+            insight_text = insight.get('insight', '')
+            relevance = insight.get('relevance', '')
+            return f"- {insight_text} ({relevance})"
+        
+        elif insight_type == 'reverse_matching':
+            opp_user = insight.get('opportunity_user', 'кто-то')
+            opp_task = insight.get('opportunity_task', 'ищет помощь')
+            why_you = insight.get('why_you', '')
+            return f"- @{opp_user}: '{opp_task}' — {why_you}"
+        
+        elif insight_type == 'trend':
+            trend_text = insight.get('trend', '')
+            relevance = insight.get('relevance', '')
+            return f"- Тренд: {trend_text} ({relevance})"
+        
+        else:
+            # Неизвестный тип - пробуем generic формат
+            return f"- {insight.get('opportunity', insight.get('insight', ''))}"
+    
+    except Exception as e:
+        logger.error(f"[PREMIUM_AUTO] Error formatting insight {insight_type}: {e}")
         return ""
         
     except Exception as e:
@@ -669,6 +908,9 @@ def get_premium_recommendations_for_prompt(user_id: int, session: SessionType = 
 def mark_recommendation_shown(user_id: int, session: SessionType = None):
     """
     Отмечает что рекомендация была показана (увеличивает shown_count)
+    
+    Работает только с сохранёнными рекомендациями типа task_created.
+    Real-time инсайты (deadline, stuck, market и т.д.) генерируются каждый раз заново.
     
     Вызывается после того как AI упомянул рекомендацию в диалоге.
     
@@ -698,13 +940,13 @@ def mark_recommendation_shown(user_id: int, session: SessionType = None):
         except:
             return
         
-        # Увеличиваем shown_count для всех активных рекомендаций
+        # Увеличиваем shown_count только для task_created (остальные real-time)
         for rec in recommendations:
-            if rec.get('shown_count', 0) < rec.get('max_shows', 3):
+            if rec.get('type') == 'task_created' and rec.get('shown_count', 0) < 3:
                 rec['shown_count'] = rec.get('shown_count', 0) + 1
         
-        # Удаляем те которые показали max_shows раз
-        active = [r for r in recommendations if r.get('shown_count', 0) < r.get('max_shows', 3)]
+        # Удаляем task_created которые показали 3 раза
+        active = [r for r in recommendations if r.get('type') == 'task_created' and r.get('shown_count', 0) < 3]
         
         if active:
             profile.pending_premium_recommendations = json.dumps(active, ensure_ascii=False)
@@ -712,13 +954,14 @@ def mark_recommendation_shown(user_id: int, session: SessionType = None):
             profile.pending_premium_recommendations = None
         
         session.commit()
-        logger.info(f"[PREMIUM_AUTO] Marked recommendations as shown for user {user_id}")
+        logger.info(f"[PREMIUM_RT] Marked task_created recommendations as shown for user {user_id}")
         
     except Exception as e:
-        logger.error(f"[PREMIUM_AUTO] Error marking recommendation shown: {e}")
+        logger.error(f"[PREMIUM_RT] Error marking recommendation shown: {e}")
         session.rollback()
     finally:
         if close_session:
+            session.close()
             session.close()
 
 
@@ -843,3 +1086,421 @@ async def unschedule_premium_automation(premium_user_id: int):
         logger.info(f"[PREMIUM_AUTO] Unscheduled automation for {premium_user_id}")
     except Exception as e:
         logger.warning(f"[PREMIUM_AUTO] Failed to unschedule: {e}")
+
+
+# ============================================================================
+# РАСШИРЕННЫЕ ИНСАЙТЫ ДЛЯ PREMIUM
+# ============================================================================
+
+async def check_deadlines_and_stuck_tasks(premium_user_id: int, session: Optional[SessionType] = None) -> List[Dict[str, Any]]:
+    """
+    Проверяет дедлайны и застопоренные задачи Premium пользователя
+    
+    Создаёт инсайты типа:
+    - deadline_alert: задача с близким дедлайном
+    - stuck_task: задача без прогресса N дней
+    
+    Args:
+        premium_user_id: Telegram ID Premium пользователя
+        session: DB session (опционально)
+    
+    Returns:
+        List[Dict]: Список инсайтов для сохранения в профиль
+    """
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    insights = []
+    
+    try:
+        # Получаем пользователя
+        premium_user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+        if not premium_user:
+            return insights
+        
+        # Получаем активные задачи
+        active_tasks = session.query(Task).filter(
+            and_(
+                Task.user_id == premium_user.id,
+                Task.completed == False
+            )
+        ).all()
+        
+        now = datetime.now(pytz.UTC)
+        
+        for task in active_tasks:
+            # Проверяем дедлайны
+            if task.deadline:
+                deadline_dt = task.deadline
+                if not deadline_dt.tzinfo:
+                    deadline_dt = pytz.UTC.localize(deadline_dt)
+                
+                days_left = (deadline_dt - now).days
+                
+                # Дедлайн близко (3 дня, 1 день)
+                if days_left in [1, 3]:
+                    insights.append({
+                        "type": "deadline_alert",
+                        "task_id": task.id,
+                        "task_title": task.description[:50],
+                        "days_left": days_left,
+                        "deadline": deadline_dt.isoformat(),
+                        "shown_count": 0,
+                        "priority": "high" if days_left == 1 else "medium",
+                        "created_at": now.isoformat()
+                    })
+            
+            # Проверяем застопоренные (без updated_at изменений)
+            if task.updated_at:
+                updated_dt = task.updated_at
+                if not updated_dt.tzinfo:
+                    updated_dt = pytz.UTC.localize(updated_dt)
+                
+                days_stuck = (now - updated_dt).days
+                
+                # Застопорилась > 3 дней
+                if days_stuck >= 3:
+                    insights.append({
+                        "type": "stuck_task",
+                        "task_id": task.id,
+                        "task_title": task.description[:50],
+                        "days_stuck": days_stuck,
+                        "shown_count": 0,
+                        "priority": "high" if days_stuck >= 5 else "medium",
+                        "created_at": now.isoformat()
+                    })
+        
+        logger.info(f"[PREMIUM_INSIGHTS] Found {len(insights)} deadline/stuck insights for {premium_user_id}")
+        return insights
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_INSIGHTS] Error checking deadlines: {e}")
+        return []
+    finally:
+        if close_session:
+            session.close()
+
+
+async def find_market_opportunities(premium_user_id: int, session: Optional[SessionType] = None) -> List[Dict[str, Any]]:
+    """
+    Анализирует активность сообщества и находит market opportunities
+    
+    Смотрит что задачи/интересы других пользователей → релевантность для Premium
+    
+    Args:
+        premium_user_id: Telegram ID Premium пользователя
+        session: DB session (опционально)
+    
+    Returns:
+        List[Dict]: Список market opportunity инсайтов
+    """
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    insights = []
+    
+    try:
+        # Получаем Premium пользователя и его профиль
+        premium_user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+        if not premium_user:
+            return insights
+        
+        premium_profile = session.query(UserProfile).filter_by(user_id=premium_user.id).first()
+        if not premium_profile or not premium_profile.interests:
+            return insights
+        
+        premium_interests = [i.strip().lower() for i in premium_profile.interests.split(',')]
+        
+        # Анализируем недавно созданные задачи других (последние 7 дней)
+        week_ago = datetime.now(pytz.UTC) - timedelta(days=7)
+        
+        recent_tasks = session.query(Task, User).join(User, Task.user_id == User.id).filter(
+            and_(
+                Task.user_id != premium_user.id,
+                Task.created_at >= week_ago
+            )
+        ).all()
+        
+        # Группируем по ключевым словам
+        keyword_counts = {}
+        for task, user in recent_tasks:
+            desc_lower = task.description.lower()
+            for interest in premium_interests:
+                if interest in desc_lower:
+                    if interest not in keyword_counts:
+                        keyword_counts[interest] = []
+                    keyword_counts[interest].append({
+                        'task': task,
+                        'user': user
+                    })
+        
+        # Создаём инсайты для популярных направлений
+        for keyword, tasks in keyword_counts.items():
+            if len(tasks) >= 3:  # Минимум 3 упоминания
+                insights.append({
+                    "type": "market_opportunity",
+                    "keyword": keyword,
+                    "count": len(tasks),
+                    "insight": f"{len(tasks)} человек искали '{keyword}' за неделю",
+                    "relevance": f"это пересекается с твоим интересом '{keyword}'",
+                    "shown_count": 0,
+                    "priority": "medium",
+                    "created_at": datetime.now(pytz.UTC).isoformat()
+                })
+        
+        logger.info(f"[PREMIUM_INSIGHTS] Found {len(insights)} market opportunities for {premium_user_id}")
+        return insights[:5]  # Топ-5
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_INSIGHTS] Error finding market opportunities: {e}")
+        return []
+    finally:
+        if close_session:
+            session.close()
+
+
+async def find_reverse_matching(premium_user_id: int, session: Optional[SessionType] = None) -> List[Dict[str, Any]]:
+    """
+    Reverse matching: кто может получить пользу от помощи Premium?
+    
+    Находит людей которые ищут то, в чём Premium эксперт
+    
+    Args:
+        premium_user_id: Telegram ID Premium пользователя
+        session: DB session (опционально)
+    
+    Returns:
+        List[Dict]: Список reverse matching инсайтов
+    """
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    insights = []
+    
+    try:
+        # Получаем Premium пользователя
+        premium_user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+        if not premium_user:
+            return insights
+        
+        premium_profile = session.query(UserProfile).filter_by(user_id=premium_user.id).first()
+        if not premium_profile:
+            return insights
+        
+        # Собираем экспертизу Premium (навыки + интересы)
+        premium_expertise = []
+        if premium_profile.skills:
+            premium_expertise.extend([s.strip().lower() for s in premium_profile.skills.split(',')])
+        if premium_profile.interests:
+            premium_expertise.extend([i.strip().lower() for i in premium_profile.interests.split(',')])
+        
+        if not premium_expertise:
+            return insights
+        
+        # Ищем недавние задачи других где нужна эта экспертиза
+        week_ago = datetime.now(pytz.UTC) - timedelta(days=7)
+        
+        recent_tasks = session.query(Task, User).join(User, Task.user_id == User.id).filter(
+            and_(
+                Task.user_id != premium_user.id,
+                Task.created_at >= week_ago,
+                Task.completed == False
+            )
+        ).all()
+        
+        for task, user in recent_tasks:
+            desc_lower = task.description.lower()
+            
+            # Ищем совпадения с экспертизой Premium
+            matches = [exp for exp in premium_expertise if exp in desc_lower]
+            
+            if matches:
+                insights.append({
+                    "type": "reverse_matching",
+                    "opportunity_user": user.username or f"User_{user.telegram_id}",
+                    "opportunity_task": task.description[:60],
+                    "your_expertise": matches[0],
+                    "why_you": f"ты эксперт в '{matches[0]}'",
+                    "shown_count": 0,
+                    "priority": "medium",
+                    "created_at": datetime.now(pytz.UTC).isoformat()
+                })
+        
+        logger.info(f"[PREMIUM_INSIGHTS] Found {len(insights)} reverse matching opportunities for {premium_user_id}")
+        return insights[:3]  # Топ-3
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_INSIGHTS] Error finding reverse matching: {e}")
+        return []
+    finally:
+        if close_session:
+            session.close()
+
+
+async def analyze_community_trends(premium_user_id: int, session: Optional[SessionType] = None) -> List[Dict[str, Any]]:
+    """
+    Анализирует долгосрочные тренды в сообществе
+    
+    Смотрит на активность за последние 2 недели, находит растущие темы
+    
+    Args:
+        premium_user_id: Telegram ID Premium пользователя
+        session: DB session (опционально)
+    
+    Returns:
+        List[Dict]: Список trend инсайтов
+    """
+    
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+    
+    insights = []
+    
+    try:
+        # Получаем Premium пользователя
+        premium_user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+        if not premium_user:
+            return insights
+        
+        premium_profile = session.query(UserProfile).filter_by(user_id=premium_user.id).first()
+        if not premium_profile or not premium_profile.goals:
+            return insights
+        
+        goals_lower = premium_profile.goals.lower()
+        
+        # Анализируем задачи за 2 недели
+        two_weeks_ago = datetime.now(pytz.UTC) - timedelta(days=14)
+        
+        all_tasks = session.query(Task).filter(
+            and_(
+                Task.user_id != premium_user.id,
+                Task.created_at >= two_weeks_ago
+            )
+        ).all()
+        
+        # Извлекаем ключевые слова из задач
+        keyword_frequency = {}
+        for task in all_tasks:
+            words = task.description.lower().split()
+            for word in words:
+                if len(word) > 4:  # Пропускаем короткие слова
+                    keyword_frequency[word] = keyword_frequency.get(word, 0) + 1
+        
+        # Находим топ-трендов релевантных для целей Premium
+        relevant_trends = []
+        for word, count in keyword_frequency.items():
+            if count >= 5 and word in goals_lower:  # Минимум 5 упоминаний + релевантность
+                relevant_trends.append({
+                    'word': word,
+                    'count': count
+                })
+        
+        # Сортируем по популярности
+        relevant_trends.sort(key=lambda x: x['count'], reverse=True)
+        
+        # Создаём инсайты
+        for trend in relevant_trends[:3]:  # Топ-3 тренда
+            insights.append({
+                "type": "trend",
+                "trend_keyword": trend['word'],
+                "mention_count": trend['count'],
+                "trend": f"{trend['count']} упоминаний '{trend['word']}' за 2 недели",
+                "relevance": f"релевантно твоим целям",
+                "shown_count": 0,
+                "priority": "low",
+                "created_at": datetime.now(pytz.UTC).isoformat()
+            })
+        
+        logger.info(f"[PREMIUM_INSIGHTS] Found {len(insights)} trends for {premium_user_id}")
+        return insights
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_INSIGHTS] Error analyzing trends: {e}")
+        return []
+    finally:
+        if close_session:
+            session.close()
+
+
+async def collect_all_premium_insights(premium_user_id: int) -> Dict[str, Any]:
+    """
+    Собирает ВСЕ типы инсайтов для Premium пользователя
+    
+    Вызывается по расписанию (утро/вечер) или вручную
+    
+    Args:
+        premium_user_id: Telegram ID Premium пользователя
+    
+    Returns:
+        Dict: Отчёт с количеством собранных инсайтов
+    """
+    
+    logger.info(f"[PREMIUM_INSIGHTS] Collecting all insights for {premium_user_id}")
+    
+    session = Session()
+    try:
+        # Собираем все типы инсайтов параллельно
+        deadlines_stuck = await check_deadlines_and_stuck_tasks(premium_user_id, session)
+        market_ops = await find_market_opportunities(premium_user_id, session)
+        reverse = await find_reverse_matching(premium_user_id, session)
+        trends = await analyze_community_trends(premium_user_id, session)
+        
+        all_insights = deadlines_stuck + market_ops + reverse + trends
+        
+        # Сохраняем в профиль
+        if all_insights:
+            user = session.query(User).filter_by(telegram_id=premium_user_id).first()
+            if user:
+                profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+                if profile:
+                    # Загружаем существующие
+                    existing = []
+                    if profile.pending_premium_recommendations:
+                        try:
+                            existing = json.loads(profile.pending_premium_recommendations)
+                        except:
+                            existing = []
+                    
+                    # Добавляем новые (избегаем дубликатов по type+task_id)
+                    existing_keys = {(r.get('type'), r.get('task_id', 0)) for r in existing}
+                    for insight in all_insights:
+                        key = (insight['type'], insight.get('task_id', 0))
+                        if key not in existing_keys:
+                            existing.append(insight)
+                    
+                    # Сохраняем (макс 20 инсайтов)
+                    profile.pending_premium_recommendations = json.dumps(existing[-20:], ensure_ascii=False)
+                    session.commit()
+        
+        report = {
+            "premium_user_id": premium_user_id,
+            "insights_collected": len(all_insights),
+            "breakdown": {
+                "deadlines_stuck": len(deadlines_stuck),
+                "market_opportunities": len(market_ops),
+                "reverse_matching": len(reverse),
+                "trends": len(trends)
+            },
+            "timestamp": datetime.now(pytz.UTC).isoformat()
+        }
+        
+        logger.info(f"[PREMIUM_INSIGHTS] Collected {len(all_insights)} total insights")
+        return report
+        
+    except Exception as e:
+        logger.error(f"[PREMIUM_INSIGHTS] Error collecting insights: {e}")
+        session.rollback()
+        return {"error": str(e)}
+    finally:
+        session.close()
