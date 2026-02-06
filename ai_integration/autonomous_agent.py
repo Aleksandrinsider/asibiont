@@ -162,15 +162,39 @@ class HybridAutonomousAgent:
 Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}
 
 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
-- add_task(title, reminder_time) - создать задачу с напоминанием
-- list_tasks() - показать список задач
+
+УПРАВЛЕНИЕ ЗАДАЧАМИ:
+- add_task(title, reminder_time, description="", is_recurring=False, recurrence_pattern=None) - создать задачу с напоминанием
+- list_tasks(filter_type=None) - показать список задач (filter_type: "today", "overdue", "upcoming", "recurring")
 - complete_task(task_title) - отметить задачу выполненной
 - delete_task(task_title) - удалить задачу
-- reschedule_task(task_title, new_time) - перенести задачу
-- find_relevant_contacts_for_task(task_description) - найти контакты для помощи
-- find_partners() - найти единомышленников
-- update_profile(...) - обновить профиль
-- update_user_memory(memory_entry) - сохранить информацию
+- delete_all_tasks() - удалить все задачи (только по прямой просьбе)
+- reschedule_task(task_title, new_time) - перенести задачу на другое время
+- edit_task(task_title, new_title=None, new_description=None, new_time=None) - редактировать детали задачи
+- get_task_details(task_title) - получить подробную информацию о задаче
+
+ДЕЛЕГИРОВАНИЕ И СОТРУДНИЧЕСТВО:
+- delegate_task(title, description, reminder_time, delegated_to_username, delegation_details="") - делегировать задачу другому пользователю
+- accept_delegated_task(task_id) - принять делегированную задачу
+- reject_delegated_task(task_id) - отклонить делегированную задачу
+- get_delegation_progress() - проверить статус делегированных задач
+- cancel_delegation(task_id) - отменить делегирование
+- find_relevant_contacts_for_task(task_description) - найти контакты, которые могут помочь с задачей
+- find_partners() - найти единомышленников по интересам и целям
+
+ПРОФИЛЬ И ПАМЯТЬ:
+- update_profile(city=None, birthdate=None, company=None, position=None, goals=None, skills=None, interests=None) - обновить данные профиля
+- update_user_memory(info) - сохранить важную информацию о пользователе в долговременную память
+- show_profile() - показать текущий профиль пользователя
+
+АНАЛИТИКА:
+- analyze_tasks() - анализ задач с AI-рекомендациями по оптимизации
+- analyze_goal_progress() - анализ прогресса по целям
+
+ПОДПИСКА:
+- check_subscription_status() - проверить статус подписки
+- create_subscription_payment(tier) - создать платеж для подписки (tier: "STANDARD", "PREMIUM")
+- cancel_subscription() - отменить подписку
 
 ЗАПРОС: "{user_message}"
 
@@ -189,7 +213,12 @@ class HybridAutonomousAgent:
 - "привет" → {{"needs_tools": false, "response_type": "just_chat"}}
 - "напомни через 5 минут позвонить" → {{"needs_tools": true, "tools": [{{"tool": "add_task", "params": {{"title": "позвонить", "reminder_time": "через 5 минут"}}, "reason": "создание напоминания"}}], "response_type": "execute_and_respond"}}
 - "мои задачи?" → {{"needs_tools": true, "tools": [{{"tool": "list_tasks", "params": {{}}, "reason": "показать список"}}], "response_type": "execute_and_respond"}}
+- "делегируй задачу отчет Ивану" → {{"needs_tools": true, "tools": [{{"tool": "delegate_task", "params": {{"title": "отчет", "delegated_to_username": "Иван", "description": "", "reminder_time": "сегодня"}}, "reason": "делегирование задачи"}}], "response_type": "execute_and_respond"}}
+- "кто может помочь с маркетингом?" → {{"needs_tools": true, "tools": [{{"tool": "find_relevant_contacts_for_task", "params": {{"task_description": "маркетинг"}}, "reason": "поиск контактов"}}], "response_type": "execute_and_respond"}}
+- "обнови мой город на Москва" → {{"needs_tools": true, "tools": [{{"tool": "update_profile", "params": {{"city": "Москва"}}, "reason": "обновление профиля"}}], "response_type": "execute_and_respond"}}
+- "запомни что я предпочитаю работать утром" → {{"needs_tools": true, "tools": [{{"tool": "update_user_memory", "params": {{"info": "предпочитает работать утром"}}, "reason": "сохранение предпочтений"}}], "response_type": "execute_and_respond"}}
 - "как дела?" → {{"needs_tools": false, "response_type": "just_chat"}}
+- "проанализируй мои задачи" → {{"needs_tools": true, "tools": [{{"tool": "analyze_tasks", "params": {{}}, "reason": "анализ задач"}}], "response_type": "execute_and_respond"}}
 
 Верни ТОЛЬКО JSON, без дополнительного текста."""
 
