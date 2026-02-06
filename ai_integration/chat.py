@@ -61,7 +61,12 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             # Получаем профиль пользователя
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
-            # Получаем системный промпт
+            # Генерируем проактивный контекст
+            from .prompts import generate_proactive_context
+            proactive_context = generate_proactive_context(user_id, session)
+            logger.info(f"[PROACTIVE] Generated context length: {len(proactive_context)}")
+
+            # Получаем системный промпт с проактивным контекстом
             system_prompt = get_extended_system_prompt(
                 user_now=None,
                 current_time_str=None,
@@ -74,7 +79,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 subscription_tier=getattr(user, 'subscription_tier', 'FREE'),
                 message_type=message_type,
                 weather_info=None,
-                news_info=None
+                news_info=None,
+                proactive_context=proactive_context
             )
 
             # Вызываем AI с tools

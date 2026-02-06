@@ -1,8 +1,132 @@
 # Optimized prompts for AI agent
 
 import pytz
+import logging
+from datetime import datetime, timezone, timedelta
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None):
+logger = logging.getLogger(__name__)
+
+def generate_proactive_context(user_id, session):
+    """
+    Генерирует проактивный контекст для AI:
+    - Анализ времени суток
+    - Просроченные/сегодняшние задачи
+    - Интересы и партнеры
+    - Конкретные предложения
+    """
+    from models import User, UserProfile, Task
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return ""
+        
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+        
+        # Определяем текущее время пользователя
+        base_now = datetime.now(timezone.utc)
+        user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_now = base_now.astimezone(user_tz)
+        except:
+            user_now = base_now
+        
+        proactive_hints = []
+        
+        # 1. АНАЛИЗ ВРЕМЕНИ СУТОК
+        hour = user_now.hour
+        if 6 <= hour < 12:
+            time_context = "утро"
+            time_suggestions = ["энергичные активности", "планирование дня", "спорт"]
+        elif 12 <= hour < 18:
+            time_context = "день"
+            time_suggestions = ["рабочие встречи", "обучение", "продуктивные задачи"]
+        elif 18 <= hour < 23:
+            time_context = "вечер"
+            time_suggestions = ["отдых", "социальные активности", "анализ дня", "спорт"]
+        else:
+            time_context = "ночь"
+            time_suggestions = ["отдых", "подготовка ко сну"]
+        
+        proactive_hints.append(f"⏰ Сейчас {time_context} ({user_now.strftime('%H:%M')}) - хорошо для: {', '.join(time_suggestions)}")
+        
+        # 2. АНАЛИЗ ЗАДАЧ
+        tasks = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status.in_(['pending', 'active', 'in_progress'])
+        ).order_by(Task.reminder_time.asc()).limit(10).all()
+        
+        if tasks:
+            overdue = []
+            today = []
+            upcoming = []
+            
+            for task in tasks:
+                if task.reminder_time:
+                    try:
+                        reminder_dt = task.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
+                        if reminder_dt < user_now:
+                            overdue.append(task.title)
+                        elif reminder_dt.date() == user_now.date():
+                            today.append(f"{task.title} ({reminder_dt.strftime('%H:%M')})")
+                        elif reminder_dt.date() == (user_now + timedelta(days=1)).date():
+                            upcoming.append(f"{task.title} ({reminder_dt.strftime('%H:%M')})")
+                    except Exception as e:
+                        logger.error(f"Error parsing task time: {e}")
+            
+            if overdue:
+                proactive_hints.append(f"⚠️ Просроченные задачи: {', '.join(overdue[:2])}")
+            if today:
+                proactive_hints.append(f"📅 Сегодня: {', '.join(today[:3])}")
+            if upcoming:
+                proactive_hints.append(f"🔜 Завтра: {', '.join(upcoming[:2])}")
+        
+        # 3. АНАЛИЗ ИНТЕРЕСОВ И ПАРТНЕРОВ
+        if profile and profile.interests:
+            interests_list = [i.strip() for i in profile.interests.split(',')[:3]]
+            proactive_hints.append(f"💡 Интересы пользователя: {', '.join(interests_list)}")
+            
+            # Ищем партнеров с похожими интересами
+            from .handlers import get_partners_list
+            try:
+                partners = get_partners_list(user.id, session)
+                if partners:
+                    top_partners = []
+                    for p in partners[:3]:
+                        partner_user = session.query(User).filter_by(id=p.user_id).first()
+                        if partner_user and partner_user.username:
+                            # Найти общие интересы
+                            if p.interests:
+                                partner_interests = set(i.strip().lower() for i in p.interests.split(','))
+                                user_interests = set(i.strip().lower() for i in profile.interests.split(','))
+                                common = user_interests & partner_interests
+                                if common:
+                                    top_partners.append(f"@{partner_user.username} ({', '.join(list(common)[:2])})")
+                    
+                    if top_partners:
+                        proactive_hints.append(f"🤝 Доступны для активностей: {'; '.join(top_partners[:2])}")
+            except Exception as e:
+                logger.debug(f"Could not fetch partners: {e}")
+        
+        # 4. ЦЕЛИ
+        if profile and profile.goals:
+            goals_list = [g.strip() for g in profile.goals.split(',')[:2]]
+            proactive_hints.append(f"🎯 Цели: {', '.join(goals_list)}")
+        
+        # Формируем итоговый контекст
+        if proactive_hints:
+            return "\n\n" + "="*50 + "\nПРОАКТИВНЫЙ КОНТЕКСТ (используй для конкретных предложений):\n" + "\n".join(proactive_hints) + "\n" + "="*50
+        
+        return ""
+        
+    except Exception as e:
+        logger.error(f"[PROACTIVE] Error generating context: {e}")
+        import traceback
+        traceback.print_exc()
+        return ""
+
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None):
     """Get optimized system prompt for AI agent"""
 
     # Subscription info
@@ -44,13 +168,18 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
         if profile_parts:
             profile_context = "\nПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n" + "\n".join(profile_parts)
 
+    # Добавляем проактивный контекст если есть
+    proactive_section = ""
+    if proactive_context:
+        proactive_section = proactive_context
+
     prompt = f"""Ты - ASI Biont, умный AI-помощник для управления задачами.
 
 СЕЙЧАС: {current_time_str}, {current_date_str}
 НИКОГДА НЕ ГАЛЛЮЦИНИРУЙ ВРЕМЯ - ИСПОЛЬЗУЙ ТОЛЬКО УКАЗАННОЕ ВЫШЕ!
 Пользователь: {user_username}{tier_info}{weather_context}{news_context}{profile_context}
 
-{user_memory}{news_instructions}
+{user_memory}{news_instructions}{proactive_section}
 
 ОСНОВНЫЕ ПРАВИЛА:
 
