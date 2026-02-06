@@ -2319,12 +2319,19 @@ def get_partners_list(user_id=None, session=None):
         tier = partner_subscription.tier.value if partner_subscription and partner_subscription.tier else 'LIGHT'
         return {'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(tier, 0)
     
-    # Sort each group by: tier priority (descending), then rating (descending)
-    partners_same_city.sort(key=lambda p: (get_tier_priority(p), p.average_rating or 0), reverse=True)
-    partners_other_city.sort(key=lambda p: (get_tier_priority(p), p.average_rating or 0), reverse=True)
-
-    # Combine: first from same city, then others
-    sorted_partners = partners_same_city + partners_other_city
+    # Базовая сортировка: (1) город, (2) релевантность=0 (заполнится ниже), (3) Premium, (4) рейтинг
+    def sort_key(p):
+        partner_city = p.city.lower() if p.city else None
+        same_city = 0 if (user_city and partner_city == user_city) else 1
+        # task_relevance_score будет 0 на этом этапе, заполнится в следующем блоке
+        return (same_city, -getattr(p, 'task_relevance_score', 0), -get_tier_priority(p), -(p.average_rating or 0))
+    
+    partners.sort(key=sort_key)
+    sorted_partners = partners
+    
+    # Подсчёт для логирования
+    partners_same_city = [p for p in partners if (p.city.lower() if p.city else None) == user_city] if user_city else []
+    partners_other_city = [p for p in partners if (p.city.lower() if p.city else None) != user_city] if user_city else partners
     
     logger.info(f"[PARTNERS] Sorted results: {len(partners_same_city)} from same city, {len(partners_other_city)} from other cities")
     
@@ -2487,16 +2494,13 @@ def get_partners_list(user_id=None, session=None):
                         partner.task_relevance_score += 10  # Максимальный приоритет для точных совпадений
                         logger.info(f"[PARTNERS] @{partner_user.username} has exact same active tasks: {exact_task_matches}")
     
-    # Пересортируем партнеров с учетом релевантности для задач + Premium-приоритета
-    # Сначала релевантные для задач (по убыванию score), потом остальные
-    relevant_for_tasks = [p for p in sorted_partners if p.task_relevance_score > 0]
-    # Сортируем с учётом: (1) task_relevance_score, (2) Premium-приоритет, (3) рейтинг
-    relevant_for_tasks.sort(key=lambda p: (p.task_relevance_score, get_tier_priority(p), p.average_rating or 0), reverse=True)
-    
-    not_relevant_for_tasks = [p for p in sorted_partners if p.task_relevance_score == 0]
-    # not_relevant_for_tasks уже отсортирован по (tier_priority, rating) на строках 2323-2324
-    
-    sorted_partners = relevant_for_tasks + not_relevant_for_tasks
+    # Пересортируем ВСЕХ партнеров с учетом релевантности: (1) город, (2) релевантность, (3) Premium, (4) рейтинг
+    sorted_partners.sort(key=lambda p: (
+        0 if (user_city and (p.city.lower() if p.city else None) == user_city) else 1,  # город
+        -p.task_relevance_score,  # релевантность
+        -get_tier_priority(p),  # Premium
+        -(p.average_rating or 0)  # рейтинг
+    ))
     
     logger.info(f"[PARTNERS] Task-relevant partners: {len(relevant_for_tasks)}, other: {len(not_relevant_for_tasks)}")
     
@@ -2865,9 +2869,9 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         else:
             contacts_other_city.append(contact)
     
-    # Сортируем каждую группу по: (1) Premium-приоритет, (2) баллы релевантности
-    contacts_same_city.sort(key=lambda x: (x.get('tier_priority', 0), x['score']), reverse=True)
-    contacts_other_city.sort(key=lambda x: (x.get('tier_priority', 0), x['score']), reverse=True)
+    # Сортируем каждую группу по: (1) релевантность, (2) Premium, (3) рейтинг (город уже разделен)
+    contacts_same_city.sort(key=lambda x: (x['score'], x.get('tier_priority', 0)), reverse=True)
+    contacts_other_city.sort(key=lambda x: (x['score'], x.get('tier_priority', 0)), reverse=True)
     
     # Объединяем: СНАЧАЛА свой город, ПОТОМ остальные
     sorted_contacts = contacts_same_city + contacts_other_city

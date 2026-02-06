@@ -3145,6 +3145,10 @@ async def api_partners_handler(request):
         def sort_key(partner):
             partner_city = normalize_city(partner.get('city', ''))
             same_city = 0 if (normalized_user_city and partner_city == normalized_user_city) else 1
+            
+            # Premium-РїСЂРёРѕСЂРёС‚РµС‚ (PREMIUM=3, STANDARD=2, LIGHT=1)
+            tier = partner.get('subscription_tier', 'light').upper()
+            tier_priority = -{'PREMIUM': 3, 'STANDARD': 2, 'LIGHT': 1}.get(tier, 1)
 
             rating = partner.get('average_rating', 0) or 0
             # Р“СЂСѓРїРїС‹ СЂРµР№С‚РёнаіР°:
