@@ -228,6 +228,15 @@ try:
             else:
                 logger.info("Migration: subscription_renewal_date column already exists")
 
+            # Migration for pending_premium_recommendations column
+            if 'pending_premium_recommendations' not in columns:
+                logger.info("Adding pending_premium_recommendations column to user_profiles table")
+                session.execute(text('ALTER TABLE user_profiles ADD COLUMN pending_premium_recommendations TEXT'))
+                session.commit()
+                logger.info("Migration: pending_premium_recommendations column added successfully")
+            else:
+                logger.info("Migration: pending_premium_recommendations column already exists")
+
         # Migration for users table columns
         if inspector.has_table('users'):
             user_columns = [col['name'] for col in inspector.get_columns('users')]
