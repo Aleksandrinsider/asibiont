@@ -33,11 +33,6 @@ class HybridAutonomousAgent:
         self.success_patterns = {}  # Паттерны успешных действий
         self.user_preferences = {}  # Предпочтения пользователей
         
-        # КЭШИРОВАНИЕ для производительности
-        self.user_cache = {}  # Кэш пользователей (user_id -> user_data)
-        self.tasks_cache = {}  # Кэш задач (user_id -> tasks_list, expires in 30 sec)
-        self.cache_expiry = {}  # Время истечения кэша
-        
         # Загружаем статистику, если есть
         self.tool_discovery.load_stats()
 
@@ -270,10 +265,10 @@ class HybridAutonomousAgent:
         AI планирование с TOOLS - гибридный подход.
         AI сам решает какие инструменты вызвать через DeepSeek tool_calls.
         """
-        # Получаем информацию о пользователе для контекста - ИСПОЛЬЗУЕМ КЭШ
+        # Получаем информацию о пользователе напрямую из БД
         session = Session()
         try:
-            user = self._get_cached_user(user_id, session)
+            user = session.query(User).filter_by(telegram_id=user_id).first()
             if not user:
                 return {
                     "intent": "general_chat",
@@ -634,60 +629,6 @@ class HybridAutonomousAgent:
         content = clean_technical_details(content)
         
         return content.strip()
-
-    def _get_cached_user(self, user_id, session):
-        """Получить пользователя из кэша или базы данных"""
-        import time
-        
-        current_time = time.time()
-        
-        # Проверяем кэш (кэш на 5 минут)
-        if user_id in self.user_cache and user_id in self.cache_expiry:
-            if current_time < self.cache_expiry[user_id]:
-                return self.user_cache[user_id]
-        
-        # Загружаем из базы
-        user = session.query(User).filter_by(telegram_id=user_id).first()
-        if user:
-            self.user_cache[user_id] = user
-            self.cache_expiry[user_id] = current_time + 300  # 5 минут
-        
-        return user
-
-    def _get_cached_tasks(self, user_id, session, force_refresh=False):
-        """Получить задачи пользователя из кэша или базы данных"""
-        import time
-        
-        current_time = time.time()
-        cache_key = f"tasks_{user_id}"
-        
-        # Проверяем кэш (кэш на 30 секунд для задач)
-        if not force_refresh and cache_key in self.tasks_cache and cache_key in self.cache_expiry:
-            if current_time < self.cache_expiry[cache_key]:
-                return self.tasks_cache[cache_key]
-        
-        # Загружаем из базы с оптимизацией и обработкой ошибок
-        try:
-            from models import User
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                return []
-            
-            tasks = session.query(Task).filter(
-                Task.user_id == user.id
-            ).limit(100).all()  # Ограничиваем для производительности
-            
-            # Фильтруем невыполненные задачи (status != 'completed')
-            active_tasks = [t for t in tasks if t.status != 'completed']
-            
-            self.tasks_cache[cache_key] = active_tasks
-            self.cache_expiry[cache_key] = current_time + 30  # 30 секунд
-            
-            return active_tasks
-        except Exception as e:
-            logger.error(f"Error loading tasks: {e}")
-            # Возвращаем пустой список в случае ошибки
-            return []
 
     def _extract_task_title(self, message):
         """Извлекает название задачи из сообщения"""
