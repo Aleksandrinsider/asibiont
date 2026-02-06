@@ -7,7 +7,7 @@ import aiohttp
 import json
 import logging
 import pytz
-from datetime import datetime
+from datetime import datetime, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 from models import Session, User, Task, UserProfile, Subscription
 from .prompts import get_extended_system_prompt
