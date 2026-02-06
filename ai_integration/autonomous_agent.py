@@ -194,153 +194,44 @@ class HybridAutonomousAgent:
 
     async def plan_strategy(self, user_message, user_id, context=None):
         """
-        ШАГ 1: AI-ПЛАНИРОВАНИЕ БЕЗ ЖЕСТКИХ ПРАВИЛ
-        AI анализирует запрос и сам решает, какие инструменты нужны
+        ШАГ 1: ГИБРИДНОЕ ПЛАНИРОВАНИЕ - ПРАВИЛА + AI ДЛЯ ОБЩЕНИЯ
         """
-        
-        # Получаем контекст пользователя
-        session = Session()
-        try:
-            user = self._get_cached_user(user_id, session)
-            if not user:
-                return {
-                    "intent": "general_chat",
-                    "actions": [],
-                    "response_strategy": "natural_response"
-                }
 
-            # Получаем текущее время
-            from datetime import datetime
-            import pytz
-            base_now = datetime.now(pytz.UTC)
-            user_now = base_now
-            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-            current_date_str = user_now.strftime("%Y-%m-%d")
-            
-            months = [
-                'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
-            ]
-            
-            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-            try:
-                user_tz = pytz.timezone(user_timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.error(f"Error setting user timezone: {e}")
+        message_lower = user_message.lower()
 
-            # Получаем список задач для контекста
-            tasks = self._get_cached_tasks(user_id, session)
-            tasks_summary = ""
-            if tasks:
-                active_tasks = [t for t in tasks if t.status != 'completed']
-                if active_tasks:
-                    tasks_summary = f"\nТекущие задачи ({len(active_tasks)}):\n"
-                    for t in active_tasks[:5]:  # Первые 5
-                        tasks_summary += f"- {t.title} (напоминание: {t.reminder_time})\n"
+        # СТРОГИЕ ПРАВИЛА ДЛЯ КОМАНД (БЕЗ AI)
+        command_patterns = {
+            'delete_task': ['удали', 'сотри', 'удалить'],
+            'list_tasks': ['покажи', 'список', 'мои'],
+            'reschedule_task': ['перенеси', 'отложи'],
+            'edit_task': ['измени', 'отредактируй', 'поменяй'],
+            'find_relevant_contacts_for_task': ['контакты', 'поможет'],
+            'find_partners': ['единомышленники', 'познакомься', 'найди'],
+            'complete_task': ['готово', 'сделал', 'завершил', 'выполнил'],
+            'add_task': ['создай', 'добавь', 'напомни'],
+            'delegate_task': ['делегируй', 'передай', 'поручи'],
+            'update_profile': ['обнови'],
+            'update_user_memory': ['запомни'],
+            'analyze_goal_progress': ['проанализируй цел', 'анализ цел'],
+            'get_task_details': ['расскажи о задаче', 'подробно о задаче']
+        }
 
-            # Получаем профиль
-            profile_data = {}
-            from models import UserProfile
-            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-            if profile:
-                if profile.city:
-                    profile_data['city'] = profile.city
-                if profile.goals:
-                    profile_data['goals'] = profile.goals
-                if profile.interests:
-                    profile_data['interests'] = profile.interests
-            
-            profile_summary = ""
-            if profile_data:
-                profile_summary = "\nПрофиль:\n"
-                if 'city' in profile_data:
-                    profile_summary += f"Город: {profile_data['city']}\n"
-                if 'goals' in profile_data:
-                    profile_summary += f"Цели: {profile_data['goals']}\n"
-                if 'interests' in profile_data:
-                    profile_summary += f"Интересы: {profile_data['interests']}\n"
+        # Проверяем на команды задач
+        for intent, keywords in command_patterns.items():
+            if any(keyword in message_lower for keyword in keywords):
+                # Специальные проверки для некоторых команд
+                if intent in ['delete_task', 'list_tasks', 'reschedule_task', 'edit_task', 'add_task', 'complete_task', 'delegate_task']:
+                    # Для этих команд обязательно должно быть слово "задач" ИЛИ другие признаки
+                    if ('задач' in message_lower or
+                        'встреч' in message_lower or  # "встречу" тоже работа с задачами
+                        intent == 'complete_task' or  # "готово" не требует "задач"
+                        intent == 'delegate_task'):   # "делегируй" не требует "задач"
+                        return self._create_command_plan(intent, user_message)
+                else:
+                    return self._create_command_plan(intent, user_message)
 
-            # ПРОАКТИВНЫЙ КОНТЕКСТ: анализируем ситуацию для предложений
-            proactive_context = await self._generate_proactive_context(user_id, session, user_now)
-
-        finally:
-            session.close()
-
-        # Добавляем контекст диалога если есть
-        context_info = ""
-        if context:
-            context_info = f"\nКОНТЕКСТ ДИАЛОГА: {context}\n(ОБЯЗАТЕЛЬНО используй этот контекст для конкретизации задач!)"
-
-        # УПРОЩЕННЫЙ ПЛАНИРОВЩИК: только анализ context, tools выберет AI
-        planning_prompt = f"""Анализ запроса для проактивного ответа.
-
-КОНТЕКСТ:
-Время: {current_time_str}, {current_date_str}
-Пользователь: {user.username or "пользователь"}{profile_summary}{tasks_summary}{context_info}{proactive_context}
-
-Запрос: "{user_message}"
-
-Не планируй инструменты - их выберет AI автоматически.
-Твоя задача - определить тип запроса и проактивные подсказки.
-
-JSON:
-{{
-  "intent_type": "command"|"question"|"task_management"|"general_chat"|"proactive_opportunity",
-  "context_needed": true если нужны данные из БД для ответа,
-  "proactive_hints": "краткие подсказки для AI что может быть полезно пользователю сейчас",
-  "user_goal_evident": true если видна конкретная цель пользователя
-}}
-
-Примеры:
-- "привет" → {{"intent_type": "general_chat", "context_needed": false, "proactive_hints": "утреннее приветствие, можно предложить планирование дня"}}
-- "мои задачи" → {{"intent_type": "task_management", "context_needed": true, "proactive_hints": "показать задачи, предложить приоритизацию"}}
-- "создай задачу пробежка" → {{"intent_type": "command", "context_needed": false, "proactive_hints": "спортивная активность - предложить партнера, учесть погоду", "user_goal_evident": true}}
-- "как дела?" → {{"intent_type": "question", "context_needed": true, "proactive_hints": "спросить о прогрессе по задачам и целям"}}
-
-ТОЛЬКО JSON:"""
-
-        messages = [
-            {"role": "system", "content": planning_prompt},
-            {"role": "user", "content": user_message}
-        ]
-
-        try:
-            response = await self.call_ai(messages, temperature=0.3)
-            content = response['choices'][0]['message']['content'].strip()
-            
-            # Extract JSON from response
-            import json
-            import re
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                plan_data = json.loads(json_match.group())
-            else:
-                plan_data = json.loads(content)
-            
-            if plan_data.get('needs_tools'):
-                return {
-                    "intent": "tool_execution",
-                    "actions": plan_data.get('tools', []),
-                    "response_strategy": "execute_action"
-                }
-            else:
-                return {
-                    "intent": "general_chat",
-                    "actions": [],
-                    "response_strategy": "natural_response"
-                }
-                
-        except Exception as e:
-            logger.error(f"[AGENT] Error in AI planning: {e}")
-            # Fallback - простое общение
-            return {
-                "intent": "general_chat",
-                "actions": [],
-                "response_strategy": "natural_response"
-            }
+        # ЕСЛИ НЕ КОМАНДА - ИСПОЛЬЗУЕМ AI ДЛЯ ОБЩЕГО ОБЩЕНИЯ
+        return await self._plan_general_chat(user_message, user_id)
 
     def _create_command_plan(self, intent, user_message):
         """Создает план для команды"""
@@ -354,11 +245,23 @@ JSON:
                 "task_title": self._extract_task_title(user_message),
                 "new_time": self._extract_time(user_message)
             }
+        elif intent == 'edit_task':
+            params = {
+                "task_title": self._extract_task_title(user_message),
+                "title": self._extract_new_title(user_message)
+            }
         elif intent == 'add_task':
             title, time_str = self._extract_task_info(user_message)
             params = {"title": title, "reminder_time": time_str}
         elif intent == 'find_relevant_contacts_for_task':
             params = {"task_description": user_message}
+        elif intent == 'get_task_details':
+            params = {"task_title": self._extract_task_title(user_message)}
+        elif intent == 'delegate_task':
+            params = {
+                "task_title": self._extract_task_title(user_message),
+                "delegate_to": self._extract_delegate_username(user_message)
+            }
 
         return {
             "intent": intent,
@@ -383,50 +286,10 @@ JSON:
                     "response_strategy": "natural_response"
                 }
 
-            # Устанавливаем время пользователя (как в chat.py)
-            from datetime import datetime
-            import pytz
-            base_now = datetime.now(pytz.UTC)
-            user_now = base_now  # Default to UTC
-            current_time_str = f"{user_now.strftime('%H:%M')} (UTC)"
-            current_date_str = user_now.strftime("%Y-%m-%d")
-            
-            months = [
-                'января',
-                'февраля',
-                'марта',
-                'апреля',
-                'мая',
-                'июня',
-                'июля',
-                'августа',
-                'сентября',
-                'октября',
-                'ноября',
-                'декабря']
-            
-            # Get user timezone if available, default to Moscow if not set
-            user_timezone = user.timezone if user and user.timezone else 'Europe/Moscow'
-            try:
-                user_tz = pytz.timezone(user_timezone)
-                user_now = base_now.astimezone(user_tz)
-                current_time_str = f"{user_now.strftime('%H:%M')} ({user_timezone})"
-                current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except Exception as e:
-                logger.error(f"Error setting user timezone for chat: {e}")
-                # Fallback to Moscow time
-                try:
-                    moscow_tz = pytz.timezone('Europe/Moscow')
-                    user_now = base_now.astimezone(moscow_tz)
-                    current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
-                    current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                except:
-                    pass  # Keep UTC if all fails
-
             base_prompt = get_extended_system_prompt(
-                user_now,
-                current_time_str,
-                current_date_str,
+                user_now=None,
+                current_time_str=None,
+                current_date_str=None,
                 user_username=user.username or "пользователь",
                 mentions_str="",
                 user_memory=user.memory or "",
@@ -440,11 +303,9 @@ JSON:
         finally:
             session.close()
 
-        system_prompt = f"{base_prompt}\n\n" + """Ты ведешь естественный разговор. Можешь предлагать идеи, задавать вопросы, давать советы. Но НЕ ВЫЗЫВАЙ ИНСТРУМЕНТЫ для команд - это уже обработано правилами выше.
+        system_prompt = f"{base_prompt}\n\n" + """Ты ведешь естественный разговор. Можешь предлагать идеи, задавать вопросы, давать советы.
 
-Если пользователь хочет пообщаться - отвечай естественно и полезно.
-
-Адаптируйся под ситуацию: используй эмодзи когда уместно, выбирай подходящий стиль общения."""
+Если пользователь хочет пообщаться - отвечай естественно и полезно."""
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -797,6 +658,42 @@ JSON:
         title = self._extract_task_title(message)
         time_str = self._extract_time(message)
         return title, time_str
+
+    def _extract_new_title(self, message):
+        """Извлекает новое название из сообщения типа 'измени X на Y'"""
+        import re
+        # Ищем паттерн "на 'новое название'" или "на новое название"
+        match = re.search(r"на ['\"]?([^'\"]+)['\"]?", message, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        # Если не нашли, берём всё после ключевого слова
+        words = message.lower().split()
+        keywords = ['измени', 'поменяй', 'отредактируй']
+        for i, word in enumerate(words):
+            if any(kw in word for kw in keywords):
+                remaining = ' '.join(words[i+1:])
+                if 'на' in remaining:
+                    parts = remaining.split('на', 1)
+                    if len(parts) > 1:
+                        return parts[1].strip().strip('"').strip("'")
+        return message.strip()
+
+    def _extract_delegate_username(self, message):
+        """Извлекает имя пользователя для делегирования"""
+        # Ищем @username или просто username после ключевых слов
+        words = message.split()
+        keywords = ['делегируй', 'передай', 'поручи']
+        for i, word in enumerate(words):
+            if any(kw in word.lower() for kw in keywords):
+                # Берём последнее слово как username
+                if i + 1 < len(words):
+                    for w in words[i+1:]:
+                        if w.startswith('@'):
+                            return w[1:]  # убираем @
+                        elif not w.lower() in ['задач', 'задачу', 'на']:
+                            return w  # берём первое подходящее слово
+        # Fallback - последнее слово
+        return words[-1] if words else "unknown"
 
     async def process_request(self, user_message, user_id, context=None):
         """
