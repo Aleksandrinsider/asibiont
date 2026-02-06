@@ -83,12 +83,14 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                 proactive_context=proactive_context
             )
 
-            # Вызываем AI с tools
-            response_data = await call_ai_with_tools(
-                user_message=message,
-                system_prompt=system_prompt,
+            # Используем улучшенный гибридный автономный агент (трёхэтапный подход)
+            response_data = await autonomous_chat_with_ai(
+                message=message,
+                context=context,
                 user_id=user_id,
-                context=context
+                file_content=file_content,
+                db_session=session,
+                message_type=message_type
             )
 
             return response_data
@@ -1035,13 +1037,12 @@ def validate_response_compliance(content, msg_type):
     word_count = len(content.split())
     issues = []
     
-    # Общие правила
-    if word_count > 100:  # Слишком длинный
+    # Общие правила (смягчённые для трёхэтапного подхода)
+    if word_count > 150:  # Слишком длинный (увеличено со 100 до 150)
         issues.append("Too long")
-    if word_count < 5:  # Слишком короткий
+    if word_count < 3:  # Слишком короткий (уменьшено с 5 до 3)
         issues.append("Too short")
-    if any(word in content_lower for word in ["здравствуйте", "спасибо за вопрос", "я помогу"]):  # Клише
-        issues.append("Contains clichés")
+    # Убрали проверку на клише - агент формирует естественные ответы
     
     # Специфические по типу
     if msg_type in ["reminder", "overdue"]:

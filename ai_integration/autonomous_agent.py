@@ -933,20 +933,23 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
         response_text = await agent.process_request(message, user_id, context)
 
         # Возвращаем в формате, ожидаемом остальным кодом
-        # Для тестирования возвращаем tool_calls из плана
+        # Для тестирования возвращаем tool_calls из execution_results
         tool_calls = []
         try:
-            # Попробуем извлечь информацию о вызванных инструментах из истории
+            # Извлекаем информацию о вызванных инструментах из execution_history
             if agent.execution_history:
                 last_execution = agent.execution_history[-1]
-                if last_execution.get('plan', {}).get('actions'):
-                    for action in last_execution['plan']['actions']:
-                        tool_calls.append({
-                            'function': {
-                                'name': action.get('tool', ''),
-                                'arguments': json.dumps(action.get('params', {}))
-                            }
-                        })
+                # Берём results вместо plan - там реальные вызовы
+                if last_execution.get('results'):
+                    for result in last_execution['results']:
+                        tool_name = result.get('tool', '')
+                        if tool_name:  # Если инструмент был вызван
+                            tool_calls.append({
+                                'function': {
+                                    'name': tool_name,
+                                    'arguments': json.dumps(result.get('params', {}))
+                                }
+                            })
         except Exception as e:
             logger.warning(f"Could not extract tool calls: {e}")
 

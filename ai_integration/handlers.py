@@ -2502,7 +2502,10 @@ def get_partners_list(user_id=None, session=None):
         -(p.average_rating or 0)  # рейтинг
     ))
     
-    logger.info(f"[PARTNERS] Task-relevant partners: {len(relevant_for_tasks)}, other: {len(not_relevant_for_tasks)}")
+    # Подсчитываем партнеров с релевантностью для задач
+    relevant_count = sum(1 for p in sorted_partners if p.task_relevance_score > 0)
+    not_relevant_count = len(sorted_partners) - relevant_count
+    logger.info(f"[PARTNERS] Task-relevant partners: {relevant_count}, other: {not_relevant_count}")
     
     for partner in sorted_partners[:5]:  # Log top 5
         partner_user = session.query(User).filter_by(id=partner.user_id).first()
