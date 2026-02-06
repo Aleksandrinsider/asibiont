@@ -69,7 +69,8 @@ class LongTermMemory:
                 if user.long_term_memory:
                     try:
                         ltm = json.loads(decrypt_data(user.long_term_memory))
-                    except:
+                    except Exception as e:
+                        logger.warning(f"[MEMORY] Failed to parse long_term_memory: {e}")
                         ltm = {}
 
                 # Add project context

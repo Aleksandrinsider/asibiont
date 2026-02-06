@@ -91,8 +91,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
                     current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
                     logger.info(f"[DATETIME] Fallback to Moscow: {current_time_str}, {current_date_str}")
-                except:
-                    pass  # Оставляем UTC
+                except Exception as e:
+                    logger.warning(f"[DATETIME] Error in Moscow fallback: {e}")
 
             # Генерируем проактивный контекст
             from .prompts import generate_proactive_context
@@ -187,8 +187,8 @@ async def generate_reminder(user_id, task_title, task_id=None):
                         desc = decrypt_data(task.description)
                         if desc:
                             task_context += f"\nДетали: {desc}"
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"[CONTEXT] Error decrypting task description: {e}")
         
         # Получить память и профиль пользователя
         user_memory = ""
@@ -197,8 +197,8 @@ async def generate_reminder(user_id, task_title, task_id=None):
             try:
                 decrypted = decrypt_data(user.memory)
                 user_memory = f"\nИнформация о пользователе: {decrypted}"
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"[CONTEXT] Error decrypting user memory: {e}")
         
         # Получить профиль для контекста
         profile = db_session.query(UserProfile).filter_by(user_id=user.id).first()
@@ -702,8 +702,8 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                             upcoming_tasks.append(task)
                         
                         task_time = f" (на {task_time_local.strftime('%H:%M')})"
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"[PROACTIVE] Error formatting task time: {e}")
                 else:
                     upcoming_tasks.append(task)  # Задачи без времени считаем предстоящими
             
@@ -721,8 +721,8 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                                 task_time_utc = task.reminder_time
                             task_time_local = task_time_utc.astimezone(user_tz)
                             task_time = f" (на {task_time_local.strftime('%H:%M')})"
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"[PROACTIVE] Error formatting task time in list: {e}")
                     tasks_info += f"• {task.title}{task_time}\n"
             else:
                 tasks_info += "• Нет предстоящих задач\n"
@@ -922,8 +922,8 @@ async def generate_daily_report(user_id):
                     if resp.status == 200:
                         res = await resp.json()
                         return res["choices"][0]["message"]["content"].strip()
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"[REPORT] AI report generation failed: {e}")
         return "Как прошёл день? 🌆"
 
 
@@ -1069,8 +1069,8 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                     if resp.status == 200:
                         res = await resp.json()
                         return res["choices"][0]["message"]["content"].strip()
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"[REMINDER] AI reminder generation failed: {e}")
         return "Задачи ожидают внимания."
 
 

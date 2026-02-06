@@ -1873,7 +1873,8 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         upcoming_tasks.append(task)  # Завтра
                     else:
                         later_tasks.append(task)  # Позже
-                except:
+                except Exception as e:
+                    logger.warning(f"[TASKLIST] Error parsing reminder time: {e}")
                     later_tasks.append(task)
             else:
                 later_tasks.append(task)  # Без времени - в конец
@@ -1919,7 +1920,8 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         result += ", "
                     else:
                         result += ". "
-                except:
+                except Exception as e:
+                    logger.warning(f"[TASKLIST] Error formatting priority task time: {e}")
                     result += f"'{task.title}'"
                     if i < len(priority_tasks) - 1:
                         result += ", "
@@ -1937,7 +1939,8 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         result += ", "
                     else:
                         result += ". "
-                except:
+                except Exception as e:
+                    logger.warning(f"[TASKLIST] Error formatting today task time: {e}")
                     result += f"'{task.title}'"
                     if i < len(today_tasks[:5]) - 1:
                         result += ", "
@@ -1955,7 +1958,8 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         result += ", "
                     else:
                         result += ". "
-                except:
+                except Exception as e:
+                    logger.warning(f"[TASKLIST] Error formatting upcoming task time: {e}")
                     result += f"'{task.title}'"
                     if i < len(upcoming_tasks[:3]) - 1:
                         result += ", "
@@ -1978,7 +1982,8 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         result += ", "
                     else:
                         result += ". "
-                except:
+                except Exception as e:
+                    logger.warning(f"[TASKLIST] Error formatting later task time: {e}")
                     result += f"'{task.title}'"
                     if i < len(remaining_later) - 1:
                         result += ", "
@@ -3776,8 +3781,8 @@ def get_task_details(task_id=None, task_title=None, user_id=None, session=None):
                         details += "💡 Рекомендации AI:\n"
                         for i, rec in enumerate(recs[:3], 1):
                             details += f"  {i}. {rec}\n"
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[TASKDETAILS] Error parsing recommendations: {e}")
             
             details += f"🕒 Создана: {task.created_at.astimezone(user_tz).strftime('%d.%m.%Y %H:%M')}\n"
             
@@ -4652,9 +4657,8 @@ def analyze_single_goal_progress(goal: Goal, session) -> dict:
                 import json
                 task_ids = json.loads(goal.related_tasks)
                 related_tasks = session.query(Task).filter(Task.id.in_(task_ids)).all()
-            except:
-                # Если related_tasks не JSON, пытаемся разобрать как текст
-                pass
+            except Exception as e:
+                logger.warning(f"[GOALS] Error parsing related_tasks JSON: {e}")
 
         # Также получаем задачи, связанные через goal_id
         goal_tasks = session.query(Task).filter_by(goal_id=goal.id).all()
@@ -4899,7 +4903,8 @@ def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
                     skills_list = json.loads(profile.skills) if profile.skills.startswith('[') else [s.strip() for s in profile.skills.split(',')]
                     if skills_list:
                         profile_info.append(f"🛠️ **Навыки:** {', '.join(skills_list[:10])}" + ("..." if len(skills_list) > 10 else ""))
-                except:
+                except Exception as e:
+                    logger.warning(f"[PROFILE] Error parsing skills: {e}")
                     profile_info.append(f"🛠️ **Навыки:** {profile.skills[:200]}" + ("..." if len(profile.skills) > 200 else ""))
 
             # Интересы
@@ -4908,7 +4913,8 @@ def show_profile(user_id: int, session=None, close_session: bool = True) -> str:
                     interests_list = json.loads(profile.interests) if profile.interests.startswith('[') else [i.strip() for i in profile.interests.split(',')]
                     if interests_list:
                         profile_info.append(f"🎯 **Интересы:** {', '.join(interests_list[:10])}" + ("..." if len(interests_list) > 10 else ""))
-                except:
+                except Exception as e:
+                    logger.warning(f"[PROFILE] Error parsing interests: {e}")
                     profile_info.append(f"🎯 **Интересы:** {profile.interests[:200]}" + ("..." if len(profile.interests) > 200 else ""))
 
             # Цели
@@ -4999,7 +5005,8 @@ async def analyze_tasks(user_id, session=None):
                 user_today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
                 user_today_end = user_today_start + timedelta(days=1)
                 user_tomorrow_end = user_today_start + timedelta(days=2)
-            except:
+            except Exception as e:
+                logger.warning(f"[DASHBOARD] Timezone conversion failed: {e}")
                 user_now = now
                 user_today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
                 user_today_end = user_today_start + timedelta(days=1)

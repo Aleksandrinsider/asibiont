@@ -4597,8 +4597,8 @@ async def get_feed_handler(request):
                     blocked_list = json.loads(profile.blocked_contacts)
                     if user.id in blocked_list:
                         blocked_by_users.add(profile.user_id)
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[FEED] Failed to parse blocked_contacts: {e}")
 
             logger.info(f"Feed: blocked_by_users: {blocked_by_users}")
 

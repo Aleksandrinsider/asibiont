@@ -136,8 +136,8 @@ class HybridAutonomousAgent:
                                 overdue.append(task.title)
                             elif reminder_dt.date() == user_now.date():
                                 today.append(task.title)
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"[AGENT] Error parsing task reminder time: {e}")
                 
                 if overdue:
                     proactive_hints.append(f"⚠️ Просроченные задачи: {', '.join(overdue[:2])}")
@@ -302,8 +302,8 @@ class HybridAutonomousAgent:
                     user_now = base_now.astimezone(moscow_tz)
                     current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                except:
-                    pass  # Оставляем UTC
+                except Exception as e:
+                    logger.warning(f"[AGENT] Moscow timezone fallback failed: {e}")
 
             # Получаем погоду и новости
             weather_info = None
@@ -513,8 +513,8 @@ class HybridAutonomousAgent:
                     user_now = base_now.astimezone(moscow_tz)
                     current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                     current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-                except:
-                    pass  # Оставляем UTC
+                except Exception as e:
+                    logger.warning(f"[AGENT] Moscow timezone fallback failed in reflect: {e}")
             
             # Расшифровываем память
             decrypted_memory = ""

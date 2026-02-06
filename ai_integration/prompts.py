@@ -29,7 +29,8 @@ def generate_proactive_context(user_id, session):
         try:
             user_tz = pytz.timezone(user_timezone)
             user_now = base_now.astimezone(user_tz)
-        except:
+        except Exception as e:
+            logger.warning(f"[PROACTIVE] Timezone conversion failed: {e}")
             user_now = base_now
         
         proactive_hints = []
