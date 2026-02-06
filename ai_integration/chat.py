@@ -245,8 +245,8 @@ async def generate_reminder(user_id, task_title, task_id=None):
                 user_now = base_now.astimezone(moscow_tz)
                 current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except:
-                pass  # Keep UTC if all fails
+            except Exception as e:
+                logger.warning(f"[CHAT] Failed Moscow timezone fallback: {e}")
         
         user_username = user.username if user and user.username else "пользователь"
         mentions_str = ""
@@ -364,8 +364,8 @@ async def generate_result_check(user_id, task_title):
                 user_now = base_now.astimezone(moscow_tz)
                 current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except:
-                pass  # Keep UTC if all fails
+            except Exception as e:
+                logger.warning(f"[RESULT_CHECK] Failed Moscow timezone fallback: {e}")
         
         user_username = "пользователь"
         mentions_str = ""
@@ -846,8 +846,8 @@ async def generate_daily_report(user_id):
                 user_now = base_now.astimezone(moscow_tz)
                 current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except:
-                pass  # Keep UTC if all fails
+            except Exception as e:
+                logger.warning(f"[DAILY_REPORT] Failed Moscow timezone fallback: {e}")
         
         user_username = "пользователь"
         mentions_str = ""
@@ -985,8 +985,8 @@ async def generate_overdue_reminder(user_id, overdue_tasks, escalation_level=1):
                 user_now = base_now.astimezone(moscow_tz)
                 current_time_str = f"{user_now.strftime('%H:%M')} (Europe/Moscow)"
                 current_date_str = f"{user_now.day} {months[user_now.month - 1]} {user_now.year}"
-            except:
-                pass  # Keep UTC if all fails
+            except Exception as e:
+                logger.warning(f"[OVERDUE] Failed Moscow timezone fallback: {e}")
         
         user_username = "пользователь"
         mentions_str = ""
